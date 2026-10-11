@@ -7,6 +7,8 @@
  **/
 
 #include <array>
+#include "graph/debug/PerfTrace.hpp"
+#include "storage/relocatable/property/PropertyCollectionRootTestUtils.hpp"
 #include <functional>
 #include <limits>
 #include <optional>
@@ -19,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
@@ -1358,4 +1361,86 @@ TEST_F(NativeGraphMutationExecutorValidationTest, UpdatesAnExistingVectorIndexTh
 	EXPECT_EQ(manifest.delta_entry_count, 2U);
 	EXPECT_TRUE(metadata_->findIndexRootOptional(snapshot, manifest.delta_mapping_index_id).has_value());
 	snapshot.release();
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, tokens(),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {}}, {{"Person"}, {}}};
+	const auto created = executor.execute(create);
+	ASSERT_EQ(created.result.created_node_ids.size(), 2U);
+	const auto &ids = created.result.created_node_ids;
+	const std::array roots{PropertyCollectionRoot{ids[0], graph::Node::typeId, {{17U, PropertyValue(1)}}},
+		PropertyCollectionRoot{ids[1], graph::Node::typeId, {{17U, PropertyValue(2)}}}};
+	ASSERT_EQ(graph::storage::test::publishPropertyRoots(*entities_, *properties_, *metadata_, roots,
+		plannerOptions().property_roots).properties.size(), 2U);
+	auto before = metadata_->openSnapshot();
+	const auto first = metadata_->findEntityPropertyLocationOptional(before, {EntityPropertyOwnerKind::EPOK_NODE, ids[0]});
+	const auto second = metadata_->findEntityPropertyLocationOptional(before, {EntityPropertyOwnerKind::EPOK_NODE, ids[1]});
+	ASSERT_TRUE(first); ASSERT_TRUE(second); ASSERT_EQ(first->page_id, second->page_id);
+	NativeReadSession candidates;
+	const bool valuesEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	for (size_t index = 0U; index < ids.size(); ++index) {
+		graph.validateNodeExactPropertiesSorted(before, std::span<const uint64_t>(&ids[index], 1U), 7U,
+			std::array<uint32_t, 1U>{17U}, std::array<PropertyValue, 1U>{PropertyValue(static_cast<int>(index + 1U))}, 8U, &candidates);
+	}
+	const auto candidateTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesEnabled);
+	ASSERT_TRUE(candidateTrace.contains("native_graph.read.property_directory_refill"));
+	EXPECT_EQ(candidateTrace.at("native_graph.read.property_directory_refill").totalValue, 1);
+	LogicalGraphMutationBatch replace;
+	for (uint64_t id: ids) replace.property_replacements.push_back({
+		{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id},
+		{{"age", PropertyValue(3)}}});
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	static_cast<void>(executor.execute(replace));
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+	ASSERT_TRUE(trace.contains("native_graph.read.property_full_cursor_pages"));
+	EXPECT_EQ(trace.at("native_graph.read.property_full_cursor_pages").totalValue, 1);
+	auto current = metadata_->openSnapshot();
+	for (size_t index = 0U; index < ids.size(); ++index) {
+		EXPECT_EQ(graph.readNode(before, ids[index]).properties[0].value, PropertyValue(static_cast<int>(index + 1U)));
+		EXPECT_EQ(graph.readNode(current, ids[index]).properties[0].value, PropertyValue(3));
+	}
+	current.release(); before.release();
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest,
+       UnorderedNodeDeletesPreserveOldSnapshotAndSurvivingTopology) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(
+	  planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, tokens(),
+	  [](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+	  [](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	auto create = planner.beginTransaction();
+	const uint64_t first = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t survivor = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t last = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t edge = create.createEdge(first, last, 11U);
+	ASSERT_TRUE(create.commit().committed());
+	auto old = metadata_->openSnapshot();
+	const auto oldFirst = graph.readNode(old, first);
+	const auto oldLast = graph.readNode(old, last);
+	const auto oldSurvivor = graph.readNode(old, survivor);
+	LogicalGraphMutationBatch batch;
+	batch.node_deletes = {{last, true, 1U}, {first, false, 0U}};
+	ASSERT_TRUE(executor.execute(batch).committed());
+	auto now = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(graph.readNode(now, first)), FormatException);
+	EXPECT_THROW(static_cast<void>(graph.readNode(now, last)), FormatException);
+	EXPECT_THROW(static_cast<void>(graph.readEdge(now, edge)), FormatException);
+	EXPECT_EQ(graph.readNode(now, survivor), oldSurvivor);
+	EXPECT_EQ(graph.readNode(old, first), oldFirst);
+	EXPECT_EQ(graph.readNode(old, last), oldLast);
+	EXPECT_NO_THROW(static_cast<void>(graph.readEdge(old, edge)));
 }

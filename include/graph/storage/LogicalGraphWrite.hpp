@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <functional>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -175,6 +176,13 @@ namespace graph::storage {
 		bool operator==(const LogicalGraphMutationBatchResult &) const = default;
 	};
 
+	// Synchronous read controls for backend validation before graph publication.
+	// Property admission reports absolute encoded selected-source bytes per batch.
+	struct LogicalGraphMutationReadControl {
+		std::function<void()> checkpoint;
+		std::function<void(size_t)> property_admission;
+	};
+
 	// A caller that evaluated a read-dependent mutation against an older logical
 	// snapshot must restart planning, never replay the old row set at a newer
 	// generation. This distinct error makes that retry contract explicit.
@@ -202,6 +210,15 @@ namespace graph::storage {
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult
 		executeLogicalGraphMutationBatch(const LogicalGraphMutationBatch &batch,
 										 std::optional<LogicalGraphMutationFence> expectedFence = std::nullopt) = 0;
+		[[nodiscard]] virtual LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithReadControl(
+			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+			const LogicalGraphMutationReadControl &control) {
+			// Legacy backends retain entry checks; native backends additionally
+			// admit constraint sources and check before durable publication.
+			if (control.checkpoint) control.checkpoint();
+			return executeLogicalGraphMutationBatch(batch, expectedFence);
+		}
+
 	};
 
 	// All enum members are prefixed for Windows macro safety. A logical

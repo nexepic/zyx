@@ -109,6 +109,60 @@ TEST(RelocatablePropertyCollectionRootTest, PresenceCodecUsesCanonicalDirectoryW
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatablePropertyCollectionRootTest, SelectedAdmissionRunsBeforeVariablePayloadDecode) {
+	const PropertyCollectionRoot source{1001U, Node::typeId,
+		{{1U, PropertyValue(std::string(8192U, 'a'))}, {3U, PropertyValue()},
+		 {5U, PropertyValue(std::string(4096U, 'b'))}}};
+	const std::array<uint32_t, 4U> tokens{1U, 2U, 3U, 5U};
+	for (const bool large: {false, true}) {
+		SCOPED_TRACE(large);
+		auto bytes = large ? EntityPropertyLargeValuePayloadCodec::encode(source.entries)
+				: EntityPropertyCollectionRootCodec::encode(source);
+		const auto decode = [&](const SelectedPropertyReadAdmission *admission) {
+			return large ? EntityPropertyLargeValuePayloadCodec::decodeSelected(bytes, tokens, admission)
+					: EntityPropertyCollectionRootCodec::decodeSelected(bytes, tokens, admission);
+		};
+		std::vector<size_t> admitted;
+		const SelectedPropertyReadAdmission accept = [&](size_t size) { admitted.push_back(size); };
+		const auto selected = decode(&accept);
+		ASSERT_EQ(selected.size(), 4U);
+		EXPECT_EQ(selected[0], std::optional{source.entries[0]});
+		EXPECT_FALSE(selected[1].has_value());
+		EXPECT_EQ(selected[2], std::optional{source.entries[1]});
+		EXPECT_EQ(selected[3], std::optional{source.entries[2]});
+		ASSERT_EQ(admitted.size(), 3U);
+		EXPECT_GT(admitted[0], 8192U);
+		EXPECT_LT(admitted[1], admitted[2]);
+		admitted.clear();
+		const auto combined = large ? EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(bytes, tokens, &accept)
+			: EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, tokens, &accept);
+		EXPECT_EQ(combined.first, source.entries.size());
+		EXPECT_EQ(combined.second, selected);
+		EXPECT_EQ(admitted.size(), 3U);
+		const SelectedPropertyReadAdmission reject = [](size_t) { throw std::runtime_error("admission rejected"); };
+		// A malformed selected value must not be decoded after admission rejects.
+		const size_t valueOffset = large
+				? RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
+						EntityPropertyLargeValuePayloadCodec::decodeDirectory(bytes).front().offset + sizeof(uint32_t)
+				: RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES + sizeof(uint32_t) * source.entries.size() + sizeof(uint32_t);
+		bytes[valueOffset] = std::byte{0xff};
+		try {
+			static_cast<void>(decode(&reject));
+			FAIL() << "admission must reject before value decoding";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "admission rejected");
+		}
+		try {
+			if (large) static_cast<void>(EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(bytes, tokens, &reject));
+			else static_cast<void>(EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, tokens, &reject));
+			FAIL() << "combined admission must reject before malformed payload decode";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "admission rejected");
+		}
+		EXPECT_THROW(static_cast<void>(decode(nullptr)), FormatException);
+	}
+}
+
 TEST(RelocatablePropertyCollectionRootTest, MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence) {
 	const std::vector<std::byte> encoded = EntityPropertyCollectionRootCodec::encode(root());
 	const std::array<uint32_t, 3U> tokens{1U, 2U, 3U};
@@ -126,6 +180,30 @@ TEST(RelocatablePropertyCollectionRootTest, MultiColumnSelectiveDecodePreservesT
 	const std::array<uint32_t, 2U> duplicate{1U, 1U};
 	expectFormatError([&] { static_cast<void>(EntityPropertyCollectionRootCodec::decodeSelected(encoded, duplicate)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory) {
+	const auto expected = root();
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(expected.entries);
+	const std::array<uint32_t, 4U> tokens{3U, 2U, 1U, 3U};
+	for (int retry = 0; retry < 2; ++retry) {
+		size_t calls = 0U;
+		const SelectedPropertyReadAdmission admission = [&](size_t bytes) { EXPECT_GT(bytes, 0U); ++calls; };
+		const auto combined = EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(payload, tokens, &admission);
+		EXPECT_EQ(combined.first, expected.entries.size());
+		ASSERT_EQ(combined.second.size(), tokens.size());
+		EXPECT_EQ(combined.second[0], expected.entries[1]);
+		EXPECT_FALSE(combined.second[1]);
+		EXPECT_EQ(combined.second[2], expected.entries[0]);
+		EXPECT_EQ(combined.second[3], expected.entries[1]);
+		EXPECT_EQ(calls, 3U);
+	}
+	const auto countOnly = EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(payload, {});
+	EXPECT_EQ(countOnly.first, expected.entries.size());
+	EXPECT_TRUE(countOnly.second.empty());
+	auto corrupt = payload;
+	LittleEndianCodec::writeU32(corrupt, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES, 0U);
+	EXPECT_THROW(static_cast<void>(EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(corrupt, {})), FormatException);
 }
 
 TEST(RelocatablePropertyCollectionRootTest, SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads) {
@@ -289,4 +367,118 @@ TEST(RelocatablePropertyCollectionRootTest, RejectsOrExactlyRoundTripsEverySingl
 			}
 		}
 	}
+}
+
+TEST(RelocatablePropertyCollectionRootTest, FullAdmissionPrecedesAllVariableDecodeAndCanRetry) {
+	const PropertyCollectionRoot source{1001U, Node::typeId,
+		{{1U, PropertyValue(std::string(8192U, 'a'))}, {3U, PropertyValue()},
+		 {5U, PropertyValue(std::string(4096U, 'b'))}}};
+	for (const bool large: {false, true}) {
+		SCOPED_TRACE(large);
+		auto bytes = large ? EntityPropertyLargeValuePayloadCodec::encode(source.entries) : EntityPropertyCollectionRootCodec::encode(source);
+		const auto decode = [&](const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slots = nullptr) {
+			return large ? EntityPropertyLargeValuePayloadCodec::decode(bytes, admission, slots)
+				: EntityPropertyCollectionRootCodec::decode(bytes, admission, slots).entries;
+		};
+		std::vector<size_t> admitted;
+		const SelectedPropertyReadAdmission accept = [&](size_t size) { admitted.push_back(size); };
+		EXPECT_EQ(decode(&accept), source.entries);
+		ASSERT_EQ(admitted.size(), 3U);
+		EXPECT_GT(admitted[0], 8192U);
+		EXPECT_GT(admitted[2], 4096U);
+		const auto original = bytes;
+		const size_t firstValue = large ? RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
+			EntityPropertyLargeValuePayloadCodec::decodeDirectory(bytes).front().offset + sizeof(uint32_t)
+			: RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES + source.entries.size() * sizeof(uint32_t) + sizeof(uint32_t);
+		bytes[firstValue] = std::byte{0xff};
+		size_t callbacks = 0U;
+		const SelectedPropertyReadAdmission rejectThird = [&](size_t) {
+			if (++callbacks == 3U) throw std::length_error("full admission rejected");
+		};
+		// Rejecting the last entry must precede even the first value's decode.
+		EXPECT_THROW(static_cast<void>(decode(&rejectThird)), std::length_error);
+		EXPECT_EQ(callbacks, 3U);
+		EXPECT_THROW(static_cast<void>(decode(nullptr)), FormatException);
+		const SelectedPropertyReadAdmission rejectSlots = [](size_t) { throw std::length_error("Property slots rejected"); };
+		EXPECT_THROW(static_cast<void>(decode(nullptr, &rejectSlots)), std::length_error);
+		bytes = original;
+		for (int retry = 0; retry < 2; ++retry) {
+			std::vector<size_t> slots;
+			const SelectedPropertyReadAdmission acceptSlots = [&](size_t next) { slots.push_back(next); };
+			const auto output = decode(nullptr, &acceptSlots);
+			EXPECT_EQ(output, source.entries);
+			ASSERT_EQ(slots.size(), large ? 5U : 2U);
+			EXPECT_EQ(slots.front(), source.entries.size() * (large ? sizeof(EntityPropertyLargeValueEntryLocation) : sizeof(PropertyCollectionRootEntry)));
+			EXPECT_EQ(slots.back(), output.capacity() * sizeof(PropertyCollectionRootEntry));
+		}
+		EXPECT_EQ(decode(&accept), source.entries);
+	}
+}
+
+TEST(RelocatablePropertyCollectionRootTest, FullInlineTokenValidationPrecedesAdmission) {
+	const PropertyCollectionRoot source{1001U, Node::typeId, {{1U, PropertyValue(1)}, {3U, PropertyValue(2)}}};
+	auto bytes = EntityPropertyCollectionRootCodec::encode(source);
+	const size_t payload = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
+	const uint32_t secondOffset = LittleEndianCodec::readU32(bytes, payload + sizeof(uint32_t));
+	LittleEndianCodec::writeU32(bytes, payload + secondOffset, 1U);
+	size_t callbacks = 0U;
+	const SelectedPropertyReadAdmission reject = [&](size_t) { ++callbacks; throw std::length_error("must not run"); };
+	EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::decode(bytes, &reject)), FormatException);
+	EXPECT_EQ(callbacks, 0U);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, LargeValueDirectoryValidationPrecedesSlotRejection) {
+	const std::vector<PropertyCollectionRootEntry> entries{{1U, PropertyValue()}, {3U, PropertyValue()}};
+	auto bytes = EntityPropertyLargeValuePayloadCodec::encode(entries);
+	LittleEndianCodec::writeU32(bytes, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES, 0U);
+	size_t calls = 0U;
+	const SelectedPropertyReadAdmission reject = [&](size_t) { ++calls; throw std::length_error("directory slots rejected"); };
+	EXPECT_THROW(static_cast<void>(EntityPropertyLargeValuePayloadCodec::decode(bytes, nullptr, &reject)), FormatException);
+	EXPECT_EQ(calls, 0U);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry) {
+	const auto expected = root();
+	const auto bytes = EntityPropertyLargeValuePayloadCodec::encode(expected.entries);
+	const std::array<uint32_t, 3U> tokens{3U, 2U, 1U};
+	size_t values = 0U;
+	const SelectedPropertyReadAdmission valueAdmission = [&](size_t) { ++values; };
+	const SelectedPropertyReadAdmission rejectDirectory = [](size_t) { throw std::length_error("directory rejected"); };
+	EXPECT_THROW(static_cast<void>(EntityPropertyLargeValuePayloadCodec::decodeSelected(bytes, tokens, &valueAdmission, &rejectDirectory)), std::length_error);
+	EXPECT_EQ(values, 0U);
+	const size_t directoryBytes = expected.entries.size() * sizeof(EntityPropertyLargeValueEntryLocation);
+	const SelectedPropertyReadAdmission rejectResult = [&](size_t requested) { if (requested > directoryBytes) throw std::length_error("selected slots rejected"); };
+	EXPECT_THROW(static_cast<void>(EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(bytes, tokens, &valueAdmission, &rejectResult)), std::length_error);
+	EXPECT_EQ(values, 0U);
+	for (int retry = 0; retry < 2; ++retry) {
+		size_t retained = 0U, peak = 0U;
+		const SelectedPropertyReadAdmission accept = [&](size_t requested) { retained = requested; peak = std::max(peak, requested); };
+		const auto result = EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(bytes, tokens, &valueAdmission, &accept);
+		EXPECT_EQ(result.first, expected.entries.size());
+		EXPECT_EQ(result.second, EntityPropertyLargeValuePayloadCodec::decodeSelected(bytes, tokens));
+		EXPECT_EQ(retained, result.second.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
+		EXPECT_GE(peak, retained + directoryBytes);
+	}
+	EXPECT_EQ(values, 4U);
+	auto corrupt = bytes;
+	LittleEndianCodec::writeU32(corrupt, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES, 0U);
+	EXPECT_THROW(static_cast<void>(EntityPropertyLargeValuePayloadCodec::decodeDirectory(corrupt, &rejectDirectory)), FormatException);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, InlineSelectedSlotsRejectBeforeValueDecodeAndRetry) {
+	const auto bytes = EntityPropertyCollectionRootCodec::encode(root());
+	const std::array<uint32_t, 3U> tokens{1U, 2U, 3U};
+	size_t values = 0U, retained = 0U;
+	const SelectedPropertyReadAdmission payload = [&](size_t) { ++values; };
+	const SelectedPropertyReadAdmission reject = [](size_t) { throw std::length_error("inline selected slots rejected"); };
+	EXPECT_THROW(static_cast<void>(EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, tokens, &payload, &reject)), std::length_error);
+	EXPECT_EQ(values, 0U);
+	for (int retry = 0; retry < 2; ++retry) {
+		const SelectedPropertyReadAdmission accept = [&](size_t count) { retained = count; };
+		const auto result = EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, tokens, &payload, &accept);
+		EXPECT_EQ(result.first, root().entries.size());
+		EXPECT_EQ(result.second, EntityPropertyCollectionRootCodec::decodeSelected(bytes, tokens));
+		EXPECT_EQ(retained, result.second.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
+	}
+	EXPECT_EQ(values, 4U);
 }

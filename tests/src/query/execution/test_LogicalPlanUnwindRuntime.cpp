@@ -21,14 +21,21 @@
 #include "graph/core/TemporalTypes.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/ListComprehensionExpression.hpp"
+#include "graph/query/expressions/ListSliceExpression.hpp"
+#include "graph/query/expressions/QuantifierFunctionExpression.hpp"
+#include "graph/query/expressions/ReduceExpression.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
+#include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalOptionalMatch.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
+#include "graph/query/logical/operators/LogicalSkip.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
 
 using namespace graph;
@@ -38,53 +45,7 @@ using namespace graph::storage;
 namespace logical = graph::query::logical;
 namespace expressions = graph::query::expressions;
 
-namespace {
-
-	class NoGraphSnapshot final : public LogicalGraphReadSnapshot {
-	public:
-		[[nodiscard]] LogicalGraphNode readNode(uint64_t) const override { throw std::logic_error("unexpected Node read"); }
-		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t) const override { throw std::logic_error("unexpected Edge read"); }
-		void visitNodes(size_t, const std::function<bool(const LogicalGraphNode &)> &) const override {
-			throw std::logic_error("unexpected Node traversal");
-		}
-		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t, size_t, size_t) const override {
-			throw std::logic_error("unexpected Node page scan");
-		}
-		[[nodiscard]] LogicalGraphAdjacencyPage scanAdjacentEdges(
-				uint64_t, LogicalGraphReadDirection, std::optional<LogicalGraphAdjacencyContinuation>, size_t) const override {
-			throw std::logic_error("unexpected adjacency scan");
-		}
-		void visitEdges(size_t, const std::function<bool(const LogicalGraphEdge &)> &) const override {
-			throw std::logic_error("unexpected Edge traversal");
-		}
-		void visitAdjacentEdges(uint64_t, LogicalGraphReadDirection, size_t,
-								const std::function<bool(const LogicalGraphEdge &)> &) const override {
-			throw std::logic_error("unexpected adjacency traversal");
-		}
-	};
-
-	class NoGraphBackend final : public LogicalGraphReadBackend {
-	public:
-		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
-			return std::make_unique<NoGraphSnapshot>();
-		}
-	};
-
-	[[nodiscard]] LogicalPlanReadRuntimeBounds bounds() {
-		return {
-				.maximum_node_records = 16U,
-				.maximum_node_page_records = 4U,
-				.maximum_metadata_pages_per_node_page = 4U,
-				.maximum_edges_per_node = 16U,
-				.maximum_edge_records = 32U,
-				.maximum_adjacency_page_records = 4U,
-				.maximum_property_entries = 16U,
-				.maximum_rows = 16U,
-				.maximum_distinct_rows = 16U,
-		};
-	}
-
-} // namespace
+using namespace graph::query::execution::test;
 
 TEST(LogicalPlanUnwindRuntimeTest, ExecutesParserProducedLiteralAndParameterUnwindPlans) {
 	NoGraphBackend backend;
@@ -759,6 +720,150 @@ TEST(LogicalPlanReadRuntimeTest, PropagatesNullListComprehensionsAndRejectsNonBo
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*invalidPredicate.root, bounds())), std::runtime_error);
 }
 
+TEST(LogicalPlanReadRuntimeTest, ListComprehensionRetainsSourceAndOutputUnderOneByteBudget) {
+	NoGraphSnapshot snapshot;
+	LogicalPlanReadRow row;
+	QueryContext context;
+	const std::string payload(1000U, 'v');
+	const PropertyValue expected(std::vector<PropertyValue>{PropertyValue(payload), PropertyValue(payload)});
+	context.parameters.emplace("values", expected);
+	expressions::ListComprehensionExpression comprehension(
+		"item", std::make_unique<expressions::ParameterExpression>("values"), nullptr,
+		std::make_unique<expressions::VariableReferenceExpression>("item"),
+		expressions::ListComprehensionExpression::ComprehensionType::COMP_EXTRACT);
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 3500U;
+	ASSERT_LT(property_utils::getPropertyValueSize(expected), limited.maximum_materialized_bytes);
+	try {
+		static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, comprehension, row, limited, context));
+		FAIL() << "the source and accumulated output must share the byte budget";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	limited.maximum_materialized_bytes = 10000U;
+	const auto result = std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, comprehension, row, limited, context));
+	EXPECT_EQ(result, expected);
+}
+
+TEST(LogicalPlanReadRuntimeTest, ReduceRetainsSourceAndBothAccumulatorGenerationsUnderOneByteBudget) {
+	NoGraphSnapshot snapshot;
+	LogicalPlanReadRow row;
+	QueryContext context;
+	const std::string payload(1000U, 'v');
+	context.parameters.emplace("initial", PropertyValue(payload));
+	context.parameters.emplace("values", PropertyValue(std::vector<PropertyValue>{PropertyValue(payload)}));
+	expressions::ReduceExpression reduce(
+		"total", std::make_unique<expressions::ParameterExpression>("initial"),
+		"item", std::make_unique<expressions::ParameterExpression>("values"),
+		std::make_unique<expressions::VariableReferenceExpression>("item"));
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 2500U;
+	try {
+		static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, reduce, row, limited, context));
+		FAIL() << "the prior and next accumulator must coexist within the byte budget";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	limited.maximum_materialized_bytes = 8000U;
+	const auto result = std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, reduce, row, limited, context));
+	EXPECT_EQ(result, PropertyValue(payload));
+}
+
+TEST(LogicalPlanReadRuntimeTest, QuantifierRetainsCopiedSourceListWhileEvaluating) {
+	NoGraphSnapshot snapshot;
+	LogicalPlanReadRow row;
+	QueryContext context;
+	const std::string payload(1000U, 'v');
+	context.parameters.emplace("values", PropertyValue(std::vector<PropertyValue>{
+		PropertyValue(payload), PropertyValue(payload)}));
+	expressions::QuantifierFunctionExpression quantifier(
+		"any", "item", std::make_unique<expressions::ParameterExpression>("values"),
+		std::make_unique<expressions::LiteralExpression>(true));
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1500U;
+	try {
+		static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, quantifier, row, limited, context));
+		FAIL() << "the copied quantifier source must fit the shared byte budget";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	limited.maximum_materialized_bytes = 8000U;
+	const auto result = std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, quantifier, row, limited, context));
+	EXPECT_EQ(result, PropertyValue(true));
+}
+
+TEST(LogicalPlanReadRuntimeTest, ScopedListBindingAdmitsShadowCopyBeforeReplacingOuterValue) {
+	NoGraphSnapshot snapshot;
+	LogicalPlanReadRow row;
+	const PropertyValue outer(std::string(1000U, 'o'));
+	row.values.emplace("item", outer);
+	QueryContext context;
+	context.parameters.emplace("values", PropertyValue(std::vector<PropertyValue>{PropertyValue(1)}));
+	expressions::ListComprehensionExpression comprehension(
+		"item", std::make_unique<expressions::ParameterExpression>("values"),
+		std::make_unique<expressions::LiteralExpression>(false), nullptr,
+		expressions::ListComprehensionExpression::ComprehensionType::COMP_FILTER);
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1000U;
+	try {
+		static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, comprehension, row, limited, context));
+		FAIL() << "the saved outer binding must be admitted before it is copied";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	EXPECT_EQ(std::get<PropertyValue>(row.values.at("item")), outer);
+	limited.maximum_materialized_bytes = 5000U;
+	const auto result = std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, comprehension, row, limited, context));
+	EXPECT_EQ(result, PropertyValue(std::vector<PropertyValue>{}));
+	EXPECT_EQ(std::get<PropertyValue>(row.values.at("item")), outer);
+}
+
+TEST(LogicalPlanReadRuntimeTest, ListLiteralAndSliceShareSourceAndOutputByteBudget) {
+	NoGraphSnapshot snapshot;
+	LogicalPlanReadRow row;
+	QueryContext context;
+	const std::string payload(1000U, 'v');
+	context.parameters.emplace("first", PropertyValue(payload));
+	context.parameters.emplace("second", PropertyValue(payload));
+	const PropertyValue full(std::vector<PropertyValue>{PropertyValue(payload), PropertyValue(payload)});
+	context.parameters.emplace("values", full);
+	std::vector<std::unique_ptr<expressions::Expression>> elements;
+	elements.push_back(std::make_unique<expressions::ParameterExpression>("first"));
+	elements.push_back(std::make_unique<expressions::ParameterExpression>("second"));
+	expressions::ListLiteralExpression literal(std::move(elements));
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1500U;
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, literal, row, limited, context)), std::runtime_error);
+	limited.maximum_materialized_bytes = 5000U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, literal, row, limited, context)), full);
+	expressions::ListSliceExpression partial(
+		std::make_unique<expressions::ParameterExpression>("values"),
+		std::make_unique<expressions::LiteralExpression>(int64_t{0}),
+		std::make_unique<expressions::LiteralExpression>(int64_t{1}), true);
+	limited.maximum_materialized_bytes = 2500U;
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, partial, row, limited, context)), std::runtime_error);
+	limited.maximum_materialized_bytes = 6000U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, partial, row, limited, context)),
+		PropertyValue(std::vector<PropertyValue>{PropertyValue(payload)}));
+	expressions::ListSliceExpression complete(
+		std::make_unique<expressions::ParameterExpression>("values"), nullptr, nullptr, true);
+	limited.maximum_materialized_bytes = 2500U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, complete, row, limited, context)), full);
+}
+
 TEST(LogicalPlanReadRuntimeTest, PropagatesNullCollectionInputsAndRejectsNonBooleanQuantifiers) {
 	NoGraphBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -946,6 +1051,36 @@ TEST(LogicalPlanReadRuntimeTest, BoundsRetainedAggregatePayloadByMaterializedByt
 	QueryPlan countPlan = parser.parseToLogical("UNWIND $items AS item RETURN count(item) AS total");
 	ASSERT_NE(countPlan.root, nullptr);
 	EXPECT_NO_THROW(static_cast<void>(runtime.executeToQueryResult(*countPlan.root, limited, context)));
+}
+
+TEST(LogicalPlanUnwindRuntimeTest, BorrowedListsPreserveLargeNestedValuesAndRepeatedExecution) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	const PropertyValue nested(PropertyValue::MapType{{"payload", PropertyValue(std::string(8192U, 'x'))}});
+	const std::vector<PropertyValue> items{nested, PropertyValue(), nested};
+	QueryContext context;
+	context.parameters.emplace("items", PropertyValue(items));
+	for (const bool literal: {false, true}) {
+		std::unique_ptr<logical::LogicalOperator> root;
+		if (literal) {
+			root = std::make_unique<logical::LogicalUnwind>(std::make_unique<logical::LogicalSingleRow>(), "item", items);
+		} else {
+			root = parser.parseToLogical("UNWIND $items AS item RETURN item").root;
+		}
+		ASSERT_NE(root, nullptr);
+		for (const bool stopEarly: {true, false, false}) {
+			SCOPED_TRACE(literal);
+			SCOPED_TRACE(stopEarly);
+			std::vector<PropertyValue> delivered;
+			static_cast<void>(runtime.execute(*root, bounds(), [&](const LogicalPlanReadRow &row) {
+				delivered.push_back(std::get<PropertyValue>(row.values.at("item")));
+				return !stopEarly;
+			}, context));
+			EXPECT_EQ(delivered, stopEarly ? std::vector<PropertyValue>{nested} : items);
+			EXPECT_EQ(context.parameters.at("items"), PropertyValue(items));
+		}
+	}
 }
 
 TEST(LogicalPlanUnwindRuntimeTest, RejectsOversizedTransientRows) {
@@ -1683,4 +1818,165 @@ TEST(LogicalPlanUnwindRuntimeTest, RejectsEmptyAliasesAndUnboundExpressions) {
 	EXPECT_THROW(static_cast<void>(runtime.execute(unboundParameter, bounds(),
 															 [](const LogicalPlanReadRow &) { return true; }, context)),
 				 std::runtime_error);
+}
+
+TEST(LogicalPlanReadRuntimeTest, PaginationFlushesUnderBytePressureWithoutChangingTheWindow) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryPlan plan = parser.parseToLogical("UNWIND [1,2,3,4,5,6,7,8] AS value RETURN value SKIP 6 LIMIT 2");
+	ASSERT_NE(plan.root, nullptr);
+	auto constrained = bounds();
+	constrained.maximum_materialized_bytes = 1000U;
+	// The two retained QueryResult rows now share the cap with both pagination
+	// buffers and the output batch; the former 1000-byte allowance omits them.
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained)), std::runtime_error);
+	constrained.maximum_materialized_bytes = 1500U;
+	const auto result = runtime.executeToQueryResult(*plan.root, constrained);
+	ASSERT_EQ(result.rowCount(), 2U);
+	EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(7));
+	EXPECT_EQ(result.getRows()[1].at("value").asPrimitive(), PropertyValue(8));
+}
+
+TEST(LogicalPlanReadRuntimeTest, SkipStreamsAnExactBudgetRowWithoutSelectionStorage) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	const PropertyValue payload(std::string(1000U, 'x'));
+	auto source = std::make_unique<logical::LogicalUnwind>(
+		std::make_unique<logical::LogicalSingleRow>(), "value", std::vector<PropertyValue>{payload});
+	logical::LogicalSkip skip(std::move(source), 0);
+	auto constrained = bounds();
+	const size_t rowBytes = sizeof(LogicalPlanReadRow) + std::string("value").size() +
+		sizeof(LogicalPlanReadValue) + property_utils::getPropertyValueSize(payload);
+	constrained.maximum_materialized_bytes = rowBytes + sizeof(LogicalPlanReadRow);
+	size_t delivered = 0U;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(skip, constrained, [&](const LogicalPlanReadRow &row) {
+		++delivered;
+		EXPECT_EQ(std::get<PropertyValue>(row.values.at("value")), payload);
+		return true;
+	})));
+	EXPECT_EQ(delivered, 1U);
+}
+
+TEST(LogicalPlanReadRuntimeTest, ScalarResultPublicationChecksTheSharedBudgetBeforeCopying) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	const std::string payload(500U, 'v');
+	QueryPlan plan = parser.parseToLogical("UNWIND ['" + payload + "'] AS value RETURN value");
+	ASSERT_NE(plan.root, nullptr);
+	auto constrained = bounds();
+	constrained.maximum_materialized_bytes = 1000U + sizeof(LogicalPlanReadRow);
+	size_t streamed = 0U;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, constrained,
+		[&](const LogicalPlanReadRow &) { ++streamed; return true; })));
+	EXPECT_EQ(streamed, 1U);
+	try {
+		static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+		FAIL() << "the retained input and its public result copy must share one allowance";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	constrained.maximum_materialized_bytes = 3000U;
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(payload));
+}
+
+TEST(LogicalPlanReadRuntimeTest, SortPaginationAndSortTransferRowsWithinTheSharedBudget) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryPlan plan = parser.parseToLogical(
+			"UNWIND ['d','b','a','c'] AS value WITH value ORDER BY value SKIP 1 LIMIT 2 "
+			"RETURN value ORDER BY value DESC");
+	ASSERT_NE(plan.root, nullptr);
+	auto constrained = bounds();
+	// Four retained rows, one output slot and both Sort key-slot sets.
+	// Fixed slack covers scalar bindings and result-vector growth, not payloads.
+	constrained.maximum_materialized_bytes =
+			5U * sizeof(LogicalPlanReadRow) + 8U * sizeof(PropertyValue) + 616U;
+	EXPECT_LT(constrained.maximum_materialized_bytes,
+			8U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + 6U));
+	const auto result = runtime.executeToQueryResult(*plan.root, constrained);
+	ASSERT_EQ(result.rowCount(), 2U);
+	EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue("c"));
+	EXPECT_EQ(result.getRows()[1].at("value").asPrimitive(), PropertyValue("b"));
+	size_t delivered = 0U;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, constrained,
+			[&](const LogicalPlanReadRow &row) {
+				++delivered;
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("value")), PropertyValue("c"));
+				return false;
+			})));
+	EXPECT_EQ(delivered, 1U);
+}
+
+TEST(LogicalPlanReadRuntimeTest, AppliesWithOrderingAndPaginationForAliasStarAndAggregateBodies) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	for (const std::string &query: {
+		std::string("UNWIND [3,1,2] AS value WITH value AS renamed ORDER BY renamed SKIP 1 LIMIT 1 RETURN renamed AS value"),
+		std::string("UNWIND [3,1,2] AS value WITH * ORDER BY value SKIP 1 LIMIT 1 RETURN value"),
+		std::string("UNWIND [3,1,2] AS value RETURN * ORDER BY value SKIP 1 LIMIT 1"),
+		std::string("UNWIND [3,1,3,2,2] AS value WITH value, count(*) AS count ORDER BY count DESC, value SKIP 1 LIMIT 1 RETURN value"),
+		std::string("UNWIND [3,1,2,2] AS value WITH DISTINCT value ORDER BY value SKIP 1 LIMIT 1 RETURN value")
+	}) {
+		SCOPED_TRACE(query);
+		QueryPlan plan = parser.parseToLogical(query);
+		ASSERT_NE(plan.root, nullptr);
+		const auto result = runtime.executeToQueryResult(*plan.root, bounds());
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(query.find("count(*)") != std::string::npos ? 3 : 2));
+	}
+}
+
+TEST(LogicalPlanReadRuntimeTest, LimitExhaustsItsLogicalWindowForSortAndAggregateIncludingZero) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	for (const int limit: {0, 1, 2}) {
+		SCOPED_TRACE(limit);
+		const std::string input = "UNWIND [3,1,2] AS value WITH value LIMIT " + std::to_string(limit);
+		QueryPlan sorted = parser.parseToLogical(input + " RETURN value ORDER BY value");
+		const auto rows = runtime.executeToQueryResult(*sorted.root, bounds());
+		ASSERT_EQ(rows.rowCount(), static_cast<size_t>(limit));
+		if (limit == 1) EXPECT_EQ(rows.getRows()[0].at("value").asPrimitive(), PropertyValue(3));
+		if (limit == 2) {
+			EXPECT_EQ(rows.getRows()[0].at("value").asPrimitive(), PropertyValue(1));
+			EXPECT_EQ(rows.getRows()[1].at("value").asPrimitive(), PropertyValue(3));
+		}
+		QueryPlan counted = parser.parseToLogical(input + " RETURN count(*) AS count");
+		const auto result = runtime.executeToQueryResult(*counted.root, bounds());
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows()[0].at("count").asPrimitive(), PropertyValue(limit));
+	}
+}
+
+
+TEST(LogicalPlanReadRuntimeTest, HashJoinCanonicalNestedMapsPreserveBagAndSignedZero) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	PropertyValue::MapType first;
+	first.emplace("wide", PropertyValue(std::string(4096U, 'x')));
+	first.emplace("nested", PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(-0.0)}));
+	PropertyValue::MapType second;
+	second.emplace("nested", PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(0.0)}));
+	second.emplace("wide", PropertyValue(std::string(4096U, 'x')));
+	auto left = std::make_unique<logical::LogicalUnwind>(
+		std::make_unique<logical::LogicalSingleRow>(), "shared", std::vector<PropertyValue>{PropertyValue(first)});
+	auto right = std::make_unique<logical::LogicalUnwind>(
+		std::make_unique<logical::LogicalSingleRow>(), "shared",
+		std::vector<PropertyValue>{PropertyValue(second), PropertyValue(second)});
+	logical::LogicalJoin join(std::move(left), std::move(right));
+	const QueryResult result = runtime.executeToQueryResult(join, bounds());
+	first.clear();
+	second.clear();
+	ASSERT_EQ(result.rowCount(), 2U);
+	for (const auto &row : result.getRows()) {
+		const auto &map = row.at("shared").asPrimitive().getMap();
+		EXPECT_EQ(map.at("wide"), PropertyValue(std::string(4096U, 'x')));
+		EXPECT_EQ(map.at("nested"), PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(0.0)}));
+	}
 }

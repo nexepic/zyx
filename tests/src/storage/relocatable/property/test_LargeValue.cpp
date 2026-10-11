@@ -262,6 +262,15 @@ TEST(RelocatableLargeValueManifestPageTest, RoundTripsMixedChunksAndBindsTypedOw
 	const std::vector<std::byte> encoded = LargeValueManifestPageCodec::encode(expected);
 	EXPECT_EQ(encoded.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
 	EXPECT_EQ(LargeValueManifestPageCodec::decode(encoded), expected);
+	size_t admittedBytes = 0U;
+	const auto decoded = LargeValueManifestPage::decodeManifest(owner, encoded,
+			[&](size_t bytes) { admittedBytes = bytes; });
+	EXPECT_EQ(decoded, expected);
+	EXPECT_EQ(admittedBytes, decoded.media_type.capacity() +
+			decoded.chunks.capacity() * sizeof(LargeValueChunk));
+	EXPECT_THROW(LargeValueManifestPage::decodeManifest(owner, encoded,
+			[](size_t) { throw std::length_error("manifest budget"); }), std::length_error);
+	EXPECT_EQ(LargeValueManifestPage::decodeManifest(owner, encoded), expected);
 
 	const LargeValueManifestPage page = LargeValueManifestPage::create(owner, expected);
 	EXPECT_EQ(page.manifest(), expected);
@@ -285,6 +294,8 @@ TEST(RelocatableLargeValueManifestPageTest, RoundTripsMixedChunksAndBindsTypedOw
 
 	PageOwnerHeader wrongOwner = owner;
 	wrongOwner.owner_id += 1U;
+	expectFormatError([&] { static_cast<void>(LargeValueManifestPage::decodeManifest(wrongOwner, encoded)); },
+					  FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(LargeValueManifestPage::open(wrongOwner, page.serialize())); },
 					  FormatError::FERR_INVALID_STATE);
 }
@@ -641,4 +652,55 @@ TEST(RelocatableLargeValueDataPageTest, RejectsEveryInvalidFrameIdentityAndCheck
 	wrongOwner = owner;
 	wrongOwner.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
 	expectFormatError([&] { static_cast<void>(frame.rebindOwner(wrongOwner)); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST(RelocatableLargeValueManifestPageTest, AdmitsDecodedManifestArraysBeforeAllocationAndAllowsRetry) {
+	for (bool internal: {false, true}) {
+		SCOPED_TRACE(internal);
+		auto source = manifest();
+		if (internal) {
+			source.node_level = 1U;
+			source.children = {{PageId(301U), 0U, static_cast<uint32_t>(source.chunks.size()), 0U, source.logical_bytes}};
+			source.chunks.clear();
+		}
+		const auto bytes = LargeValueManifestPageCodec::encode(source);
+		size_t calls = 0U, requested = 0U;
+		const auto reject = [&](size_t count) { ++calls; requested = count; throw std::length_error("manifest arrays rejected"); };
+		EXPECT_THROW(static_cast<void>(LargeValueManifestPageCodec::decode(bytes, reject)), std::length_error);
+		EXPECT_EQ(calls, 1U);
+		EXPECT_EQ(requested, source.media_type.size() + source.chunks.size() * sizeof(LargeValueChunk)
+			+ source.children.size() * sizeof(LargeValueManifestChild));
+		for (size_t retry = 0U; retry < 2U; ++retry) {
+			const auto decoded = LargeValueManifestPageCodec::decode(bytes, [&](size_t count) { requested = count; });
+			EXPECT_EQ(decoded, source);
+			EXPECT_EQ(requested, decoded.media_type.capacity() + decoded.chunks.capacity() * sizeof(LargeValueChunk)
+				+ decoded.children.capacity() * sizeof(LargeValueManifestChild));
+		}
+		auto corrupt = bytes; corrupt[0] ^= std::byte{1}; calls = 0U;
+		expectFormatError([&] { static_cast<void>(LargeValueManifestPageCodec::decode(corrupt, reject)); }, FormatError::FERR_CHECKSUM_MISMATCH);
+		EXPECT_EQ(calls, 0U);
+	}
+}
+
+TEST(RelocatableLargeValueDataPageTest, AdmitsDecodedPayloadAfterIntegrityChecksAndAllowsRetry) {
+	const auto expected = firstDataPage();
+	const auto encoded = LargeValueDataPageCodec::encode(expected);
+	size_t calls = 0U, requested = 0U;
+	EXPECT_THROW(static_cast<void>(LargeValueDataPageCodec::decode(encoded, [&](size_t bytes) {
+		++calls; requested = bytes; throw std::length_error("data payload budget");
+	})), std::length_error);
+	EXPECT_EQ(calls, 1U);
+	EXPECT_EQ(requested, expected.payload.size());
+	for (int retry = 0; retry < 2; ++retry) {
+		const auto decoded = LargeValueDataPageCodec::decode(encoded, [&](size_t bytes) { requested = bytes; });
+		EXPECT_EQ(decoded, expected);
+		EXPECT_EQ(requested, decoded.payload.capacity());
+	}
+	auto corrupt = encoded;
+	corrupt[0] ^= std::byte{1U};
+	calls = 0U;
+	expectFormatError([&] {
+		static_cast<void>(LargeValueDataPageCodec::decode(corrupt, [&](size_t) { ++calls; }));
+	}, FormatError::FERR_CHECKSUM_MISMATCH);
+	EXPECT_EQ(calls, 0U);
 }

@@ -49,6 +49,19 @@ namespace graph::query::execution {
 
 	namespace {
 
+		[[nodiscard]] storage::LogicalGraphMutationBatchResult executeMutationWithReadControl(
+			storage::LogicalGraphWriteBackend &backend, const storage::LogicalGraphMutationBatch &batch,
+			std::optional<storage::LogicalGraphMutationFence> fence, const LogicalPlanReadRuntimeBounds &bounds,
+			const QueryContext &context) {
+			storage::LogicalGraphMutationReadControl control;
+			if (context.guard) control.checkpoint = [&context] { context.checkGuardNow(); };
+			control.property_admission = [&context, maximumBytes = bounds.maximum_materialized_bytes](size_t bytes) {
+				context.checkGuardNow();
+				if (bytes > maximumBytes) throw std::runtime_error("logical mutation constraint Property source exceeded its byte bound");
+			};
+			return backend.executeLogicalGraphMutationBatchWithReadControl(batch, fence, control);
+		}
+
 		using storage::LogicalGraphBatchEdgeCreateRequest;
 		using storage::LogicalGraphMutationBatch;
 		using storage::LogicalGraphMutationEntityKind;
@@ -1550,7 +1563,7 @@ namespace graph::query::execution {
 					// makes the current mutation batch visible.
 					context.checkGuardNow();
 					const storage::LogicalGraphMutationBatchResult result =
-							writeBackend.executeLogicalGraphMutationBatch(batch, fence);
+							executeMutationWithReadControl(writeBackend, batch, fence, bounds, context);
 					return buildCreateSetResult(projection, implicitColumns, projectionRows, *snapshot, batch, result,
 												persistedEntities, bounds, context, exportedProjection,
 												&prepublicationCache, false, resultSort, resultSkip, resultLimit);
@@ -2548,7 +2561,7 @@ namespace graph::query::execution {
 						--remaining;
 						if (topology.type == operation.getEdgeType() &&
 							matches(storage::LogicalGraphEdge{topology.edge_id, topology.source_node_id,
-														 topology.target_node_id, topology.type})) {
+															  topology.target_node_id, topology.type})) {
 							candidates.push_back(&topology);
 						}
 						if (remaining == 0U && page.continuation.has_value()) {
@@ -2564,8 +2577,28 @@ namespace graph::query::execution {
 						for (const storage::LogicalGraphEdgeTopology *candidate: candidates) {
 							edgeIds.push_back(candidate->edge_id);
 						}
+						size_t admittedPropertyBytes = 0U;
+						for (const auto &[key, expected]: orderedProperties) {
+							static_cast<void>(expected);
+							if (key.size() > state.bounds.maximum_materialized_bytes - admittedPropertyBytes) {
+								throw std::runtime_error(
+										"logical MERGE relationship Property batch exceeded its byte bound");
+							}
+							admittedPropertyBytes += key.size();
+						}
+						const std::function<void(size_t)> admission = [&](size_t bytes) {
+							state.context.checkGuard();
+							if (bytes > state.bounds.maximum_materialized_bytes - admittedPropertyBytes) {
+								throw std::runtime_error(
+										"logical MERGE relationship Property batch exceeded its byte bound");
+							}
+							admittedPropertyBytes += bytes;
+						};
 						const std::vector<std::vector<PropertyValue>> columns =
-								state.snapshot.readEdgePropertyColumnsSorted(edgeIds, propertyKeys);
+								state.snapshot.supportsPropertyReadAdmission()
+										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+												  edgeIds, propertyKeys, admission)
+										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, propertyKeys);
 						if (columns.size() != orderedProperties.size()) {
 							throw std::runtime_error(
 									"logical MERGE relationship Property batch returned an invalid column count");
@@ -2576,8 +2609,8 @@ namespace graph::query::execution {
 										"logical MERGE relationship Property batch returned an invalid row count");
 							}
 						}
-						enforceMergePropertyColumnBytes(
-								columns, orderedProperties, state.bounds.maximum_materialized_bytes);
+						enforceMergePropertyColumnBytes(columns, orderedProperties,
+														state.bounds.maximum_materialized_bytes);
 						for (size_t row = 0U; row < candidates.size() && !matchOrdinal.has_value(); ++row) {
 							bool matchesProperties = true;
 							for (size_t column = 0U; column < columns.size(); ++column) {
@@ -3775,7 +3808,7 @@ namespace graph::query::execution {
 				}
 				try {
 					context.checkGuardNow();
-					static_cast<void>(write_backend_.executeLogicalGraphMutationBatch(batch, fence));
+					static_cast<void>(executeMutationWithReadControl(write_backend_, batch, fence, bounds, context));
 					return preparedResult;
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// Re-read and reapply the ordered chain against the new graph generation.
@@ -3866,7 +3899,7 @@ namespace graph::query::execution {
 				}
 				try {
 					context.checkGuardNow();
-					static_cast<void>(write_backend_.executeLogicalGraphMutationBatch(batch, fence));
+					static_cast<void>(executeMutationWithReadControl(write_backend_, batch, fence, bounds, context));
 					return deleteResult;
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// Re-open the snapshot and re-evaluate the full read plan. Never reuse
@@ -3906,7 +3939,7 @@ namespace graph::query::execution {
 					context.checkGuardNow();
 					const storage::LogicalGraphMutationBatchResult result =
 							mergeBatchHasMutations(state.batch)
-									? write_backend_.executeLogicalGraphMutationBatch(state.batch, fence)
+									? executeMutationWithReadControl(write_backend_, state.batch, fence, bounds, context)
 									: storage::LogicalGraphMutationBatchResult{};
 					return buildMergeResult(*mergePipeline,
 											visibleMutationOutputColumns(*mergePipeline->mutation_chain.merge_root),

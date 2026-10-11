@@ -1,0 +1,184 @@
+---
+title: 当前局部读取优化实施计划
+description: 保留现有单文件架构、格式和正确性合同，只减少目录解析与索引验证中的重复工作。
+category: 性能
+categoryOrder: 5
+order: 14
+project: zyx
+projectLabel: ZYX
+projectDescription: 高性能嵌入式图数据库引擎
+projectOrder: 1
+---
+
+# 当前局部读取优化实施计划
+
+更新：2026-10-09。**这是当前实施入口，首批范围为目录按需解析和已验证结果复用；已完成 macOS 定向验收。** 本文可独立指导首批优化，不需要从聊天记录推断约束。
+
+[原优化策略](optimization)记录过去阶段及历史结果，不代表本文完成。[完整替代架构](single-file-next-generation-design)仅为研究备选，其中直接物理页引用、新 backend、PAX、OCC 和 G0–G7 路线均不在本次实施范围。[当前格式规范](native-single-file-storage-plan)继续有效；本计划不授权改变格式或降低正确性保证。
+
+## 1. 保留项与禁止扩张项
+
+必须保留单文件、A/B 发布、页级 COW、稳定实体 ID/PageId、目录支持的搬迁、快照隔离、事务原子性、read-your-writes、统一分配、安全回收、显式字节编码、StorageIO、现有公共 ABI。复用现有 B+Tree、批量/按需读取、NativeReadSession、选择向量和计划缓存。
+
+首批不改变磁盘 codec、根布局、页大小、默认缓存/内存预算、持久化屏障、隔离等级或跨进程访问规则；不增加 backend，不重新设计属性主存储，不新增另一套长期缓存体系。代码保持 macOS/Linux/Windows 可移植，目前只实测 macOS。
+
+任何改动若需要违反上述条款，停止该改动并单独给出收益与语义评审；不能把它混在性能修复中。用户不要求重构已经合理的部分。
+
+## 2. 依据与首批收益目标
+
+已有 profile 证据在 `benchmarks/graphdb-comparison/results/20261009-root-cause/`：索引点查解码 1 条记录却有 2823 次 metadata read、58 个 distinct page pin；1250 个等值索引候选有 20568 次 metadata read。这些是含缓存命中的诊断计数，不能当作物理 I/O，也不能据此承诺加速倍数。
+
+首批只追求两项可验收结果：
+
+1. 单路径目录查找不解析无关兄弟引用；多键查找只解析实际访问集合，共享路由不重复读取。
+2. 索引首次必要的实体/标签/属性一致性验证保留；后续算子消费已有验证结果时不再做等价重复读取。若当前路径已经做到，则记录无新增改动，不为了完成任务增加缓存或改写代码。
+
+实际时间收益必须通过同配置无 profile 测量确认。计数减少但耗时增加不能自动验收；不同优化的预期倍数不能相乘。
+
+## 3. L0：冻结首批基线和合同
+
+依次完成：
+
+1. 记录当前工作树源码散列、dirty 状态、编译器、Release 参数、运行二进制散列。现有未提交修改属于用户工作，不重置、不 stash、不提交。使用当前工作树作为控制组，不能把旧提交当作等价控制组。
+2. 梳理读调用链：哪些调用要完整解析，哪些只需要一个/一组子引用；标出读取、写候选、搬迁和完整性工具。源码入口见第 4 节。
+3. 记录同一查询中索引验证、后续过滤/投影和属性读取的调用次数。先确认重复读取真的存在，区分已有优化与新增机会。
+4. 冻结查询结果、排序要求、NULL/缺失、损坏拒绝、快照和 overlay 合同。目录按需检查对未访问兄弟引用的检查时机须明确；不能宣称一次点查会验证整棵树。
+5. 保存受影响场景的 profile 工作量与无 profile 延迟控制数据，确定第 7 节的留出验证组合。
+
+每个验收项附证据路径后才标记完成。旧测量可用于选场景，不能替代当前源码控制组。
+
+## 4. L1：目录按需解析
+
+### 4.1 源码与职责
+
+| 文件 | 审查/修改职责 |
+|---|---|
+| `src/storage/relocatable/metadata/MetadataPageFile.cpp` | `readMetadataRadix`、`readMetadataRadixUnresolved`、`resolveLogicalRadixChildren`；保留完整解析能力，提供所选引用解析路径 |
+| `include/graph/storage/relocatable/metadata/MetadataPageFile.hpp` | 为新读取能力定义清楚的输入、返回状态和校验边界 |
+| `src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp` | 复用已有单查/`findMany`；不要假定这里没有批处理 |
+| `src/storage/relocatable/metadata/LocationDirectory.cpp` | 将确实只需选定孩子的读取下降接入新路径；写候选与迁移路径不自动替换 |
+| `include/graph/storage/relocatable/entity/NativeReadSession.hpp` | 仅当计数证明跨读取重复时评估现有快照会话复用，不作为默认新增缓存的理由 |
+
+### 4.2 实施步骤与不变量
+
+1. 将“解码并校验当前 radix 页”和“解析所有子引用”拆成可明确选择的读取行为；新接口返回选中的引用或明确的部分解析视图。
+2. **绝不能只填一个 child 后把原页标记为全部 `logical_children_resolved`。** 完整解析调用者仍须得到完整结果，避免未解析位置被当成空子树。
+3. 单查根据目标键选择 child；多查按 child/路由页分组并复用 `findMany`，保留输入 ID 与输出结果的严格对应。空输入、重复输入的约束遵循原接口，不悄悄放宽。
+4. 每次仍检查所读页的校验和、codec、owner、边界、generation，以及被使用路由的身份/可见性。bootstrap 和 routeContext 必须来自正确快照，不能用最新根替代旧根。
+5. 写候选允许使用前一发布 bootstrap 的现有专用规则保持不变；第一轮不要将读缓存扩展到未发布候选。完整性扫描和 relocation 验证继续走完整所需校验。
+6. 如需要缓存，绑定数据库身份、快照及解释引用的根/路由上下文；未命中/不存在结果同样不能跨快照复用。沿用现有预算和页 pin 生命周期，不缓存无所有权裸指针，不跨线程共享可变会话。
+7. 优先先交付按需解析，再依据剩余计数决定是否增加解析缓存；不要同时引入多个机制而无法归因收益。
+
+### 4.3 必要验收
+
+- 新定向测试覆盖单子路径、多键共享路由、稀疏槽位、根/叶边界、缺失命中引用、错误类型/owner/generation、错误数据库上下文、旧快照和取消。
+- 页内结构损坏仍拒绝；完整解析 API 和完整性工具仍发现应检查的坏路由。未访问引用的行为与 L0 冻结的边界一致。
+- 现有 `RelocatableMetadataPageFileTest`、`RelocatableMetadataPageRouteDirectoryTest`、`RelocatableLocationDirectoryRouteValidationTest`、`LocationDirectoryScanCacheTest` 的相关用例保留。
+- 结构计数证明单路径未解析无关引用，多查不退回逐 ID 全树解析；取消后不发生额外存储读取。
+- 同配置点查和批量读取延迟/内存对比通过第 7 节评审。磁盘格式和写入发布路径保持不变。
+
+## 5. L2：索引验证复用，不取消必要验证
+
+### 5.1 源码与现有合同
+
+入口为 `RelocatableStorageBackend.cpp` 中精确索引候选产生路径、`PageBackedGraphReadAdapter.cpp` 的 `validateNodeExactPropertiesSorted`、`LogicalGraphRead.hpp` 的 `IndexCandidateBatch`、`NativeReadSession.hpp` 及消费这些标记/列的执行器路径。
+
+`exact_match_verified`、`predicates_verified`、`label_scope_verified` 具有不同证明范围，不能看到其中一个为真就跳过所有验证。当前 `verified_property_columns` 已经存在；先检查它的消费链，不重复发明同一机制。
+
+必须保留 `RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord`：校验和有效、结构有效的索引键仍可能与主属性不一致。正常写入原子性不能替代这项读取损坏检测。首批禁止无回查 index-only、伪造 verified 标记或删除这项测试。
+
+### 5.2 实施步骤与失效规则
+
+1. 在同一查询内追踪“首次核验 → 候选批次 → 过滤 → 投影”，仅对确认的等价重复读取进行修改；额外谓词和未覆盖投影仍按需读取。
+2. 核验结果只能证明具体实体、具体标签/属性/比较语义、具体快照。不能按 EntityId 单独记为“全部已验证”，也不能把精确谓词证明复用于不同范围谓词。
+3. 优先复用批次携带的已验证列和现有会话值，不跨批保留大量 `PropertyValue` 副本。需要持久化到会话的结果计入原有字节预算。
+4. 对 overlay 修改的实体绕过基底核验结果，按事务最终态重新判断；删除、移除属性、修改标签、再次修改同一实体都需覆盖。不能仅比较持久 generation，因为 overlay revision 在同一 generation 内也会变化。
+5. 保留错误传播、visitor 取消和预算拒绝语义，不把损坏异常当作预算压力重试。若生命周期不清楚，宁可保留一次必要读取，不引入全局缓存。
+
+### 5.3 必要验收
+
+- 保留 Schema 测试中的主属性不一致、实体值不一致、owner 错误和页 checksum 损坏拒绝。
+- 保留旧/新快照、属性替换、精确/复合候选、字节预算、提前停止等相关测试。
+- 重点复用 `OverlayExactLookupHydratesOnlyUnchangedBaseMatches`、`OverlayExactStreamPreservesFinalStateBudgetStopAndRevision`、`ReversePruningUsesExactCandidatesWithoutHydratingUnrelatedTargetProperties` 等已有用例，不为了指标改正确断言。
+- 新测试只验证实际新增行为：首次核验存在；重复消费者不再重复读取；未覆盖字段仍读取；overlay 修改不能命中旧证明。
+- 如果审计确认该路径没有重复工作，保存调用链/计数证据，结论为无需修改，可完成本阶段评审；不得虚报加速或引入无用重构。
+
+## 6. 延后项目的进入条件
+
+| 项目 | 在开始生产实现前必须形成的具体材料 |
+|---|---|
+| 类型计数快路径 | 计数存放/初始化方式；所有写入路径的增量表；回滚/快照/overlay 规则；溢出检查；符合条件的逻辑计划形状；端点损坏检测的等价保证或显式合同评审；旧文件和缺失计数回退 |
+| 覆盖邻接 | key-only 规范的正式局部变更；codec/版本和升级/构建；保留 EdgeId 顺序及 continuation；两方向原子维护；自环/平行边规则；Entity 真值核验边界；回收和旧快照；读、写、空间原型对比 |
+| 无回查 index-only | 在不读主属性时如何保持现有损坏拒绝合同的具体机制，或单独批准的合同变更；不能用“索引正常情况下总正确”代替 |
+| 整体架构替代 | 首批完成后目录仍占主导的证据，以及优化目录/单层映射/直接引用的同功能比较；当前不启动 |
+
+以上不计入首批完成率，不因首批完成而自动获准实施。必要优化没有被跳过，而是明确保留为待满足条件的独立工作。
+
+## 7. 定向测试与性能验收
+
+仅执行对应模块测试；不跑全量单元测试，不把覆盖率作为门禁。构建测试可执行文件不等于运行全部测试。现有过滤命令示例：
+
+```bash
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter='RelocatableMetadataPageFileTest.*:RelocatableMetadataPageRouteDirectoryTest.*:RelocatableLocationDirectoryRouteValidationTest.*:LocationDirectoryScanCacheTest.*'
+./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord:RelocatableStorageBackendTest.OverlayExactLookupHydratesOnlyUnchangedBaseMatches:RelocatableStorageBackendTest.OverlayExactStreamPreservesFinalStateBudgetStopAndRevision'
+```
+
+这些是已存在的入口示例，不是完整验收用例清单。修改后的新用例也必须加入对应选择，并确认实际执行数量非零。不要使用不带过滤的 `run_tests.sh`，不要误认为 `--file` 会过滤测试。
+
+受影响场景包括命中/未命中点查、精确索引少量/大量候选、按需属性投影、目录批读、一跳/多跳读取及必要的更新后查询。只跑所改模块相关组合，多个修改稳定后统一跑首批集成组合，不反复执行整套 benchmark。
+
+控制组与优化组统一数据、索引、线程、缓存、预算、编译参数及持久化语义；诊断计数和无 profile 计时分开。常规对比使用至少 3 次独立进程、每组 3 次预热和 10 次样本；10 个样本不报告有统计说服力的 p99。重开进程不等于冷 OS 缓存，必须标注缓存状态。
+
+记录 p50/p95、原始样本、metadata read、被请求/实际解析引用数、独立页 pin、主属性验证/读取数、峰值 RSS；读取优化不应额外写盘。若涉及未来持久结构变更，另记录写放大和文件大小。缺少的诊断指标可以添加，但不得改变无 profile 执行语义。
+
+每个声称有收益的修改必须同时提供工作量与耗时证据；与噪声重叠则写“未证实”，不能硬报收益。p50 退化超过 10% 或 p95 超过 20% 触发复测与原因评审，任何可重复退化都应披露；百分比是调查触发线，不是达到线内就自动通过。正确性失败不可接受。
+
+至少留出一组未用于调优的新种子和重命名标签/类型，以及不同度分布、类型选择率、删除后布局和读写组合。生产代码禁止识别 benchmark 名称、固定 ID、查询文本、种子、规模或答案；优化仅由逻辑语义和实际访问结构触发。
+
+## 8. 进度与证据账本
+
+首批共 4 阶段、20 个验收项，每项占本阶段 20%，总体占 5%。文档审查不算实现验收。每次完成任务后报告所有阶段百分比、证据路径、剩余问题；不得按耗时、代码行数或“正在测试”增加进度。
+
+| 阶段 | 五个验收项 | 当前进度 |
+|---|---|---|
+| L0 基线/合同 | 源码与二进制冻结；调用者分类；重复读取审计；语义/损坏边界；控制组与留出组合 | 5/5，100% |
+| L1 目录解析 | 单路径接口；按需接入/批量复用；快照/完整解析边界；相关测试；工作量及耗时对照 | 5/5，100% |
+| L2 验证复用 | 重复点证据或无需改动证明；证明范围与生命周期；消费者/overlay 处理；相关测试；性能/资源评审 | 5/5，100% |
+| L3 首批收口 | 两项集成回归；留出通用性；资源/无新增写入；文档与证据归档；最终 diff/未解决项复审 | 5/5，100% |
+
+顺序为 L0 → L1 → L2 → L3。实现证据放 `benchmarks/graphdb-comparison/results/` 下新的任务目录，至少包含 provenance、原始样本、对比表、定向测试结果及决策记录；本轮证据目录为 `benchmarks/graphdb-comparison/results/20261009-targeted-read/`。
+
+每个验收项使用稳定编号 L0.1–L3.5，记录状态、源码/二进制散列、命令、结果路径、通过日期。存在未解决正确性问题时不得完成对应项。若某项无需代码变化，须给出证据与明确结论，不能悄悄跳过。
+
+## 9. 操作约束与交付状态
+
+不 commit、不 push、不改动或清除用户已有修改；不自动创建 Docker 环境。确需临时数据时限定到本任务目录，结束后清理自己创建的可执行文件/临时库，保留小型证据，不删除用户数据库。
+
+首批 L0–L3 均为 100%，总计 20/20。L2 经源码与读取计数回归确认，现有验证列复用已经满足目标，因此保留生产实现，仅补充必要回归；这不是跳过任务。类型计数、覆盖邻接及整体替代架构仍不在首批完成范围。
+
+### 9.1 本轮实施与验收记录（2026-10-09）
+
+- `MetadataPageFile::resolveMetadataRadixChildren` 返回所选槽位的引用，保留稀疏/重复输入顺序，不修改原 codec 页的完整解析状态；复用已有 `findMany`。
+- `LocationDirectory::findOptional` 只解析所选路径，并复用已经认证的根引用，避免再做一次 bootstrap/根路由查找。
+- 有界范围游标只解析与范围相交的子引用；实体/属性稀疏多键查询进一步使用实际请求键集合，跳过首尾之间未请求的分支，借用 span 的生命周期限定在同步调用内。使用独立引用视图；没有新增长期缓存。完整解析、写候选、迁移和原格式继续保留。
+- 最终相关模块及集成选择 **118/118 通过**；新增回归覆盖部分/完整解析边界、共享路由计数、旧快照和上下文、重复投影与未覆盖字段。最终结果见 `final-module-tests.xml`；初期测试夹具配置错误及其失败日志保留，未修改既有正确断言。
+
+同机 macOS Release、1 线程、相同数据/预算，交替运行两版本；每场景每版本 3 个独立进程，每进程 3 次预热与 10 次计时。诊断 profile 独立采集。以下为 30 个样本汇总 p50，OS 缓存未清空：
+
+| 主数据场景 | 优化前 ms | 优化后 ms | p50 降低 | metadata read 前 → 后 |
+|---|---:|---:|---:|---:|
+| 索引点查 | 5.683 | 5.165 | 9.1% | 4411 → 4088 |
+| 等值索引查询 | 41.732 | 38.953 | 6.7% | 22156 → 20797 |
+| 一跳展开 | 5.860 | 5.227 | 10.8% | 4400 → 4080 |
+| 标签过滤扫描 | 49.086 | 45.555 | 7.2% | 22759 → 21071 |
+
+留出数据使用 seed 917、640 个用户、420 个帖子、37 个标签、出度 7/每帖 3 个标签；三项查询 p50 分别降低 7.8%、7.3%、6.2%。标签/属性重命名通过 `Account917`/`ranking` 回归验证；稀疏布局、缺失路由、更新/删除、overlay revision 通过相应模块回归验证。七项 p95 均降低，但不能据此保证所有工作负载都加速。
+
+资源限制完整披露：最终七组整进程峰值 RSS 中位数相对变化为 −6.26% 至 +2.48%（包含加载），不宣称查询内存下降。中间版本曾出现 +5.68%/+7.92% 的等值查询 RSS 上升；各补 5 次独立进程复测后仅为 +0.07%/+1.10%，初测幅度未复现。该复测归属于补齐稀疏请求集合之前的版本，保存在 `before-sparse-selection/resource-recheck.json`，不能冒充最终版本证据。最终资源值以 `comparison.csv` 为准。查询 profile 未出现写入字节事件，源码未新增写入路径。
+
+完整对比、p95、逐进程数据、资源复测与验收决策分别见证据目录中的 `comparison.csv`、`comparison-details.json`、`before-sparse-selection/resource-recheck.json`、`acceptance-review.json`。`progress.json` 记录 L0.1–L3.5 的证据。`selected-only/` 与 `before-sparse-selection/` 分别为去除根重复解析前、补齐稀疏集合前的探索结果，均不是最终验收版本。
+
+本轮没有全量单元测试、commit、push 或 Docker 环境。临时控制程序、CSV 与数据库在取证后清理，只保留小型证据；复现旧控制组须先取得与 `baseline-source-sha256.json` 匹配的源码，不能用当前 HEAD 冒充。当前点查仍有数千次 metadata read；本轮是有限的通用改进，不代表已追平旧架构或 Kuzu。
+
+最后源码复审补充了超出根覆盖范围时的错误路由上下文拒绝，并纳入最终定向测试。性能样本对应此错误输入检查加入前的源码；上述正常命中查询不进入该分支。性能冻结散列见 `optimized-provenance.json`，最终源码/二进制散列见 `final-state-provenance.json`，不将两者混写为同一版本。

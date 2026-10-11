@@ -22,6 +22,10 @@
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
+#include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
+#include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -29,6 +33,7 @@
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/utils/Sha256.hpp"
 #include "storage/relocatable/property/PropertyCollectionRootTestUtils.hpp"
 
@@ -407,6 +412,38 @@ TEST_F(PropertyCollectionRootStoreValidationTest, SelectiveReadsPreserveOwnerAnd
 	snapshot.release();
 }
 
+TEST_F(PropertyCollectionRootStoreValidationTest, MaterializedBytesDistinguishSelectedFullAndMissingReads) {
+	auto original = root(1001U, 3U, "selected value");
+	original.entries.push_back({7U, graph::PropertyValue(int64_t{42})});
+	publishNodeAndRoot(original);
+	auto snapshot = metadata_->openSnapshot();
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, 1001U};
+	using graph::debug::PerfTrace;
+	struct Cleanup { ~Cleanup() { PerfTrace::setEnabled(false); PerfTrace::reset(); } } cleanup;
+	PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(true); PerfTrace::reset();
+	ASSERT_TRUE(properties_->readEntityPropertyOptional(snapshot, key, 7U).has_value());
+	const auto selectedTrace = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(selectedTrace.at("native_graph.read.selected_values_decoded").totalValue, 1);
+	EXPECT_EQ(selectedTrace.at("native_graph.read.materialized_bytes").totalValue,
+		CanonicalPropertyValueCodec::encodedSize(original.entries.back().value));
+	ASSERT_TRUE(properties_->readEntityOptional(snapshot, key).has_value());
+	EXPECT_EQ(PerfTrace::snapshotAndReset().at("native_graph.read.materialized_bytes").totalValue,
+		CanonicalPropertyValueCodec::encodedSize(original.entries.front().value) +
+		CanonicalPropertyValueCodec::encodedSize(original.entries.back().value));
+	EXPECT_FALSE(properties_->readEntityPropertyOptional(snapshot, key, 5U).has_value());
+	const auto missingTrace = PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(missingTrace.contains("native_graph.read.materialized_bytes"));
+	EXPECT_EQ(missingTrace.at("native_graph.read.selected_values_decoded").totalValue, 0);
+	const std::array<EntityPropertyKey, 1U> keys{key};
+	const std::array<uint32_t, 3U> tokens{3U, 5U, 7U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 3U> results;
+	properties_->readEntityPropertiesOptionalSorted(snapshot, keys, tokens, results);
+	EXPECT_TRUE(results[0].has_value());
+	EXPECT_FALSE(results[1].has_value());
+	EXPECT_TRUE(results[2].has_value());
+	EXPECT_EQ(PerfTrace::snapshotAndReset().at("native_graph.read.selected_values_decoded").totalValue, 2);
+}
+
 TEST_F(PropertyCollectionRootStoreValidationTest, ReadsRejectUnusableTypedPropertyPayloads) {
 	const EntityPropertyKey missingStoreKey{EntityPropertyOwnerKind::EPOK_NODE, 1001U};
 	static_cast<void>(publishPropertyPayload(
@@ -509,6 +546,22 @@ TEST_F(PropertyCollectionRootStoreValidationTest, SelectiveReadsSupportCanonical
 	ASSERT_TRUE(selected[1].has_value());
 	EXPECT_EQ(*selected[0], original.entries[0]);
 	EXPECT_EQ(*selected[1], original.entries[1]);
+	auto cursor = propertiesWithLargeValues.openScanCursor(snapshot);
+	for (bool useCursor : {false, true}) {
+		const auto read = [&](const SelectedPropertyReadAdmission &slots) {
+			return useCursor ? cursor.readEntity(snapshot, key, nullptr, &slots)
+				: propertiesWithLargeValues.readEntity(snapshot, key, nullptr, &slots);
+		};
+		EXPECT_THROW(static_cast<void>(read([](size_t) { throw std::length_error("LargeValue buffers rejected"); })), std::length_error);
+		for (int retry = 0; retry < 2; ++retry) {
+			size_t retained = 0U, peak = 0U;
+			const auto result = read([&](size_t bytes) { retained = bytes; peak = std::max(peak, bytes); });
+			EXPECT_EQ(result, original);
+			EXPECT_EQ(retained, result.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+			EXPECT_GT(peak, retained);
+		}
+	}
+
 	snapshot.release();
 }
 
@@ -1441,4 +1494,247 @@ TEST_F(PropertyCollectionRootStoreValidationTest, RetirementAndLargeValuePrepara
 				FormatError::FERR_INVALID_STATE);
 	}
 	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, SelectedLargeValueFieldSkipsUnrequestedLaterChunks) {
+	LargeValueStore largeValues(io_, *metadata_);
+	PropertyCollectionRootStore store(*pages_, largeValues, *metadata_);
+	PropertyCollectionRoot source = root(1001U, 3U, "selected");
+	source.entries.push_back({4U, graph::PropertyValue(std::string(100000U, 'w'))});
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(source.entries);
+	const auto published = largeValues.write(payload, largeValueOptions(), nextCheckpointLsn());
+	ASSERT_GT(published.manifest.chunks.size(), 1U);
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, source.owner_entity_id};
+	const auto encoded = EntityPropertyLargeValueReferenceCodec::encode(
+		{source.owner_entity_id, source.owner_entity_type, published.reference});
+	static_cast<void>(publishPropertyPayload(key, encoded, PhysicalSlotId(41U)));
+	auto snapshot = metadata_->openSnapshot();
+	using graph::debug::PerfTrace;
+	const bool valuesEnabled = PerfTrace::areValuesEnabled();
+	struct RestoreTrace {
+		bool enabled;
+		~RestoreTrace() { PerfTrace::setValueCollectionEnabled(enabled); PerfTrace::reset(); }
+	} restore{valuesEnabled};
+	PerfTrace::setValueCollectionEnabled(true);
+	const auto chunkReads = [](const auto &trace) {
+		const auto found = trace.find("native_graph.read.large_value_chunks_read");
+		return found == trace.end() ? int64_t{0} : found->second.totalValue;
+	};
+	for (bool useCursor: {false, true}) {
+		SCOPED_TRACE(useCursor);
+		PerfTrace::reset();
+		if (useCursor) {
+			auto cursor = store.openScanCursor(snapshot);
+			const std::array keys{key};
+			const std::array<uint32_t, 2U> tokens{3U, 5U};
+			std::array<std::optional<PropertyCollectionRootEntry>, 2U> values;
+			cursor.readEntityPropertiesOptionalSorted(snapshot, keys, tokens, values, true);
+			EXPECT_EQ(values[0], source.entries.front());
+			EXPECT_FALSE(values[1]);
+		} else {
+			EXPECT_EQ(store.readEntityPropertyOptional(snapshot, key, 3U), source.entries.front());
+		}
+		const auto selectedTrace = PerfTrace::snapshotAndReset();
+		EXPECT_EQ(chunkReads(selectedTrace), 1);
+		EXPECT_EQ(store.readEntity(snapshot, key), source);
+		const auto fullTrace = PerfTrace::snapshotAndReset();
+		EXPECT_EQ(chunkReads(fullTrace), static_cast<int64_t>(published.manifest.chunks.size()));
+		EXPECT_GT(chunkReads(fullTrace), chunkReads(selectedTrace));
+	}
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode) {
+	LargeValueStore largeValues(io_, *metadata_);
+	PropertyCollectionRootStore store(*pages_, largeValues, *metadata_);
+	const PropertyCollectionRoot source = root(1001U, 3U, std::string(16000U, 'v'));
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(source.entries);
+	const auto published = largeValues.write(payload, largeValueOptions(), nextCheckpointLsn());
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, source.owner_entity_id};
+	const auto encoded = EntityPropertyLargeValueReferenceCodec::encode(
+		{source.owner_entity_id, source.owner_entity_type, published.reference});
+	static_cast<void>(publishPropertyPayload(key, encoded, PhysicalSlotId(41U)));
+	auto snapshot = metadata_->openSnapshot();
+	auto cursor = store.openScanCursor(snapshot);
+	const std::array keys{key};
+	const std::array<uint32_t, 2U> tokens{3U, 4U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 2U> values;
+	size_t requested = 0U;
+	const SelectedPropertyReadAdmission reject = [&](size_t bytes) {
+		requested = bytes;
+		throw std::runtime_error("selected range budget exhausted");
+	};
+	EXPECT_THROW(cursor.readEntityPropertiesOptionalSorted(snapshot, keys, tokens, values, true, &reject), std::runtime_error);
+	EXPECT_GT(requested, 16000U);
+	EXPECT_FALSE(values[0].has_value());
+	const SelectedPropertyReadAdmission accept = [&](size_t bytes) { EXPECT_EQ(bytes, requested); };
+	cursor.readEntityPropertiesOptionalSorted(snapshot, keys, tokens, values, true, &accept);
+	ASSERT_TRUE(values[0].has_value());
+	EXPECT_EQ(*values[0], source.entries.front());
+	EXPECT_FALSE(values[1].has_value());
+	for (bool useCursor: {false, true}) {
+		SCOPED_TRACE(useCursor);
+		std::array<std::optional<size_t>, 1U> counts;
+		const auto readCombined = [&](const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *buffers = nullptr) {
+			if (useCursor) cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot, keys, tokens, values, counts, admission, buffers);
+			else store.readEntityPropertiesAndCountsOptionalSorted(snapshot, keys, tokens, values, counts, nullptr, admission, buffers);
+		};
+		const SelectedPropertyReadAdmission rejectBuffers = [](size_t) { throw std::length_error("LargeValue directory buffers rejected"); };
+		EXPECT_THROW(readCombined(nullptr, &rejectBuffers), std::length_error);
+		EXPECT_FALSE(values[0]);
+		EXPECT_FALSE(counts[0]);
+		for (int retry = 0; retry < 2; ++retry) {
+			size_t retained = 0U, peak = 0U;
+			const SelectedPropertyReadAdmission acceptBuffers = [&](size_t bytes) { retained = bytes; peak = std::max(peak, bytes); };
+			EXPECT_NO_THROW(readCombined(&accept, &acceptBuffers));
+			EXPECT_EQ(counts[0], std::optional<size_t>{1U});
+			EXPECT_EQ(values[0], std::optional<PropertyCollectionRootEntry>{source.entries.front()});
+			EXPECT_GT(peak, retained);
+			EXPECT_EQ(retained, 0U);
+			EXPECT_GE(peak, tokens.size() * sizeof(std::optional<PropertyCollectionRootEntry>));
+		}
+		EXPECT_THROW(readCombined(&reject), std::runtime_error);
+		EXPECT_FALSE(values[0]);
+		const bool traceEnabled = graph::debug::PerfTrace::isEnabled();
+		const bool valuesEnabled = graph::debug::PerfTrace::areValuesEnabled();
+		graph::debug::PerfTrace::setEnabled(true);
+		graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		graph::debug::PerfTrace::reset();
+		EXPECT_NO_THROW(readCombined(&accept));
+		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(valuesEnabled);
+		graph::debug::PerfTrace::setEnabled(traceEnabled);
+		ASSERT_TRUE(trace.contains("native_graph.read.property_large_value_directory_reads"));
+		EXPECT_EQ(trace.at("native_graph.read.property_large_value_directory_reads").totalValue, 1);
+		EXPECT_EQ(counts[0], std::optional<size_t>{1U});
+		ASSERT_TRUE(values[0]);
+		EXPECT_EQ(*values[0], source.entries.front());
+		EXPECT_FALSE(values[1]);
+	}
+	for (bool useCursor : {false, true}) {
+		SCOPED_TRACE(useCursor);
+		const auto readFull = [&](const SelectedPropertyReadAdmission *admission) {
+			return useCursor ? cursor.readEntity(snapshot, key, admission)
+						 : store.readEntity(snapshot, key, admission);
+		};
+		EXPECT_THROW(static_cast<void>(readFull(&reject)), std::runtime_error);
+		EXPECT_EQ(readFull(&accept), source);
+		const auto readOptional = [&](const SelectedPropertyReadAdmission *admission) {
+			return useCursor ? cursor.readEntityOptional(snapshot, key, admission)
+						 : store.readEntityOptional(snapshot, key, admission);
+		};
+		EXPECT_THROW(static_cast<void>(readOptional(&reject)), std::runtime_error);
+		EXPECT_EQ(readOptional(&accept), std::optional(source));
+	}
+	EntityLabelSetStore labels(io_, *metadata_, *pages_);
+	BTreePageStore trees(*pages_, *metadata_);
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, labels, store, trees);
+	NativeReadSession session;
+	const std::array<uint64_t, 1U> ids{source.owner_entity_id};
+	size_t graphRequested = 0U;
+	const SelectedPropertyReadAdmission rejectGraphBuffers = [&](size_t bytes) { graphRequested = bytes; throw std::length_error("graph staging rejected"); };
+	EXPECT_THROW(static_cast<void>(graph.readNodePropertyColumnsAndCountsSorted(snapshot, ids, tokens, &session, nullptr, &rejectGraphBuffers)), std::length_error);
+	EXPECT_FALSE(session.hasProperty(false, ids.front(), tokens.front()));
+	EXPECT_EQ(graphRequested, ids.size() * sizeof(EntityPropertyKey));
+	EXPECT_THROW(static_cast<void>(graph.readNodePropertyColumnsAndCountsSorted(snapshot, ids, {}, &session, nullptr, &rejectGraphBuffers)), std::length_error);
+	EXPECT_EQ(graphRequested, ids.size() * sizeof(std::optional<size_t>));
+	for (int retry = 0; retry < 2; ++retry) {
+		// The first retry fills the session; the second exercises cached values.
+		size_t bufferCalls = 0U, finalBuffers = 0U;
+		const SelectedPropertyReadAdmission acceptGraphBuffers = [&](size_t bytes) { ++bufferCalls; finalBuffers = bytes; };
+		const auto result = graph.readNodePropertyColumnsAndCountsSorted(snapshot, ids, tokens, &session, nullptr, &acceptGraphBuffers);
+		EXPECT_EQ(result.first[0][0], std::optional<graph::PropertyValue>{source.entries.front().value});
+		EXPECT_FALSE(result.first[1][0]);
+		EXPECT_EQ(result.second[0], std::optional<size_t>{1U});
+		size_t expectedBuffers = result.second.capacity() * sizeof(std::optional<size_t>)
+			+ result.first.capacity() * sizeof(std::vector<std::optional<graph::PropertyValue>>);
+		for (const auto &column : result.first) expectedBuffers += column.capacity() * sizeof(std::optional<graph::PropertyValue>);
+		EXPECT_EQ(finalBuffers, expectedBuffers);
+		EXPECT_GT(bufferCalls, 0U);
+		EXPECT_THROW(static_cast<void>(graph.readNodePropertyColumnsAndCountsSorted(snapshot, ids, tokens, &session, nullptr, &rejectGraphBuffers)), std::length_error);
+		EXPECT_TRUE(session.hasProperty(false, ids.front(), tokens.front()));
+	}
+
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries) {
+	const auto source = root(1001U, 3U, "counted value");
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, source.owner_entity_id};
+	const auto encoded = EntityPropertyCollectionRootCodec::encode(source);
+	static_cast<void>(publishPropertyPayload(key, encoded, PhysicalSlotId(41U)));
+	PropertyCollectionRootStore store(*pages_, *metadata_);
+	auto snapshot = metadata_->openSnapshot();
+	auto cursor = store.openScanCursor(snapshot);
+	const std::array keys{key};
+	std::array<std::optional<size_t>, 1U> counts;
+	const size_t ownerBytes = sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t);
+	for (int retry = 0; retry < 2; ++retry) {
+		const SelectedPropertyReadAdmission reject = [&](size_t bytes) {
+			if (bytes >= ownerBytes + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)
+				throw std::length_error("owned page budget");
+		};
+		EXPECT_THROW(cursor.readEntityPropertyCountsSorted(snapshot, keys, counts, &reject), std::length_error);
+		EXPECT_FALSE(counts[0]);
+		size_t peak = 0U;
+		const SelectedPropertyReadAdmission accept = [&](size_t bytes) { peak = std::max(peak, bytes); };
+		cursor.readEntityPropertyCountsSorted(snapshot, keys, counts, &accept);
+		EXPECT_EQ(counts[0], source.entries.size());
+		EXPECT_GE(peak, ownerBytes + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + encoded.size());
+	}
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry) {
+	const auto source = root(1001U, 3U, "full cursor value");
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, source.owner_entity_id};
+	const auto encoded = EntityPropertyCollectionRootCodec::encode(source);
+	static_cast<void>(publishPropertyPayload(key, encoded, PhysicalSlotId(41U)));
+	PropertyCollectionRootStore store(*pages_, *metadata_);
+	auto snapshot = metadata_->openSnapshot();
+	auto cursor = store.openScanCursor(snapshot);
+	for (int retry = 0; retry < 2; ++retry) {
+		const SelectedPropertyReadAdmission reject = [](size_t bytes) {
+			if (bytes >= RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) throw std::length_error("cursor page budget");
+		};
+		EXPECT_THROW(static_cast<void>(cursor.readEntity(snapshot, key, nullptr, &reject)), std::length_error);
+		size_t peak = 0U, retained = 0U;
+		const SelectedPropertyReadAdmission accept = [&](size_t bytes) {
+			peak = std::max(peak, bytes); retained = bytes;
+		};
+		const auto output = cursor.readEntity(snapshot, key, nullptr, &accept);
+		EXPECT_EQ(output, source);
+		EXPECT_GE(peak, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + encoded.size() +
+				output.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+		EXPECT_EQ(retained, output.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+	}
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry) {
+	const auto source = root(1001U, 3U, "selected cursor value");
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, source.owner_entity_id};
+	const auto encoded = EntityPropertyCollectionRootCodec::encode(source);
+	static_cast<void>(publishPropertyPayload(key, encoded, PhysicalSlotId(41U)));
+	PropertyCollectionRootStore store(*pages_, *metadata_);
+	auto snapshot = metadata_->openSnapshot();
+	auto cursor = store.openScanCursor(snapshot);
+	const std::array keys{key};
+	const std::array<uint32_t, 1U> tokens{3U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 1U> selected;
+	std::array<std::optional<size_t>, 1U> counts;
+	const size_t ownerBytes = sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t);
+	for (int retry = 0; retry < 2; ++retry) {
+		const SelectedPropertyReadAdmission reject = [&](size_t bytes) {
+			if (bytes >= ownerBytes + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)
+				throw std::length_error("selected page budget");
+		};
+		EXPECT_THROW(cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot, keys, tokens,
+				selected, counts, nullptr, &reject), std::length_error);
+		EXPECT_FALSE(selected[0]);
+		EXPECT_FALSE(counts[0]);
+		size_t peak = 0U;
+		const SelectedPropertyReadAdmission accept = [&](size_t bytes) { peak = std::max(peak, bytes); };
+		cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot, keys, tokens, selected, counts, nullptr, &accept);
+		EXPECT_EQ(selected[0], source.entries.front());
+		EXPECT_EQ(counts[0], source.entries.size());
+		EXPECT_GE(peak, ownerBytes + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + encoded.size());
+	}
 }

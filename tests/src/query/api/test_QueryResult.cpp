@@ -42,6 +42,25 @@ TEST(QueryResultTest, DefaultStateAndBasicAccessors) {
 	EXPECT_EQ(result.getDuration(), 12.5);
 }
 
+TEST(QueryResultTest, ReservedRowCapacityAvoidsGrowthWhileAppendingRows) {
+	QueryResult result;
+	result.reserveRows(8U);
+	const size_t reservedCapacity = result.getRows().capacity();
+	ASSERT_GE(reservedCapacity, 8U);
+
+	for (int64_t value = 0; value < 6; ++value) {
+		QueryResult::Row row;
+		row.emplace("value", ResultValue(value));
+		result.addRow(std::move(row));
+	}
+
+	EXPECT_EQ(result.rowCount(), 6U);
+	EXPECT_EQ(result.getRows().capacity(), reservedCapacity);
+	for (size_t index = 0U; index < result.rowCount(); ++index) {
+		EXPECT_EQ(result.getRows()[index].at("value").asPrimitive(), graph::PropertyValue(static_cast<int64_t>(index)));
+	}
+}
+
 TEST(QueryResultTest, LogicalEntityResultsRetainNamesEndpointsAndPropertiesWithoutTokens) {
 	LogicalNodeResult node{42U, {"Person", "VIP"}, {{"name", graph::PropertyValue("Ada")}}};
 	LogicalEdgeResult edge{7U, 42U, 99U, "KNOWS", {{"weight", graph::PropertyValue(3)}}};

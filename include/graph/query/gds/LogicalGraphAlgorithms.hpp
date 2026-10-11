@@ -28,6 +28,9 @@ namespace graph::query::gds {
 		size_t maximum_edges = 0U;
 		size_t maximum_iterations = 0U;
 		size_t maximum_work_units = 0U;
+		// Zero keeps the storage-neutral direct-algorithm API unbounded by bytes;
+		// query procedures pass their configured materialization limit.
+		size_t maximum_materialized_bytes = 0U;
 	};
 
 	struct LogicalPageRankOptions {

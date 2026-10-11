@@ -23,6 +23,48 @@ projectOrder: 1
 | `HOLD_FOR_PORT` | C0 audit 证明某个 legacy tree 仍提供实际行为、测试、公开 API 或必要 consumer。 | 禁止删除；必须先迁移该仍存在的行为与测试。 |
 | `UNSUPPORTED` | 不属于支持的公开契约。 | 记录决策，且只有 C0 证明不存在 public consumer 后才可删除。 |
 
+## 历史能力检查点（2026-09-24）
+
+当前性能实施与百分比统一见[后续优化方案](optimization)。以下保留带日期的公开能力证据，不表示当前工作树仍处于相同状态，也不要求重复已完成工作。
+
+本文回答的是每项公开能力是否已经有 native owner 和具名契约证据，不负责
+报告 production-read 优化百分比、benchmark 加速幅度或最终发布就绪状态。当前
+Stage 0-10、P0 和 C0-C7 的 native correctness core 已经建立 owner 和最小定向证据，
+但最终的规模、故障、sanitizer、binding、coverage 和跨平台门禁仍未关闭。单独的
+[后续优化方案](optimization)已替代旧性能台账，不沿用旧 34% 状态。
+
+最近记录的 macOS runtime 六-suite 定向检查点为 `306/306`，当时的 direct-edge
+结果为 `77/77`；两者都早于最新只读 correlated-subquery complete-Entity 改动和当前
+lazy-`EntityRef` Vector procedure 改动。direct-edge 的 `78/78` 也早于 Vector 改动。
+上一次已验证的 `QueryEngineLogicalBackendTest.*` boundary suite 在 Vector 改动前为
+`57/57`，其中 `VectorProcedure*` 为 `8/8`，不能验证当前未提交工作树。独立的
+`ShortestPath*` 和 Vector 边界组此前分别通过 `3/3` 和 `8/8`。较早的 shape-aware projection/adapter 检查点为
+`15/15`；单次 staging 改动后的当前 `LogicalGraphProjectionTest.*` 为 `14/14`。
+这些数字不是仓库总测试数，也不能单独关闭任何能力行。
+最近一次完整 quick run 早于当前未提交的 runtime 修改；在当前工作树重新执行之前，
+历史完整测试、coverage 和 benchmark 结果只能作为审计历史。某项能力即使已有 native
+行为定向测试，也可能继续保持 `IN_PROGRESS`，因为契约、生命周期、资源上限、恢复、
+性能、binding 或平台门禁仍必须单独记录和关闭。
+
+另有独立的 `ShortestPath*` 边界组通过 `3/3`，覆盖 native `algo.shortestPath`
+procedure 的最终路径 Node 物化：通过一个有界的 logical-snapshot batch 读取路径 Node，
+并恢复 traversal 顺序。native `gds.shortestPath.dijkstra.stream` 使用同一个排序 batch helper，
+在 storage 顺序读取后恢复算法顺序；helper 校验 cardinality/identity，并将重复路径位置计入
+materialized-byte 上限。BFS 仍使用 topology/existence read；不支持 existence probe 的 adapter
+保留显式完整读取 fallback。这只是单个 consumer 的优化检查点，不关闭 procedure
+Property-expression、GDS、overlay、maintenance 或跨平台验收行。
+
+当前 Vector procedure 实现是待验证的 lazy-`EntityRef` 检查点：验证、过滤、投影、`SKIP`
+和 `LIMIT` 先在 reference 上执行；selected 与 complete Property cache 分离；只有最终仍需 Node
+的存活行才进行完整 Node 读取；排序后的有界 batch 再散回 search-score 顺序，重复引用复用同一
+payload。只有 scalar 或 Property 输出应避免完整 Node read。此前 `VectorProcedure*` 的 `8/8`
+早于该改动，必须在重新编译后重跑。procedure Property expression batching 以及更广泛的
+procedure 能力验收行仍未关闭。
+
+shape-aware GDS projection 证据也有同样边界：较早的 projection/adapter 定向运行通过
+`15/15`，单次 Node-ID retention 改动后的当前 `LogicalGraphProjectionTest.*` 通过 `14/14`。
+两者都只是定向正确性证据，不能关闭 capability row，不能替代当前完整 suite，也不是性能批准。
+
 ## 验收记录规则
 
 任何仍存在的 legacy source/test 退役前，对应能力记录必须明确以下全部信息：
@@ -48,7 +90,7 @@ source/test allowlist。它们尚未关闭的 C0-C7 门禁只能由当前 native
 | Cypher parsing、logical plan、read/mutation runtime、`EXPLAIN`/`PROFILE` | Cypher parser、logical operator tree、logical read/mutation runtime、bounded Catalog-backed statistics provider | `tests/src/query/parser/cypher/`；`tests/src/query/execution/`；`test_QueryEngineLogicalBackend.cpp`；`RelocatableStorageBackendSchemaTest.ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes`；`RelocatableStorageBackendSchemaTest.ResolvesScalarNodeRangesThroughPinnedIndexes`；`RelocatableIndexKeyCodecTest`；`LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide`；`QueryEngineLogicalBackendBoundaryTest.UsesCatalogAdjacencyCardinalityToOrderCartesianTraversalInput`；`LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCanonicalConjunctiveRangeLookup`；`LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCompositeRangeLookupAndRetainsPredicateValidation`；`RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesAndSurvivesReopen` | `IN_PROGRESS`：cacheable read plan 已进入 logical optimization；其 native provider 每次规划只读取一份 snapshot/reopen-safe System Catalog 基数对，对 Node scan 给出保守上界，planner 不扫描图。单跳 traversal 使用 `ceil(edge_count / node_count)` 与饱和的全局 Edge 上界估算邻接 cardinality；零 Node 却有 Edge、未知方向或无效 plan shape 不产生估算。`AND` 中的安全字面量等值会合并为一个 scan；unique/node-key、scalar 与完整 composite exact lookup 都通过 snapshot-pinned native tree 执行，且逐 entry 重新验证。同一 property 上的 property-left 字面量范围上下界会 canonicalize 为一个 interval，仍保留 Filter；不同 property、反向 operand、`NULL` 或已有 scan predicate 不改写。字面量 equality prefix 加不同 trailing range property 仅选择同序 composite index；单边及开闭区间从 snapshot-pinned encoded prefix 有界分页，完整复算 key 后按 Node ID 返回。无匹配 index 安全回退，未知 property 返回空集，不可索引输入返回 `nullopt`；已选择树中的 stale/malformed/超限状态失败关闭。对于 Cartesian Join，当两个有效估计严格不同，较小输入会放到 runtime materialize 的右侧；缺失/无效/相同统计保持计划稳定。ordinary 与 streamed-bulk Edge publication 原子更新该对记录，partial record fail closed。其余 pushdown、Vector calibration、benchmark、coverage 和三平台证据仍未完成。 |
 | Schema index 与 constraint | `LogicalGraphSchema`、logical schema runtime、System Catalog、native B+Tree 与 support tree | `test_LogicalPlanSchemaRuntime.cpp`；relocatable schema suite | `IN_PROGRESS`：旧 scalar-index/constraint implementation closure 已完成 consumer audit 并物理退休；native DDL、support-tree、recovery、规模与跨平台门禁仍待收口。 |
 | Native procedure registry 与 transaction mode | `NativeProcedureManifest`、`ProcedureRegistry`、`LogicalPlanProcedureRuntime` | `test_NativeProcedureRegistry.cpp`；`test_QueryEngineLogicalBackend.cpp`；`test_RelocatableStorageBackend_ProcedureTransactions.cpp`；`test_LogicalPlanMutationRuntime.cpp`；Vector base-rebuild/native-backend cancellation 测试 | `IN_PROGRESS`：显式 Vector overlay owner、有界 exact fallback、timeout 前拒绝 administration 副作用、Vector training 在唯一 atomic publication 前取消（包括 precise 的 prepared-but-not-published deadline boundary）、取消的 GDS projection 不发布 partial catalog entry、administration/GDS 输出共享的正数 result-row bound、由 manifest cardinality 校验的全部 autocommit-only procedure 在显式 transaction 中拒绝，以及每个 native procedure 在 backend access 前发生的、带 manifest-cardinality 校验 timeout 均已有证据。独立 `IN TRANSACTIONS` batch 也已在 publication 前即时检查取消：已完成 batch 保留，而被取消的当前 batch 不发布；仍需完整跨 procedure cancellation/failure 与三平台 matrix。 |
-| GDS projection catalog 与 procedure | `LogicalGraphProjection`、`LogicalProjectionCatalog`、严格 projection codec | `tests/src/query/gds/`；`test_CypherGds.cpp`；`test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`：`test_CypherGds.cpp` 已经通过 native `QueryEngine` 执行 project/drop/exists/list/schema、stale detection、projection signature、selector/weight/orientation validation 和 catalog error；`LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes` 锁定六个 catalog procedure 的完整列顺序和输出 logical type。projection builder 对 Node 和 outgoing adjacency 使用可报告 continuation 的 bounded cursor；continuation 会明确拒绝，避免超级节点被静默截断。仍需规模/性能和最终 public-contract 比对。 |
+| GDS projection catalog 与 procedure | `LogicalGraphProjection`、`LogicalProjectionCatalog`、严格 projection codec | `tests/src/query/gds/`；`test_CypherGds.cpp`；`test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`：`test_CypherGds.cpp` 已经通过 native `QueryEngine` 执行 project/drop/exists/list/schema、stale detection、projection signature、selector/weight/orientation validation 和 catalog error；`LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes` 锁定六个 catalog procedure 的完整列顺序和输出 logical type。projection builder 对 Node 和 outgoing adjacency 使用可报告 continuation 的 bounded cursor；continuation 会明确拒绝，避免超级节点被静默截断。较早的 native shape-aware 可续接 Node scan projection/adapter 定向运行通过 `15/15`，单次 staging 改动后的当前 `LogicalGraphProjectionTest.*` 通过 `14/14`；这两个结果都只是定向检查。仍需规模/性能和最终 public-contract 比对。 |
 | GDS algorithm（含 Leiden） | immutable logical projection 上的 `LogicalGraphAlgorithms` | `test_LogicalGraphProjection.cpp`；`test_LogicalGdsProcedures.cpp`；`test_CypherGds.cpp`；`benchmarks/leiden/`。固定 seed 的 randomized oracle 独立校验 WCC、带权 Dijkstra、PageRank，以及弱无向 Betweenness/Closeness 在方向整体反转后的不变性；Leiden 在两个和四个 worker 的 pool 下，以自动、串行、受限和超过 pool 宽度的 concurrency cap 检查 determinism/modularity。并行 degree scan 在调用线程的 checkpoint 间分批调度，因而不从 worker 调用非线程安全的 QueryGuard callback；`leidenModularity` 与可执行算法共享完整 fail-closed CSR 验证。`LogicalGdsProceduresTest.PreservesAlgorithmProcedureResultColumnOrderAndLogicalValueTypes` 还锁定六个 stream procedure 的列顺序和 logical output type（包括 Dijkstra logical Node）。 | `IN_PROGRESS`：native Cypher contract suite 已额外覆盖 PageRank、WCC、Betweenness、Closeness、Dijkstra 与 Leiden 的公开 stream result/error behavior。仍需更广的并行 phase、更多对抗性/随机性质、生产 baseline 与三平台证据。 |
 | Vector query、training、rebuild 与 recovery | native Raw/PQ/adjacency/manifest store 与 maintenance service | relocatable Vector suite；`test_CypherVector.cpp`；`test_RelocatableStorageBackend_ProcedureTransactions.cpp`；`zyx-vector-build-calibrate` / `zyx-vector-calibrate` smoke | `IN_PROGRESS`：显式 transaction 持有 pinned Vector generation；发生 graph-overlay mutation 后，会对 transaction 最终 Node 视图执行有界 exact scan，不会与过期 derived data 混合。native Vector core source set 与两个 calibration app 的配置期 guard 已拒绝 legacy Vector include closure，旧 Vector implementation/test/doc family 已完成物理退休。该 smoke 不是 production baseline；仍需 calibration、Recall/QPS、update/recovery、coverage 与三平台门禁。 |
 | Core 与公开 C++ transaction | `graph::Transaction`、`zyx::Transaction`、transaction-owned overlay/GDS catalog | `test_NativeTransaction.cpp`；`test_NativeDatabaseLifecycle.cpp`；`test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`：活动 transaction 在 Database wrapper 析构后仍保有 native backend；`Transaction::execute` 会在组合 foreign policy/catalog state 或本地 overlay 前拒绝来自另一 Database 的 QueryEngine。仍需完整 public API behavior mapping 与 binding 验证。 |

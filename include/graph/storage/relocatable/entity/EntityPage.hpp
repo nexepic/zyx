@@ -11,7 +11,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -74,6 +73,12 @@ namespace graph::storage {
 		uint64_t type_id = 0;
 
 		constexpr bool operator==(const EdgeEntityRecord &) const = default;
+	};
+
+	struct IdentifiedNodeEntityRecord {
+		uint64_t entity_id = 0;
+		NodeEntityRecord record;
+		constexpr bool operator==(const IdentifiedNodeEntityRecord &) const = default;
 	};
 
 	struct IdentifiedEdgeEntityRecord {
@@ -186,9 +191,10 @@ namespace graph::storage {
 		[[nodiscard]] EntityPage rebindOwner(const PageOwnerHeader &owner) const;
 		[[nodiscard]] uint16_t insert(uint64_t entityId, const NodeEntityRecord &record);
 		[[nodiscard]] uint16_t insert(uint64_t entityId, const EdgeEntityRecord &record);
-		// Inserts no more than one fixed-page worth of Edge records. It validates
+		// Inserts no more than one fixed-page worth of Node or Edge records. It validates
 		// every input before changing the page, then refreshes the durable page
 		// checksums once for the complete page image.
+		[[nodiscard]] std::vector<uint16_t> insertNodes(std::span<const IdentifiedNodeEntityRecord> records);
 		[[nodiscard]] std::vector<uint16_t> insertEdges(std::span<const IdentifiedEdgeEntityRecord> records);
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot) const;
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot, uint32_t expectedSlotGeneration) const;
@@ -214,6 +220,9 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<std::byte> serialize() const;
 
 	private:
+		template<typename IdentifiedRecord, typename Codec>
+		[[nodiscard]] std::vector<uint16_t> insertRecords(std::span<const IdentifiedRecord> records, EntityPageRecordKind kind);
+
 		explicit EntityPage(std::vector<std::byte> bytes, EntityPageHeader header);
 
 		void validateLayout() const;

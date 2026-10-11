@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include "query/api/LogicalProcedureTestFixture.hpp"
 
 #include "graph/core/Types.hpp"
 #include "graph/query/NativeProcedureManifest.hpp"
@@ -48,6 +49,10 @@
 #include "graph/storage/LogicalGraphWrite.hpp"
 
 namespace graph::query {
+
+	using test::ProcedureBackendState;
+	using test::ProcedureLogicalGraphSnapshot;
+	using test::RecordingVectorProcedureBackend;
 
 	namespace {
 
@@ -177,6 +182,26 @@ namespace graph::query {
 				return statistics;
 			}
 
+			std::optional<uint64_t> estimateLogicalNodeCardinality(std::span<const std::string> labels) const override {
+				++label_estimate_reads;
+				if (fail_label_read) throw std::runtime_error("unavailable label statistics");
+				uint64_t count = statistics.node_count;
+				for (const auto &label : labels) {
+					const auto found = label_counts.find(label);
+					if (found == label_counts.end()) return std::nullopt;
+					count = found->second;
+				}
+				return count;
+			}
+			storage::LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+				std::span<const std::vector<std::string>> labels) const override {
+				++planning_reads;
+				return storage::LogicalGraphStatisticsBackend::readLogicalPlanningStatistics(labels);
+			}
+			mutable size_t planning_reads = 0U;
+			std::unordered_map<std::string, uint64_t> label_counts;
+			bool fail_label_read = false;
+			mutable size_t label_estimate_reads = 0U;
 			storage::LogicalGraphCardinalityStatistics statistics{7U, 11U};
 			bool fail_statistics_read = false;
 			mutable size_t snapshot_opens = 0U;
@@ -230,323 +255,6 @@ namespace graph::query {
 			mutable size_t snapshot_opens = 0U;
 			size_t configuration_writes = 0U;
 			size_t statistics_resets = 0U;
-		};
-
-		struct ProcedureBackendState {
-			storage::LogicalGraphVectorSearchResult search_result;
-			std::unordered_map<uint64_t, storage::LogicalGraphNode> nodes;
-			std::vector<storage::LogicalGraphEdge> edges;
-			bool return_nonmonotonic_adjacency_page = false;
-			bool return_null_search_snapshot = false;
-			size_t cancellation_checks_before_throw = 0U;
-			mutable size_t search_cancellation_checks = 0U;
-			std::chrono::milliseconds search_cancellation_initial_delay{0};
-			size_t training_cancellation_checks_before_throw = 0U;
-			mutable size_t training_cancellation_checks = 0U;
-			std::chrono::milliseconds training_prepare_delay{0};
-			std::chrono::milliseconds training_preview_delay{0};
-			std::chrono::milliseconds training_commit_delay{0};
-			std::chrono::milliseconds projection_scan_delay{0};
-			mutable size_t topology_scans = 0U;
-			mutable size_t node_batch_reads = 0U;
-			mutable std::vector<size_t> node_batch_sizes;
-			mutable size_t batched_existence_scans = 0U;
-			mutable size_t full_adjacency_scans = 0U;
-		};
-
-		class ProcedureLogicalGraphSnapshot final : public storage::LogicalGraphVectorSearchSnapshot {
-		public:
-			explicit ProcedureLogicalGraphSnapshot(std::shared_ptr<const ProcedureBackendState> state) : state_(std::move(state)) {}
-
-			[[nodiscard]] storage::LogicalGraphNode readNode(uint64_t nodeId) const override {
-				const auto node = state_->nodes.find(nodeId);
-				return node == state_->nodes.end() ? storage::LogicalGraphNode{} : node->second;
-			}
-			[[nodiscard]] std::vector<storage::LogicalGraphNode> readNodesShapedSorted(
-					const std::span<const uint64_t> nodeIds, const storage::EntityReadShape &shape) const override {
-				++state_->node_batch_reads;
-				state_->node_batch_sizes.push_back(nodeIds.size());
-				static_cast<void>(shape);
-				uint64_t previous = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					if (nodeId == 0U || nodeId <= previous) {
-						throw std::invalid_argument("test Vector snapshot received an invalid sorted Node batch");
-					}
-					previous = nodeId;
-				}
-				std::vector<storage::LogicalGraphNode> result;
-				result.reserve(nodeIds.size());
-				for (const uint64_t nodeId: nodeIds) {
-					const auto node = state_->nodes.find(nodeId);
-					if (node == state_->nodes.end()) {
-						throw std::runtime_error("test Vector snapshot lost a requested Node");
-					}
-					result.push_back(node->second);
-				}
-				return result;
-			}
-			[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
-				return state_->nodes.contains(nodeId);
-			}
-			[[nodiscard]] bool supportsNodeExistenceProbes() const override { return true; }
-			[[nodiscard]] std::vector<bool> containsNodesSorted(
-					const std::span<const uint64_t> nodeIds) const override {
-				++state_->batched_existence_scans;
-				std::vector<bool> result;
-				result.reserve(nodeIds.size());
-				uint64_t previous = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					if (nodeId == 0U || nodeId <= previous) {
-						throw std::invalid_argument("test snapshot received an invalid sorted Node batch");
-					}
-					previous = nodeId;
-					result.push_back(state_->nodes.contains(nodeId));
-				}
-				return result;
-			}
-			[[nodiscard]] storage::LogicalGraphEdge readEdge(uint64_t edgeId) const override {
-				const auto edge = std::ranges::find(state_->edges, edgeId, &storage::LogicalGraphEdge::edge_id);
-				return edge == state_->edges.end() ? storage::LogicalGraphEdge{} : *edge;
-			}
-			void visitNodes(size_t, const std::function<bool(const storage::LogicalGraphNode &)> &) const override {
-				throw std::logic_error("scalar procedure test must not scan Nodes");
-			}
-			[[nodiscard]] storage::LogicalGraphNodePage scanNodesAfter(const uint64_t afterNodeId,
-					const size_t maximumRecords, const size_t maximumMetadataPages) const override {
-				if (maximumRecords == 0U || maximumMetadataPages == 0U) {
-					throw std::invalid_argument("logical projection test received invalid Node scan bounds");
-				}
-				if (state_->projection_scan_delay.count() > 0) {
-					std::this_thread::sleep_for(state_->projection_scan_delay);
-				}
-				std::vector<storage::LogicalGraphNode> nodes;
-				nodes.reserve(state_->nodes.size());
-				for (const auto &[_, node]: state_->nodes) {
-					nodes.push_back(node);
-				}
-				std::ranges::sort(nodes, {}, &storage::LogicalGraphNode::node_id);
-				storage::LogicalGraphNodePage page;
-				for (const storage::LogicalGraphNode &node: nodes) {
-					if (node.node_id <= afterNodeId) {
-						continue;
-					}
-					if (page.nodes.size() == maximumRecords) {
-						page.may_have_more = true;
-						break;
-					}
-					page.nodes.push_back(node);
-				}
-				page.metadata_pages_visited = page.nodes.empty() ? 0U : 1U;
-				return page;
-			}
-			[[nodiscard]] storage::LogicalGraphAdjacencyPage
-			scanAdjacentEdges(uint64_t, storage::LogicalGraphReadDirection,
-							  std::optional<storage::LogicalGraphAdjacencyContinuation>, size_t) const override;
-			[[nodiscard]] storage::LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
-					uint64_t nodeId, storage::LogicalGraphReadDirection direction,
-					std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
-					size_t maximumRecords) const override;
-			void visitEdges(size_t, const std::function<bool(const storage::LogicalGraphEdge &)> &) const override {
-				throw std::logic_error("scalar procedure test must not scan relationships");
-			}
-			void visitAdjacentEdges(const uint64_t nodeId, const storage::LogicalGraphReadDirection direction,
-							const size_t maximumRecords,
-							const std::function<bool(const storage::LogicalGraphEdge &)> &visitor) const override {
-				size_t visited = 0U;
-				for (const storage::LogicalGraphEdge &edge: state_->edges) {
-					const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-								 ? edge.source_node_id == nodeId
-								 : edge.target_node_id == nodeId;
-					if (!matches) {
-						continue;
-					}
-					if (++visited > maximumRecords || !visitor(edge)) {
-						return;
-					}
-				}
-			}
-			[[nodiscard]] std::optional<storage::LogicalGraphMutationFence> mutationFence() const override {
-				return storage::LogicalGraphMutationFence{0x3456U, 0x789AU, {}};
-			}
-			[[nodiscard]] storage::LogicalGraphVectorSearchResult
-			searchLogicalVector(const storage::LogicalGraphVectorSearchRequest &request) const override {
-				if (state_->cancellation_checks_before_throw != 0U) {
-					if (request.cancellation == nullptr) {
-						throw std::logic_error("logical Vector procedure did not receive a cancellation checkpoint");
-					}
-					if (state_->search_cancellation_initial_delay.count() > 0) {
-						std::this_thread::sleep_for(state_->search_cancellation_initial_delay);
-					}
-					for (size_t check = 0U; check < state_->cancellation_checks_before_throw; ++check) {
-						++state_->search_cancellation_checks;
-						request.cancellation->check();
-					}
-				}
-				return state_->search_result;
-			}
-
-		private:
-			std::shared_ptr<const ProcedureBackendState> state_;
-		};
-
-		storage::LogicalGraphAdjacencyPage ProcedureLogicalGraphSnapshot::scanAdjacentEdges(
-				uint64_t nodeId, storage::LogicalGraphReadDirection direction,
-				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
-			std::vector<storage::LogicalGraphEdge> edges;
-			++state_->full_adjacency_scans;
-			for (const storage::LogicalGraphEdge &edge: state_->edges) {
-				const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-									 ? edge.source_node_id == nodeId
-									 : edge.target_node_id == nodeId;
-				if (matches) {
-					edges.push_back(edge);
-				}
-			}
-			std::ranges::sort(edges, {}, &storage::LogicalGraphEdge::edge_id);
-			if (state_->return_nonmonotonic_adjacency_page && edges.size() > 1U) {
-				std::swap(edges[0], edges[1]);
-			}
-			size_t begin = 0U;
-			if (continuation.has_value()) {
-				const auto next = std::ranges::find(edges, continuation->next_edge_id,
-																		 &storage::LogicalGraphEdge::edge_id);
-				if (next == edges.end()) {
-					return {};
-				}
-				begin = static_cast<size_t>(std::distance(edges.begin(), next));
-			}
-			const size_t count = std::min(maximumRecords, edges.size() - begin);
-			storage::LogicalGraphAdjacencyPage page;
-			page.edges.insert(page.edges.end(), edges.begin() + static_cast<std::ptrdiff_t>(begin),
-							  edges.begin() + static_cast<std::ptrdiff_t>(begin + count));
-			if (begin + count < edges.size() && count != 0U) {
-				page.continuation = {page.edges.back().edge_id, edges[begin + count].edge_id};
-			}
-			return page;
-		}
-
-		storage::LogicalGraphAdjacencyTopologyPage ProcedureLogicalGraphSnapshot::scanAdjacentEdgeTopologies(
-				uint64_t nodeId, storage::LogicalGraphReadDirection direction,
-				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
-			++state_->topology_scans;
-			std::vector<storage::LogicalGraphEdgeTopology> edges;
-			for (const storage::LogicalGraphEdge &edge: state_->edges) {
-				const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-						? edge.source_node_id == nodeId : edge.target_node_id == nodeId;
-				if (matches) {
-					edges.push_back({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
-				}
-			}
-			std::ranges::sort(edges, {}, &storage::LogicalGraphEdgeTopology::edge_id);
-			if (state_->return_nonmonotonic_adjacency_page && edges.size() > 1U) {
-				std::swap(edges[0], edges[1]);
-			}
-			size_t begin = 0U;
-			if (continuation.has_value()) {
-				const auto next = std::ranges::find(edges, continuation->next_edge_id,
-																 &storage::LogicalGraphEdgeTopology::edge_id);
-				if (next == edges.end()) {
-					return {};
-				}
-				begin = static_cast<size_t>(std::distance(edges.begin(), next));
-			}
-			const size_t count = std::min(maximumRecords, edges.size() - begin);
-			storage::LogicalGraphAdjacencyTopologyPage page;
-			page.edges.insert(page.edges.end(), edges.begin() + static_cast<std::ptrdiff_t>(begin),
-					edges.begin() + static_cast<std::ptrdiff_t>(begin + count));
-			if (begin + count < edges.size() && count != 0U) {
-				page.continuation = {page.edges.back().edge_id, edges[begin + count].edge_id};
-			}
-			return page;
-		}
-
-		class RecordingVectorProcedureBackend final : public storage::LogicalGraphReadBackend,
-																		 public storage::LogicalGraphVectorSearchBackend,
-																		 public storage::LogicalGraphVectorMaintenanceBackend {
-		public:
-			class PreparedTraining final : public storage::PreparedLogicalGraphVectorTraining {
-			public:
-				PreparedTraining(RecordingVectorProcedureBackend &backend,
-									const storage::LogicalGraphVectorTrainingRequest &request,
-									storage::LogicalGraphVectorTrainingResult result) :
-					backend_(backend), request_(request), result_(result), preview_{result.trained} {}
-
-				[[nodiscard]] storage::LogicalGraphVectorTrainingPreview preview() const noexcept override {
-					if (backend_.state->training_preview_delay.count() > 0) {
-						std::this_thread::sleep_for(backend_.state->training_preview_delay);
-					}
-					return preview_;
-				}
-
-				[[nodiscard]] storage::LogicalGraphVectorTrainingResult commit() override {
-					if (committed_) {
-						throw std::logic_error("recording Vector training committed more than once");
-					}
-					committed_ = true;
-					return backend_.publishTraining(request_, result_);
-				}
-
-			private:
-				RecordingVectorProcedureBackend &backend_;
-				storage::LogicalGraphVectorTrainingRequest request_;
-				storage::LogicalGraphVectorTrainingResult result_;
-				storage::LogicalGraphVectorTrainingPreview preview_;
-				bool committed_ = false;
-			};
-
-			[[nodiscard]] std::unique_ptr<storage::LogicalGraphReadSnapshot>
-			openLogicalGraphReadSnapshot() const override {
-				return std::make_unique<ProcedureLogicalGraphSnapshot>(state);
-			}
-			[[nodiscard]] std::unique_ptr<storage::LogicalGraphVectorSearchSnapshot>
-			openLogicalGraphVectorSearchSnapshot() const override {
-				++search_snapshot_opens;
-				if (state->return_null_search_snapshot) {
-					return nullptr;
-				}
-				return std::make_unique<ProcedureLogicalGraphSnapshot>(state);
-			}
-			[[nodiscard]] std::unique_ptr<storage::PreparedLogicalGraphVectorTraining>
-			prepareLogicalVectorTraining(const storage::LogicalGraphVectorTrainingRequest &request) override {
-				return std::make_unique<PreparedTraining>(*this, request, prepareTraining(request));
-			}
-
-			[[nodiscard]] storage::LogicalGraphVectorTrainingResult
-			prepareTraining(const storage::LogicalGraphVectorTrainingRequest &request) {
-				++training_preparations;
-				last_training_request = request;
-				if (state->training_prepare_delay.count() > 0) {
-					std::this_thread::sleep_for(state->training_prepare_delay);
-				}
-				if (state->training_cancellation_checks_before_throw != 0U) {
-					if (request.cancellation == nullptr) {
-						throw std::logic_error("logical Vector training did not receive a cancellation checkpoint");
-					}
-					for (size_t check = 0U; check < state->training_cancellation_checks_before_throw; ++check) {
-						++state->training_cancellation_checks;
-						request.cancellation->check();
-					}
-				}
-				return training_result;
-			}
-
-			[[nodiscard]] storage::LogicalGraphVectorTrainingResult
-			publishTraining(const storage::LogicalGraphVectorTrainingRequest &request,
-								storage::LogicalGraphVectorTrainingResult result) {
-				if (state->training_commit_delay.count() > 0) {
-					std::this_thread::sleep_for(state->training_commit_delay);
-				}
-				++training_calls;
-				last_training_request = request;
-				return result;
-			}
-
-			mutable size_t search_snapshot_opens = 0U;
-			size_t training_preparations = 0U;
-			size_t training_calls = 0U;
-			storage::LogicalGraphVectorTrainingRequest last_training_request;
-			storage::LogicalGraphVectorTrainingResult training_result{1U, true, false};
-			std::shared_ptr<ProcedureBackendState> state = std::make_shared<ProcedureBackendState>();
 		};
 
 		class RecordingPreparedLogicalVectorTraining final : public storage::PreparedLogicalGraphVectorTraining {
@@ -712,6 +420,59 @@ namespace graph::query {
 	TEST(QueryEngineLogicalBackendBoundaryTest, RejectsANullLogicalBackendAtConstruction) {
 		std::shared_ptr<storage::LogicalGraphReadBackend> backend;
 		EXPECT_THROW(static_cast<void>(QueryEngine(std::move(backend))), std::invalid_argument);
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, UsesLabelCostsForJoinAndFallsBackOnUnavailableOrInvalidEstimates) {
+		for (int mode : {0, 1, 2}) {
+			auto backend = std::make_shared<StatisticsLogicalGraphReadBackend>();
+			backend->label_counts = {{"Rare", mode == 2 ? 99U : 1U}, {"Common", 6U}};
+			backend->fail_label_read = mode == 1;
+			QueryEngine engine(backend);
+			ASSERT_NE(engine.buildPlan("MATCH (rare:Rare) RETURN rare").root, nullptr);
+			EXPECT_EQ(backend->label_estimate_reads, 0U);
+			EXPECT_EQ(backend->planning_reads, 1U);
+			const auto plan = engine.buildPlan("MATCH (rare:Rare), (common:Common) RETURN rare, common");
+			EXPECT_GT(backend->label_estimate_reads, 0U);
+			EXPECT_EQ(backend->planning_reads, 2U);
+			if (mode != 1) EXPECT_EQ(backend->label_estimate_reads, 2U);
+			const auto *project = dynamic_cast<const logical::LogicalProject *>(plan.root.get());
+			ASSERT_NE(project, nullptr);
+			const auto *join = dynamic_cast<const logical::LogicalJoin *>(project->getChildren().front());
+			ASSERT_NE(join, nullptr);
+			const auto *left = dynamic_cast<const logical::LogicalNodeScan *>(join->getLeft());
+			const auto *right = dynamic_cast<const logical::LogicalNodeScan *>(join->getRight());
+			ASSERT_NE(left, nullptr);
+			ASSERT_NE(right, nullptr);
+			EXPECT_EQ(left->getVariable(), mode == 0 ? "common" : "rare");
+			EXPECT_EQ(right->getVariable(), mode == 0 ? "rare" : "common");
+			EXPECT_EQ(backend->snapshot_opens, 0U);
+			if (mode == 0) {
+				backend->label_counts = {{"Rare", 6U}, {"Common", 1U}};
+				const auto next = engine.buildPlan("MATCH (rare:Rare), (common:Common) RETURN common, rare");
+				const auto *nextProject = dynamic_cast<const logical::LogicalProject *>(next.root.get());
+				ASSERT_NE(nextProject, nullptr);
+				const auto *nextJoin = dynamic_cast<const logical::LogicalJoin *>(nextProject->getChildren().front());
+				ASSERT_NE(nextJoin, nullptr);
+				const auto *nextRight = dynamic_cast<const logical::LogicalNodeScan *>(nextJoin->getRight());
+				ASSERT_NE(nextRight, nullptr);
+				EXPECT_EQ(nextRight->getVariable(), "common");
+				EXPECT_EQ(backend->label_estimate_reads, 4U);
+				EXPECT_EQ(backend->planning_reads, 3U);
+			}
+		}
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, KeepsFilteredJoinOrderWhenPropertySelectivityIsUnknown) {
+		for (const auto *query : {"MATCH (rare:Rare), (common:Common {rank: 1}) RETURN rare, common",
+			"MATCH (rare:Rare), (common:Common) WHERE common.rank = 1 RETURN rare, common"}) {
+			auto backend = std::make_shared<StatisticsLogicalGraphReadBackend>(); backend->label_counts = {{"Rare", 2U}, {"Common", 6U}}; QueryEngine engine(backend); const auto plan = engine.buildPlan(query);
+			const auto *project = dynamic_cast<const logical::LogicalProject *>(plan.root.get()); ASSERT_NE(project, nullptr);
+			const auto *input = project->getChildren().front();
+			if (const auto *filter = dynamic_cast<const logical::LogicalFilter *>(input)) input = filter->getChildren().front();
+			const auto *join = dynamic_cast<const logical::LogicalJoin *>(input); ASSERT_NE(join, nullptr);
+			const auto *right = dynamic_cast<const logical::LogicalNodeScan *>(join->getRight()); ASSERT_NE(right, nullptr);
+			EXPECT_EQ(right->getVariable(), "common"); EXPECT_FALSE(right->getPropertyPredicates().empty()); EXPECT_EQ(backend->snapshot_opens, 0U);
+		}
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, ReadsBoundedNativeCardinalityDuringLogicalPlanOptimization) {
@@ -965,7 +726,7 @@ namespace graph::query {
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest,
-		 AdministrationMutationWaitsForTheCompleteCypherResultPipelineBeforePublishing) {
+			 AdministrationMutationWaitsForTheCompleteCypherResultPipelineBeforePublishing) {
 		auto backend = std::make_shared<RecordingAdministrationLogicalGraphBackend>();
 		QueryEngine engine(backend);
 
@@ -986,7 +747,33 @@ namespace graph::query {
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest,
-		 AdministrationMutationChecksAnExpiredGuardImmediatelyBeforePublishing) {
+			 AdministrationPipelineSharesBufferedRowsAndRetainedResultBudget) {
+		auto backend = std::make_shared<RecordingAdministrationLogicalGraphBackend>();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 1024U;
+		QueryEngine constrained(backend, options);
+		try {
+			static_cast<void>(constrained.execute(
+					"CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value"));
+			FAIL() << "administration pipeline omitted its retained QueryResult row from the shared byte budget";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+		}
+		EXPECT_EQ(backend->configuration_writes, 0U);
+		EXPECT_FALSE(backend->configurations.contains("query.timeout_ms"));
+
+		options.bounds.maximum_materialized_bytes = 4096U;
+		QueryEngine sufficient(backend, options);
+		const QueryResult result = sufficient.execute(
+				"CALL dbms.setConfig('query.timeout_ms', 41) YIELD value RETURN value");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(int64_t{41}));
+		EXPECT_EQ(backend->configuration_writes, 1U);
+		EXPECT_EQ(backend->configurations.at("query.timeout_ms"), PropertyValue(int64_t{41}));
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest,
+			 AdministrationMutationChecksAnExpiredGuardImmediatelyBeforePublishing) {
 		auto backend = std::make_shared<RecordingAdministrationLogicalGraphBackend>();
 		backend->snapshot_open_delay = std::chrono::milliseconds(75);
 		QueryEngine engine(backend);
@@ -1262,6 +1049,46 @@ namespace graph::query {
 		EXPECT_EQ(backend->search_snapshot_opens, 2U);
 	}
 
+	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingDirectResultSharesMaterializationBudget) {
+		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 1U;
+		QueryEngine engine(backend, options);
+		EXPECT_THROW(static_cast<void>(engine.execute("CALL db.index.vector.train('memory_embedding')")),
+				 std::runtime_error);
+		EXPECT_EQ(backend->training_calls, 0U);
+
+		options.bounds.maximum_materialized_bytes = 4096U;
+		QueryEngine boundedEngine(backend, options);
+		const QueryResult result = boundedEngine.execute("CALL db.index.vector.train('memory_embedding')");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("status").asPrimitive(), PropertyValue("Success"));
+		EXPECT_EQ(backend->training_calls, 1U);
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingPipelineBudgetFailureDoesNotCommitMaintenance) {
+		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 1024U;
+		QueryEngine constrained(backend, options);
+		try {
+			static_cast<void>(constrained.execute(
+					"CALL db.index.vector.train('memory_embedding') YIELD status RETURN status"));
+			FAIL() << "Vector Training pipeline omitted its retained result row from the shared byte budget";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+		}
+		EXPECT_EQ(backend->training_calls, 0U);
+
+		options.bounds.maximum_materialized_bytes = 4096U;
+		QueryEngine sufficient(backend, options);
+		const QueryResult result = sufficient.execute(
+				"CALL db.index.vector.train('memory_embedding') YIELD status RETURN status");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("status").asPrimitive(), PropertyValue("Success"));
+		EXPECT_EQ(backend->training_calls, 1U);
+	}
+
 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorTrainingRejectsReadOnlyAndUnboundedRequestsBeforeMaintenance) {
 		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
 		QueryEngine readOnlyEngine(backend);
@@ -1358,25 +1185,31 @@ namespace graph::query {
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, ShortestPathProcedureUsesTheLogicalReadSnapshot) {
 		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
-		backend->state->nodes.emplace(1U, storage::LogicalGraphNode{1U, {"Person"}});
-		backend->state->nodes.emplace(2U, storage::LogicalGraphNode{2U, {"Person"}});
+		// The logical path order is intentionally not Node-ID order. The runtime
+		// must sort only the storage batch and then restore traversal order.
+		backend->state->nodes.emplace(9U, storage::LogicalGraphNode{9U, {"Person"}});
 		backend->state->nodes.emplace(3U, storage::LogicalGraphNode{3U, {"Person"}});
-		backend->state->edges = {{11U, 1U, 2U, "KNOWS"}, {12U, 2U, 3U, "KNOWS"}};
+		backend->state->nodes.emplace(7U, storage::LogicalGraphNode{7U, {"Person"}});
+		backend->state->edges = {{11U, 9U, 3U, "KNOWS"}, {12U, 3U, 7U, "KNOWS"}};
 		QueryEngine engine(backend);
 
-		const QueryResult result = engine.execute("CALL algo.shortestPath(1, 3, 2)");
+		const QueryResult result = engine.execute("CALL algo.shortestPath(9, 7, 2)");
 		ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"step", "node", "path_length"}));
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(result.getRows()[0].at("step").asPrimitive(), PropertyValue(int64_t{0}));
 		EXPECT_EQ(result.getRows()[2].at("path_length").asPrimitive(), PropertyValue(int64_t{3}));
-		EXPECT_EQ(result.getRows()[0].at("node").asLogicalNode().node_id, 1U);
-		EXPECT_EQ(result.getRows()[2].at("node").asLogicalNode().node_id, 3U);
+		EXPECT_EQ(result.getRows()[0].at("node").asLogicalNode().node_id, 9U);
+		EXPECT_EQ(result.getRows()[1].at("node").asLogicalNode().node_id, 3U);
+		EXPECT_EQ(result.getRows()[2].at("node").asLogicalNode().node_id, 7U);
 		EXPECT_EQ(backend->search_snapshot_opens, 0U);
 		EXPECT_GT(backend->state->topology_scans, 0U);
 		EXPECT_GT(backend->state->batched_existence_scans, 0U);
 		EXPECT_EQ(backend->state->full_adjacency_scans, 0U);
+		EXPECT_EQ(backend->state->node_point_reads, 0U);
+		ASSERT_EQ(backend->state->node_batch_reads, 1U);
+		EXPECT_EQ(backend->state->node_batch_sizes.front(), 3U);
 
-		const QueryResult tooShallow = engine.execute("CALL algo.shortestPath(1, 3, 1)");
+		const QueryResult tooShallow = engine.execute("CALL algo.shortestPath(9, 7, 1)");
 		EXPECT_TRUE(tooShallow.isEmpty());
 		EXPECT_THROW(static_cast<void>(engine.execute("CALL algo.shortestPath(1, 3, 0)")), std::invalid_argument);
 	}
@@ -1582,14 +1415,13 @@ namespace graph::query {
 		backend->state->cancellation_checks_before_throw = 1023U;
 		backend->state->search_cancellation_initial_delay = std::chrono::milliseconds(2);
 		QueryEngine engine(backend);
+		auto plan = engine.buildPlan("CALL db.index.vector.queryNodes('memory_embedding', 1, [1.0])");
 
 		QueryGuard guard(1, 0);
 		QueryContext context;
 		context.guard = &guard;
-		EXPECT_THROW(static_cast<void>(engine.executePlan(engine.buildPlan(
-					 "CALL db.index.vector.queryNodes('memory_embedding', 1, [1.0])"),
-				 context)),
-				QueryTimeoutException);
+		EXPECT_THROW(static_cast<void>(engine.executePlan(std::move(plan), context)),
+				 QueryTimeoutException);
 		EXPECT_EQ(backend->search_snapshot_opens, 1U);
 		// The immediate entry guard admits this initially live query. The backend
 		// then crosses the deadline and receives cancellation on its 1023rd callback:
@@ -1979,6 +1811,42 @@ namespace graph::query {
 		EXPECT_THROW(static_cast<void>(execute(nonStringProjectionName)), std::invalid_argument);
 	}
 
+	TEST(QueryEngineLogicalBackendBoundaryTest, GdsCatalogPipelineSharesBufferedRowsAndRetainedResultBudget) {
+		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+		gds::LogicalProjectionCatalog catalog;
+		auto snapshot = backend->openLogicalGraphReadSnapshot();
+		ASSERT_NE(snapshot, nullptr);
+		static_cast<void>(catalog.create({.name = "budgeted_catalog"}, *snapshot,
+				{.maximum_nodes = 16U, .maximum_metadata_pages = 16U, .maximum_edges_per_node = 16U}));
+
+		logical::LogicalProject project(std::make_unique<logical::LogicalCallProcedure>(
+				"gds.graph.exists", std::vector<PropertyValue>{PropertyValue("budgeted_catalog")}),
+				{{std::make_shared<expressions::VariableReferenceExpression>("exists"), "exists"}});
+		LogicalReadExecutionOptions options;
+		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get(), nullptr, &catalog);
+		const auto execute = [&runtime](const logical::LogicalOperator &root, const LogicalReadExecutionOptions &executionOptions) {
+			return runtime.execute(root, executionOptions.bounds, executionOptions.maximum_vector_mapping_entries,
+					executionOptions.maximum_raw_vector_reads, executionOptions.vector_candidate_search_budget,
+					executionOptions.vector_candidate_refinement_budget, executionOptions.maximum_vector_training_records,
+					executionOptions.maximum_vector_training_pages, executionOptions.maximum_gds_algorithm_edges,
+					executionOptions.maximum_gds_algorithm_iterations, executionOptions.maximum_gds_algorithm_work_units,
+					QueryContext{});
+		};
+
+		options.bounds.maximum_materialized_bytes = 1024U;
+		try {
+			static_cast<void>(execute(project, options));
+			FAIL() << "GDS catalog pipeline omitted its retained QueryResult row from the shared byte budget";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical procedure source and retained result exceeded their byte bound");
+		}
+
+		options.bounds.maximum_materialized_bytes = 4096U;
+		const QueryResult result = execute(project, options);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("exists").asPrimitive(), PropertyValue(true));
+	}
+
 	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureRuntimeRejectsMalformedOutputOperators) {
 		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
 		const LogicalReadExecutionOptions options;
@@ -2127,129 +1995,6 @@ namespace graph::query {
 		backend->state->nodes.at(1U).properties.clear();
 		backend->state->nodes.at(1U).labels = {"Memory", "Memory"};
 		EXPECT_THROW(static_cast<void>(execute(options)), std::runtime_error);
-	}
-
-	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureRuntimeValidatesBufferedSearchRowsAndSortKeys) {
-		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
-		const LogicalReadExecutionOptions options;
-		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
-		const auto searchCall = [] {
-			return std::make_unique<logical::LogicalCallProcedure>(
-					"db.index.vector.queryNodes",
-					std::vector<PropertyValue>{PropertyValue("memory_embedding"), PropertyValue(int64_t{2}),
-							PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
-		};
-		const auto execute = [&runtime, &options](const logical::LogicalOperator &root) {
-			return runtime.execute(root, options.bounds, options.maximum_vector_mapping_entries,
-					options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
-					options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
-					options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
-					options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
-		};
-
-		storage::LogicalGraphNode firstNode;
-		firstNode.node_id = 1U;
-		firstNode.labels = {"Memory"};
-		storage::LogicalGraphNode secondNode;
-		secondNode.node_id = 2U;
-		secondNode.labels = {"Memory"};
-		backend->state->nodes = {{firstNode.node_id, firstNode}, {secondNode.node_id, secondNode}};
-		const auto literalSortKey = std::make_shared<expressions::LiteralExpression>(int64_t{1});
-
-		backend->state->search_result.hits = {{0U, 0.0F}};
-		logical::LogicalSort zeroIdHitSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(zeroIdHitSort)), std::runtime_error);
-		backend->state->search_result.hits = {{firstNode.node_id, std::numeric_limits<float>::quiet_NaN()}};
-		logical::LogicalSort nonFiniteHitSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(nonFiniteHitSort)), std::runtime_error);
-		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}, {firstNode.node_id, 0.0F}};
-		logical::LogicalSort duplicateHitSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(duplicateHitSort)), std::runtime_error);
-		backend->state->search_result.hits = {{firstNode.node_id, 1.0F}, {secondNode.node_id, 0.0F}};
-		logical::LogicalSort unorderedScoreSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(unorderedScoreSort)), std::runtime_error);
-		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}, {firstNode.node_id, 1.0F}};
-		logical::LogicalSort repeatedIdSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(repeatedIdSort)), std::runtime_error);
-
-		backend->state->nodes.at(firstNode.node_id).node_id = secondNode.node_id;
-		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}};
-		logical::LogicalSort mismatchedNodeSort(searchCall(), {{literalSortKey, true}});
-		EXPECT_THROW(static_cast<void>(execute(mismatchedNodeSort)), std::runtime_error);
-		backend->state->nodes.at(firstNode.node_id) = firstNode;
-
-		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}};
-		const auto nodeValue = std::make_shared<expressions::VariableReferenceExpression>("node");
-		logical::LogicalSort nodeSortKey(searchCall(), {{nodeValue, true}});
-		EXPECT_THROW(static_cast<void>(execute(nodeSortKey)), std::runtime_error);
-		logical::LogicalFilter nodePredicate(searchCall(), nodeValue);
-		EXPECT_THROW(static_cast<void>(execute(nodePredicate)), std::runtime_error);
-
-		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}, {secondNode.node_id, 1.0F}};
-		logical::LogicalSort equalSortKeys(searchCall(), {{literalSortKey, true}});
-		EXPECT_NO_THROW(static_cast<void>(execute(equalSortKeys)));
-		EXPECT_GT(backend->state->node_batch_reads, 0U);
-		const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
-		logical::LogicalSort ascendingScoreSort(searchCall(), {{score, true}});
-		EXPECT_NO_THROW(static_cast<void>(execute(ascendingScoreSort)));
-		logical::LogicalSort descendingScoreSort(searchCall(), {{score, false}});
-		EXPECT_NO_THROW(static_cast<void>(execute(descendingScoreSort)));
-	}
-
-	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureEnforcesMaterializedByteBoundForCompleteNodes) {
-		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
-		LogicalReadExecutionOptions options;
-		options.bounds.maximum_materialized_bytes = 512U;
-		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
-		logical::LogicalCallProcedure search(
-				"db.index.vector.queryNodes",
-				{PropertyValue("memory_embedding"), PropertyValue(int64_t{1}),
-						PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
-		storage::LogicalGraphNode node;
-		node.node_id = 1U;
-		node.labels = {"Memory"};
-		node.properties = {{"body", PropertyValue(std::string(4096U, 'x'))}};
-		backend->state->nodes = {{node.node_id, node}};
-		backend->state->search_result.hits = {{node.node_id, 0.0F}};
-
-		EXPECT_THROW(static_cast<void>(runtime.execute(
-				search, options.bounds, options.maximum_vector_mapping_entries, options.maximum_raw_vector_reads,
-				options.vector_candidate_search_budget, options.vector_candidate_refinement_budget,
-				options.maximum_vector_training_records, options.maximum_vector_training_pages,
-				options.maximum_gds_algorithm_edges, options.maximum_gds_algorithm_iterations,
-				options.maximum_gds_algorithm_work_units, QueryContext{})),
-				std::runtime_error);
-	}
-
-	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureMaterializesLargeHitSetsInBoundedNodeBatches) {
-		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
-		LogicalReadExecutionOptions options;
-		// A small byte budget must reduce the physical Node batch before complete
-		// Property payloads are copied, rather than allowing the default 256 rows
-		// to be staged and rejected only after the read.
-		options.bounds.maximum_materialized_bytes = 1024U;
-		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
-		logical::LogicalCallProcedure search(
-				"db.index.vector.queryNodes",
-				{PropertyValue("memory_embedding"), PropertyValue(int64_t{300}),
-						PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
-		for (uint64_t id = 1U; id <= 300U; ++id) {
-			storage::LogicalGraphNode node;
-			node.node_id = id;
-			node.labels = {"Memory"};
-			backend->state->nodes.emplace(id, std::move(node));
-			backend->state->search_result.hits.push_back({id, static_cast<float>(id)});
-		}
-		const QueryResult result = runtime.execute(
-				search, options.bounds, options.maximum_vector_mapping_entries, options.maximum_raw_vector_reads,
-				options.vector_candidate_search_budget, options.vector_candidate_refinement_budget,
-				options.maximum_vector_training_records, options.maximum_vector_training_pages,
-				options.maximum_gds_algorithm_edges, options.maximum_gds_algorithm_iterations,
-				options.maximum_gds_algorithm_work_units, QueryContext{});
-		EXPECT_EQ(result.rowCount(), 300U);
-		EXPECT_GE(backend->state->node_batch_reads, 2U);
-		ASSERT_FALSE(backend->state->node_batch_sizes.empty());
-		EXPECT_LT(*std::ranges::max_element(backend->state->node_batch_sizes), 256U);
 	}
 
 } // namespace graph::query

@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -114,7 +115,8 @@ namespace graph::storage {
 		if (key.page_offset >= io_.fileSizeUncached()) {
 			throw std::out_of_range("buffer pool cannot pin a page beyond the end of the database file");
 		}
-		std::lock_guard lock(mutex_);
+		std::unique_lock lock(mutex_, std::defer_lock);
+		{ debug::ScopedPerfTimer waitTimer("storage.buffer_pool.pin_lock_wait"); lock.lock(); }
 		Entry &entry = loadLocked(key, hint);
 		if (entry.private_cow) {
 			throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
@@ -123,6 +125,7 @@ namespace graph::storage {
 			++pinned_pages_;
 		}
 		++entry.pin_count;
+		debug::PerfTrace::addPagePin(&io_, key.page_offset, key.generation);
 		return Pin(this, key, false);
 	}
 
@@ -268,6 +271,7 @@ namespace graph::storage {
 			const size_t bytesRead = io_.readAtUncached(pageOffset,
 					output.data() + static_cast<std::ptrdiff_t>(copied), requested);
 			disk_read_bytes_ += bytesRead;
+		debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytesRead));
 			misses_ += runPages;
 			copied += bytesRead;
 			if (bytesRead != requested) {
@@ -550,9 +554,11 @@ namespace graph::storage {
 	}
 
 	BufferPool::Entry &BufferPool::loadLocked(BufferPoolPageKey key, BufferPoolReadHint hint) {
+		debug::ScopedPerfTimer lookupTimer("storage.buffer_pool.load_locked");
 		const auto existing = entries_.find(key);
 		if (existing != entries_.end()) {
 			++hits_;
+			debug::PerfTrace::addValue("storage.buffer_pool.hits", 1);
 			if (existing->second->prefetched) {
 				++prefetch_hits_;
 				existing->second->prefetched = false;
@@ -561,11 +567,13 @@ namespace graph::storage {
 			return *existing->second;
 		}
 		++misses_;
+		debug::PerfTrace::addValue("storage.buffer_pool.misses", 1);
 		ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
 		auto entry = std::make_unique<Entry>();
 		const size_t bytesRead = io_.readAtUncached(key.page_offset, entry->bytes.data(), entry->bytes.size());
 		entry->valid_bytes = bytesRead;
 		disk_read_bytes_ += bytesRead;
+		debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytesRead));
 		entry->transient = hint == BufferPoolReadHint::BPRH_SEQUENTIAL;
 		Entry &stored = *entry;
 		entries_.emplace(key, std::move(entry));

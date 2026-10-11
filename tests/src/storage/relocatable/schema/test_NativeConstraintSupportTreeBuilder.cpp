@@ -280,6 +280,67 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, BuildsAndPublishesANativeTreeFrom
 	current.release();
 }
 
+TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsIncompleteReferenceScanAndRetriesOnTheSameSnapshot) {
+	BTreePageStore indexes(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	auto create = planner.beginTransaction();
+	for (int i = 0; i < 3; ++i) {
+		const auto id = create.createNode(std::array<uint64_t, 1U>{7U});
+		create.replaceNodeProperty(rootFor(id, PropertyValue(i)));
+	}
+	ASSERT_TRUE(create.commit().committed());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
+	auto snapshot = metadata_->openSnapshot();
+	auto options = supportTreeOptions();
+	options.validation_batch_entries = 1U;
+	options.maximum_entries = 2U;
+	EXPECT_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(indexes, *metadata_, snapshot,
+		uniqueConstraintForPlanning(), graph, options, propertyTokenResolver())), FormatException);
+	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST));
+	options.maximum_entries = 3U;
+	for (size_t retry = 0U; retry < 2U; ++retry) {
+		EXPECT_NO_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(indexes, *metadata_, snapshot,
+			uniqueConstraintForPlanning(), graph, options, propertyTokenResolver())));
+	}
+	snapshot.release();
+}
+
+TEST_F(NativeConstraintSupportTreeBuilderTest, SourceAdmissionCoversInitialColumnsAndCachedCanonicalValidation) {
+	BTreePageStore indexes(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	auto create = planner.beginTransaction();
+	for (int i = 0; i < 3; ++i) {
+		const auto id = create.createNode(std::array<uint64_t, 1U>{7U});
+		create.replaceNodeProperty(rootFor(id, PropertyValue(i)));
+	}
+	ASSERT_TRUE(create.commit().committed());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
+	auto snapshot = metadata_->openSnapshot();
+	auto options = supportTreeOptions(); options.validation_batch_entries = 3U;
+	// The fourth admission is the first cached value copied during canonical validation.
+	for (size_t cancellationCall: {size_t{1U}, size_t{4U}}) {
+		size_t calls = 0U;
+		options.property_admission = [&](size_t) {
+			if (++calls == cancellationCall) throw std::length_error("reject constraint Property source");
+		};
+		EXPECT_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(indexes, *metadata_, snapshot,
+			uniqueConstraintForPlanning(), graph, options, propertyTokenResolver())), std::length_error);
+		EXPECT_EQ(calls, cancellationCall);
+		EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST));
+	}
+	for (size_t retry = 0U; retry < 2U; ++retry) {
+		size_t calls = 0U;
+		options.property_admission = [&](size_t bytes) {
+			++calls;
+			if (bytes > 64U) throw std::length_error("source batch exceeds three Integer fields");
+		};
+		EXPECT_NO_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(indexes, *metadata_, snapshot,
+			uniqueConstraintForPlanning(), graph, options, propertyTokenResolver())));
+		EXPECT_EQ(calls, 6U);
+	}
+	snapshot.release();
+}
+
 TEST_F(NativeConstraintSupportTreeBuilderTest, FirstNativeCreatePublishesCatalogAndSupportTreeAtomically) {
 	BTreePageStore indexes(*slottedPages_, *metadata_);
 	SystemCatalog catalog(indexes, *metadata_);

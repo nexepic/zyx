@@ -640,13 +640,15 @@ namespace graph::storage {
 			node.page.committed_lsn = lsn;
 			const uint64_t ordinal = leafOrdinal(logicalId);
 			const uint32_t index = CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.page.level);
-			if (!node.page.children[index].isValid()) {
-				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
-											"relocatable location directory deletion references an absent radix route");
-			}
 			if (node.page.level != 0U) {
 				auto iterator = node.node_children.find(index);
 				if (iterator == node.node_children.end()) {
+					// Root growth and mutations can retain a child only in the
+					// mutable tree until publication writes its physical reference.
+					if (!node.page.children[index].isValid()) {
+						throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+								"relocatable location directory deletion references an absent radix route");
+					}
 					const uint16_t childLevel = node.page.level - 1U;
 					iterator = node.node_children
 									   .emplace(index, loadNode(pages, node.page.children[index], childLevel, type,
@@ -658,6 +660,12 @@ namespace graph::storage {
 			}
 			auto iterator = node.leaf_children.find(index);
 			if (iterator == node.leaf_children.end()) {
+				// Root growth and mutations can retain a child only in the
+				// mutable tree until publication writes its physical reference.
+				if (!node.page.children[index].isValid()) {
+					throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+							"relocatable location directory deletion references an absent radix route");
+				}
 				iterator = node.leaf_children
 								   .emplace(index, loadLeaf(pages, node.page.children[index], ordinal, type, superblock,
 															batch))
@@ -976,7 +984,10 @@ namespace graph::storage {
 
 	struct LocationDirectoryRangeCursor::Impl final {
 		struct RouteFrame final {
-			CatalogRadixPage page;
+			uint16_t level = 0U;
+			// Only the cursor's bounded ordinal range is resolved. Keep this view
+			// separate from the codec page, whose full-resolution flag stays false.
+			std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> children{};
 			PhysicalPageRef reference{};
 			uint64_t ordinal_base = 0U;
 			uint32_t next_child = 0U;
@@ -988,6 +999,10 @@ namespace graph::storage {
 		uint64_t next_logical_id = 1U;
 		uint64_t upper_logical_id = std::numeric_limits<uint64_t>::max();
 		const CancellationCheckpoint *cancellation = nullptr;
+		// Borrowed only by the synchronous sorted multi-lookup methods below;
+		// their local cursor is destroyed before either caller-owned span expires.
+		std::span<const uint64_t> requested_entity_ids;
+		std::span<const EntityPropertyKey> requested_property_keys;
 		std::vector<RouteFrame> route;
 		std::optional<LocationLeafPage> leaf;
 		size_t leaf_entry_index = 0U;
@@ -1003,6 +1018,52 @@ namespace graph::storage {
 			}
 		}
 
+		[[nodiscard]] RouteFrame resolveFrame(const CatalogRadixPage &page,
+				PhysicalPageRef reference, uint64_t ordinalBase) {
+			RouteFrame frame;
+			frame.level = page.level;
+			frame.reference = reference;
+			frame.ordinal_base = ordinalBase;
+			const uint64_t minimum = leafOrdinal(next_logical_id);
+			const uint64_t maximum = leafOrdinal(upper_logical_id);
+			const uint64_t factor = radixFactor(page.level);
+			std::array<uint32_t, RSS_CATALOG_RADIX_FANOUT> indices{};
+			std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> references{};
+			size_t count = 0U;
+			const auto selectRequested = [&](const auto requested, const auto ordinalOf) {
+				const uint64_t lower = std::max(minimum, ordinalBase);
+				auto position = std::lower_bound(requested.begin(), requested.end(), lower,
+						[&](const auto &key, uint64_t value) { return ordinalOf(key) < value; });
+				for (; position != requested.end(); ++position) {
+					const uint64_t ordinal = ordinalOf(*position);
+					if (ordinal > maximum) break;
+					const uint64_t index = (ordinal - ordinalBase) / factor;
+					if (index >= RSS_CATALOG_RADIX_FANOUT) break;
+					if (count == 0U || indices[count - 1U] != index)
+						indices[count++] = static_cast<uint32_t>(index);
+				}
+			};
+			if (!requested_entity_ids.empty()) {
+				selectRequested(requested_entity_ids, [](uint64_t id) { return leafOrdinal(id); });
+			} else if (!requested_property_keys.empty()) {
+				selectRequested(requested_property_keys,
+						[](const EntityPropertyKey &key) { return leafOrdinal(key.directoryId()); });
+			} else {
+				for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
+					if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) break;
+					const uint64_t ordinal = ordinalBase + static_cast<uint64_t>(index) * factor;
+					if (ordinal > maximum) break;
+					if (ordinal < minimum && factor <= minimum - ordinal) continue;
+					indices[count++] = index;
+				}
+			}
+			checkCancellation();
+			pages->resolveMetadataRadixChildren(page, superblock, std::span(indices).first(count),
+					std::span(references).first(count));
+			for (size_t index = 0U; index < count; ++index) frame.children[indices[index]] = references[index];
+			return frame;
+		}
+
 		void initialize() {
 			if (initialized || exhausted) {
 				return;
@@ -1016,9 +1077,10 @@ namespace graph::storage {
 			}
 			checkCancellation();
 			CatalogRadixPage root =
-					pages->readMetadataRadix(rootReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					pages->readMetadataRadixUnresolved(rootReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 			++metadata_pages_read;
 			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_root_descents", 1);
+			debug::PerfTrace::addValue("native_graph.read.root_descents", 1);
 			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
 			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != directory_type ||
 				root.level > RSS_CATALOG_RADIX_MAX_LEVEL) {
@@ -1028,7 +1090,7 @@ namespace graph::storage {
 			validateVisible(root.generation, root.committed_lsn, superblock,
 							"relocatable location range cursor root is newer than its Superblock");
 			route.reserve(static_cast<size_t>(RSS_CATALOG_RADIX_MAX_LEVEL) + 1U);
-			route.push_back({std::move(root), rootReference, 0U, 0U});
+			route.push_back(resolveFrame(root, rootReference, 0U));
 		}
 
 		[[nodiscard]] bool referenceIsOnRoute(const PhysicalPageRef reference) const {
@@ -1045,7 +1107,7 @@ namespace graph::storage {
 			const uint64_t maximumOrdinal = leafOrdinal(upper_logical_id);
 			while (!route.empty()) {
 				RouteFrame &frame = route.back();
-				const uint64_t factor = radixFactor(frame.page.level);
+				const uint64_t factor = radixFactor(frame.level);
 				bool descended = false;
 				while (frame.next_child < RSS_CATALOG_RADIX_FANOUT) {
 					const uint32_t childIndex = frame.next_child++;
@@ -1066,7 +1128,7 @@ namespace graph::storage {
 					if (endsBeforeMinimum) {
 						continue;
 					}
-					const PhysicalPageRef childReference = frame.page.children[childIndex];
+					const PhysicalPageRef childReference = frame.children[childIndex];
 					if (!childReference.isValid()) {
 						continue;
 					}
@@ -1075,7 +1137,7 @@ namespace graph::storage {
 											"relocatable location range cursor found a cyclic radix route");
 					}
 					checkCancellation();
-					if (frame.page.level == 0U) {
+					if (frame.level == 0U) {
 						LocationLeafPage candidate =
 								pages->readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 						++metadata_pages_read;
@@ -1109,11 +1171,11 @@ namespace graph::storage {
 					}
 
 					CatalogRadixPage child =
-						pages->readMetadataRadix(childReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						pages->readMetadataRadixUnresolved(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 					++metadata_pages_read;
 					debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
 					if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
-						child.directory_type != directory_type || child.level + 1U != frame.page.level) {
+						child.directory_type != directory_type || child.level + 1U != frame.level) {
 						throwLocationDirectoryError(
 								FormatError::FERR_INVALID_HEADER,
 								"relocatable location range cursor has an invalid internal route");
@@ -1124,7 +1186,7 @@ namespace graph::storage {
 						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location range cursor exceeds the maximum radix depth");
 					}
-					route.push_back({std::move(child), childReference, childOrdinal, 0U});
+					route.push_back(resolveFrame(child, childReference, childOrdinal));
 					descended = true;
 					break;
 				}
@@ -1244,6 +1306,7 @@ namespace graph::storage {
 		implementation->next_logical_id = lowerInclusive;
 		implementation->upper_logical_id = upperInclusive;
 		implementation->cancellation = cancellation;
+		debug::PerfTrace::addValue("native_graph.read.directory_range_calls", 1);
 		return LocationDirectoryRangeCursor(std::move(implementation));
 	}
 
@@ -2148,19 +2211,38 @@ namespace graph::storage {
 		if (logicalId == 0U) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE, "relocatable location lookup requires an ID");
 		}
-		if (!rootFor(pages_, superblock, directoryType).isValid()) {
+		const PhysicalPageRef rootReference = rootFor(pages_, superblock, directoryType);
+		if (!rootReference.isValid()) {
 			return std::nullopt;
 		}
-		CatalogRadixPage node = readRoot(pages_, superblock, directoryType);
+		// Reuse the root just authenticated above: readRoot would resolve it again.
+		CatalogRadixPage node = pages_.readMetadataRadixUnresolved(rootReference);
+		if (node.kind != CatalogRadixPageKind::CRPK_ROOT || node.directory_type != directoryType) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+					"relocatable location Superblock root has an invalid directory type");
+		}
+		validateVisible(node.generation, node.committed_lsn, superblock,
+				"relocatable location root is newer than its Superblock");
 		const uint64_t ordinal = leafOrdinal(logicalId);
 		for (;;) {
-			const std::optional<PhysicalPageRef> reference =
-					CatalogRadixPageCodec::findChildForLeafOrdinal(node, ordinal);
-			if (!reference.has_value()) {
+			if (node.kind == CatalogRadixPageKind::CRPK_ROOT) {
+				uint64_t quotient = ordinal;
+				for (uint16_t level = 0U; level <= node.level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
+				if (quotient != 0U) {
+					// Even an out-of-domain miss must reject a foreign route context.
+					pages_.resolveMetadataRadixChildren(node, superblock, {}, {});
+					return std::nullopt;
+				}
+			}
+			const std::array<uint32_t, 1U> indices{CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.level)};
+			std::array<PhysicalPageRef, 1U> references{};
+			pages_.resolveMetadataRadixChildren(node, superblock, indices, references);
+			const PhysicalPageRef reference = references.front();
+			if (!reference.isValid()) {
 				return std::nullopt;
 			}
 			if (node.level == 0U) {
-				const LocationLeafPage leaf = pages_.readLocationLeaf(*reference);
+				const LocationLeafPage leaf = pages_.readLocationLeaf(reference);
 				if (leaf.directory_type != directoryType) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"relocatable location leaf has an unexpected directory type");
@@ -2174,7 +2256,7 @@ namespace graph::storage {
 				}
 				return *position;
 			}
-			CatalogRadixPage child = pages_.readMetadataRadix(*reference, superblock);
+			CatalogRadixPage child = pages_.readMetadataRadixUnresolved(reference);
 			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
 				child.level + 1U != node.level) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -2538,6 +2620,7 @@ namespace graph::storage {
 
 		LocationDirectoryRangeCursor cursor = openRangeCursor(
 				superblock, directoryType, entityIds.front(), entityIds.back(), cancellation);
+		cursor.implementation_->requested_entity_ids = entityIds;
 		std::optional<LocationLeafEntry> pending;
 		for (size_t index = 0U; index < entityIds.size(); ++index) {
 			const uint64_t requested = entityIds[index];
@@ -2604,6 +2687,7 @@ namespace graph::storage {
 		LocationDirectoryRangeCursor cursor = openRangeCursor(
 				superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, keys.front().directoryId(),
 				keys.back().directoryId(), cancellation);
+		cursor.implementation_->requested_property_keys = keys;
 		std::optional<LocationLeafEntry> pending;
 		for (size_t index = 0U; index < keys.size(); ++index) {
 			const uint64_t requested = keys[index].directoryId();

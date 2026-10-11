@@ -1,6 +1,6 @@
 ---
-title: Optimization Strategy
-description: General read, execution, cache, and write optimization for the ZYX native storage architecture.
+title: Architecture and General Performance Implementation Plan
+description: A COW single-file graph database roadmap covering execution IR, properties, adjacency, transactions, resources, optimization and phased acceptance.
 category: Performance
 categoryOrder: 5
 order: 9
@@ -10,338 +10,221 @@ projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
 
-# Optimization Strategy
+# Architecture and General Performance Implementation Plan
 
-This is the single execution document for performance work on the new ZYX architecture. It defines a reusable batched read and execution framework. It must not introduce a branch for one benchmark, Cypher text, or dataset. The [native single-file storage plan](native-single-file-storage-plan) owns persistent layout, page formats, Catalog, Page Directory, recovery, relocation, and reclamation. The [native capability acceptance matrix](native-capability-acceptance-matrix) owns feature migration and legacy-retirement status.
+Updated: 2026-10-11. **This page is the sole implementation entry for subsequent architecture and performance work. Implementation has not started: S0–S6 are all 0%, overall 0/34. Writing this document does not complete implementation milestones.**
 
-Queries and graph algorithms declare a logical read shape. The shared framework organizes reads by snapshot, logical page, and bounded batch. Every optimization preserves snapshot isolation, corruption detection, resource limits, cancellation, result order, duplicates, `NULL`, `LIMIT`, and `SKIP` semantics.
+The previous P0–P7 result of 40/40 closed that checklist only; it did not establish architectural completeness or Kuzu parity. The previous optimization document and storage stage ledger are outside the documentation site at `benchmarks/architecture-design/archive/20261011-completed-optimization/`, with original-file SHA-256 hashes. Earlier records are in `20261009-superseded-plans/`. These are historical evidence, not execution plans.
 
-## Current Assessment
+## 1. Scope, decisions and document authority
 
-Release measurements show that the new architecture is not uniformly slower: index loading/building has already beaten the old path in some runs, and point lookup is close. The large regressions are concentrated in full entity scans, property filters, index-candidate verification, and short-path traversal.
+### 1.1 Established boundaries
 
-The common cost is repeated execution of:
+- Continue using **COW and A/B Superblocks**. Do not introduce WAL or treat cross-transaction group commit as ordinary tuning; changing commit acknowledgement requires a separate protocol design.
+- Remain a general-purpose, embedded, strictly single-file database. Durable data, recovery information and query spill space belong to the same database file; no database WAL/SHM/temporary sidecars.
+- Preserve stable EntityId/PageId, logical/physical separation, snapshots, read-your-writes, shared allocation, relocation, snapshot-safe reclamation, explicit codecs, integrity checks and public API/Driver ABI boundaries.
+- Preserve clause IR, Expression, logical plans and useful caches/selected reads/batches. Do not revive retired storage or physical executors, or create a second complete database backend.
+- **A3 authorizes layout design and admission experiments, not unconditional columnar replacement. A4 must establish its consistency protocol before selecting the physical layout.**
+- LLVM is a conditional experiment, not a mandatory dependency. Establish efficient non-JIT execution first; retain a non-JIT WASM path.
+- No query-text, dataset-name, fixed-answer or benchmark-size special cases. General cost models may use actual cardinalities, types, bytes, pages and selectivity.
+- Preserve macOS/Linux/Windows portability; this round executes on macOS. **Run only relevant module unit tests, never the full unit suite; coverage is not a gate; no commit or push.** Generic repository templates and historical records do not override this scope.
 
-```text
-generic Page Directory route
-  -> Entity Map lookup
-  -> Entity page validation
-  -> Property Directory lookup
-  -> Property page validation
-  -> complete-object materialization
-```
+### 1.2 Document responsibilities
 
-When this chain is repeated for every entity or candidate, it hides the benefits of logical identity, snapshot routing, and relocatable pages. Remove repeated work first; use structural counters before considering a page-layout change.
+| Document | Responsibility |
+|---|---|
+| This page | Sole task list, dependencies, design admission, acceptance and progress |
+| [Single-file storage specification](native-single-file-storage-plan) | Current file rules and explicitly labeled unimplemented targets; no phase percentages |
+| [Capability acceptance matrix](native-capability-acceptance-matrix) | Public capabilities, source owners and historical evidence; changed paths need current-source validation |
+| [Benchmarks](benchmarks) | Measurement methods and historical results, not task status |
+| [Release follow-ups](native-remaining-work-roadmap) | Separate release scope, not another optimization checklist |
 
-Reusable foundations already present include `EntityReadShape`, `NativeReadSession`, `BoundedBatch`, `SelectionVector`, `BTreeIndex::RangeCursor`, selected-column Property APIs, ordered Node/Edge batch reads, topology/reference adjacency APIs, and LargeValue manifest/chunk/range-read support. These foundations do not mean that every consumer has migrated. A stage closes only after its consumer audit, tests, and lifecycle evidence are complete.
+Until the corresponding implementation changes, existing files retain their current codecs and protocol. New designs cannot silently reinterpret old bytes. A4 reopens old future-policy restrictions such as permanently prohibiting covering adjacency; this does not permit current readers to skip primary-record validation. Amend affected format clauses before implementing new writer/reader/integrity/reclamation behavior.
 
-## Target Architecture
+The current compatibility policy is new databases for a new format and explicit rejection of old formats, with no automatic conversion or deletion of user files. Migration requires separately established requirements and a protocol. Format envelope, Superblock and local codec versions are distinct; obtain actual version values from source when implementing.
 
-```mermaid
-flowchart LR
-    Q["Cypher / GDS / algorithms"] --> S["EntityReadShape"]
-    S --> B["Batch Read Planner"]
-    B --> E["Typed Entity Cursor"]
-    B --> A["Adjacency Range Cursor"]
-    B --> I["Index Candidate Cursor"]
-    E --> P["Property Column Reader"]
-    A --> P
-    I --> P
-    P --> M["Shape Materializer"]
-    M --> O["Operator / procedure"]
-```
+## 2. Current facts and benefit hypotheses
 
-The framework has five boundaries:
+The current pipeline includes QueryAST, Expression, LogicalOperator and LogicalPlanOptimizer. Logical runtimes directly execute plans; the main row representation still uses string-keyed hash maps. EntityRef delayed materialization, selected property reads, selection vectors and bounded batches already exist and must not be reimplemented as new features.
 
-1. **Shape**: the consumer declares fields instead of choosing physical reads.
-2. **Plan**: logical IDs, Property tokens, and budgets become ordered batches.
-3. **Execute**: requests are grouped by typed directory, PageId, and page slot.
-4. **Validate**: page admission, record decoding, and semantic cross-checks enforce invariants.
-5. **Materialize**: only the declared result shape is built, in logical order.
+Properties are organized as owner collections; ordinary mutation requests replace complete collections, and large collections may be encoded into a single LargeValue payload. Ordinary adjacency is a global key-only B+Tree; obtaining neighbors/type generally requires Edge records. Ordinary write transactions use graph-root fences, which are safe but can conflict on disjoint writes. Sort has memory bounds; that does not establish general spill execution.
 
-Every new consumer must use these boundaries and must not implement its own per-entity loop.
+### 2.1 Existing baseline, not a new measurement
 
-## Read Shape Contract
+Existing final-round P50, macOS, one thread, warm queries, 225,000 nodes/860,000 edges:
 
-All Node, Edge, adjacency, and index reads use an explicit shape:
+| Workload | ZYX/ms | Kuzu/ms | ZYX/Kuzu |
+|---|---:|---:|---:|
+| Indexed point lookup | 0.8515415 | 0.109583 | 7.77 |
+| One hop | 1.229225 | 0.236563 | 5.20 |
+| Two hops | 1.347205 | 0.5988755 | 2.25 |
+| Label scan/filter | 167.8235 | 1.024271 | 163.85 |
+| Relationship type scan | 157.0135 | 3.053521 | 51.42 |
+| DISTINCT count | 221.3725 | 1.656271 | 133.66 |
 
-| Shape | Data |
-| --- | --- |
-| `IDENTITY` | NodeId or EdgeId, liveness, and state |
-| `TOPOLOGY` | EdgeId, source, target, relationship type, and state |
-| `LABELS` | Identity plus label tokens |
-| `SELECTED_PROPERTIES` | Identity plus requested Property-token columns |
-| `COMPLETE` | Complete logical Node or Edge |
+Evidence root: `benchmarks/graphdb-comparison/results/followup-optimization-20261009/`. The table comes from `p7-final-source-medium-six-threeway/summary.json`. ZYX C++ and Kuzu Python have different entry paths and indexing capabilities. In this matrix `aggregation_group_by` is a DISTINCT count, not a full grouped-output test. Scan gaps motivate layout/execution investigation but do not identify each hotspot's share.
 
-A shape also carries the pinned snapshot, row and temporary-byte budgets, cancellation checkpoint, admission/prefetch policy, early-stop requirement, and ordering/duplicate contract.
+Other retained evidence:
 
-Default shapes are:
+- `p7-final-acceptance.json`: final source identity, limitations and acceptance index for the previous plan.
+- `p7-final-owning-output-resources/summary.json`: approximately 183,000/580,000 C++ new calls for 10,000 IDs/full nodes; excludes some malloc/mmap activity and is not a complete heap metric.
+- `p3-read-write-resource-acceptance.json`: updating one integer in a 32 KiB owner writes 729408 bytes including publication metadata, not property-only amplification.
+- `p3-authoritative-layout-adoption-decision.json`: column-block prototype improves selected reads but regresses a small-payload update fixture by approximately 23%; graph routing and unreachable-data reclamation are incomplete. It was not admitted to production and must not simply be enabled.
+- Related `p4` decisions: covered payload cannot avoid primary reads under the unchanged per-entry recheck contract. This does not disprove every covering/segmented design.
 
-| Consumer | Shape |
-| --- | --- |
-| degree, count, BFS, DFS, shortest path, Leiden | `TOPOLOGY` |
-| relationship-type filter | `TOPOLOGY` |
-| entity references | `IDENTITY` |
-| Property predicate | `TOPOLOGY + SELECTED_PROPERTIES` |
-| GDS projection | Declared projection fields |
-| `RETURN n` or `RETURN r` | `COMPLETE` |
+Historical evidence does not describe a future working tree. S0 must verify provenance; HEAD is not a substitute for the user's uncommitted source.
 
-`COMPLETE` is reserved for consumers that really return complete objects. A topology algorithm must not create a Property cursor for adapter convenience.
+## 3. Architecture work packages A1–A7
 
-## Batch Read Contract
+Every design deliverable includes current call paths, target interfaces/ownership, data/snapshot identities, failure states, byte layouts/versions where applicable, recovery/reclamation states, replacement boundaries, module tests, benefit hypotheses and falsification conditions. The following contracts are mandatory; exact ABI/codecs, block sizes and cost parameters must be settled in S1 decision records, not guessed during coding.
 
-Batch reads use gather, execute, and scatter:
+### A1: Bound execution representation and physical plans
 
-```text
-Gather:
-  collect logical IDs, shape, Property tokens, and budgets
+Keep the frontend and logical IR. Add execution binding/physical planning after them. Resolve names to slots; property tokens/descriptors have explicit schema epochs and plan-cache invalidation. Use typed kernels for known types and semantically equivalent fallbacks for dynamic/mixed values.
 
-Execute:
-  resolve directories, group by PageId, pin pages sequentially, decode in-page
+Execution batches carry typed columns, presence/null information, selection vectors, EntityRefs and variable-payload owners. Define borrowing, batch reuse, page pins, ordering and multiplicity. Physical plans select access paths, join/aggregate/sort algorithms, pipelines and blocking materialization. Start with non-JIT scan/filter/project/aggregate; then migrate join, sort, unwind, procedures/subqueries and mutation read sides. These paths must not silently fall back to unaccounted old row objects.
 
-Scatter:
-  restore the caller's requested order by input ordinal
-```
+Create owning QueryResult/Driver ABI values at the output boundary. Enumerate transitional adapters and their removal conditions; do not retain two independently maintained query semantics. Preserve NULL, numeric/type behavior, optional matches, paths, correlated subqueries, cancellation and public error behavior.
 
-Physical requests may sort and deduplicate, but results preserve logical order, duplicate IDs, `NULL` and missing positions, `LIMIT`, `SKIP`, early-stop, and snapshot visibility. Every variable-length Property, LargeValue, label set, and result object is charged before it enters downstream execution. A batch is bounded by both rows and bytes.
+### A2: Property patch contract
 
-`LOAD CSV` is an external pull source and remains row-at-a-time at the visitor
-boundary. It still enforces the same row/byte budgets and cancellation checks,
-while downstream operators batch the rows they receive. A CSV implementation
-must not pre-read a batch before invoking the visitor: doing so would change
-`LIMIT`, cancellation, and fail-fast behavior. True CSV source batching is
-reserved for a future generic pull/batch protocol shared by all external
-sources; it must not be introduced as a CSV-specific fast path.
+Support internal per-key set/remove while retaining explicit whole-map replacement. Preserve distinct semantics of single-key SET, map merge, full map replacement and REMOVE. Coalesce final durable state without changing intermediate statement overlay/read-your-writes behavior; never borrow LargeValue references past their lifetime.
 
-The physical cost of a batch should track directory ranges, metadata pages, distinct data pages, decoded records, and selected values rather than the number of input rows.
+Compute index, constraint and statistic changes only for affected fields. Define create-then-delete, no-op values, property deletion, type changes, conflicting index keys and final failure. Publish properties, derived indexes, statistics and entity state in one COW publication.
 
-## Typed Entity Page Cursors
+A2 may initially use the current layout. A request containing one field does not prove localized physical writing; measure interface and physical behavior separately.
 
-Node and Edge scans must use typed entity-directory entry points. Do not walk the generic `visitPageLocationsUntil()` stream and filter pages by segment or owner afterward.
+### A3: Grouped and chunked properties for general graphs
 
-The shared cursor family is:
+**Goal: improve cross-entity narrow scans while preserving point reads, small updates, dynamic properties and full-entity retrieval. Do not unconditionally make all properties dense columns.**
 
-```text
-NodePageCursor
-EdgePageCursor
-PropertyPageCursor
-IndexPageCursor
-AdjacencyRangeCursor
-```
+1. Organize bounded entity ranges/slots into groups, with separate Node/Edge identity spaces. Stable EntityId is distinct from internal slot; deletion/reuse has generation/liveness metadata. Labels are membership, not duplicate property ownership; adding labels must not move entire entities.
+2. Identify property chunks by PropertyKey/token. Dense fields use compact arrays/bitmaps; sparse fields use ordered slot/value pairs or compact presence/rank structures. Preserve mixed types and missing-property semantics; one observed value does not establish a permanent schema.
+3. Support direct entity/field lookup and enumeration of fields actually owned by an entity. Full-node reads must not scan global property tokens or the whole group. Include routing/enumeration metadata in space/read/COW costs; do not create an independent tree for every entity-property pair.
+4. Large values use independent LargeValue references; ordinary variable values use bounded local payloads. Define group, compression block, page and update unit separately. Changing one value must not rewrite an entire group or unrelated large values. First evaluate direct page-level COW updates; do not preselect multi-level deltas/LSM, hot/cold migration or automatic layout switching.
+5. Each logical property has one unambiguous authoritative version per snapshot. If column chunks and sparse extensions coexist, the group descriptor determines ownership; extensions are not a second full copy. Layout transitions and retirement share a recoverable protocol.
+6. Preserve snapshot/owner/generation checks. Define old-version reachability for group splits, slot reuse, large-value replacement, failed publication, relocation and whole-group deletion. Start with few encodings. Thresholds derive from general space/access costs, not benchmark names or special sizes.
 
-Each cursor binds one `MetadataSnapshotPin`, reads only its typed directory, caches the current pool route, admits and pins each page once, scans many records in that page, uses bounded sequential admission/prefetch, resumes through logical continuation, and stops at row, byte, cancellation, or visitor limits. A record scan must not cause a Page Directory root descent. A page must not be re-authenticated and re-pinned for multiple owners in one session.
+**Admission sequence:** establish a current-row-layout control, implement a complete lifecycle prototype, then decide on adoption. Before reusing old prototype readers, finish graph routing, index maintenance, unreachable child/root/LargeValue retirement, reopen and failed-publication recovery. A laboratory carrier is not a production engine.
 
-## Property Column Reader
+Required cases: single/multi-field range scans, random single-field/full-entity reads, neighbor property gathering; sparse/dense fields, mixed types, multiple labels, wide entities and large values; set/remove/type changes, ingestion, deletion, long snapshots and sustained updates. Measure end-to-end latency, read/write bytes, peak memory and steady-state space. Resolve material point-read/update regressions or explicitly establish product tradeoffs; average scan improvements cannot hide them.
 
-Property pages are shared 4 KiB slotted pages. Node and Edge roots may share a page. Property reads are page-oriented:
+If the prototype fails Section 6 admission, reject that prototype, retain production format, record attribution and a revised proposal. Production milestones in S3 remain incomplete. Do not silently skip A3 to reach 100%, and do not ship a regressing layout merely to execute the checklist.
 
-```text
-EntityPropertyKey
-  -> one Property Directory range merge
-  -> group by Property PageId
-  -> pin each Property page once
-  -> decode multiple owner roots in-page
-  -> decode only requested tokens
-  -> restore entity order
-```
+### A4: Direct adjacency access and trusted derived layouts
 
-The common reader provides `readSelectedColumns(keys, tokens, budget)`, `readPropertyCounts(keys, budget)`, `readPropertyExists(keys, tokens, budget)`, and `readFullRoots(keys, budget)`. Small roots decode only framing, slot, token offsets, and requested values. Selected reads must not decode an entire root merely because one token was requested.
+Logical batches provide EdgeId, NeighborId, TypeId and required visibility information, preserving direction, parallel edges, self-loops, type filters, continuation and overlay semantics. Authoritative Edge records define identity/topology; covered data is a protocol-maintained derivative, not independently writable authority.
 
-Directory cursors, route cache, page image, owner/slot-generation validation, token offset directory, snapshot generation, cancellation, and row/byte budget are shared by all four APIs.
+First specify when authenticated adjacency fields can be trusted directly, checks performed at load/publication/integrity scan, missing-membership detection, and corruption/wrong-generation/inconsistency errors. Do not remove primary-record rechecks before proving the replacement contract; a checksum alone does not establish index/entity consistency.
 
-## LargeValue Reads
+Compare two candidates behind one interface: covering entries in shared Packed B+Trees, and multi-node segmented adjacency blocks organized by direction/type. Both require shared space for low-degree nodes, supernodes, online changes, atomic bidirectional maintenance, relocation and reclamation. Avoid per-node roots/dedicated tail pages. Do not add public endpoint/type mutation solely for tests when current APIs do not support it.
 
-When a Property collection does not fit in a Property page, the page stores only a `LargeValueRef`. The generic LargeValueStore stores the payload in manifests, chunks, and 4 KiB data pages. It serves source code, JSON, text, images, and arbitrary bytes without a domain-specific store.
+Prefer the smaller covering-tree change if it meets goals. Adopt segments only when benefits justify maintenance/write amplification. Include topology-only traversal, typed expansion, multiple hops, random insertion/deletion, skewed degrees, self-loops/parallel edges and long-term space, not just sequential loading. Existing key-only files retain semantics until the format changes.
 
-The existing mechanism provides immutable logical IDs, manifest trees, chunked data pages, per-chunk `RAW`/`LZ4`/`ZSTD` codecs, content hashing and bounded deduplication, full and range reads, generation-aware retirement, and snapshot-safe reclaim.
+### A5: Isolation and conflict granularity
 
-The remaining framework work is selected range reading. The Property payload offset directory must map to LargeValue chunk ranges so a selected token reads only overlapping chunks. Reading one small field must not unconditionally read a large source file or binary object. The selected path now reuses the already authenticated manifest route while reading the requested entries, so each token does not reopen the manifest directory. Full Property reads still perform full-content validation, and ranged reads retain chunk, codec, checksum, and snapshot validation. Compression remains a generic per-chunk policy with a savings threshold and RAW fallback; it must not contain file-type-specific branches.
+Derive the promised isolation level from public contracts/tests; do not automatically claim serializability. Define transaction snapshots, read dependencies, entity/property write intents, uniqueness/range/predicate dependencies and schema epochs. Specify phantom/write-skew behavior for the chosen level; write-set checks alone do not establish serializability.
 
-## Topology-First Adjacency
+Disjoint changes should not fail solely because graph roots changed. Detect overlapping writes, constraint conflicts and node deletion versus edge creation. After validation, rebuild candidates against current roots and publish atomically. A serialized publication gate is acceptable; stale page pointers must never overwrite newer versions. Define ID leases, retries, overlays, indeterminate commits and resource release. Do not merely delete the global fence.
 
-Ordinary graph adjacency is the global key-only Packed B+Tree:
+### A6: Resource ownership and single-file spill
 
-```text
-(direction, NodeId, EdgeId) -> empty
-```
+Unify query/batch/operator budgets, pins, variable payloads and cancellation. Account for actual container capacities and held resources, not just row counts. Over-budget execution uses a supported spill path or fails explicitly; never truncate results or swallow corruption errors.
 
-The Edge Entity page remains authoritative for endpoints, type, and state. An adjacency leaf contains no complete Edge, Property, endpoint copy, or physical offset.
+Implement sorted runs/merge first, then partitionable aggregation/hash operations. List unsupported spilling operators and their errors. Reuse allocation infrastructure, but existing bulk scratch does not prove query spill. Specify durable scratch registration/ownership, release, crash cleanup, read-only file behavior, disk exhaustion and shared handles. Read-only execution cannot secretly write spill data into the database; without writable file scratch it uses bounded memory and fails clearly when necessary.
 
-The common API is:
+Budget foreground work, reclamation and compaction separately. When long snapshots prevent reuse, expose backlog and apply limits instead of growing indefinitely or reclaiming referenced pages.
 
-```text
-scanTopology(node, direction)
-scanReferences(node, direction)
-scanSelected(node, direction, shape)
-scanFull(node, direction, shape)
-scanForNodes(nodes, direction, shape)
-```
+### A7: Format evolution and implementation boundaries
 
-Multi-Node scans reuse `GlobalAdjacencyIndex::visitForNodes()` and one continuous range cursor. Edge IDs are then grouped by Entity page and decoded as topology. Type and other light predicates run before selected Property reads.
+Specify each new root/page type/descriptor, codec field/width/endianness, version, reachability, atomic maintenance, retirement and integrity walker. Reuse namespaces/shared allocator and prefixed cross-platform enums. Test explicit old-format rejection. Do not copy version numbers from archives into code.
 
-Topology-only paths must not pin unrelated Property pages, build complete `LogicalGraphEdge` objects, resolve Property names, or read LargeValues. Endpoint and direction validation remains in the same snapshot, including self-loop, parallel-edge, continuation, and early-stop semantics.
+Record implemented, pending-validation, rejected and replaced decisions. A3/A4 currently establish goals, not finalized codecs. On adoption update both this page and affected storage-specification sections, removing conflicting future-policy restrictions while retaining historical evidence.
 
-## Index Candidate Stream
+## 4. Optimization work packages O1–O8
 
-Indexes use `(canonical value tuple, EntityId)` keys. The index is an access path; authoritative Property values remain in the Property Store. Reads expose a generation-bound candidate batch containing the canonical key, EntityId, index definition/version, and snapshot generation.
+| Work | Implementation | Dependency and validation |
+|---|---|---|
+| O1 Plans/work volume | Cardinality/selectivity, index versus scan, join order, filter/projection pushdown, LIMIT/EXISTS termination, Top-K | Audit existing features first; preserve NULL/multiplicity/order and legal rewrite boundaries; compare operator input/output and end-to-end time |
+| O2 Allocation/materialization | Batch reuse, fewer container/string/property copies, delayed entities, ownership at output | A1; views cannot outlive owners/pins; release large payloads; avoid unbounded arenas/over-reservation |
+| O3 Read locality | Page-grouped IDs, findMany/cursors, snapshot-local metadata reuse, merged reads and bounded prefetch | Keep stable IDs; restore correspondence/multiplicity/order; cache keys include database/version/resolution context; misses are not corruption |
+| O4 Operator kernels | Batch filter/join/distinct/aggregate/sort, fewer generic-value conversions | A1; contiguous data/correct algorithms first; dynamic-type fallback; measure width/selectivity/skew |
+| O5 COW writes | Coalesced final state, private-page reuse, tree/page-batched index changes, affected indexes only, split/merge control, contiguous writes, final encoding | A2 and relevant layouts; retain data-before-root and durable sync; do not weaken durability for speed |
+| O6 Steady-state maintenance | Protect hot caches from scans; budget reclamation/compaction; long-snapshot/disk-pressure management | A6; sustained throughput, P95, backlog and file size; do not defer unlimited work to background |
+| O7 Hardware/compiler | Profile-led SIMD, parallel scans/aggregation, compression, LTO/PGO | After typed baseline; portable fallback, equal threads/CPU features, representative PGO training/holdouts |
+| O8 Conditional LLVM experiment | Optional expression JIT; pipelines only after demonstrated benefit | Optional implementation, not dependency; attribute expression CPU first; compilation/first-run/cache-hit/code-memory measurements; bounded cache, safe invalidation, fallback; WASM does not depend on JIT |
 
-Exact, scalar-range, and composite-range candidates share one root-descent `BTreeIndex::RangeCursor`, bounded candidate batches, Entity-page grouping, selected Property-column grouping, candidate/column alignment and reorder, residual validation, early-stop, and byte budgets.
+Reuse verification of the same immutable page version without removing first-use checks. More memory, threads or weaker sync are not equal-resource gains. O7/O8 can conclude with evidence-based non-adoption; they do not replace mandatory A1–A6 capabilities.
 
-Candidate verification must not perform independent Entity Directory and Property Directory root lookups for every candidate. When the index and Property state were published atomically in one generation, the query performs the necessary liveness, shape, and residual checks; full cross-store verification belongs to index build, maintenance, recovery, and the integrity scanner.
+## 5. Phases, dependencies and fixed progress
 
-Every candidate stream rejects a wrong snapshot or definition, zero/duplicate/invalid IDs, owner/generation/checksum/codec mismatches, missing or misaligned Property columns, row/byte overflow, and a physical reorder that cannot be scattered back to logical order.
+S0 → S1 → S2 → S3 → S4 → S5 → S6. Designs may cover all modules in advance; implementation follows dependencies. A2 may precede S3 layout changes. Minimal A6 lifecycle support needed by earlier modules can be implemented early but remains counted under S5 once only. User questions about progress must not cause unfinished work to be skipped.
 
-## Snapshot-Local Cache
+| Phase | Fixed deliverables | Accepted/total | Progress |
+|---|---|---:|---:|
+| S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 0/4 | 0% |
+| S1 Architecture | S1.1 A1; S1.2 A2; S1.3 A3; S1.4 A4; S1.5 A5; S1.6 A6; S1.7 A7 complete decision records | 0/7 | 0% |
+| S2 Execution | S2.1 binding/batches/cache identity; S2.2 scan/filter/project/aggregate; S2.3 other operators and read/write consumers; S2.4 focused semantics tests; S2.5 O1/O2/O4 comparisons | 0/5 | 0% |
+| S3 Properties | S3.1 A2/current-layout regressions; S3.2 complete A3 prototype/admission decision; S3.3 admitted production layout/specification; S3.4 correctness/fault tests; S3.5 O3/O5 read/write/resources | 0/5 | 0% |
+| S4 Graph access | S4.1 consistency protocol/candidate comparisons; S4.2 admitted production path/format; S4.3 graph semantics/fault tests; S4.4 read/write/space acceptance | 0/4 | 0% |
+| S5 Transactions/resources | S5.1 conflict validation/safe rebase; S5.2 isolation/retry/fault tests; S5.3 single-file spill/budgets; S5.4 out-of-memory/cancel/disk-full/read-only/crash-cleanup tests; S5.5 O6 steady-state acceptance | 0/5 | 0% |
+| S6 Integration | S6.1 final source/affected-module regressions; S6.2 workload classes/Kuzu comparison; S6.3 long-run resources/recovery/cleanup; S6.4 O7/O8 adoption decisions/final docs | 0/4 | 0% |
+| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 0/34 | 0% |
 
-Caches store physical reads and authenticated intermediate state, never final query answers:
+States: pending, in progress, accepted, blocked. Only accepted items count. Phase progress is accepted/phase total; overall is accepted/34. Subtasks may show completed/remaining work without silently changing denominators. Rejecting a prototype can complete its comparison/decision milestone, never subsequent production capabilities. If no acceptable replacement exists, keep those open, report the issue and propose revisions; changing mandatory scope requires explicit user agreement.
 
-1. **Buffer Pool** caches physical 4 KiB pages.
-2. **Snapshot route cache** maps logical PageIds to current physical routes.
-3. **NativeReadSession** caches typed pages, Entity records, tokens, and Property columns for one snapshot.
+Every completed round reports all S0–S6 percentages, overall progress, newly accepted IDs, evidence, remaining issues and next work. Useful investigation without milestone acceptance must explain concrete findings without inflating percentages. Old P0–P7 and new S0–S6 are separate.
 
-Cache identity includes logical identity, snapshot generation, page generation, owner kind, and codec/layout version. Relocation changes only the Page Directory route; a route-generation change invalidates the old route while PageId, EntityId, EdgeId, LargeValueRef, and cursor continuation remain stable. Authenticated owner, generation, LSN, checksum, and layout state may be reused in one session, never across snapshots or owner kinds.
+## 6. Performance and correctness acceptance
 
-## Layered Validation
+### 6.1 Freeze and controls
 
-| Layer | Checks |
-| --- | --- |
-| Page admission | magic, owner, kind, generation, LSN, checksum, layout |
-| Page scan | slot bounds, bitmap/slot directory, record kind, page-local offsets |
-| Semantic read | logical ID, endpoint, direction, index key, Property token, snapshot visibility |
+S0 freezes the current dirty tree: source manifest/hash, Release compiler/options/dependencies, binary hash, hardware/OS, threads, memory/query budgets, cache mode, format, data seed/manifest, query/parameters/indexes and result consumption. No reset/stash or overwriting user changes. Keep necessary control binaries and remove private copies using a task ownership manifest when finished.
 
-Full page validation remains mandatory at admission, recovery, and integrity scans. A page authenticated in one session may use lightweight record checks on repeat reads, but semantic fail-closed checks remain mandatory and benchmark mode cannot disable corruption validation.
+Interleave control/current/Kuzu on the same host. Formal warm measurements default to at least 3 independent processes per case, 3 warmups and 10 samples each. Restore writes from the same isolated baseline and verify outcomes; explicitly fix whether restore/open is timed. Separate cold, fresh-open and warm; restarting a process does not flush OS cache. Separate profiled diagnostics from uninstrumented timing and do not sum nested timers. During iteration run affected cases, expand relevant matrices at phase boundaries, and run integrated performance comparisons at S6. Integrated benchmarks are not the full unit suite.
 
-## Batch Execution Primitives
+### 6.2 Representative matrix
 
-`BoundedBatch`, typed columns, and `SelectionVector` are shared by scan, filter, project, aggregate, JOIN, OPTIONAL MATCH, UNION, `LOAD CSV`, `LIMIT`, and `SKIP`.
+Include hit/miss point reads, random selected/full entities, sparse/dense label/type filtering, single/multiple hops and supernodes, DISTINCT/real group-by/sort/Top-K, parameterized queries, dynamic fields, wide rows/large values, small/bulk/mixed writes, long snapshots, deletion/compaction, above-budget queries and sustained updates. Hold out combinations of scale, degree, property sparsity/type and selectivity from tuning. A3/A4 controls use the same improved executor/carrier so A1 benefits are not attributed to layout.
 
-Each batch declares row count, selected count, materialized bytes, validity/null masks, logical ordinals, cancellation state, and downstream ownership. Filters should update selection vectors instead of copying rejected complete objects. Projects copy Property payload only when the column is retained. Count, degree, and existence operations do not create complete result rows.
+Verify actual IDs, values, types, NULL/missing behavior, required order and multiplicity, not only counts/checksums. Kuzu-unsupported cases are N/A, never zero. Disclose non-equivalent casts/schema/indexes/bindings/durability separately; do not claim strict wins from them.
 
-Batching changes internal order only; null, duplicate, ordering, short-circuit, and error semantics remain unchanged.
+### 6.3 Admission rules
 
-## Writes and Maintenance
+- Correctness, atomic publication, recovery, snapshots, budgets and cleanup must pass. Only relevant module tests; no full suite or coverage gate. Coverage may assist diagnosis.
+- S0 preregisters primary goals, protected workloads and resource limits; do not change success criteria after results. Default expectation: at least 10% P50 improvement in the primary bottleneck case, repeatable across processes; protected P50/P95 must not show a stable regression above 5% and beyond control noise. Borderline/noisy results are inconclusive and need targeted repetition. These are decision thresholds, not universal performance promises.
+- Do not increase memory limits. Report process RSS, query memory, read/write bytes and steady-state file size separately. Stable resource growth above 5% requires attribution and an explicit admission decision. A3/A4 must not trade uncontrolled writes/space/point-read regressions for scans. Exceeding protected thresholds requires a concrete tradeoff and user agreement, not silent relaxation.
+- Lower CPU/allocation counts with uncertain end-to-end benefit must be reported as such, not claimed as speedups. Reject unhelpful complexity and preserve controls. Correctness fixes are not required to deliver a 10% speedup.
+- Kuzu parity or better is the objective on equivalent core workloads/resources, not a promise for all workloads. S6 reports remaining gaps; checklist completion does not automatically establish the performance objective.
 
-Online mutations, bulk ingest, index builds, adjacency rebuilds, and maintenance share canonical ordering, a byte-aware page builder, fill/split/merge policy, codecs/checksums, COW publication, retirement, and reclaim.
+### 6.4 Necessary module tests
 
-Bulk Edge writes plan the Edge Entity, OUT adjacency, IN adjacency, Property root, and affected indexes in one transaction-local sorted overlay. Each Edge must not cause an independent root-to-leaf insertion, split, or metadata publication. Add generic dirty-path COW, Directory merge, or a shared B+Tree WriteBatch only when structural counters show that COW amplification remains the dominant cost.
+A1: expression types/NULL/overflow, multiplicity, ORDER BY, optional/path, subqueries, mutation read sides, cancellation, budgets and result ownership. A2/A3: final state, old snapshots, indexes/constraints, large-value reuse, deletion/slot reuse, reopen, failed publication and retirement. A4: directions, self-loops, parallel edges, types, continuation, overlays and inconsistent/corrupt indexes. A5: disjoint/overlapping writes, uniqueness, endpoint deletion, promised isolation, retries and indeterminate commits. A6: low budgets, spill, disk-full, cancellation, exceptions, read-only and post-crash cleanup.
 
-Bulk Edge preflight validates only the canonical Property key/token shape; it does not copy or sort Property values. Token hits and misses are memoized for the transaction snapshot, so preflight and materialization do not repeat catalog/index resolution for the same key. The actual Property roots are materialized once in the unified write phase, avoiding a second full resolved payload for large batches.
+Discover actual GoogleTest names and use explicit filters. In `scripts/run_tests.sh`, `--file` limits rendered detail, not test execution; never accidentally run the full suite by supplying only `--file`. Run corresponding fault tests for format/write changes. Documentation-only changes need links/MDX validation only. Do not remove assertions or change expectations to hide source defects.
 
-Scalar index mutation planning also caches published-root presence by database and base snapshot generation. Entity staging therefore does not repeat the same Metadata Directory lookup for every owner, while a new generation invalidates the cache before the next transaction.
+## 7. Evidence and cleanup
 
-Every write optimization proves writer conflict/rebase, short I/O, ENOSPC, interruption, old-snapshot reads, reopen/recovery, retire-queue reclaim, single-file durability, and atomic visibility of Entity, adjacency, Property, and index state.
+Create a separate dated evidence directory under `benchmarks/architecture-design/results/` when implementation starts; do not overwrite historical measurements. Each item records task ID, before/after source identity, hypothesis, call paths, scope, test commands/results, raw samples, correctness, metrics/noise, adoption/rejection rationale and cleanup manifest. This page is the sole progress source; do not maintain another manual percentage ledger.
 
-## Staged Execution Plan
+Clean intermediate databases, CSVs, logs, build copies and processes by ownership manifest. Retain necessary samples, manifests, reproducible scripts and limited controls. Docker is not the default; if later explicitly used, clean only task-owned containers/volumes/images, never global prune. Do not delete user databases, existing caches or other tasks' environments.
 
-These are the only stages. Names describe reusable capabilities, not benchmarks.
+## 8. Source entry points
 
-### Stage 0: Trusted Baseline and Structural Counters
+These identify owners, not instructions to rewrite entire files:
 
-Separate diagnostic profile overhead from measured latency. Fix the Release toolchain, dataset, seed, warmup, iterations, and execution mode. Record `directory_range_calls`, `root_descents`, `metadata_pages_read`, `distinct_page_pins`, `records_decoded`, `selected_values_decoded`, `full_materializations`, `materialized_bytes`, and `large_value_chunks_read`. Counters are saturating and cannot change query behavior.
+| Work | Current repository-relative entry points |
+|---|---|
+| A1/O1/O2/O4 | `include/graph/query/ir/`, `include/graph/query/logical/`, `src/query/api/QueryEngine.cpp`, `src/query/optimization/LogicalPlanOptimizer.cpp`, `src/query/execution/LogicalPlanReadRuntime.cpp`, `include/graph/query/execution/BoundedBatch.hpp` |
+| A2 | `include/graph/storage/LogicalGraphWrite.hpp`, `src/storage/LogicalGraphTransactionOverlay.cpp`, `src/query/execution/LogicalPlanMutationRuntime.cpp` |
+| A3/O3 | `src/storage/relocatable/property/PropertyCollectionRootStore.cpp`, `src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp`, `include/graph/storage/relocatable/entity/NativeReadSession.hpp` |
+| A4 | `src/storage/relocatable/adjacency/`, `src/storage/relocatable/entity/NativeGraphWritePlanner.cpp`, `src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp` |
+| A5/O5 | `src/storage/relocatable/backend/RelocatableStorageBackend.cpp`, `src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp`, `src/storage/relocatable/index/`, `src/storage/relocatable/metadata/` |
+| A6/O6 | `src/query/execution/LogicalPlanReadRuntime.cpp`, existing scratch/allocator/maintenance code under `src/storage/relocatable/` |
+| Validation | `apps/compare_benchmark/main.cpp`, `benchmarks/graphdb-comparison/runner/`, `tests/src/query/`, `tests/src/storage/` |
 
-Close when one run explains both latency and structural work and the required tests pass.
+## 9. External references and limits
 
-### Stage 1: Typed Entity Cursors
-
-Use typed Node/Edge page-location cursors, remove generic Page Directory scans and segment filtering, cache pool routes and authenticated pages, and add sequential admission, bounded prefetch, and cancellation.
-
-Close when root descents and page pins no longer repeat per record and relocation, reopen, old-snapshot, corruption, and early-stop tests pass.
-
-### Stage 2: Unified EntityReadShape
-
-Audit query, GDS, procedure, overlay, constraint, and maintenance Entity entry points. Use explicit shapes everywhere, remove field-by-field reads and premature complete materialization, and unify session, budget, cancellation, and logical-order handling.
-
-Close when topology consumers create no Property cursor, complete objects are produced only for `COMPLETE`, and null, duplicate, order, limit, and snapshot regressions pass.
-
-### Stage 3: Property Page Batch Reader
-
-Implement gather/execute/scatter Property batches, group roots by PageId, locate selected tokens through offset directories, share one cursor across count/exists/selected/full APIs, and map Property offsets to LargeValue chunk ranges.
-
-Close when one session authenticates and pins each Property page once, selected reads decode no unrequested token, LargeValue selected reads are ranged, and large-value/corruption tests pass.
-
-### Stage 4: Topology-First Adjacency
-
-Move traversal, degree, count, shortest path, Leiden, GDS, and procedures to topology/reference shapes. Use continuous multi-Node adjacency cursors, batch Edge topology by Entity page, and apply type/endpoint predicates before complete Property reads.
-
-Close when topology-only paths have no unrelated Property pins/decodes, supernodes stream across leaves, and self-loop, parallel-edge, continuation, early-stop, and cancellation tests pass.
-
-### Stage 5: Index Candidate Stream
-
-Unify exact, range, and composite candidate streams. Descend once, verify by Entity and Property page groups, preserve generation/owner/checksum/codec/liveness/residual checks, and support value-major batch order with bounded deduplication and scatter.
-
-Close when root descent does not grow with candidate count, candidates do not independently visit both directories, and stale, missing-field, duplicate, corruption, concurrent-snapshot, and resource-bound tests pass.
-
-### Stage 6: Batch Execution
-
-Connect `BoundedBatch`, typed columns, and `SelectionVector` to scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/`LIMIT`/`SKIP`. Apply the same bounded row/byte accounting and cancellation contract at the `LOAD CSV` source boundary, and batch its downstream consumers without source read-ahead. Separate selection from payload and enforce one byte budget and cancellation contract.
-
-Close when empty, all-selected, all-rejected, null, duplicate, unsorted, early-stop, and aggregate-boundary semantics pass and count-like operations avoid complete entities.
-
-### Stage 7: Snapshot Cache and Layered Validation
-
-Unify Buffer Pool, route-cache, and NativeReadSession lifetimes. Reuse authenticated pages in one session, move full page checks to admission/recovery/integrity scans, and retain record and semantic fail-closed checks.
-
-Close when route generation invalidates stale routes, snapshots do not contaminate one another, and corruption, relocation, reopen, and reclaim tests pass.
-
-### Stage 8: General Write Batching
-
-Measure replacement, append, retirement, publication, scratch decoding, and bytes per mutation. Implement target-page grouping, sorted Directory merge, and B+Tree WriteBatch only when evidence supports them. Online, bulk, and rebuild paths share page building and publication.
-
-Close when writer-conflict, fault-injection, ENOSPC, recovery, reclaim, old-snapshot, and concurrent-write tests pass and the optimization applies to a mutation class rather than one workload.
-
-### Stage 9: Final Evaluation and Coverage Closure
-
-Run the no-profile Release binary on macOS, Linux, and Windows across smoke, small, and medium scales and warm, opened, and cold-ish modes. Compare latency, page work, bytes, memory, and file size. Run comprehensive four-dimensional coverage only after feature work and required tests are complete.
-
-## Test Protocol
-
-During development, run the smallest relevant selection:
-
-```bash
-./scripts/run_tests.sh --quick --gtest-filter "SuiteName.*" --file path/to/changed/source.cpp
-```
-
-Every stage covers normal and cross-page reads, empty/full results, early-stop, unordered/duplicate/missing/malformed input, relocation, reopen, old snapshots, owner/generation/slot-generation/checksum/codec corruption, cancellation, row/byte budgets, LargeValue compression/range reads, and reclaim. After the functional work for a stage:
-
-```bash
-./scripts/run_tests.sh --quick
-```
-
-Comprehensive four-dimensional coverage is a Stage 9 activity. Tests must never be changed merely to hide a source defect.
-
-## Structural Acceptance Metrics
-
-| Metric | Target |
-| --- | --- |
-| root descents | correlated with ranges/batches |
-| directory range calls | not linear in record count |
-| distinct page pins | bounded by pages actually needed |
-| full materializations | no more than the declared shape requires |
-| selected decodes | only requested tokens |
-| LargeValue chunks | only requested ranges |
-| materialized bytes | always within batch budget |
-| result order | identical to the existing contract |
-
-If a speedup cannot be explained by these structural metrics, the stage stays open and the shared framework is investigated instead of adding a local fast path.
-
-## Prohibited Changes
-
-- Branches keyed by benchmark names, Cypher text, fixed node counts, or fixed degree;
-- restoring the old Segment Chain or Edge linked list;
-- copying complete Properties into indexes as covering data;
-- final-result caches in the query layer;
-- disabling owner, generation, checksum, or snapshot validation;
-- assuming a fixed number of entities per page;
-- domain-specific stores for code, images, or another payload type;
-- a second persistent database file or external WAL;
-- enlarging pages or bitmaps before read-path attribution is complete.
-
-The optimization is complete when all consumers use the shared shape, batch, typed-cursor, Property-column, topology-cursor, and snapshot-cache contracts; required feature, lifecycle, corruption, and resource tests pass; and the final no-profile multi-platform Release evaluation is explained by structural counters.
-
-## Related Documents
-
-- [Native Single-File Storage Plan](native-single-file-storage-plan)
-- [Native Capability Acceptance Matrix](native-capability-acceptance-matrix)
-- [Relationship Traversal](../algorithms/relationship-traversal)
-- [Property Index](../algorithms/property-index)
-- [Packed B+Tree Indexing](../algorithms/btree-indexing)
+- [Kuzu NodeGroup design](https://github.com/kuzudb/kuzu/issues/1474) and [columnar/list processing research](https://arxiv.org/abs/2103.02284): establish relevance to graph engines, not proof that ZYX dynamic properties, COW updates or point reads are solved.
+- [Kuzu performance debugging](https://kuzudb.github.io/docs/developer-guide/performance-debugging/): compare plans/operators without mixing timing boundaries.
+- [PostgreSQL JIT admission](https://www.postgresql.org/docs/17/jit-decision.html) and [LLVM ORC](https://llvm.org/docs/ORCv2.html): O8 compilation/integration references, not a requirement to implement LLVM this round.

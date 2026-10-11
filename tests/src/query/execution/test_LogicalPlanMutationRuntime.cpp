@@ -250,17 +250,17 @@ namespace graph::query {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
 		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
-		static_cast<void>(backend->addEdge(
-				source, target, "LINK", {{"payload", PropertyValue(std::string(4096U, 'x'))}}));
+		static_cast<void>(
+				backend->addEdge(source, target, "LINK", {{"payload", PropertyValue(std::string(4096U, 'x'))}}));
 		backend->resetReadMetrics();
 		LogicalReadExecutionOptions options;
 		options.bounds.maximum_materialized_bytes = 1024U;
 		QueryEngine engine(backend, backend, options);
 
 		try {
-			static_cast<void>(engine.execute(
-					"MERGE (source:Person {name: 'Ada'})-[relationship:LINK {payload: 'missing'}]->"
-					"(target:Person {name: 'Bob'})"));
+			static_cast<void>(
+					engine.execute("MERGE (source:Person {name: 'Ada'})-[relationship:LINK {payload: 'missing'}]->"
+								   "(target:Person {name: 'Bob'})"));
 			FAIL() << "oversized selected relationship Properties must fail closed";
 		} catch (const std::runtime_error &error) {
 			EXPECT_STREQ(error.what(), "logical MERGE relationship Property batch exceeded its byte bound");
@@ -269,6 +269,34 @@ namespace graph::query {
 		EXPECT_EQ(backend->edgeCount(), 1U);
 		EXPECT_EQ(backend->graph().mutation_batches, 0U);
 		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeAdmitsSelectedRelationshipPropertiesBeforeCopyingPayloads) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(
+				backend->addEdge(source, target, "LINK", {{"payload", PropertyValue(std::string(4096U, 'x'))}}));
+		backend->setPropertyAdmission(true);
+		backend->resetReadMetrics();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 1024U;
+		QueryEngine engine(backend, backend, options);
+
+		try {
+			static_cast<void>(
+					engine.execute("MERGE (source:Person {name: 'Ada'})-[relationship:LINK {payload: 'missing'}]->"
+								   "(target:Person {name: 'Bob'})"));
+			FAIL() << "oversized selected relationship Properties must fail before the column read";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical MERGE relationship Property batch exceeded its byte bound");
+		}
+
+		EXPECT_EQ(backend->edgeCount(), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_admission_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 0U);
 		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
 	}
 
@@ -282,10 +310,9 @@ namespace graph::query {
 		backend->resetReadMetrics();
 		QueryEngine engine(backend, backend);
 
-		EXPECT_THROW(static_cast<void>(engine.execute(
-					 "MERGE (source:Person {name: 'Ada'})-[relationship:KNOWS]->"
-					 "(target:Person {name: 'Bob'})")),
-				 std::runtime_error);
+		EXPECT_THROW(static_cast<void>(engine.execute("MERGE (source:Person {name: 'Ada'})-[relationship:KNOWS]->"
+													  "(target:Person {name: 'Bob'})")),
+					 std::runtime_error);
 
 		EXPECT_EQ(backend->edgeCount(), 2U);
 		EXPECT_EQ(backend->graph().mutation_batches, 0U);

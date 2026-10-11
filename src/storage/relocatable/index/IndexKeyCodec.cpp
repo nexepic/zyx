@@ -198,6 +198,13 @@ namespace graph::storage {
 		});
 	}
 
+	int64_t IndexKeyCodec::decodeIntegerEntryValue(std::span<const std::byte> key) {
+		if (key.size() != 1U + 2U * sizeof(uint64_t) || key.front() != TAG_INTEGER) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER, "integer index entry has an invalid scalar layout");
+		}
+		return std::bit_cast<int64_t>(readBigEndianU64(key, 1U) ^ (UINT64_C(1) << 63U));
+	}
+
 	uint64_t IndexKeyCodec::decodeEntryEntityId(std::span<const std::byte> key) {
 		if (key.size() <= ENTITY_ID_BYTES) {
 			fail(FormatError::FERR_BUFFER_TOO_SMALL,

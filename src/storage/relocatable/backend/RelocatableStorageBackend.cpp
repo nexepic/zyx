@@ -19,6 +19,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <numeric>
 #include <queue>
 #include <random>
@@ -45,6 +46,7 @@
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/entity/NativeMembershipAccessCost.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 #include "graph/storage/relocatable/entity/NativeBulkEdgeEndpointCache.hpp"
@@ -340,6 +342,89 @@ namespace graph::storage {
 			}
 		}
 
+		class CandidateDedupMemoryResource final : public std::pmr::memory_resource {
+		public:
+			explicit CandidateDedupMemoryResource(size_t maximumBytes): maximum_bytes_(maximumBytes) {}
+			[[nodiscard]] size_t retainedBytes() const noexcept { return retained_bytes_; }
+			void setAllocationAdmission(std::function<void(size_t)> admission) { allocation_admission_ = std::move(admission); }
+		private:
+			void *do_allocate(size_t bytes, size_t alignment) override {
+				if (allocation_admission_) allocation_admission_(bytes);
+				if (bytes > maximum_bytes_ - retained_bytes_) {
+					traceNativeCandidateMetric("native_graph.read.range_dedup_allocation_rejected", 1U);
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable native range candidate deduplication exceeded its byte bound");
+				}
+				void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+				retained_bytes_ += bytes;
+				return result;
+			}
+			void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+				std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+				retained_bytes_ -= bytes;
+			}
+			bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override {
+				return this == &other;
+			}
+			std::function<void(size_t)> allocation_admission_;
+			size_t maximum_bytes_;
+			size_t retained_bytes_ = 0U;
+		};
+
+		void reserveCandidateOutput(IndexCandidateBatch &batch, size_t rows,
+				std::span<const std::string> keys, const SelectedPropertyReadAdmission &admit) {
+			size_t retained = 0U;
+			const auto check = [&](size_t count, size_t width) {
+				if (count > (std::numeric_limits<size_t>::max() - retained) / width) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "candidate output capacity overflowed");
+				}
+				admit(retained + count * width);
+			};
+			check(rows, sizeof(EntityRef));
+			batch.candidates.reserve(rows);
+			check(batch.candidates.capacity(), sizeof(EntityRef));
+			retained += batch.candidates.capacity() * sizeof(EntityRef);
+			check(keys.size(), sizeof(IndexCandidateBatch::VerifiedPropertyColumn));
+			batch.verified_property_columns.reserve(keys.size());
+			check(batch.verified_property_columns.capacity(), sizeof(IndexCandidateBatch::VerifiedPropertyColumn));
+			retained += batch.verified_property_columns.capacity() * sizeof(IndexCandidateBatch::VerifiedPropertyColumn);
+			for (const auto &key: keys) {
+				check(key.size(), sizeof(char));
+				batch.verified_property_columns.push_back({key, {}});
+				auto &column = batch.verified_property_columns.back();
+				check(column.key.capacity(), sizeof(char));
+				retained += column.key.capacity();
+				check(rows, sizeof(PropertyValue));
+				column.values.reserve(rows);
+				check(column.values.capacity(), sizeof(PropertyValue));
+				retained += column.values.capacity() * sizeof(PropertyValue);
+			}
+		}
+
+		void reorderCandidateRowsInPlace(IndexCandidateBatch &batch, std::span<size_t> order) {
+			for (const auto &column: batch.verified_property_columns) {
+				if (column.values.size() != order.size()) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable candidate reorder found an invalid Property column");
+				}
+			}
+			// Rotate destination-to-source cycles across candidates and all columns.
+			// The existing permutation also records which cycles are consumed.
+			for (size_t start = 0U; start < order.size(); ++start) {
+				size_t current = start;
+				while (order[current] != start) {
+					const size_t next = order[current];
+					std::swap(batch.candidates[current], batch.candidates[next]);
+					for (auto &column: batch.verified_property_columns) {
+						std::swap(column.values[current], column.values[next]);
+					}
+					order[current] = current;
+					current = next;
+				}
+				order[current] = current;
+			}
+		}
+
 		[[nodiscard]] size_t candidateBatchCapacity(size_t maximumNodes, size_t maximumBytes) {
 			// Keep producer staging below the caller's byte budget. The authenticated
 			// batch-size check remains authoritative because Property payloads are
@@ -352,6 +437,71 @@ namespace graph::storage {
 				capacity = std::min(capacity, std::max<size_t>(1U, byteCapacity));
 			}
 			return std::max<size_t>(1U, capacity);
+		}
+
+		// Exact predicates supply the values that will be copied into verified
+		// columns. Check their known retained sizes before reserving/copying cells.
+		[[nodiscard]] size_t exactCandidateRowBytes(std::span<const PropertyValue> values) {
+			size_t bytes = sizeof(EntityRef);
+			for (const auto &value: values) {
+				const size_t payload = property_utils::getPropertyValueSize(value);
+				if (payload > std::numeric_limits<size_t>::max() - sizeof(PropertyValue) ||
+					payload + sizeof(PropertyValue) > std::numeric_limits<size_t>::max() - bytes) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable native index candidate byte accounting overflowed");
+				}
+				bytes += sizeof(PropertyValue) + payload;
+			}
+			return bytes;
+		}
+
+		void prepareExactCandidateColumns(IndexCandidateBatch &batch, size_t count,
+				std::span<const PropertyValue> values, size_t maximumBytes) {
+			if (maximumBytes == 0U) {
+				throw FormatException(FormatError::FERR_INVALID_HEADER, "relocatable native index candidate stream requires a positive byte bound");
+			}
+			const size_t rowBytes = exactCandidateRowBytes(values);
+			size_t keyBytes = 0U;
+			for (const auto &column: batch.verified_property_columns) {
+				if (column.key.capacity() > std::numeric_limits<size_t>::max() - keyBytes) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable native index candidate byte accounting overflowed");
+				}
+				keyBytes += column.key.capacity();
+			}
+			if (keyBytes > maximumBytes || count > (maximumBytes - keyBytes) / rowBytes) {
+				throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable native index candidate batch exceeded its byte bound");
+			}
+			batch.candidates.reserve(count);
+			for (auto &column: batch.verified_property_columns) column.values.reserve(count);
+			// Account for the actual capacities chosen by the standard library too.
+			const size_t baseBytes = candidateBatchBytes(batch);
+			const size_t payloadPerRow = rowBytes - sizeof(EntityRef) - values.size() * sizeof(PropertyValue);
+			if (baseBytes > maximumBytes || (payloadPerRow != 0U && count > (maximumBytes - baseBytes) / payloadPerRow)) {
+				throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable native index candidate batch exceeded its byte bound");
+			}
+		}
+
+		void checkExactCandidateSourceBytes(size_t used, size_t buffers, size_t maximumBytes) {
+			if (used > maximumBytes || buffers > maximumBytes - used)
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable native index candidate batch exceeded its byte bound (retained=" +
+						std::to_string(used) + ", scratch=" + std::to_string(buffers) +
+						", limit=" + std::to_string(maximumBytes) + ")");
+		}
+		[[nodiscard]] SelectedPropertyReadAdmission exactCandidateSourceAdmission(
+				size_t &used, size_t &buffers, size_t maximumBytes) {
+			return [&used, &buffers, maximumBytes](size_t bytes) {
+				checkExactCandidateSourceBytes(used, bytes, maximumBytes);
+				checkExactCandidateSourceBytes(used + bytes, buffers, maximumBytes);
+				used += bytes;
+				traceNativeCandidateMetric("native_graph.read.exact_candidate_source_bytes", bytes);
+			};
+		}
+		[[nodiscard]] SelectedPropertyReadAdmission exactCandidateBufferAdmission(
+				size_t &used, size_t &buffers, size_t maximumBytes) {
+			return [&used, &buffers, maximumBytes](size_t bytes) {
+				checkExactCandidateSourceBytes(used, bytes, maximumBytes);
+				buffers = bytes;
+			};
 		}
 
 		void checkVectorTrainingCancellation(const LogicalGraphVectorTrainingRequest &request) {
@@ -1935,8 +2085,10 @@ namespace graph::storage {
 		const std::filesystem::path dataPath = canonicalNewPath(options.data_path, "database");
 
 		std::unique_ptr<OwnedRelocatableBackendFile> data;
+		bool created = false;
 		try {
 			data = OwnedRelocatableBackendFile::create(dataPath, options.buffer_pool_bytes);
+			created = true;
 			Superblock initial;
 			initial.database_id = DatabaseId(generateDatabaseId());
 			initial.generation = Generation(1U);
@@ -1948,8 +2100,20 @@ namespace graph::storage {
 			// Catalog ownership and typed route/header in one durable transaction.
 			metadata.reset();
 			data->io()->sync();
+			data.reset();
+			// Bootstrap private new-file membership roots before returning a handle.
+			// Existing files are never scanned or upgraded implicitly on open.
+			auto bootstrapOptions = options;
+			bootstrapOptions.data_path = dataPath;
+			bootstrapOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+			bootstrapOptions.maintenance.reset();
+			RelocatableStorageBackend bootstrapBackend(std::move(bootstrapOptions));
+			bootstrapBackend.open();
+			static_cast<void>(bootstrapBackend.ensureLogicalMembershipIndexes());
+			bootstrapBackend.rebuildLogicalTokenCardinalityStatistics();
+			bootstrapBackend.close();
 		} catch (...) {
-			const bool removeData = static_cast<bool>(data);
+			const bool removeData = created;
 			data.reset();
 			std::error_code ignored;
 			if (removeData) {
@@ -2694,7 +2858,7 @@ namespace graph::storage {
 		request.last_large_value_manifest_output_slot = last;
 		request.preparation = {
 				{options_.maximum_bulk_edge_transaction_records,
-				 publicationPlan.token_entry_count,
+				 std::max<size_t>(1U, publicationPlan.token_entry_count),
 				 candidateBytes,
 				 {options_.maximum_bulk_edge_sort_runs, candidateBytes, options_.maximum_bulk_edge_candidate_pages, 8U,
 				  NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}},
@@ -2706,7 +2870,9 @@ namespace graph::storage {
 				{first, last, options_.maximum_bulk_edge_index_entries, options_.maximum_bulk_edge_candidate_pages},
 				{first, last, options_.maximum_bulk_edge_index_entries, options_.maximum_bulk_edge_candidate_pages, 8U},
 				{first, last, options_.maximum_bulk_edge_index_entries, options_.maximum_bulk_edge_candidate_pages,
-				 8U}};
+				 8U},
+				{first, last, options_.maximum_bulk_edge_index_entries, options_.maximum_bulk_edge_candidate_pages,
+				 options_.maximum_index_definitions, options_.online_index_sort_run_bytes, options_.maximum_online_index_sort_runs}};
 		const Superblock publicationBase = current.superblock();
 		current.release();
 		try {
@@ -2856,6 +3022,13 @@ namespace graph::storage {
 
 	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeLogicalGraphMutationBatch(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence) {
+		return executeLogicalGraphMutationBatchWithReadControl(batch, expectedFence, {});
+	}
+
+	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeLogicalGraphMutationBatchWithReadControl(
+		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+		const LogicalGraphMutationReadControl &control) {
+		if (control.checkpoint) control.checkpoint();
 		requireOpen();
 		if (batch.node_creates.empty() && batch.edge_creates.empty() && batch.property_replacements.empty() &&
 			batch.node_label_replacements.empty() && batch.edge_deletes.empty() && batch.node_deletes.empty() &&
@@ -2889,7 +3062,7 @@ namespace graph::storage {
 			beforeExecution.release();
 			NativeGraphMutationExecutionResult execution;
 			try {
-				execution = native_graph_mutation_executor_->execute(batch, fenceValidator);
+				execution = native_graph_mutation_executor_->execute(batch, fenceValidator, control);
 			} catch (...) {
 				// A failed final durability fence can leave a complete inactive
 				// Superblock selected even though the caller received an error. Compare
@@ -2972,6 +3145,179 @@ namespace graph::storage {
 			session->putNodeExists(nodeId, exists);
 		}
 		return exists;
+	}
+
+	std::optional<bool> RelocatableStorageBackend::visitNativeEdgeTypeCandidates(
+			const MetadataSnapshotPin &snapshot, uint64_t typeToken, size_t maximumRecords,
+			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session) const {
+		if (!visitor || maximumRecords == 0U) {
+			throw std::invalid_argument("native type candidate access requires a visitor and positive bound");
+		}
+		// Historical member trees omit untyped relationships. A zero token must
+		// therefore scan the primary records, never produce a false empty result.
+		if (typeToken == 0U || typeToken > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return std::nullopt;
+		if (session != nullptr) session->bind(snapshot);
+		const auto estimate = system_catalog_->readTokenCardinalityEstimate(
+				snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, typeToken);
+		if (estimate && !NativeMembershipAccessCost::preferCandidates(
+				estimate->first.edge_count, estimate->second, maximumRecords, true)) return std::nullopt;
+		const auto *definitions = session == nullptr ? nullptr :
+				session->indexDefinitions(options_.maximum_index_definitions);
+		std::vector<IndexDefinition> loaded;
+		if (definitions == nullptr) {
+			loaded = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+			if (session != nullptr) session->putIndexDefinitions(loaded);
+			definitions = &loaded;
+		}
+		for (const auto &definition : *definitions) {
+			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_EDGE ||
+					definition.kind != IndexDefinitionKind::IDK_LABEL ||
+					!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) continue;
+			BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
+			const PropertyValue value(static_cast<int64_t>(typeToken));
+			const auto lower = IndexKeyCodec::lowerBound(value);
+			const auto upper = IndexKeyCodec::upperBound(value);
+			const size_t cursorBound = maximumRecords == std::numeric_limits<size_t>::max() ?
+					maximumRecords : maximumRecords + 1U;
+			auto cursor = index.openRangeCursor(snapshot, std::span<const std::byte>(lower), cursorBound);
+			uint64_t previous = 0U;
+			size_t visited = 0U;
+			std::vector<uint64_t> ids;
+			ids.reserve(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+			const auto emit = [&] {
+				if (ids.empty()) return true;
+				const auto records = native_graph_reads_->readEdgeTopologiesSorted(snapshot, ids, session);
+				for (size_t i = 0U; i < ids.size(); ++i) {
+					const auto &record = records[i];
+					if (record.type_id != typeToken) throw FormatException(FormatError::FERR_INVALID_STATE,
+							"native type Index disagrees with the primary Edge type");
+					const EntityRef reference{ids[i], true, record.source_node_id, record.target_node_id, record.type_id};
+					debug::PerfTrace::addValue("native_graph.read.type_index_candidates", 1);
+					if (!visitor(reference)) return false;
+				}
+				ids.clear(); return true;
+			};
+			while (auto entry = cursor.next()) {
+				if (entry->key > upper) break;
+				if (entry->key.size() != lower.size() ||
+						!std::equal(lower.begin(), lower.end() - sizeof(uint64_t), entry->key.begin())) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "native type Index has a malformed key");
+				}
+				const uint64_t id = IndexKeyCodec::decodeEntryEntityId(entry->key);
+				if (id <= previous || entry->value_or_child != id) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "native type Index has an invalid Edge ID");
+				}
+				if (visited == maximumRecords) {
+					if (!emit()) return false;
+					throw std::runtime_error("native type candidate access exceeded its record bound");
+				}
+				++visited; previous = id; ids.push_back(id);
+				if ((ids.size() == BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES || visited == maximumRecords) && !emit()) return false;
+			}
+			return emit();
+		}
+		return std::nullopt;
+	}
+
+	std::optional<bool> RelocatableStorageBackend::visitNativeNodeLabelCandidates(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			size_t maximumRecords, const std::function<bool(const EntityRef &, bool)> &visitor,
+			NativeReadSession *session) const {
+		if (!visitor || maximumRecords == 0U) {
+			throw std::invalid_argument("native label candidate access requires a visitor and positive bound");
+		}
+		if (labels.empty()) return std::nullopt;
+		if (session != nullptr) session->bind(snapshot);
+		std::optional<uint64_t> token;
+		std::string_view primaryLabel = labels.front();
+		std::optional<uint64_t> smallestCount;
+		const bool estimateDriver = labels.size() > 1U && system_catalog_->hasCompleteTokenCardinality(
+				snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL);
+		for (const auto &label : labels) {
+			if (label.empty()) return true;
+			std::optional<uint64_t> resolved;
+			const auto cached = session == nullptr ? std::nullopt : session->nodeLabelToken(label);
+			if (cached.has_value()) resolved = *cached;
+			else {
+				resolved = system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, label);
+				if (session != nullptr) session->putNodeLabelToken(label, resolved);
+			}
+			if (!resolved.has_value()) return true;
+			if (!token.has_value()) token = resolved;
+			if (estimateDriver) {
+				const auto count = system_catalog_->readTokenCardinality(
+						snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, *resolved);
+				if (count && (!smallestCount || *count < *smallestCount)) {
+					smallestCount = count; token = resolved; primaryLabel = label;
+				}
+			}
+		}
+		if (*token > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return std::nullopt;
+		const auto estimate = system_catalog_->readTokenCardinalityEstimate(
+				snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, *token);
+		if (estimate && !NativeMembershipAccessCost::preferCandidates(
+				estimate->first.node_count, estimate->second, maximumRecords, false)) return std::nullopt;
+		const auto *definitions = session == nullptr ? nullptr :
+				session->indexDefinitions(options_.maximum_index_definitions);
+		std::vector<IndexDefinition> loaded;
+		if (definitions == nullptr) {
+			loaded = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+			if (session != nullptr) session->putIndexDefinitions(loaded);
+			definitions = &loaded;
+		}
+		for (const auto &definition : *definitions) {
+			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
+					definition.kind != IndexDefinitionKind::IDK_LABEL ||
+					!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) continue;
+			BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
+			const PropertyValue value(static_cast<int64_t>(*token));
+			const auto lower = IndexKeyCodec::lowerBound(value);
+			const auto upper = IndexKeyCodec::upperBound(value);
+			const size_t cursorBound = maximumRecords == std::numeric_limits<size_t>::max() ?
+					maximumRecords : maximumRecords + 1U;
+			auto cursor = index.openRangeCursor(snapshot, std::span<const std::byte>(lower), cursorBound);
+			std::vector<uint64_t> ids;
+			ids.reserve(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+			uint64_t previous = 0U;
+			size_t visited = 0U;
+			const auto emit = [&]() {
+				if (ids.empty()) return true;
+				const auto primary = native_logical_graph_reads_->readNodeLabelMatchesSorted(
+						snapshot, ids, {std::string(primaryLabel)}, session);
+				const auto matches = labels.size() == 1U ? primary :
+						native_logical_graph_reads_->readNodeLabelMatchesSorted(snapshot, ids, labels, session);
+				for (size_t i = 0U; i < ids.size(); ++i) {
+					if (!primary[i]) throw FormatException(FormatError::FERR_INVALID_STATE,
+							"native label Index disagrees with the primary Node label set");
+					// The label batch has already authenticated the primary Entity record.
+					const EntityRef reference{ids[i], false, 0U, 0U, 0U};
+					debug::PerfTrace::addValue("native_graph.read.label_index_candidates", 1);
+					if (!visitor(reference, matches[i])) return false;
+				}
+				ids.clear();
+				return true;
+			};
+			while (auto entry = cursor.next()) {
+				if (entry->key > upper) break;
+				if (entry->key.size() != lower.size() ||
+						!std::equal(lower.begin(), lower.end() - sizeof(uint64_t), entry->key.begin())) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has a malformed key");
+				}
+				const uint64_t id = IndexKeyCodec::decodeEntryEntityId(entry->key);
+				if (id <= previous || entry->value_or_child != id) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "native label Index has an invalid Node ID");
+				}
+				if (visited == maximumRecords) {
+					// Give a stopping visitor a chance to terminate at the bound.
+					if (!emit()) return false;
+					throw std::runtime_error("native label candidate access exceeded its record bound");
+				}
+				++visited; previous = id; ids.push_back(id);
+				if ((ids.size() == BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES || visited == maximumRecords) && !emit()) return false;
+			}
+			return emit();
+		}
+		return std::nullopt;
 	}
 
 	std::vector<bool> RelocatableStorageBackend::containsLogicalNodesSorted(
@@ -3198,9 +3544,14 @@ namespace graph::storage {
 				// pipeline instead of repeating a Directory descent per candidate.
 				// The batch API retains owner, label, Property count, token, and value
 				// checks; this changes only their granularity.
+				prepareExactCandidateColumns(result, candidateNodeIds.size(), requestedValues, maximumCandidateBytes);
+				size_t sourceBytes = candidateBatchBytes(result);
+				size_t sourceBuffers = 0U;
+				const auto admission = exactCandidateSourceAdmission(sourceBytes, sourceBuffers, maximumCandidateBytes);
+				const auto bufferAdmission = exactCandidateBufferAdmission(sourceBytes, sourceBuffers, maximumCandidateBytes);
 				native_graph_reads_->validateNodeExactPropertiesSorted(
 						snapshot, candidateNodeIds, definition.schema_token_id, propertyTokens, requestedValues,
-						maximumPropertyEntries, session);
+						maximumPropertyEntries, session, &admission, &bufferAdmission);
 				traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", candidateNodeIds.size());
 				for (const uint64_t nodeId: candidateNodeIds) {
 					result.candidates.push_back({nodeId, false, 0U, 0U, 0U});
@@ -3311,9 +3662,19 @@ namespace graph::storage {
 			}
 			const BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
 			if (visitor != nullptr) {
-				const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
+				size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
+				size_t keyBytes = 0U;
+				for (const auto &name: definition.property_names) {
+					if (name.capacity() > std::numeric_limits<size_t>::max() - keyBytes) {
+						throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable native index candidate byte accounting overflowed");
+					}
+					keyBytes += name.capacity();
+				}
+				batchCapacity = std::min(batchCapacity, std::max<size_t>(1U,
+					(maximumCandidateBytes - std::min(maximumCandidateBytes, keyBytes)) / exactCandidateRowBytes(requestedValues)));
 				auto cursor = index.openRangeCursor(snapshot, std::optional(std::span<const std::byte>(*entryKey)),
 						options_.maximum_online_index_entries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				debug::PerfTrace::addValue("native_graph.read.index_candidate_root_descent", 1);
 				std::vector<BTreePageEntry> pending;
 				pending.reserve(batchCapacity);
 				size_t totalCandidates = 0U;
@@ -3347,8 +3708,13 @@ namespace graph::storage {
 						previousNodeId = nodeId;
 						nodeIds.push_back(nodeId);
 					}
+					prepareExactCandidateColumns(batch, nodeIds.size(), requestedValues, maximumCandidateBytes);
+					size_t sourceBytes = candidateBatchBytes(batch);
+					size_t sourceBuffers = 0U;
+					const auto admission = exactCandidateSourceAdmission(sourceBytes, sourceBuffers, maximumCandidateBytes);
+					const auto bufferAdmission = exactCandidateBufferAdmission(sourceBytes, sourceBuffers, maximumCandidateBytes);
 					native_graph_reads_->validateNodeExactPropertiesSorted(snapshot, nodeIds, definition.label_token_id,
-							propertyTokens, requestedValues, maximumPropertyEntries, session);
+							propertyTokens, requestedValues, maximumPropertyEntries, session, &admission, &bufferAdmission);
 					traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", nodeIds.size());
 					for (const uint64_t nodeId: nodeIds) {
 						batch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
@@ -3621,15 +3987,10 @@ namespace graph::storage {
 			}
 			std::optional<std::vector<std::byte>> lower;
 			if (isOpenBound(range.min_value)) {
-				const std::optional<std::vector<std::byte>> encoded =
-						IndexKeyCodec::tryEncodeEntryKey(range.min_value, 1U);
-				if (!encoded.has_value()) {
-					return std::nullopt;
-				}
-				// For an exclusive lower bound, begin after the complete value
-				// prefix (all Entity-ID suffixes), not merely after Entity ID 1.
-				lower = range.min_inclusive ? IndexKeyCodec::lowerBound(range.min_value)
-													 : IndexKeyCodec::upperBound(range.min_value);
+				// Encode once, including the Entity-ID sentinel for the requested edge.
+				lower = IndexKeyCodec::tryEncodeEntryKey(range.min_value,
+						range.min_inclusive ? 1U : std::numeric_limits<uint64_t>::max());
+				if (!lower.has_value()) return std::nullopt;
 			}
 			const BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
 			if (candidateOutput != nullptr) {
@@ -3641,13 +4002,15 @@ namespace graph::storage {
 			}
 			std::vector<LogicalGraphNode> result;
 			std::vector<uint64_t> resultNodeIds;
-			std::unordered_set<uint64_t> seenNodeIds;
+			CandidateDedupMemoryResource dedupMemory(maximumCandidateBytes);
+			std::pmr::unordered_set<uint64_t> seenNodeIds(&dedupMemory);
 			// The cursor retains one verified root-to-leaf route. Stream callers use
 			// bounded batches; complete callers keep the historical whole-result path
 			// so their result-bound semantics remain unchanged.
 			auto cursor = index.openRangeCursor(
 					snapshot, lower.has_value() ? std::optional(std::span<const std::byte>(*lower)) : std::nullopt,
 					options_.maximum_online_index_entries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			debug::PerfTrace::addValue("native_graph.read.index_candidate_root_descent", 1);
 			const std::optional<std::vector<std::byte>> upperExclusive = [&]() -> std::optional<std::vector<std::byte>> {
 				if (!isOpenBound(range.max_value)) {
 					return std::nullopt;
@@ -3666,13 +4029,55 @@ namespace graph::storage {
 		if (visitor != nullptr) {
 			pending.reserve(batchCapacity);
 		}
+		size_t boundaryKeyBytes = 0U;
+		const std::function<void(size_t)> admitBoundaryKey = [&](size_t bytes) {
+			size_t retained = dedupMemory.retainedBytes();
+			const auto add = [&](size_t count, size_t width) {
+				if (count > (maximumCandidateBytes - retained) / width) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "range cursor boundary exceeded its byte bound");
+				}
+				retained += count * width;
+			};
+			add(pending.capacity(), sizeof(BTreePageEntry));
+			for (const auto &entry: pending) add(entry.key.capacity(), 1U);
+			add(bytes, 1U);
+			boundaryKeyBytes = bytes;
+		};
+		dedupMemory.setAllocationAdmission([&](size_t bytes) {
+			const size_t retainedBoundary = boundaryKeyBytes;
+			if (bytes > maximumCandidateBytes - retainedBoundary) {
+				throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+			}
+			admitBoundaryKey(retainedBoundary + bytes);
+			boundaryKeyBytes = retainedBoundary;
+		});
 		size_t totalCandidates = 0U;
-		const auto emit = [&](const std::span<const BTreePageEntry> entries) -> bool {
+		struct RangeSourceBytePressure {};
+		const auto emitOnce = [&](const std::span<const BTreePageEntry> entries) -> bool {
 			if (entries.empty()) {
 				return true;
 			}
+			size_t candidateStagingBytes = dedupMemory.retainedBytes();
+			if (boundaryKeyBytes > maximumCandidateBytes - candidateStagingBytes) throw RangeSourceBytePressure{};
+			candidateStagingBytes += boundaryKeyBytes;
+			// The whole pending batch stays alive during recursive splits.
+			// Charge its slots and owned keys, not only the emitted subspan.
+			if (pending.capacity() > (maximumCandidateBytes - candidateStagingBytes) / sizeof(BTreePageEntry))
+				throw RangeSourceBytePressure{};
+			candidateStagingBytes += pending.capacity() * sizeof(BTreePageEntry);
+			for (const auto &entry: pending) {
+				if (entry.key.capacity() > maximumCandidateBytes - candidateStagingBytes) throw RangeSourceBytePressure{};
+				candidateStagingBytes += entry.key.capacity();
+			}
+			const auto checkSlots = [&](size_t count, size_t width) {
+				if (count > (maximumCandidateBytes - candidateStagingBytes) / width)
+					throw RangeSourceBytePressure{};
+			};
+			checkSlots(entries.size(), sizeof(uint64_t));
 			std::vector<uint64_t> nodeIds;
 			nodeIds.reserve(entries.size());
+			checkSlots(nodeIds.capacity(), sizeof(uint64_t));
+			candidateStagingBytes += nodeIds.capacity() * sizeof(uint64_t);
 			for (const BTreePageEntry &candidate: entries) {
 				if (candidate.key.size() <= sizeof(uint64_t)) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -3685,22 +4090,52 @@ namespace graph::storage {
 				}
 				nodeIds.push_back(nodeId);
 			}
+			checkSlots(nodeIds.size(), sizeof(size_t));
 			std::vector<size_t> propertyOrder(nodeIds.size());
+			checkSlots(propertyOrder.capacity(), sizeof(size_t));
+			candidateStagingBytes += propertyOrder.capacity() * sizeof(size_t);
 			std::iota(propertyOrder.begin(), propertyOrder.end(), 0U);
 			std::ranges::sort(propertyOrder, [&nodeIds](const size_t left, const size_t right) {
 				return nodeIds[left] < nodeIds[right];
 			});
 			std::vector<uint64_t> sortedNodeIds;
+			checkSlots(nodeIds.size(), sizeof(uint64_t));
 			sortedNodeIds.reserve(nodeIds.size());
+			checkSlots(sortedNodeIds.capacity(), sizeof(uint64_t));
+			candidateStagingBytes += sortedNodeIds.capacity() * sizeof(uint64_t);
 			for (const size_t index: propertyOrder) {
 				sortedNodeIds.push_back(nodeIds[index]);
 			}
 			const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+			size_t labelBufferBytes = 0U;
+			const SelectedPropertyReadAdmission admitLabelBuffers = [&](size_t bytes) {
+				if (bytes > maximumCandidateBytes - candidateStagingBytes) throw RangeSourceBytePressure{};
+				labelBufferBytes = bytes;
+			};
 			const std::vector<bool> labelMatches =
-					native_graph_reads_->readNodeLabelMatchesSorted(snapshot, sortedNodeIds, labelTokens, session);
-			const auto propertyColumnsAndCounts = native_graph_reads_->readNodePropertyColumnsAndCountsSorted(
-					snapshot, sortedNodeIds, std::array<uint32_t, 1U>{*propertyToken}, session);
-			const auto &propertyColumns = propertyColumnsAndCounts.first;
+					native_graph_reads_->readNodeLabelMatchesSorted(snapshot, sortedNodeIds, labelTokens, session, &admitLabelBuffers);
+			if (labelMatches.size() != sortedNodeIds.size() ||
+				std::ranges::any_of(labelMatches, [](bool matches) { return !matches; })) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+					"relocatable native range Node lookup found an invalid indexed label");
+			}
+			size_t selectedSourceBytes = candidateStagingBytes;
+			size_t largeValueBufferBytes = labelBufferBytes;
+			const SelectedPropertyReadAdmission admission = [&](size_t bytes) {
+				if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+					largeValueBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes)
+					throw RangeSourceBytePressure{};
+				selectedSourceBytes += bytes;
+				traceNativeCandidateMetric("native_graph.read.range_candidate_source_bytes", bytes);
+			};
+			const SelectedPropertyReadAdmission admitLargeValueBuffers = [&](size_t bytes) {
+				if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+					labelBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes) throw RangeSourceBytePressure{};
+				largeValueBufferBytes = labelBufferBytes + bytes;
+			};
+			auto propertyColumnsAndCounts = native_graph_reads_->readNodePropertyColumnsAndCountsSorted(
+					snapshot, sortedNodeIds, std::array<uint32_t, 1U>{*propertyToken}, session, &admission, &admitLargeValueBuffers);
+			auto &propertyColumns = propertyColumnsAndCounts.first;
 			const auto &propertyCounts = propertyColumnsAndCounts.second;
 			if (labelMatches.size() != sortedNodeIds.size() || propertyCounts.size() != sortedNodeIds.size() ||
 					propertyColumns.size() != 1U || propertyColumns.front().size() != propertyOrder.size()) {
@@ -3715,21 +4150,33 @@ namespace graph::storage {
 								"relocatable native range Node lookup found an invalid indexed Node");
 				}
 			}
-			std::vector<std::optional<PropertyValue>> properties(entries.size());
+			// Scatter in place using the existing source-to-destination permutation.
+			// No second array of PropertyValue slots needs to coexist with the reader output.
+			auto &properties = propertyColumns.front();
 			for (size_t index = 0U; index < propertyOrder.size(); ++index) {
-				properties[propertyOrder[index]] = propertyColumns.front()[index];
+				while (propertyOrder[index] != index) {
+					const size_t destination = propertyOrder[index];
+					std::swap(properties[index], properties[destination]);
+					std::swap(propertyOrder[index], propertyOrder[destination]);
+				}
 			}
+			size_t outputBufferBytes = 0U;
+			const SelectedPropertyReadAdmission admitOutput = [&](size_t bytes) {
+				if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+					largeValueBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes) throw RangeSourceBytePressure{};
+				outputBufferBytes = bytes;
+			};
 			IndexCandidateBatch streamBatch;
 			if (visitor != nullptr) {
 				streamBatch.snapshot_generation = snapshot.superblock().generation.value();
 				streamBatch.predicates_verified = true;
 				streamBatch.label_scope_verified = true;
-				streamBatch.verified_property_columns.push_back({range.key, {}});
+				reserveCandidateOutput(streamBatch, entries.size(), std::span<const std::string>(&range.key, 1U), admitOutput);
 			}
 			for (size_t index = 0U; index < entries.size(); ++index) {
 				const BTreePageEntry &candidate = entries[index];
 				const uint64_t nodeId = nodeIds[index];
-				const std::optional<PropertyValue> &property = properties[index];
+				std::optional<PropertyValue> &property = properties[index];
 				if (!property.has_value()) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 									"relocatable native range Node lookup found a stale scalar Index entry");
@@ -3746,11 +4193,11 @@ namespace graph::storage {
 				}
 					if (candidateOutput != nullptr) {
 						candidateOutput->candidates.push_back({nodeId, false, 0U, 0U, 0U});
-						candidateOutput->verified_property_columns.front().values.push_back(*property);
+						candidateOutput->verified_property_columns.front().values.push_back(std::move(*property));
 						traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", 1U);
 				} else if (visitor != nullptr) {
 					streamBatch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
-					streamBatch.verified_property_columns.front().values.push_back(*property);
+					streamBatch.verified_property_columns.front().values.push_back(std::move(*property));
 				} else {
 					resultNodeIds.push_back(nodeId);
 				}
@@ -3760,30 +4207,35 @@ namespace graph::storage {
 			}
 			// Range index order is value-major. Sort only this bounded batch so the
 			// storage-neutral runtime can validate its monotonic candidate contract.
-			std::vector<size_t> order(streamBatch.candidates.size());
+			// Reuse the already admitted row permutation for output ordering.
+			propertyOrder.resize(streamBatch.candidates.size());
+			auto &order = propertyOrder;
 			std::iota(order.begin(), order.end(), 0U);
 			std::ranges::sort(order, [&streamBatch](const size_t left, const size_t right) {
 				return streamBatch.candidates[left].entity_id < streamBatch.candidates[right].entity_id;
 			});
-			IndexCandidateBatch ordered;
-			ordered.snapshot_generation = streamBatch.snapshot_generation;
-			ordered.predicates_verified = streamBatch.predicates_verified;
-			ordered.label_scope_verified = streamBatch.label_scope_verified;
-			ordered.verified_property_columns.push_back({range.key, {}});
-			ordered.candidates.reserve(order.size());
-			ordered.verified_property_columns.front().values.reserve(order.size());
-			for (const size_t index: order) {
-				ordered.candidates.push_back(streamBatch.candidates[index]);
-				ordered.verified_property_columns.front().values.push_back(
-						std::move(streamBatch.verified_property_columns.front().values[index]));
-			}
-			traceNativeCandidateMetric("native_graph.read.index_candidate_batches", ordered.candidates.empty() ? 0U : 1U);
-			traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", ordered.candidates.size());
-			enforceCandidateBatchBytes(ordered, maximumCandidateBytes);
-			return ordered.candidates.empty() || (*visitor)(ordered);
+			reorderCandidateRowsInPlace(streamBatch, order);
+			traceNativeCandidateMetric("native_graph.read.index_candidate_batches", streamBatch.candidates.empty() ? 0U : 1U);
+			traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", streamBatch.candidates.size());
+			enforceCandidateBatchBytes(streamBatch, maximumCandidateBytes);
+			return streamBatch.candidates.empty() || (*visitor)(streamBatch);
 		};
+		std::function<bool(std::span<const BTreePageEntry>)> emit;
+		emit = [&](std::span<const BTreePageEntry> entries) -> bool {
+			try {
+				return emitOnce(entries);
+			} catch (const RangeSourceBytePressure &) {
+				if (entries.size() <= 1U) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable native index candidate batch exceeded its byte bound");
+				}
+			}
+			traceNativeCandidateMetric("native_graph.read.range_candidate_source_splits", 1U);
+			const size_t left = entries.size() / 2U;
+			return emit(entries.first(left)) && emit(entries.subspan(left));
+		};
+
 		for (;;) {
-			const std::optional<BTreePageEntry> candidate = cursor.next();
+			std::optional<BTreePageEntry> candidate = cursor.next(admitBoundaryKey);
 			if (!candidate.has_value()) {
 				break;
 			}
@@ -3809,7 +4261,7 @@ namespace graph::storage {
 									"relocatable native range Node lookup exceeded its caller-supplied result bound");
 			}
 			if (visitor != nullptr) {
-				pending.push_back(*candidate);
+				pending.push_back(std::move(*candidate));
 				if (pending.size() == batchCapacity) {
 					if (!emit(std::span<const BTreePageEntry>(pending))) {
 						if (visitorCompleted != nullptr) {
@@ -3824,7 +4276,7 @@ namespace graph::storage {
 				// maximumNodes contract and deterministic final Node-ID ordering.
 				// Defer Property validation until all candidates are sorted by owner.
 				// This path is handled by the same emitter after the cursor is drained.
-				pending.push_back(*candidate);
+				pending.push_back(std::move(*candidate));
 			}
 		}
 		if (visitor != nullptr) {
@@ -3853,20 +4305,7 @@ namespace graph::storage {
 			std::ranges::sort(order, [candidateOutput](size_t left, size_t right) {
 				return candidateOutput->candidates[left].entity_id < candidateOutput->candidates[right].entity_id;
 			});
-			std::vector<EntityRef> sortedCandidates;
-			sortedCandidates.reserve(order.size());
-			for (const size_t index: order) {
-				sortedCandidates.push_back(candidateOutput->candidates[index]);
-			}
-			candidateOutput->candidates = std::move(sortedCandidates);
-			for (auto &column: candidateOutput->verified_property_columns) {
-				std::vector<PropertyValue> sortedValues;
-				sortedValues.reserve(order.size());
-				for (const size_t index: order) {
-					sortedValues.push_back(std::move(column.values[index]));
-				}
-				column.values = std::move(sortedValues);
-			}
+			reorderCandidateRowsInPlace(*candidateOutput, order);
 		}
 		return result;
 		}
@@ -3900,31 +4339,11 @@ namespace graph::storage {
 										"relocatable native range Node lookup returned an invalid Property column");
 			}
 		}
-		// The range implementation already restores candidate order after its
-		// cursor batches. Avoid sorting and moving every verified column a second
-		// time; retain the defensive reorder for alternate implementations that
-		// may return an unsorted candidate batch.
-		if (std::ranges::is_sorted(result.candidates, {}, &EntityRef::entity_id)) {
-			return result;
-		}
-		std::vector<size_t> order(result.candidates.size());
-		std::iota(order.begin(), order.end(), 0U);
-		std::ranges::sort(order, [&result](size_t left, size_t right) {
-			return result.candidates[left].entity_id < result.candidates[right].entity_id;
-		});
-		std::vector<EntityRef> candidates;
-		candidates.reserve(order.size());
-		for (const size_t index: order) {
-			candidates.push_back(result.candidates[index]);
-		}
-		result.candidates = std::move(candidates);
-		for (auto &column: result.verified_property_columns) {
-			std::vector<PropertyValue> values;
-			values.reserve(order.size());
-			for (const size_t index: order) {
-				values.push_back(std::move(column.values[index]));
-			}
-			column.values = std::move(values);
+		// The native source owns ordering; validate its contract without another
+		// permutation array or a second copy of every verified Property column.
+		if (!std::ranges::is_sorted(result.candidates, {}, &EntityRef::entity_id)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+					"relocatable native range Node lookup returned an unsorted candidate batch");
 		}
 		return result;
 	}
@@ -4061,6 +4480,7 @@ namespace graph::storage {
 				definition.kind != IndexDefinitionKind::IDK_COMPOSITE || definition.label_token_id != *labelToken ||
 				definition.property_names.size() != prefix.size() + 1U || definition.property_names.back() != request.range.key) continue;
 			std::vector<PropertyValue> prefixValues;
+			prefixValues.reserve(definition.property_names.size());
 			std::vector<uint32_t> propertyTokens;
 			bool matches = true;
 			for (size_t index = 0U; index + 1U < definition.property_names.size(); ++index) {
@@ -4075,12 +4495,18 @@ namespace graph::storage {
 			propertyTokens.push_back(*rangeToken);
 			const auto encodedPrefix = IndexKeyCodec::tryEncodeComposite(prefixValues);
 			if (!encodedPrefix.has_value()) return std::nullopt;
+			// Reuse one prefix workspace for both bounds instead of copying every
+			// prefix PropertyValue (including strings) into two additional vectors.
+			const auto encodeBound = [&](const PropertyValue &value, uint64_t entityId) {
+				prefixValues.push_back(value);
+				auto encoded = IndexKeyCodec::tryEncodeCompositeEntryKey(prefixValues, entityId);
+				prefixValues.pop_back();
+				return encoded;
+			};
 			std::optional<std::vector<std::byte>> lower;
 				if (isBound(request.range.min_value)) {
-					std::vector<PropertyValue> lowerValues = prefixValues;
-					lowerValues.push_back(request.range.min_value);
-					lower = IndexKeyCodec::tryEncodeCompositeEntryKey(
-							lowerValues, request.range.min_inclusive ? 1U : std::numeric_limits<uint64_t>::max());
+					lower = encodeBound(request.range.min_value,
+							request.range.min_inclusive ? 1U : std::numeric_limits<uint64_t>::max());
 					if (!lower.has_value()) return std::nullopt;
 				}
 			if (!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) {
@@ -4107,15 +4533,16 @@ namespace graph::storage {
 				const bool excludeLowerBound = isBound(request.range.min_value) && !request.range.min_inclusive;
 				auto cursor = index.openRangeCursor(snapshot, start, options_.maximum_online_index_entries,
 					BufferPoolReadHint::BPRH_SEQUENTIAL, excludeLowerBound);
+				debug::PerfTrace::addValue("native_graph.read.index_candidate_root_descent", 1);
 				std::optional<std::vector<std::byte>> upperExclusive;
 				if (isBound(request.range.max_value)) {
-					std::vector<PropertyValue> upperValues = prefixValues;
-					upperValues.push_back(request.range.max_value);
-					upperExclusive = IndexKeyCodec::tryEncodeCompositeEntryKey(
-							upperValues, request.range.max_inclusive ? std::numeric_limits<uint64_t>::max() : 1U);
+					upperExclusive = encodeBound(request.range.max_value,
+							request.range.max_inclusive ? std::numeric_limits<uint64_t>::max() : 1U);
 					if (!upperExclusive.has_value()) return std::nullopt;
 				}
-			std::unordered_set<uint64_t> seen;
+			std::vector<PropertyValue>().swap(prefixValues);
+			CandidateDedupMemoryResource dedupMemory(maximumCandidateBytes);
+			std::pmr::unordered_set<uint64_t> seen(&dedupMemory);
 			std::vector<LogicalGraphNode> result;
 			std::vector<uint64_t> resultNodeIds;
 			std::vector<BTreePageEntry> pending;
@@ -4123,12 +4550,55 @@ namespace graph::storage {
 			if (visitor != nullptr) {
 			pending.reserve(batchCapacity);
 			}
+			size_t boundaryKeyBytes = 0U;
+			const std::function<void(size_t)> admitBoundaryKey = [&](size_t bytes) {
+				size_t retained = dedupMemory.retainedBytes();
+				const auto add = [&](size_t count, size_t width) {
+					if (count > (maximumCandidateBytes - retained) / width) {
+						throw FormatException(FormatError::FERR_INVALID_STATE, "range cursor boundary exceeded its byte bound");
+					}
+					retained += count * width;
+				};
+				add(pending.capacity(), sizeof(BTreePageEntry));
+				for (const auto &entry: pending) add(entry.key.capacity(), 1U);
+				add(bytes, 1U);
+				boundaryKeyBytes = bytes;
+			};
+			dedupMemory.setAllocationAdmission([&](size_t bytes) {
+				const size_t retainedBoundary = boundaryKeyBytes;
+				if (bytes > maximumCandidateBytes - retainedBoundary) {
+					throw FormatException(FormatError::FERR_INVALID_STATE, "range dedup allocation exceeded its shared byte bound");
+				}
+				admitBoundaryKey(retainedBoundary + bytes);
+				boundaryKeyBytes = retainedBoundary;
+			});
 			size_t totalCandidates = 0U;
 			bool rangeExhausted = false;
-			const auto emit = [&](const std::span<const BTreePageEntry> entries) -> bool {
+			struct CompositeSourceBytePressure {};
+			const auto emitOnce = [&](const std::span<const BTreePageEntry> entries) -> bool {
 				if (entries.empty()) return true;
+				size_t candidateStagingBytes = dedupMemory.retainedBytes();
+				if (boundaryKeyBytes > maximumCandidateBytes - candidateStagingBytes) throw CompositeSourceBytePressure{};
+				candidateStagingBytes += boundaryKeyBytes;
+				// The whole pending batch stays alive during recursive splits.
+				// Charge its slots and owned keys, not only the emitted subspan.
+				if (pending.capacity() > (maximumCandidateBytes - candidateStagingBytes) / sizeof(BTreePageEntry))
+					throw CompositeSourceBytePressure{};
+				candidateStagingBytes += pending.capacity() * sizeof(BTreePageEntry);
+				for (const auto &entry: pending) {
+					if (entry.key.capacity() > maximumCandidateBytes - candidateStagingBytes) throw CompositeSourceBytePressure{};
+					candidateStagingBytes += entry.key.capacity();
+				}
+				size_t labelBufferBytes = 0U;
+				const auto checkSlots = [&](size_t count, size_t width) {
+					if (count > (maximumCandidateBytes - candidateStagingBytes - labelBufferBytes) / width)
+						throw CompositeSourceBytePressure{};
+				};
+				checkSlots(entries.size(), sizeof(uint64_t));
 				std::vector<uint64_t> nodeIds;
 				nodeIds.reserve(entries.size());
+				checkSlots(nodeIds.capacity(), sizeof(uint64_t));
+				candidateStagingBytes += nodeIds.capacity() * sizeof(uint64_t);
 				for (const BTreePageEntry &candidate: entries) {
 					if (candidate.key.size() <= encodedPrefix->size() + sizeof(uint64_t) ||
 							!std::equal(encodedPrefix->begin(), encodedPrefix->end(), candidate.key.begin())) {
@@ -4142,18 +4612,77 @@ namespace graph::storage {
 					}
 					nodeIds.push_back(nodeId);
 				}
+				checkSlots(nodeIds.size(), sizeof(size_t));
 				std::vector<size_t> propertyOrder(nodeIds.size());
+				checkSlots(propertyOrder.capacity(), sizeof(size_t));
+				candidateStagingBytes += propertyOrder.capacity() * sizeof(size_t);
 				std::iota(propertyOrder.begin(), propertyOrder.end(), 0U);
 				std::ranges::sort(propertyOrder, [&nodeIds](size_t left, size_t right) {
 					return nodeIds[left] < nodeIds[right];
 				});
 				std::vector<uint64_t> sortedNodeIds;
+				checkSlots(propertyOrder.size(), sizeof(uint64_t));
 				sortedNodeIds.reserve(propertyOrder.size());
+				checkSlots(sortedNodeIds.capacity(), sizeof(uint64_t));
+				candidateStagingBytes += sortedNodeIds.capacity() * sizeof(uint64_t);
 				for (const size_t index: propertyOrder) sortedNodeIds.push_back(nodeIds[index]);
 				const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+				const SelectedPropertyReadAdmission admitLabelBuffers = [&](size_t bytes) {
+					if (bytes > maximumCandidateBytes - candidateStagingBytes) throw CompositeSourceBytePressure{};
+					labelBufferBytes = bytes;
+				};
 				const auto labelMatches = native_graph_reads_->readNodeLabelMatchesSorted(
-						snapshot, sortedNodeIds, labelTokens, session);
-				const auto propertyCounts = native_graph_reads_->nodePropertyCountsSorted(snapshot, sortedNodeIds, session);
+						snapshot, sortedNodeIds, labelTokens, session, &admitLabelBuffers);
+				if (labelMatches.size() != sortedNodeIds.size() ||
+					std::ranges::any_of(labelMatches, [](bool matches) { return !matches; })) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable composite range Node lookup found an invalid indexed label");
+				}
+
+				std::vector<std::pair<uint32_t, size_t>> tokenOrder;
+				checkSlots(propertyTokens.size(), sizeof(std::pair<uint32_t, size_t>));
+				tokenOrder.reserve(propertyTokens.size());
+				checkSlots(tokenOrder.capacity(), sizeof(std::pair<uint32_t, size_t>));
+				candidateStagingBytes += tokenOrder.capacity() * sizeof(std::pair<uint32_t, size_t>);
+				if (labelBufferBytes > maximumCandidateBytes - candidateStagingBytes) throw CompositeSourceBytePressure{};
+				for (size_t index = 0U; index < propertyTokens.size(); ++index) {
+					tokenOrder.emplace_back(propertyTokens[index], index);
+				}
+				std::ranges::sort(tokenOrder, {}, &std::pair<uint32_t, size_t>::first);
+				for (size_t index = 1U; index < tokenOrder.size(); ++index) {
+					if (tokenOrder[index - 1U].first == tokenOrder[index].first) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup resolved duplicate Property tokens");
+					}
+				}
+				std::vector<uint32_t> sortedPropertyTokens;
+				checkSlots(tokenOrder.size(), sizeof(uint32_t));
+				sortedPropertyTokens.reserve(tokenOrder.size());
+				checkSlots(sortedPropertyTokens.capacity(), sizeof(uint32_t));
+				candidateStagingBytes += sortedPropertyTokens.capacity() * sizeof(uint32_t);
+				if (labelBufferBytes > maximumCandidateBytes - candidateStagingBytes) throw CompositeSourceBytePressure{};
+				for (const auto &[token, originalColumn]: tokenOrder) {
+					static_cast<void>(originalColumn);
+					sortedPropertyTokens.push_back(token);
+				}
+				size_t selectedSourceBytes = candidateStagingBytes;
+				size_t largeValueBufferBytes = labelBufferBytes;
+				const SelectedPropertyReadAdmission admission = [&](size_t bytes) {
+					if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+						largeValueBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes)
+						throw CompositeSourceBytePressure{};
+					selectedSourceBytes += bytes;
+					traceNativeCandidateMetric("native_graph.read.composite_range_candidate_source_bytes", bytes);
+				};
+				const SelectedPropertyReadAdmission admitLargeValueBuffers = [&](size_t bytes) {
+					if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+						labelBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes) throw CompositeSourceBytePressure{};
+					largeValueBufferBytes = labelBufferBytes + bytes;
+				};
+				auto columnsAndCounts = native_graph_reads_->readNodePropertyColumnsAndCountsSorted(
+						snapshot, sortedNodeIds, sortedPropertyTokens, session, &admission, &admitLargeValueBuffers);
+				auto &sortedPropertiesByToken = columnsAndCounts.first;
+				const auto &propertyCounts = columnsAndCounts.second;
 				if (labelMatches.size() != sortedNodeIds.size() || propertyCounts.size() != sortedNodeIds.size()) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 							"relocatable composite range Node lookup returned an invalid candidate validation batch");
@@ -4166,62 +4695,63 @@ namespace graph::storage {
 								"relocatable composite range Node lookup found an invalid indexed Node");
 					}
 				}
-				std::vector<std::pair<uint32_t, size_t>> tokenOrder;
-				tokenOrder.reserve(propertyTokens.size());
-				for (size_t index = 0U; index < propertyTokens.size(); ++index) {
-					tokenOrder.emplace_back(propertyTokens[index], index);
-				}
-				std::ranges::sort(tokenOrder, {}, &std::pair<uint32_t, size_t>::first);
-				for (size_t index = 1U; index < tokenOrder.size(); ++index) {
-					if (tokenOrder[index - 1U].first == tokenOrder[index].first) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-								"relocatable composite range Node lookup resolved duplicate Property tokens");
-					}
-				}
-				std::vector<uint32_t> sortedPropertyTokens;
-				sortedPropertyTokens.reserve(tokenOrder.size());
-				for (const auto &[token, originalColumn]: tokenOrder) {
-					static_cast<void>(originalColumn);
-					sortedPropertyTokens.push_back(token);
-				}
-				const auto sortedPropertiesByToken = native_graph_reads_->readNodePropertyColumnsSorted(
-						snapshot, sortedNodeIds, sortedPropertyTokens, session);
 				if (sortedPropertiesByToken.size() != propertyTokens.size()) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 							"relocatable composite range Node lookup returned an invalid Property column batch");
 				}
-				std::vector<std::vector<std::optional<PropertyValue>>> propertiesByToken(propertyTokens.size());
-				for (size_t tokenIndex = 0U; tokenIndex < sortedPropertiesByToken.size(); ++tokenIndex) {
-					const auto &sortedProperties = sortedPropertiesByToken[tokenIndex];
-					if (sortedProperties.size() != propertyOrder.size()) {
+				for (const auto &column: sortedPropertiesByToken) {
+					if (column.size() != propertyOrder.size()) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 								"relocatable composite range Node lookup returned an invalid Property batch");
 					}
-					std::vector<std::optional<PropertyValue>> properties(entries.size());
-					for (size_t index = 0U; index < propertyOrder.size(); ++index) {
-						properties[propertyOrder[index]] = sortedProperties[index];
-					}
-					propertiesByToken[tokenOrder[tokenIndex].second] = std::move(properties);
 				}
+				// Reuse both permutations to scatter rows and columns without allocating
+				// another matrix of optional PropertyValue slots.
+				auto &propertiesByToken = sortedPropertiesByToken;
+				for (size_t index = 0U; index < propertyOrder.size(); ++index) {
+					while (propertyOrder[index] != index) {
+						const size_t destination = propertyOrder[index];
+						for (auto &column: propertiesByToken) std::swap(column[index], column[destination]);
+						std::swap(propertyOrder[index], propertyOrder[destination]);
+					}
+				}
+				for (size_t index = 0U; index < tokenOrder.size(); ++index) {
+					while (tokenOrder[index].second != index) {
+						const size_t destination = tokenOrder[index].second;
+						std::swap(propertiesByToken[index], propertiesByToken[destination]);
+						std::swap(tokenOrder[index], tokenOrder[destination]);
+					}
+				}
+				size_t outputBufferBytes = 0U;
+				const SelectedPropertyReadAdmission admitOutput = [&](size_t bytes) {
+					if (bytes > maximumCandidateBytes - selectedSourceBytes ||
+						largeValueBufferBytes > maximumCandidateBytes - selectedSourceBytes - bytes) throw CompositeSourceBytePressure{};
+					outputBufferBytes = bytes;
+				};
 				IndexCandidateBatch streamBatch;
 				if (visitor != nullptr) {
 					streamBatch.snapshot_generation = snapshot.superblock().generation.value();
 					streamBatch.predicates_verified = true;
 					streamBatch.label_scope_verified = true;
-					for (const std::string &name: definition.property_names) {
-						streamBatch.verified_property_columns.push_back({name, {}});
-					}
+					reserveCandidateOutput(streamBatch, entries.size(), definition.property_names, admitOutput);
 				}
+				// One row workspace is reused; its slots coexist with reader/output arrays.
+				std::vector<PropertyValue> actual;
+				const size_t outputSlots = outputBufferBytes;
+				if (propertyTokens.size() > (maximumCandidateBytes - selectedSourceBytes - largeValueBufferBytes - outputSlots) / sizeof(PropertyValue))
+					throw CompositeSourceBytePressure{};
+				admitOutput(outputSlots + propertyTokens.size() * sizeof(PropertyValue));
+				actual.reserve(propertyTokens.size());
+				admitOutput(outputSlots + actual.capacity() * sizeof(PropertyValue));
 				for (size_t index = 0U; index < entries.size(); ++index) {
 					const uint64_t nodeId = nodeIds[index];
-					std::vector<PropertyValue> actual;
-					actual.reserve(propertyTokens.size());
-					for (const auto &properties: propertiesByToken) {
+					actual.clear();
+					for (auto &properties: propertiesByToken) {
 						if (!properties[index].has_value()) {
 							throw FormatException(FormatError::FERR_INVALID_STATE,
 									"relocatable composite range Node lookup found a stale Index entry");
 						}
-						actual.push_back(*properties[index]);
+						actual.push_back(std::move(*properties[index]));
 					}
 					const auto expected = IndexKeyCodec::tryEncodeCompositeEntryKey(actual, nodeId);
 					if (!expected.has_value() || entries[index].key != *expected) {
@@ -4239,48 +4769,50 @@ namespace graph::storage {
 					if (belowLower) continue;
 					if (candidateOutput != nullptr) {
 						for (size_t propertyIndex = 0U; propertyIndex < definition.property_names.size(); ++propertyIndex) {
-							candidateOutput->verified_property_columns[propertyIndex].values.push_back(actual[propertyIndex]);
+							candidateOutput->verified_property_columns[propertyIndex].values.push_back(std::move(actual[propertyIndex]));
 						}
 						candidateOutput->candidates.push_back({nodeId, false, 0U, 0U, 0U});
 						traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", 1U);
 					} else if (visitor != nullptr) {
 						streamBatch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
 						for (size_t propertyIndex = 0U; propertyIndex < actual.size(); ++propertyIndex) {
-							streamBatch.verified_property_columns[propertyIndex].values.push_back(actual[propertyIndex]);
+							streamBatch.verified_property_columns[propertyIndex].values.push_back(std::move(actual[propertyIndex]));
 						}
 					} else {
 						resultNodeIds.push_back(nodeId);
 					}
 				}
 				if (visitor == nullptr) return true;
-				std::vector<size_t> order(streamBatch.candidates.size());
+				// Reuse the already admitted row permutation for output ordering.
+				propertyOrder.resize(streamBatch.candidates.size());
+				auto &order = propertyOrder;
 				std::iota(order.begin(), order.end(), 0U);
 				std::ranges::sort(order, [&streamBatch](size_t left, size_t right) {
 					return streamBatch.candidates[left].entity_id < streamBatch.candidates[right].entity_id;
 				});
-				IndexCandidateBatch ordered;
-				ordered.snapshot_generation = streamBatch.snapshot_generation;
-				ordered.predicates_verified = streamBatch.predicates_verified;
-				ordered.label_scope_verified = streamBatch.label_scope_verified;
-				for (size_t column = 0U; column < streamBatch.verified_property_columns.size(); ++column) {
-					ordered.verified_property_columns.push_back({streamBatch.verified_property_columns[column].key, {}});
-				}
-				ordered.candidates.reserve(order.size());
-				for (const size_t index: order) {
-					ordered.candidates.push_back(streamBatch.candidates[index]);
-					for (size_t column = 0U; column < ordered.verified_property_columns.size(); ++column) {
-						ordered.verified_property_columns[column].values.push_back(
-								std::move(streamBatch.verified_property_columns[column].values[index]));
+				reorderCandidateRowsInPlace(streamBatch, order);
+				traceNativeCandidateMetric("native_graph.read.index_candidate_batches", streamBatch.candidates.empty() ? 0U : 1U);
+				traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", streamBatch.candidates.size());
+				enforceCandidateBatchBytes(streamBatch, maximumCandidateBytes);
+				return streamBatch.candidates.empty() || (*visitor)(streamBatch);
+			};
+			std::function<bool(std::span<const BTreePageEntry>)> emit;
+			emit = [&](std::span<const BTreePageEntry> entries) -> bool {
+				try {
+					return emitOnce(entries);
+				} catch (const CompositeSourceBytePressure &) {
+					if (entries.size() <= 1U) {
+						throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable native index candidate batch exceeded its byte bound");
 					}
 				}
-				traceNativeCandidateMetric("native_graph.read.index_candidate_batches", ordered.candidates.empty() ? 0U : 1U);
-				traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", ordered.candidates.size());
-				enforceCandidateBatchBytes(ordered, maximumCandidateBytes);
-				return ordered.candidates.empty() || (*visitor)(ordered);
+				traceNativeCandidateMetric("native_graph.read.composite_range_candidate_source_splits", 1U);
+				const size_t left = entries.size() / 2U;
+				return emit(entries.first(left)) && emit(entries.subspan(left));
 			};
+
 				for (;;) {
 					if (rangeExhausted) break;
-					const auto candidate = cursor.next();
+					auto candidate = cursor.next(admitBoundaryKey);
 					if (!candidate.has_value() || candidate->key.size() <= encodedPrefix->size() + sizeof(uint64_t) ||
 							!std::equal(encodedPrefix->begin(), encodedPrefix->end(), candidate->key.begin())) break;
 					if (upperExclusive.has_value()) {
@@ -4300,7 +4832,7 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 							"relocatable composite range Node lookup exceeded its caller-supplied result bound");
 				}
-				pending.push_back(*candidate);
+				pending.push_back(std::move(*candidate));
 				if (pending.size() == batchCapacity) {
 					if (!emit(std::span<const BTreePageEntry>(pending))) {
 						if (visitorCompleted != nullptr) *visitorCompleted = false;
@@ -4325,16 +4857,7 @@ namespace graph::storage {
 				std::ranges::sort(order, [candidateOutput](size_t left, size_t right) {
 					return candidateOutput->candidates[left].entity_id < candidateOutput->candidates[right].entity_id;
 				});
-				std::vector<EntityRef> sortedCandidates;
-				sortedCandidates.reserve(order.size());
-				for (const size_t index: order) sortedCandidates.push_back(candidateOutput->candidates[index]);
-				candidateOutput->candidates = std::move(sortedCandidates);
-				for (auto &column: candidateOutput->verified_property_columns) {
-					std::vector<PropertyValue> sortedValues;
-					sortedValues.reserve(order.size());
-					for (const size_t index: order) sortedValues.push_back(std::move(column.values[index]));
-					column.values = std::move(sortedValues);
-				}
+				reorderCandidateRowsInPlace(*candidateOutput, order);
 			}
 			return result;
 		}
@@ -4368,24 +4891,10 @@ namespace graph::storage {
 										"relocatable native composite range Node lookup returned an invalid Property column");
 			}
 		}
-		std::vector<size_t> order(result.candidates.size());
-		std::iota(order.begin(), order.end(), 0U);
-		std::ranges::sort(order, [&result](size_t left, size_t right) {
-			return result.candidates[left].entity_id < result.candidates[right].entity_id;
-		});
-		std::vector<EntityRef> candidates;
-		candidates.reserve(order.size());
-		for (const size_t index: order) {
-			candidates.push_back(result.candidates[index]);
-		}
-		result.candidates = std::move(candidates);
-		for (auto &column: result.verified_property_columns) {
-			std::vector<PropertyValue> values;
-			values.reserve(order.size());
-			for (const size_t index: order) {
-				values.push_back(std::move(column.values[index]));
-			}
-			column.values = std::move(values);
+		// The composite source already orders the complete batch and its columns.
+		if (!std::ranges::is_sorted(result.candidates, {}, &EntityRef::entity_id)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+					"relocatable native composite range Node lookup returned an unsorted candidate batch");
 		}
 		return result;
 	}
@@ -5302,6 +5811,90 @@ namespace graph::storage {
 		return LogicalGraphCardinalityStatistics{statistics->node_count, statistics->edge_count};
 	}
 
+	namespace {
+		std::optional<uint64_t> estimateSnapshotLabels(SystemCatalog &catalog,
+			const MetadataSnapshotPin &snapshot, uint64_t nodes, std::span<const std::string> labels) {
+			uint64_t estimate = nodes;
+			for (const auto &label : labels) {
+				if (label.empty()) return std::nullopt;
+				const auto token = catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, label);
+				if (!token) return std::nullopt;
+				const auto count = catalog.readTokenCardinality(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, *token);
+				if (!count || *count > nodes) return std::nullopt;
+				estimate = std::min(estimate, *count);
+			}
+			return estimate;
+		}
+	}
+
+	std::optional<uint64_t> RelocatableStorageBackend::estimateLogicalNodeCardinality(
+			std::span<const std::string> labels) const {
+		requireOpen();
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		const auto statistics = system_catalog_->readGraphCardinalityStatistics(snapshot);
+		if (!statistics) return std::nullopt;
+		return estimateSnapshotLabels(*system_catalog_, snapshot, statistics->node_count, labels);
+	}
+
+	LogicalGraphPlanningStatistics RelocatableStorageBackend::readLogicalPlanningStatistics(
+			std::span<const std::vector<std::string>> labels) const {
+		requireOpen();
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		LogicalGraphPlanningStatistics result;
+		result.node_counts.resize(labels.size());
+		const auto statistics = system_catalog_->readGraphCardinalityStatistics(snapshot);
+		if (!statistics) return result;
+		result.graph = LogicalGraphCardinalityStatistics{statistics->node_count, statistics->edge_count};
+		std::map<std::string, std::optional<uint64_t>> names;
+		std::vector<uint64_t> tokens;
+		for (const auto &combination : labels) for (const auto &label : combination)
+			if (!label.empty()) names.try_emplace(label, std::nullopt);
+		std::vector<std::string> orderedNames;
+		orderedNames.reserve(names.size());
+		for (const auto &[name, token] : names) orderedNames.push_back(name);
+		try {
+			const auto resolved = system_catalog_->findSchemaTokens(snapshot,
+				SystemCatalogSchemaTokenKind::SCSTK_LABEL, orderedNames);
+			for (size_t i = 0U; i < orderedNames.size(); ++i) names.at(orderedNames[i]) = resolved.at(i);
+		} catch (...) {
+			// A malformed name must not disable unrelated validated inputs.
+			for (auto &[name, token] : names) {
+				try { token = system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, name); }
+				catch (...) { }
+			}
+		}
+		for (const auto &[name, token] : names) if (token) tokens.push_back(*token);
+		std::sort(tokens.begin(), tokens.end());
+		tokens.erase(std::unique(tokens.begin(), tokens.end()), tokens.end());
+		std::vector<std::optional<uint64_t>> counts;
+		try {
+			if (!tokens.empty()) counts = system_catalog_->readTokenCardinalities(
+				snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, tokens);
+		} catch (...) {
+			// Preserve unrelated valid estimates if a corrupt token breaks the
+			// combined read. This slower path still uses the same pinned snapshot.
+			for (size_t i = 0U; i < labels.size(); ++i) {
+				try { result.node_counts[i] = estimateSnapshotLabels(*system_catalog_, snapshot, statistics->node_count, labels[i]); }
+				catch (...) { }
+			}
+			return result;
+		}
+		for (size_t i = 0U; i < labels.size(); ++i) {
+			uint64_t estimate = statistics->node_count;
+			bool available = true;
+			for (const auto &label : labels[i]) {
+				const auto found = names.find(label);
+				if (found == names.end() || !found->second) { available = false; break; }
+				const size_t position = std::lower_bound(tokens.begin(), tokens.end(), *found->second) - tokens.begin();
+				const auto count = counts.at(position);
+				if (!count || *count > statistics->node_count) { available = false; break; }
+				estimate = std::min(estimate, *count);
+			}
+			if (available) result.node_counts[i] = estimate;
+		}
+		return result;
+	}
+
 	void RelocatableStorageBackend::resetRuntimeStatistics() { resetIoStats(); }
 
 	LogicalGraphIndexDefinition
@@ -5314,8 +5907,259 @@ namespace graph::storage {
 		return created.front();
 	}
 
+	void RelocatableStorageBackend::rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint) {
+		requireOpen();
+		if (isReadOnly()) throw std::runtime_error("token statistics rebuilding requires a writable backend");
+		requireNoIndeterminateWrite();
+		if (checkpoint) checkpoint();
+		std::lock_guard<std::mutex> lock(native_publication_mutex_);
+		auto snapshot = metadata_->openSnapshot();
+		const Superblock base = snapshot.superblock();
+		if (base.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+			throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "statistics rebuild checkpoint overflowed");
+		}
+		const LogSequenceNumber lsn(base.checkpoint_lsn.value() + 1U);
+		ExternalBTreeEntrySorter sorter({options_.maximum_online_index_entries,
+				options_.online_index_sort_run_bytes, options_.maximum_online_index_sort_runs});
+		NativeGraphCardinalityStatistics totals;
+		NativeReadSession session; session.bind(snapshot);
+		const auto addMember = [&](SystemCatalogSchemaTokenKind kind, uint64_t token, uint64_t entity) {
+			auto key = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
+			for (int shift = 56; shift >= 0; shift -= 8) key.push_back(static_cast<std::byte>((entity >> shift) & 0xffU));
+			sorter.add({std::move(key), entity});
+		};
+		std::vector<uint64_t> nodeIds;
+		nodeIds.reserve(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+		const auto flush = [&] {
+			if (checkpoint) checkpoint();
+			const auto labels = native_graph_reads_->readNodeLabelTokensSorted(snapshot, nodeIds, &session);
+			for (size_t i = 0U; i < nodeIds.size(); ++i) {
+				for (uint64_t token : labels[i]) addMember(SystemCatalogSchemaTokenKind::SCSTK_LABEL, token, nodeIds[i]);
+			}
+			nodeIds.clear();
+		};
+		const bool nodesComplete = native_graph_reads_->visitNodeRefsUntil(snapshot,
+				options_.maximum_online_index_scan_nodes, [&](const EntityRef &ref) {
+					++totals.node_count; nodeIds.push_back(ref.entity_id);
+					if (nodeIds.size() == BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES) flush(); return true;
+				}, &session);
+		if (!nodesComplete) throw std::runtime_error("token statistics Node scan exceeded its bound");
+		if (!nodeIds.empty()) flush();
+		const bool edgesComplete = native_graph_reads_->visitEdgeRefsUntil(snapshot,
+				options_.maximum_online_index_entries, [&](const EntityRef &ref) {
+					if (totals.edge_count % BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES == 0U && checkpoint) checkpoint();
+					++totals.edge_count;
+					addMember(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, ref.type_token, ref.entity_id); return true;
+				}, &session);
+		if (!edgesComplete) throw std::runtime_error("token statistics Edge scan exceeded its bound");
+		const auto sorted = sorter.finish();
+		const OrderedBTreeEntrySource statistics = [sorted, totals, checkpoint] {
+			auto cursor = sorted();
+			return [cursor = std::move(cursor), totals, checkpoint, phase = 0U, scanned = size_t{0U},
+					pending = std::optional<BTreePageEntry>{}]() mutable -> std::optional<BTreePageEntry> {
+				if (phase == 0U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+						SystemCatalogGraphCardinalityCodec::encodeCount(totals.node_count)}; }
+				if (phase == 1U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::edgeCountKey(),
+						SystemCatalogGraphCardinalityCodec::encodeCount(totals.edge_count)}; }
+				if (phase == 2U) {
+					if (!pending) pending = cursor();
+					if (pending) {
+						if (pending->key.size() != 18U || pending->value_or_child == 0U)
+							throw FormatException(FormatError::FERR_INVALID_STATE, "statistics sorter returned an invalid member");
+						std::vector<std::byte> key(pending->key.begin(), pending->key.begin() + 10U);
+						uint64_t count = 0U;
+						do {
+							if (scanned++ % BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES == 0U && checkpoint) checkpoint();
+							++count; pending = cursor();
+						} while (pending && pending->key.size() == 18U && std::equal(key.begin(), key.end(), pending->key.begin()));
+						return BTreePageEntry{std::move(key), SystemCatalogGraphCardinalityCodec::encodeCount(count)};
+					}
+					++phase;
+				}
+				if (phase == 3U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKey(
+						SystemCatalogSchemaTokenKind::SCSTK_LABEL), 1U}; }
+				if (phase == 4U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKey(
+						SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE), 1U}; }
+				return std::nullopt;
+			};
+		};
+		OrderedBTreeEntrySource preserved;
+		if (metadata_->findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID)) {
+			const auto existing = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, *btree_pages_, *metadata_)
+					.orderedSource(snapshot, options_.maximum_bulk_edge_index_entries);
+			preserved = [existing, checkpoint] {
+				auto cursor = existing();
+				return [cursor = std::move(cursor), checkpoint, count = size_t{0U}]() mutable -> std::optional<BTreePageEntry> {
+					while (auto entry = cursor()) {
+						if (count++ % BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES == 0U && checkpoint) checkpoint();
+						if (entry->key.size() >= 2U && entry->key[0] == std::byte{13U} &&
+								entry->key[1] >= std::byte{1U} && entry->key[1] <= std::byte{6U}) continue;
+						return entry;
+					}
+					return std::nullopt;
+				};
+			};
+		} else {
+			preserved = [] {
+				return [done = false]() mutable -> std::optional<BTreePageEntry> {
+					if (done) return std::nullopt; done = true;
+					return BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE};
+				};
+			};
+		}
+		const auto entries = NativeBulkEdgeCatalogTokenMaterializer::overlayEntries(preserved, statistics);
+		const NativeStreamedGraphCatalogIndexPlanningOptions options{PhysicalSlotId(1U),
+				PhysicalSlotId(std::numeric_limits<uint64_t>::max()), options_.maximum_bulk_edge_index_entries,
+				options_.maximum_online_index_pages};
+		auto plan = NativeStreamedGraphCatalogIndexPlanner::plan(*system_catalog_, *metadata_, entries, true, options, snapshot, lsn);
+		if (!plan) throw std::logic_error("token statistics rebuild produced no Catalog plan");
+		NativeGraphDerivedStateMutation derived;
+		derived.index_tree_mutations.push_back(plan->mutation);
+		if (checkpoint) checkpoint();
+		try {
+			static_cast<void>(metadata_->mutateNativeGraphPagesWithLargeValues({}, {}, {}, {}, {}, {}, derived, lsn,
+					[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+						std::span<EntityPageNewPoolBatchMaterialization>, std::span<NativeGraphPropertyPageReplacementMaterialization>,
+						std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
+					[preparer = plan->preparer](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+						if (batches.size() != 1U) throw std::logic_error("statistics rebuild changed its Catalog partition");
+						preparer(batches.front());
+					}, {}, {}, {}, {}, {}, {}, {}, base.generation));
+		} catch (...) {
+			markReopenRequiredIfPublicationAdvanced(base); throw;
+		}
+	}
+
+	std::vector<uint64_t> RelocatableStorageBackend::ensureLogicalMembershipIndexes(
+			const std::function<void()> &checkpoint) {
+		if (checkpoint) checkpoint();
+		requireOpen();
+		if (isReadOnly()) throw std::runtime_error("membership Index creation requires a writable backend");
+		requireNoIndeterminateWrite();
+		if (options_.maximum_online_index_entries == 0U || options_.maximum_online_index_scan_nodes == 0U ||
+				options_.maximum_online_index_pages == 0U || options_.online_index_sort_run_bytes == 0U ||
+				options_.maximum_online_index_sort_runs == 0U) {
+			throw std::invalid_argument("membership Index creation requires positive work bounds");
+		}
+		std::lock_guard<std::mutex> lock(native_publication_mutex_);
+		auto transaction = native_graph_write_planner_->beginTransaction();
+		const auto &snapshot = transaction.baseSnapshot();
+		const auto existing = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+		std::array<IndexDefinition, 2U> definitions;
+		std::array<bool, 2U> missing{true, true};
+		for (const auto &definition : existing) {
+			if (definition.kind != IndexDefinitionKind::IDK_LABEL) continue;
+			const size_t ordinal = definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE ? 0U : 1U;
+			if (missing[ordinal]) { definitions[ordinal] = definition; missing[ordinal] = false; }
+		}
+		if (!missing[0] && !missing[1]) return {definitions[0].index_id, definitions[1].index_id};
+		const size_t additions = static_cast<size_t>(missing[0]) + static_cast<size_t>(missing[1]);
+		if (additions > options_.maximum_index_definitions - existing.size()) {
+			throw std::runtime_error("membership Index definitions exceed the configured bound");
+		}
+		auto catalogSession = system_catalog_->beginWrite(transaction);
+		std::array<std::unique_ptr<ExternalBTreeEntrySorter>, 2U> sorters;
+		for (size_t ordinal = 0U; ordinal < 2U; ++ordinal) {
+			if (!missing[ordinal]) continue;
+			auto &definition = definitions[ordinal];
+			definition.entity_kind = ordinal == 0U ? IndexDefinitionEntityKind::IDEK_NODE : IndexDefinitionEntityKind::IDEK_EDGE;
+			definition.kind = IndexDefinitionKind::IDK_LABEL;
+			const std::string base = ordinal == 0U ? "__zyx_node_membership" : "__zyx_edge_membership";
+			definition.name = base;
+			size_t suffix = 0U;
+			while (std::ranges::any_of(existing, [&](const auto &other) { return other.name == definition.name; })) {
+				definition.name = base + "_" + std::to_string(++suffix);
+			}
+			definition = catalogSession.createIndexDefinition(std::move(definition));
+			sorters[ordinal] = std::make_unique<ExternalBTreeEntrySorter>(ExternalBTreeEntrySorterOptions{
+					options_.maximum_online_index_entries, options_.online_index_sort_run_bytes,
+					options_.maximum_online_index_sort_runs});
+		}
+		NativeGraphCardinalityStatistics scannedCounts;
+		NativeReadSession session;
+		session.bind(snapshot);
+		const auto addMember = [&](size_t ordinal, uint64_t token, uint64_t id) {
+			if (token > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+				throw FormatException(FormatError::FERR_INVALID_STATE, "membership token exceeds scalar encoding");
+			}
+			sorters[ordinal]->add({IndexKeyCodec::encodeEntryKey(PropertyValue(static_cast<int64_t>(token)), id), id});
+		};
+		if (missing[0]) {
+			std::vector<uint64_t> ids;
+			ids.reserve(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+			const auto flush = [&] {
+				if (checkpoint) checkpoint();
+				const auto labels = native_graph_reads_->readNodeLabelTokensSorted(snapshot, ids, &session);
+				for (size_t i = 0U; i < ids.size(); ++i) {
+					for (uint64_t token : labels[i]) addMember(0U, token, ids[i]);
+				}
+				ids.clear();
+			};
+			const bool complete = native_graph_reads_->visitNodeRefsUntil(snapshot,
+					options_.maximum_online_index_scan_nodes, [&](const EntityRef &reference) {
+						++scannedCounts.node_count;
+						ids.push_back(reference.entity_id);
+						if (ids.size() == BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES) flush();
+						return true;
+					}, &session);
+			if (!complete) throw std::runtime_error("membership Index source exceeded its scan bound");
+			if (!ids.empty()) flush();
+		}
+		if (missing[1]) {
+			const bool complete = native_graph_reads_->visitEdgeRefsUntil(snapshot,
+					options_.maximum_online_index_entries, [&](const EntityRef &reference) {
+						if (checkpoint) checkpoint();
+						++scannedCounts.edge_count;
+						if (reference.type_token != 0U) addMember(1U, reference.type_token, reference.entity_id);
+						return true;
+					}, &session);
+			if (!complete) throw std::runtime_error("membership Index source exceeded its scan bound");
+		}
+		for (size_t ordinal = 0U; ordinal < 2U; ++ordinal) {
+			if (!missing[ordinal]) continue;
+			if (checkpoint) checkpoint();
+			const auto unchecked = sorters[ordinal]->finish();
+			OrderedBTreeEntrySource source = unchecked;
+			if (checkpoint) source = [unchecked, checkpoint] {
+				auto cursor = unchecked();
+				return [cursor = std::move(cursor), checkpoint, count = size_t{0U}]() mutable {
+					if (count++ % 256U == 0U) checkpoint();
+					return cursor();
+				};
+			};
+			const BulkBTreeBuildOptions build{PhysicalSlotId(1U), PhysicalSlotId(std::numeric_limits<uint64_t>::max()),
+					definitions[ordinal].index_id, options_.maximum_online_index_entries, options_.maximum_online_index_pages};
+			transaction.stageScalarIndexCreate(*btree_pages_, BulkBTreeBuilder::planNativeTree(
+					*btree_pages_, *metadata_, snapshot, definitions[ordinal].index_id, source, build));
+		}
+		// Both exhaustive sources proved completion under the same snapshot.
+		// Backfill live totals only with this proof, never from high-water IDs.
+		if (missing[0] && missing[1] && !system_catalog_->readGraphCardinalityStatistics(snapshot).has_value()) {
+			catalogSession.setGraphCardinalityStatistics(scannedCounts);
+		}
+		catalogSession.finish();
+		if (checkpoint) checkpoint();
+		if (!commitNativeGraphWriteTransaction(transaction).committed()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE, "membership Index creation lost its publication fence");
+		}
+		return {definitions[0].index_id, definitions[1].index_id};
+	}
+
+	LogicalGraphIndexDefinition RelocatableStorageBackend::createLogicalNodeIndexWithCheckpoint(
+		const LogicalGraphNodeIndexCreateRequest &request, const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) {
+		auto result = createLogicalNodeIndexesWithCheckpoint(std::span(&request, 1U), checkpoint, propertyAdmission);
+		return std::move(result.front());
+	}
+
 	std::vector<LogicalGraphIndexDefinition> RelocatableStorageBackend::createLogicalNodeIndexes(
 			const std::span<const LogicalGraphNodeIndexCreateRequest> requests) {
+		return createLogicalNodeIndexesWithCheckpoint(requests, {});
+	}
+
+	std::vector<LogicalGraphIndexDefinition>
+	RelocatableStorageBackend::createLogicalNodeIndexesWithCheckpoint(std::span<const LogicalGraphNodeIndexCreateRequest> requests,
+		const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) {
+		if (checkpoint) checkpoint();
 		requireOpen();
 		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Index");
@@ -5464,6 +6308,7 @@ namespace graph::storage {
 		nodeBatch.reserve(ONLINE_INDEX_NODE_BATCH_ENTRIES);
 		NativeReadSession readSession;
 		const auto flushNodeBatch = [&]() {
+			if (checkpoint) checkpoint();
 			if (nodeBatch.empty()) {
 				return;
 			}
@@ -5498,8 +6343,9 @@ namespace graph::storage {
 
 			std::vector<std::vector<std::optional<graph::PropertyValue>>> columns;
 			if (!propertyNodeIds.empty()) {
+				auto admission = makeSelectedPropertyBatchAdmission(propertyAdmission);
 				columns = native_graph_reads_->readNodePropertyColumnsSorted(
-						snapshot, propertyNodeIds, propertyTokensUnion, &readSession);
+						snapshot, propertyNodeIds, propertyTokensUnion, &readSession, admission ? &admission : nullptr);
 				if (columns.size() != propertyTokensUnion.size() ||
 						std::ranges::any_of(columns, [&](const auto &column) {
 							return column.size() != propertyNodeIds.size();
@@ -5569,8 +6415,17 @@ namespace graph::storage {
 		}
 
 		for (size_t definitionIndex = 0U; definitionIndex < definitions.size(); ++definitionIndex) {
+			if (checkpoint) checkpoint();
 			const IndexDefinition &definition = definitions[definitionIndex];
-			const OrderedBTreeEntrySource source = indexStates[definitionIndex].sorter.finish();
+			const OrderedBTreeEntrySource uncheckedSource = indexStates[definitionIndex].sorter.finish();
+			OrderedBTreeEntrySource source = uncheckedSource;
+			if (checkpoint) source = [uncheckedSource, checkpoint] {
+				auto cursor = uncheckedSource();
+				return [cursor = std::move(cursor), checkpoint, count = size_t{0U}]() mutable {
+					if (count++ % 256U == 0U && checkpoint) checkpoint();
+					return cursor();
+				};
+			};
 			const BulkBTreeBuildOptions build = {
 					PhysicalSlotId(1U), PhysicalSlotId(std::numeric_limits<uint64_t>::max()), definition.index_id,
 					options_.maximum_online_index_entries, options_.maximum_online_index_pages};
@@ -5578,7 +6433,9 @@ namespace graph::storage {
 												 BulkBTreeBuilder::planNativeTree(*btree_pages_, *metadata_, snapshot,
 																									 definition.index_id, source, build));
 		}
+		if (checkpoint) checkpoint();
 		catalogSession.finish();
+		if (checkpoint) checkpoint();
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
 		if (!committed.committed()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -5589,6 +6446,13 @@ namespace graph::storage {
 
 	LogicalGraphIndexDefinition
 	RelocatableStorageBackend::createLogicalNodeVectorIndex(const LogicalGraphNodeVectorIndexCreateRequest &request) {
+		return createLogicalNodeVectorIndexWithCheckpoint(request, {});
+	}
+
+	LogicalGraphIndexDefinition
+	RelocatableStorageBackend::createLogicalNodeVectorIndexWithCheckpoint(const LogicalGraphNodeVectorIndexCreateRequest &request,
+		const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) {
+		if (checkpoint) checkpoint();
 		requireOpen();
 		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Vector Index");
@@ -5647,13 +6511,18 @@ namespace graph::storage {
 		pendingNodeIds.reserve(ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES);
 		NativeReadSession readSession;
 		const auto flushPropertyBatch = [&]() {
+			if (checkpoint) checkpoint();
 			if (pendingNodeIds.empty()) {
 				return;
 			}
 			std::ranges::sort(pendingNodeIds);
 			pendingNodeIds.erase(std::ranges::unique(pendingNodeIds).begin(), pendingNodeIds.end());
-			const std::vector<std::optional<graph::PropertyValue>> values =
-					native_graph_reads_->readNodePropertiesSorted(snapshot, pendingNodeIds, propertyToken, &readSession);
+			auto admission = makeSelectedPropertyBatchAdmission(propertyAdmission);
+			const std::array<uint32_t, 1U> selectedTokens{propertyToken};
+			auto columns = native_graph_reads_->readNodePropertyColumnsSorted(snapshot, pendingNodeIds,
+				selectedTokens, &readSession, admission ? &admission : nullptr);
+			if (columns.size() != 1U) throw std::runtime_error("vector bootstrap Property column changed cardinality");
+			auto values = std::move(columns.front());
 			if (values.size() != pendingNodeIds.size()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 						"relocatable logical Vector Index creation returned an invalid Property batch");
@@ -5678,9 +6547,11 @@ namespace graph::storage {
 			pendingNodeIds.clear();
 		};
 		const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+		size_t scannedForCheckpoint = 0U;
 		const bool scannedAllNodes = native_graph_reads_->visitNodeRefsWithLabelTokenMatchesUntil(
 				snapshot, options_.maximum_online_index_scan_nodes, labelTokens,
 				[&](const EntityRef &reference, const bool labelsMatch) {
+					if (++scannedForCheckpoint % 256U == 0U && checkpoint) checkpoint();
 					if (labelsMatch) {
 						pendingNodeIds.push_back(reference.entity_id);
 						if (pendingNodeIds.size() == ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES) {
@@ -5688,23 +6559,27 @@ namespace graph::storage {
 						}
 					}
 					return true;
-				});
+				}, &readSession);
 		flushPropertyBatch();
 		if (!scannedAllNodes) {
 			throw FormatException(
 					FormatError::FERR_INVALID_STATE,
 					"relocatable logical Vector Index graph scan exceeded its configured bounded DDL work");
 		}
+		if (checkpoint) checkpoint();
 		if (!records.empty()) {
 			NativeGraphVectorBootstrapOptions bootstrap;
 			bootstrap.first_slot = PhysicalSlotId(1U);
 			bootstrap.last_slot = PhysicalSlotId(std::numeric_limits<uint64_t>::max());
 			bootstrap.maximum_vectors = options_.maximum_online_index_entries;
 			bootstrap.maximum_pages = options_.maximum_online_index_pages;
+			bootstrap.checkpoint = checkpoint;
 			transaction.stageVectorIndexBootstrap(*btree_pages_, *vector_pages_, *vector_manifests_, definition,
 												  records, bootstrap);
 		}
+		if (checkpoint) checkpoint();
 		catalogSession.finish();
+		if (checkpoint) checkpoint();
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
 		if (!committed.committed()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -5787,14 +6662,22 @@ namespace graph::storage {
 	std::vector<LogicalGraphIndexDefinition>
 	RelocatableStorageBackend::listLogicalIndexes(size_t maximumIndexes) const {
 		requireOpen();
+		if (maximumIndexes == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+					"relocatable logical Index list requires a positive result bound");
+		}
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-		const std::vector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, maximumIndexes);
+		const std::vector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 		std::vector<LogicalGraphIndexDefinition> result;
 		result.reserve(definitions.size());
 		for (const IndexDefinition &definition: definitions) {
 			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
 				definition.kind == IndexDefinitionKind::IDK_LABEL) {
 				continue;
+			}
+			if (result.size() == maximumIndexes) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable logical Index list exceeded its result bound");
 			}
 			if (definition.label_token_id == 0U) {
 				result.push_back({definition.index_id,
@@ -5820,6 +6703,13 @@ namespace graph::storage {
 
 	LogicalGraphConstraintDefinition
 	RelocatableStorageBackend::createLogicalConstraint(const LogicalGraphConstraintCreateRequest &request) {
+		return createLogicalConstraintWithCheckpoint(request, {});
+	}
+
+	LogicalGraphConstraintDefinition
+	RelocatableStorageBackend::createLogicalConstraintWithCheckpoint(const LogicalGraphConstraintCreateRequest &request,
+		const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) {
+		if (checkpoint) checkpoint();
 		requireOpen();
 		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical constraint");
@@ -5864,6 +6754,8 @@ namespace graph::storage {
 								  "relocatable logical constraint catalog reached its configured definition bound");
 		}
 
+		std::vector<ConstraintDefinition> validationDefinitions = existing;
+		validationDefinitions.push_back(definition);
 		PageBackedConstraintMutationAdapter validationAdapter(
 				snapshot, *native_graph_reads_, *btree_pages_, *metadata_,
 				[this](const MetadataSnapshotPin &pinned, uint32_t token) {
@@ -5879,7 +6771,11 @@ namespace graph::storage {
 					const std::optional<uint64_t> token = system_catalog_->findSchemaToken(
 							pinned, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
 					return token.value_or(0U);
-				});
+				}, selectConstraintProperties(validationDefinitions, [&](std::string_view name) -> std::optional<uint32_t> {
+					const auto staged = requestedPropertyTokens.find(name);
+					return staged != requestedPropertyTokens.end() ? std::optional<uint32_t>{staged->second}
+						: system_catalog_->findPropertyToken(snapshot, name);
+				}), checkpoint, propertyAdmission);
 		ConstraintMutationValidator validator(
 				validationAdapter.makeAdapter(),
 				{options_.maximum_online_index_entries, options_.maximum_constraint_support_collisions});
@@ -5900,6 +6796,8 @@ namespace graph::storage {
 						   options_.maximum_online_index_sort_runs,
 						   options_.maximum_constraint_support_collisions};
 		}
+		supportTree.checkpoint = checkpoint;
+		supportTree.property_admission = propertyAdmission;
 		NativeConstraintDefinitionWriter::stageCreate(
 				transaction, *system_catalog_, catalogSession, *btree_pages_, *metadata_, definition,
 				*native_graph_reads_, supportTree,
@@ -5911,7 +6809,9 @@ namespace graph::storage {
 					}
 					return system_catalog_->findPropertyToken(pinned, name);
 				});
+		if (checkpoint) checkpoint();
 		catalogSession.finish();
+		if (checkpoint) checkpoint();
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
 		if (!committed.committed()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -6358,13 +7258,27 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid relationship-type resolver state");
 		}
-		const std::optional<SystemCatalogSchemaToken> token = system_catalog_->findSchemaToken(
+		auto token = system_catalog_->findSchemaToken(
 				snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, tokenId);
 		if (!token.has_value() || token->name.empty()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader found an unknown relationship-type Token");
 		}
-		return token->name;
+		return std::move(token->name);
+	}
+	std::string RelocatableStorageBackend::resolveRelationshipTypeTokenWithNameAdmission(const MetadataSnapshotPin &snapshot,
+																		uint64_t tokenId, const std::function<void(size_t)> &admission) const {
+		if (tokenId == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native logical reader has an invalid relationship-type resolver state");
+		}
+		auto token = system_catalog_->findSchemaToken(
+				snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, tokenId, admission);
+		if (!token.has_value() || token->name.empty()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native logical reader found an unknown relationship-type Token");
+		}
+		return std::move(token->name);
 	}
 
 	std::string RelocatableStorageBackend::resolvePropertyKey(const MetadataSnapshotPin &snapshot,
@@ -6380,6 +7294,21 @@ namespace graph::storage {
 										  std::to_string(tokenId));
 		}
 		return *resolved;
+	}
+
+	std::string RelocatableStorageBackend::resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
+															  uint32_t tokenId, const std::function<void(size_t)> &admission) const {
+		if (tokenId == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native logical reader has an invalid Property-key resolver state");
+		}
+		auto resolved = system_catalog_->findPropertyName(snapshot, tokenId, admission);
+		if (!resolved.has_value() || resolved->empty()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native logical reader found an unknown Property-key Token: " +
+										  std::to_string(tokenId));
+		}
+		return std::move(*resolved);
 	}
 
 	std::optional<uint32_t> RelocatableStorageBackend::resolvePropertyToken(const MetadataSnapshotPin &snapshot,

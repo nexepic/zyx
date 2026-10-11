@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <thread>
+#include <limits>
 #include <vector>
 
 #include "graph/debug/PerfTrace.hpp"
@@ -16,6 +17,40 @@ protected:
 		PerfTrace::setValueCollectionEnabled(false);
 	}
 };
+
+TEST_F(PerfTraceTest, DistinctPagePinsDeduplicateThreadsAndSeparateIoOffsetAndGeneration) {
+	int first = 0, second = 0;
+	PerfTrace::addPagePin(&first, 0U, 1U);
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+	PerfTrace::setValueCollectionEnabled(true);
+	PerfTrace::addPagePin(&first, 0U, 1U);
+	std::thread worker([&] { PerfTrace::addPagePin(&first, 0U, 1U); });
+	worker.join();
+	PerfTrace::addPagePin(&second, 0U, 1U);
+	PerfTrace::addPagePin(&first, 4096U, 1U);
+	PerfTrace::addPagePin(&first, 0U, 2U);
+	auto snapshot = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins").totalValue, 4);
+	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins_incomplete").totalValue, 0);
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+	PerfTrace::addPagePin(&first, 0U, 1U);
+	PerfTrace::reset();
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+}
+
+TEST_F(PerfTraceTest, DistinctPagePinsReportBoundWithoutThrowingOrCountingDuplicateAsOverflow) {
+	PerfTrace::setValueCollectionEnabled(true);
+	for (size_t i = 0; i < PerfTrace::MAXIMUM_DISTINCT_PAGE_PINS; ++i)
+		PerfTrace::addPagePin(this, i, 1U);
+	PerfTrace::addPagePin(this, 0U, 1U);
+	auto exact = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(exact.at("native_graph.read.distinct_page_pins_incomplete").totalValue, 0);
+	for (size_t i = 0; i <= PerfTrace::MAXIMUM_DISTINCT_PAGE_PINS; ++i)
+		PerfTrace::addPagePin(this, i, 1U);
+	auto capped = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(capped.at("native_graph.read.distinct_page_pins").totalValue, PerfTrace::MAXIMUM_DISTINCT_PAGE_PINS);
+	EXPECT_EQ(capped.at("native_graph.read.distinct_page_pins_incomplete").totalValue, 1);
+}
 
 TEST_F(PerfTraceTest, DefaultDisabled) {
 	EXPECT_FALSE(PerfTrace::isEnabled());
@@ -197,4 +232,83 @@ TEST_F(PerfTraceTest, ConcurrentAddsAreMergedAcrossWorkerShards) {
 	EXPECT_EQ(snapshot["parallel-workers"].valueCalls, 800u);
 	EXPECT_EQ(snapshot["parallel-workers"].totalValue, 800);
 	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+}
+
+TEST_F(PerfTraceTest, SaturatesDurationsAndBatchCountsInsteadOfWrapping) {
+	PerfTrace::setEnabled(true);
+	const auto maximum = std::numeric_limits<uint64_t>::max();
+	PerfTrace::addDurationBatch("batch", maximum - 1U, maximum - 1U);
+	PerfTrace::addDurationBatch("batch", 1U, 1U);
+	PerfTrace::addDurationBatch("batch", 1U, 1U);
+	PerfTrace::addDuration("batch", maximum);
+	const auto snapshot = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(snapshot.at("batch").totalNs, maximum);
+	EXPECT_EQ(snapshot.at("batch").calls, maximum);
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+}
+
+TEST_F(PerfTraceTest, SaturatesSignedValuesAtBothBoundsAndAllowsOpposingUpdates) {
+	PerfTrace::setEnabled(true);
+	const auto maximum = std::numeric_limits<int64_t>::max();
+	const auto minimum = std::numeric_limits<int64_t>::min();
+	PerfTrace::addValue("positive", maximum);
+	PerfTrace::addValue("positive", 1);
+	PerfTrace::addValue("negative", minimum);
+	PerfTrace::addValue("negative", -1);
+	const auto saturated = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(saturated.at("positive").totalValue, maximum);
+	EXPECT_EQ(saturated.at("negative").totalValue, minimum);
+	PerfTrace::addValue("mixed", maximum);
+	PerfTrace::addValue("mixed", minimum);
+	PerfTrace::addValue("mixed", 1);
+	EXPECT_EQ(PerfTrace::snapshotAndReset().at("mixed").totalValue, 0);
+	PerfTrace::addValue("recover", minimum);
+	PerfTrace::addValue("recover", -1);
+	PerfTrace::addValue("recover", 1);
+	EXPECT_EQ(PerfTrace::snapshotAndReset().at("recover").totalValue, minimum + 1);
+}
+
+TEST_F(PerfTraceTest, SaturatesWorkerShardAggregation) {
+	PerfTrace::setEnabled(true);
+	std::vector<std::thread> workers;
+	for (size_t worker = 0U; worker < 8U; ++worker) {
+		workers.emplace_back([] {
+			PerfTrace::addDurationBatch("duration", std::numeric_limits<uint64_t>::max(),
+					std::numeric_limits<uint64_t>::max());
+			PerfTrace::addValue("positive", std::numeric_limits<int64_t>::max());
+			PerfTrace::addValue("negative", std::numeric_limits<int64_t>::min());
+		});
+	}
+	for (auto &worker: workers) worker.join();
+	const auto snapshot = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(snapshot.at("duration").totalNs, std::numeric_limits<uint64_t>::max());
+	EXPECT_EQ(snapshot.at("duration").calls, std::numeric_limits<uint64_t>::max());
+	EXPECT_EQ(snapshot.at("positive").totalValue, std::numeric_limits<int64_t>::max());
+	EXPECT_EQ(snapshot.at("negative").totalValue, std::numeric_limits<int64_t>::min());
+	EXPECT_EQ(snapshot.at("positive").valueCalls, 8U);
+}
+
+TEST_F(PerfTraceTest, MaximumValuePreservesNegativeValuesMergesThreadsAndResets) {
+ PerfTrace::setEnabled(true);
+ PerfTrace::setValueCollectionEnabled(true);
+ PerfTrace::addValue("negative", -9);
+ PerfTrace::addValue("negative", -3);
+ PerfTrace::addDuration("negative", 5);
+ std::vector<std::thread> workers;
+ for (int value : {-7, -1, -5}) {
+  workers.emplace_back([value] { PerfTrace::addValue("negative", value); });
+ }
+ for (auto &worker : workers) worker.join();
+ auto snapshot = PerfTrace::snapshotAndReset();
+ ASSERT_EQ(snapshot.at("negative").valueCalls, 5U);
+ EXPECT_EQ(snapshot.at("negative").maximumValue, -1);
+ EXPECT_EQ(snapshot.at("negative").totalValue, -25);
+ EXPECT_EQ(snapshot.at("negative").calls, 1U);
+ EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+ PerfTrace::addValue("negative", -42);
+ EXPECT_EQ(PerfTrace::snapshotAndReset().at("negative").maximumValue, -42);
+ PerfTrace::addValue("extreme", std::numeric_limits<int64_t>::min());
+ PerfTrace::addValue("extreme", std::numeric_limits<int64_t>::max());
+ EXPECT_EQ(PerfTrace::snapshotAndReset().at("extreme").maximumValue,
+           std::numeric_limits<int64_t>::max());
 }

@@ -7,6 +7,7 @@
  **/
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <filesystem>
@@ -24,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
@@ -151,6 +153,110 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, ResolvesCompleteRoutesAcrossMu
 	EXPECT_EQ(reopenedDirectory.find(batch.candidate(), root, MetadataPageId(1U)), routes[0].physical_reference);
 	EXPECT_EQ(reopenedDirectory.find(batch.candidate(), root, routes[1].page_id), routes[1].physical_reference);
 	EXPECT_EQ(reopenedDirectory.collectRoutesFromRouteBranch(batch.candidate(), root), routes);
+	const std::array<MetadataPageId, 3U> ids{routes[1].page_id, routes[0].page_id, routes[1].page_id};
+	std::array<PhysicalPageRef, 3U> results{};
+	reopenedDirectory.findMany(batch.candidate(), root, ids, results);
+	EXPECT_EQ(results[0], routes[1].physical_reference);
+	EXPECT_EQ(results[1], routes[0].physical_reference);
+	EXPECT_EQ(results[2], routes[1].physical_reference);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, BatchResolvesSharedRouteLeafWithTwoPageReads) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	std::vector<MetadataPageRoute> routes;
+	std::array<MetadataPageId, 64U> ids{};
+	std::array<PhysicalPageRef, 64U> results{};
+	for (size_t index = 0U; index < ids.size(); ++index) {
+		routes.push_back(route(index + 1U, 1000U + index, 1U, 1U));
+		ids[ids.size() - index - 1U] = routes.back().page_id;
+	}
+	const auto root = directory.buildFromCompleteRouteSet(batch, routes);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	try {
+		directory.findMany(batch.candidate(), root, ids, results);
+	} catch (...) {
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		throw;
+	}
+	const auto events = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(false);
+	for (size_t index = 0U; index < ids.size(); ++index) {
+		EXPECT_EQ(results[index], routes[ids.size() - index - 1U].physical_reference);
+	}
+	const auto reads = events.find("native_graph.read.metadata_pages_read");
+	ASSERT_NE(reads, events.end());
+	EXPECT_EQ(reads->second.totalValue, 2);
+	graph::debug::PerfTrace::reset();
+	const std::array<MetadataPageId, 1U> missing{MetadataPageId(65U)};
+	std::array<PhysicalPageRef, 1U> missingResult{};
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, missing, missingResult); },
+			FormatError::FERR_INVALID_STATE);
+	const std::array<MetadataPageId, 1U> invalid{MetadataPageId{}};
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, invalid, missingResult); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, ids, missingResult); },
+			FormatError::FERR_INVALID_HEADER);
+	std::array<MetadataPageId, RSS_CATALOG_RADIX_FANOUT + 1U> oversizedIds;
+	oversizedIds.fill(MetadataPageId(1U));
+	std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT + 1U> oversizedResults{};
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, oversizedIds, oversizedResults); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, LogicalRadixChildrenShareRouteReadsAndPreserveSparseSlots) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	std::vector<MetadataPageRoute> routes;
+	for (uint64_t id = 1U; id <= 64U; ++id) routes.push_back(route(id, 1000U + id, 1U, 1U));
+	const auto routeRoot = directory.buildFromCompleteRouteSet(batch, routes);
+	MetadataRadixPage parent;
+	parent.kind = CatalogRadixPageKind::CRPK_ROOT;
+	parent.directory_type = MetadataDirectoryType::MDT_CATALOG;
+	parent.page_id = MetadataPageId(10000U);
+	parent.generation = Generation(2U);
+	parent.committed_lsn = LogSequenceNumber(2U);
+	parent.logical_children_enabled = true;
+	for (size_t index = 0U; index < routes.size(); ++index) {
+		parent.logical_children[index * 2U] = routes[routes.size() - index - 1U].page_id;
+	}
+	const auto parentReference = pageRef(40U, 1U, 2U);
+	pages.writeMetadataRadix(parentReference, parent);
+	PageDirectoryBootstrap bootstrap;
+	bootstrap.generation = Generation(2U);
+	bootstrap.committed_lsn = LogSequenceNumber(2U);
+	bootstrap.metadata_page_directory_root = routeRoot;
+	const auto bootstrapReference = pageRef(41U, 1U, 2U);
+	pages.writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+	auto published = batch.candidate();
+	published.page_directory_root = bootstrapReference;
+	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	MetadataPageFile publishedPages(io, published);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	MetadataRadixPage resolved;
+	try {
+		resolved = publishedPages.readMetadataRadix(parentReference);
+	} catch (...) {
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		throw;
+	}
+	const auto events = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(false);
+	EXPECT_TRUE(resolved.logical_children_resolved);
+	for (size_t index = 0U; index < routes.size(); ++index) {
+		EXPECT_EQ(resolved.children[index * 2U], routes[routes.size() - index - 1U].physical_reference);
+		EXPECT_FALSE(resolved.children[index * 2U + 1U].isValid());
+	}
+	const auto reads = events.find("native_graph.read.metadata_pages_read");
+	ASSERT_NE(reads, events.end());
+	// Parent, bootstrap header, route root, route leaf; no per-child restart.
+	EXPECT_EQ(reads->second.totalValue, 4);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsMissingFutureAndWronglyTypedRoutes) {
@@ -166,12 +272,23 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsMissingFutureAndWrongly
 					  FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(directory.find(current, root, MetadataPageId(1U))); },
 					  FormatError::FERR_INVALID_HEADER);
+	const std::array<MetadataPageId, 1U> ids{MetadataPageId(1U)};
+	std::array<PhysicalPageRef, 1U> results{};
+	expectFormatError([&] { directory.findMany(current, root, ids, results); }, FormatError::FERR_INVALID_HEADER);
+	const auto visibleRoot = pages.readMetadataRadix(root);
+	auto futureLeaf = pages.readMetadataPageRouteLeaf(visibleRoot.children[0]);
+	futureLeaf.committed_lsn = LogSequenceNumber(3U);
+	pages.writeMetadataPageRouteLeaf(visibleRoot.children[0], futureLeaf);
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, ids, results); },
+			FormatError::FERR_INVALID_HEADER);
 
 	MetadataRadixPage wrongRoot = pages.readMetadataRadix(root);
 	wrongRoot.directory_type = MetadataDirectoryType::MDT_PAGE;
 	pages.writeMetadataRadix(root, wrongRoot);
 	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), root, MetadataPageId(1U))); },
 					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { directory.findMany(batch.candidate(), root, ids, results); },
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsEmptyInvalidAndFutureRouteInputs) {
@@ -1255,4 +1372,237 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RefreshesAnIsolatedBootstrapHe
 	EXPECT_EQ(directory.find(published, routeRoot, MetadataPageId(99U)), pageRef(9U, 1U, 1U));
 	EXPECT_FALSE(canRefreshBootstrapHeaderForEvacuation(pages, published, sourceHeader.physical_slot,
 																	 sourceFrame | (1U << RSS_PAGE_POOL_FIRST_DATA_FRAME)));
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, SelectedChildrenPreserveOrderSparseSlotsAndFullValidation) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory routes(pages);
+	const auto routeRoot = routes.buildFromCompleteRouteSet(batch,
+			std::vector{route(1U, 1000U, 1U, 1U), route(2U, 1001U, 1U, 1U)});
+	MetadataRadixPage parent;
+	parent.kind = CatalogRadixPageKind::CRPK_ROOT;
+	parent.directory_type = MetadataDirectoryType::MDT_NODE_ENTITY;
+	parent.page_id = MetadataPageId(10000U);
+	parent.generation = Generation(2U);
+	parent.committed_lsn = LogSequenceNumber(2U);
+	parent.logical_children_enabled = true;
+	parent.logical_children[0] = MetadataPageId(1U);
+	parent.logical_children[2] = MetadataPageId(2U);
+	parent.logical_children[3] = MetadataPageId(99U); // Missing route outside the selected set.
+	const auto parentReference = pageRef(40U, 1U, 2U);
+	pages.writeMetadataRadix(parentReference, parent);
+	PageDirectoryBootstrap bootstrap;
+	bootstrap.generation = Generation(2U);
+	bootstrap.committed_lsn = LogSequenceNumber(2U);
+	bootstrap.metadata_page_directory_root = routeRoot;
+	const auto bootstrapReference = pageRef(41U, 1U, 2U);
+	pages.writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+	auto published = batch.candidate();
+	published.page_directory_root = bootstrapReference;
+	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	MetadataPageFile reader(io, published);
+	const auto decoded = reader.readMetadataRadixUnresolved(parentReference);
+	const std::array<uint32_t, 4U> indices{2U, 1U, 0U, 2U};
+	std::array<PhysicalPageRef, 4U> selected{};
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	try {
+		reader.resolveMetadataRadixChildren(decoded, published, indices, selected);
+	} catch (...) {
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		throw;
+	}
+	const auto events = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(false);
+	EXPECT_EQ(selected[0], pageRef(1001U, 1U, 1U));
+	EXPECT_FALSE(selected[1].isValid());
+	EXPECT_EQ(selected[2], pageRef(1000U, 1U, 1U));
+	EXPECT_EQ(selected[3], selected[0]);
+	EXPECT_FALSE(decoded.logical_children_resolved);
+	EXPECT_TRUE(std::ranges::none_of(decoded.children, [](auto ref) { return ref.isValid(); }));
+	ASSERT_TRUE(events.contains("native_graph.read.metadata_pages_read"));
+	EXPECT_EQ(events.at("native_graph.read.metadata_pages_read").totalValue, 3); // Bootstrap, route root, shared leaf.
+	ASSERT_TRUE(events.contains("native_graph.read.radix_resolved_children"));
+	EXPECT_EQ(events.at("native_graph.read.radix_resolved_children").totalValue, 3);
+	EXPECT_THROW(static_cast<void>(reader.readMetadataRadix(parentReference)), FormatException);
+	const std::array<uint32_t, 1U> missing{3U};
+	std::array<PhysicalPageRef, 1U> result{};
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, published, missing, result), FormatException);
+	const std::array<uint32_t, 1U> invalid{RSS_CATALOG_RADIX_FANOUT};
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, published, invalid, result), FormatException);
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, published, indices, result), FormatException);
+	EXPECT_NO_THROW(reader.resolveMetadataRadixChildren(decoded, published, {}, {}));
+	auto wrongDatabase = published;
+	wrongDatabase.database_id = DatabaseId(42U);
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, wrongDatabase, indices, selected), FormatException);
+	auto wrongLayout = published;
+	wrongLayout.data_region_offset += RSS_SEGMENT_SIZE;
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, wrongLayout, indices, selected), FormatException);
+	auto staleContext = published;
+	staleContext.generation = Generation(4U);
+	staleContext.checkpoint_lsn = LogSequenceNumber(4U);
+	EXPECT_THROW(reader.resolveMetadataRadixChildren(decoded, staleContext, indices, selected), FormatException);
+	// A reader rebound to a later publication must still use the explicitly pinned old route.
+	reader.rebindSuperblock(staleContext);
+	EXPECT_NO_THROW(reader.resolveMetadataRadixChildren(decoded, published, indices, selected));
+	EXPECT_EQ(selected[2], pageRef(1000U, 1U, 1U));
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, PointAndBoundedCursorDoNotResolveUnvisitedSiblingRoutes) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory routes(pages);
+	const auto leafReference = pageRef(50U, 1U, 2U);
+	LocationLeafPage leaf;
+	leaf.directory_type = MetadataDirectoryType::MDT_NODE_ENTITY;
+	leaf.page_id = MetadataPageId(901U);
+	leaf.generation = Generation(2U);
+	leaf.committed_lsn = LogSequenceNumber(2U);
+	leaf.entries = {{1U, SegmentId(10U), Generation(1U), 0U, 1U, 0U}};
+	pages.writeLocationLeaf(leafReference, leaf);
+	const auto rootReference = pageRef(51U, 1U, 2U);
+	const auto routeRoot = routes.buildFromCompleteRouteSet(batch,
+			std::vector{MetadataPageRoute{MetadataPageId(900U), rootReference},
+					MetadataPageRoute{leaf.page_id, leafReference}});
+	MetadataRadixPage root;
+	root.kind = CatalogRadixPageKind::CRPK_ROOT;
+	root.level = 0U;
+	root.directory_type = MetadataDirectoryType::MDT_NODE_ENTITY;
+	root.page_id = MetadataPageId(900U);
+	root.generation = Generation(2U);
+	root.committed_lsn = LogSequenceNumber(2U);
+	root.logical_children_enabled = true;
+	root.logical_children[0] = leaf.page_id;
+	root.logical_children[1] = MetadataPageId(902U); // Deliberately missing, beyond the bounded range.
+	pages.writeMetadataRadix(rootReference, root);
+	PageDirectoryBootstrap bootstrap;
+	bootstrap.generation = Generation(2U);
+	bootstrap.committed_lsn = LogSequenceNumber(2U);
+	bootstrap.metadata_page_directory_root = routeRoot;
+	bootstrap.metadata_directory_roots[static_cast<size_t>(MetadataDirectoryRootOrdinal::MDRO_NODE_ENTITY)] = root.page_id;
+	const auto bootstrapReference = pageRef(52U, 1U, 2U);
+	pages.writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+	auto published = batch.candidate();
+	published.node_entity_directory_root = rootReference;
+	published.page_directory_root = bootstrapReference;
+	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	MetadataPageFile reader(io, published);
+	LocationDirectory directory(reader, allocator);
+	const auto type = MetadataDirectoryType::MDT_NODE_ENTITY;
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	try {
+		EXPECT_EQ(directory.findNodePageLocation(published, 1U).entity_id, 1U);
+	} catch (...) {
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		throw;
+	}
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(false);
+	ASSERT_TRUE(trace.contains("native_graph.read.metadata_pages_read"));
+	// Root route (3), root (1), selected leaf route (3), data leaf (1).
+	// Re-resolving the root would add another bootstrap/root/route-leaf pass.
+	EXPECT_EQ(trace.at("native_graph.read.metadata_pages_read").totalValue, 8);
+	EXPECT_FALSE(directory.findNodePageLocationOptional(published, 2U).has_value());
+	EXPECT_FALSE(directory.findNodePageLocationOptional(published,
+			1U + static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT).has_value());
+	auto foreignLayout = published;
+	foreignLayout.data_region_offset += RSS_SEGMENT_SIZE;
+	EXPECT_THROW(static_cast<void>(directory.findNodePageLocationOptional(foreignLayout,
+			1U + static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT)), FormatException);
+	auto cursor = directory.openRangeCursor(published, type, 1U, 2U);
+	ASSERT_TRUE(cursor.next().has_value());
+	EXPECT_FALSE(cursor.next().has_value());
+	EXPECT_THROW(static_cast<void>(reader.readMetadataRadix(rootReference)), FormatException);
+	EXPECT_THROW(static_cast<void>(directory.findNodePageLocation(published, 1U + RSS_LOCATION_LEAF_MAX_ENTRIES)), FormatException);
+	auto invalidCursor = directory.openRangeCursor(published, type,
+			1U + RSS_LOCATION_LEAF_MAX_ENTRIES, 2U + RSS_LOCATION_LEAF_MAX_ENTRIES);
+	EXPECT_THROW(static_cast<void>(invalidCursor.next()), FormatException);
+	// Selected descendants retain type validation even when unrelated siblings are ignored.
+	leaf.directory_type = MetadataDirectoryType::MDT_EDGE_ENTITY;
+	pages.writeLocationLeaf(leafReference, leaf);
+	EXPECT_THROW(static_cast<void>(directory.findNodePageLocation(published, 1U)), FormatException);
+	auto wrongTypeCursor = directory.openRangeCursor(published, type, 1U, 2U);
+	EXPECT_THROW(static_cast<void>(wrongTypeCursor.next()), FormatException);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, SparseEntityAndPropertyBatchesSkipUnrequestedInteriorRoutes) {
+	for (const auto type : {MetadataDirectoryType::MDT_NODE_ENTITY, MetadataDirectoryType::MDT_ENTITY_PROPERTY}) {
+		SCOPED_TRACE(static_cast<int>(type));
+		TestMetadataPageAllocator allocator;
+		MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+		MetadataPageFile pages(io, batch.candidate());
+		MetadataPageRouteDirectory routes(pages);
+		const auto leafReference = pageRef(50U, 1U, 2U);
+		LocationLeafPage leaf;
+		leaf.directory_type = type;
+		leaf.page_id = MetadataPageId(901U);
+		leaf.generation = Generation(2U);
+		leaf.committed_lsn = LogSequenceNumber(2U);
+		leaf.entries = {{1U, SegmentId(10U), Generation(1U), 0U, 1U, 0U}};
+		pages.writeLocationLeaf(leafReference, leaf);
+		const uint64_t farId = 1U + 2U * RSS_LOCATION_LEAF_MAX_ENTRIES;
+		const auto farReference = pageRef(53U, 1U, 2U);
+		LocationLeafPage farLeaf = leaf;
+		farLeaf.page_id = MetadataPageId(903U);
+		farLeaf.entries.front().logical_id = farId;
+		pages.writeLocationLeaf(farReference, farLeaf);
+		const auto rootReference = pageRef(51U, 1U, 2U);
+		const auto routeRoot = routes.buildFromCompleteRouteSet(batch,
+				std::vector{MetadataPageRoute{MetadataPageId(900U), rootReference},
+						MetadataPageRoute{leaf.page_id, leafReference},
+						MetadataPageRoute{farLeaf.page_id, farReference}});
+		MetadataRadixPage root;
+		root.kind = CatalogRadixPageKind::CRPK_ROOT;
+		root.level = 0U;
+		root.directory_type = type;
+		root.page_id = MetadataPageId(900U);
+		root.generation = Generation(2U);
+		root.committed_lsn = LogSequenceNumber(2U);
+		root.logical_children_enabled = true;
+		root.logical_children[0] = leaf.page_id;
+		root.logical_children[1] = MetadataPageId(902U); // Missing route between requested IDs.
+		root.logical_children[2] = farLeaf.page_id;
+		pages.writeMetadataRadix(rootReference, root);
+		PageDirectoryBootstrap bootstrap;
+		bootstrap.generation = Generation(2U);
+		bootstrap.committed_lsn = LogSequenceNumber(2U);
+		bootstrap.metadata_page_directory_root = routeRoot;
+		bootstrap.metadata_directory_roots[static_cast<size_t>(type == MetadataDirectoryType::MDT_NODE_ENTITY ?
+				MetadataDirectoryRootOrdinal::MDRO_NODE_ENTITY : MetadataDirectoryRootOrdinal::MDRO_ENTITY_PROPERTY)] = root.page_id;
+		const auto bootstrapReference = pageRef(52U, 1U, 2U);
+		pages.writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+		auto published = batch.candidate();
+		published.node_entity_directory_root = rootReference;
+		published.page_directory_root = bootstrapReference;
+		published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+		MetadataPageFile reader(io, published);
+		LocationDirectory directory(reader, allocator);
+		const std::array<uint64_t, 3U> ids{1U, 2U, farId};
+		if (type == MetadataDirectoryType::MDT_NODE_ENTITY) {
+			std::array<std::optional<EntityPageLocation>, 3U> result{};
+			directory.findEntityPageLocationsSorted(published, type, ids, result);
+			ASSERT_TRUE(result[0].has_value());
+			EXPECT_FALSE(result[1].has_value());
+			ASSERT_TRUE(result[2].has_value());
+			EXPECT_EQ(result[2]->entity_id, farId);
+		} else {
+			const std::array<EntityPropertyKey, 3U> keys{{
+				{EntityPropertyOwnerKind::EPOK_NODE, 1U},
+				{EntityPropertyOwnerKind::EPOK_NODE, 2U},
+				{EntityPropertyOwnerKind::EPOK_NODE, farId}}};
+			std::array<std::optional<EntityPropertyLocation>, 3U> result{};
+			directory.findEntityPropertiesSorted(published, keys, result);
+			ASSERT_TRUE(result[0].has_value());
+			EXPECT_FALSE(result[1].has_value());
+			ASSERT_TRUE(result[2].has_value());
+			EXPECT_EQ(result[2]->key.entity_id, farId);
+		}
+		// A true range scan includes the hole and must still report the bad route.
+		auto cursor = directory.openRangeCursor(published, type, 1U, farId);
+		EXPECT_THROW(static_cast<void>(cursor.next()), FormatException);
+	}
 }

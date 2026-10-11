@@ -21,6 +21,10 @@ namespace graph::storage {
 	// a time without deriving boundaries from native C++ object layout.
 	class CanonicalPropertyValueCodec final {
 	public:
+		static constexpr size_t HEADER_BYTES = 6U;
+		// Inspect an authenticated value header without decoding its payload.
+		// encodedBytes includes header and payload; malformed envelopes fail closed.
+		[[nodiscard]] static bool isNullHeader(std::span<const std::byte> header, size_t encodedBytes);
 		// Computes the exact canonical wire size without allocating an encoded
 		// temporary. Callers with a bounded destination use this to reject an
 		// oversized value before beginning a scratch or page materialization.

@@ -574,13 +574,14 @@ namespace graph::storage {
 								 "relocatable bulk B+Tree internal plan has no leftmost child");
 						}
 						header.leftmost_child = (*assignedPageIds)[node.children.front()];
-						BTreePage page = BTreePage::create(
-								pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header);
+						std::vector<BTreePageEntry> entries;
+						entries.reserve(node.children.size() - 1U);
 						for (size_t childIndex = 1; childIndex < node.children.size(); ++childIndex) {
 							const size_t childOrdinal = node.children[childIndex];
-							page.insert({nodes[childOrdinal].first_key, (*assignedPageIds)[childOrdinal].value()});
+							entries.push_back({nodes[childOrdinal].first_key, (*assignedPageIds)[childOrdinal].value()});
 						}
-						return page;
+						return BTreePage::createWithEntries(
+								pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header, entries);
 					}
 					if (nextLeafOrdinal != ordinal || assignedPageIds->empty() || assignedPageIds->size() != nodes.size()) { // ZYX_COV_EXCL_LINE: store invokes planned pages sequentially.
 						fail(FormatError::FERR_INVALID_STATE,
@@ -595,8 +596,9 @@ namespace graph::storage {
 					header.left_sibling = ordinal == 0U ? PageId{} : (*assignedPageIds)[ordinal - 1U];
 					header.right_sibling = ordinal + 1U == leafCount ? PageId{} : (*assignedPageIds)[ordinal + 1U];
 					header.leaf_value_layout = leafValueLayout;
-					BTreePage page = BTreePage::create(pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header);
+					std::vector<BTreePageEntry> entries;
 					const size_t expectedEntries = nodes[ordinal].leaf_entry_count;
+					entries.reserve(expectedEntries);
 					for (size_t entryIndex = 0; entryIndex < expectedEntries; ++entryIndex) {
 						std::optional<BTreePageEntry> next = secondCursor();
 						if (!next.has_value()) {
@@ -613,7 +615,7 @@ namespace graph::storage {
 							fail(FormatError::FERR_INVALID_STATE,
 								 "relocatable bulk B+Tree second source pass changed one planned leaf boundary");
 						}
-						page.insert(entry);
+						entries.push_back(entry);
 						secondPreviousKey = entry.key;
 						++secondEntryCount;
 						updateSemanticCrc(secondSemanticCrc, entry);
@@ -626,7 +628,8 @@ namespace graph::storage {
 								 "relocatable bulk B+Tree second source pass differs from the validated first pass");
 						}
 					}
-					return page;
+					return BTreePage::createWithEntries(
+							pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header, entries);
 				};
 
 		const Superblock superblock = pages.materializeAndPublishTreeAcrossPools(

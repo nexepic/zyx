@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <limits>
@@ -17,6 +18,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -75,12 +77,18 @@ namespace {
 		bool enable_native_range_node_candidates = false;
 		bool disable_native_candidate_stream = false;
 		bool enable_native_ref_scans = false;
+		bool enable_property_admission = false;
+		bool truncate_node_property_columns = false;
+		std::shared_ptr<size_t> admitted_property_copies;
 		bool enable_native_adjacent_topology = false;
 		bool enable_native_adjacent_topology_pages = false;
+		std::unordered_map<std::string, uint32_t> property_tokens;
 		bool enable_range_node_lookup = false;
 		bool enable_composite_range_node_lookup = false;
 		std::optional<std::vector<LogicalGraphNode>> exact_lookup_result;
 		std::optional<IndexCandidateBatch> exact_candidate_result;
+		std::optional<std::vector<std::string>> expected_exact_labels;
+		std::optional<std::vector<std::pair<std::string, PropertyValue>>> expected_exact_properties;
 		std::optional<std::vector<IndexCandidateBatch>> exact_candidate_stream_results;
 		std::optional<std::vector<IndexCandidateBatch>> range_candidate_stream_results;
 		std::optional<std::vector<IndexCandidateBatch>> composite_range_candidate_stream_results;
@@ -104,8 +112,11 @@ namespace {
 		std::shared_ptr<size_t> composite_range_lookup_count;
 		std::shared_ptr<size_t> node_read_count;
 		std::shared_ptr<size_t> node_batch_read_count;
+		std::shared_ptr<std::vector<std::pair<std::vector<uint64_t>, EntityReadShape>>> node_batch_read_requests;
 		std::shared_ptr<size_t> node_label_batch_read_count;
 		std::shared_ptr<size_t> node_property_column_read_count;
+		std::shared_ptr<std::vector<size_t>> node_property_column_batch_sizes;
+		std::shared_ptr<std::vector<std::pair<uint64_t, EntityReadShape>>> node_shaped_read_requests;
 		std::shared_ptr<size_t> node_existence_probe_count;
 		std::shared_ptr<size_t> node_existence_batch_probe_count;
 		std::shared_ptr<size_t> edge_property_column_read_count;
@@ -128,11 +139,22 @@ namespace {
 			return found->second;
 		}
 
+		[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+			validateEntityReadShape(shape);
+			if (data_.node_shaped_read_requests) {
+				data_.node_shaped_read_requests->emplace_back(nodeId, shape);
+			}
+			return LogicalGraphReadSnapshot::readNodeShaped(nodeId, shape);
+		}
+
 		[[nodiscard]] std::vector<LogicalGraphNode> readNodesShapedSorted(
 				std::span<const uint64_t> nodeIds, const EntityReadShape &shape) const override {
 			validateEntityReadShape(shape);
 			if (data_.node_batch_read_count) {
 				++*data_.node_batch_read_count;
+			}
+			if (data_.node_batch_read_requests) {
+				data_.node_batch_read_requests->emplace_back(std::vector<uint64_t>(nodeIds.begin(), nodeIds.end()), shape);
 			}
 			std::vector<LogicalGraphNode> result;
 			result.reserve(nodeIds.size());
@@ -173,6 +195,11 @@ namespace {
 				}));
 			}
 			return result;
+		}
+
+		[[nodiscard]] std::optional<uint32_t> findPropertyToken(std::string_view name) const override {
+			const auto found = data_.property_tokens.find(std::string(name));
+			return found == data_.property_tokens.end() ? std::nullopt : std::optional<uint32_t>(found->second);
 		}
 
 		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
@@ -294,8 +321,8 @@ namespace {
 			if (data_.exact_candidate_lookup_count) {
 				++*data_.exact_candidate_lookup_count;
 			}
-			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != std::vector<std::string>{"Person"} ||
-				properties != std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}}) {
+			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != data_.expected_exact_labels.value_or(std::vector<std::string>{"Person"}) ||
+				properties != data_.expected_exact_properties.value_or(std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}})) {
 				throw std::runtime_error("test logical graph native exact candidate lookup received an unexpected request");
 			}
 			if (data_.exact_candidate_result.has_value()) {
@@ -455,8 +482,24 @@ namespace {
 
 		[[nodiscard]] std::vector<std::vector<PropertyValue>> readNodePropertyColumnsSorted(
 				std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys) const override {
+			return readNodeColumns(nodeIds, keys, nullptr);
+		}
+
+		[[nodiscard]] bool supportsPropertyReadAdmission() const override { return data_.enable_property_admission; }
+		[[nodiscard]] std::vector<std::vector<PropertyValue>> readNodePropertyColumnsSortedWithAdmission(
+				std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> &admission) const override {
+			return readNodeColumns(ids, keys, &admission);
+		}
+
+		std::vector<std::vector<PropertyValue>> readNodeColumns(
+				std::span<const uint64_t> nodeIds, std::span<const std::string_view> keys,
+				const std::function<void(size_t)> *admission) const {
 			if (data_.node_property_column_read_count) {
 				++*data_.node_property_column_read_count;
+			}
+			if (data_.node_property_column_batch_sizes) {
+				data_.node_property_column_batch_sizes->push_back(nodeIds.size());
 			}
 			std::vector<std::vector<PropertyValue>> columns;
 			columns.reserve(keys.size());
@@ -470,10 +513,15 @@ namespace {
 					}
 					const auto property = std::ranges::find(found->second.properties, key,
 							&LogicalGraphPropertyEntry::key);
+					if (property != found->second.properties.end() && admission != nullptr) {
+						(*admission)(graph::storage::CanonicalPropertyValueCodec::encodedSize(property->value) + sizeof(uint32_t));
+						if (data_.admitted_property_copies) ++*data_.admitted_property_copies;
+					}
 					values.push_back(property == found->second.properties.end() ? PropertyValue() : property->value);
 				}
 				columns.push_back(std::move(values));
 			}
+			if (data_.truncate_node_property_columns && !columns.empty() && !columns.front().empty()) columns.front().pop_back();
 			return columns;
 		}
 

@@ -31,6 +31,10 @@ class ZyxAdapter(BenchmarkAdapter):
         self.binary = Path(os.environ.get("ZYX_COMPARE_BENCH", "/usr/local/bin/zyx-compare-bench"))
         self.db_path = dataset_dir.parent / "zyx.db"
         self.timeout_seconds = float(os.environ.get("ZYX_COMPARE_TIMEOUT_SECONDS", "600"))
+        profile_setting = os.environ.get("ZYX_COMPARE_EMIT_PROFILE", "1")
+        if profile_setting not in ("0", "1"):
+            raise ValueError("ZYX_COMPARE_EMIT_PROFILE must be 0 or 1")
+        self.emit_profile = profile_setting == "1"
         self.profile_events: list[ProfileEvent] = []
 
     def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm") -> list[WorkloadResult]:
@@ -83,7 +87,8 @@ class ZyxAdapter(BenchmarkAdapter):
         ]
         if self.threads is not None:
             command.extend(["--threads", str(self.threads)])
-        command.append("--emit-profile")
+        if self.emit_profile:
+            command.append("--emit-profile")
 
         try:
             # COSEC: an argument vector bypasses shell parsing, so paths and workload names cannot inject commands.

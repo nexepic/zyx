@@ -1,0 +1,26 @@
+{
+  "status": "historical-only; not an implementation plan",
+  "date": "2026-10-11",
+  "files": [
+    {
+      "source": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261011-completed-optimization/zh/optimization.mdx",
+      "sha256": "d5bdac4aa81a6d0340c73cfe5a2be1f5ce49db3dc712075f00728dcbba5e810b"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261011-completed-optimization/zh/native-single-file-storage-plan.mdx",
+      "sha256": "5069372061b23a7ea53eb39bd1f1abe1b43f1ab015ceb768d98f527b68063775"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261011-completed-optimization/en/optimization.mdx",
+      "sha256": "743047fc91e492106dfe1213ae10bfe48c26d0c918e517f76259d5779303c05c"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261011-completed-optimization/en/native-single-file-storage-plan.mdx",
+      "sha256": "068fa0e5180e2be8c719c7304819fbd8bf4cd70f73195c8e55f0f2ad57f1cd43"
+    }
+  ]
+}

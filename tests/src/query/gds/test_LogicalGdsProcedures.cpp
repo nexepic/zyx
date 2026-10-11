@@ -7,6 +7,7 @@
  */
 
 #include "QueryTestFixture.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -552,4 +553,44 @@ TEST_F(LogicalGdsProceduresTest, RunsNativeLeidenWithValidatedOptionsAndStableCo
 		EXPECT_EQ(serial.getRows()[index].at("communityId").toString(),
 				  requestedParallel.getRows()[index].at("communityId").toString());
 	}
+}
+
+TEST_F(LogicalGdsProceduresTest, ScalarPathProcedureOutputsDoNotDecodeNodeProperties) {
+	const std::string payload(8192U, 'x');
+	(void) execute("CREATE (a:DeferredPath {name: 'A', payload: '" + payload +
+		"'})-[:PATH_LINK {cost: 2.0}]->(b:DeferredPath {name: 'B', payload: '" + payload + "'})");
+	const uint64_t a = static_cast<uint64_t>(integerValue(execute("MATCH (n:DeferredPath {name: 'A'}) RETURN id(n) AS id").getRows().front().at("id")));
+	const uint64_t b = static_cast<uint64_t>(integerValue(execute("MATCH (n:DeferredPath {name: 'B'}) RETURN id(n) AS id").getRows().front().at("id")));
+	(void) execute("CALL gds.graph.project('deferred_path', {nodeLabels: ['DeferredPath'], relationships: {PATH_LINK: {weight: 'cost'}}})");
+	for (const bool weighted: {false, true}) {
+		SCOPED_TRACE(weighted);
+		const std::string query = weighted
+			? "CALL gds.shortestPath.dijkstra.stream('deferred_path', " + std::to_string(a) + ", " + std::to_string(b) +
+			  ") YIELD nodeId, cost, totalCost RETURN nodeId, cost, totalCost"
+			: "CALL algo.shortestPath(" + std::to_string(a) + ", " + std::to_string(b) +
+			  ") YIELD step, path_length RETURN step, path_length";
+		const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+		graph::debug::PerfTrace::reset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		const auto result = execute(query);
+		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+		ASSERT_EQ(result.rowCount(), 2U);
+		if (weighted) {
+			EXPECT_EQ(integerValue(result.getRows()[0].at("nodeId")), static_cast<int64_t>(a));
+			EXPECT_EQ(integerValue(result.getRows()[1].at("nodeId")), static_cast<int64_t>(b));
+			EXPECT_DOUBLE_EQ(doubleValue(result.getRows()[1].at("cost")), 2.0);
+		} else {
+			EXPECT_EQ(integerValue(result.getRows()[1].at("step")), 1);
+			EXPECT_EQ(integerValue(result.getRows()[1].at("path_length")), 2);
+		}
+		EXPECT_FALSE(trace.contains("native_graph.read.property_full_decode"));
+		EXPECT_FALSE(trace.contains("native_graph.read.property_selected_decode"));
+	}
+	// The cached projection still refers to the removed Node. Scalar projection
+	// must authenticate IDs even though it no longer hydrates Node Properties.
+	(void) execute("MATCH (n:DeferredPath {name: 'B'}) DETACH DELETE n");
+	EXPECT_THROW(static_cast<void>(execute("CALL gds.shortestPath.dijkstra.stream('deferred_path', " +
+		std::to_string(a) + ", " + std::to_string(b) + ") YIELD cost RETURN cost")), std::runtime_error);
+
 }

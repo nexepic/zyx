@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorPage.hpp"
@@ -56,7 +57,14 @@ namespace graph::storage {
 		// children are resolved through that snapshot's route branch.
 		[[nodiscard]] MetadataRadixPage readMetadataRadix(PhysicalPageRef reference, const Superblock &routeContext,
 																								  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
-		// Writer-only inspection of a physical radix frame. It intentionally skips
+		// Resolve selected slots of a decoded, unmodified radix page. Results follow
+		// input order (duplicates allowed); absent slots yield invalid references.
+		// The input page is never marked fully resolved. Callers validate descendant
+		// kind/level and visibility, just as with the full read API.
+		void resolveMetadataRadixChildren(const MetadataRadixPage &page, const Superblock &routeContext,
+				std::span<const uint32_t> childIndices, std::span<PhysicalPageRef> results) const;
+		// Inspection of a physical radix frame for writers or selected-path readers.
+		// It intentionally skips
 		// logical child resolution so an unpublished COW child can contribute its
 		// stable page identity to its parent before route publication.
 		[[nodiscard]] MetadataRadixPage
@@ -94,6 +102,8 @@ namespace graph::storage {
 		[[nodiscard]] std::array<std::byte, RSS_PAGE_SIZE> readPage(PhysicalPageRef reference,
 																	BufferPoolReadHint hint) const;
 		void resolveLogicalRadixChildren(MetadataRadixPage &page, const Superblock &routeContext) const;
+		void resolveLogicalMetadataReferences(const Superblock &routeContext,
+				std::span<const MetadataPageId> ids, std::span<PhysicalPageRef> results) const;
 
 		std::shared_ptr<StorageIO> io_;
 		Superblock superblock_{};

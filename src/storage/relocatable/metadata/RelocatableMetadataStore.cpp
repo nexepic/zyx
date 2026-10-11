@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataStoreLifecycle.hpp"
 
@@ -3065,6 +3066,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata Catalog lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return catalog_.find(snapshot.superblock(), segmentId);
 	}
 
@@ -3075,6 +3077,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Retire Queue lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findRetireQueueEntryOptional(snapshot.superblock(), slot);
 	}
 
@@ -3085,6 +3088,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Retire Queue traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitRetireQueue(snapshot.superblock(), visitor);
 	}
 
@@ -3094,6 +3098,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Catalog traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		catalog_.visit(snapshot.superblock(), visitor);
 	}
 
@@ -3103,6 +3108,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable index page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3123,6 +3129,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Entity page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3143,6 +3150,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable adjacency page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3163,6 +3171,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable raw Vector page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3184,6 +3193,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable retired Raw Vector page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3204,6 +3214,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable PQ page-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3225,6 +3236,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared LargeValue data-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			if (entry.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL) {
@@ -3252,6 +3264,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared LargeValue Manifest-pool scan requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools](const CatalogEntry &entry) {
 			if (entry.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) {
@@ -3280,6 +3293,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Property page-pool scan requires this store's active snapshot and owner");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools, poolOwnerId](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3301,6 +3315,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable State page-pool scan requires this store's active snapshot and owner");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<CatalogEntry> pools;
 		catalog_.visit(snapshot.superblock(), [this, &snapshot, &pools, poolOwnerId](const CatalogEntry &entry) {
 			const uint8_t eligible =
@@ -3321,6 +3336,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Page Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findPage(snapshot.superblock(), pageId);
 	}
 
@@ -3331,6 +3347,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Page Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findPageOptional(snapshot.superblock(), pageId);
 	}
 
@@ -3340,6 +3357,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Extent Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findExtent(snapshot.superblock(), extentId);
 	}
 
@@ -3350,6 +3368,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Extent Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findExtentOptional(snapshot.superblock(), extentId);
 	}
 
@@ -3359,6 +3378,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Entity Map Node lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findNodePageLocation(snapshot.superblock(), nodeId);
 	}
 
@@ -3368,6 +3388,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Entity Map Edge lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findEdgePageLocation(snapshot.superblock(), edgeId);
 	}
 
@@ -3378,6 +3399,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Entity Map Node lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findNodePageLocationOptional(snapshot.superblock(), nodeId);
 	}
 
@@ -3388,6 +3410,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Entity Map Edge lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findEdgePageLocationOptional(snapshot.superblock(), edgeId);
 	}
 
@@ -3399,6 +3422,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 									"relocatable Node multi-lookup requires this store's active snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.findEntityPageLocationsSorted(snapshot.superblock(), MetadataDirectoryType::MDT_NODE_ENTITY,
 																			 nodeIds, results, cancellation);
 	}
@@ -3411,6 +3435,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 									"relocatable Edge multi-lookup requires this store's active snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.findEntityPageLocationsSorted(snapshot.superblock(), MetadataDirectoryType::MDT_EDGE_ENTITY,
 																			 edgeIds, results, cancellation);
 	}
@@ -3422,6 +3447,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Entity Map Node traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitNodePageLocations(snapshot.superblock(), visitor);
 	}
 
@@ -3432,6 +3458,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Entity Map Edge traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitEdgePageLocations(snapshot.superblock(), visitor);
 	}
 
@@ -3442,6 +3469,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Entity Map Node traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitNodePageLocationsUntil(snapshot.superblock(), visitor);
 	}
 
@@ -3452,6 +3480,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Entity Map Edge traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitEdgePageLocationsUntil(snapshot.superblock(), visitor);
 	}
 
@@ -3463,6 +3492,7 @@ namespace graph::storage {
 								  "relocatable resumable Entity Map Node traversal "
 								  "requires this store's active snapshot, page bound, and visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitNodePageLocationsAfter(snapshot.superblock(), afterNodeId, maximumMetadataPages, visitor,
 													  visitedMetadataPages);
 	}
@@ -3475,6 +3505,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Extent directory traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitExtents(snapshot.superblock(), visitor);
 	}
 
@@ -3486,6 +3517,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Page directory traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitPagesUntil(snapshot.superblock(), visitor);
 	}
 
@@ -3497,6 +3529,7 @@ namespace graph::storage {
 								  "relocatable Entity Property directory traversal requires this store's active "
 								  "snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitEntityProperties(snapshot.superblock(), visitor);
 	}
 
@@ -3507,6 +3540,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 							  "relocatable Entity Property range cursor requires this store's active snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.openRangeCursor(snapshot.superblock(), MetadataDirectoryType::MDT_ENTITY_PROPERTY,
 									  lowerDirectoryId, upperDirectoryId, cancellation);
 	}
@@ -3519,6 +3553,7 @@ namespace graph::storage {
 																   "requires this store's active snapshot, page bound, "
 																   "and visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitEntityPropertiesAfter(snapshot.superblock(), afterDirectoryId, maximumMetadataPages,
 													 visitor, visitedMetadataPages);
 	}
@@ -3531,6 +3566,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable State directory traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitStates(snapshot.superblock(), visitor);
 	}
 
@@ -3543,6 +3579,7 @@ namespace graph::storage {
 								  "relocatable resumable State traversal requires this store's active snapshot, page "
 								  "bound, and visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitStatesAfter(snapshot.superblock(), afterStateId, maximumMetadataPages, visitor,
 										   visitedMetadataPages);
 	}
@@ -3555,6 +3592,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Index Root directory traversal requires this store's active snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitIndexRoots(snapshot.superblock(), visitor);
 	}
 
@@ -3566,6 +3604,7 @@ namespace graph::storage {
 								  "relocatable Vector Location Directory traversal requires this store's active "
 								  "snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitVectorLocations(snapshot.superblock(), visitor);
 	}
 
@@ -3577,6 +3616,7 @@ namespace graph::storage {
 								  "relocatable Vector Manifest Directory traversal requires this store's active "
 								  "snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitVectorManifests(snapshot.superblock(), visitor);
 	}
 
@@ -3588,6 +3628,7 @@ namespace graph::storage {
 																   "requires this store's active snapshot, page bound, "
 																   "and visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitVectorManifestsAfter(snapshot.superblock(), afterIndexId, maximumMetadataPages, visitor,
 													visitedMetadataPages);
 	}
@@ -3600,6 +3641,7 @@ namespace graph::storage {
 								  "relocatable LargeValue Manifest Directory traversal requires this store's active "
 								  "snapshot and a visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.visitLargeValueManifests(snapshot.superblock(), visitor);
 	}
 
@@ -3613,6 +3655,7 @@ namespace graph::storage {
 								  "snapshot, page bound, "
 								  "and visitor");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.visitLargeValueManifestsAfter(snapshot.superblock(), afterValueId, maximumMetadataPages,
 														visitor, visitedMetadataPages);
 	}
@@ -3623,6 +3666,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Entity Property Directory lookup requires a valid key and snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findEntityProperty(snapshot.superblock(), key);
 	}
 
@@ -3633,6 +3677,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable optional Entity Property lookup requires a valid key and snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findEntityPropertyOptional(snapshot.superblock(), key);
 	}
 
@@ -3644,6 +3689,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 							  "relocatable Entity Property multi-lookup requires this store's active snapshot");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		locations_.findEntityPropertiesSorted(snapshot.superblock(), keys, results, cancellation);
 	}
 
@@ -3653,6 +3699,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable State Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findState(snapshot.superblock(), stateId);
 	}
 
@@ -3663,6 +3710,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional State Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findStateOptional(snapshot.superblock(), stateId);
 	}
 
@@ -3673,6 +3721,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Vector Location Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findVectorLocation(snapshot.superblock(), vectorId);
 	}
 
@@ -3683,6 +3732,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Vector Location Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findVectorLocationOptional(snapshot.superblock(), vectorId);
 	}
 
@@ -3693,6 +3743,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Vector Manifest Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findVectorManifest(snapshot.superblock(), indexId);
 	}
 
@@ -3703,6 +3754,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Vector Manifest Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findVectorManifestOptional(snapshot.superblock(), indexId);
 	}
 
@@ -3713,6 +3765,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable LargeValue Manifest Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findLargeValueManifest(snapshot.superblock(), valueId);
 	}
 
@@ -3723,6 +3776,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable optional LargeValue Manifest Directory "
 																   "lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findLargeValueManifestOptional(snapshot.superblock(), valueId);
 	}
 
@@ -3732,6 +3786,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Index Root Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findIndexRoot(snapshot.superblock(), indexId);
 	}
 
@@ -3742,6 +3797,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable optional Index Root Directory lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return locations_.findIndexRootOptional(snapshot.superblock(), indexId);
 	}
 
@@ -3752,6 +3808,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable Page directory scan requires this store's active snapshot and a Segment ID");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		std::vector<PageLocation> locations;
 		locations_.visitPages(snapshot.superblock(), [&](const PageLocation &location) {
 			if (location.segment_id == segmentId) {
@@ -3767,6 +3824,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata free-space lookup requires this store's active snapshot pin");
 		}
+		MetadataPageReadContext::Scope readScope(snapshot.readContext(), *pages_.storageIO());
 		return allocator_.isAllocated(snapshot.superblock(), slot);
 	}
 

@@ -55,6 +55,9 @@ namespace graph::storage {
 			LogicalGraphEdge edge;
 			bool created = false;
 			bool deleted = false;
+			// Snapshot-local token resolved once when a staged Edge is created.
+			// Zero retains the string fallback for transaction-new types.
+			uint64_t relationship_type_token = 0U;
 		};
 
 		class Snapshot;

@@ -12,6 +12,7 @@
 #include "graph/storage/relocatable/entity/NativeStreamedGraphCatalogIndexPlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphPrivatePreparation.hpp"
+#include "graph/storage/relocatable/entity/NativeStreamedGraphMembershipIndexPlanner.hpp"
 
 namespace graph::storage {
 
@@ -19,9 +20,10 @@ namespace graph::storage {
 		NativeStreamedGraphCatalogIndexPlanningOptions catalog;
 		NativeStreamedGraphAdjacencyIndexPlanningOptions adjacency;
 		NativeStreamedGraphLargeValueContentIndexPlanningOptions large_value_content;
+		NativeStreamedGraphMembershipIndexPlanningOptions membership;
 	};
 
-	// Combines the three independently typed roots that a streamed Edge commit
+	// Combines the independently typed roots that a streamed Edge commit
 	// may change. This is deliberately the only composition point: callers
 	// receive one deterministic, duplicate-free deferred-plan bundle for the
 	// enclosing metadata generation instead of publishing Catalog, adjacency, or
@@ -32,7 +34,8 @@ namespace graph::storage {
 		plan(SystemCatalog &catalog, BTreePageStore &adjacencyPages, LargeValueStore *largeValueStore,
 			 RelocatableMetadataStore &metadata, const NativeStreamedGraphPrivatePreparation &prepared,
 			 const NativeStreamedGraphPublicationIndexPlanningOptions &options,
-			 const NativeGraphDeferredIndexPlanningContext &planning, LogSequenceNumber checkpointLsn);
+			 const NativeGraphDeferredIndexPlanningContext &planning, LogSequenceNumber checkpointLsn,
+			 const NativeStreamedGraphDeferredPublication *publication = nullptr);
 	};
 
 } // namespace graph::storage

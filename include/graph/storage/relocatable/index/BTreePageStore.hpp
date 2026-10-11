@@ -195,6 +195,9 @@ namespace graph::storage {
 													  const MetadataPublishOptions &options = {});
 		[[nodiscard]] BTreePage read(const MetadataSnapshotPin &snapshot, PageId pageId,
 									 BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		[[nodiscard]] BTreePage readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
+			std::vector<BTreePageEntry> &decodedEntries,
+			BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		// Plans an upsert that fits in an existing unsplit root leaf. It never
 		// publishes or writes a frame. Structural splits intentionally remain on
 		// the full tree-mutation path until their complete plan can join graph COW.

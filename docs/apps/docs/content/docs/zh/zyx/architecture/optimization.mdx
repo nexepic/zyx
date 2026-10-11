@@ -1,6 +1,6 @@
 ---
-title: 优化策略
-description: ZYX 新存储架构的通用读取、执行、缓存和写入优化方案。
+title: 架构调整与通用性能实施方案
+description: 保留 COW 的单文件图数据库演进方案：执行 IR、属性、邻接、事务、资源管理、性能优化与逐阶段验收。
 category: 性能
 categoryOrder: 5
 order: 9
@@ -10,490 +10,221 @@ projectDescription: 高性能嵌入式图数据库引擎
 projectOrder: 1
 ---
 
-# 优化策略
+# 架构调整与通用性能实施方案
 
-本文是 ZYX 新架构性能优化的唯一执行文档。它描述如何把当前实现收敛为通用的批量读取和执行框架，不针对任何一个 benchmark、Cypher 文本或数据集添加特例。持久化布局、页格式、Catalog、Page Directory、恢复、搬迁和空间回收以[原生单文件存储重构方案](native-single-file-storage-plan)为准；功能迁移与遗留实现状态以[原生能力验收矩阵](native-capability-acceptance-matrix)为准。
+更新：2026-10-11。**本页是后续架构调整和性能优化的唯一实施入口。新方案尚未实施：S0–S6 均为 0%，总计 0/34。文档编写不计为实现完成。**
 
-当前目标是让查询和图算法声明所需的数据形状，由统一执行框架按 snapshot、逻辑页和批次组织读取。优化必须同时保持快照隔离、损坏检测、资源上限、取消、结果顺序、重复行、`NULL`、`LIMIT` 和 `SKIP` 语义。
+旧 P0–P7 的 40/40 只表示旧清单收口，不表示架构完善或追平 Kuzu。旧优化全文及存储阶段流水账已移出文档站，保存在 `benchmarks/architecture-design/archive/20261011-completed-optimization/`，有原始文件 SHA-256。更早记录在 `20261009-superseded-plans/`。这些目录仅供追溯，不是执行入口。
 
-## 当前判断
+## 1. 范围、决策和文档优先级
 
-Release 基准已经证明，新架构的写入和索引构建路径并非全面退化：索引加载构建曾快于旧架构，点查接近旧架构。主要回归集中在全量实体扫描、属性过滤、索引候选验证和短路径遍历。
+### 1.1 已确定的边界
 
-当前回归的共同原因是读取路径重复执行以下工作：
+- 继续使用 **COW 与 A/B Superblock**。不引入 WAL，不把 WAL 或跨事务 group commit 混入普通优化；改变提交确认协议需另立设计。
+- 保持通用、嵌入式、严格单文件：持久数据、恢复信息及查询落盘空间均由同一个数据库文件管理，不产生数据库 WAL/SHM/临时 sidecar。
+- 保留稳定 EntityId/PageId、逻辑与物理位置分离、快照与 read-your-writes、统一分配、搬迁、旧版本安全回收、显式 codec、完整性校验及公共 API/Driver ABI。
+- 保留现有语句级 IR、Expression、逻辑计划与有收益的缓存/选择访问/批处理；不恢复已退休的存储或物理执行器，不另起一套完整数据库 backend。
+- **A3 是布局设计与准入验证，不是全面列存替换授权；A4 也必须先解决一致性协议，再决定物理布局。**
+- LLVM 是条件性实验，不是必选依赖。先完善非 JIT 执行；WASM 保留非 JIT 路径。
+- 不针对查询文本、数据集名称、固定答案或 benchmark 特定规模建立快路径。通用成本模型可以使用实际基数、类型、字节数、页数和选择率。
+- 生产代码保持 macOS/Linux/Windows 可移植；本轮实测 macOS。**只执行相关模块单元测试，不执行全量单元测试，覆盖率不是门禁，不 commit、不 push。** 不因仓库通用模板或归档要求改变此约束。
 
-```text
-通用 Page Directory 路由
-  -> Entity Map 定位
-  -> Entity page 校验
-  -> Property Directory 定位
-  -> Property page 校验
-  -> 完整对象物化
-```
+### 1.2 三类文档各自负责什么
 
-这条链路在每个实体或每个候选上重复执行时，会抵消新架构的空间、快照和可搬迁优势。后续工作必须优先消除重复工作，再根据结构计数器决定是否需要调整页粒度或写入布局。
+| 文档 | 职责 |
+|---|---|
+| 本页 | 唯一任务清单、先后顺序、设计准入、验收和进度 |
+| [单文件存储规范](native-single-file-storage-plan) | 现行文件规则与明确标注的待实现目标；不维护阶段完成率 |
+| [能力验收矩阵](native-capability-acceptance-matrix) | 公开能力、源码 owner 和历史验证证据；受影响项需用新源码重验 |
+| [基准文档](benchmarks) | 测量方法和历史数据，不能取代本页任务状态 |
+| [发布事项](native-remaining-work-roadmap) | 独立发布边界，不生成第二份优化清单 |
 
-当前代码中可复用的基础包括：
+当前文件在对应阶段切换前仍按现行 codec 和协议解释。新设计不能默默改变既有字节含义。旧文档中“永远禁止覆盖邻接”等未来路线限制由本页 A4 重新审查；这不允许当前 reader 跳过主记录验证。每个格式变更必须先修改具体格式条款，再实现 writer/reader/integrity/reclamation。
 
-- `EntityReadShape`：描述 identity、topology、type、label、selected Property 和完整对象需求；
-- `NativeReadSession`：绑定一个 snapshot，保存路由、实体、token 和 Property 读取状态；
-- `BoundedBatch`、`SelectionVector`：提供有界批次、选择和结果重排；
-- `BTreeIndex::RangeCursor`：在一个 pinned snapshot 中保持 B+Tree 路由；
-- selected-column Property API；
-- Node/Edge 有序批量读取和 adjacency topology/reference API；
-- LargeValue manifest、chunk、压缩和范围读取基础。
+现行兼容策略为新格式新建数据库、旧格式明确拒绝，不自动转换、不删除用户文件。若需要迁移，须单独确定需求后编写迁移协议。format envelope、Superblock 和局部 codec 是不同版本空间；版本值以实现时源码为准。
 
-这些基础已经存在不代表所有消费者已经迁移完成。每个阶段都要完成消费者审计、必要测试和生命周期验证后才能关闭。
+## 2. 当前事实和收益假设
 
-## 总体目标架构
+当前链路包含 QueryAST、Expression、LogicalOperator 和 LogicalPlanOptimizer；逻辑 Runtime 直接执行计划，主要行表示仍使用字符串键哈希表。已有 EntityRef 延迟物化、选列读取、选择向量和有界批次，不应重复实现。
 
-```mermaid
-flowchart LR
-    Q["Cypher / GDS / 算法"] --> S["EntityReadShape"]
-    S --> B["Batch Read Planner"]
-    B --> E["Typed Entity Cursor"]
-    B --> A["Adjacency Range Cursor"]
-    B --> I["Index Candidate Cursor"]
-    E --> P["Property Column Reader"]
-    A --> P
-    I --> P
-    P --> M["Shape Materializer"]
-    M --> O["Operator / Procedure"]
-```
+属性按 owner 集合组织，普通属性 mutation 请求替换完整集合；大集合可能整体编码到 LargeValue。普通邻接为全局 key-only B+Tree，通常要取 Edge record 才得到邻居/type。普通写事务使用图根 fence；安全但可能令不相交写冲突。排序有预算限制，尚不能据此宣称已有通用落盘执行。
 
-读取框架分为五个边界：
+### 2.1 已有基线，不是本轮重测
 
-1. **Shape**：调用方声明字段，不直接选择物理读取函数。
-2. **Plan**：将逻辑 ID、Property token 和资源预算组织成有序批次。
-3. **Execute**：按 typed directory、PageId 和 page slot 分组读取。
-4. **Validate**：在 page admission、record decode 和语义交叉校验三个层次执行验证。
-5. **Materialize**：只生成调用方声明的结果形状，并保持逻辑顺序。
+macOS、单线程、热态、22.5 万节点/86 万边，既有末轮 P50：
 
-任何新消费者都必须进入这五个边界，不能重新实现一套逐实体读取循环。
+| 场景 | ZYX/ms | Kuzu/ms | ZYX/Kuzu |
+|---|---:|---:|---:|
+| 索引点查 | 0.8515415 | 0.109583 | 7.77 |
+| 一跳 | 1.229225 | 0.236563 | 5.20 |
+| 两跳 | 1.347205 | 0.5988755 | 2.25 |
+| 标签扫描过滤 | 167.8235 | 1.024271 | 163.85 |
+| 关系类型扫描 | 157.0135 | 3.053521 | 51.42 |
+| DISTINCT 计数 | 221.3725 | 1.656271 | 133.66 |
 
-## 读取形状契约
+证据根目录：`benchmarks/graphdb-comparison/results/followup-optimization-20261009/`。上表来自 `p7-final-source-medium-six-threeway/summary.json`。ZYX C++ API 与 Kuzu Python 的入口并不完全相同；索引能力也有差异。`aggregation_group_by` 在该矩阵实际是 DISTINCT 计数，不能称为完整分组输出测试。扫描差距提示布局/执行存在问题，但不能从倍数推导各热点占比。
 
-所有 Node、Edge、adjacency 和索引读取都必须使用显式形状。形状至少支持：
+其他保留证据：
 
-| 形状 | 数据 |
-| --- | --- |
-| `IDENTITY` | NodeId 或 EdgeId、存在性和 state |
-| `TOPOLOGY` | EdgeId、source、target、relationship type、state |
-| `LABELS` | identity 加 label token |
-| `SELECTED_PROPERTIES` | identity 加调用方声明的 Property token 列 |
-| `COMPLETE` | 完整的逻辑 Node 或 Edge |
+- `p7-final-acceptance.json`：旧方案最终源码身份、限制及验收索引。
+- `p7-final-owning-output-resources/summary.json`：1 万 ID/完整节点约 18.3 万/58 万次 C++ new；不包含全部 malloc/mmap，不是完整堆指标。
+- `p3-read-write-resource-acceptance.json`：32 KiB owner 修改一个整数产生 729408 写入字节，含发布元数据，不能称为属性单独写放大。
+- `p3-authoritative-layout-adoption-decision.json`：列块原型选择读取显著改善，但一个小载荷案例更新退化约 23%；图目录接入及不可达数据回收未闭环。原型未准入生产，不得直接启用。
+- `p4` 相关决策：旧覆盖载荷在保留逐项回查协议下不能省掉主记录读取；不是所有覆盖/分段布局都被证明无效。
 
-形状还必须携带：
+旧证据不是未来工作树的性能结论。S0 必须检查来源，不能用 HEAD 代替用户已有未提交修改。
 
-- pinned snapshot；
-- 最大记录数和最大临时字节数；
-- cancellation checkpoint；
-- 是否允许 sequential admission 和预取；
-- 是否严格要求 early-stop；
-- 结果顺序和重复项契约。
+## 3. 架构工作包 A1–A7
 
-默认规则如下：
+每项设计交付必须含：当前调用链、目标接口及所有权、数据/快照身份、失败状态、必要时的字节布局和版本、恢复与回收状态、替换边界、模块测试清单、性能假设及反证条件。以下是必须遵守的目标合同；具体 ABI/codec、块大小和成本参数须在 S1 的决策记录中定案，不能在编码时私自猜测。
 
-| 消费者 | 默认形状 |
-| --- | --- |
-| degree、count、BFS、DFS、shortest path、Leiden | `TOPOLOGY` |
-| relationship type filter | `TOPOLOGY` |
-| 只返回实体引用 | `IDENTITY` |
-| Property predicate | `TOPOLOGY + SELECTED_PROPERTIES` |
-| GDS 投影 | 由投影字段声明决定 |
-| `RETURN n` 或 `RETURN r` | `COMPLETE` |
+### A1：绑定后的执行表示与物理计划
 
-`COMPLETE` 只能由确实需要完整结果的消费者请求。拓扑算法不得因为通用 adapter 的方便而创建 Property cursor。
+保留前端与逻辑 IR，在其后新增执行绑定/物理规划边界。变量名在绑定时变为槽位；属性使用可校验的 token/描述符，明确 schema epoch 与计划缓存失效。静态可知类型使用类型化内核，动态/混合类型保留有语义等价性的回退。
 
-## 批量读取契约
+执行批次包含类型化列、presence/null 信息、选择向量、EntityRef 和可变长载荷 owner；定义借用范围、批次复用、pin 生命周期、输出顺序和重复行。物理计划明确访问路径、连接/聚合/排序算法、流水线与阻塞物化点。先做非 JIT scan/filter/project/aggregate，再迁移 join、sort、unwind、procedure/subquery 及 mutation 的读侧；不能让这些路径静默绕回未计费的旧行表示。
 
-批量读取必须采用 gather、execute、scatter 三阶段：
-
-```text
-Gather:
-  收集逻辑 ID、shape、Property token 和资源预算
-
-Execute:
-  解析目录，按 PageId 分组，顺序 pin 物理 page，页内批量解码
+公共 QueryResult/Driver ABI 在输出边界生成拥有数据的结果。过渡适配器必须列出使用位置及移除条件；不长期维护两套独立查询语义。空值、数值/类型规则、可选匹配、路径、相关子查询、取消及错误与当前公开合同一致。
 
-Scatter:
-  根据输入 ordinal 恢复调用方要求的顺序
-```
-
-物理读取可以排序和去重，但对外结果必须保持：
-
-- 输入要求的逻辑顺序；
-- 重复逻辑 ID；
-- `NULL` 和缺失值位置；
-- `LIMIT`、`SKIP` 和 visitor early-stop；
-- pinned snapshot 下的可见性。
+### A2：属性增量修改合同
 
-批次同时受记录数和字节数限制。任何变长 Property、LargeValue、label 集合或结果对象都必须在进入下游之前计费；不能先使用默认容量暂存，再在结果边界才失败。
+内部请求支持按键 set/remove，显式保留完整替换操作。不能混淆单键 SET、map 合并、完整 map 替换和 REMOVE 的现有语义。同事务多次修改可折叠最终持久状态，但每条语句的 overlay/read-your-writes 必须正确；大值引用不得跨失效生命周期借用。
 
-`LOAD CSV` 是外部拉取数据源，在 visitor 边界保持逐行输出。它仍然使用
-同一套行数/字节预算和 cancellation 检查，接收到 CSV 行的下游算子继续使用
-批处理。CSV 实现不能在调用 visitor 之前预读整批数据，否则会改变 `LIMIT`、
-取消和 fail-fast 语义。真正的 CSV 源批处理应等待所有外部数据源共用的通用
-pull/batch 协议；不能为 CSV 单独增加 fast path。
+仅为变化的字段计算索引、约束和统计增量；无需改变的字段不应无条件删建索引。创建后删除、值未变化、属性删除、类型变化、索引键碰撞和最终失败均有确定行为。属性、派生索引、统计与实体状态在同一 COW 发布点生效。
 
-一个批次的物理成本应接近以下量，而不是输入记录数：
+A2 可先使用当前存储布局实现，不能把“接口只传一个字段”当成“底层已局部写入”。两者分别测量。
 
-```text
-Directory range calls
-+ distinct metadata pages
-+ distinct physical data pages
-+ decoded records
-+ selected values
-```
+### A3：面向通用图属性的分组分块布局
 
-## Typed Entity Page Cursor
+**目标：改善跨实体少字段扫描，并保留高效点读、小更新、动态属性和完整实体读取。不是把所有属性无条件变成稠密列。**
 
-Node 和 Edge 扫描必须直接使用按实体类型组织的目录入口。禁止先调用通用 `visitPageLocationsUntil()` 遍历全部 Page Directory，再按 segment 或 owner 过滤。
+1. 按有界实体范围/槽位组织组；Node/Edge 身份空间分开。稳定 EntityId 与内部 slot 分离，删除/复用有 generation 和存活信息。标签仅为成员关系，不按每个标签复制属性，不因加标签搬迁整实体。
+2. 组内属性块以 PropertyKey/token 标识；密集字段使用紧凑值数组与位图，稀疏字段使用有序 slot/value 或紧凑 presence/rank。保留混合类型及属性缺失语义；不能用观察到的一个样本推断永久 schema。
+3. 有直接的实体/字段定位，也有该实体实际字段的枚举路径。完整节点读取不能遍历全库属性 token 或扫描整个组。必要元数据必须计入空间、读取和 COW 成本，避免为每个 entity-property 再建独立树。
+4. 大值使用独立 LargeValue 引用，变长普通值采用有界局部载荷。组大小、压缩块、页及更新单位分别定义；修改一个值不得重写整组或无关大值。优先验证页级 COW 的直接更新；不预设新增多层 delta/LSM、冷热迁移和后台自动布局切换。
+5. 每个逻辑属性在每个快照中只有确定的权威版本。若允许列块和稀疏扩展区共存，组描述符必须无歧义地决定归属；扩展区不是第二份完整副本。布局转换与回收在同一可恢复协议内完成。
+6. 查找不得绕过快照/owner/generation 校验；组分裂、槽位复用、大值替换、失败发布、搬迁和整组删除必须明确旧版本可达性。首次实施限定少量编码，阈值来自通用空间/访问成本，不使用 benchmark 名称或特例规模。
 
-需要提供并统一复用：
+**准入流程**：先完成现有行布局对照，再实现完整生命周期原型，最后决定是否切换。沿用旧原型读取代码前，必须补齐图目录接入、索引维护、不可达子块/root/LargeValue 退役、重开和失败恢复，不能把实验载体当生产引擎。
 
-```text
-NodePageCursor
-EdgePageCursor
-PropertyPageCursor
-IndexPageCursor
-AdjacencyRangeCursor
-```
+必测：单/多字段范围扫描、随机单字段、随机完整实体、邻居属性读取；稀疏/稠密字段、混合类型、多标签、宽实体、大值；set/remove/类型变化、导入、删除、长快照及持续更新。记录端到端延迟、读取/写入字节、峰值内存和稳态空间。任何明显点读/更新退化都须解决或形成明确产品取舍，不得只用平均扫描收益覆盖。
 
-每个 cursor 必须：
+若原型不满足第 6 节门槛：拒绝该原型，保留生产格式，给出成本归因和修订方案；S3 的生产接入项保持未完成。不得为得到 100% 静默跳过 A3，也不得为了执行清单强行采用退化布局。
 
-1. 绑定一个 `MetadataSnapshotPin`；
-2. 只读取自己的 typed directory；
-3. 缓存当前 pool route；
-4. 一个 page 只执行一次 admission 和 pin；
-5. 在页内扫描多个 record；
-6. 使用有界 sequential admission 和预取；
-7. 通过逻辑 continuation 恢复，不暴露物理 offset；
-8. 在达到记录、字节、取消或 visitor 边界时立即停止。
+### A4：直接邻接访问与可信派生布局
 
-一个 record 扫描不能触发一次 Page Directory root descent。一个 page 在同一个 read session 中不能因为多个 owner 被重复认证和 pin。
+逻辑批次能提供 EdgeId、NeighborId、TypeId 和必要可见性信息，保持方向、重复边、自环、类型过滤、continuation 和 overlay 语义。权威 Edge record 仍定义边身份/拓扑；覆盖数据是受协议维护的派生表示，不是可独立更新的第二份权威。
 
-## Property Column Reader
+设计必须先回答：哪些认证允许查询直接信任邻接字段；哪些校验在加载/发布/完整性扫描执行；遗漏成员如何发现；损坏、错 generation 和不一致如何报告。不能在尚未证明新合同前删除现有主记录回查；checksum 通过也不等于索引与实体一致。
 
-Property page 是共享的 4 KiB slotted page。多个 Node 和 Edge 的 Property root 可以位于同一页。Property 读取必须以 page 为单位组织：
+在同一逻辑接口下比较两种候选：共享 Packed B+Tree 的覆盖 entry；多个节点共享、按方向/类型组织的分段邻接块。均应支持低度数共享空间、超级节点、在线修改、原子双向维护、搬迁与回收；不为每个节点建立根/独占尾页。端点/type 若当前 API 不支持修改，不为测试新增公开语义。
 
-```text
-EntityPropertyKey
-  -> 一次 Property Directory range merge
-  -> 按 Property PageId 分组
-  -> 每个 Property page 只 pin 一次
-  -> 页内解析多个 owner root
-  -> 只解码所需 token
-  -> 恢复 Entity 顺序
-```
+覆盖树若已满足目标，优先较小改动；分段方案只有在收益抵消维护/写放大后才采用。对照必须含无属性遍历、类型过滤、多跳、随机插删、热点/幂律度数、自环多边和长期空间，避免只测顺序导入。现行 key-only 文件在版本切换前保持原语义。
 
-统一 reader 至少提供：
+### A5：事务隔离与冲突粒度
 
-```text
-readSelectedColumns(keys, tokens, budget)
-readPropertyCounts(keys, budget)
-readPropertyExists(keys, tokens, budget)
-readFullRoots(keys, budget)
-```
+首先从公开合同和现有测试定义隔离级别，不自动宣称 serializable。记录事务快照、读依赖、实体/属性写意图、唯一性及范围/谓词依赖、schema epoch。根据选定隔离级别验证幻读、write skew 等结果；不能仅检查写集合后宣称串行化。
 
-小属性只需要解析 root header、slot、token offset 和目标 value。一个 selected Property 请求不得因为调用方只需要一个 token 而解码整个 root。
+目标是不相交修改无需因整组图根变化无条件失败；相交写、约束冲突、节点删除与创建关联边仍必须检测。通过验证后在最新根上重建候选，并原子发布；提交门可以串行化，不能持有旧页面指针直接覆盖新版本。ID lease、重试、读写叠加、无确定结果的提交及资源归还需明确状态。禁止仅删除全局 fence。
 
-Property reader 必须共享：
+### A6：资源所有权与文件内落盘执行
 
-- Directory cursor；
-- page route cache；
-- 当前 page image；
-- slot generation 和 owner 验证；
-- token offset directory；
-- snapshot generation；
-- cancellation；
-- record/byte budget。
+统一 query/batch/operator 的预算、pin、可变长数据和取消语义；计入容器实际容量及持有资源，不仅统计逻辑行数。预算超限应选择受支持的落盘路径或明确失败，不能静默截断结果/吞掉损坏错误。
 
-## LargeValue 读取
+先实现排序 run 与归并，再实现可分区的聚合/哈希操作；列出暂不支持落盘的算子和返回错误。复用单文件分配基础，但现有 bulk scratch 不等于已具备查询 spill。持久 scratch 登记、所属查询、释放、崩溃清理、read-only 文件模式、磁盘不足及共享句柄必须定案。read-only 模式不能为 spill 偷写数据库；无法使用文件内 scratch 时使用有界内存并明确报错。
 
-无法放进 Property page 的属性集合在 Property page 中只保存 `LargeValueRef`。真实数据由通用 LargeValueStore 以 manifest、chunk 和 4 KiB data page 保存。它可用于代码、JSON、文本、图片和任意二进制数据，不增加场景专用 Store。
+维护预算分别约束前台、后台回收与整理。长快照阻止回收时提供可观察的积压与限额，不能无界增长或破坏仍被引用的页。
 
-当前 LargeValue 的完整读取能力包括：
+### A7：格式演进与实施边界
 
-- immutable logical `LargeValueId`；
-- manifest tree；
-- 多个 chunk 和 data page；
-- 每 chunk 的 `RAW`、`LZ4` 或 `ZSTD` codec；
-- content hash 和有界 dedup；
-- `read()` 和 `readRange()`；
-- generation-aware retirement 和 snapshot-safe reclaim。
+逐项定义新增 root/页类型/描述符、codec 字段/位宽/字节序、版本、可达性、原子维护、retirement 及 integrity walker。采用已有 namespace 和共享 allocator，新增枚举使用跨平台前缀。版本切换必须有明确旧文件拒绝测试；不要读取归档中的版本号直接写入代码。
 
-后续必须补齐 selected Property 的范围读取：Property payload 的 offset directory 应能映射到 LargeValue chunk 范围，只读取目标 token 涉及的 chunk。读取单个小字段不能无条件读取整个大型代码片段或二进制对象。
+维护“已实现 / 待验证 / 已拒绝 / 已替换”决策记录。A3/A4 当前只确定目标，不声称 codec 已定稿。每次采用布局后同步本页决策与格式规范的相关节，移除相冲突的未来路线禁令，同时保留旧证据。
 
-当前 selected 路径在解析 LargeValue directory 后会复用同一份已认证的 manifest 路由，再读取各个目标 entry 的重叠 chunk；不会为每个 token 重新执行 manifest directory lookup。完整 Property 读取仍使用完整内容校验，范围读取仍保留 chunk、codec、checksum 和 snapshot 校验。
+## 4. 优化工作包 O1–O8
 
-压缩策略按 chunk 生效。压缩收益低于策略阈值时可以保留 RAW。不得为某种文件类型写固定压缩特例；codec、最低收益和 raw fallback 都由通用写入选项控制。
+| 工作 | 实施内容 | 架构依赖与验证 |
+|---|---|---|
+| O1 计划与工作量 | 基数/选择率、索引与扫描选择、连接顺序、过滤/投影下推、LIMIT/EXISTS 提前终止、Top-K | 先检查已有实现；语义允许才下推，维护 NULL、重复和排序；比较算子输入/输出和端到端耗时 |
+| O2 分配与物化 | 复用批次、减少容器/字符串/属性复制、延迟完整实体、输出边界拥有数据 | A1；借用不能越过 owner/pin 生命周期，释放大值，避免无界 arena 和过度 reserve |
+| O3 读取局部性 | 按页聚集 ID、findMany/游标、快照内目录解码复用、合并读取及有界预取 | 不改变稳定 ID；恢复输入对应/重复/顺序；缓存键覆盖数据库、版本与解析上下文，缓存 miss 不等于损坏 |
+| O4 算子内核 | 过滤、连接、去重、聚合、排序批次内核，减少通用对象转换 | A1；先连续数据与正确算法，保留动态类型回退，测宽度/选择率/倾斜 |
+| O5 COW 写入 | 事务内最终态合并、复用私有页、按树/页批量索引修改、仅维护变化索引、控制分裂合并、合并连续写、最终编码 | A2 及相应格式；保留 data-before-root 和 durable sync，不通过降低持久化保证提速 |
+| O6 稳态维护 | 扫描不污染热点缓存、回收/整理分批预算、长快照和磁盘压力治理 | A6；测持续吞吐、P95、积压、文件稳态，不把成本无限转移后台 |
+| O7 硬件与编译 | 按热点评估 SIMD、并行扫描/聚合、压缩、LTO/PGO | 类型化基线之后；通用 fallback，线程/CPU 特性相同，PGO 使用代表性训练与留出集 |
+| O8 LLVM 条件实验 | 可选表达式 JIT，收益成立才扩展到流水线 | 非必做实现、不是依赖；先定位表达式 CPU 份额，记录编译/冷启动/缓存命中/代码内存，预算化代码缓存及安全失效，失败回退，WASM 不依赖 JIT |
 
-## Topology-first Adjacency
+同一版本不可变页的已验证结果可以复用，不能删除首次必要校验。扩展预算、增加线程或关闭同步不能作为同条件收益。O7/O8 没有证据时记录不采用即可，但不能用其替代 A1–A6 的必做能力。
 
-普通图 adjacency 是全局 Packed B+Tree 的 key-only access path：
+## 5. 阶段、依赖和固定进度
 
-```text
-(direction, NodeId, EdgeId) -> empty
-```
+S0 → S1 → S2 → S3 → S4 → S5 → S6。设计可提前覆盖所有模块；实现按依赖推进。A2 接口可在 S3 布局前完成。为接入模块所需的最小 A6 生命周期工作可提前，但归属仍计入 S5，不重复计数。只因用户询问进度不能跳过未完成工作。
 
-Edge Entity page 仍然是 endpoint、type 和 state 的权威来源。adjacency leaf 不保存完整 Edge、Property、另一端 endpoint 或物理位置。
+| 阶段 | 固定交付项 | 已完成/总数 | 进度 |
+|---|---|---:|---:|
+| S0 基线与归因 | S0.1 来源冻结；S0.2 工作负载/资源合同；S0.3 同条件基线；S0.4 热点与反证报告 | 0/4 | 0% |
+| S1 架构设计 | S1.1 A1；S1.2 A2；S1.3 A3；S1.4 A4；S1.5 A5；S1.6 A6；S1.7 A7 的完整决策记录 | 0/7 | 0% |
+| S2 执行引擎 | S2.1 绑定/批次/缓存身份；S2.2 scan/filter/project/aggregate；S2.3 其余算子与读写消费者接入；S2.4 定向语义测试；S2.5 O1/O2/O4 对照验收 | 0/5 | 0% |
+| S3 属性读写 | S3.1 A2 及旧布局回归；S3.2 A3 生命周期原型与准入决策；S3.3 获准布局生产接入及规范更新；S3.4 正确性/故障测试；S3.5 O3/O5 读写/资源验收 | 0/5 | 0% |
+| S4 图访问 | S4.1 一致性协议与候选原型对照；S4.2 获准路径生产接入及格式更新；S4.3 图语义/故障测试；S4.4 读写/空间验收 | 0/4 | 0% |
+| S5 事务与资源 | S5.1 冲突验证与安全重建；S5.2 隔离/重试/故障测试；S5.3 文件内 spill 与预算接入；S5.4 超内存/取消/磁盘不足/read-only/崩溃清理测试；S5.5 O6 稳态验收 | 0/5 | 0% |
+| S6 综合验收 | S6.1 最终源码与受影响模块回归；S6.2 分层工作负载与 Kuzu 比较；S6.3 长时间资源/恢复/清理；S6.4 O7/O8 采用或不采用决策及最终文档 | 0/4 | 0% |
+| 总计 | 必做交付项固定，不以代码行数或运行时间计分 | 0/34 | 0% |
 
-应统一提供：
+状态：待开始、进行中、已验收、阻塞。仅已验收项计分，阶段百分比为已验收/阶段总数，总进度为已验收/34。小任务可拆解并显示已完成/剩余，但不偷偷修改分母。不采用某个原型可以完成其比较/决策项，不能自动完成后续生产能力项；若无可接受替代，保持未完成，说明问题并提出修订，改变必做范围需用户明确同意。
 
-```text
-scanTopology(node, direction)
-scanReferences(node, direction)
-scanSelected(node, direction, shape)
-scanFull(node, direction, shape)
-scanForNodes(nodes, direction, shape)
-```
+每轮报告 S0–S6 全部百分比、总进度、本轮验收 ID、证据、剩余问题与下一步。有有效调查但未通过交付验收时，说明具体新发现，不能虚增百分比。历史 P0–P7 与新 S0–S6 分开。
 
-多 Node 扫描必须复用 `GlobalAdjacencyIndex::visitForNodes()` 的连续 range cursor，减少每个 Node 的 root descent。EdgeId 得到后按 Entity page 批量解析 topology，再根据 type 和其他轻量条件筛选，最后只为通过筛选的 Edge 读取 selected Property。
+## 6. 性能与正确性验收合同
 
-Topology-only 路径的强制不变量：
+### 6.1 冻结与对照
 
-- 不 pin 无关 Property page；
-- 不构造完整 `LogicalGraphEdge`；
-- 不解析 Property token name；
-- 不读取 LargeValue；
-- endpoint 与 direction 必须在同一个 snapshot 中验证；
-- self-loop、parallel Edge、continuation 和 early-stop 语义保持不变。
+S0 从当前 dirty 工作树冻结对照：源码清单/hash、编译器/Release 选项、依赖、二进制 hash、硬件/OS、线程、内存与查询预算、缓存模式、数据库格式、数据 seed/manifest、查询/参数/索引和结果消费方式。禁止 reset/stash 或覆盖用户修改。保留必要控制二进制，结束后按清单清理本轮私有副本。
 
-## Index Candidate Stream
+同机交错运行 control/current/Kuzu，正式热态默认每场景至少 3 个独立进程、各 3 次预热与 10 次测量；写样本从同一隔离基线恢复且结果一致，恢复/open 是否计时必须固定。冷态、fresh-open、warm 分开；不能把重启进程等同于清空 OS cache。profile 与正式无 instrumentation 计时分开，嵌套 timer 不相加。迭代只跑受影响场景，阶段结束再扩展相关矩阵，S6 才做综合性能对照；综合 benchmark 不等于全量单元测试。
 
-索引使用 `(canonical value tuple, EntityId)` key。索引是 access path，权威 Property 仍在 Property Store。索引读取统一输出 generation-bound candidate batch：
+### 6.2 代表性矩阵
 
-```text
-canonical key
-EntityId
-index definition/version
-snapshot generation
-```
+至少包含：命中/未命中点查、随机单字段/完整实体、标签/type 稀疏与稠密过滤、单/多跳及超级节点、DISTINCT/真实 group-by/sort/Top-K、参数查询、动态属性、宽行/大值、逐条小写/批量写/混合读写、长快照、删除整理、超过查询内存预算及持续更新。规模、度数、字段稀疏度、类型和选择率至少有未用于调优的留出组合。A3/A4 原型要用同一已改进的执行器/载体对照，避免混入 A1 收益。
 
-Exact、scalar range 和 composite range 必须共享：
+正确性检查实际 ID、值、类型、NULL/缺失、顺序要求及重复次数，不只比行数或 checksum。Kuzu 不支持的场景记 N/A，不填 0；类型转换、schema、索引、绑定层、durability 不等价时单独披露，不能用于严格胜负声明。
 
-1. 一次 root descent 的 `BTreeIndex::RangeCursor`；
-2. 有界 candidate batch；
-3. Entity page 分组读取；
-4. Property selected-column 分组读取；
-5. candidate 与 Property column 的对齐和重排；
-6. residual predicate 验证；
-7. early-stop 和字节预算。
+### 6.3 准入规则
 
-索引候选验证不能对每个候选独立执行 Entity Directory 和 Property Directory root lookup。索引和 Property 在同一 generation 原子发布后，查询只做必要的 liveness、shape 和 residual 验证；完整交叉校验由 index build、maintenance、recovery 和 integrity scanner 完成。
+- 正确性、原子发布、恢复、快照、预算和资源清理必须通过。只跑受影响模块的必要测试，不跑全量单元测试；覆盖率可辅助诊断但不是准入指标。
+- S0 预登记主要目标、保护工作负载和资源上限，禁止看结果后更换成功指标。默认期望主要瓶颈场景 P50 至少降低 10%，且跨进程可重复；保护场景 P50/P95 不应出现超过 5% 且超出控制波动的稳定退化。接近阈值或控制波动过大时结论为不确定，定向补测；这些是本方案决策阈值，不是对所有负载的性能保证。
+- 内存上限不提高；峰值 RSS、查询内存、读写字节和稳态文件空间分别报告。超过 5% 的稳定资源增长必须解释并纳入准入决定；A3/A4 不得以不受控写放大、空间或点读退化换扫描速度。若需要突破保护阈值，先提交具体取舍并由用户确认，不静默放宽。
+- 机制性收益（例如 CPU/分配下降）但端到端收益不确定时，如实标记，不宣布提速；不要为凑比例积累复杂度。拒绝无收益机制并保留原实现，不要求每个正确性修复都达到 10% 提速。
+- 与 Kuzu 持平或更快是同语义、同资源核心工作负载的目标，不承诺所有负载全面超过。S6 必须列出尚存差距；完成文档清单不等于性能目标自动达到。
 
-任何 candidate stream 都必须拒绝：
+### 6.4 必要模块测试
 
-- 错误 snapshot 或 index definition；
-- 零 ID、重复 ID 或非法 key；
-- owner、generation、checksum、codec 不一致；
-- 缺失 Property 或列长度不一致；
-- 超过记录或字节预算；
-- 无法恢复逻辑输出顺序的物理重排。
+A1：表达式类型/NULL/溢出、重复行、ORDER BY、optional/路径、子查询、mutation 读侧、取消、预算、结果所有权。A2/A3：最终态、旧快照、索引/约束、大值复用、删除/槽位复用、重开、故障发布和回收。A4：方向、自环、多边、type、continuation、overlay、索引不一致/损坏。A5：不相交/相交写、唯一性、端点删除、约定隔离级别、重试及不确定提交。A6：低预算、spill、磁盘不足、取消、异常、read-only 和进程崩溃后清理。
 
-## Snapshot-local Cache
+复用实际存在的 GoogleTest suite，实施时先查询用例名，使用明确 filter。`scripts/run_tests.sh` 的 `--file` 只限制展示，不限制测试；禁止只传 `--file` 误跑全量。格式/写入模块运行对应故障注入测试；文档修改只运行链接/MDX 验证。不得通过删除断言或改变预期掩盖实现缺陷。
 
-缓存只缓存物理读取结果和已认证的中间状态，不缓存某条查询的最终答案。分为三层：
+## 7. 证据与清理交付
 
-1. **Buffer Pool**：缓存物理 4 KiB page；
-2. **Snapshot route cache**：缓存逻辑 PageId 到当前物理 route 的解析；
-3. **NativeReadSession**：缓存本次 snapshot 中的 typed page、Entity record、token 和 Property column。
+新证据放在独立的 `benchmarks/architecture-design/results/` 日期目录，实施时创建，不改写旧测量结果。每项包含：任务 ID、before/after 源码身份、假设、调用链、改动边界、测试命令与结果、原始样本、正确性记录、指标/波动、采用/拒绝原因和清理清单。本页是唯一进度源，不再创建第二份手工百分比账本。
 
-缓存身份必须包含：
+中间 DB、CSV、日志、构建副本和进程按本轮创建清单清理；只保留必要原始样本、manifest、可复现脚本及有限对照产物。不启动 Docker 作为默认路线；若以后明确使用，容器、卷、镜像按归属清理，不做全局 prune。不得删除用户数据库、已有缓存或其他任务环境。
 
-```text
-logical identity
-snapshot generation
-page generation
-owner kind
-codec/layout version
-```
+## 8. 实施源码入口
 
-Page relocation 只改变 Page Directory route。route generation 变化时，旧 route 自动失效；逻辑 PageId、EntityId、EdgeId、LargeValueRef 和 cursor continuation 不得变化。
+以下仅为定位入口，不表示重写整个文件：
 
-同一 session 内，一个 page 的 owner、generation、LSN、checksum 和 layout 校验结果可以复用。跨 snapshot、跨 generation 或跨 owner kind 不得复用。
+| 工作 | 当前入口（仓库相对路径） |
+|---|---|
+| A1/O1/O2/O4 | `include/graph/query/ir/`、`include/graph/query/logical/`、`src/query/api/QueryEngine.cpp`、`src/query/optimization/LogicalPlanOptimizer.cpp`、`src/query/execution/LogicalPlanReadRuntime.cpp`、`include/graph/query/execution/BoundedBatch.hpp` |
+| A2 | `include/graph/storage/LogicalGraphWrite.hpp`、`src/storage/LogicalGraphTransactionOverlay.cpp`、`src/query/execution/LogicalPlanMutationRuntime.cpp` |
+| A3/O3 | `src/storage/relocatable/property/PropertyCollectionRootStore.cpp`、`src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp`、`include/graph/storage/relocatable/entity/NativeReadSession.hpp` |
+| A4 | `src/storage/relocatable/adjacency/`、`src/storage/relocatable/entity/NativeGraphWritePlanner.cpp`、`src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp` |
+| A5/O5 | `src/storage/relocatable/backend/RelocatableStorageBackend.cpp`、`src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp`、`src/storage/relocatable/index/`、`src/storage/relocatable/metadata/` |
+| A6/O6 | `src/query/execution/LogicalPlanReadRuntime.cpp`、`src/storage/relocatable/` 中已有 scratch、allocator、maintenance 实现 |
+| 验证 | `apps/compare_benchmark/main.cpp`、`benchmarks/graphdb-comparison/runner/`、`tests/src/query/`、`tests/src/storage/` |
 
-## 分层校验
+## 9. 外部参考及适用限制
 
-校验分为三个层次：
-
-| 层次 | 校验 |
-| --- | --- |
-| Page admission | magic、owner、kind、generation、LSN、checksum、layout |
-| Page scan | slot bounds、bitmap/slot directory、record kind、page-local offset |
-| Semantic read | logical ID、endpoint、direction、index key、Property token、snapshot visibility |
-
-完整校验必须在 page admission、recovery 和 integrity scan 执行。已认证 page 在同一 session 内可以使用轻量 record 检查，但不能绕过语义校验，也不能因为 benchmark 模式关闭损坏检测。
-
-## Batch Execution Primitives
-
-`BoundedBatch`、typed columns 和 `SelectionVector` 必须成为 scan、filter、project、aggregate、JOIN、OPTIONAL MATCH、UNION、`LOAD CSV`、`LIMIT` 和 `SKIP` 的共同执行原语。
-
-每个 batch 必须明确：
-
-- row count；
-- selected row count；
-- materialized bytes；
-- column validity/null mask；
-- logical ordinal；
-- cancellation state；
-- downstream ownership。
-
-Filter 应尽可能只修改 selection vector，不复制未选中的完整对象。Project 只有在列被保留时才复制 Property payload。Count、degree 和 existence 操作不得生成完整结果行。
-
-所有算子必须保持原有 null、重复、排序、短路和异常语义。批处理只改变内部执行顺序，不改变 Cypher 可观察结果。
-
-## 写入与维护
-
-在线 mutation、bulk ingest、index build、adjacency rebuild 和后台 maintenance 共享：
-
-```text
-canonical sort order
-byte-aware page builder
-fill/split/merge policy
-codec and checksum
-COW publication
-retirement and reclaim
-```
-
-批量 Edge 写入在一个 transaction-local sorted overlay 中同时规划：
-
-```text
-Edge Entity
-OUT adjacency
-IN adjacency
-Property root
-affected indexes
-```
-
-批量 Edge 写入的预检只解析 Property key/token 的 canonical 形状，不复制或排序 Property value；同一事务 snapshot 内的 token 命中和未命中结果会缓存，预检和物化不会为同一个 key 重复访问 Catalog/Index。真正的 Property root 在统一写入阶段只物化一次。这样可以避免大批量写入在验证阶段产生第二份完整 resolved payload。
-
-标量 Index 写入规划还会按数据库和基准 snapshot generation 缓存已发布 root 的存在性。这样不同实体的 staging 不会重复查询同一个 Metadata Directory；进入新的 generation 后缓存会失效，再为下一个事务重新确认。
-
-不能为每一条 Edge 单独执行 root-to-leaf insertion、page split 或 metadata publication。只有在结构计数器证明 COW amplification 仍是主要成本时，才增加通用 dirty-path COW、Directory merge 或共享 B+Tree WriteBatch；如果证据不成立，保留现有简单路径。
-
-任何写入优化都必须验证：
-
-- writer conflict 和 rebase；
-- short write、ENOSPC 和中断；
-- old snapshot 读取；
-- reopen/recovery；
-- retire queue 和 frame reclaim；
-- 单文件 durability；
-- mutation 前后索引、Property 和 adjacency 的原子可见性。
-
-## 分阶段执行计划
-
-下面是唯一执行顺序。阶段名称描述通用能力，不对应某个 benchmark。
-
-### Stage 0：可信基线和结构计数器
-
-关闭 profile 的诊断开销，固定 Release 编译、数据集、seed、warmup、iterations 和 execution mode。统一记录 `directory_range_calls`、`root_descents`、`metadata_pages_read`、`distinct_page_pins`、`records_decoded`、`selected_values_decoded`、`full_materializations`、`materialized_bytes` 和 `large_value_chunks_read`。计数器必须饱和且不能改变查询结果。
-
-关闭条件：同一运行能够同时解释 latency 和结构工作量，必要测试通过。
-
-### Stage 1：Typed Entity Cursor
-
-Node/Edge 扫描改用 typed page-location cursor，移除通用 Page Directory 全量遍历和 segment 过滤，缓存 pool route 和已认证 page，接入 sequential admission、有界预取和 cancellation。
-
-关闭条件：root descent 与 page pin 不再随每条 record 重复，relocation、reopen、old snapshot、corruption 和 early-stop 测试通过。
-
-### Stage 2：统一 EntityReadShape
-
-审计 query、GDS、procedure、overlay、constraint 和 maintenance 的 Node/Edge 入口，全部使用显式 shape；删除 field-by-field read 和 premature complete materialization，统一 session、budget、cancellation 和 logical order。
-
-关闭条件：topology-only consumer 不创建 Property cursor，完整对象只由 `COMPLETE` 请求产生，null、duplicate、order、limit 和 snapshot 回归通过。
-
-### Stage 3：Property Page Batch Reader
-
-实现 gather/execute/scatter Property page batch；owner root 按 PageId 分组；selected token 使用 offset directory 定位；count、exists、selected、full root API 共享 page cursor；建立 LargeValue offset 到 chunk range 的映射。
-
-关闭条件：一个 session 中一个 Property page 只认证和 pin 一次，selected read 不解码未请求 token，LargeValue selected read 不无条件读取完整 payload，大属性和损坏测试通过。
-
-### Stage 4：Topology-first Adjacency
-
-traversal、degree、count、shortest path、Leiden、GDS 和 procedure 使用 topology/reference shape；多 Node adjacency 使用连续 range cursor；按 Entity page 批量解析 Edge topology；type/endpoint 条件在完整 Property 读取前执行。
-
-关闭条件：topology-only 无无关 Property pin/decode，supernode 可跨多个 leaf 流式读取，self-loop、parallel Edge、continuation、early-stop 和 cancellation 测试通过。
-
-### Stage 5：Index Candidate Stream
-
-exact、range、composite 统一 candidate stream；一次 root descent，按 Entity/Property page 分组验证；保留 generation、owner、checksum、codec、liveness 和 residual 验证；支持 value-major batch 的局部排序、去重和结果重排。
-
-关闭条件：root descent 不随候选数量增长，candidate 不再逐条独立访问两个目录，stale、missing field、duplicate、corruption、concurrent snapshot 和 resource bound 测试通过。
-
-### Stage 6：Batch Execution
-
-将 `BoundedBatch`、typed columns、`SelectionVector` 接入 scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/`LIMIT`/`SKIP`；在 `LOAD CSV` 源边界使用同一套行数/字节预算和 cancellation 契约，在不预读源数据的前提下让下游消费者批处理；selection 与 payload 分离；统一 byte budget 和 cancellation。
-
-关闭条件：empty、all-selected、all-rejected、null、duplicate、unsorted、early-stop 和 aggregate-boundary 语义回归通过，count-like 操作不生成完整实体。
-
-### Stage 7：Snapshot-local Cache 和校验分层
-
-统一 Buffer Pool、route cache、NativeReadSession 生命周期；复用同一 session 内已认证 page；完整 page 校验集中到 admission/recovery/integrity scan，保留 record 和 semantic fail-closed 检查。
-
-关闭条件：route generation 变化不会命中旧 route，跨 snapshot 不污染缓存，corruption、relocation、reopen 和 reclaim 测试通过。
-
-### Stage 8：通用写入批处理
-
-统计 replacement、append、retirement、publication、scratch decode 和 bytes-per-mutation；只有证据证明 COW amplification 是主要成本时，才实现通用 target-page grouping、sorted Directory merge 和 B+Tree WriteBatch。online、bulk、rebuild 共用 page builder 和 publication。
-
-关闭条件：writer conflict、fault injection、ENOSPC、recovery、reclaim、old snapshot 和 concurrent write 测试通过；优化适用于一类 mutation，而不是某个 workload。
-
-### Stage 9：最终评估和覆盖率收口
-
-使用无 profile 的 Release binary，在 macOS、Linux、Windows 执行 smoke、small、medium 以及 warm、opened、cold-ish 矩阵，对比 latency、page work、bytes、内存和文件大小。所有阶段功能和必要测试通过后，再执行完整四维 coverage 收口。
-
-## 测试协议
-
-开发阶段使用最小相关测试：
-
-```bash
-./scripts/run_tests.sh --quick --gtest-filter "SuiteName.*" --file path/to/changed/source.cpp
-```
-
-每个阶段至少覆盖正常单页、跨页、空结果、满结果、early-stop、unsorted、duplicate、missing、malformed input、relocation、reopen、old snapshot、owner/generation/slot generation/checksum/codec corruption、cancellation、record budget、byte budget、LargeValue、压缩、范围读取和 reclaim。完成阶段功能后运行：
-
-```bash
-./scripts/run_tests.sh --quick
-```
-
-全面四维 coverage 在 Stage 9 执行。任何测试不得通过修改断言来掩盖源代码问题。
-
-## 结构验收指标
-
-| 指标 | 目标 |
-| --- | --- |
-| root descents | 与 range/batch 数量相关 |
-| directory range calls | 不随 record 数量线性增长 |
-| distinct page pins | 不超过实际所需 page 的有界倍数 |
-| full materializations | 不超过 shape 明确要求 |
-| selected decodes | 只覆盖请求 token |
-| LargeValue chunks | 只覆盖请求范围 |
-| materialized bytes | 始终受 batch budget 控制 |
-| result order | 与旧语义完全一致 |
-
-如果性能改善无法由这些结构指标解释，阶段不能关闭，应回到共享框架查找重复工作。
-
-## 禁止事项
-
-- 针对 benchmark 名称、Cypher 文本、固定节点数或固定度数添加分支；
-- 恢复旧 Segment Chain 或 Edge 双向链表；
-- 在索引中复制完整 Property 作为 covering copy；
-- 在查询层缓存最终结果；
-- 通过关闭 owner、generation、checksum 或 snapshot 校验换取速度；
-- 假设固定的每页实体数量；
-- 为代码、图片或其他领域增加专用 Store；
-- 增加第二个持久化数据库文件或外部 WAL；
-- 先扩大 page 或 bitmap，再跳过读取路径归因。
-
-完成定义是：所有消费者通过通用 shape、batch、typed cursor、Property column、topology cursor 和 snapshot cache 工作；所有必要功能、生命周期、损坏和资源测试通过；最后的无 profile 多平台 Release 评估能够由结构计数器解释。
-
-## 相关文档
-
-- [原生单文件存储重构方案](native-single-file-storage-plan)
-- [原生能力验收矩阵](native-capability-acceptance-matrix)
-- [关系遍历](../algorithms/relationship-traversal)
-- [属性索引](../algorithms/property-index)
-- [Packed B+Tree 索引](../algorithms/btree-indexing)
+- [Kuzu NodeGroup 设计](https://github.com/kuzudb/kuzu/issues/1474)与[列存/列表处理研究](https://arxiv.org/abs/2103.02284)：说明分组列布局在图数据库中的价值，不证明 ZYX 动态属性、COW 和点读已解决。
+- [Kuzu 性能分析](https://kuzudb.github.io/docs/developer-guide/performance-debugging/)：用于对照计划/算子，不能把不同计时边界相除。
+- [PostgreSQL JIT 适用条件](https://www.postgresql.org/docs/17/jit-decision.html)与[LLVM ORC](https://llvm.org/docs/ORCv2.html)：O8 的编译成本与接入参考，不构成本轮 LLVM 实施要求。

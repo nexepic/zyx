@@ -193,14 +193,18 @@ namespace graph::storage {
 		// optionals represent absent logical IDs; present records remain fully
 		// authenticated by the typed page codec.
 		[[nodiscard]] std::vector<std::optional<NodeEntityRecord>>
-		readNodesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds) const;
+		readNodesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+			const std::function<void(size_t)> &retainedBufferAdmission = {}) const;
 		[[nodiscard]] EdgeEntityRecord readEdgeAt(const MetadataSnapshotPin &snapshot,
 														  const EntityPageLocation &location) const;
 		// Resolves and reads a strictly increasing Edge-ID batch through one
 		// directory range cursor, grouping locations by Entity page. Empty results
 		// represent absent logical IDs; present records remain fully authenticated.
+		// Optional admission covers live result/location/ordinal vector capacities.
+		// Directory cursor and decoded Entity pages are accounted separately.
 		[[nodiscard]] std::vector<std::optional<EdgeEntityRecord>>
-		readEdgesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds) const;
+		readEdgesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+			const std::function<void(size_t)> &retainedBufferAdmission = {}) const;
 		// Ordinary scans walk current physical Entity pages and enumerate their live
 		// slots without a per-record Entity Map lookup. Order is intentionally not a
 		// contract; resumable logical-ID scans use visitNodesAfter below.
@@ -375,12 +379,6 @@ namespace graph::storage {
 		[[nodiscard]] ReadPage loadReadPage(const MetadataSnapshotPin &snapshot, PageId pageId,
 													EntityPageRecordKind expectedKind,
 													BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
-		// A physical scan starts from the Page Directory, so it already owns the
-		// exact current location. Entity pools may also contain LabelSet pages;
-		// those are authenticated and skipped without being decoded as EntityPage.
-		[[nodiscard]] std::optional<ReadPage>
-		loadPhysicalScanReadPage(const MetadataSnapshotPin &snapshot, const CatalogEntry &pool,
-							 const PageLocation &location) const;
 		// Entity Map order commonly groups records from the same Entity page. A
 		// bounded scan retains only that current decoded page, so a transient read is
 		// issued once per contiguous PageId run instead of once per Entity record.

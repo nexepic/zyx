@@ -137,8 +137,8 @@ TEST_F(VectorizedNodeScanIntegrationTest, IndexedPropertyFilterHonorsLimitBefore
 	debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 
 	ASSERT_EQ(result.rowCount(), 1U);
-	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
-	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 1);
 	// The indexed candidate validator may inspect one bounded batch, but the
 	// generic full-scan property prefetch path must not enumerate all 300 Nodes.
 	ASSERT_TRUE(trace.contains("native_graph.read.node_sorted_batch_entries"));

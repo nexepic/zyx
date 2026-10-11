@@ -78,7 +78,8 @@ namespace graph::storage {
 		return bytes;
 	}
 
-	std::vector<uint64_t> EntityLabelSetCodec::decode(std::span<const std::byte> bytes) {
+	std::vector<uint64_t> EntityLabelSetCodec::decode(std::span<const std::byte> bytes,
+		const std::function<void(size_t)> &bufferAdmission) {
 		if (bytes.size() < RSS_ENTITY_LABEL_SET_HEADER_BYTES) {
 			throwLabelSetError(FormatError::FERR_BUFFER_TOO_SMALL,
 						   "relocatable Entity label overflow record is truncated");
@@ -88,12 +89,16 @@ namespace graph::storage {
 						   "relocatable Entity label overflow exceeds one typed slotted-page record");
 		}
 		const uint32_t expectedChecksum = LittleEndianCodec::readU32(bytes, CHECKSUM_OFFSET);
+		if (bufferAdmission) bufferAdmission(bytes.size());
 		std::vector<std::byte> checksumBytes(bytes.begin(), bytes.end());
+		if (bufferAdmission) bufferAdmission(checksumBytes.capacity());
 		LittleEndianCodec::writeU32(checksumBytes, CHECKSUM_OFFSET, 0U);
 		if (checksum(checksumBytes) != expectedChecksum) {
 			throwLabelSetError(FormatError::FERR_CHECKSUM_MISMATCH,
 						   "relocatable Entity label overflow checksum does not match");
 		}
+		std::vector<std::byte>().swap(checksumBytes);
+		if (bufferAdmission) bufferAdmission(0U);
 		if (LittleEndianCodec::readU32(bytes, MAGIC_OFFSET) != RSS_ENTITY_LABEL_SET_MAGIC) {
 			throwLabelSetError(FormatError::FERR_INVALID_MAGIC,
 						   "relocatable Entity label overflow has an invalid magic");
@@ -117,7 +122,9 @@ namespace graph::storage {
 		}
 
 		std::vector<uint64_t> labelIds;
+		if (bufferAdmission) bufferAdmission(static_cast<size_t>(labelCount) * sizeof(uint64_t));
 		labelIds.reserve(labelCount);
+		if (bufferAdmission) bufferAdmission(labelIds.capacity() * sizeof(uint64_t));
 		for (uint32_t index = 0U; index < labelCount; ++index) {
 			labelIds.push_back(LittleEndianCodec::readU64(bytes, LABELS_OFFSET + static_cast<size_t>(index) * LABEL_BYTES));
 		}

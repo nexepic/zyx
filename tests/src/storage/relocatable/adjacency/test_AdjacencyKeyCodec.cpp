@@ -47,6 +47,14 @@ TEST(RelocatableAdjacencyKeyCodecTest, RoundTripsAndPreservesCanonicalOrdering) 
 
 TEST(RelocatableAdjacencyKeyCodecTest, CreatesBoundsAndMatchesOnlyTheRequestedNodeDirection) {
 	const std::vector<std::byte> lower = AdjacencyKeyCodec::lowerBound(GlobalAdjacencyDirection::GAD_OUT, 42U);
+	const auto fixed = AdjacencyKeyCodec::lowerBoundFixed(GlobalAdjacencyDirection::GAD_OUT, 42U);
+	EXPECT_EQ(std::vector<std::byte>(fixed.begin(), fixed.end()), lower);
+	EXPECT_EQ(fixed.front(), std::byte{1});
+	EXPECT_EQ(fixed[8U], std::byte{42});
+	for (size_t index = 9U; index < fixed.size(); ++index) EXPECT_EQ(fixed[index], std::byte{0});
+	expectFormatError([] { static_cast<void>(AdjacencyKeyCodec::lowerBoundFixed(
+		GlobalAdjacencyDirection::GAD_OUT, 0U)); }, FormatError::FERR_INVALID_HEADER);
+
 	const std::vector<std::byte> first =
 			AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 42U, 1U});
 	const std::vector<std::byte> nextNode =

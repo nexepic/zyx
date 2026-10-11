@@ -109,6 +109,20 @@ namespace graph::query::execution {
 		constexpr bool operator==(const LogicalPlanReadRuntimeStats &) const = default;
 	};
 
+	struct LogicalPlanBatchedPropertyRequest {
+		std::string variable;
+		std::string key;
+
+		constexpr bool operator==(const LogicalPlanBatchedPropertyRequest &) const = default;
+	};
+
+	struct LogicalPlanBatchedMetadataRequest {
+		std::string variable;
+		std::string function;
+
+		constexpr bool operator==(const LogicalPlanBatchedMetadataRequest &) const = default;
+	};
+
 	// This runtime deliberately supports only the streaming read subset required
 	// for the first production relocatable query path. Unsupported logical operators
 	// fail closed instead of silently falling back to the legacy physical engine.
@@ -153,6 +167,19 @@ namespace graph::query::execution {
 		evaluateExpressionWithSnapshot(storage::LogicalGraphReadSnapshot &snapshot,
 									   const expressions::Expression &expression, LogicalPlanReadRow &row,
 									   const LogicalPlanReadRuntimeBounds &bounds, const QueryContext &context);
+		// Collects the selected Property reads in expressions that can be safely
+		// prefetched across rows. Unsupported expressions retain their evaluator
+		// path; safe sibling expressions still batch. Returns false if none qualify.
+		[[nodiscard]] static bool collectBatchedPropertyRequests(
+				const std::vector<const expressions::Expression *> &expressions,
+				std::vector<LogicalPlanBatchedPropertyRequest> &requests);
+		[[nodiscard]] static std::vector<LogicalPlanBatchedMetadataRequest> collectBatchedMetadataRequests(
+				const std::vector<const expressions::Expression *> &expressions);
+		// Shares the scoped complete-Entity collector with buffered procedures.
+		// Only properties(), keys() and all-Property map projections request a
+		// complete binding; unsupported nested graph scopes keep their evaluator.
+		[[nodiscard]] static std::vector<std::string> collectBatchedCompleteEntityVariables(
+				const std::vector<const expressions::Expression *> &expressions);
 		// A type-preserving, length-delimited key for bounded DISTINCT consumers
 		// outside the streaming operator tree. Logical entities use stable IDs,
 		// never an ambiguous display representation.

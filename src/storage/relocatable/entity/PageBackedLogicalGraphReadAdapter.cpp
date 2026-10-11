@@ -11,8 +11,10 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <memory_resource>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -26,6 +28,49 @@ namespace graph::storage {
 
 		[[noreturn]] void throwLogicalAdapterError(FormatError error, const char *message) {
 			throw FormatException(error, message);
+		}
+
+		// Admission may throw during allocation. Deallocation never invokes user code.
+		// The caller reconciles released temporary storage after materialization.
+		class AdmittedTemporaryResource final : public std::pmr::memory_resource {
+		public:
+			explicit AdmittedTemporaryResource(const std::function<void(size_t)> &admission) : admission_(admission) {}
+		private:
+			void *do_allocate(size_t bytes, size_t alignment) override {
+				if (bytes > std::numeric_limits<size_t>::max() - retained_) throw std::overflow_error("temporary allocation size overflowed");
+				if (admission_) admission_(retained_ + bytes);
+				void *result = upstream_->allocate(bytes, alignment);
+				retained_ += bytes;
+				return result;
+			}
+			void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+				upstream_->deallocate(pointer, bytes, alignment);
+				retained_ -= bytes;
+			}
+			bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+			const std::function<void(size_t)> &admission_;
+			size_t retained_ = 0U;
+			std::pmr::memory_resource *upstream_ = std::pmr::get_default_resource();
+		};
+
+		void validateNamedPropertyColumnRequest(std::span<const uint64_t> ids,
+			std::span<const std::string_view> keys) {
+			uint64_t previous = 0U;
+			for (const uint64_t id: ids) {
+				if (id == 0U || id <= previous)
+					throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
+						"named Property columns require strictly increasing nonzero Entity IDs");
+				previous = id;
+			}
+			if (std::ranges::any_of(keys, [](std::string_view key) { return key.empty(); }))
+				throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER, "named Property columns require non-empty keys");
+		}
+
+		std::vector<std::vector<PropertyValue>> makeEmptyPropertyColumns(size_t columns, size_t rows) {
+			std::vector<std::vector<PropertyValue>> result;
+			result.reserve(columns);
+			for (size_t column = 0U; column < columns; ++column) result.emplace_back(rows);
+			return result;
 		}
 
 		[[nodiscard]] PageBackedGraphReadDirection pageDirection(LogicalGraphReadDirection direction) {
@@ -124,12 +169,13 @@ namespace graph::storage {
 	}
 
 	std::string PageBackedLogicalGraphReadAdapter::resolveRelationshipTypeName(const MetadataSnapshotPin &snapshot,
-																								 uint64_t tokenId, NativeReadSession &session) const {
-		if (const auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_RELATIONSHIP_TYPE, tokenId);
+																								 uint64_t tokenId, NativeReadSession &session, const std::function<void(size_t)> &copyAdmission) const {
+		if (auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_RELATIONSHIP_TYPE, tokenId, copyAdmission);
 			cached.has_value()) {
-			return *cached;
+			return std::move(*cached);
 		}
-		std::string resolved = names_.resolveRelationshipTypeToken(snapshot, tokenId);
+		std::string resolved = names_.resolveRelationshipTypeTokenWithNameAdmission(snapshot, tokenId, copyAdmission);
+		if (copyAdmission) copyAdmission(resolved.capacity());
 		if (!resolved.empty()) {
 			session.putTokenName(NativeReadSession::TokenNameKind::TNK_RELATIONSHIP_TYPE, tokenId, resolved);
 		}
@@ -137,12 +183,13 @@ namespace graph::storage {
 	}
 
 	std::string PageBackedLogicalGraphReadAdapter::resolvePropertyKeyName(const MetadataSnapshotPin &snapshot,
-																			 uint32_t tokenId, NativeReadSession &session) const {
-		if (const auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, tokenId);
+																			 uint32_t tokenId, NativeReadSession &session, const std::function<void(size_t)> &copyAdmission) const {
+		if (auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, tokenId, copyAdmission);
 			cached.has_value()) {
-			return *cached;
+			return std::move(*cached);
 		}
-		std::string resolved = names_.resolvePropertyKey(snapshot, tokenId);
+		std::string resolved = names_.resolvePropertyKeyWithNameAdmission(snapshot, tokenId, copyAdmission);
+		if (copyAdmission) copyAdmission(resolved.capacity());
 		if (!resolved.empty()) {
 			session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, tokenId, resolved);
 		}
@@ -181,8 +228,19 @@ namespace graph::storage {
 		return tokens;
 	}
 
-	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNode(const MetadataSnapshotPin &snapshot,
-																							const PageBackedGraphNode &node, NativeReadSession &session) const {
+	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNode(
+			const MetadataSnapshotPin &snapshot, const PageBackedGraphNode &node, NativeReadSession &session) const {
+		return materializeNodeImpl(snapshot, node, session);
+	}
+
+	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNode(
+			const MetadataSnapshotPin &snapshot, PageBackedGraphNode &&node, NativeReadSession &session) const {
+		return materializeNodeImpl(snapshot, node, session);
+	}
+
+	template<typename RawNode>
+	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNodeImpl(
+			const MetadataSnapshotPin &snapshot, RawNode &node, NativeReadSession &session) const {
 		// Entity Map publication rejects zero Node IDs before the native read adapter materializes.
 		if (node.node_id == 0U) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
@@ -209,7 +267,7 @@ namespace graph::storage {
 		result.properties.reserve(node.properties.size());
 		std::unordered_set<std::string> propertyNames;
 		propertyNames.reserve(node.properties.size());
-		for (const PropertyCollectionRootEntry &property: node.properties) {
+		for (auto &property: node.properties) {
 			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
@@ -226,13 +284,32 @@ namespace graph::storage {
 			// session cache so a subsequent predicate/projection does not reopen the
 			// Property directory for the same token.
 			session.putProperty(false, node.node_id, property.key_token, property.value);
-			result.properties.push_back({std::move(key), property.value});
+			if constexpr (std::is_const_v<RawNode>) {
+				result.properties.push_back({std::move(key), property.value});
+			} else {
+				result.properties.push_back({std::move(key), std::move(property.value)});
+			}
 		}
+		debug::PerfTrace::addValue("native_graph.read.full_materializations", 1);
 		return result;
 	}
 
-	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::materializeEdge(const MetadataSnapshotPin &snapshot,
-																							const PageBackedGraphEdge &edge, NativeReadSession &session) const {
+	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::materializeEdge(
+			const MetadataSnapshotPin &snapshot, const PageBackedGraphEdge &edge, NativeReadSession &session) const {
+		return materializeEdgeImpl(snapshot, edge, session);
+	}
+
+	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::materializeEdge(
+			const MetadataSnapshotPin &snapshot, PageBackedGraphEdge &&edge, NativeReadSession &session) const {
+		return materializeEdgeImpl(snapshot, edge, session);
+	}
+
+	template<typename RawEdge>
+	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::materializeEdgeImpl(
+			const MetadataSnapshotPin &snapshot, RawEdge &edge, NativeReadSession &session,
+			const std::function<void(size_t)> &typeNameAdmission,
+			const std::function<void(size_t)> &propertySlotsAdmission,
+			const std::function<void(size_t)> &temporaryAdmission) const {
 		// Entity Map and EdgeEntityRecordCodec authenticate these three durable identities.
 		if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
 			throwLogicalAdapterError(
@@ -244,30 +321,57 @@ namespace graph::storage {
 		result.source_node_id = edge.source_node_id;
 		result.target_node_id = edge.target_node_id;
 		if (edge.type_id != 0U) {
-			result.type = resolveRelationshipTypeName(snapshot, edge.type_id, session);
+			result.type = resolveRelationshipTypeName(snapshot, edge.type_id, session, typeNameAdmission);
 			if (result.type.empty()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter resolved an empty Edge type name");
 			}
 		}
+		size_t retainedNameBytes = result.type.empty() ? 0U : result.type.capacity();
+		const auto admitPropertySlots = [&](size_t count) {
+			if (count > std::numeric_limits<size_t>::max() / sizeof(LogicalGraphPropertyEntry)) {
+				throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "logical Edge Property slots overflowed");
+			}
+			if (propertySlotsAdmission) propertySlotsAdmission(count * sizeof(LogicalGraphPropertyEntry));
+		};
+		admitPropertySlots(edge.properties.size());
 		result.properties.reserve(edge.properties.size());
-		std::unordered_set<std::string> propertyNames;
+		admitPropertySlots(result.properties.capacity());
+		// reserve keeps output keys stable while the duplicate set borrows them.
+		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission);
+		std::pmr::unordered_set<std::string_view> propertyNames(&propertyNameMemory);
 		propertyNames.reserve(edge.properties.size());
-		for (const PropertyCollectionRootEntry &property: edge.properties) {
+		for (auto &property: edge.properties) {
 			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter received a zero Edge Property token");
 			}
-			std::string key = resolvePropertyKeyName(snapshot, property.key_token, session);
-			if (key.empty() || !propertyNames.insert(key).second) {
+			std::string key = resolvePropertyKeyName(snapshot, property.key_token, session, [&](size_t bytes) {
+				if (bytes > std::numeric_limits<size_t>::max() - retainedNameBytes) {
+					throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Edge Property name size overflowed");
+				}
+				if (typeNameAdmission) typeNameAdmission(retainedNameBytes + bytes);
+			});
+			if (key.capacity() > std::numeric_limits<size_t>::max() - retainedNameBytes) {
+				throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "retained Edge Property names overflowed");
+			}
+			retainedNameBytes += key.capacity();
+			if (typeNameAdmission) typeNameAdmission(retainedNameBytes);
+			if (key.empty() || propertyNames.contains(key)) {
 				throwLogicalAdapterError(
 						FormatError::FERR_INVALID_STATE,
 						"page-backed logical graph adapter resolved invalid or duplicate Edge Properties");
 			}
-		session.putProperty(true, edge.edge_id, property.key_token, property.value);
-			result.properties.push_back({std::move(key), property.value});
+			session.putProperty(true, edge.edge_id, property.key_token, property.value);
+			if constexpr (std::is_const_v<RawEdge>) {
+				result.properties.push_back({std::move(key), property.value});
+			} else {
+				result.properties.push_back({std::move(key), std::move(property.value)});
+			}
+			propertyNames.insert(result.properties.back().key);
 		}
+		debug::PerfTrace::addValue("native_graph.read.full_materializations", 1);
 		return result;
 	}
 
@@ -310,7 +414,7 @@ namespace graph::storage {
 		}
 		if (!shape.property_tokens.empty()) {
 			const std::array<uint64_t, 1U> ids{nodeId};
-			const std::vector<std::vector<std::optional<PropertyValue>>> columns =
+			auto columns =
 				pages_.readNodePropertyColumnsSorted(snapshot, ids, shape.property_tokens, &active);
 			if (columns.size() != shape.property_tokens.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
@@ -321,14 +425,13 @@ namespace graph::storage {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed shaped Node read changed Property row cardinality");
 				}
-				active.putProperty(false, nodeId, shape.property_tokens[index], columns[index][0]);
 				const std::string key = resolvePropertyKeyName(snapshot, shape.property_tokens[index], active);
 				if (key.empty()) {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 											 "page-backed shaped Node read resolved an empty Property key");
 				}
 				if (columns[index][0].has_value()) {
-					result.properties.push_back({key, *columns[index][0]});
+					result.properties.push_back({key, std::move(*columns[index][0])});
 				}
 			}
 		}
@@ -337,7 +440,7 @@ namespace graph::storage {
 
 	std::vector<LogicalGraphNode> PageBackedLogicalGraphReadAdapter::readNodesShapedSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			const EntityReadShape &shape, NativeReadSession *session) const {
+			const EntityReadShape &shape, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		validateEntityReadShape(shape);
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
@@ -352,8 +455,8 @@ namespace graph::storage {
 		if (shape.all_properties) {
 			std::vector<LogicalGraphNode> result;
 			result.reserve(nodeIds.size());
-			const auto propertyRoots = pages_.readNodePropertiesSorted(snapshot, nodeIds, &active);
-			const auto labelTokens = shape.include_labels
+			auto propertyRoots = pages_.readNodePropertiesSorted(snapshot, nodeIds, &active, admission);
+			auto labelTokens = shape.include_labels
 					? pages_.readNodeLabelTokensSorted(snapshot, nodeIds, &active)
 					: std::vector<std::vector<uint64_t>>{};
 			if (shape.include_labels && labelTokens.size() != nodeIds.size()) {
@@ -371,10 +474,10 @@ namespace graph::storage {
 				PageBackedGraphNode raw;
 				raw.node_id = nodeIds[index];
 				if (shape.include_labels) {
-					raw.label_token_ids = labelTokens[index];
+					raw.label_token_ids = std::move(labelTokens[index]);
 				}
-				raw.properties = propertyRoots[index];
-				result.push_back(materializeNode(snapshot, raw, active));
+				raw.properties = std::move(propertyRoots[index]);
+				result.push_back(materializeNode(snapshot, std::move(raw), active));
 			}
 			return result;
 		}
@@ -387,7 +490,7 @@ namespace graph::storage {
 					"page-backed shaped Node batch changed label cardinality");
 		}
 		if (!shape.property_tokens.empty()) {
-			columns = pages_.readNodePropertyColumnsSorted(snapshot, nodeIds, shape.property_tokens, &active);
+			columns = pages_.readNodePropertyColumnsSorted(snapshot, nodeIds, shape.property_tokens, &active, admission);
 			if (columns.size() != shape.property_tokens.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									 "page-backed shaped Node batch changed Property column cardinality");
@@ -424,10 +527,9 @@ namespace graph::storage {
 				}
 			}
 			for (size_t column = 0U; column < shape.property_tokens.size(); ++column) {
-				const std::optional<PropertyValue> &value = columns[column][row];
-				active.putProperty(false, node.node_id, shape.property_tokens[column], value);
+				auto &value = columns[column][row];
 				if (value.has_value()) {
-					node.properties.push_back({propertyNames[column], *value});
+					node.properties.push_back({propertyNames[column], std::move(*value)});
 				}
 			}
 			result.push_back(std::move(node));
@@ -470,7 +572,7 @@ namespace graph::storage {
 		}
 		if (!shape.property_tokens.empty()) {
 			const std::array<uint64_t, 1U> ids{edgeId};
-			const std::vector<std::vector<std::optional<PropertyValue>>> columns =
+			auto columns =
 				pages_.readEdgePropertyColumnsSorted(snapshot, ids, shape.property_tokens, &active);
 			if (columns.size() != shape.property_tokens.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
@@ -481,14 +583,13 @@ namespace graph::storage {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed shaped Edge read changed Property row cardinality");
 				}
-				active.putProperty(true, edgeId, shape.property_tokens[index], columns[index][0]);
 				const std::string key = resolvePropertyKeyName(snapshot, shape.property_tokens[index], active);
 				if (key.empty()) {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 											 "page-backed shaped Edge read resolved an empty Property key");
 				}
 				if (columns[index][0].has_value()) {
-					result.properties.push_back({key, *columns[index][0]});
+					result.properties.push_back({key, std::move(*columns[index][0])});
 				}
 			}
 		}
@@ -497,7 +598,7 @@ namespace graph::storage {
 
 	std::vector<LogicalGraphEdge> PageBackedLogicalGraphReadAdapter::readEdgesShapedSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
-			const EntityReadShape &shape, NativeReadSession *session) const {
+			const EntityReadShape &shape, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		validateEntityReadShape(shape);
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
@@ -510,7 +611,7 @@ namespace graph::storage {
 								 "page-backed shaped Edge batch changed record cardinality");
 		}
 		if (shape.all_properties) {
-			const auto propertyRoots = pages_.readEdgePropertiesSorted(snapshot, edgeIds, &active);
+			auto propertyRoots = pages_.readEdgePropertiesSorted(snapshot, edgeIds, &active, admission);
 			if (propertyRoots.size() != edgeIds.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 						"page-backed shaped Edge batch changed complete Property cardinality");
@@ -526,14 +627,14 @@ namespace graph::storage {
 				raw.source_node_id = records[index].source_node_id;
 				raw.target_node_id = records[index].target_node_id;
 				raw.type_id = shape.include_type ? records[index].type_id : 0U;
-				raw.properties = propertyRoots[index];
-				result.push_back(materializeEdge(snapshot, raw, active));
+				raw.properties = std::move(propertyRoots[index]);
+				result.push_back(materializeEdge(snapshot, std::move(raw), active));
 			}
 			return result;
 		}
 		std::vector<std::vector<std::optional<PropertyValue>>> columns;
 		if (!shape.property_tokens.empty()) {
-			columns = pages_.readEdgePropertyColumnsSorted(snapshot, edgeIds, shape.property_tokens, &active);
+			columns = pages_.readEdgePropertyColumnsSorted(snapshot, edgeIds, shape.property_tokens, &active, admission);
 			if (columns.size() != shape.property_tokens.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									 "page-backed shaped Edge batch changed Property column cardinality");
@@ -570,8 +671,7 @@ namespace graph::storage {
 				}
 			}
 			for (size_t column = 0U; column < shape.property_tokens.size(); ++column) {
-				const std::optional<PropertyValue> &value = columns[column][row];
-				active.putProperty(true, edge.edge_id, shape.property_tokens[column], value);
+				auto &value = columns[column][row];
 				if (value.has_value()) {
 					if (traceValues) {
 						++selectedPropertyValues;
@@ -584,7 +684,7 @@ namespace graph::storage {
 							selectedPropertyPayloadBytes += valueBytes;
 						}
 					}
-					edge.properties.push_back({propertyNames[column], *value});
+					edge.properties.push_back({propertyNames[column], std::move(*value)});
 				}
 			}
 			result.push_back(std::move(edge));
@@ -614,7 +714,7 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
 		if (!token.has_value() || *token == 0U) {
 			return PropertyValue();
@@ -625,7 +725,7 @@ namespace graph::storage {
 
 	bool PageBackedLogicalGraphReadAdapter::nodePropertyExists(const MetadataSnapshotPin &snapshot,
 																			 const uint64_t nodeId, const std::string_view key,
-																			 NativeReadSession *session) const {
+																			 NativeReadSession *session, const bool requireNonNull) const {
 		if (key.empty()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									"page-backed Node Property presence read requires a non-empty key");
@@ -635,9 +735,9 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
-		return token.has_value() && *token != 0U && pages_.nodePropertyExists(snapshot, nodeId, *token, &active);
+		return token.has_value() && *token != 0U && pages_.nodePropertyExists(snapshot, nodeId, *token, &active, requireNonNull);
 	}
 
 	std::vector<PropertyValue> PageBackedLogicalGraphReadAdapter::readNodePropertiesSorted(
@@ -652,7 +752,7 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
 
 		std::vector<PropertyValue> result(nodeIds.size());
@@ -673,22 +773,20 @@ namespace graph::storage {
 
 	std::vector<std::vector<PropertyValue>> PageBackedLogicalGraphReadAdapter::readNodePropertyColumnsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			const std::span<const std::string_view> keys, NativeReadSession *session) const {
+			const std::span<const std::string_view> keys, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission) const {
+		validateNamedPropertyColumnRequest(nodeIds, keys);
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
-		std::vector<std::vector<PropertyValue>> result(keys.size(), std::vector<PropertyValue>(nodeIds.size()));
+		auto result = makeEmptyPropertyColumns(keys.size(), nodeIds.size());
 		std::vector<std::pair<uint32_t, size_t>> resolved;
 		resolved.reserve(keys.size());
 		for (size_t index = 0U; index < keys.size(); ++index) {
-			if (keys[index].empty()) {
-				throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
-									  "page-backed Node Property column read requires non-empty keys");
-			}
 			const std::optional<std::optional<uint32_t>> cached = active.propertyToken(keys[index]);
 			const std::optional<uint32_t> token =
 					cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, keys[index]);
 			if (!cached.has_value()) {
-				active.putPropertyToken(std::string(keys[index]), token);
+				active.putPropertyToken(keys[index], token);
 			}
 			if (token.has_value() && *token != 0U) {
 				resolved.emplace_back(*token, index);
@@ -696,31 +794,47 @@ namespace graph::storage {
 		}
 		std::ranges::sort(resolved, {}, &std::pair<uint32_t, size_t>::first);
 		std::vector<uint32_t> tokens;
-		std::vector<std::vector<size_t>> outputColumns;
+		size_t uniqueTokens = 0U;
+		uint32_t previousToken = 0U;
 		for (const auto &[token, outputIndex]: resolved) {
-			if (tokens.empty() || tokens.back() != token) {
-				tokens.push_back(token);
-				outputColumns.emplace_back();
-			}
-			outputColumns.back().push_back(outputIndex);
+			if (token != previousToken) { ++uniqueTokens; previousToken = token; }
 		}
+		tokens.reserve(uniqueTokens);
+		for (const auto &[token, outputIndex]: resolved)
+			if (tokens.empty() || tokens.back() != token) tokens.push_back(token);
 		if (tokens.empty()) {
 			return result;
 		}
-		const std::vector<std::vector<std::optional<PropertyValue>>> values =
-				pages_.readNodePropertyColumnsSorted(snapshot, nodeIds, tokens, &active);
+		std::vector<std::vector<std::optional<PropertyValue>>> values =
+				pages_.readNodePropertyColumnsSorted(snapshot, nodeIds, tokens, &active, admission);
 		if (values.size() != tokens.size()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed Node Property column read changed column cardinality");
 		}
+		size_t resolvedIndex = 0U;
 		for (size_t tokenIndex = 0U; tokenIndex < values.size(); ++tokenIndex) {
 			if (values[tokenIndex].size() != nodeIds.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									  "page-backed Node Property column read changed row cardinality");
 			}
-			for (const size_t outputIndex: outputColumns[tokenIndex]) {
+			size_t groupEnd = resolvedIndex;
+			while (groupEnd < resolved.size() && resolved[groupEnd].first == tokens[tokenIndex]) ++groupEnd;
+			for (; resolvedIndex < groupEnd; ++resolvedIndex) {
+				const size_t outputIndex = resolved[resolvedIndex].second;
+				const bool lastAlias = resolvedIndex + 1U == groupEnd;
 				for (size_t row = 0U; row < nodeIds.size(); ++row) {
-					result[outputIndex][row] = values[tokenIndex][row].value_or(PropertyValue());
+					auto &value = values[tokenIndex][row];
+					// Duplicate requested keys need independent values; the last alias
+					// can take the decoded payload without another copy.
+					if (admission != nullptr && value.has_value() && !lastAlias) {
+						const size_t encodedBytes = CanonicalPropertyValueCodec::encodedSize(*value);
+						if (encodedBytes > std::numeric_limits<size_t>::max() - sizeof(uint32_t)) {
+							throw std::overflow_error("logical Property entry size overflowed");
+						}
+						(*admission)(encodedBytes + sizeof(uint32_t));
+					}
+					result[outputIndex][row] = !value.has_value() ? PropertyValue()
+							: lastAlias ? std::move(*value) : *value;
 				}
 			}
 		}
@@ -739,7 +853,7 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
 		if (!token.has_value() || *token == 0U) {
 			return PropertyValue();
@@ -750,7 +864,7 @@ namespace graph::storage {
 
 	bool PageBackedLogicalGraphReadAdapter::edgePropertyExists(const MetadataSnapshotPin &snapshot,
 																			 const uint64_t edgeId, const std::string_view key,
-																			 NativeReadSession *session) const {
+																			 NativeReadSession *session, const bool requireNonNull) const {
 		if (key.empty()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									"page-backed Edge Property presence read requires a non-empty key");
@@ -760,9 +874,9 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
-		return token.has_value() && *token != 0U && pages_.edgePropertyExists(snapshot, edgeId, *token, &active);
+		return token.has_value() && *token != 0U && pages_.edgePropertyExists(snapshot, edgeId, *token, &active, requireNonNull);
 	}
 
 	std::vector<PropertyValue> PageBackedLogicalGraphReadAdapter::readEdgePropertiesSorted(
@@ -777,7 +891,7 @@ namespace graph::storage {
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
 		if (!cached.has_value()) {
-			active.putPropertyToken(std::string(key), token);
+			active.putPropertyToken(key, token);
 		}
 
 		std::vector<PropertyValue> result(edgeIds.size());
@@ -798,22 +912,20 @@ namespace graph::storage {
 
 	std::vector<std::vector<PropertyValue>> PageBackedLogicalGraphReadAdapter::readEdgePropertyColumnsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
-			const std::span<const std::string_view> keys, NativeReadSession *session) const {
+			const std::span<const std::string_view> keys, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission) const {
+		validateNamedPropertyColumnRequest(edgeIds, keys);
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
-		std::vector<std::vector<PropertyValue>> result(keys.size(), std::vector<PropertyValue>(edgeIds.size()));
+		auto result = makeEmptyPropertyColumns(keys.size(), edgeIds.size());
 		std::vector<std::pair<uint32_t, size_t>> resolved;
 		resolved.reserve(keys.size());
 		for (size_t index = 0U; index < keys.size(); ++index) {
-			if (keys[index].empty()) {
-				throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
-									  "page-backed Edge Property column read requires non-empty keys");
-			}
 			const std::optional<std::optional<uint32_t>> cached = active.propertyToken(keys[index]);
 			const std::optional<uint32_t> token =
 					cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, keys[index]);
 			if (!cached.has_value()) {
-				active.putPropertyToken(std::string(keys[index]), token);
+				active.putPropertyToken(keys[index], token);
 			}
 			if (token.has_value() && *token != 0U) {
 				resolved.emplace_back(*token, index);
@@ -821,19 +933,19 @@ namespace graph::storage {
 		}
 		std::ranges::sort(resolved, {}, &std::pair<uint32_t, size_t>::first);
 		std::vector<uint32_t> tokens;
-		std::vector<std::vector<size_t>> outputColumns;
+		size_t uniqueTokens = 0U;
+		uint32_t previousToken = 0U;
 		for (const auto &[token, outputIndex]: resolved) {
-			if (tokens.empty() || tokens.back() != token) {
-				tokens.push_back(token);
-				outputColumns.emplace_back();
-			}
-			outputColumns.back().push_back(outputIndex);
+			if (token != previousToken) { ++uniqueTokens; previousToken = token; }
 		}
+		tokens.reserve(uniqueTokens);
+		for (const auto &[token, outputIndex]: resolved)
+			if (tokens.empty() || tokens.back() != token) tokens.push_back(token);
 		if (tokens.empty()) {
 			return result;
 		}
-		const std::vector<std::vector<std::optional<PropertyValue>>> values =
-				pages_.readEdgePropertyColumnsSorted(snapshot, edgeIds, tokens, &active);
+		std::vector<std::vector<std::optional<PropertyValue>>> values =
+				pages_.readEdgePropertyColumnsSorted(snapshot, edgeIds, tokens, &active, admission);
 		if (values.size() != tokens.size()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed Edge Property column read changed column cardinality");
@@ -841,15 +953,19 @@ namespace graph::storage {
 		const bool traceValues = debug::PerfTrace::areValuesEnabled();
 		size_t copiedValues = 0U;
 		size_t copiedPayloadBytes = 0U;
+		size_t resolvedIndex = 0U;
 		for (size_t tokenIndex = 0U; tokenIndex < values.size(); ++tokenIndex) {
 			if (values[tokenIndex].size() != edgeIds.size()) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									  "page-backed Edge Property column read changed row cardinality");
 			}
-			for (const size_t outputIndex: outputColumns[tokenIndex]) {
+			size_t groupEnd = resolvedIndex;
+			while (groupEnd < resolved.size() && resolved[groupEnd].first == tokens[tokenIndex]) ++groupEnd;
+			for (; resolvedIndex < groupEnd; ++resolvedIndex) {
+				const size_t outputIndex = resolved[resolvedIndex].second;
+				const bool lastAlias = resolvedIndex + 1U == groupEnd;
 				for (size_t row = 0U; row < edgeIds.size(); ++row) {
-					const std::optional<PropertyValue> &value = values[tokenIndex][row];
-					result[outputIndex][row] = value.value_or(PropertyValue());
+					std::optional<PropertyValue> &value = values[tokenIndex][row];
 					if (traceValues && value.has_value()) {
 						++copiedValues;
 						const size_t valueBytes = property_utils::getPropertyValueSize(*value);
@@ -857,6 +973,15 @@ namespace graph::storage {
 									? std::numeric_limits<size_t>::max()
 									: copiedPayloadBytes + valueBytes;
 					}
+					if (admission != nullptr && value.has_value() && !lastAlias) {
+						const size_t encodedBytes = CanonicalPropertyValueCodec::encodedSize(*value);
+						if (encodedBytes > std::numeric_limits<size_t>::max() - sizeof(uint32_t)) {
+							throw std::overflow_error("logical Property entry size overflowed");
+						}
+						(*admission)(encodedBytes + sizeof(uint32_t));
+					}
+					result[outputIndex][row] = !value.has_value() ? PropertyValue()
+							: lastAlias ? std::move(*value) : *value;
 				}
 			}
 		}
@@ -923,7 +1048,6 @@ namespace graph::storage {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 											 "page-backed Node reference read changed Property row cardinality");
 				}
-				active.putProperty(false, nodeId, shape.property_tokens[index], columns[index][0]);
 			}
 		}
 		return {nodeId, false, 0U, 0U, 0U};
@@ -956,7 +1080,6 @@ namespace graph::storage {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 											 "page-backed Edge reference read changed Property row cardinality");
 				}
-				active.putProperty(true, edgeId, shape.property_tokens[index], columns[index][0]);
 			}
 		}
 		return {edgeId, true, edge.source_node_id, edge.target_node_id, edge.type_id};
@@ -1086,12 +1209,21 @@ namespace graph::storage {
 	}
 
 	LogicalGraphNodePage PageBackedLogicalGraphReadAdapter::scanNodesAfter(const MetadataSnapshotPin &snapshot,
-																						   uint64_t afterNodeId, size_t maximumRecords,
-																						   size_t maximumMetadataPages, NativeReadSession *session) const {
+																																								   uint64_t afterNodeId, size_t maximumRecords,
+																																								   size_t maximumMetadataPages, NativeReadSession *session) const {
+		return scanNodesAfter(snapshot, afterNodeId, maximumRecords, maximumMetadataPages,
+																																								   EntityReadShape{.include_labels = true, .all_properties = true}, session);
+	}
+
+	LogicalGraphNodePage PageBackedLogicalGraphReadAdapter::scanNodesAfter(const MetadataSnapshotPin &snapshot,
+																																								   uint64_t afterNodeId, size_t maximumRecords,
+																																								   size_t maximumMetadataPages, const EntityReadShape &shape,
+																																								   NativeReadSession *session) const {
+		validateEntityReadShape(shape);
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const PageBackedGraphNodePage raw =
-				pages_.scanNodesAfter(snapshot, afterNodeId, maximumRecords, maximumMetadataPages, &active);
+				pages_.scanNodesAfter(snapshot, afterNodeId, maximumRecords, maximumMetadataPages, shape, &active);
 		LogicalGraphNodePage result;
 		result.may_have_more = raw.may_have_more;
 		result.metadata_pages_visited = raw.metadata_pages_visited;
@@ -1105,34 +1237,78 @@ namespace graph::storage {
 	LogicalGraphAdjacencyPage PageBackedLogicalGraphReadAdapter::scanAdjacentEdges(
 			const MetadataSnapshotPin &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
 			std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
-			NativeReadSession *session) const {
+			NativeReadSession *session, const SelectedPropertyReadAdmission *admission,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
-		const PageBackedGraphAdjacencyPage raw = pages_.scanAdjacentEdges(
-				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active);
+		PageBackedGraphAdjacencyPage raw = pages_.scanAdjacentEdges(
+				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, admission, retainedBufferAdmission);
+		const auto checkedBytes = [](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "logical adjacency buffer size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			return bytes;
+		};
+		const auto admitBuffers = [&](size_t base, size_t count, size_t width) {
+			const size_t bytes = checkedBytes(base, count, width);
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes);
+			return bytes;
+		};
+		size_t rawBytes = checkedBytes(0U, raw.edges.capacity(), sizeof(PageBackedGraphEdge));
+		for (const auto &edge : raw.edges) {
+			rawBytes = checkedBytes(rawBytes, edge.properties.capacity(), sizeof(PropertyCollectionRootEntry));
+		}
+		admitBuffers(rawBytes, 0U, 0U);
+		admitBuffers(rawBytes, raw.edges.size(), sizeof(LogicalGraphEdge));
 		LogicalGraphAdjacencyPage result;
 		result.edges.reserve(raw.edges.size());
-		for (const PageBackedGraphEdge &edge: raw.edges) {
-			result.edges.push_back(materializeEdge(snapshot, edge, active));
+		const size_t conversionBytes = admitBuffers(rawBytes, result.edges.capacity(), sizeof(LogicalGraphEdge));
+		size_t typeBytes = 0U, propertySlotsBytes = 0U;
+		for (PageBackedGraphEdge &edge: raw.edges) {
+			size_t currentPropertySlots = 0U, currentTypeBytes = 0U, temporaryBytes = 0U;
+			const auto baseBytes = [&] { return checkedBytes(checkedBytes(conversionBytes, propertySlotsBytes, 1U), typeBytes, 1U); };
+			auto logical = materializeEdgeImpl(snapshot, edge, active,
+				[&](size_t bytes) { currentTypeBytes = bytes; admitBuffers(checkedBytes(checkedBytes(baseBytes(), temporaryBytes, 1U), currentPropertySlots, 1U), bytes, 1U); },
+				[&](size_t bytes) { currentPropertySlots = bytes; admitBuffers(checkedBytes(checkedBytes(baseBytes(), temporaryBytes, 1U), currentTypeBytes, 1U), bytes, 1U); },
+				[&](size_t bytes) { temporaryBytes = bytes; admitBuffers(checkedBytes(checkedBytes(baseBytes(), currentPropertySlots, 1U), currentTypeBytes, 1U), bytes, 1U); });
+			propertySlotsBytes = checkedBytes(propertySlotsBytes, currentPropertySlots, 1U);
+			typeBytes = checkedBytes(typeBytes, currentTypeBytes, 1U);
+			admitBuffers(checkedBytes(conversionBytes, propertySlotsBytes, 1U), typeBytes, 1U);
+			result.edges.push_back(std::move(logical));
 		}
 		result.continuation = logicalContinuation(raw.continuation);
+		admitBuffers(checkedBytes(typeBytes, propertySlotsBytes, 1U), result.edges.capacity(), sizeof(LogicalGraphEdge));
 		return result;
 	}
 
 	LogicalGraphAdjacencyTopologyPage PageBackedLogicalGraphReadAdapter::scanAdjacentEdgeTopologies(
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, const LogicalGraphReadDirection direction,
 			const std::optional<LogicalGraphAdjacencyContinuation> continuation, const size_t maximumRecords,
-			NativeReadSession *session) const {
+			NativeReadSession *session, const std::function<void(size_t)> &retainedBufferAdmission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
-		const PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
-				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active);
+		PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
+				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, retainedBufferAdmission);
 		if (raw.edges.size() != raw.edge_ids.size()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph topology scan returned mismatched Edge identities and records");
 		}
+		const auto checkedBytes = [](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "logical topology buffer size overflowed");
+			}
+			return base + count * width;
+		};
+		const size_t rawBytes = checkedBytes(checkedBytes(0U, raw.edge_ids.capacity(), sizeof(uint64_t)),
+			raw.edges.capacity(), sizeof(EdgeEntityRecord));
+		const auto admit = [&](size_t bytes) { if (retainedBufferAdmission) retainedBufferAdmission(bytes); };
 		LogicalGraphAdjacencyTopologyPage result;
+		admit(checkedBytes(rawBytes, raw.edges.size(), sizeof(LogicalGraphEdgeTopology)));
 		result.edges.reserve(raw.edges.size());
+		const size_t conversionBytes = checkedBytes(rawBytes, result.edges.capacity(), sizeof(LogicalGraphEdgeTopology));
+		admit(conversionBytes);
+		size_t typeBytes = 0U;
 		for (size_t index = 0U; index < raw.edges.size(); ++index) {
 			const EdgeEntityRecord &edge = raw.edges[index];
 			const uint64_t edgeId = raw.edge_ids[index];
@@ -1142,32 +1318,48 @@ namespace graph::storage {
 			}
 			std::string type;
 			if (edge.type_id != 0U) {
-				type = resolveRelationshipTypeName(snapshot, edge.type_id, active);
+				type = resolveRelationshipTypeName(snapshot, edge.type_id, active,
+					[&](size_t bytes) { admit(checkedBytes(checkedBytes(conversionBytes, typeBytes, 1U), bytes, 1U)); });
 				if (type.empty()) {
 					throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 											  "page-backed graph adjacency topology resolved an empty Edge type");
 				}
 			}
+			typeBytes = checkedBytes(typeBytes, type.capacity(), 1U);
+			admit(checkedBytes(conversionBytes, typeBytes, 1U));
 			result.edges.push_back({edgeId, edge.source_node_id, edge.target_node_id, std::move(type)});
 		}
 		result.continuation = logicalContinuation(raw.continuation);
+		std::vector<uint64_t>().swap(raw.edge_ids);
+		std::vector<EdgeEntityRecord>().swap(raw.edges);
+		admit(checkedBytes(checkedBytes(0U, result.edges.capacity(), sizeof(LogicalGraphEdgeTopology)), typeBytes, 1U));
 		return result;
 	}
 
 	LogicalGraphAdjacencyReferencePage PageBackedLogicalGraphReadAdapter::scanAdjacentEdgeRefs(
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, const LogicalGraphReadDirection direction,
 			const std::optional<LogicalGraphAdjacencyContinuation> continuation, const size_t maximumRecords,
-			NativeReadSession *session) const {
+			NativeReadSession *session, const std::function<void(size_t)> &retainedBufferAdmission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
-		const PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
-				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active);
+		PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
+				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, retainedBufferAdmission);
 		if (raw.edges.size() != raw.edge_ids.size()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph reference scan returned mismatched Edge identities and records");
 		}
+		const auto checkedBytes = [](size_t base, size_t count, size_t width) {
+			if (count > (std::numeric_limits<size_t>::max() - base) / width)
+				throwLogicalAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "logical reference buffer size overflowed");
+			return base + count * width;
+		};
+		const auto admit = [&](size_t bytes) { if (retainedBufferAdmission) retainedBufferAdmission(bytes); };
+		const size_t rawBytes = checkedBytes(checkedBytes(0U, raw.edge_ids.capacity(), sizeof(uint64_t)),
+			raw.edges.capacity(), sizeof(EdgeEntityRecord));
 		LogicalGraphAdjacencyReferencePage result;
+		admit(checkedBytes(rawBytes, raw.edges.size(), sizeof(EntityRef)));
 		result.edges.reserve(raw.edges.size());
+		admit(checkedBytes(rawBytes, result.edges.capacity(), sizeof(EntityRef)));
 		for (size_t index = 0U; index < raw.edges.size(); ++index) {
 			const EdgeEntityRecord &edge = raw.edges[index];
 			const uint64_t edgeId = raw.edge_ids[index];
@@ -1181,17 +1373,21 @@ namespace graph::storage {
 			result.edges.push_back({edgeId, true, edge.source_node_id, edge.target_node_id, edge.type_id});
 		}
 		result.continuation = logicalContinuation(raw.continuation);
+		std::vector<uint64_t>().swap(raw.edge_ids);
+		std::vector<EdgeEntityRecord>().swap(raw.edges);
+		admit(checkedBytes(0U, result.edges.capacity(), sizeof(EntityRef)));
 		return result;
 	}
 
 	bool PageBackedLogicalGraphReadAdapter::visitAdjacentEdgeRefsForNodesUntil(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
 			const LogicalGraphReadDirection direction, const size_t maximumRecords,
-			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session) const {
+			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitAdjacentEdgeRefsForNodesUntil(snapshot, nodeIds, pageDirection(direction), maximumRecords,
-				[&visitor](const EntityRef &reference) { return visitor(reference); }, &active);
+				[&visitor](const EntityRef &reference) { return visitor(reference); }, &active, retainedBufferAdmission);
 	}
 
 	PageBackedLogicalGraphAdjacencyCursor PageBackedLogicalGraphReadAdapter::openAdjacentEdgeCursor(

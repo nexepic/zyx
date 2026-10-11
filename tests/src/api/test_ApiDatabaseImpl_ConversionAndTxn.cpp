@@ -118,6 +118,47 @@ TEST_F(CppApiTest, ExecuteParamsCoversTxnDelegateAndAutoCommitBranches) {
 	EXPECT_TRUE(verifyRes.isSuccess());
 }
 
+TEST_F(CppApiTest, BatchEdgeDeletePreservesPackedAdjacencyAfterBulkTransaction) {
+	auto writer = db->beginTransaction();
+	std::vector<int64_t> nodes;
+	for (int64_t i = 0; i < 128; ++i) {
+		nodes.push_back(writer.createNode(std::vector<std::string>{"PackedNode", "PackedMember"}, {{"ordinal", i}}));
+	}
+	for (int64_t i = 0; i < 256; ++i) {
+		static_cast<void>(writer.createEdge(nodes[i % 128], nodes[(i % 128 + 1) % 128],
+				"PackedLink", {{"ordinal", i}, {"value", i * 17}}));
+	}
+	ASSERT_NO_THROW(writer.commit());
+	auto deleted = db->execute("MATCH ()-[r:PackedLink]->() WHERE r.ordinal % 11 = 0 DELETE r");
+	ASSERT_TRUE(deleted.isSuccess()) << deleted.getError();
+	const auto verify = [&] {
+		auto result = db->execute("MATCH (a:PackedNode)-[r:PackedLink]->(b:PackedNode) "
+				"RETURN a.ordinal,b.ordinal,r.ordinal,r.value");
+		ASSERT_TRUE(result.isSuccess()) << result.getError();
+		std::vector<std::vector<int64_t>> actual, expected;
+		while (result.hasNext()) {
+			result.next();
+			std::vector<int64_t> row;
+			for (int column = 0; column < 4; ++column) {
+				const auto value = result.get(column);
+				ASSERT_TRUE(std::holds_alternative<int64_t>(value));
+				row.push_back(std::get<int64_t>(value));
+			}
+			actual.push_back(std::move(row));
+		}
+		for (int64_t i = 0; i < 256; ++i) {
+			if (i % 11 != 0) expected.push_back({i % 128, (i % 128 + 1) % 128, i, i * 17});
+		}
+		std::ranges::sort(actual);
+		std::ranges::sort(expected);
+		EXPECT_EQ(actual, expected);
+	};
+	verify();
+	db->close();
+	ASSERT_TRUE(db->openIfExists());
+	verify();
+}
+
 TEST_F(CppApiTest, CreateNodeWithMultipleLabelsCoversImplicitAndExplicitTxnPaths) {
 	db->createNode(std::vector<std::string>{"L1", "L2"}, {{"k", (int64_t) 1}});
 	db->save();

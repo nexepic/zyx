@@ -23,6 +23,7 @@
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 using namespace graph::storage;
 using namespace std::chrono_literals;
@@ -302,5 +303,26 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, InspectsPinnedSnapshotsOnlyUnder
 	foreignWriter.release();
 	writer.release();
 	pinned.release();
+	EXPECT_EQ(snapshots.activeSnapshotCount(), 0U);
+}
+
+TEST_F(RelocatableMetadataSnapshotRegistryTest, DecodedContextFollowsPinMovesAndIsReleasedWithThePin) {
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(superblock(1U, 1U));
+	MetadataSnapshotRegistry snapshots(bootstrap);
+	auto pin = snapshots.openSnapshot();
+	std::weak_ptr<MetadataPageReadContext> original = pin.readContext();
+	auto *identity = pin.readContext().get();
+	MetadataSnapshotPin moved(std::move(pin));
+	EXPECT_FALSE(pin.isValid());
+	EXPECT_EQ(pin.readContext(), nullptr);
+	EXPECT_EQ(moved.readContext().get(), identity);
+	auto replacement = snapshots.openSnapshot();
+	std::weak_ptr<MetadataPageReadContext> discarded = replacement.readContext();
+	replacement = std::move(moved);
+	EXPECT_TRUE(discarded.expired());
+	EXPECT_FALSE(original.expired());
+	replacement.release();
+	EXPECT_TRUE(original.expired());
 	EXPECT_EQ(snapshots.activeSnapshotCount(), 0U);
 }

@@ -29,9 +29,15 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <functional>
+#include "graph/query/execution/GuardedPropertyCopy.hpp"
+#include "graph/query/execution/RetainedPropertyBytes.hpp"
+#include <memory_resource>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -85,6 +91,8 @@ public:
 	 * @param context The evaluation context for expression evaluation
 	 */
 	virtual void update(const PropertyValue& value) = 0;
+	virtual void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &) { update(value); }
+
 
 	/**
 	 * @brief Updates the accumulator for COUNT(*)-style row counting.
@@ -99,10 +107,21 @@ public:
 	 */
 	[[nodiscard]] virtual PropertyValue getResult() const = 0;
 
+	// Destructive finalization for owners that transfer a completed group.
+	// getResult() remains available for callers requiring a reusable snapshot.
+	[[nodiscard]] virtual PropertyValue takeResult() {
+		PropertyValue result = getResult();
+		reset();
+		return result;
+	}
+
 	// Bytes retained by the accumulator after its last update. This is a
 	// payload estimate used by the logical runtime's aggregate memory guard;
 	// scalar accumulators normally retain no user-owned payload.
 	[[nodiscard]] virtual size_t retainedBytes() const { return 0U; }
+	// Excludes storage already charged by an explicitly supplied resource.
+	[[nodiscard]] virtual size_t retainedBytesForAdmission() const { return retainedBytes(); }
+
 
 	/**
 	 * @brief Resets the accumulator to its initial state.
@@ -280,14 +299,28 @@ public:
 		}
 	}
 
+	void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &admit) override {
+		if (value.getType() == PropertyType::NULL_TYPE || (hasValue_ && !(value < minValue_))) return;
+		const auto bytes = detail::retainedPropertyValueBytes(value, [&] { admit(0U); });
+		admit(bytes);
+		PropertyValue copied = detail::copyPropertyValueGuarded(value, [&] { admit(bytes); }, true);
+		minValue_ = std::move(copied); hasValue_ = true;
+	}
+
 	[[nodiscard]] PropertyValue getResult() const override {
 		if (!hasValue_) {
 			return PropertyValue(); // NULL if no values
 		}
 		return minValue_;
 	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		if (!hasValue_) return PropertyValue();
+		PropertyValue result = std::move(minValue_);
+		reset();
+		return result;
+	}
 	[[nodiscard]] size_t retainedBytes() const override {
-		return hasValue_ ? property_utils::getPropertyValueSize(minValue_) : 0U;
+		return hasValue_ ? detail::retainedPropertyValueBytes(minValue_, [] {}) : 0U;
 	}
 
 	void reset() override {
@@ -329,14 +362,28 @@ public:
 		}
 	}
 
+	void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &admit) override {
+		if (value.getType() == PropertyType::NULL_TYPE || (hasValue_ && !(value > maxValue_))) return;
+		const auto bytes = detail::retainedPropertyValueBytes(value, [&] { admit(0U); });
+		admit(bytes);
+		PropertyValue copied = detail::copyPropertyValueGuarded(value, [&] { admit(bytes); }, true);
+		maxValue_ = std::move(copied); hasValue_ = true;
+	}
+
 	[[nodiscard]] PropertyValue getResult() const override {
 		if (!hasValue_) {
 			return PropertyValue(); // NULL if no values
 		}
 		return maxValue_;
 	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		if (!hasValue_) return PropertyValue();
+		PropertyValue result = std::move(maxValue_);
+		reset();
+		return result;
+	}
 	[[nodiscard]] size_t retainedBytes() const override {
-		return hasValue_ ? property_utils::getPropertyValueSize(maxValue_) : 0U;
+		return hasValue_ ? detail::retainedPropertyValueBytes(maxValue_, [] {}) : 0U;
 	}
 
 	void reset() override {
@@ -371,13 +418,31 @@ public:
 		values_.push_back(value);
 	}
 
+	void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &admit) override {
+		if (value.getType() == PropertyType::NULL_TYPE) return;
+		const auto payload = detail::retainedPropertyValueBytes(value, [&] { admit(0U); });
+		const bool grow = values_.size() == values_.capacity();
+		const size_t capacity = grow ? (values_.capacity() ? checkedAggregateBytesMul(values_.capacity(), 2U) : 1U) : values_.capacity();
+		const size_t peak = checkedAggregateBytesAdd(payload, grow ? checkedAggregateBytesMul(capacity, sizeof(PropertyValue)) : 0U);
+		admit(peak);
+		PropertyValue copied = detail::copyPropertyValueGuarded(value, [&] { admit(peak); }, true);
+		if (grow) values_.reserve(capacity);
+		values_.push_back(std::move(copied));
+	}
+
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(values_);
+	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		PropertyValue result(std::move(values_));
+		std::vector<PropertyValue>().swap(values_);
+		reset();
+		return result;
 	}
 	[[nodiscard]] size_t retainedBytes() const override {
 		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
 		for (const PropertyValue &value: values_) {
-			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+			total = checkedAggregateBytesAdd(total, detail::retainedPropertyValueBytes(value, [] {}));
 		}
 		return total;
 	}
@@ -434,22 +499,47 @@ private:
 class CollectDistinctAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
-		if (value.getType() == PropertyType::NULL_TYPE) {
-			return;
-		}
-		if (seen_.insert(value)) {
-			values_.push_back(value);
+		updateAdmitted(value, [](size_t) {});
+	}
+
+	void updateAdmitted(const PropertyValue &value, const std::function<void(size_t)> &admit) override {
+		if (value.getType() == PropertyType::NULL_TYPE || seen_.contains(value)) return;
+		const size_t payload = detail::retainedPropertyValueBytes(value, [&] { admit(0U); });
+		const bool grow = values_.size() == values_.capacity();
+		const size_t capacity = grow ? (values_.capacity() ? checkedAggregateBytesMul(values_.capacity(), 2U) : 1U) : values_.capacity();
+		const size_t peak = checkedAggregateBytesAdd(checkedAggregateBytesMul(payload, 2U),
+			grow ? checkedAggregateBytesMul(capacity, sizeof(PropertyValue)) : 0U);
+		admit(peak);
+		PropertyValue output = detail::copyPropertyValueGuarded(value, [&] { admit(peak); }, true);
+		const auto type = value.getType();
+		const bool fallback = type == PropertyType::DURATION || type == PropertyType::BYTES ||
+			type == PropertyType::LIST || type == PropertyType::MAP || type == PropertyType::COMPOSITE || type == PropertyType::UNKNOWN;
+		PropertyValue distinct;
+		if (fallback) distinct = detail::copyPropertyValueGuarded(value, [&] { admit(peak); }, true);
+		if (grow) values_.reserve(capacity);
+		values_.push_back(std::move(output));
+		try {
+			if (!(fallback ? seen_.insertFallbackOwned(std::move(distinct)) : seen_.insert(value))) values_.pop_back();
+		} catch (...) {
+			values_.pop_back();
+			throw;
 		}
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(values_);
 	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		PropertyValue result(std::move(values_));
+		std::vector<PropertyValue>().swap(values_);
+		reset();
+		return result;
+	}
 	[[nodiscard]] size_t retainedBytes() const override {
 		size_t total = checkedAggregateBytesAdd(
 				checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue)), seen_.memoryBytes());
 		for (const PropertyValue &value: values_) {
-			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+			total = checkedAggregateBytesAdd(total, detail::retainedPropertyValueBytes(value, [] {}));
 		}
 		return total;
 	}
@@ -534,7 +624,9 @@ private:
  */
 class PercentileDiscAccumulator : public AggregateAccumulator {
 public:
-	explicit PercentileDiscAccumulator(double percentile) : percentile_(percentile) {}
+	explicit PercentileDiscAccumulator(double percentile, std::pmr::memory_resource *memory = nullptr)
+		: percentile_(percentile), externally_accounted_(memory != nullptr),
+		  values_(memory ? memory : std::pmr::new_delete_resource()) {}
 
 	void update(const PropertyValue& value) override {
 		if (value.getType() == PropertyType::NULL_TYPE) return;
@@ -543,11 +635,15 @@ public:
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
-		if (values_.empty()) return PropertyValue();
 		auto sorted = values_;
 		std::sort(sorted.begin(), sorted.end());
-		size_t idx = static_cast<size_t>(std::floor(percentile_ * static_cast<double>(sorted.size() - 1)));
-		return sorted[idx];
+		return resultFromSorted(sorted);
+	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		std::sort(values_.begin(), values_.end());
+		PropertyValue result = resultFromSorted(values_);
+		std::pmr::vector<PropertyValue>(values_.get_allocator()).swap(values_);
+		return result;
 	}
 	[[nodiscard]] size_t retainedBytes() const override {
 		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
@@ -555,6 +651,12 @@ public:
 			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
 		}
 		return total;
+	}
+
+	[[nodiscard]] size_t retainedBytesForAdmission() const override {
+		// update accepts only inline numeric values; the resource owns all
+		// dynamic storage, including overlapping arrays during growth.
+		return externally_accounted_ ? 0U : retainedBytes();
 	}
 
 	void reset() override {
@@ -568,8 +670,14 @@ public:
 	}
 
 private:
+	[[nodiscard]] PropertyValue resultFromSorted(std::span<const PropertyValue> values) const {
+		if (values.empty()) return PropertyValue();
+		size_t idx = static_cast<size_t>(std::floor(percentile_ * static_cast<double>(values.size() - 1)));
+		return values[idx];
+	}
 	double percentile_;
-	std::vector<PropertyValue> values_;
+	bool externally_accounted_;
+	std::pmr::vector<PropertyValue> values_;
 };
 
 /**
@@ -578,7 +686,9 @@ private:
  */
 class PercentileContAccumulator : public AggregateAccumulator {
 public:
-	explicit PercentileContAccumulator(double percentile) : percentile_(percentile) {}
+	explicit PercentileContAccumulator(double percentile, std::pmr::memory_resource *memory = nullptr)
+		: percentile_(percentile), externally_accounted_(memory != nullptr),
+		  values_(memory ? memory : std::pmr::new_delete_resource()) {}
 
 	void update(const PropertyValue& value) override {
 		if (value.getType() == PropertyType::NULL_TYPE) {
@@ -589,23 +699,15 @@ public:
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
-		if (values_.empty()) return PropertyValue();
 		auto sorted = values_;
 		std::sort(sorted.begin(), sorted.end());
-		double rank = percentile_ * static_cast<double>(sorted.size() - 1);
-		size_t lo = static_cast<size_t>(std::floor(rank));
-		size_t hi = static_cast<size_t>(std::ceil(rank));
-		if (lo == hi || hi >= sorted.size()) {
-			return sorted[lo];
-		}
-		double loVal = (sorted[lo].getType() == PropertyType::INTEGER)
-			? static_cast<double>(std::get<int64_t>(sorted[lo].getVariant()))
-			: std::get<double>(sorted[lo].getVariant());
-		double hiVal = (sorted[hi].getType() == PropertyType::INTEGER)
-			? static_cast<double>(std::get<int64_t>(sorted[hi].getVariant()))
-			: std::get<double>(sorted[hi].getVariant());
-		double frac = rank - static_cast<double>(lo);
-		return PropertyValue(loVal + frac * (hiVal - loVal));
+		return resultFromSorted(sorted);
+	}
+	[[nodiscard]] PropertyValue takeResult() override {
+		std::sort(values_.begin(), values_.end());
+		PropertyValue result = resultFromSorted(values_);
+		std::pmr::vector<PropertyValue>(values_.get_allocator()).swap(values_);
+		return result;
 	}
 	[[nodiscard]] size_t retainedBytes() const override {
 		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
@@ -613,6 +715,12 @@ public:
 			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
 		}
 		return total;
+	}
+
+	[[nodiscard]] size_t retainedBytesForAdmission() const override {
+		// update accepts only inline numeric values; the resource owns all
+		// dynamic storage, including overlapping arrays during growth.
+		return externally_accounted_ ? 0U : retainedBytes();
 	}
 
 	void reset() override {
@@ -626,42 +734,68 @@ public:
 	}
 
 private:
+	[[nodiscard]] PropertyValue resultFromSorted(std::span<const PropertyValue> values) const {
+		if (values.empty()) return PropertyValue();
+		double rank = percentile_ * static_cast<double>(values.size() - 1);
+		size_t lo = static_cast<size_t>(std::floor(rank));
+		size_t hi = static_cast<size_t>(std::ceil(rank));
+		if (lo == hi || hi >= values.size()) {
+			return values[lo];
+		}
+		double loVal = (values[lo].getType() == PropertyType::INTEGER)
+			? static_cast<double>(std::get<int64_t>(values[lo].getVariant()))
+			: std::get<double>(values[lo].getVariant());
+		double hiVal = (values[hi].getType() == PropertyType::INTEGER)
+			? static_cast<double>(std::get<int64_t>(values[hi].getVariant()))
+			: std::get<double>(values[hi].getVariant());
+		double frac = rank - static_cast<double>(lo);
+		return PropertyValue(loVal + frac * (hiVal - loVal));
+	}
 	double percentile_;
-	std::vector<PropertyValue> values_;
+	bool externally_accounted_;
+	std::pmr::vector<PropertyValue> values_;
 };
 
 /**
  * @brief Factory function to create an accumulator for a given aggregate function type.
  */
-[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false, double percentileArg = 0.5) {
+[[nodiscard]] inline std::unique_ptr<AggregateAccumulator> createAccumulator(AggregateFunctionType type, bool distinct = false, double percentileArg = 0.5, std::pmr::memory_resource *memory = nullptr,
+	const std::function<void(size_t)> &admitObject = {}) {
 	if ((type == AggregateFunctionType::AGG_PERCENTILE_DISC ||
 		 type == AggregateFunctionType::AGG_PERCENTILE_CONT) &&
 		(!std::isfinite(percentileArg) || percentileArg < 0.0 || percentileArg > 1.0)) {
 		throw std::invalid_argument("percentile aggregate requires a finite value between zero and one");
 	}
+	// Charge the concrete object before allocating it. Payloads remain accounted
+	// by each accumulator or its supplied memory resource.
+	const auto make = [&]<typename T, typename... Args>(Args &&...args) -> std::unique_ptr<AggregateAccumulator> {
+		if (admitObject) admitObject(sizeof(T));
+		return std::make_unique<T>(std::forward<Args>(args)...);
+	};
+
 	switch (type) {
 		case AggregateFunctionType::AGG_COUNT:
-			if (distinct) return std::make_unique<CountDistinctAccumulator>();
-			return std::make_unique<CountAccumulator>();
+			if (distinct) return make.template operator()<CountDistinctAccumulator>();
+			return make.template operator()<CountAccumulator>();
 		case AggregateFunctionType::AGG_SUM:
-			return std::make_unique<SumAccumulator>();
+			return make.template operator()<SumAccumulator>();
 		case AggregateFunctionType::AGG_AVG:
-			return std::make_unique<AvgAccumulator>();
+			return make.template operator()<AvgAccumulator>();
 		case AggregateFunctionType::AGG_MIN:
-			return std::make_unique<MinAccumulator>();
+			return make.template operator()<MinAccumulator>();
 		case AggregateFunctionType::AGG_MAX:
-			return std::make_unique<MaxAccumulator>();
+			return make.template operator()<MaxAccumulator>();
 		case AggregateFunctionType::AGG_COLLECT:
-			if (distinct) return std::make_unique<CollectDistinctAccumulator>();
-			return std::make_unique<CollectAccumulator>();
+			if (distinct) return make.template operator()<CollectDistinctAccumulator>();
+			return make.template operator()<CollectAccumulator>();
 		case AggregateFunctionType::AGG_STDEV:
-			return std::make_unique<StDevAccumulator>(false);
+			return make.template operator()<StDevAccumulator>(false);
 		case AggregateFunctionType::AGG_STDEVP:
-			return std::make_unique<StDevAccumulator>(true);
+			return make.template operator()<StDevAccumulator>(true);
 		case AggregateFunctionType::AGG_PERCENTILE_DISC:
-			return std::make_unique<PercentileDiscAccumulator>(percentileArg);
+			return make.template operator()<PercentileDiscAccumulator>(percentileArg, memory);
 		case AggregateFunctionType::AGG_PERCENTILE_CONT:
-			return std::make_unique<PercentileContAccumulator>(percentileArg);
+			return make.template operator()<PercentileContAccumulator>(percentileArg, memory);
 		default:
 			return nullptr;
 	}

@@ -416,6 +416,10 @@ namespace graph::storage {
 																std::span<PageLocation> locations,
 																LogSequenceNumber checkpointLsn,
 																size_t preparedPrefixCount) {
+		debug::PerfTrace::addValue("native_graph.write.new_pool_prepare_calls", 1);
+		debug::PerfTrace::addValue("native_graph.write.new_pool_prepare_pages", static_cast<int64_t>(pages.size()));
+		debug::PerfTrace::addValue("native_graph.write.new_pool_prepared_prefix_pages", static_cast<int64_t>(preparedPrefixCount));
+
 		if (pages.empty() || pages.size() != locations.size() || pages.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
 			preparedPrefixCount > RSS_PAGE_POOL_DATA_FRAME_COUNT - pages.size() ||
 			!checkpointLsn.isValid()) { // ZYX_COV_EXCL_LINE: private callback receives a MetadataWriteBatch-validated
@@ -904,17 +908,18 @@ namespace graph::storage {
 			const CatalogEntry &sourcePool = replacement.source_pool;
 			const PageLocation &source = replacement.source_location;
 			const PageOwnerHeader &owner = replacement.owner;
+			// Pools identify allocation namespaces, while the page owner identifies
+			// its logical tree/entity. Cross-pool COW preserves the latter against
+			// the authenticated sourceOwner below, not either pool's owner ID.
 			const uint8_t invalidSource =
 					static_cast<uint8_t>(sourcePool.state != SegmentState::SGS_SEALED) |
 					static_cast<uint8_t>(sourcePool.kind != destinationPool.kind) |
-					static_cast<uint8_t>(sourcePool.owner_id != destinationPool.owner_id) |
 					static_cast<uint8_t>(source.segment_id != sourcePool.segment_id) |
 					static_cast<uint8_t>(source.generation != sourcePool.generation) |
 					static_cast<uint8_t>(source.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
 					static_cast<uint8_t>(source.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
 					static_cast<uint8_t>(!replacement.expected_owner_lsn.isValid()) |
 					static_cast<uint8_t>(owner.page_id != source.page_id) |
-					static_cast<uint8_t>(owner.owner_id != destinationPool.owner_id) |
 					static_cast<uint8_t>(owner.flags != 0U) |
 					static_cast<uint8_t>(owner.generation != destinationPool.generation) |
 					static_cast<uint8_t>(owner.committed_lsn != checkpointLsn) |

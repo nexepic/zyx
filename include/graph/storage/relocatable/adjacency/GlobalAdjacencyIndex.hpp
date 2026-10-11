@@ -40,9 +40,13 @@ namespace graph::storage {
 	public:
 		GlobalAdjacencyIndex(BTreePageStore &pages, RelocatableMetadataStore &metadata);
 
+		// Optional admission receives absolute live ID-buffer and leaf-boundary-key bytes before growth
+		// (old plus new allocation), then actual capacity after the old buffer frees.
+		// It does not account for cursor pages or other decoded key temporaries.
 		[[nodiscard]] GlobalAdjacencyRange
 		scan(const MetadataSnapshotPin &snapshot, GlobalAdjacencyDirection direction, uint64_t nodeId,
-				size_t maximumEntries, std::optional<GlobalAdjacencyContinuation> continuation = {}) const;
+				size_t maximumEntries, std::optional<GlobalAdjacencyContinuation> continuation = {},
+				const std::function<void(size_t)> &retainedIdAdmission = {}) const;
 		// Visits one direction of the adjacency tree in key order while matching a
 		// sorted set of source nodes. A single range cursor replaces one B+Tree root
 		// descent per source node for high-cardinality anchored traversals. The
@@ -50,7 +54,8 @@ namespace graph::storage {
 		// false therefore also reports a physical scan-budget exhaustion.
 		[[nodiscard]] bool visitForNodes(const MetadataSnapshotPin &snapshot, GlobalAdjacencyDirection direction,
 									 std::span<const uint64_t> nodeIds, size_t maximumEntries,
-									 const std::function<bool(uint64_t, uint64_t)> &visitor) const;
+									 const std::function<bool(uint64_t, uint64_t)> &visitor,
+									 const std::function<void(size_t)> &boundaryKeyAdmission = {}) const;
 
 	private:
 		BTreeIndex index_;

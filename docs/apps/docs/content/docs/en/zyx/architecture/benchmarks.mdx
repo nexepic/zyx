@@ -81,6 +81,48 @@ Each benchmark also reports a **stage breakdown** (`[Stage avg ms/op]`) showing 
 
 Storage benchmarks report the native database file only: `Nodes | Edges | Props | DB(MB) | Bytes/Node`, and export results to `/tmp/zyx_storage_profile.csv`.
 
+## Current Evidence Boundary
+
+Benchmark output is not a completion percentage. The current working tree has
+focused read-optimization checkpoints, but no frozen post-checkpoint benchmark
+has been approved as the new-versus-old architecture baseline. Historical
+measurements may explain hotspots, yet they must not be presented as current
+release performance or as proof that the native design is globally faster or
+slower.
+
+A formal comparison must use the same commit, dataset manifest, seed, hardware,
+compiler flags, thread contract, warmup, iteration count, open mode, and
+diagnostic state for both paths. The release artifact must disable per-event
+diagnostic tracing and include structural counters such as root descents,
+distinct page pins, selected decodes, complete materializations, materialized
+bytes, peak RSS, and file size. A profiled run is an attribution artifact, not a
+latency baseline. Benchmark-specific branches, query-text exceptions, or
+threshold changes are not valid optimization evidence.
+
+The next benchmark run is intentionally deferred until the functional Stage 2-8
+consumer migration and its necessary tests are stable. Until then, use focused
+GoogleTest results to validate behavior and use benchmark runs only to diagnose
+the shared framework; do not use them to close a roadmap stage.
+
+### Current interpretation correction (2026-09-24)
+
+The recent observation that the new path did not improve end-to-end latency does
+not mean that the target architecture was fully implemented and lost to the old
+one. The current result is explained by incomplete consumer migration: several
+workloads still repeat generic Entity/Property routing, and diagnostic event
+collection can dominate short runs. The historical focused `306/306` and `77/77`,
+pre-Vector-change direct-edge `78/78`, `15/15`, and
+current projection `14/14` results are correctness checkpoints, not performance
+measurements. Until a no-diagnostic, frozen-manifest comparison is produced, the
+only supported conclusion is that the optimization roadmap remains partial.
+
+The current working tree also contains an unverified lazy-`EntityRef` Vector
+procedure implementation. It is intended to validate and filter hits before
+complete Node materialization, keep selected and complete Property caches
+separate, and batch-read only surviving final Node outputs. The last Vector
+`8/8` and logical-backend `57/57` records predate this change and must not be
+reported as current evidence until the target is rebuilt and rerun.
+
 ## Benchmark Reference
 
 ### Insert Benchmarks
@@ -166,7 +208,7 @@ Measure on-disk footprint after `db.save()`.
 ## Interpreting Results
 
 1. **Fix your hardware and compiler flags** — Results vary significantly across CPUs, storage devices, and optimization levels. Always use the same `-O3` release build for comparisons.
-2. **Separate cold-start from steady-state** — The first run exercises the page cache and WAL creation; subsequent runs benefit from warm caches. Report both.
+2. **Separate cold-start from steady-state** — The first run exercises file open/recovery and page-cache admission; subsequent runs benefit from warm caches. The current single-file native format has no production sidecar WAL, so do not attribute cold-start cost to WAL creation. Report both.
 3. **Use `PROFILE` and `EXPLAIN`** — Combine benchmark numbers with query plan analysis to understand *why* a query is fast or slow.
 4. **Check index hit rates** — A query may appear slow not because of the engine, but because an expected index is missing.
 5. **Compare across versions with identical setup** — Same compiler, same data distribution, same hardware. Anything else introduces confounding variables.
@@ -246,7 +288,7 @@ samples, for 360/360 successful samples. Every run has zero execution and qualit
 | `opened` | `30,230.6 / 30,570.4 ms` | `11,622.9 / 11,777.0 ms` | `14,047.2 / 14,152.1 ms` | `5,996.50 / 6,052.99 ms` |
 | `warm` | `30,373.7 / 30,640.6 ms` | `11,637.8 / 11,738.3 ms` | `14,104.6 / 14,177.2 ms` | `6,058.01 / 6,104.93 ms` |
 
-This closes the benchmark-orchestration defect and the stable medium scan gate. Linux/Windows,
+This closes the benchmark-orchestration defect and the local stable-medium scan diagnostic gate. It does not close production-read optimization or prove a global speedup. The result is not the Stage 0 baseline or the Stage 9 final comparison because it is a profiled local diagnostic run rather than the frozen no-profile Release manifest. Linux/Windows,
 final full-suite coverage, RSS/file-size/I/O evidence, and package closure remain separate gates.
 
 ### Multihop
@@ -300,7 +342,45 @@ read/write bytes, fixed environment provenance, and macOS/Linux/Windows acceptan
 
 ## Optimization Roadmap
 
-The framework-level performance plan is maintained in the [Optimization Strategy](optimization) document. Use its staged execution plan (Stage 0 through Stage 9) as the execution authority for read shapes, batching, topology, indexes, execution, caching, validation, and write amplification. Benchmark results are diagnostic evidence only: a `smoke` speedup cannot close an optimization stage, and an unexplained timeout or regression remains a failed gate until structural counters attribute the cost. Comparisons must use the same binary, dataset manifest, parameters, workload order, and `cold-ish`/`opened`/`warm` mode; report latency percentiles, RSS, file size, I/O, and the relevant structural counters.
+Follow the [architecture and performance plan](optimization): A1–A7, O1–O8 and S0–S6. Completed P0–P7 is historical evidence, not subsequent work. Existing benchmark records require current-source provenance, result, timing and resource verification. Fix comparable control/current/Kuzu binary provenance, data manifests, parameters, consumption and cache modes; report latency percentiles, memory, file size, I/O and structural counters. Never divide cross-environment results. The implementation plan owns admission and regression thresholds.
+
+The current working tree contains an additional generic expression batching
+change in `LogicalPlanReadRuntime.cpp` for Filter, Project, Aggregate, and Sort.
+It includes complete-Entity prefetch for `properties(entity)`, `keys(entity)`, and
+`entity{.*}`. The historical six-suite `306/306` runtime/executor checkpoint
+predates the latest complete-Entity correlated-subquery change; the current
+direct-edge suite passed `78/78` after that change, but that result predates the
+current lazy-`EntityRef` Vector procedure change. The focused evidence includes
+the deferred-EntityRef Sort-key and earlier read-only correlated-subquery import
+regressions. No benchmark has been
+rerun after the change. Therefore, benchmark results recorded before that
+checkpoint must not be described as measurements of it. The focused checkpoint
+also does not prove that every consumer uses the shared contract: the direct
+Filter complete-Entity predicate contract now has focused evidence, while
+procedure/GDS/overlay/maintenance paths and the
+remaining complex JOIN/OPTIONAL MATCH/UNION payload audit are still open. Until that
+consumer audit is complete, a lack of end-to-end speedup is an implementation
+status signal, not evidence that the native storage design should be replaced by
+a benchmark-specific path.
+
+The current working tree also adds a shape-aware resumable Node scan to the
+logical read contract and uses it from GDS projection construction. Native
+page-backed readers can now omit labels and Property roots that the projection
+does not request; generic adapters retain the complete-scan fallback. The
+`zyx_test_suite` target compiles and links this checkpoint, and the focused
+projection/adapter shape-equivalence run passes 15/15 tests. No benchmark has
+been rerun after it, so results recorded above must not be attributed to this
+scan change.
+
+Separately, the native `algo.shortestPath` procedure has a `ShortestPath*`
+focused boundary group at `3/3` for bounded final path-Node materialization.
+The native `gds.shortestPath.dijkstra.stream` path uses the same sorted batch
+helper and restores logical path order after storage-order reads. The Vector
+procedure checkpoint passes `8/8` for score-order restoration without a
+duplicate ID-keyed Node map. These are correctness/memory checkpoints, not
+benchmark measurements and not part of the six-suite `306/306` count;
+procedure Property-expression batching, GDS, overlay, maintenance, and
+full-regression consumers remain open.
 
 ## Regression Baseline Contract
 

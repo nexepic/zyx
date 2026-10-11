@@ -97,9 +97,8 @@ namespace graph::storage {
 
 		void validateCanonicalEntries(const ConstraintDefinition &definition, PageBackedGraphReadAdapter &graph,
 				const MetadataSnapshotPin &snapshot, std::span<const uint32_t> propertyTokens,
-				const OrderedBTreeEntrySource &source, size_t maximumCollisions, size_t batchEntries) {
+				const OrderedBTreeEntrySource &source, size_t maximumCollisions, size_t batchEntries, NativeReadSession &session, const std::function<void(size_t)> &propertyAdmission) {
 			OrderedBTreeEntryCursor cursor = source();
-			NativeReadSession session;
 			session.bind(snapshot);
 			std::array<std::byte, RSS_CONSTRAINT_SUPPORT_DIGEST_BYTES> digest{};
 			bool hasDigest = false;
@@ -157,16 +156,17 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 							"native constraint support-tree definition repeats a Property-key Token");
 				}
+				auto admission = makeSelectedPropertyBatchAdmission(propertyAdmission);
 				if (definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE) {
 					labels = graph.readNodeLabelTokensSorted(snapshot, ids, &session);
-					selectedProperties = graph.readNodePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session);
+					selectedProperties = graph.readNodePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session, admission ? &admission : nullptr);
 					if (labels.size() != ids.size() ||
 						selectedProperties.size() != propertyTokens.size()) {
 						fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree validation changed Node batch cardinality");
 					}
 				} else {
 					edgeRecords = graph.readEdgeTopologiesSorted(snapshot, ids, &session);
-					selectedProperties = graph.readEdgePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session);
+					selectedProperties = graph.readEdgePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session, admission ? &admission : nullptr);
 					if (edgeRecords.size() != ids.size() || selectedProperties.size() != propertyTokens.size()) {
 						fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree validation changed Edge batch cardinality");
 					}
@@ -245,38 +245,67 @@ namespace graph::storage {
 
 		const std::vector<uint32_t> propertyTokens = resolvePropertyTokens(snapshot, definition, propertyTokenResolver);
 		ExternalBTreeEntrySorter sorter({options.maximum_entries, options.sort_run_bytes, options.maximum_sort_runs});
-		const auto add = [&](uint64_t entityId, const std::vector<uint64_t> &labels, uint64_t typeId,
-				const std::vector<PropertyCollectionRootEntry> &properties) {
-			const bool inScope = definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE
-						? std::ranges::find(labels, definition.schema_token_id) != labels.end()
-						: typeId == definition.schema_token_id;
-			if (!inScope) {
-				return;
-			}
-			const std::optional<std::vector<std::byte>> canonical = canonicalValues(
-					properties, propertyTokens, definition.kind == ConstraintDefinitionKind::CDK_NODE_KEY);
-			if (!canonical.has_value()) {
-				return;
-			}
-			sorter.add({ConstraintSupportTree::entryKey(*canonical, entityId), entityId});
-		};
-
-		if (definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE) {
-			static_cast<void>(graph.visitNodesUntil(snapshot, options.maximum_entries,
-					[&](const PageBackedGraphNode &node) {
-						add(node.node_id, node.label_token_ids, 0U, node.properties);
-						return true;
-					}));
-		} else {
-			static_cast<void>(graph.visitEdgesUntil(snapshot, options.maximum_entries,
-					[&](const PageBackedGraphEdge &edge) {
-						add(edge.edge_id, {}, edge.type_id, edge.properties);
-						return true;
-					}));
+		std::vector<uint32_t> readTokens = propertyTokens;
+		std::ranges::sort(readTokens);
+		if (std::ranges::adjacent_find(readTokens) != readTokens.end()) {
+			fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree definition repeats a Property-key Token");
 		}
-		const OrderedBTreeEntrySource source = sorter.finish();
+		NativeReadSession session;
+		const size_t batchEntries = std::min<size_t>(256U, options.validation_batch_entries);
+		std::vector<uint64_t> ids;
+		ids.reserve(std::min(batchEntries, options.maximum_entries));
+		const bool node = definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE;
+		const auto flush = [&] {
+			if (ids.empty()) return;
+			if (options.checkpoint) options.checkpoint();
+			auto admission = makeSelectedPropertyBatchAdmission(options.property_admission);
+			auto columns = node ? graph.readNodePropertyColumnsSorted(snapshot, ids, readTokens, &session, admission ? &admission : nullptr)
+				: graph.readEdgePropertyColumnsSorted(snapshot, ids, readTokens, &session, admission ? &admission : nullptr);
+			if (columns.size() != readTokens.size() || std::ranges::any_of(columns, [&](const auto &column) {
+				return column.size() != ids.size();
+			})) fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree source changed column cardinality");
+			if (options.checkpoint) options.checkpoint();
+			for (size_t row = 0U; row < ids.size(); ++row) {
+				std::vector<PropertyCollectionRootEntry> properties;
+				properties.reserve(readTokens.size());
+				for (size_t column = 0U; column < readTokens.size(); ++column) {
+					if (columns[column][row]) properties.push_back({readTokens[column], std::move(*columns[column][row])});
+				}
+				const auto canonical = canonicalValues(properties, propertyTokens,
+					definition.kind == ConstraintDefinitionKind::CDK_NODE_KEY);
+				if (canonical) sorter.add({ConstraintSupportTree::entryKey(*canonical, ids[row]), ids[row]});
+			}
+			ids.clear();
+		};
+		size_t scannedForCheckpoint = 0U;
+		const auto collect = [&](const EntityRef &ref, bool matches) {
+			if (scannedForCheckpoint == options.maximum_entries)
+				fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree source exceeded its Entity scan bound");
+			if (scannedForCheckpoint++ % 256U == 0U && options.checkpoint) options.checkpoint();
+			if (matches) {
+				ids.push_back(ref.entity_id);
+				if (ids.size() == batchEntries) flush();
+			}
+			return true;
+		};
+		const std::array<uint64_t, 1U> labels{definition.schema_token_id};
+		const size_t scanBound = options.maximum_entries == std::numeric_limits<size_t>::max()
+			? options.maximum_entries : options.maximum_entries + 1U;
+		static_cast<void>(node ? graph.visitNodeRefsWithLabelTokenMatchesUntil(snapshot, scanBound,
+			labels, collect, &session) : graph.visitEdgeRefsUntil(snapshot, scanBound,
+			[&](const EntityRef &ref) { return collect(ref, ref.type_token == definition.schema_token_id); }, &session));
+		flush();
+		const OrderedBTreeEntrySource uncheckedSource = sorter.finish();
+		OrderedBTreeEntrySource source = uncheckedSource;
+		if (options.checkpoint) source = [uncheckedSource, checkpoint = options.checkpoint] {
+			auto cursor = uncheckedSource();
+			return [cursor = std::move(cursor), checkpoint, count = size_t{0U}]() mutable {
+				if (count++ % 256U == 0U) checkpoint();
+				return cursor();
+			};
+		};
 		validateCanonicalEntries(definition, graph, snapshot, propertyTokens, source, options.maximum_collisions,
-				options.validation_batch_entries);
+				options.validation_batch_entries, session, options.property_admission);
 		return BulkBTreeBuilder::planNativeTree(
 				pages, metadata, snapshot, definition.constraint_id, source,
 				{options.first_slot, options.last_slot, definition.constraint_id, options.maximum_entries,

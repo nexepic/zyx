@@ -50,12 +50,30 @@ namespace graph::storage {
 			readNodesShapedSorted(const std::span<const uint64_t> nodeIds, const EntityReadShape &shape) const override {
 				return native_reads_.readNodesShapedSorted(snapshot_.metadataSnapshot(), nodeIds, shape, &read_session_);
 			}
+			[[nodiscard]] bool supportsShapedPropertyReadAdmission() const override { return true; }
+			[[nodiscard]] std::vector<LogicalGraphNode>
+			readNodesShapedSortedWithAdmission(std::span<const uint64_t> nodeIds, const EntityReadShape &shape,
+					const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("shaped Property admission callback must not be empty");
+				return native_reads_.readNodesShapedSorted(snapshot_.metadataSnapshot(), nodeIds, shape, &read_session_, &admission);
+			}
+			[[nodiscard]] std::vector<LogicalGraphEdge>
+			readEdgesShapedSortedWithAdmission(std::span<const uint64_t> edgeIds, const EntityReadShape &shape,
+					const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("shaped Property admission callback must not be empty");
+				return native_reads_.readEdgesShapedSorted(snapshot_.metadataSnapshot(), edgeIds, shape, &read_session_, &admission);
+			}
 			[[nodiscard]] PropertyValue readNodeProperty(uint64_t nodeId, const std::string_view key) const override {
 				return native_reads_.readNodeProperty(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
 			}
 			[[nodiscard]] std::optional<bool> nodePropertyExists(uint64_t nodeId, const std::string_view key) const override {
 				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_);
 			}
+			[[nodiscard]] bool supportsPropertyNonNullProbes() const override { return true; }
+			[[nodiscard]] std::optional<bool> nodePropertyIsNonNull(uint64_t nodeId, const std::string_view key) const override {
+				return native_reads_.nodePropertyExists(snapshot_.metadataSnapshot(), nodeId, key, &read_session_, true);
+			}
+
 
 			[[nodiscard]] std::vector<PropertyValue>
 			readNodePropertiesSorted(const std::span<const uint64_t> nodeIds, const std::string_view key) const override {
@@ -65,6 +83,21 @@ namespace graph::storage {
 			readNodePropertyColumnsSorted(const std::span<const uint64_t> nodeIds,
 																  const std::span<const std::string_view> keys) const override {
 				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
+			}
+			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return true; }
+			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
+					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("Property admission callback must not be empty");
+				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys,
+						&read_session_, &admission);
+			}
+			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+			readEdgePropertyColumnsSortedWithAdmission(std::span<const uint64_t> edgeIds,
+					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("Property admission callback must not be empty");
+				return native_reads_.readEdgePropertyColumnsSorted(snapshot_.metadataSnapshot(), edgeIds, keys,
+						&read_session_, &admission);
 			}
 			[[nodiscard]] bool nodeHasLabels(uint64_t nodeId,
 													 const std::vector<std::string> &labels) const override {
@@ -82,6 +115,17 @@ namespace graph::storage {
 														  const std::function<bool(const EntityRef &, bool)> &visitor) const override {
 				static_cast<void>(native_reads_.visitNodeRefsWithLabelMatchesUntil(
 						snapshot_.metadataSnapshot(), maximumRecords, requiredLabels, visitor, &read_session_));
+			}
+
+			void visitNodeRefsForLabelPredicate(size_t maximumRecords,
+					const std::vector<std::string> &labels,
+					const std::function<bool(const EntityRef &, bool)> &visitor) const override {
+				auto canonical = labels;
+				std::ranges::sort(canonical);
+				canonical.erase(std::ranges::unique(canonical).begin(), canonical.end());
+				if (backend_.visitNativeNodeLabelCandidates(snapshot_.metadataSnapshot(), canonical,
+						maximumRecords, visitor, &read_session_).has_value()) return;
+				visitNodeRefsWithLabelMatches(maximumRecords, canonical, visitor);
 			}
 
 			[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
@@ -109,6 +153,10 @@ namespace graph::storage {
 			[[nodiscard]] std::optional<bool> edgePropertyExists(uint64_t edgeId, const std::string_view key) const override {
 				return native_reads_.edgePropertyExists(snapshot_.metadataSnapshot(), edgeId, key, &read_session_);
 			}
+			[[nodiscard]] std::optional<bool> edgePropertyIsNonNull(uint64_t edgeId, const std::string_view key) const override {
+				return native_reads_.edgePropertyExists(snapshot_.metadataSnapshot(), edgeId, key, &read_session_, true);
+			}
+
 
 			[[nodiscard]] std::vector<PropertyValue>
 			readEdgePropertiesSorted(const std::span<const uint64_t> edgeIds, const std::string_view key) const override {
@@ -238,13 +286,25 @@ namespace graph::storage {
 			[[nodiscard]] bool supportsNativeNodeRefScans() const override { return true; }
 
 			[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
-															  size_t maximumMetadataPages) const override {
+																																					  size_t maximumMetadataPages) const override {
 				if (maximumRecords == 0U || maximumMetadataPages == 0U) {
 					throw FormatException(FormatError::FERR_INVALID_HEADER,
 										  "logical graph resumable Node scan requires positive bounds");
 				}
 				return native_reads_.scanNodesAfter(snapshot_.metadataSnapshot(), afterNodeId, maximumRecords,
-																												 maximumMetadataPages, &read_session_);
+																																									 maximumMetadataPages, &read_session_);
+			}
+
+			[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
+																																					  size_t maximumMetadataPages,
+																																					  const EntityReadShape &shape) const override {
+				if (maximumRecords == 0U || maximumMetadataPages == 0U) {
+					throw FormatException(FormatError::FERR_INVALID_HEADER,
+												  "logical shaped Node scan requires positive bounds");
+				}
+				validateEntityReadShape(shape);
+				return native_reads_.scanNodesAfter(snapshot_.metadataSnapshot(), afterNodeId, maximumRecords,
+																																					 maximumMetadataPages, shape, &read_session_);
 			}
 
 		[[nodiscard]] LogicalGraphAdjacencyPage
@@ -253,6 +313,36 @@ namespace graph::storage {
 							  size_t maximumRecords) const override {
 				return native_reads_.scanAdjacentEdges(snapshot_.metadataSnapshot(), nodeId, direction,
 																									 std::move(continuation), maximumRecords, &read_session_);
+			}
+
+			[[nodiscard]] bool supportsAdjacencyPropertyReadAdmission() const override { return true; }
+			[[nodiscard]] LogicalGraphAdjacencyPage scanAdjacentEdgesWithPropertyAdmission(
+				uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+				const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("adjacency Property admission callback must not be empty");
+				return native_reads_.scanAdjacentEdges(snapshot_.metadataSnapshot(), nodeId, direction,
+					std::move(continuation), maximumRecords, &read_session_, &admission);
+			}
+
+			[[nodiscard]] bool supportsAdjacencyReadAdmission() const override { return true; }
+			[[nodiscard]] LogicalGraphAdjacencyPage scanAdjacentEdgesWithAdmission(
+				uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+				const std::function<void(size_t)> &propertyAdmission,
+				const std::function<void(size_t)> &bufferAdmission) const override {
+				if (!propertyAdmission || !bufferAdmission) throw std::invalid_argument("adjacency admission callbacks must not be empty");
+				return native_reads_.scanAdjacentEdges(snapshot_.metadataSnapshot(), nodeId, direction,
+					std::move(continuation), maximumRecords, &read_session_, &propertyAdmission, bufferAdmission);
+			}
+
+			[[nodiscard]] bool supportsAdjacencyTopologyBufferAdmission() const override { return true; }
+			[[nodiscard]] LogicalGraphAdjacencyTopologyPage
+			scanAdjacentEdgeTopologiesWithBufferAdmission(uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+				const std::function<void(size_t)> &admission) const override {
+				return native_reads_.scanAdjacentEdgeTopologies(snapshot_.metadataSnapshot(), nodeId, direction,
+					std::move(continuation), maximumRecords, &read_session_, admission);
 			}
 
 			[[nodiscard]] LogicalGraphAdjacencyTopologyPage
@@ -269,6 +359,15 @@ namespace graph::storage {
 						 size_t maximumRecords) const override {
 				return native_reads_.scanAdjacentEdgeRefs(snapshot_.metadataSnapshot(), nodeId, direction,
 																	 std::move(continuation), maximumRecords, &read_session_);
+			}
+
+			[[nodiscard]] bool supportsAdjacencyReferenceBufferAdmission() const override { return true; }
+			[[nodiscard]] LogicalGraphAdjacencyReferencePage
+			scanAdjacentEdgeRefsWithBufferAdmission(uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+				const std::function<void(size_t)> &admission) const override {
+				return native_reads_.scanAdjacentEdgeRefs(snapshot_.metadataSnapshot(), nodeId, direction,
+					std::move(continuation), maximumRecords, &read_session_, admission);
 			}
 
 			[[nodiscard]] bool supportsNativeAdjacentEdgeRefScans() const override { return true; }
@@ -292,6 +391,13 @@ namespace graph::storage {
 																						 &read_session_));
 			}
 
+			void visitEdgeRefsForTypePredicate(size_t maximumRecords, std::optional<uint64_t> typeToken,
+					const std::function<bool(const EntityRef &)> &visitor) const override {
+				if (typeToken.has_value() && backend_.visitNativeEdgeTypeCandidates(
+						snapshot_.metadataSnapshot(), *typeToken, maximumRecords, visitor, &read_session_).has_value()) return;
+				visitEdgeRefs(maximumRecords, visitor);
+			}
+
 			[[nodiscard]] bool supportsNativeEdgeRefScans() const override { return true; }
 
 			[[nodiscard]] bool supportsNativeRelationshipTypeTokens() const override { return true; }
@@ -306,9 +412,12 @@ namespace graph::storage {
 					return *cached;
 				}
 				const std::optional<uint64_t> token = backend_.findRelationshipTypeTokenId(snapshot_, name);
-				read_session_.putRelationshipTypeToken(std::string(name), token);
+				read_session_.putRelationshipTypeToken(name, token);
 				return token;
 			}
+
+			[[nodiscard]] bool supportsPropertyPresenceProbes() const override { return true; }
+			[[nodiscard]] bool supportsPropertyTokenResolution() const override { return true; }
 
 			[[nodiscard]] std::optional<uint32_t> findPropertyToken(const std::string_view name) const override {
 				return backend_.findPropertyKeyToken(snapshot_, name);
@@ -354,6 +463,15 @@ namespace graph::storage {
 																		 direction, maximumEdges, visitor, &read_session_));
 			}
 
+			[[nodiscard]] bool supportsBatchAdjacencyReferenceBufferAdmission() const override { return true; }
+			void visitAdjacentEdgeRefsForNodesWithBufferAdmission(std::span<const uint64_t> nodeIds,
+				LogicalGraphReadDirection direction, size_t maximumEdges,
+				const std::function<bool(const EntityRef &)> &visitor,
+				const std::function<void(size_t)> &admission) const override {
+				static_cast<void>(native_reads_.visitAdjacentEdgeRefsForNodesUntil(snapshot_.metadataSnapshot(), nodeIds,
+					direction, maximumEdges, visitor, &read_session_, admission));
+			}
+
 			[[nodiscard]] bool supportsNativeBatchAdjacentEdgeRefs() const override { return true; }
 
 			[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
@@ -374,6 +492,14 @@ namespace graph::storage {
 			[[nodiscard]] std::optional<LogicalGraphVectorIndexDescriptor>
 			describeLogicalVectorIndex(const LogicalGraphVectorSearchRequest &request) const override {
 				return backend_.describeLogicalVectorIndex(snapshot_, request);
+			}
+
+			// The native exact scorer needs only the descriptor's label and vector.
+			[[nodiscard]] EntityReadShape exactOverlayCandidateReadShape(
+					const LogicalGraphVectorIndexDescriptor &index) const override {
+				const auto token = findPropertyToken(index.property_key);
+				if (!token.has_value()) return LogicalGraphVectorSearchSnapshot::exactOverlayCandidateReadShape(index);
+				return {.include_labels = true, .property_tokens = {*token}};
 			}
 
 			[[nodiscard]] std::optional<LogicalGraphVectorSearchHit>

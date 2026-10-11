@@ -833,7 +833,9 @@ def build_quality_gate_report(
         )
 
     profile_workloads = {event.workload for event in profile_events if event.database == "zyx"}
-    if "zyx" in databases:
+    if "zyx" in databases and environment.get("zyx_emit_profile") is False:
+        gates.append(_quality_gate("zyx_profile_coverage", "skipped", "ZYX diagnostics explicitly disabled for latency measurement"))
+    elif "zyx" in databases:
         zyx_ok_workloads = {row.workload for row in rows if row.database == "zyx" and row.status == "ok" and row.samples > 0}
         missing_profiles = sorted(zyx_ok_workloads - profile_workloads)
         gates.append(
@@ -890,6 +892,13 @@ def build_quality_gate_report(
                 or field not in baseline_environment
                 or environment[field] != baseline_environment[field]
             ]
+            if "zyx" in databases:
+                # Older runners always enabled diagnostics; missing flags retain that contract.
+                current_diagnostics = environment.get("zyx_emit_profile", True)
+                baseline_diagnostics = baseline_environment.get("zyx_emit_profile", True)
+                if (type(current_diagnostics) is not bool or type(baseline_diagnostics) is not bool
+                        or current_diagnostics != baseline_diagnostics):
+                    mismatched.append("zyx_emit_profile")
             gates.append(
                 _quality_gate(
                     "baseline_environment_provenance",

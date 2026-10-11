@@ -39,11 +39,21 @@ public:
 	virtual ~LogicalStatisticsProvider() = default;
 	[[nodiscard]] virtual std::optional<LogicalCardinalityEstimate>
 	estimate(const logical::LogicalOperator &root) const noexcept = 0;
+	// Cost consumers may request more detailed metadata without charging
+	// ordinary root annotations or single-scan plans for those reads.
+	[[nodiscard]] virtual std::optional<LogicalCardinalityEstimate>
+	estimateJoinInput(const logical::LogicalOperator &root) const noexcept { return estimate(root); }
+
+	// Exact counts for unconstrained single-label/all-node anchor scans only.
+	// Providers without reliable endpoint counts preserve the original anchor.
+	[[nodiscard]] virtual std::optional<uint64_t>
+	estimateAnchorScan(const logical::LogicalOperator &) const noexcept { return std::nullopt; }
 };
 
 struct LogicalOptimizerOptions {
 	size_t maximum_rewrite_passes = 8U;
 	size_t maximum_plan_depth = 1024U;
+	bool allow_read_traversal_anchor = false;
 };
 
 struct LogicalOptimizationResult {

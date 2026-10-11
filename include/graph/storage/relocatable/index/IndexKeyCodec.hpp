@@ -50,6 +50,7 @@ namespace graph::storage {
 		tryEncodeCompositeEntryKey(std::span<const PropertyValue> values, uint64_t entityId);
 		[[nodiscard]] static std::vector<std::byte> lowerBound(const PropertyValue &value);
 		[[nodiscard]] static std::vector<std::byte> upperBound(const PropertyValue &value);
+		[[nodiscard]] static int64_t decodeIntegerEntryValue(std::span<const std::byte> key);
 		[[nodiscard]] static uint64_t decodeEntryEntityId(std::span<const std::byte> key);
 	};
 

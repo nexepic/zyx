@@ -81,6 +81,30 @@ ninja -C buildDir zyx-bench
 
 存储测试只报告原生数据库文件：`Nodes | Edges | Props | DB(MB) | Bytes/Node`，并将结果导出到 `/tmp/zyx_storage_profile.csv`。
 
+## 当前证据边界
+
+Benchmark 输出不是完成百分比。当前工作树已经有若干读取优化定向检查点，
+但尚未批准任何一次检查点之后的冻结 benchmark 作为新旧架构正式基线。历史
+测量可以帮助解释热点，却不能被写成当前发布性能，也不能证明 native 设计
+已经全局快于或慢于旧架构。
+
+正式对比必须对两条路径固定相同的 commit、数据集 manifest、seed、硬件、编译
+选项、线程契约、warmup、迭代次数、open mode 和诊断状态。发布 artifact 还必须
+关闭逐事件诊断 tracing，并包含 `root descents`、distinct page pins、selected
+decode、complete materialization、materialized bytes、峰值 RSS 和文件大小等
+结构计数器。带 profile 的运行只能用于归因，不能作为延迟基线；针对某条
+query 文本的分支或调整阈值也不是有效优化证据。
+
+下一次正式 benchmark 有意延后到 Stage 2-8 的功能级 consumer 迁移及必要测试
+稳定之后。在此之前，用定向 GoogleTest 验证行为，用 benchmark 诊断共享框架；
+不要用 benchmark 结果关闭路线图阶段。
+
+### 当前解释更正（2026-09-24）
+
+最近新路径端到端延迟没有提升，并不意味着目标架构已经全部实现后仍然输给旧架构。当前结果首先说明消费者迁移尚未完成：部分 workload 仍重复执行通用的 Entity/Property 路由，短运行中的诊断事件收集也可能占据主要开销。历史 `306/306` 与 `77/77`、Vector 改动前的 direct-edge `78/78`、`15/15` 以及 projection `14/14` 都是正确性检查点，不是性能测量。在得到关闭诊断、冻结 manifest 的正式对比之前，唯一有效的结论是优化路线仍处于 partial 状态。
+
+当前工作树还包含尚未验证的 lazy-`EntityRef` Vector procedure 实现：目标是在完整 Node 物化之前完成 hit 验证和过滤，区分 selected 与 complete Property cache，并且只为最终仍需 Node 的存活输出执行批量读取。上一次 Vector `8/8` 和 logical-backend `57/57` 都早于该改动，在重新编译和重跑之前不能写成当前正确性或性能证据。
+
 ## 测试清单
 
 ### 插入测试
@@ -166,7 +190,7 @@ ninja -C buildDir zyx-bench
 ## 结果解读
 
 1. **固定硬件和编译选项** — 结果因 CPU、存储设备和优化级别而异。对比时始终使用相同的 `-O3` release 构建。
-2. **区分冷启动和稳态** — 首次运行会填充页缓存和创建 WAL；后续运行受益于热缓存。两者都应报告。
+2. **区分冷启动和稳态** — 首次运行会经历文件打开/恢复和页缓存 admission；后续运行受益于热缓存。当前单文件 native 格式没有生产 sidecar WAL，因此不能把冷启动开销归因于 WAL 创建。两者都应报告。
 3. **使用 `PROFILE` 和 `EXPLAIN`** — 将 benchmark 数值与查询计划分析结合，理解查询快或慢的原因。
 4. **检查索引命中率** — 查询可能不是因为引擎慢，而是缺少预期索引。
 5. **跨版本对比时保持完全相同的配置** — 同一编译器、同一数据分布、同一硬件。
@@ -243,7 +267,7 @@ Release 矩阵位于
 | `opened` | `30,230.6 / 30,570.4 ms` | `11,622.9 / 11,777.0 ms` | `14,047.2 / 14,152.1 ms` | `5,996.50 / 6,052.99 ms` |
 | `warm` | `30,373.7 / 30,640.6 ms` | `11,637.8 / 11,738.3 ms` | `14,104.6 / 14,177.2 ms` | `6,058.01 / 6,104.93 ms` |
 
-这关闭了 benchmark 编排缺陷和稳定 medium scan 门禁。Linux/Windows、最终完整测试覆盖率、
+这只关闭 benchmark 编排缺陷和本地稳定 medium scan 诊断门禁，不代表 production-read 优化已经完成，也不能证明整体性能提升。该结果不是 Stage 0 基线或 Stage 9 最终对比，因为它是带 profile 的本地诊断运行，而不是冻结的无 profile Release manifest。Linux/Windows、最终完整测试覆盖率、
 RSS/文件大小/I/O 证据与工作包关闭仍是独立门禁。
 
 ### Multihop
@@ -296,7 +320,23 @@ RSS、原生数据库文件大小、读写字节、冻结环境来源，以及 m
 
 ## 优化路线入口
 
-框架级性能优化方案维护在[优化策略](optimization)文档中。后续实现以该文档的 Stage 0 至 Stage 9 分阶段执行计划为准，覆盖读取形状、批处理、拓扑、索引、执行、缓存、校验和写放大优化。benchmark 结果只能作为诊断证据：`smoke` 的局部加速不能关闭阶段；任何无法解释的超时或回归，在结构计数器归因之前都视为门禁失败。比较必须固定相同的 binary、数据集 manifest、参数、workload 顺序以及 `cold-ish`/`opened`/`warm` 模式，并报告延迟分位数、RSS、文件大小、I/O 和相关结构计数器。
+架构调整与性能实施统一见[架构调整与通用性能实施方案](optimization)，按 A1–A7、O1–O8 和 S0–S6 推进。旧 P0–P7 是历史完成记录，不再是后续任务。本页历史 benchmark 只作证据；当前源码需重新确认来源、结果、计时和资源合同。固定同条件 control/current/Kuzu 的二进制来源、数据 manifest、参数、消费方式和缓存模式，报告延迟分位数、内存、文件大小、I/O 和结构计数；不将跨环境数字相除。采用与回归阈值由实施方案统一规定。
+
+当前工作树在 `LogicalPlanReadRuntime.cpp` 中新增了接入 Filter、Project、Aggregate 和 Sort 的通用表达式批处理修改，并为 `properties(entity)`、`keys(entity)` 和 `entity{.*}` 增加 complete-Entity 预取。历史六个 focused suite 的 `306/306` runtime/executor 定向检查点早于该 complete-Entity correlated-subquery 改动；该改动后的 direct-edge suite 曾通过 `78/78`，但也早于当前 lazy-`EntityRef` Vector procedure 改动。这些检查点还覆盖跨行 NamedPath path reference 批处理、deferred-EntityRef Sort-key 和较早的只读 correlated subquery imported-Property 回归，但尚未在 Vector 改动后重新执行 benchmark。因此，之前记录的 benchmark 不能描述为当前修改的测量结果。该检查点也不代表所有消费者都采用了统一契约：Filter 的 complete-Entity predicate 已有直接定向契约证据，但 procedure/GDS/overlay/maintenance 路径，以及更复杂的 JOIN/OPTIONAL MATCH/UNION 剩余 payload 审计仍未关闭。在消费者审计完成前，端到端性能没有提升只能说明实现迁移仍未完成，不能作为恢复旧架构或添加 benchmark 特例路径的依据。
+
+当前工作树还为 logical read contract 增加了 shape-aware 可续接 Node scan，并在 GDS
+projection 构建中使用它。native page-backed reader 可以省略 projection 未请求的 label
+和 Property root，通用 adapter 仍保留 complete-scan fallback。`zyx_test_suite` 目标已经
+成功编译和链接该检查点，projection/adapter 的 shape 等价性定向运行通过 `15/15`；但尚未
+在此改动后重新执行 benchmark，因此上面的结果不能归因于该 scan 改动。
+
+另外，native `algo.shortestPath` procedure 有独立的 `ShortestPath*` 定向边界组，
+以 `3/3` 验证有界的最终路径 Node 物化。该结果不属于六个 suite 的 `306/306`，也不是
+benchmark 测量结果。native `gds.shortestPath.dijkstra.stream` 使用同一个排序 batch helper，
+在 storage 顺序读取后恢复逻辑路径顺序；Vector procedure 的定向检查点通过 `8/8`，验证
+score 顺序恢复且不再保留重复的 ID-keyed Node map。这些都是正确性/物化内存检查点，不属于
+六个 suite 的 `306/306`，也不能关闭 procedure Property-expression batching、GDS、overlay、
+maintenance 或完整回归消费者。Vector procedure 的 `8/8` 结果属于 Vector 改动之前的物化内存检查点，必须在当前实现编译后重跑。
 
 ## 回归基线契约
 

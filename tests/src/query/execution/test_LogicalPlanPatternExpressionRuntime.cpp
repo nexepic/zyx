@@ -1,379 +1,4 @@
-/**
- * @file test_LogicalPlanPatternExpressionRuntime.cpp
- * @brief Regression tests for bounded logical EXISTS and pattern comprehensions.
- *
- * Copyright (c) 2026 Nexepic
- * Licensed under the Apache License, Version 2.0.
- */
-
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <map>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
-
-#include <gtest/gtest.h>
-
-#include "CypherParserImpl.hpp"
-#include "graph/core/Types.hpp"
-#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
-#include "graph/query/expressions/ExistsExpression.hpp"
-#include "graph/query/expressions/PatternComprehensionExpression.hpp"
-#include "graph/query/expressions/ShortestPathExpression.hpp"
-#include "graph/query/expressions/Expression.hpp"
-#include "graph/query/logical/operators/LogicalAggregate.hpp"
-#include "graph/query/logical/operators/LogicalJoin.hpp"
-#include "graph/query/logical/operators/LogicalNodeScan.hpp"
-#include "graph/query/logical/operators/LogicalProject.hpp"
-#include "graph/query/logical/operators/LogicalSingleRow.hpp"
-#include "graph/query/logical/operators/LogicalTraversal.hpp"
-#include "graph/storage/LogicalGraphRead.hpp"
-
-using namespace graph;
-using namespace graph::query;
-using namespace graph::query::execution;
-using namespace graph::storage;
-
-namespace {
-
-	using FixtureNodes = std::map<uint64_t, LogicalGraphNode>;
-	using FixtureEdges = std::map<uint64_t, LogicalGraphEdge>;
-
-	struct PatternExpressionGraph {
-		FixtureNodes nodes;
-		FixtureEdges edges;
-	};
-
-	struct PatternExpressionSnapshotFaults {
-		bool malformed_adjacency_page = false;
-		bool invalid_adjacency_endpoint = false;
-		bool wrong_node_identity = false;
-		bool discontinuous_adjacency_page = false;
-		bool supports_node_existence_probes = false;
-		bool supports_native_adjacency_refs = false;
-		std::shared_ptr<size_t> node_read_count;
-		std::shared_ptr<size_t> edge_read_count;
-		std::shared_ptr<size_t> node_existence_probe_count;
-		std::shared_ptr<size_t> node_existence_batch_probe_count;
-		std::shared_ptr<size_t> adjacency_topology_scan_count;
-		std::shared_ptr<size_t> adjacency_reference_scan_count;
-		std::shared_ptr<size_t> edge_shaped_batch_read_count;
-		std::shared_ptr<std::vector<uint64_t>> edge_shaped_batch_ids;
-	};
-
-	[[nodiscard]] PatternExpressionGraph makeDefaultPatternExpressionGraph() {
-		PatternExpressionGraph graph;
-		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"name", PropertyValue("Ada")}}});
-		graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Person", "Friend"}, {{"age", PropertyValue(30)}}});
-		graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Robot"}, {{"age", PropertyValue(7)}}});
-		graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 2U, "KNOWS"});
-		graph.edges.emplace(11U, LogicalGraphEdge{11U, 1U, 3U, "OTHER"});
-		graph.edges.emplace(12U, LogicalGraphEdge{12U, 3U, 1U, "LIKES"});
-		return graph;
-	}
-
-	class PatternExpressionSnapshot final : public LogicalGraphReadSnapshot {
-	public:
-		explicit PatternExpressionSnapshot(PatternExpressionGraph graph,
-									   PatternExpressionSnapshotFaults faults = {})
-		: nodes_(std::move(graph.nodes)), edges_(std::move(graph.edges)), faults_(faults) {}
-
-		[[nodiscard]] LogicalGraphNode readNode(uint64_t id) const override {
-			if (faults_.node_read_count) {
-				++*faults_.node_read_count;
-			}
-			if (faults_.wrong_node_identity && id != nodes_.begin()->first) {
-				return nodes_.begin()->second;
-			}
-			return nodes_.at(id);
-		}
-		[[nodiscard]] bool containsNode(uint64_t id) const override {
-			if (faults_.node_existence_probe_count) {
-				++*faults_.node_existence_probe_count;
-			}
-			return nodes_.contains(id);
-		}
-		[[nodiscard]] std::vector<bool> containsNodesSorted(std::span<const uint64_t> ids) const override {
-			if (faults_.node_existence_batch_probe_count) {
-				++*faults_.node_existence_batch_probe_count;
-			}
-			std::vector<bool> result;
-			result.reserve(ids.size());
-			uint64_t previous = 0U;
-			for (const uint64_t id: ids) {
-				if (id == 0U || id <= previous) {
-					throw std::invalid_argument("pattern-expression fixture requires sorted Node probes");
-				}
-				previous = id;
-				result.push_back(nodes_.contains(id));
-			}
-			return result;
-		}
-		[[nodiscard]] bool supportsNodeExistenceProbes() const override {
-			return faults_.supports_node_existence_probes;
-		}
-		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t id) const override {
-			if (faults_.edge_read_count) {
-				++*faults_.edge_read_count;
-			}
-			return edges_.at(id);
-		}
-		[[nodiscard]] std::vector<LogicalGraphEdge> readEdgesShapedSorted(
-				std::span<const uint64_t> ids, const EntityReadShape &shape) const override {
-			if (faults_.edge_shaped_batch_read_count) {
-				++*faults_.edge_shaped_batch_read_count;
-			}
-			if (faults_.edge_shaped_batch_ids) {
-				faults_.edge_shaped_batch_ids->assign(ids.begin(), ids.end());
-			}
-			return LogicalGraphReadSnapshot::readEdgesShapedSorted(ids, shape);
-		}
-		void visitNodes(size_t, const std::function<bool(const LogicalGraphNode &)> &) const override {
-			throw std::logic_error("pattern-expression runtime uses paged Node scans");
-		}
-		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t after, size_t maximumRecords,
-														  size_t maximumMetadataPages) const override {
-			if (maximumRecords == 0U || maximumMetadataPages == 0U) {
-				throw std::invalid_argument("pattern-expression fixture Node scan needs positive bounds");
-			}
-			LogicalGraphNodePage page;
-			page.metadata_pages_visited = 1U;
-			for (const auto &[id, node]: nodes_) {
-				if (id <= after) {
-					continue;
-				}
-				if (page.nodes.size() == maximumRecords) {
-					page.may_have_more = true;
-					break;
-				}
-				page.nodes.push_back(node);
-			}
-			return page;
-		}
-		[[nodiscard]] LogicalGraphAdjacencyPage scanAdjacentEdges(
-				uint64_t nodeId, LogicalGraphReadDirection direction,
-				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
-			if (maximumRecords == 0U) {
-				throw std::invalid_argument("pattern-expression fixture adjacency scan needs a positive bound");
-			}
-			std::vector<LogicalGraphEdge> matches;
-			for (const auto &[id, edge]: edges_) {
-				static_cast<void>(id);
-				if ((direction == LogicalGraphReadDirection::LGRD_OUTGOING && edge.source_node_id == nodeId) ||
-					(direction == LogicalGraphReadDirection::LGRD_INCOMING && edge.target_node_id == nodeId)) {
-					matches.push_back(edge);
-				}
-			}
-			size_t begin = 0U;
-			if (continuation.has_value()) {
-				while (begin < matches.size() && matches[begin].edge_id != continuation->next_edge_id) {
-					++begin;
-				}
-				if (begin == 0U || begin == matches.size() || matches[begin - 1U].edge_id != continuation->previous_edge_id) {
-					throw std::runtime_error("pattern-expression fixture received an invalid adjacency continuation");
-				}
-			}
-			const size_t end = std::min(matches.size(), begin + maximumRecords);
-			LogicalGraphAdjacencyPage page;
-			page.edges.insert(page.edges.end(), matches.begin() + static_cast<std::ptrdiff_t>(begin),
-							  matches.begin() + static_cast<std::ptrdiff_t>(end));
-			if (end < matches.size()) {
-				page.continuation = {page.edges.back().edge_id, matches[end].edge_id};
-			}
-			if (faults_.malformed_adjacency_page) {
-				return LogicalGraphAdjacencyPage{{}, LogicalGraphAdjacencyContinuation{1U, 2U}};
-			}
-			if (faults_.discontinuous_adjacency_page && continuation.has_value()) {
-				return LogicalGraphAdjacencyPage{{matches.front()}, std::nullopt};
-			}
-			if (faults_.invalid_adjacency_endpoint && !page.edges.empty()) {
-				page.edges.front().source_node_id = 999U;
-			}
-			return page;
-		}
-		[[nodiscard]] LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
-				uint64_t nodeId, LogicalGraphReadDirection direction,
-				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
-			if (faults_.adjacency_topology_scan_count) {
-				++*faults_.adjacency_topology_scan_count;
-			}
-			const LogicalGraphAdjacencyPage full =
-					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
-			LogicalGraphAdjacencyTopologyPage result;
-			result.edges.reserve(full.edges.size());
-			for (const LogicalGraphEdge &edge: full.edges) {
-				result.edges.push_back({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
-			}
-			result.continuation = full.continuation;
-			return result;
-		}
-		void visitAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumRecords,
-										 const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
-			if (maximumRecords == 0U || !visitor) {
-				throw std::invalid_argument("pattern-expression fixture topology visit needs a positive bound and visitor");
-			}
-			std::optional<LogicalGraphAdjacencyContinuation> continuation;
-		size_t visited = 0U;
-		for (;;) {
-			const LogicalGraphAdjacencyTopologyPage page =
-					scanAdjacentEdgeTopologies(nodeId, direction, continuation, maximumRecords - visited);
-			for (const LogicalGraphEdgeTopology &edge: page.edges) {
-				++visited;
-				if (!visitor(edge) || visited == maximumRecords) {
-					return;
-				}
-			}
-			if (!page.continuation.has_value()) {
-				return;
-			}
-			continuation = page.continuation;
-		}
-		}
-		[[nodiscard]] LogicalGraphAdjacencyReferencePage scanAdjacentEdgeRefs(
-				uint64_t nodeId, LogicalGraphReadDirection direction,
-				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
-			if (!faults_.supports_native_adjacency_refs) {
-				throw std::logic_error("pattern-expression fixture has no native adjacency references");
-			}
-			if (faults_.adjacency_reference_scan_count) {
-				++*faults_.adjacency_reference_scan_count;
-			}
-			const LogicalGraphAdjacencyPage full =
-					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
-			LogicalGraphAdjacencyReferencePage result;
-			result.edges.reserve(full.edges.size());
-			for (const LogicalGraphEdge &edge: full.edges) {
-				const uint64_t typeToken = edge.type == "R" ? 1U : 2U;
-				result.edges.push_back({edge.edge_id, true, edge.source_node_id, edge.target_node_id, typeToken});
-			}
-			result.continuation = full.continuation;
-			return result;
-		}
-		[[nodiscard]] bool supportsNativeAdjacentEdgeRefScans() const override {
-			return faults_.supports_native_adjacency_refs;
-		}
-		[[nodiscard]] bool supportsNativeAdjacentEdgeTopologyPages() const override { return true; }
-		[[nodiscard]] bool supportsNativeRelationshipTypeTokens() const override {
-			return faults_.supports_native_adjacency_refs;
-		}
-		[[nodiscard]] std::optional<uint64_t> findRelationshipTypeToken(std::string_view name) const override {
-			if (!faults_.supports_native_adjacency_refs) {
-				return std::nullopt;
-			}
-			return name == "R" ? std::optional<uint64_t>{1U} : std::nullopt;
-		}
-		void visitEdges(size_t, const std::function<bool(const LogicalGraphEdge &)> &) const override {
-			throw std::logic_error("pattern-expression runtime does not use Edge scans");
-		}
-		void visitAdjacentEdges(uint64_t, LogicalGraphReadDirection, size_t,
-								const std::function<bool(const LogicalGraphEdge &)> &) const override {
-			throw std::logic_error("pattern-expression runtime uses paged adjacency scans");
-		}
-
-	private:
-		FixtureNodes nodes_;
-		FixtureEdges edges_;
-		PatternExpressionSnapshotFaults faults_;
-	};
-
-	class PatternExpressionBackend final : public LogicalGraphReadBackend {
-	public:
-		explicit PatternExpressionBackend(PatternExpressionGraph graph = makeDefaultPatternExpressionGraph(),
-									  PatternExpressionSnapshotFaults faults = {})
-			: graph_(std::move(graph)), faults_(faults) {}
-
-		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
-			return std::make_unique<PatternExpressionSnapshot>(graph_, faults_);
-		}
-
-	private:
-		PatternExpressionGraph graph_;
-		PatternExpressionSnapshotFaults faults_;
-	};
-
-	[[nodiscard]] LogicalPlanReadRuntimeBounds bounds() {
-		return {.maximum_node_records = 16U,
-				.maximum_node_page_records = 2U,
-				.maximum_metadata_pages_per_node_page = 4U,
-				.maximum_edges_per_node = 8U,
-				.maximum_edge_records = 32U,
-				.maximum_adjacency_page_records = 1U,
-				.maximum_property_entries = 8U,
-				.maximum_rows = 16U,
-				.maximum_distinct_rows = 16U};
-	}
-
-	[[nodiscard]] QueryPlan parse(const std::string &query) {
-		graph::parser::cypher::CypherParserImpl parser;
-		return parser.parseToLogical(query);
-	}
-
-	[[nodiscard]] std::unique_ptr<graph::query::logical::LogicalProject>
-	makeShortestPathRoot(std::string startLabel, std::string endLabel, std::string relType,
-						 graph::query::expressions::PatternDirection direction, int minHops, int maxHops, bool all) {
-		auto left = std::make_unique<graph::query::logical::LogicalNodeScan>(
-				"a", std::vector<std::string>{std::move(startLabel)},
-				std::vector<std::pair<std::string, PropertyValue>>{});
-		auto right = std::make_unique<graph::query::logical::LogicalNodeScan>(
-				"b", std::vector<std::string>{std::move(endLabel)},
-				std::vector<std::pair<std::string, PropertyValue>>{});
-		auto join = std::make_unique<graph::query::logical::LogicalJoin>(std::move(left), std::move(right));
-		std::vector<graph::query::logical::LogicalProjectItem> items;
-		items.emplace_back(std::make_shared<graph::query::expressions::ShortestPathExpression>(
-						   "a", "b", std::move(relType), direction, minHops, maxHops, all),
-					   "path");
-		return std::make_unique<graph::query::logical::LogicalProject>(std::move(join), std::move(items));
-	}
-
-	[[nodiscard]] int64_t entityId(const PropertyValue &entity) {
-		return std::get<int64_t>(entity.getMap().at("_id").getVariant());
-	}
-
-	[[nodiscard]] PatternExpressionGraph makeDiamondGraph() {
-		PatternExpressionGraph graph;
-		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
-		graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
-		graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Middle"}});
-		graph.nodes.emplace(4U, LogicalGraphNode{4U, {"Middle"}});
-		// Map order makes the route through Node 4 visible first during BFS. The
-		// runtime must nevertheless materialize all paths in parent-ID order.
-		graph.edges.emplace(11U, LogicalGraphEdge{11U, 1U, 4U, "R"});
-		graph.edges.emplace(12U, LogicalGraphEdge{12U, 4U, 2U, "R"});
-		graph.edges.emplace(13U, LogicalGraphEdge{13U, 1U, 3U, "R"});
-		graph.edges.emplace(14U, LogicalGraphEdge{14U, 3U, 2U, "R"});
-		return graph;
-	}
-
-	[[nodiscard]] PatternExpressionGraph makeLayeredPathGraph() {
-		PatternExpressionGraph graph;
-		graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
-		for (uint64_t nodeId = 2U; nodeId <= 11U; ++nodeId) {
-			graph.nodes.emplace(nodeId, LogicalGraphNode{nodeId, {"Middle"}});
-		}
-		graph.nodes.emplace(12U, LogicalGraphNode{12U, {"End"}});
-		uint64_t edgeId = 1U;
-		for (uint64_t target = 2U; target <= 3U; ++target) {
-			graph.edges.emplace(edgeId, LogicalGraphEdge{edgeId++, 1U, target, "R"});
-		}
-		for (uint64_t firstLayer = 2U; firstLayer <= 8U; firstLayer += 2U) {
-			for (uint64_t source = firstLayer; source <= firstLayer + 1U; ++source) {
-				for (uint64_t target = firstLayer + 2U; target <= firstLayer + 3U; ++target) {
-					graph.edges.emplace(edgeId, LogicalGraphEdge{edgeId++, source, target, "R"});
-				}
-			}
-		}
-		for (uint64_t source = 10U; source <= 11U; ++source) {
-			graph.edges.emplace(edgeId, LogicalGraphEdge{edgeId++, source, 12U, "R"});
-		}
-		return graph;
-	}
-
-} // namespace
+#include "query/execution/LogicalPlanPatternExpressionRuntimeTestFixture.hpp"
 
 TEST(LogicalPlanPatternExpressionRuntimeTest, ExecutesExistsWithTypedTargetAndScopedWherePredicate) {
 	PatternExpressionBackend backend;
@@ -475,7 +100,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, BatchesEndpointExistenceForTopolog
 	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
 	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest,
 		GenericTraversalPrefiltersRelationshipTypeBeforeCompleteEdgeRead) {
 	PatternExpressionGraph graph = makeDefaultPatternExpressionGraph();
@@ -496,7 +120,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 	logical::LogicalTraversal traversal(
 			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
 			{{"weight", PropertyValue(int64_t{7})}});
-
 	std::vector<uint64_t> edgeIds;
 	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
 	traversalBounds.maximum_adjacency_page_records = 2U;
@@ -504,12 +127,10 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 		edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
 		return true;
 	}));
-
 	EXPECT_EQ(edgeIds, std::vector<uint64_t>{10U});
 	ASSERT_EQ(*faults.edge_shaped_batch_read_count, 1U);
 	EXPECT_EQ(*faults.edge_shaped_batch_ids, std::vector<uint64_t>{10U});
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotMaterializeTopologyEdgesRejectedByRelationshipType) {
 	PatternExpressionGraph graph = makeDefaultPatternExpressionGraph();
 	PatternExpressionSnapshotFaults faults;
@@ -529,8 +150,14 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotMaterializeTopologyEdgesRej
 	EXPECT_EQ(std::get<PropertyValue>(result), PropertyValue(true));
 	ASSERT_EQ(*faults.edge_shaped_batch_read_count, 1U);
 	ASSERT_EQ(*faults.edge_shaped_batch_ids, std::vector<uint64_t>({10U}));
+	*faults.edge_shaped_batch_read_count = 0U;
+	graph::query::expressions::ExistsExpression rejected(
+			"(n)-[:KNOWS]->(m:Robot)", "n", "KNOWS", "Robot", graph::query::expressions::PatternDirection::PAT_OUTGOING);
+	const auto absent = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, rejected, row, expressionBounds, context);
+	EXPECT_EQ(std::get<PropertyValue>(absent), PropertyValue(false));
+	EXPECT_EQ(*faults.edge_shaped_batch_read_count, 0U);
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesLengthForANamedSingleRelationshipPath) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -539,7 +166,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesLengthForANamedSingleRela
 			"RETURN length(p) AS relationship_count, size(nodes(p)) AS node_count, "
 			"size(relationships(p)) AS relationship_list_count");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 1U);
 	const auto &row = result.getRows().front();
@@ -547,11 +173,9 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesLengthForANamedSingleRela
 	EXPECT_EQ(row.at("node_count").asPrimitive(), PropertyValue(2));
 	EXPECT_EQ(row.at("relationship_list_count").asPrimitive(), PropertyValue(1));
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, ResolvesParameterizedNodePropertyPredicatesAtExecutionTime) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
-
 	logical::LogicalNodeScan scan("n", {"Person"});
 	scan.setParameterPropertyPredicates({{"name", "name"}});
 	QueryContext context;
@@ -559,15 +183,12 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ResolvesParameterizedNodePropertyP
 	const QueryResult matching = runtime.executeToQueryResult(scan, bounds(), context);
 	ASSERT_EQ(matching.rowCount(), 1U);
 	EXPECT_EQ(matching.getRows().front().at("n").asLogicalNode().node_id, 1U);
-
 	context.parameters.insert_or_assign("name", PropertyValue());
 	const QueryResult nullPredicate = runtime.executeToQueryResult(scan, bounds(), context);
 	EXPECT_EQ(nullPredicate.rowCount(), 0U);
-
 	QueryContext missingParameter;
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(scan, bounds(), missingParameter)), std::runtime_error);
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesEntityIntrospectionFunctionsFromParserProducedPlans) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -576,7 +197,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesEntityIntrospectionFuncti
 			"RETURN id(n) AS node_id, labels(n) AS node_labels, id(r) AS edge_id, type(r) AS edge_type, "
 			"keys(n) AS node_keys, properties(n) AS node_properties, keys(r) AS edge_keys, properties(r) AS edge_properties");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 1U);
 	const auto &row = result.getRows().front();
@@ -592,7 +212,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesEntityIntrospectionFuncti
 	EXPECT_EQ(row.at("edge_keys").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
 	EXPECT_EQ(row.at("edge_properties").asPrimitive(), PropertyValue(PropertyValue::MapType{}));
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesMapProjectionThroughTheLogicalStorageBoundary) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -600,7 +219,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesMapProjectionThroughTheLo
 			"MATCH (n:Person) WHERE n.name = 'Ada' "
 			"RETURN n {.*, .name, missing: null, greeting: 'hello'} AS projection");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 1U);
 	const PropertyValue projection = result.getRows().front().at("projection").asPrimitive();
@@ -609,19 +227,89 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesMapProjectionThroughTheLo
 	EXPECT_EQ(projection.getMap().at("missing"), PropertyValue());
 	EXPECT_EQ(projection.getMap().at("greeting"), PropertyValue("hello"));
 }
-
+TEST(LogicalPlanPatternExpressionRuntimeTest, MapProjectionAdmitsCopiesAndBoundsExpandedProperties) {
+	PatternExpressionSnapshot snapshot(makeDefaultPatternExpressionGraph());
+	LogicalPlanReadRow row;
+	QueryContext context;
+	const std::string payload(1000U, 'm');
+	context.parameters.emplace("first", PropertyValue(payload));
+	context.parameters.emplace("second", PropertyValue(payload));
+	std::vector<expressions::MapProjectionItem> items;
+	items.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "a",
+		std::make_unique<expressions::ParameterExpression>("first"));
+	items.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "b",
+		std::make_unique<expressions::ParameterExpression>("second"));
+	expressions::MapProjectionExpression literal(std::move(items));
+	const PropertyValue expected(PropertyValue::MapType{{"a", PropertyValue(payload)}, {"b", PropertyValue(payload)}});
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 2200U;
+	ASSERT_LT(property_utils::getPropertyValueSize(expected), limited.maximum_materialized_bytes);
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, literal, row, limited, context)), std::runtime_error);
+	limited.maximum_materialized_bytes = 6000U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, literal, row, limited, context)), expected);
+	std::vector<expressions::MapProjectionItem> overriding;
+	overriding.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "a",
+		std::make_unique<expressions::ParameterExpression>("first"));
+	overriding.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "a",
+		std::make_unique<expressions::LiteralExpression>(std::string("short")));
+	expressions::MapProjectionExpression overrideLiteral(std::move(overriding));
+	limited.maximum_materialized_bytes = 2500U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, overrideLiteral, row, limited, context)),
+		PropertyValue(PropertyValue::MapType{{"a", PropertyValue("short")}}));
+	row.values.emplace("m", PropertyValue(PropertyValue::MapType{
+		{"a", PropertyValue(1)}, {"b", PropertyValue(2)}, {"c", PropertyValue(3)}}));
+	std::vector<expressions::MapProjectionItem> selectors;
+	selectors.emplace_back(expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES, "");
+	expressions::MapProjectionExpression all("m", std::move(selectors));
+	limited.maximum_materialized_bytes = 6000U;
+	limited.maximum_property_entries = 2U;
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, all, row, limited, context)), std::runtime_error);
+	limited.maximum_property_entries = 4U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, all, row, limited, context)), std::get<PropertyValue>(row.values.at("m")));
+	EXPECT_TRUE(row.property_cache.empty());
+	expressions::VariableReferenceExpression property("m", "a");
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+		snapshot, property, row, limited, context)), PropertyValue(1));
+	EXPECT_TRUE(row.property_cache.empty());
+}
 TEST(LogicalPlanPatternExpressionRuntimeTest, ProducesCompletePatternComprehensionAndPreservesOuterBindings) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
 	QueryPlan plan = parse("MATCH (n:Person) RETURN n.name AS name, [(n)-[:KNOWS]->(m) WHERE m.age > 21 | m.age] AS ages");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 2U);
 	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
 	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
 	EXPECT_EQ(result.getRows().back().at("ages").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, AdmitsCompleteAdjacencyTargetColumnsBeforeReadingPayloads) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Seed"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Target"}, {{"payload", PropertyValue(std::string(4096U, 'p'))}}});
+	graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 2U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_node_ref_scans = true;
+	faults.node_property_column_admission_count = std::make_shared<size_t>(0U);
+	faults.node_property_column_read_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("n"), "n", "r", "m", "R", "out", {},
+										{{"payload", PropertyValue(std::string(4096U, 'p'))}});
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 1024U;
+	EXPECT_THROW(
+			static_cast<void>(runtime.execute(traversal, limited, [](const LogicalPlanReadRow &) { return true; })),
+			std::runtime_error);
+	EXPECT_EQ(*faults.node_property_column_admission_count, 1U);
+	EXPECT_EQ(*faults.node_property_column_read_count, 0U);
 }
 
 TEST(LogicalPlanPatternExpressionRuntimeTest, BoundsPatternComprehensionContainerOverhead) {
@@ -636,11 +324,13 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, BoundsPatternComprehensionContaine
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, limited)), std::runtime_error);
 }
 
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, BatchesEndpointExistenceForCompleteTopologyPages) {
 	PatternExpressionSnapshotFaults faults;
 	faults.supports_node_existence_probes = true;
 	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
 	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	faults.edge_read_count = std::make_shared<size_t>(0U);
 	PatternExpressionBackend backend(makeDefaultPatternExpressionGraph(), faults);
 	LogicalPlanReadRuntime runtime(backend);
 	QueryPlan plan = parse("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.age] AS ages");
@@ -652,6 +342,19 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, BatchesEndpointExistenceForComplet
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
 	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
 	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
+	for (bool references: {false, true}) {
+	faults.supports_native_adjacency_refs = references;
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	const auto brokenPlan = parse("MATCH (n:Person) RETURN [(n)-->(m) | m.age] AS ages");
+	PatternExpressionGraph broken = makeDefaultPatternExpressionGraph();
+	broken.nodes.erase(2U);
+	*faults.edge_read_count = 0U;
+	PatternExpressionBackend brokenBackend(std::move(broken), faults);
+	LogicalPlanReadRuntime brokenRuntime(brokenBackend);
+	EXPECT_THROW(static_cast<void>(brokenRuntime.executeToQueryResult(*brokenPlan.root, bounds())), std::runtime_error);
+	EXPECT_EQ(*faults.edge_read_count, 0U);
+	if (references) EXPECT_GT(*faults.adjacency_reference_scan_count, 0U);
+	}
 }
 
 TEST(LogicalPlanPatternExpressionRuntimeTest,
@@ -663,7 +366,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 	QueryPlan plan = parse(
 			"MATCH (n:Person) RETURN n.name AS name, [(n)-[r:KNOWS]->() | r.weight] AS weights");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 2U);
 	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
@@ -671,7 +373,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{7})}));
 	EXPECT_EQ(result.getRows().back().at("weights").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest,
 	 PreservesUndirectedPatternSemanticsAcrossSelfLoopsTypesAndTargetLabels) {
 	PatternExpressionGraph graph;
@@ -688,29 +389,24 @@ TEST(LogicalPlanPatternExpressionRuntimeTest,
 	LogicalPlanReadRuntime runtime(backend);
 	QueryPlan plan = parse("MATCH (n:Seed) RETURN [(n)-[:KNOWS]-(m:Friend) | m.age] AS ages");
 	ASSERT_NE(plan.root, nullptr);
-
 	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
 	ASSERT_EQ(result.rowCount(), 1U);
 	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotRebindPreexistingPatternTargets) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
-
 	QueryPlan matchingExistsPlan = parse(
 			"MATCH (n:Person), (m:Friend) WHERE EXISTS((n)-[:KNOWS]->(m)) RETURN n.name AS name");
 	ASSERT_NE(matchingExistsPlan.root, nullptr);
 	const QueryResult matching = runtime.executeToQueryResult(*matchingExistsPlan.root, bounds());
 	ASSERT_EQ(matching.rowCount(), 1U);
 	EXPECT_EQ(matching.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
-
 	QueryPlan existsPlan = parse(
 			"MATCH (n:Person), (m:Robot) WHERE EXISTS((n)-[:KNOWS]->(m)) RETURN n.name AS name");
 	ASSERT_NE(existsPlan.root, nullptr);
 	EXPECT_EQ(runtime.executeToQueryResult(*existsPlan.root, bounds()).rowCount(), 0U);
-
 	QueryPlan comprehensionPlan = parse(
 			"MATCH (n:Person), (m:Robot) RETURN n.name AS name, [(n)-[:KNOWS]->(m) | m.age] AS ages");
 	ASSERT_NE(comprehensionPlan.root, nullptr);
@@ -720,7 +416,6 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotRebindPreexistingPatternTar
 		EXPECT_EQ(row.at("ages").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
 	}
 }
-
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesStructuredNodeOnlyPatternsAndMissingSourceBindings) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -838,6 +533,127 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, MaterializesBoundedShortestPathAnd
 	EXPECT_EQ(paths.front().getType(), PropertyType::LIST);
 }
 
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathCompleteEdgeAdmissionRejectsBeforeBatchCopy) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}, {}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}, {}});
+	const std::string payload(4000U, 'e');
+	graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 2U, "R", {{"payload", PropertyValue(payload)}}});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_shaped_property_admission = true;
+	faults.edge_shaped_admission_read_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_batch_read_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "R",
+		graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 2, false);
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 3500U;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*root, limited)), std::runtime_error);
+	EXPECT_GT(*faults.edge_shaped_admission_read_count, 0U);
+	EXPECT_EQ(*faults.edge_shaped_batch_read_count, 0U);
+	limited.maximum_materialized_bytes = 32000U;
+	const auto result = runtime.executeToQueryResult(*root, limited);
+	ASSERT_EQ(result.rowCount(), 1U);
+	const auto &path = result.getRows().front().at("path").asPrimitive().getList();
+	ASSERT_EQ(path.size(), 3U);
+	EXPECT_EQ(path[1].getMap().at("payload"), PropertyValue(payload));
+	EXPECT_GT(*faults.edge_shaped_batch_read_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathRetainsNodesWhileAdmittingEdgeBatch) {
+	PatternExpressionGraph graph;
+	const std::string payload(1200U, 'p');
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}, {{"payload", PropertyValue(payload)}}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}, {{"payload", PropertyValue(payload)}}});
+	graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 2U, "R", {{"payload", PropertyValue(payload)}}});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_shaped_property_admission = true;
+	faults.node_shaped_completed_read_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_admission_read_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_batch_read_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "R", expressions::PatternDirection::PAT_OUTGOING, 1, 2, false);
+	auto limited = bounds();
+	// Identity authentication no longer retains complete BFS endpoint copies.
+	// Keep the limit between the Node source and the combined Node/Edge sources.
+	limited.maximum_materialized_bytes = 9000U;
+	try {
+		static_cast<void>(runtime.executeToQueryResult(*root, limited));
+		FAIL() << "the retained Node and Edge source batches must share the budget";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	EXPECT_GT(*faults.node_shaped_completed_read_count, 0U);
+	EXPECT_GT(*faults.edge_shaped_admission_read_count, 0U);
+	EXPECT_EQ(*faults.edge_shaped_batch_read_count, 0U);
+	limited.maximum_materialized_bytes = 16000U;
+	const auto result = runtime.executeToQueryResult(*root, limited);
+	ASSERT_EQ(result.rowCount(), 1U);
+	const auto &path = result.getRows().front().at("path").asPrimitive().getList();
+	ASSERT_EQ(path.size(), 3U);
+	for (const PropertyValue &entity: path)
+		EXPECT_EQ(entity.getMap().at("payload"), PropertyValue(payload));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathRejectsDuplicateDirectProperties) {
+	for (const bool duplicateEdge: {false, true}) {
+		auto graph = makeDefaultPatternExpressionGraph();
+		if (duplicateEdge) {
+			graph.edges.at(10U).properties = {{"weight", PropertyValue(1)}, {"weight", PropertyValue(2)}};
+		} else {
+			graph.nodes.at(1U).properties.push_back({"name", PropertyValue("duplicate")});
+		}
+		PatternExpressionSnapshot snapshot(std::move(graph));
+		LogicalPlanReadRow row;
+		row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+		row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+		expressions::ShortestPathExpression shortest("a", "b", "KNOWS",
+			expressions::PatternDirection::PAT_OUTGOING, 1, 2, false);
+		QueryContext context;
+		try {
+			static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, shortest, row, bounds(), context));
+			FAIL() << "a duplicate direct Property key must be rejected while constructing the path";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical graph backend returned an invalid direct Property entry set");
+		}
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathChargesAdjacencyTopologyPageBeforeRetainingParent) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}, {}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}, {}});
+	graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 2U, std::string(1024U, 'R'), {}});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_batch_read_count = std::make_shared<size_t>(0U);
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+	row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+	expressions::ShortestPathExpression shortest("a", "b", "",
+		expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
+	QueryContext context;
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 900U;
+	try {
+		static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, shortest, row, limited, context));
+		FAIL() << "the adjacency topology page must fit the shared budget before BFS retains a parent";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	}
+	EXPECT_GT(*faults.adjacency_topology_scan_count, 0U);
+	EXPECT_EQ(*faults.edge_shaped_batch_read_count, 0U);
+	limited.maximum_materialized_bytes = 20000U;
+	const auto result = std::get<PropertyValue>(
+		LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, shortest, row, limited, context));
+	ASSERT_EQ(result.getList().size(), 3U);
+	EXPECT_EQ(result.getList()[1].getMap().at("_id"), PropertyValue(10));
+}
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathUsesNativeEndpointProbesBeforePathMaterialization) {
 	PatternExpressionGraph graph;
 	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
@@ -863,6 +679,34 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathUsesNativeEndpointProb
 	// The start and end records are materialized only while building the returned
 	// path. The non-path frontier Node is never fully decoded.
 	EXPECT_EQ(*faults.node_read_count, 2U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ChargesShortestPathEndpointProbeBuffersToPageBudget) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Detour"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	const auto makeRoot = [] {
+		return makeShortestPathRoot("Start", "End", "R",
+				graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
+	};
+	auto limited = bounds();
+	limited.maximum_materialized_bytes = 128U;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*makeRoot(), limited)), std::runtime_error);
+	EXPECT_EQ(*faults.node_existence_batch_probe_count, 0U);
+
+	limited.maximum_materialized_bytes = 20000U;
+	const QueryResult result = runtime.executeToQueryResult(*makeRoot(), limited);
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(entityId(result.getRows().front().at("path").asPrimitive().getList()[1]), 1);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
 }
 
 TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathSeedsBfsFromEntityIdsWithoutReadingEndpoints) {
@@ -1235,4 +1079,309 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, RejectsShortestPathWithMalformedNo
 			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
 
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*root, bounds())), std::runtime_error);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathScalarConsumersAvoidCompleteEntityProperties) {
+	for (const std::string function: {"size", "length"}) {
+		for (const bool nativeRefs: {false, true}) {
+			for (const bool all: {false, true}) {
+				auto graph = makeDiamondGraph();
+				for (auto &[id, node]: graph.nodes) {
+					static_cast<void>(id);
+					node.properties.push_back({"payload", PropertyValue(std::string(8192U, 'n'))});
+				}
+				for (auto &[id, edge]: graph.edges) {
+					static_cast<void>(id);
+					edge.properties.push_back({"payload", PropertyValue(std::string(8192U, 'e'))});
+				}
+				if (all) graph.edges.emplace(15U, LogicalGraphEdge{15U, 1U, 3U, "R"});
+				PatternExpressionSnapshotFaults faults;
+				faults.supports_node_existence_probes = true;
+				faults.supports_native_adjacency_refs = nativeRefs;
+				faults.node_read_count = std::make_shared<size_t>(0U);
+				faults.edge_read_count = std::make_shared<size_t>(0U);
+				PatternExpressionSnapshot snapshot(std::move(graph), faults);
+				LogicalPlanReadRow row;
+				row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+				row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+				std::vector<std::unique_ptr<expressions::Expression>> arguments;
+				arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+						"a", "b", "R", expressions::PatternDirection::PAT_OUTGOING, 0, 3, all));
+				expressions::FunctionCallExpression size(function, std::move(arguments));
+				auto bounded = bounds();
+				bounded.maximum_materialized_bytes = 4096U;
+				QueryContext context;
+				const auto result = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, size, row, bounded, context);
+				EXPECT_EQ(std::get<PropertyValue>(result), PropertyValue(all ? 3 : function == "size" ? 5 : 2));
+				EXPECT_EQ(*faults.node_read_count, 0U);
+				EXPECT_EQ(*faults.edge_read_count, 0U);
+			}
+		}
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathScalarConsumersPreserveSelfNullDepthAndListBounds) {
+	for (const std::string function: {"size", "length"}) {
+		PatternExpressionSnapshotFaults faults;
+		faults.supports_node_existence_probes = true;
+		PatternExpressionSnapshot snapshot(makeDiamondGraph(), faults);
+		const auto evaluate = [&](uint64_t end, std::string type, bool all, int minimum,
+				const LogicalPlanReadRuntimeBounds &bounded, const QueryContext &context) {
+			LogicalPlanReadRow row;
+			row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+			row.values.emplace("b", EntityRef{end, false, 0U, 0U, 0U});
+			std::vector<std::unique_ptr<expressions::Expression>> arguments;
+			arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+					"a", "b", std::move(type), expressions::PatternDirection::PAT_OUTGOING, minimum, 3, all));
+			expressions::FunctionCallExpression size(function, std::move(arguments));
+			return std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, size, row, bounded, context));
+		};
+		QueryContext context;
+		for (const bool all: {false, true}) {
+			EXPECT_EQ(evaluate(1U, "R", all, 0, bounds(), context), PropertyValue(all || function == "size" ? 1 : 0));
+			EXPECT_EQ(evaluate(1U, "R", all, 1, bounds(), context), PropertyValue());
+			EXPECT_EQ(evaluate(2U, "MISSING", all, 0, bounds(), context), PropertyValue());
+		}
+		context.maxVarLengthDepth = 0;
+		EXPECT_EQ(evaluate(2U, "R", false, 0, bounds(), context), PropertyValue());
+		context.maxVarLengthDepth.reset();
+		auto limited = bounds();
+		limited.maximum_rows = 4U;
+		EXPECT_THROW(static_cast<void>(evaluate(2U, "R", false, 0, limited, context)), std::runtime_error);
+		limited.maximum_materialized_bytes = 32U;
+		EXPECT_THROW(static_cast<void>(evaluate(2U, "R", true, 0, limited, context)), std::runtime_error);
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, AllShortestPathSizeCountsParentDagMultiplicityWithinResultBound) {
+	PatternExpressionGraph graph;
+	for (uint64_t id = 1U; id <= 5U; ++id) graph.nodes.emplace(id, LogicalGraphNode{id, {"N"}});
+	for (uint64_t id = 1U; id < 5U; ++id) {
+		graph.edges.emplace(2U * id, LogicalGraphEdge{2U * id, id, id + 1U, "R"});
+		graph.edges.emplace(2U * id + 1U, LogicalGraphEdge{2U * id + 1U, id, id + 1U, "R"});
+	}
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+	row.values.emplace("b", EntityRef{5U, false, 0U, 0U, 0U});
+	std::vector<std::unique_ptr<expressions::Expression>> arguments;
+	arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+			"a", "b", "R", expressions::PatternDirection::PAT_OUTGOING, 0, 4, true));
+	expressions::FunctionCallExpression size("size", std::move(arguments));
+	QueryContext context;
+	auto bounded = bounds();
+	bounded.maximum_rows = 8U;
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, size, row, bounded, context)), std::runtime_error);
+	bounded.maximum_rows = 16U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, size, row, bounded, context)), PropertyValue(16));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, EntityRefSelectedPropertyKeepsNullAndRejectsMalformedColumn) {
+	for (const bool edge: {false, true}) {
+		for (const bool malformed: {false, true}) {
+			auto graph = makeDefaultPatternExpressionGraph();
+			if (edge) graph.edges.at(10U).properties.push_back({"_type", PropertyValue()});
+			else graph.nodes.at(1U).properties.push_back({"_type", PropertyValue()});
+			PatternExpressionSnapshotFaults faults;
+			faults.node_property_column_admission_count = std::make_shared<size_t>(0U);
+			faults.edge_property_column_admission_count = std::make_shared<size_t>(0U);
+			faults.truncate_selected_property_column = malformed;
+			PatternExpressionSnapshot snapshot(std::move(graph), faults);
+			LogicalPlanReadRow row;
+			row.values.emplace("entity", EntityRef{edge ? 10U : 1U, edge, edge ? 1U : 0U, edge ? 2U : 0U, 0U});
+			expressions::VariableReferenceExpression property("entity", "_type");
+			QueryContext context;
+			if (malformed) {
+				EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+					snapshot, property, row, bounds(), context)), std::runtime_error);
+			} else {
+				EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+					snapshot, property, row, bounds(), context)), PropertyValue());
+			}
+		}
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, EntityRefPropertyMissAdmitsBeforeCopyAndRetriesWithoutCachingFailure) {
+	for (const bool edge: {false, true}) {
+		auto graph = makeDefaultPatternExpressionGraph();
+		const PropertyValue large(std::string(8192U, 'x'));
+		if (edge) graph.edges.at(10U).properties.push_back({"_type", large});
+		else graph.nodes.at(1U).properties.push_back({"_type", large});
+		PatternExpressionSnapshotFaults faults;
+		auto admitted = std::make_shared<size_t>(0U);
+		auto completed = std::make_shared<size_t>(0U);
+		if (edge) {
+			faults.edge_property_column_admission_count = admitted;
+			faults.edge_property_column_read_count = completed;
+		} else {
+			faults.node_property_column_admission_count = admitted;
+			faults.node_property_column_read_count = completed;
+		}
+		PatternExpressionSnapshot snapshot(std::move(graph), faults);
+		LogicalPlanReadRow row;
+		row.values.emplace("entity", EntityRef{edge ? 10U : 1U, edge, edge ? 1U : 0U, edge ? 2U : 0U, 0U});
+		expressions::VariableReferenceExpression property("entity", "_type");
+		QueryContext context;
+		auto limited = bounds();
+		limited.maximum_materialized_bytes = 4096U;
+		EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, property, row, limited, context)), std::runtime_error);
+		EXPECT_EQ(*admitted, 1U);
+		EXPECT_EQ(*completed, 0U);
+		EXPECT_FALSE(row.property_cache.contains("entity"));
+		limited.maximum_materialized_bytes = 32768U;
+		EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, property, row, limited, context)), large);
+		EXPECT_EQ(*completed, 1U);
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathLengthPreservesOverriddenPathMarkerSemantics) {
+	for (const bool unsupported: {false, true}) {
+		for (const bool edgeMarker: {false, true}) {
+			for (const PropertyValue &marker: {PropertyValue(), PropertyValue(42), PropertyValue("spoof"),
+					PropertyValue(edgeMarker ? "relationship" : "node")}) {
+				auto graph = makeDiamondGraph();
+				if (edgeMarker) graph.edges.at(14U).properties.push_back({"_type", marker});
+				else graph.nodes.at(3U).properties.push_back({"_type", marker});
+				PatternExpressionSnapshotFaults faults;
+				faults.supports_node_existence_probes = true;
+				faults.unsupported_marker_presence = unsupported;
+				if (!unsupported) {
+					faults.node_property_column_admission_count = std::make_shared<size_t>(0U);
+					faults.edge_property_column_admission_count = std::make_shared<size_t>(0U);
+				}
+				PatternExpressionSnapshot snapshot(std::move(graph), faults);
+				LogicalPlanReadRow row;
+				row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+				row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+				std::vector<std::unique_ptr<expressions::Expression>> arguments;
+				arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+						"a", "b", "R", expressions::PatternDirection::PAT_OUTGOING, 0, 3, false));
+				expressions::FunctionCallExpression length("length", std::move(arguments));
+				QueryContext context;
+				const auto actual = std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, length, row, bounds(), context));
+				const bool valid = marker == PropertyValue(edgeMarker ? "relationship" : "node");
+				EXPECT_EQ(actual, PropertyValue(valid ? 2 : 5));
+			}
+		}
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathLengthRejectsOversizedRequestedMarker) {
+	auto graph = makeDiamondGraph();
+	graph.nodes.at(3U).properties.push_back({"_type", PropertyValue(std::string(8192U, 'x'))});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+	row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+	std::vector<std::unique_ptr<expressions::Expression>> arguments;
+	arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+			"a", "b", "R", expressions::PatternDirection::PAT_OUTGOING, 0, 3, false));
+	expressions::FunctionCallExpression length("length", std::move(arguments));
+	QueryContext context;
+	auto bounded = bounds();
+	bounded.maximum_materialized_bytes = 4096U;
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, length, row, bounded, context)), std::runtime_error);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, FusesShortestPathScalarObserversAcrossProjectionAlias) {
+	for (const bool all: {false, true}) {
+		PatternExpressionSnapshotFaults faults;
+		faults.supports_node_existence_probes = true;
+		faults.node_read_count = std::make_shared<size_t>(0U);
+		faults.edge_read_count = std::make_shared<size_t>(0U);
+		PatternExpressionBackend backend(makeDiamondGraph(), faults);
+		LogicalPlanReadRuntime runtime(backend);
+		const auto plan = parse("MATCH (a:Start), (b:End) WITH " + std::string(all ? "allShortestPaths" : "shortestPath") +
+				"((a)-[:R*0..3]->(b)) AS p, id(a) AS source "
+				"RETURN size(p) AS size, length(p) AS length, source, size(p) + 10 AS adjusted");
+		ASSERT_NE(plan.root, nullptr);
+		const auto result = runtime.executeToQueryResult(*plan.root, bounds());
+		ASSERT_EQ(result.rowCount(), 1U);
+		const auto &row = result.getRows().front();
+		EXPECT_EQ(row.at("size").asPrimitive(), PropertyValue(all ? 2 : 5));
+		EXPECT_EQ(row.at("length").asPrimitive(), PropertyValue(2));
+		EXPECT_EQ(row.at("source").asPrimitive(), PropertyValue(1));
+		EXPECT_EQ(row.at("adjusted").asPrimitive(), PropertyValue(all ? 12 : 15));
+		EXPECT_EQ(*faults.node_read_count, 0U);
+		EXPECT_EQ(*faults.edge_read_count, 0U);
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ScalarPathAliasPreservesNullAndCompletePathFallbacks) {
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	PatternExpressionBackend backend(makeDiamondGraph(), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	const auto missing = parse("MATCH (a:Start), (b:End) WITH shortestPath((a)-[:MISSING*0..3]->(b)) AS p "
+			"RETURN size(p) AS size, length(p) AS length");
+	ASSERT_NE(missing.root, nullptr);
+	const auto absent = runtime.executeToQueryResult(*missing.root, bounds());
+	ASSERT_EQ(absent.rowCount(), 1U);
+	EXPECT_EQ(absent.getRows().front().at("size").asPrimitive(), PropertyValue());
+	EXPECT_EQ(absent.getRows().front().at("length").asPrimitive(), PropertyValue());
+	const auto complete = parse("MATCH (a:Start), (b:End) WITH shortestPath((a)-[:R*0..3]->(b)) AS p "
+			"RETURN p, size(p) AS size");
+	ASSERT_NE(complete.root, nullptr);
+	const auto full = runtime.executeToQueryResult(*complete.root, bounds());
+	ASSERT_EQ(full.rowCount(), 1U);
+	EXPECT_EQ(full.getRows().front().at("p").asPrimitive().getList().size(), 5U);
+	EXPECT_EQ(full.getRows().front().at("size").asPrimitive(), PropertyValue(5));
+	const auto conditional = parse("MATCH (a:Start), (b:End) WITH shortestPath((a)-[:R*0..3]->(b)) AS p "
+			"RETURN CASE WHEN false THEN size(p) ELSE 0 END AS value");
+	ASSERT_NE(conditional.root, nullptr);
+	auto limited = bounds();
+	limited.maximum_rows = 4U;
+	const auto conditionalResult = runtime.executeToQueryResult(*conditional.root, limited);
+	ASSERT_EQ(conditionalResult.rowCount(), 1U);
+	EXPECT_EQ(conditionalResult.getRows().front().at("value").asPrimitive(), PropertyValue(0));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathTopologySourceShrinksRejectedPagesWithoutReplayingResults) {
+	for (const bool references: {false, true}) {
+		SCOPED_TRACE(references);
+		PatternExpressionSnapshotFaults faults;
+		faults.supports_native_adjacency_refs = references;
+		faults.topology_admission_requests = std::make_shared<std::vector<size_t>>();
+		faults.supports_node_existence_probes = true;
+		PatternExpressionSnapshot snapshot(makeDefaultPatternExpressionGraph(), faults);
+		LogicalPlanReadRow row;
+		row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+		row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+		std::vector<std::unique_ptr<expressions::Expression>> arguments;
+		arguments.push_back(std::make_unique<expressions::ShortestPathExpression>(
+			"a", "b", "", expressions::PatternDirection::PAT_OUTGOING, 0, 3, false));
+		expressions::FunctionCallExpression length("length", std::move(arguments));
+		QueryContext context;
+		auto limited = bounds();
+		limited.maximum_edges_per_node = 16U;
+		limited.maximum_adjacency_page_records = 16U;
+		limited.maximum_materialized_bytes = 4096U;
+		EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, length, row, limited, context)), PropertyValue(1));
+		ASSERT_GT(faults.topology_admission_requests->size(), 1U);
+		EXPECT_GT(faults.topology_admission_requests->front(), faults.topology_admission_requests->back());
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ExistsEndpointGatherRejectsBeforeProbeAndCanRetry) {
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true; faults.supports_node_existence_probes = true;
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionSnapshot snapshot(makeDefaultPatternExpressionGraph(), faults);
+	LogicalPlanReadRow row; row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+	expressions::ExistsExpression expression("(a)-->()", "a", "", "", expressions::PatternDirection::PAT_OUTGOING);
+	auto limited = bounds(); limited.maximum_adjacency_page_records = 2U;
+	limited.maximum_materialized_bytes = sizeof(EntityRef) + sizeof(const EntityRef *);
+	EXPECT_THROW(static_cast<void>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, expression, row, limited, QueryContext{})), std::runtime_error);
+	EXPECT_EQ(*faults.node_existence_batch_probe_count, 0U);
+	limited.maximum_materialized_bytes = 10000U;
+	EXPECT_EQ(std::get<PropertyValue>(LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(snapshot, expression, row, limited, QueryContext{})), PropertyValue(true));
+	EXPECT_EQ(*faults.node_existence_batch_probe_count, 1U);
 }

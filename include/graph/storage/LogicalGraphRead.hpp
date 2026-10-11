@@ -26,6 +26,13 @@
 #include "graph/core/PropertyTypes.hpp"
 
 namespace graph::storage {
+	// Only admission pressure may trigger source batching adaptation. Cancellation,
+	// corruption and visitor failures must propagate without replay.
+	class LogicalGraphBufferPressure final : public std::runtime_error {
+	public:
+		LogicalGraphBufferPressure() : std::runtime_error("shared materialization exceeded its byte bound") {}
+	};
+
 
 	// Prefixes keep the public enum safe from Windows macro collisions.
 	enum class LogicalGraphReadDirection : uint8_t {
@@ -394,6 +401,18 @@ namespace graph::storage {
 			const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
 			return std::ranges::any_of(node.properties, [&](const LogicalGraphPropertyEntry &entry) { return entry.key == key; });
 		}
+		// Presence probes distinguish a missing field from stored NULL without
+		// materializing unrelated Property values. Covers both Nodes and Edges.
+		[[nodiscard]] virtual bool supportsPropertyPresenceProbes() const { return false; }
+		// Allows consumers to omit COUNT-only Property payloads from prefetch.
+		// Both Node and Edge non-null probes must be implemented when advertised.
+		[[nodiscard]] virtual bool supportsPropertyNonNullProbes() const { return false; }
+		// Optional COUNT predicate: false includes both missing and explicit NULL.
+		// Key existence alone cannot prove this; unsupported readers return nullopt.
+		[[nodiscard]] virtual std::optional<bool> nodePropertyIsNonNull(uint64_t, std::string_view) const {
+			return std::nullopt;
+		}
+
 		// See readEdgePropertiesSorted(). Native Node pages override this to merge
 		// owner locations and decode one requested Property column at a time.
 		[[nodiscard]] virtual std::vector<PropertyValue>
@@ -426,6 +445,34 @@ namespace graph::storage {
 				columns.push_back(readNodePropertiesSorted(nodeIds, key));
 			}
 			return columns;
+		}
+		// Readers advertising admission invoke it before selected entry payload
+		// reads/copies. Native storage reports canonical token + value wire bytes;
+		// these are source scratch estimates, not decoded object capacity or RSS.
+		[[nodiscard]] virtual bool supportsPropertyReadAdmission() const { return false; }
+		[[nodiscard]] virtual std::vector<std::vector<PropertyValue>>
+		readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t>,
+				std::span<const std::string_view>, const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph reader does not support Property admission");
+		}
+		[[nodiscard]] virtual std::vector<std::vector<PropertyValue>>
+		readEdgePropertyColumnsSortedWithAdmission(std::span<const uint64_t>,
+				std::span<const std::string_view>, const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph reader does not support Property admission");
+		}
+		// Shaped admission covers canonical token + value bytes before Property
+		// decoding/copying. Names, labels, encoded input and container capacities
+		// require separate accounting; selected-column support does not imply this.
+		[[nodiscard]] virtual bool supportsShapedPropertyReadAdmission() const { return false; }
+		[[nodiscard]] virtual std::vector<LogicalGraphNode>
+		readNodesShapedSortedWithAdmission(std::span<const uint64_t>, const EntityReadShape &,
+				const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph reader does not support shaped Property admission");
+		}
+		[[nodiscard]] virtual std::vector<LogicalGraphEdge>
+		readEdgesShapedSortedWithAdmission(std::span<const uint64_t>, const EntityReadShape &,
+				const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph reader does not support shaped Property admission");
 		}
 		// Tests required labels without requiring Property or result-object
 		// materialization. Native backends resolve names to snapshot-local tokens;
@@ -538,6 +585,12 @@ namespace graph::storage {
 			const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
 			return std::ranges::any_of(edge.properties, [&](const LogicalGraphPropertyEntry &entry) { return entry.key == key; });
 		}
+		// Optional COUNT predicate: false includes both missing and explicit NULL.
+		// Key existence alone cannot prove this; unsupported readers return nullopt.
+		[[nodiscard]] virtual std::optional<bool> edgePropertyIsNonNull(uint64_t, std::string_view) const {
+			return std::nullopt;
+		}
+
 		// Reads one named Property for strictly increasing Edge IDs. Implementations
 		// with token-aware pages override this to merge the Property Directory and
 		// pin each shared page once. The default preserves the public contract for
@@ -770,6 +823,19 @@ namespace graph::storage {
 				return visitor(reference, nodeHasLabels(reference.entity_id, requiredLabels));
 			});
 		}
+		// Predicate access may enumerate only an indexed label's candidates. Each
+		// emitted reference is validated against primary records; false denotes
+		// a candidate rejected by another required label. Bounds count candidates
+		// examined, not the population skipped by an index. The fallback remains
+		// an exhaustive scan; overlays use it until they can merge memberships.
+		virtual void visitNodeRefsForLabelPredicate(size_t maximumRecords,
+				const std::vector<std::string> &requiredLabels,
+				const std::function<bool(const EntityRef &, bool)> &visitor) const {
+			auto canonical = requiredLabels;
+			std::sort(canonical.begin(), canonical.end());
+			canonical.erase(std::unique(canonical.begin(), canonical.end()), canonical.end());
+			visitNodeRefsWithLabelMatches(maximumRecords, canonical, visitor);
+		}
 		// The default reference projection is semantically compatible but may not
 		// preserve a backend's stronger resumable-page validation contract. Query
 		// execution uses it only after this explicit capability opt-in.
@@ -780,11 +846,60 @@ namespace graph::storage {
 		// The returned page reports the exact metadata-page cost, which must not
 		// exceed maximum_metadata_pages.
 		[[nodiscard]] virtual LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
-																  size_t maximumMetadataPages) const = 0;
+																								  size_t maximumMetadataPages) const = 0;
+		// Shape-aware resumable Node scan. The default delegates to the complete
+		// scan so existing adapters remain compatible; native readers override this
+		// boundary to avoid decoding labels or Properties that the caller did not
+		// request. Identity and continuation semantics are unchanged.
+		[[nodiscard]] virtual LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
+																								  size_t maximumMetadataPages,
+																								  const EntityReadShape &shape) const {
+			validateEntityReadShape(shape);
+			LogicalGraphNodePage result = scanNodesAfter(afterNodeId, maximumRecords, maximumMetadataPages);
+			if (!shape.include_labels) {
+				for (LogicalGraphNode &node: result.nodes) {
+					node.labels.clear();
+				}
+			}
+			// A generic adapter cannot map compact property tokens back to logical
+			// names without its schema resolver. Retain complete Properties for that
+			// uncommon fallback; identity/label-only scans can still drop them.
+			if (!shape.all_properties && shape.property_tokens.empty()) {
+				for (LogicalGraphNode &node: result.nodes) {
+					node.properties.clear();
+				}
+			}
+			return result;
+		}
 		[[nodiscard]] virtual LogicalGraphAdjacencyPage
 		scanAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction,
 						  std::optional<LogicalGraphAdjacencyContinuation> continuation,
 						  size_t maximumRecords) const = 0;
+		// Additive Property payload admission before decoding complete adjacency roots.
+		// Cursor, Entity, resolver and output-buffer allocations are separate.
+		[[nodiscard]] virtual bool supportsAdjacencyPropertyReadAdmission() const { return false; }
+		[[nodiscard]] virtual LogicalGraphAdjacencyPage scanAdjacentEdgesWithPropertyAdmission(
+				uint64_t, LogicalGraphReadDirection, std::optional<LogicalGraphAdjacencyContinuation>, size_t,
+				const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical snapshot does not support adjacency Property admission");
+		}
+		// Independent additive payload and absolute live array-buffer admission.
+		// Resolver names, Property containers and session caches remain separate.
+		[[nodiscard]] virtual bool supportsAdjacencyReadAdmission() const { return false; }
+		[[nodiscard]] virtual LogicalGraphAdjacencyPage scanAdjacentEdgesWithAdmission(
+			uint64_t, LogicalGraphReadDirection, std::optional<LogicalGraphAdjacencyContinuation>, size_t,
+			const std::function<void(size_t)> &, const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical snapshot does not support adjacency read admission");
+		}
+		// Buffer admission covers ID/record/output arrays and retained type names.
+		// Fixed cursor pages, session caches and resolver/Entity internals are separate.
+		[[nodiscard]] virtual bool supportsAdjacencyTopologyBufferAdmission() const { return false; }
+		[[nodiscard]] virtual LogicalGraphAdjacencyTopologyPage
+		scanAdjacentEdgeTopologiesWithBufferAdmission(uint64_t, LogicalGraphReadDirection,
+			std::optional<LogicalGraphAdjacencyContinuation>, size_t,
+			const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical snapshot does not support topology buffer admission");
+		}
 		// Backends with a native topology reader override this paging API. The
 		// fallback retains compatibility while making the expensive projection
 		// explicit at the storage-neutral boundary.
@@ -820,6 +935,15 @@ namespace graph::storage {
 			result.continuation = full.continuation;
 			return result;
 		}
+		// Absolute bytes retained by ID/record/reference arrays during this read.
+		// Fixed cursor pages and session caches remain separately bounded.
+		[[nodiscard]] virtual bool supportsAdjacencyReferenceBufferAdmission() const { return false; }
+		[[nodiscard]] virtual LogicalGraphAdjacencyReferencePage
+		scanAdjacentEdgeRefsWithBufferAdmission(uint64_t, LogicalGraphReadDirection,
+			std::optional<LogicalGraphAdjacencyContinuation>, size_t,
+			const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical snapshot does not support reference buffer admission");
+		}
 		[[nodiscard]] virtual bool supportsNativeAdjacentEdgeRefScans() const { return false; }
 		// A paged topology cursor is stronger than the visitor-only capability:
 		// callers may request one bounded page, validate its continuation, and
@@ -840,6 +964,16 @@ namespace graph::storage {
 				return visitor({edge.edge_id, true, edge.source_node_id, edge.target_node_id, 0U});
 			});
 		}
+		// A resolved, snapshot-local type token is an access hint. An indexed
+		// backend may omit unrelated types; callers still validate/filter refs.
+		// Fallbacks and overlays retain exhaustive scans until membership merging
+		// is supported. Token zero remains the untyped relationship identity.
+		virtual void visitEdgeRefsForTypePredicate(size_t maximumRecords,
+				std::optional<uint64_t> typeToken,
+				const std::function<bool(const EntityRef &)> &visitor) const {
+			static_cast<void>(typeToken);
+			visitEdgeRefs(maximumRecords, visitor);
+		}
 		[[nodiscard]] virtual bool supportsNativeEdgeRefScans() const { return false; }
 		// A native snapshot may resolve a relationship-type name once into its
 		// snapshot-local opaque token. The token is logical schema identity, not a
@@ -847,12 +981,24 @@ namespace graph::storage {
 		// from the same snapshot. Returning false preserves the string-topology
 		// fallback for storage implementations without compact type tokens.
 		[[nodiscard]] virtual bool supportsNativeRelationshipTypeTokens() const { return false; }
+		// Some transactional readers can expose native tokens for types already
+		// present in the pinned catalog while falling back for newly staged types.
+		// This query-specific capability preserves the native path for known types
+		// without claiming that every relationship reference has a token.
+		[[nodiscard]] virtual bool supportsNativeRelationshipTypeTokens(std::string_view type) const {
+			static_cast<void>(type);
+			return supportsNativeRelationshipTypeTokens();
+		}
 		[[nodiscard]] virtual std::optional<uint64_t>
 		findRelationshipTypeToken(std::string_view /*name*/) const {
 			return std::nullopt;
 		}
 		// Resolves a Property name once in the pinned schema. The token is useful
 		// when constructing an EntityReadShape for a selected-column read.
+		// A resolving backend can exclude names with no token from token-selected
+		// shapes. Staged names may have values before acquiring a catalog token;
+		// lack of a token must not be interpreted as logical Property absence.
+		[[nodiscard]] virtual bool supportsPropertyTokenResolution() const { return false; }
 		[[nodiscard]] virtual std::optional<uint32_t> findPropertyToken(std::string_view /*name*/) const {
 			return std::nullopt;
 		}
@@ -897,6 +1043,14 @@ namespace graph::storage {
 		// Batch adjacency traversal for many source IDs. Native implementations may
 		// consume one ordered adjacency cursor; the fallback preserves semantics by
 		// using the existing per-source cursor.
+		// Absolute live source-buffer bytes, including buffers retained while invoking visitor.
+		[[nodiscard]] virtual bool supportsBatchAdjacencyReferenceBufferAdmission() const { return false; }
+		virtual void visitAdjacentEdgeRefsForNodesWithBufferAdmission(std::span<const uint64_t>,
+			LogicalGraphReadDirection, size_t, const std::function<bool(const EntityRef &)> &,
+			const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph batch adjacency reference admission is unsupported");
+		}
+
 		virtual void visitAdjacentEdgeRefsForNodes(std::span<const uint64_t> nodeIds,
 										  LogicalGraphReadDirection direction, size_t maximumEdges,
 										  const std::function<bool(const EntityRef &)> &visitor) const {
@@ -966,6 +1120,12 @@ namespace graph::storage {
 		bool operator==(const LogicalGraphCardinalityStatistics &) const = default;
 	};
 
+	struct LogicalGraphPlanningStatistics {
+		std::optional<LogicalGraphCardinalityStatistics> graph;
+		// One optional cost estimate per requested label combination, in order.
+		std::vector<std::optional<uint64_t>> node_counts;
+	};
+
 	class LogicalGraphStatisticsBackend {
 	public:
 		virtual ~LogicalGraphStatisticsBackend() = default;
@@ -973,6 +1133,25 @@ namespace graph::storage {
 		// a planning-time whole-graph fallback scan.
 		[[nodiscard]] virtual std::optional<LogicalGraphCardinalityStatistics>
 		readLogicalGraphCardinalityStatistics() const = 0;
+		// Optional metadata-only estimate; unavailable statistics must never
+		// trigger a graph scan or become a query result/count.
+		[[nodiscard]] virtual std::optional<uint64_t>
+		estimateLogicalNodeCardinality(std::span<const std::string>) const { return std::nullopt; }
+		// Optional batch capability. Native storage reads one pinned metadata
+		// snapshot; the compatibility default uses existing optional interfaces.
+		[[nodiscard]] virtual LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+				std::span<const std::vector<std::string>> labels) const {
+			LogicalGraphPlanningStatistics result;
+			result.graph = readLogicalGraphCardinalityStatistics();
+			result.node_counts.reserve(labels.size());
+			for (const auto &combination : labels) {
+				try { result.node_counts.push_back(estimateLogicalNodeCardinality(combination)); }
+				catch (...) { result.node_counts.push_back(std::nullopt); }
+			}
+			return result;
+		}
+
+
 	};
 
 } // namespace graph::storage

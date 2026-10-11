@@ -125,6 +125,12 @@ namespace graph::storage {
 		describeLogicalVectorIndex(const LogicalGraphVectorSearchRequest & /*request*/) const {
 			return std::nullopt;
 		}
+		// A scorer may opt into a narrow candidate shape. The default preserves
+		// complete candidate semantics for providers requiring additional fields.
+		[[nodiscard]] virtual EntityReadShape
+		exactOverlayCandidateReadShape(const LogicalGraphVectorIndexDescriptor & /*index*/) const {
+			return {.include_labels = true, .all_properties = true};
+		}
 		[[nodiscard]] virtual std::optional<LogicalGraphVectorSearchHit>
 		scoreLogicalVectorExactOverlayCandidate(const LogicalGraphVectorSearchRequest & /*request*/,
 												   const LogicalGraphVectorIndexDescriptor & /*index*/,

@@ -1,0 +1,184 @@
+---
+title: Current targeted read optimization implementation plan
+description: Preserve the single-file architecture, format, and correctness contracts while removing redundant directory resolution and index verification work.
+category: Performance
+categoryOrder: 5
+order: 14
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+
+# Current targeted read optimization implementation plan
+
+Updated: 2026-10-09. **This is the current implementation entry point. The initial scope is selected-path directory resolution and verified-result reuse; the initial tranche has passed targeted macOS acceptance.** This document supplies the constraints without requiring conversation history.
+
+The [previous optimization strategy](optimization) records historical work and does not imply this plan is complete. The [whole-engine alternative](single-file-next-generation-design) is research only: direct physical addressing, a new backend, PAX, OCC, and G0–G7 are outside scope. The [current format specification](native-single-file-storage-plan) remains binding; this plan does not authorize format changes or weaker correctness guarantees.
+
+## 1. Preserve and exclude
+
+Preserve one file, A/B publication, page-level COW, stable entity IDs/PageId, directory-supported relocation, snapshots, atomic transactions, read-your-writes, shared allocation, safe reclamation, explicit codecs, StorageIO, and public ABI. Reuse B+Trees, batched/shaped reads, NativeReadSession, selection vectors, and the plan cache.
+
+The initial work changes no disk codec, root layout, page size, default cache/memory budget, durability barrier, isolation level, or process-access rule. Add no replacement backend, primary-property redesign, or duplicate long-lived cache system. Preserve macOS/Linux/Windows portability; actual acceptance currently targets macOS only.
+
+If a change requires violating these boundaries, stop that change and document its benefit/semantic review separately. Do not hide it in a performance fix. Reasonable existing design is not a refactoring target.
+
+## 2. Evidence and initial objectives
+
+Existing profiles in `benchmarks/graphdb-comparison/results/20261009-root-cause/` show 2823 metadata reads and 58 distinct page pins for one decoded entity, and 20568 metadata reads for 1250 equality-index candidates. Counters include cache hits: they are not physical I/O counts or speedup guarantees.
+
+The initial work has two measurable objectives:
+
+1. A directory seek resolves no unrelated siblings; multi-key lookups resolve only requested paths and reuse shared routing reads.
+2. Preserve first necessary entity/label/property index cross-checks, then avoid equivalent repeated reads by downstream consumers. If a path already does this, record that no change is needed rather than adding a cache or rewrite to manufacture work.
+
+Confirm latency benefits with equal-configuration unprofiled runs. Fewer counters with worse latency do not automatically pass. Do not multiply predicted gains.
+
+## 3. L0: Freeze baseline and contracts
+
+Complete in order:
+
+1. Record working-tree source hashes, dirty state, compiler, Release flags, and binary hash. Preserve user changes: no reset, stash, or commit. The current working tree is the control, not an assumed equivalent old commit.
+2. Classify callers needing full versus selected-child resolution, distinguishing reads, write candidates, relocation, and integrity tools. Entry points appear in section 4.
+3. Measure index verification, downstream filtering/projection, and property-read counts within one query. Establish actual duplication and distinguish existing optimizations from new opportunities.
+4. Freeze result/order, NULL/missing, corruption rejection, snapshot, and overlay contracts. Define when unvisited sibling references are checked; a point lookup is not a whole-tree verifier.
+5. Save diagnostic work counts and unprofiled control latency for affected cases and select held-out combinations from section 7.
+
+Mark an item complete only with evidence paths. Historical results help select cases but do not replace current-source controls.
+
+## 4. L1: Selected-path directory resolution
+
+### 4.1 Source responsibilities
+
+| File | Responsibility |
+|---|---|
+| `src/storage/relocatable/metadata/MetadataPageFile.cpp` | `readMetadataRadix`, `readMetadataRadixUnresolved`, `resolveLogicalRadixChildren`; retain full resolution and provide selected-reference access |
+| `include/graph/storage/relocatable/metadata/MetadataPageFile.hpp` | Define inputs, output state, and validation boundaries clearly |
+| `src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp` | Reuse existing single lookup/`findMany`; batching already exists |
+| `src/storage/relocatable/metadata/LocationDirectory.cpp` | Integrate only eligible read descents; do not automatically replace candidate-write/migration paths |
+| `include/graph/storage/relocatable/entity/NativeReadSession.hpp` | Consider existing session reuse only where counts demonstrate repeated access; not a default reason for another cache |
+
+### 4.2 Steps and invariants
+
+1. Separate decoding/validating the current radix page from resolving every child. Return selected references or an explicitly partial view.
+2. **Never fill one child and mark the original page completely `logical_children_resolved`.** Full-resolution callers must retain complete results; unresolved slots cannot be mistaken for absent subtrees.
+3. Select children by target keys; group multi-lookups by child/route page and reuse `findMany`, preserving input/output associations. Keep original empty/duplicate-input rules.
+4. Retain checksums, codec, owner, bounds, generation, and used-route identity/visibility. Bootstrap and routeContext come from the correct snapshot, never the latest root substituted for an old one.
+5. Preserve the specialized preceding-bootstrap rule for COW candidates. Do not initially extend read caches to unpublished candidates. Integrity and relocation callers retain full required validation.
+6. If caching is needed, bind database identity, snapshot, and interpreting root/route context. Negative results also cannot cross snapshots. Preserve budgets/pins, avoid unowned pointers, and do not share mutable sessions across threads.
+7. Deliver selected resolution first, then use remaining counters to decide whether another resolution cache is justified. Avoid introducing several mechanisms simultaneously and losing causal attribution.
+
+### 4.3 Required acceptance
+
+- Targeted tests cover one path, shared multi-key routes, sparse slots, root/leaf boundaries, missing selected routes, wrong type/owner/generation/database, old snapshots, and cancellation.
+- Corrupt page structure still fails. Full-resolution APIs and integrity tools still detect required bad routes; unvisited references follow the L0-defined boundary.
+- Preserve relevant tests in `RelocatableMetadataPageFileTest`, `RelocatableMetadataPageRouteDirectoryTest`, `RelocatableLocationDirectoryRouteValidationTest`, and `LocationDirectoryScanCacheTest`.
+- Counters show no unrelated child resolution or per-ID full descent fallback; cancellation causes no further storage reads.
+- Point/batch latency and memory pass section 7 review under equal configuration. Disk format and write-publication paths remain unchanged.
+
+## 5. L2: Reuse verification without removing it
+
+### 5.1 Entry points and existing contract
+
+Inspect exact candidate generation in `RelocatableStorageBackend.cpp`, `validateNodeExactPropertiesSorted` in `PageBackedGraphReadAdapter.cpp`, `IndexCandidateBatch` in `LogicalGraphRead.hpp`, `NativeReadSession.hpp`, and executor consumers of the flags/columns.
+
+`exact_match_verified`, `predicates_verified`, and `label_scope_verified` have different proof scopes. One true flag does not waive every check. `verified_property_columns` already exists: inspect its consumption before inventing another mechanism.
+
+Preserve `RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord`: a checksummed, structurally valid index may disagree with primary properties. Atomic normal writes do not replace this read-time corruption guarantee. No-refetch index-only execution, forged verified flags, and deletion of that test are excluded.
+
+### 5.2 Steps and invalidation
+
+1. Trace first verification → candidate batch → filter → projection in a query and change only evidenced equivalent rereads. Additional predicates/uncovered projections still fetch required data.
+2. A proof covers specific entities, label/property predicates, comparison semantics, and snapshot. Do not mark an EntityId globally verified or reuse an exact proof for a different range predicate.
+3. Prefer verified batch columns and existing session values over retaining duplicate PropertyValue objects across batches. Session retention counts against existing byte budgets.
+4. Overlay-modified entities bypass base verification results and use transaction final state. Test deletion, property removal, label changes, and repeated changes. Persistent generation alone is insufficient because overlay revision can change within it.
+5. Preserve errors, visitor cancellation, and admission behavior. Corruption is not byte-pressure retry. When lifetime is unclear, retain a necessary read instead of adding a global cache.
+
+### 5.3 Required acceptance
+
+- Preserve Schema rejection tests for property disagreement, mismatched entity values, wrong owners, and corrupted checksums.
+- Preserve old/new snapshots, property replacement, exact/composite candidates, byte budgets, and early termination.
+- Reuse existing `OverlayExactLookupHydratesOnlyUnchangedBaseMatches`, `OverlayExactStreamPreservesFinalStateBudgetStopAndRevision`, and `ReversePruningUsesExactCandidatesWithoutHydratingUnrelatedTargetProperties`; do not change correct assertions to improve metrics.
+- New tests establish only changed behavior: first verification occurs, repeated consumers avoid rereads, uncovered fields still load, and overlay changes cannot reuse stale proof.
+- If audit finds no duplication, save call-chain/counter evidence and conclude no change needed; this can complete the stage review without fabricated speedup or useless refactoring.
+
+## 6. Entry criteria for deferred work
+
+| Item | Required design before production implementation |
+|---|---|
+| Type-count fast path | Counter storage/initialization; delta table for every writer; rollback/snapshot/overlay; overflow handling; eligible logical shapes; equivalent endpoint-corruption detection or explicit contract review; old-file/missing-counter fallback |
+| Covering adjacency | Formal local key-only-spec change; codec/version and upgrade/build; preserved EdgeId order/continuations; atomic two-direction updates; self-loop/parallel-edge rules; authoritative-entity checks; reclamation/old snapshots; read/write/space prototype comparison |
+| No-refetch index-only | A concrete equivalent corruption-detection mechanism without primary reads, or separately approved contract change; normal index consistency is not sufficient |
+| Replacement architecture | Evidence after this tranche that directories still dominate, and equal-function optimized-directory/single-map/direct-reference comparison; not started now |
+
+These items are outside initial progress and are not automatically approved when the tranche completes. Necessary future work is explicitly deferred with prerequisites, not silently skipped.
+
+## 7. Targeted tests and performance acceptance
+
+Run affected modules only, never the full unit suite, with no coverage gate. Building the shared test executable does not run every test. Existing filter examples:
+
+```bash
+cmake --build buildDir --target zyx_test_suite
+./buildDir/zyx_test_suite --gtest_filter='RelocatableMetadataPageFileTest.*:RelocatableMetadataPageRouteDirectoryTest.*:RelocatableLocationDirectoryRouteValidationTest.*:LocationDirectoryScanCacheTest.*'
+./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendSchemaTest.RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord:RelocatableStorageBackendTest.OverlayExactLookupHydratesOnlyUnchangedBaseMatches:RelocatableStorageBackendTest.OverlayExactStreamPreservesFinalStateBudgetStopAndRevision'
+```
+
+These are existing entry-point examples, not exhaustive acceptance selections. Add relevant new tests and verify a nonzero executed count. Do not run unfiltered `run_tests.sh` or assume `--file` filters tests.
+
+Affected scenarios include hit/miss point reads, small/large exact-index candidate sets, shaped projections, directory batches, one/multi-hop reads, and necessary post-update queries. Run relevant combinations during iteration, then one initial-tranche integrated set after changes stabilize, not the whole benchmark repeatedly.
+
+Match data, indexes, threads, caches, budgets, compiler flags, and durability. Separate profiled counters from unprofiled timing. Routine comparisons use at least three independent processes, each with three warmups and ten samples; ten samples do not substantiate p99. Process restart is not cold OS cache; disclose cache state.
+
+Record p50/p95, raw samples, metadata reads, requested/resolved references, distinct page pins, primary verification/read counts, and peak RSS. Read optimization must add no writes. Future durable-structure changes also require write amplification and size. Missing instrumentation may be added without changing unprofiled semantics.
+
+Every claimed improvement needs work-count and timing evidence; overlapping noise means unproven, not a forced speedup. p50 regression over 10% or p95 over 20% triggers rerun/investigation; disclose every repeatable regression. These thresholds are investigation triggers, not automatic acceptance below them. Correctness failures are unacceptable.
+
+Use at least one held-out seed with renamed labels/types, plus different degrees, type selectivity, post-delete layout, and read/write combinations. Production paths cannot recognize benchmark names, fixed IDs, query text, seeds, scales, or answers. Decisions depend only on logical semantics and actual access structure.
+
+## 8. Progress and evidence ledger
+
+The initial tranche has four stages and 20 acceptance items: each item is 20% of its stage and 5% overall. Document review is not implementation acceptance. After each completed task report every stage's percentage, evidence, and remaining issues; elapsed time, lines written, and running tests do not increment progress.
+
+| Stage | Five acceptance items | Current progress |
+|---|---|---|
+| L0 Baseline/contracts | Source/binary freeze; caller classification; duplicate-read audit; semantic/corruption boundaries; control/held-out cases | 5/5, 100% |
+| L1 Directory resolution | Selected-path interface; integration/batched reuse; snapshots/full-resolution boundary; relevant tests; work/time comparison | 5/5, 100% |
+| L2 Verified-result reuse | Duplication evidence or no-change proof; proof scope/lifetime; consumers/overlay; relevant tests; performance/resource review | 5/5, 100% |
+| L3 Completion | Combined regression; held-out generality; resources/no extra writes; documents/evidence archive; final diff/unresolved-issue review | 5/5, 100% |
+
+Order: L0 → L1 → L2 → L3. Store new implementation evidence in a fresh task directory under `benchmarks/graphdb-comparison/results/`, including provenance, samples, comparisons, targeted test results, and decisions. Evidence is stored under `benchmarks/graphdb-comparison/results/20261009-targeted-read/`.
+
+Use stable item IDs L0.1–L3.5 with state, source/binary hashes, commands, result paths, and pass dates. Unresolved correctness prevents acceptance. No-code items require evidence and an explicit conclusion rather than silent skipping.
+
+## 9. Operating constraints and delivery status
+
+No commit, push, alteration/removal of existing user changes, or automatic Docker setup. Keep temporary data within task-owned locations; clean generated executables/databases afterward while retaining small evidence. Never delete user databases.
+
+L0–L3 are each 100%, totaling 20/20 for the initial tranche. Source inspection and read-count regressions confirmed that existing verified-column reuse already meets L2; its production implementation is retained with an additional necessary regression. This is an evidenced no-change decision, not skipped work. Type counts, covering adjacency, and whole-engine alternatives remain outside the completed tranche.
+
+### 9.1 Implementation and acceptance record (2026-10-09)
+
+- `MetadataPageFile::resolveMetadataRadixChildren` returns selected references in input order, including sparse and repeated slots, without changing the codec page's complete-resolution state; it reuses existing `findMany`.
+- `LocationDirectory::findOptional` resolves only the selected path and reuses its authenticated root instead of repeating bootstrap/root routing.
+- Bounded cursors resolve children intersecting their range into a separate reference view. Sparse entity/property multi-lookups additionally select the actual requested keys, excluding interior gaps; borrowed spans remain within their synchronous call lifetime. No long-lived cache was added. Full resolution, candidate writes, relocation, and the format remain intact.
+- The final module/integration selection passed **118/118**. New regressions cover partial/full boundaries, shared-route counts, old snapshots/context, repeated projections, and uncovered fields. See `final-module-tests.xml`. Initial fixture-configuration failures remain archived; existing correct assertions were not weakened.
+
+Same-host macOS Release, one thread, matched data/budgets, alternating version order; each version/scenario uses three processes, each with three warmups and ten measured samples. Profiles are separate. The table reports pooled p50 over 30 samples; OS caches were not flushed:
+
+| Primary scenario | Before ms | After ms | p50 reduction | Metadata reads before → after |
+|---|---:|---:|---:|---:|
+| Indexed point lookup | 5.683 | 5.165 | 9.1% | 4411 → 4088 |
+| Indexed equality | 41.732 | 38.953 | 6.7% | 22156 → 20797 |
+| One-hop expansion | 5.860 | 5.227 | 10.8% | 4400 → 4080 |
+| Label-filter scan | 49.086 | 45.555 | 7.2% | 22759 → 21071 |
+
+Held-out data uses seed 917, 640 users, 420 posts, 37 tags, degree seven and three tags/post; its three query p50 reductions are 7.8%, 7.3%, and 6.2%. The `Account917`/`ranking` regression checks renamed labels/properties; module regressions cover sparse layouts, missing routes, update/delete, and overlay revisions. All seven p95 values decreased, which does not establish a universal speedup.
+
+Resource limitations remain explicit: final whole-process median peak RSS changes range from −6.26% to +2.48%, including loading; query-memory reduction is not claimed. An intermediate version showed +5.68%/+7.92% equality-query peaks; five extra independent runs reduced those differences to +0.07%/+1.10%, without reproducing their initial magnitude. That rerun predates exact sparse-set selection and is archived at `before-sparse-selection/resource-recheck.json`; it is not final-version evidence. Final resources are in `comparison.csv`. Query profiles emitted no write-byte events, and no write path was added.
+
+See `comparison.csv`, `comparison-details.json`, `before-sparse-selection/resource-recheck.json`, and `acceptance-review.json` for p95, per-process data, resources, and decisions. `progress.json` maps L0.1–L3.5 to evidence. `selected-only/` and `before-sparse-selection/` contain exploratory versions before removing repeated root resolution and before selecting exact sparse key sets respectively; neither is the final acceptance version.
+
+No full unit suite, commit, push, or Docker environment. Temporary control executable, CSVs, and databases are cleaned after evidence capture; small records remain. Reproducing the old control requires source matching `baseline-source-sha256.json`, not substituting current HEAD. Point lookups still perform thousands of metadata reads; this is a limited general improvement, not demonstrated parity with the old architecture or Kuzu.
+
+Final source review added rejection of a foreign route context on an out-of-domain root miss, covered by final targeted tests. Performance samples predate that invalid-input guard; the reported normal hit queries do not enter it. `optimized-provenance.json` identifies the measured version; `final-state-provenance.json` identifies final source/binaries. These are not represented as the same revision.

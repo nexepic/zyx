@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 using graph::PropertyValue;
 using graph::TemporalDate;
@@ -21,6 +22,33 @@ using graph::TemporalDuration;
 using graph::storage::CanonicalPropertyValueCodec;
 using graph::storage::FormatError;
 using graph::storage::FormatException;
+
+TEST(RelocatablePropertyValueCodecBytesTest, MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount) {
+	using graph::debug::PerfTrace;
+	struct Cleanup { ~Cleanup() { PerfTrace::setEnabled(false); PerfTrace::reset(); } } cleanup;
+	const PropertyValue nested(std::vector<PropertyValue>{PropertyValue(int64_t{7}),
+		PropertyValue(std::string("abc")), PropertyValue(PropertyValue::Bytes(20U, std::byte{0x37}))});
+	std::vector<std::byte> encoded;
+	CanonicalPropertyValueCodec::append(encoded, nested);
+	PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(true); PerfTrace::reset();
+	size_t offset = 0U;
+	EXPECT_EQ(CanonicalPropertyValueCodec::decodeNext(encoded, offset), nested);
+	EXPECT_EQ(offset, encoded.size());
+	const auto trace = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(trace.at("native_graph.read.materialized_bytes").totalValue, encoded.size());
+	EXPECT_EQ(trace.at("native_graph.read.materialized_bytes").valueCalls, 1U);
+	offset = 0U;
+	EXPECT_THROW(static_cast<void>(CanonicalPropertyValueCodec::decodeNext(
+		std::span<const std::byte>(encoded).first(encoded.size() - 1U), offset)), FormatException);
+	EXPECT_EQ(offset, 0U);
+	EXPECT_FALSE(PerfTrace::snapshotAndReset().contains("native_graph.read.materialized_bytes"));
+	CanonicalPropertyValueCodec::append(encoded, PropertyValue(int64_t{9}));
+	EXPECT_FALSE(PerfTrace::snapshotAndReset().contains("native_graph.read.materialized_bytes"));
+	PerfTrace::setEnabled(false);
+	offset = 0U;
+	EXPECT_EQ(CanonicalPropertyValueCodec::decodeNext(encoded, offset), nested);
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+}
 
 namespace {
 
@@ -265,4 +293,27 @@ TEST(RelocatablePropertyValueCodecBytesTest, RejectsTruncatedFixedPayloadsAndTra
 	offset = 0U;
 	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::decodeNext(nullValue, offset)); },
 				  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatablePropertyValueCodecBytesTest, HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload) {
+	for (const PropertyValue &value: {PropertyValue(), PropertyValue(0), PropertyValue(std::string(8192U, 'x'))}) {
+		std::vector<std::byte> bytes;
+		CanonicalPropertyValueCodec::append(bytes, value);
+		const auto header = std::span<const std::byte>(bytes).first(CanonicalPropertyValueCodec::HEADER_BYTES);
+		EXPECT_EQ(CanonicalPropertyValueCodec::isNullHeader(header, bytes.size()), std::holds_alternative<std::monostate>(value.getVariant()));
+		expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(header, bytes.size() + 1U)); }, FormatError::FERR_INVALID_HEADER);
+	}
+	std::vector<std::byte> bytes;
+	CanonicalPropertyValueCodec::append(bytes, PropertyValue());
+	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(std::span<const std::byte>(bytes).first(5U), bytes.size())); }, FormatError::FERR_BUFFER_TOO_SMALL);
+	bytes[1] = std::byte{1};
+	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size())); }, FormatError::FERR_RESERVED_BITS);
+	bytes[1] = std::byte{0};
+	bytes[0] = std::byte{255};
+	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size())); }, FormatError::FERR_INVALID_HEADER);
+	bytes[0] = std::byte{3}; // An INTEGER cannot have a zero-byte payload.
+	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size())); }, FormatError::FERR_INVALID_HEADER);
+	bytes[0] = std::byte{1};
+	bytes[2] = std::byte{1};
+	expectFormatError([&] { static_cast<void>(CanonicalPropertyValueCodec::isNullHeader(bytes, bytes.size() + 1U)); }, FormatError::FERR_INVALID_HEADER);
 }

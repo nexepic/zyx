@@ -13,6 +13,7 @@ build_wasm/
 CMakeFiles/
 CMakeCache.txt
 CMakeUserPresets.json
+conan_windows_profile
 emsdk/
 antlr-*.jar
 
@@ -47,6 +48,11 @@ docs/apps/docs/next-env.d.ts
 docs/node_modules/
 docs/.turbo/
 
+# Dependency installations and generated caches in nested workspaces
+node_modules/
+.content-collections/
+*.tsbuildinfo
+
 docs/superpowers/
 
 # Conan/CMake downloaded or generated dependency sources
@@ -64,6 +70,9 @@ __pycache__/
 benchmarks/graphdb-comparison/results/*
 !benchmarks/graphdb-comparison/results/.gitkeep
 benchmarks/graphdb-comparison/results-*/
+
+# Local architecture experiments; keep probe sources and curated archives
+/benchmarks/architecture-design/results/
 
 # Rust build artifacts
 target/

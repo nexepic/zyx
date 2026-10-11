@@ -56,6 +56,52 @@ protected:
 	static inline int counter = 0;
 };
 
+TEST_F(CompareBenchmarkTest, CounterOnlyMeasurementDisablesTimersAndEmitsWorkValues) {
+	Options options;
+	options.scale = "smoke";
+	options.emitCounters = true;
+	std::ostringstream captured;
+	int64_t result = 0;
+	{
+		struct RestoreStream {
+			std::streambuf *previous;
+			~RestoreStream() { std::cout.rdbuf(previous); }
+		} restore{std::cout.rdbuf(captured.rdbuf())};
+		result = measureOperation(options, "counted", 0, []() {
+		EXPECT_FALSE(graph::debug::PerfTrace::isEnabled());
+		EXPECT_TRUE(graph::debug::PerfTrace::areValuesEnabled());
+		graph::debug::PerfTrace::addDuration("ignored.timer", 1000);
+		graph::debug::PerfTrace::addValue("records_decoded", 7);
+		return int64_t{7};
+	}, [](int64_t value) { requireNonNegative("counted", value); });
+	}
+	const auto output = captured.str();
+	EXPECT_EQ(result, 7);
+	EXPECT_NE(output.find("\"event\":\"result\""), std::string::npos);
+	EXPECT_NE(output.find("\"value\":7"), std::string::npos);
+	EXPECT_NE(output.find("\"event\":\"sample\""), std::string::npos);
+	EXPECT_NE(output.find("records_decoded"), std::string::npos);
+	EXPECT_EQ(output.find("ignored.timer"), std::string::npos);
+	EXPECT_NE(output.find("\"value_total\":7"), std::string::npos);
+	EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
+	EXPECT_TRUE(graph::debug::PerfTrace::snapshotAndReset().empty());
+}
+
+TEST_F(CompareBenchmarkTest, CounterOnlyMeasurementCleansUpWhenOperationThrows) {
+	Options options;
+	options.emitCounters = true;
+	testing::internal::CaptureStdout();
+	EXPECT_THROW((void) measureOperation(options, "failed", 0, []() -> int64_t {
+		graph::debug::PerfTrace::addValue("records_decoded", 1);
+		throw std::runtime_error("operation failure");
+	}, [](int64_t) {}), std::runtime_error);
+	const auto output = testing::internal::GetCapturedStdout();
+	EXPECT_TRUE(output.empty());
+	EXPECT_FALSE(graph::debug::PerfTrace::isEnabled());
+	EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
+	EXPECT_TRUE(graph::debug::PerfTrace::snapshotAndReset().empty());
+}
+
 TEST_F(CompareBenchmarkTest, MeasureOperationDoesNotEmitEventsWhenValidationFails) {
 	Options options;
 	options.scale = "smoke";
@@ -205,6 +251,16 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 	EXPECT_EQ(options.executionMode, std::string(kExecutionModeColdish));
 	EXPECT_EQ(options.warmup, 2);
 	EXPECT_EQ(options.iterations, 3);
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCounterOnlyDiagnostics) {
+    std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+                                     "--scale", "small", "--emit-counters"};
+    std::vector<char *> argv;
+    for (auto &arg: args) argv.push_back(arg.data());
+    const auto options = parseArgs(static_cast<int>(argv.size()), argv.data());
+    EXPECT_TRUE(options.emitCounters);
+    EXPECT_FALSE(options.emitProfile);
 }
 
 TEST_F(CompareBenchmarkTest, ParseArgsAcceptsThreadsOption) {

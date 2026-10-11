@@ -14,11 +14,11 @@ projectOrder: 1
 本章节按“从外到内”组织：
 
 1. 先看 [架构概述](overview)
-2. 再看 [查询引擎](query-engine) 与[原生单文件存储重构方案](native-single-file-storage-plan)
-3. 然后看 [缓存管理](cache) 与[优化策略](optimization)
+2. 再看 [查询引擎](query-engine) 与[原生单文件存储规范](native-single-file-storage-plan)
+3. 然后看 [缓存管理](cache) 与[架构调整与通用性能实施方案](optimization)
 4. 最后看 [基准测试](benchmarks) 和[原生能力验收矩阵](native-capability-acceptance-matrix)
 
-长期存储重构以[原生单文件存储重构方案](native-single-file-storage-plan)为唯一实施蓝图。该文档明确单文件约束、Catalog 可回收设计、通用 LargeValue、Stage 0-10 开发顺序以及测试和性能门禁。
+后续工作唯一按[架构调整与通用性能实施方案](optimization)推进：保留 COW，区分 A1–A7 架构设计和 O1–O8 优化，按 S0–S6 验收。[单文件规范](native-single-file-storage-plan)保留现行格式和正确性边界；旧 Stage/P/C 台账仅供追溯，不再指导实施。
 
 ## 文档口径
 

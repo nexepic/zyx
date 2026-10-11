@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -110,6 +111,14 @@ namespace graph::storage {
 		[[nodiscard]] static uint64_t decodeCount(uint64_t encoded);
 	};
 
+	// Optional per-token estimates. A missing completeness record means unknown,
+	// even when individual records exist; complete absence then denotes zero.
+	class SystemCatalogTokenCardinalityCodec final {
+	public:
+		[[nodiscard]] static std::vector<std::byte> countKey(SystemCatalogSchemaTokenKind kind, uint64_t token);
+		[[nodiscard]] static std::vector<std::byte> completeKey(SystemCatalogSchemaTokenKind kind);
+	};
+
 	constexpr uint64_t RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE = UINT64_C(0x5A5958434154414C);
 
 	class SystemCatalog;
@@ -136,6 +145,8 @@ namespace graph::storage {
 		[[nodiscard]] ConstraintDefinition createConstraintDefinition(ConstraintDefinition definition);
 		void setConfiguration(std::string_view name, const PropertyValue &value);
 		void setGraphCardinalityStatistics(const NativeGraphCardinalityStatistics &statistics);
+		void setTokenCardinality(SystemCatalogSchemaTokenKind kind, uint64_t token, uint64_t count);
+		void markTokenCardinalityComplete(SystemCatalogSchemaTokenKind kind);
 		void dropIndexDefinition(const IndexDefinition &definition);
 		void dropConstraintDefinition(const ConstraintDefinition &definition);
 		// Required before committing a session that allocated a previously absent
@@ -192,12 +203,18 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<uint32_t> findPropertyToken(const MetadataSnapshotPin &snapshot,
 																std::string_view name) const;
 		[[nodiscard]] std::optional<std::string> findPropertyName(const MetadataSnapshotPin &snapshot,
-																  uint32_t token) const;
+																  uint32_t token, const std::function<void(size_t)> &nameAdmission = {}) const;
 		[[nodiscard]] std::optional<uint64_t> findSchemaToken(const MetadataSnapshotPin &snapshot,
 															  SystemCatalogSchemaTokenKind kind,
 															  std::string_view name) const;
+		// Strictly ordered names (encoded key order). Shared bootstrap/forward
+		// probes retain each reverse mapping's uniqueness, value and name checks.
+		[[nodiscard]] std::vector<std::optional<uint64_t>> findSchemaTokens(
+			const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
+			std::span<const std::string> names) const;
 		[[nodiscard]] std::optional<SystemCatalogSchemaToken>
-		findSchemaToken(const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind, uint64_t token) const;
+		findSchemaToken(const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind, uint64_t token,
+			const std::function<void(size_t)> &nameAdmission = {}) const;
 		[[nodiscard]] std::optional<IndexDefinition> findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
 																			 uint64_t indexId) const;
 		[[nodiscard]] std::optional<IndexDefinition> findIndexDefinitionByName(const MetadataSnapshotPin &snapshot,
@@ -228,6 +245,20 @@ namespace graph::storage {
 		// A partial pair is corruption and is rejected rather than guessed.
 		[[nodiscard]] std::optional<NativeGraphCardinalityStatistics>
 		readGraphCardinalityStatistics(const MetadataSnapshotPin &snapshot) const;
+		[[nodiscard]] bool hasCompleteTokenCardinality(const MetadataSnapshotPin &snapshot,
+				SystemCatalogSchemaTokenKind kind) const;
+		[[nodiscard]] std::optional<uint64_t> readTokenCardinality(const MetadataSnapshotPin &snapshot,
+				SystemCatalogSchemaTokenKind kind, uint64_t token) const;
+		// Exact batch for strictly increasing tokens; one bootstrap/completeness
+		// proof, ordered results. Missing complete counts mean zero, not unknown.
+		[[nodiscard]] std::vector<std::optional<uint64_t>> readTokenCardinalities(
+			const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
+			std::span<const uint64_t> tokens) const;
+		// One bootstrap validation for both planning inputs; unknown completeness
+		// or missing totals remains unknown, never a query answer.
+		[[nodiscard]] std::optional<std::pair<NativeGraphCardinalityStatistics, uint64_t>>
+		readTokenCardinalityEstimate(const MetadataSnapshotPin &snapshot,
+				SystemCatalogSchemaTokenKind kind, uint64_t token) const;
 		[[nodiscard]] SystemCatalogWriteSession beginWrite(NativeGraphWriteTransaction &transaction);
 		// Internal collaborators use these only to build one transaction-pinned
 		// B+Tree overlay; callers still receive logical token APIs above.

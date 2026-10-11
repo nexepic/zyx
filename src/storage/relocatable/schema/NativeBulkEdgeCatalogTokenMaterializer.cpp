@@ -380,6 +380,12 @@ namespace graph::storage {
 
 	} // namespace
 
+	OrderedBTreeEntrySource NativeBulkEdgeCatalogTokenMaterializer::overlayEntries(
+			OrderedBTreeEntrySource existing, OrderedBTreeEntrySource updates) {
+		if (!existing || !updates) fail(FormatError::FERR_INVALID_HEADER, "Catalog overlay requires two ordered sources");
+		return mergeOverlay(std::move(existing), std::move(updates));
+	}
+
 	NativeBulkEdgeCatalogTokenMaterialization
 	NativeBulkEdgeCatalogTokenMaterializer::prepare(SystemCatalog &catalog, const MetadataSnapshotPin &snapshot,
 													const OrderedBTreeEntrySource &sortedTokenEntries,

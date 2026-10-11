@@ -1,556 +1,197 @@
-#include <algorithm>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <map>
-#include <memory>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
-
-#include <gtest/gtest.h>
-
-#include "graph/debug/PerfTrace.hpp"
-#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
-#include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/ExistsExpression.hpp"
-#include "graph/query/expressions/ListLiteralExpression.hpp"
-#include "graph/query/logical/operators/LogicalAggregate.hpp"
-#include "graph/query/logical/operators/LogicalFilter.hpp"
+#include "CypherParserImpl.hpp"
+#include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
-#include "graph/query/logical/operators/LogicalNodeScan.hpp"
-#include "graph/query/logical/operators/LogicalProject.hpp"
-#include "graph/query/logical/operators/LogicalSort.hpp"
-#include "graph/query/logical/operators/LogicalTraversal.hpp"
-#include "graph/query/logical/operators/LogicalUnwind.hpp"
+#include "graph/query/logical/operators/LogicalSkip.hpp"
+#include "query/execution/LogicalPlanDirectEdgeRuntimeTestFixture.hpp"
 
 namespace graph::query::execution {
-	namespace {
+	using namespace direct_edge_test;
 
-		using storage::EntityRef;
-		using storage::LogicalGraphAdjacencyPage;
-		using storage::LogicalGraphEdge;
-		using storage::LogicalGraphEdgeTopology;
-		using storage::LogicalGraphNode;
-		using storage::LogicalGraphNodePage;
-		using storage::LogicalGraphReadBackend;
-		using storage::LogicalGraphReadDirection;
-		using storage::LogicalGraphReadSnapshot;
-
-		struct DirectEdgeGraph {
-			std::map<uint64_t, LogicalGraphNode> nodes;
-			std::vector<LogicalGraphEdge> edges;
-			std::vector<uint64_t> node_read_ids;
-			std::vector<uint64_t> edge_read_ids;
-			size_t node_shaped_reads = 0U;
-			size_t edge_shaped_reads = 0U;
-			size_t topology_scans = 0U;
-			size_t topology_records = 0U;
-			size_t edge_ref_scans = 0U;
-			size_t edge_ref_records = 0U;
-			bool duplicate_first_edge_reference = false;
-			bool truncate_node_existence_batch = false;
-			bool truncate_node_label_batch = false;
-			bool truncate_node_property_batch = false;
-			bool truncate_edge_property_batch = false;
-			std::optional<EntityRef> forced_node_reference;
-			std::optional<EntityRef> forced_edge_reference;
-			size_t adjacency_ref_scans = 0U;
-			size_t adjacency_ref_records = 0U;
-			size_t batch_adjacency_ref_scans = 0U;
-			size_t batch_adjacency_ref_records = 0U;
-			size_t node_existence_probes = 0U;
-			size_t node_existence_batch_probes = 0U;
-			bool enable_adjacency_reference_pages = false;
-			bool enable_batch_adjacency_reference_scan = false;
-			std::optional<uint64_t> forced_edge_reference_type_token;
-			size_t adjacency_scans = 0U;
-			size_t node_property_point_reads = 0U;
-			size_t node_property_sorted_reads = 0U;
-			std::vector<std::vector<uint64_t>> node_property_sorted_ids;
-			size_t node_property_column_batch_reads = 0U;
-			std::vector<std::vector<std::string>> node_property_column_batch_keys;
-			size_t node_label_point_reads = 0U;
-			size_t node_label_match_scans = 0U;
-			size_t node_label_match_records = 0U;
-			size_t node_label_sorted_reads = 0U;
-			std::vector<std::vector<uint64_t>> node_label_sorted_ids;
-			size_t edge_property_point_reads = 0U;
-			size_t edge_property_sorted_reads = 0U;
-			std::vector<std::vector<uint64_t>> edge_property_sorted_ids;
-			size_t edge_property_column_batch_reads = 0U;
-			std::vector<std::vector<std::string>> edge_property_column_batch_keys;
-		};
-
-		[[nodiscard]] const PropertyValue *
-		findProperty(const std::vector<storage::LogicalGraphPropertyEntry> &properties, std::string_view key) {
-			const auto found = std::ranges::find(properties, key, &storage::LogicalGraphPropertyEntry::key);
-			return found == properties.end() ? nullptr : &found->value;
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateBufferLeavesRoomForHeapPayloadsAcrossManyBatches) {
+		DirectEdgeGraph graph = directGraph();
+		for (uint64_t id = 1U; id <= 51U; ++id) {
+			auto node = graph.nodes.at(1U);
+			node.node_id = id;
+			node.properties = {{"payload", PropertyValue(std::string(1000U, 'a'))}};
+			graph.nodes.insert_or_assign(id, std::move(node));
 		}
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto plan =
+				parser.parseToLogical("MATCH (n {payload: '" + std::string(1000U, 'a') + "'}) RETURN id(n) AS id");
+		auto bounds = directBounds();
+		bounds.maximum_node_records = 64U;
+		bounds.maximum_rows = 64U;
+		// Fit one payload and a small reference window with output/cache staging;
+		// the full 51-payload column must remain far larger than this allowance.
+		bounds.maximum_materialized_bytes = 1000U +
+			4U * (sizeof(LogicalPlanReadRow) + sizeof(LogicalPlanReadValue) + sizeof(PropertyValue)) + 512U;
+		ASSERT_LT(bounds.maximum_materialized_bytes, 51U * 1000U);
+		std::vector<int64_t> ids;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
+			ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at("id")).getVariant()));
+			return true;
+		})));
+		ASSERT_EQ(ids.size(), 51U);
+		for (size_t index = 0U; index < ids.size(); ++index)
+			EXPECT_EQ(ids[index], static_cast<int64_t>(index + 1U));
+		EXPECT_GT(graph.node_property_column_batch_reads, 1U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+		EXPECT_TRUE(graph.node_read_ids.empty());
+	}
 
-		class DirectEdgeSnapshot final : public LogicalGraphReadSnapshot {
-		public:
-			explicit DirectEdgeSnapshot(DirectEdgeGraph &graph) : graph_(graph) {}
-
-			[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
-				graph_.node_read_ids.push_back(nodeId);
-				return graph_.nodes.at(nodeId);
-			}
-
-			[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId,
-														  const storage::EntityReadShape &shape) const override {
-				++graph_.node_shaped_reads;
-				graph_.node_read_ids.push_back(nodeId);
-				EXPECT_TRUE(shape.include_labels || shape.all_properties);
-				return graph_.nodes.at(nodeId);
-			}
-
-			[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
-				graph_.edge_read_ids.push_back(edgeId);
-				const auto found = std::ranges::find(graph_.edges, edgeId, &LogicalGraphEdge::edge_id);
-				if (found == graph_.edges.end()) {
-					throw std::out_of_range("direct Edge test record is absent");
-				}
-				return *found;
-			}
-
-			[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId,
-														  const storage::EntityReadShape &shape) const override {
-				++graph_.edge_shaped_reads;
-				graph_.edge_read_ids.push_back(edgeId);
-				EXPECT_TRUE(shape.include_type);
-				const auto found = std::ranges::find(graph_.edges, edgeId, &LogicalGraphEdge::edge_id);
-				if (found == graph_.edges.end()) {
-					throw std::out_of_range("direct Edge test record is absent");
-				}
-				return *found;
-			}
-
-			[[nodiscard]] PropertyValue readNodeProperty(uint64_t nodeId, std::string_view key) const override {
-				++graph_.node_property_point_reads;
-				const PropertyValue *value = findProperty(graph_.nodes.at(nodeId).properties, key);
-				return value == nullptr ? PropertyValue() : *value;
-			}
-
-			[[nodiscard]] std::vector<PropertyValue>
-			readNodePropertiesSorted(const std::span<const uint64_t> nodeIds,
-									 const std::string_view key) const override {
-				++graph_.node_property_sorted_reads;
-				graph_.node_property_sorted_ids.emplace_back(nodeIds.begin(), nodeIds.end());
-				std::vector<PropertyValue> result;
-				result.reserve(nodeIds.size());
-				uint64_t previous = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					if (nodeId == 0U || nodeId <= previous) {
-						throw std::invalid_argument("direct Node test sorted Property IDs are invalid");
-					}
-					previous = nodeId;
-					const PropertyValue *value = findProperty(graph_.nodes.at(nodeId).properties, key);
-					result.push_back(value == nullptr ? PropertyValue() : *value);
-				}
-				return result;
-			}
-
-			[[nodiscard]] std::vector<std::vector<PropertyValue>>
-			readNodePropertyColumnsSorted(const std::span<const uint64_t> nodeIds,
-										  const std::span<const std::string_view> keys) const override {
-				++graph_.node_property_column_batch_reads;
-				std::vector<std::string> copiedKeys;
-				copiedKeys.reserve(keys.size());
-				for (const std::string_view key: keys) {
-					copiedKeys.emplace_back(key);
-				}
-				graph_.node_property_column_batch_keys.push_back(std::move(copiedKeys));
-				std::vector<std::vector<PropertyValue>> columns(keys.size());
-				for (size_t column = 0U; column < keys.size(); ++column) {
-					columns[column].reserve(nodeIds.size());
-					for (const uint64_t nodeId: nodeIds) {
-						const PropertyValue *value = findProperty(graph_.nodes.at(nodeId).properties, keys[column]);
-						columns[column].push_back(value == nullptr ? PropertyValue() : *value);
-					}
-				}
-				if (graph_.truncate_node_property_batch && !columns.empty() && !columns.front().empty()) {
-					columns.front().pop_back();
-				}
-				return columns;
-			}
-
-			[[nodiscard]] PropertyValue readEdgeProperty(uint64_t edgeId, std::string_view key) const override {
-				++graph_.edge_property_point_reads;
-				const LogicalGraphEdge edge = readEdge(edgeId);
-				const PropertyValue *value = findProperty(edge.properties, key);
-				return value == nullptr ? PropertyValue() : *value;
-			}
-
-			[[nodiscard]] std::vector<PropertyValue>
-			readEdgePropertiesSorted(const std::span<const uint64_t> edgeIds,
-									 const std::string_view key) const override {
-				++graph_.edge_property_sorted_reads;
-				graph_.edge_property_sorted_ids.emplace_back(edgeIds.begin(), edgeIds.end());
-				std::vector<PropertyValue> result;
-				result.reserve(edgeIds.size());
-				uint64_t previous = 0U;
-				for (const uint64_t edgeId: edgeIds) {
-					if (edgeId == 0U || edgeId <= previous) {
-						throw std::invalid_argument("direct Edge test sorted Property IDs are invalid");
-					}
-					previous = edgeId;
-					const LogicalGraphEdge edge = readEdge(edgeId);
-					const PropertyValue *value = findProperty(edge.properties, key);
-					result.push_back(value == nullptr ? PropertyValue() : *value);
-				}
-				return result;
-			}
-
-			[[nodiscard]] std::vector<std::vector<PropertyValue>>
-			readEdgePropertyColumnsSorted(const std::span<const uint64_t> edgeIds,
-										  const std::span<const std::string_view> keys) const override {
-				++graph_.edge_property_column_batch_reads;
-				std::vector<std::string> copiedKeys;
-				copiedKeys.reserve(keys.size());
-				for (const std::string_view key: keys) {
-					copiedKeys.emplace_back(key);
-				}
-				graph_.edge_property_column_batch_keys.push_back(std::move(copiedKeys));
-				std::vector<std::vector<PropertyValue>> columns(keys.size());
-				for (size_t column = 0U; column < keys.size(); ++column) {
-					columns[column].reserve(edgeIds.size());
-					for (const uint64_t edgeId: edgeIds) {
-						const LogicalGraphEdge edge = readEdge(edgeId);
-						const PropertyValue *value = findProperty(edge.properties, keys[column]);
-						columns[column].push_back(value == nullptr ? PropertyValue() : *value);
-					}
-				}
-				if (graph_.truncate_edge_property_batch && !columns.empty() && !columns.front().empty()) {
-					columns.front().pop_back();
-				}
-				return columns;
-			}
-
-			[[nodiscard]] bool nodeHasLabels(uint64_t nodeId,
-											 const std::vector<std::string> &requiredLabels) const override {
-				++graph_.node_label_point_reads;
-				const auto &actual = graph_.nodes.at(nodeId).labels;
-				return std::ranges::all_of(requiredLabels, [&actual](const std::string &required) {
-					return !required.empty() && std::ranges::find(actual, required) != actual.end();
-				});
-			}
-
-			[[nodiscard]] std::vector<bool>
-			readNodeLabelMatchesSorted(const std::span<const uint64_t> nodeIds,
-									   const std::vector<std::string> &requiredLabels) const override {
-				++graph_.node_label_sorted_reads;
-				graph_.node_label_sorted_ids.emplace_back(nodeIds.begin(), nodeIds.end());
-				std::vector<bool> result;
-				result.reserve(nodeIds.size());
-				uint64_t previous = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					if (nodeId == 0U || nodeId <= previous) {
-						throw std::invalid_argument("direct Node test sorted label IDs are invalid");
-					}
-					previous = nodeId;
-					const auto &actual = graph_.nodes.at(nodeId).labels;
-					result.push_back(std::ranges::all_of(requiredLabels, [&actual](const std::string &required) {
-						return !required.empty() && std::ranges::find(actual, required) != actual.end();
-					}));
-				}
-				if (graph_.truncate_node_label_batch && !result.empty()) {
-					result.pop_back();
-				}
-				return result;
-			}
-
-			void visitNodeRefsWithLabelMatches(
-					size_t maximumRecords, const std::vector<std::string> &requiredLabels,
-					const std::function<bool(const EntityRef &, bool)> &visitor) const override {
-				++graph_.node_label_match_scans;
-				size_t visited = 0U;
-				for (const auto &[nodeId, node]: graph_.nodes) {
-					if (visited == maximumRecords) {
-						return;
-					}
-					++visited;
-					++graph_.node_label_match_records;
-					const bool matches = std::ranges::all_of(requiredLabels, [&node](const std::string &required) {
-						return !required.empty() && std::ranges::find(node.labels, required) != node.labels.end();
-					});
-					const EntityRef reference = graph_.forced_node_reference.value_or(
-							EntityRef{nodeId, false, 0U, 0U, 0U});
-					if (!visitor(reference, matches)) {
-						return;
-					}
-				}
-			}
-
-			void visitNodes(size_t maximumRecords,
-							const std::function<bool(const LogicalGraphNode &)> &visitor) const override {
-				size_t visited = 0U;
-				for (const auto &[id, node]: graph_.nodes) {
-					static_cast<void>(id);
-					if (visited++ == maximumRecords || !visitor(node)) {
-						return;
-					}
-				}
-			}
-
-			void visitNodeRefs(size_t maximumRecords,
-							   const std::function<bool(const EntityRef &)> &visitor) const override {
-				size_t visited = 0U;
-				for (const auto &[nodeId, node]: graph_.nodes) {
-					static_cast<void>(node);
-					if (visited == maximumRecords) {
-						return;
-					}
-					++visited;
-					const EntityRef reference = graph_.forced_node_reference.value_or(
-							EntityRef{nodeId, false, 0U, 0U, 0U});
-					if (!visitor(reference)) {
-						return;
-					}
-				}
-			}
-
-			[[nodiscard]] bool supportsNativeNodeRefScans() const override { return true; }
-
-			[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
-				++graph_.node_existence_probes;
-				return graph_.nodes.contains(nodeId);
-			}
-			[[nodiscard]] std::vector<bool> containsNodesSorted(
-					const std::span<const uint64_t> nodeIds) const override {
-				++graph_.node_existence_batch_probes;
-				std::vector<bool> result;
-				result.reserve(nodeIds.size());
-				uint64_t previous = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					if (nodeId == 0U || nodeId <= previous) {
-						throw std::invalid_argument("direct Edge test sorted Node probes are invalid");
-					}
-					previous = nodeId;
-					result.push_back(graph_.nodes.contains(nodeId));
-				}
-				if (graph_.truncate_node_existence_batch && !result.empty()) {
-					result.pop_back();
-				}
-				return result;
-			}
-
-			[[nodiscard]] bool supportsNodeExistenceProbes() const override { return true; }
-
-			[[nodiscard]] LogicalGraphNodePage scanNodesAfter(
-					uint64_t, size_t, size_t) const override {
-				throw std::logic_error("direct Edge test must not use paged Node scans");
-			}
-
-			[[nodiscard]] LogicalGraphAdjacencyPage scanAdjacentEdges(
-					uint64_t, LogicalGraphReadDirection, std::optional<storage::LogicalGraphAdjacencyContinuation>,
-					size_t) const override {
-				++graph_.adjacency_scans;
-				throw std::logic_error("direct Edge test must not use adjacency pages");
-			}
-
-			[[nodiscard]] storage::LogicalGraphAdjacencyReferencePage scanAdjacentEdgeRefs(
-				uint64_t nodeId, LogicalGraphReadDirection direction,
-				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
-				size_t maximumRecords) const override {
-				++graph_.adjacency_ref_scans;
-				if (maximumRecords == 0U) {
-					throw std::invalid_argument("direct Edge test adjacency reference page size is zero");
-				}
-				std::vector<const LogicalGraphEdge *> candidates;
-				for (const LogicalGraphEdge &edge: graph_.edges) {
-					const bool matches = direction == LogicalGraphReadDirection::LGRD_OUTGOING
-							? edge.source_node_id == nodeId
-							: edge.target_node_id == nodeId;
-					if (matches) {
-						candidates.push_back(&edge);
-					}
-				}
-				std::ranges::sort(candidates, [](const LogicalGraphEdge *left, const LogicalGraphEdge *right) {
-					return left->edge_id < right->edge_id;
-				});
-				size_t begin = 0U;
-				if (continuation.has_value()) {
-					const auto next = std::ranges::find(candidates, continuation->next_edge_id,
-																											&LogicalGraphEdge::edge_id);
-					if (next == candidates.end()) {
-						throw std::invalid_argument("direct Edge test continuation does not name the next record");
-					}
-					begin = static_cast<size_t>(next - candidates.begin());
-				}
-				storage::LogicalGraphAdjacencyReferencePage result;
-				for (size_t index = begin; index < candidates.size(); ++index) {
-					const LogicalGraphEdge *edge = candidates[index];
-					if (result.edges.size() == maximumRecords) {
-						break;
-					}
-					++graph_.adjacency_ref_records;
-					result.edges.push_back({edge->edge_id, true, edge->source_node_id, edge->target_node_id,
-							edge->type == "KNOWS" ? 1U : 0U});
-				}
-				const size_t nextIndex = begin + result.edges.size();
-				if (nextIndex < candidates.size() && !result.edges.empty()) {
-					result.continuation = storage::LogicalGraphAdjacencyContinuation{
-							result.edges.back().entity_id, candidates[nextIndex]->edge_id};
-				}
-				return result;
-			}
-
-			[[nodiscard]] bool supportsNativeAdjacentEdgeRefScans() const override {
-				return graph_.enable_adjacency_reference_pages;
-			}
-
-			void visitAdjacentEdgeRefsForNodes(
-					const std::span<const uint64_t> nodeIds, const LogicalGraphReadDirection direction,
-					const size_t maximumEdges, const std::function<bool(const EntityRef &)> &visitor) const override {
-				if (!graph_.enable_batch_adjacency_reference_scan || nodeIds.empty() || maximumEdges == 0U || !visitor ||
-					!std::ranges::is_sorted(nodeIds) || std::ranges::adjacent_find(nodeIds) != nodeIds.end()) {
-					throw std::invalid_argument("direct Edge test batch adjacency request is invalid");
-				}
-				++graph_.batch_adjacency_ref_scans;
-				size_t visited = 0U;
-				for (const uint64_t nodeId: nodeIds) {
-					for (const LogicalGraphEdge &edge: graph_.edges) {
-						const bool matches = direction == LogicalGraphReadDirection::LGRD_OUTGOING
-								? edge.source_node_id == nodeId : edge.target_node_id == nodeId;
-						if (!matches) {
-							continue;
-						}
-						if (visited == maximumEdges) {
-							return;
-						}
-						++visited;
-						++graph_.batch_adjacency_ref_records;
-						if (!visitor({edge.edge_id, true, edge.source_node_id, edge.target_node_id,
-								edge.type == "KNOWS" ? 1U : 0U})) {
-							return;
-						}
-					}
-				}
-			}
-
-			[[nodiscard]] bool supportsNativeBatchAdjacentEdgeRefs() const override {
-				return graph_.enable_batch_adjacency_reference_scan;
-			}
-
-			void visitEdges(size_t maximumRecords,
-							const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
-				size_t visited = 0U;
-				for (const LogicalGraphEdge &edge: graph_.edges) {
-					if (visited++ == maximumRecords || !visitor(edge)) {
-						return;
-					}
-				}
-			}
-
-			void visitEdgeRefs(size_t maximumRecords,
-							   const std::function<bool(const EntityRef &)> &visitor) const override {
-				++graph_.edge_ref_scans;
-				size_t visited = 0U;
-				for (size_t edgeIndex = 0U; edgeIndex < graph_.edges.size(); ++edgeIndex) {
-					const LogicalGraphEdge &edge = graph_.edges[edgeIndex];
-					if (visited == maximumRecords) {
-						return;
-					}
-					++visited;
-					++graph_.edge_ref_records;
-					const uint64_t typeToken = graph_.forced_edge_reference_type_token.value_or(
-							edge.type == "KNOWS" ? 1U : 0U);
-					const EntityRef reference = graph_.forced_edge_reference.value_or(
-							EntityRef{edge.edge_id, true, edge.source_node_id, edge.target_node_id, typeToken});
-					if (!visitor(reference)) {
-						return;
-					}
-					if (graph_.duplicate_first_edge_reference && edgeIndex == 0U) {
-						if (visited == maximumRecords) {
-							return;
-						}
-						++visited;
-						++graph_.edge_ref_records;
-						if (!visitor(reference)) {
-							return;
-						}
-					}
-				}
-			}
-
-			[[nodiscard]] bool supportsNativeEdgeRefScans() const override { return true; }
-
-			[[nodiscard]] bool supportsNativeRelationshipTypeTokens() const override { return true; }
-
-			[[nodiscard]] std::optional<uint64_t>
-			findRelationshipTypeToken(std::string_view name) const override {
-				return name == "KNOWS" ? std::optional<uint64_t>{1U} : std::nullopt;
-			}
-
-			void visitEdgeTopologies(
-					size_t maximumRecords,
-					const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
-				++graph_.topology_scans;
-				for (const LogicalGraphEdge &edge: graph_.edges) {
-					if (graph_.topology_records == maximumRecords) {
-						return;
-					}
-					++graph_.topology_records;
-					if (!visitor({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type})) {
-						return;
-					}
-				}
-			}
-
-			void visitAdjacentEdges(uint64_t, LogicalGraphReadDirection, size_t,
-									const std::function<bool(const LogicalGraphEdge &)> &) const override {
-				++graph_.adjacency_scans;
-				throw std::logic_error("direct Edge test must not use adjacency visitors");
-			}
-
-		private:
-			DirectEdgeGraph &graph_;
-		};
-
-		class DirectEdgeBackend final : public LogicalGraphReadBackend {
-		public:
-			explicit DirectEdgeBackend(DirectEdgeGraph &graph) : graph_(graph) {}
-
-			[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override {
-				return std::make_unique<DirectEdgeSnapshot>(graph_);
-			}
-
-		private:
-			DirectEdgeGraph &graph_;
-		};
-
-		[[nodiscard]] LogicalPlanReadRuntimeBounds directBounds() {
-			return {.maximum_node_records = 8U,
-					.maximum_node_page_records = 2U,
-					.maximum_metadata_pages_per_node_page = 2U,
-					.maximum_edges_per_node = 8U,
-					.maximum_edge_records = 16U,
-					.maximum_adjacency_page_records = 2U,
-					.maximum_property_entries = 8U,
-					.maximum_rows = 16U,
-					.maximum_distinct_rows = 16U};
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation) {
+		DirectEdgeGraph graph = directGraph();
+		graph.node_ref_scan_order = {3U, 1U, 2U};
+		for (auto &[id, node]: graph.nodes)
+			node.properties.emplace_back("payload", PropertyValue(std::string(1000U, 'a')));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto plan =
+				parser.parseToLogical("MATCH (n {payload: '" + std::string(1000U, 'a') + "'}) RETURN id(n) AS id");
+		auto bounds = directBounds();
+		bounds.maximum_materialized_bytes = 2000U;
+		for (bool stop: {false, true, false}) {
+			graph.node_property_column_batch_reads = 0U;
+			std::vector<int64_t> ids;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
+				ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at("id")).getVariant()));
+				return !stop;
+			})));
+			EXPECT_EQ(ids, stop ? (std::vector<int64_t>{3}) : (std::vector<int64_t>{3, 1, 2}));
+			EXPECT_GT(graph.node_property_column_batch_reads, 1U);
 		}
-
-		[[nodiscard]] DirectEdgeGraph directGraph() {
-			DirectEdgeGraph graph;
-			graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"rank", PropertyValue(1)}}});
-			graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Person"}, {{"rank", PropertyValue(2)}}});
-			graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}, {{"rank", PropertyValue(3)}}});
-			graph.edges.emplace_back(10U, 1U, 2U, "KNOWS",
-									 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)},
-																								 {"tier", PropertyValue(1)}});
-			graph.edges.emplace_back(11U, 1U, 3U, "KNOWS",
-									 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)},
-																								 {"tier", PropertyValue(2)}});
-			graph.edges.emplace_back(12U, 2U, 1U, "KNOWS",
-									 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(8)}});
-			return graph;
+		graph.nodes.at(1U).properties.pop_back();
+		std::vector<int64_t> ids;
+		static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
+			ids.push_back(std::get<int64_t>(std::get<PropertyValue>(row.values.at("id")).getVariant()));
+			return true;
+		}));
+		EXPECT_EQ(ids, (std::vector<int64_t>{3, 2}));
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+		EXPECT_TRUE(graph.node_read_ids.empty());
+		graph.nodes.at(3U).properties.back().value = PropertyValue(std::string(4000U, 'a'));
+		size_t delivered = 0U;
+		EXPECT_THROW(static_cast<void>(runtime.execute(*plan.root, bounds,
+													   [&](const LogicalPlanReadRow &) {
+														   ++delivered;
+														   return true;
+													   })),
+					 std::runtime_error);
+		EXPECT_EQ(delivered, 0U);
+		graph.truncate_node_property_batch = true;
+		graph.node_property_column_batch_reads = 0U;
+		try {
+			static_cast<void>(runtime.execute(*plan.root, bounds, [](const LogicalPlanReadRow &) { return true; }));
+			FAIL() << "invalid column shape must fail before byte-pressure splitting";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical graph backend changed sorted Node Property result cardinality");
 		}
+		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+	}
 
-	} // namespace
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PropertyColumnLastConsumerPreservesRepeatedEntityPayloads) {
+		for (const bool isEdge: {false, true}) {
+			SCOPED_TRACE(isEdge);
+			DirectEdgeGraph graph = directGraph();
+			graph.enable_property_tokens = true;
+			for (auto &[id, node]: graph.nodes) {
+				node.properties.emplace_back("payload",
+											 PropertyValue(std::string(1000U, static_cast<char>('a' + id - 1U))));
+			}
+			for (size_t index = 0U; index < graph.edges.size(); ++index) {
+				graph.edges[index].properties.emplace_back(
+						"payload", PropertyValue(std::string(1000U, static_cast<char>('a' + index))));
+			}
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			graph::parser::cypher::CypherParserImpl parser;
+			const auto plan = parser.parseToLogical(
+					isEdge ? "MATCH ()-[r:KNOWS]->() UNWIND [1, 2] AS repeat RETURN r.payload AS payload"
+						   : "MATCH (n) UNWIND [1, 2] AS repeat RETURN n.payload AS payload");
+			auto bounds = directBounds();
+			bounds.maximum_materialized_bytes = 16000U;
+			for (const bool stopAfterFirst: {false, true, false}) {
+				SCOPED_TRACE(stopAfterFirst);
+				graph.node_property_column_batch_reads = 0U;
+				graph.edge_property_column_batch_reads = 0U;
+				std::vector<PropertyValue> delivered;
+				static_cast<void>(runtime.execute(*plan.root, bounds, [&](const LogicalPlanReadRow &row) {
+					delivered.push_back(std::get<PropertyValue>(row.values.at("payload")));
+					return !stopAfterFirst;
+				}));
+				std::vector<PropertyValue> expected;
+				for (char value: {'a', 'a', 'b', 'b', 'c', 'c'})
+					expected.emplace_back(std::string(1000U, value));
+				if (stopAfterFirst)
+					expected.resize(1U);
+				EXPECT_EQ(delivered, expected);
+				EXPECT_EQ(isEdge ? graph.edge_property_column_batch_reads : graph.node_property_column_batch_reads, 1U);
+				EXPECT_EQ(graph.node_property_point_reads, 0U);
+				EXPECT_EQ(graph.edge_property_point_reads, 0U);
+			}
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, CompleteNodeAndEdgeCachesShareTheExecutionBudgetAndReuseRecords) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.erase(3U);
+		graph.edges.resize(1U);
+		graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue(std::string(2000U, 'n')));
+		graph.edges.front().properties.emplace_back("payload", PropertyValue(std::string(2000U, 'r')));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto nodeOnly = parser.parseToLogical("MATCH (n) RETURN size(keys(n)) AS keys");
+		const auto edgeOnly = parser.parseToLogical("MATCH ()-[r:KNOWS]->() RETURN size(keys(r)) AS keys");
+		const std::string query =
+				"MATCH (n)-[r:KNOWS]->(m) RETURN size(keys(n)) AS nodeKeys, size(keys(r)) AS edgeKeys";
+		const auto combined = parser.parseToLogical(query);
+		auto bounds = directBounds();
+		bool sharedCacheRejected = false;
+		// Find a same-budget boundary where each entity kind fits separately,
+		// but the combined query cannot retain both complete caches.
+		for (size_t allowance = 4000U; allowance < 16000U; allowance += 64U) {
+			bounds.maximum_materialized_bytes = allowance;
+			try {
+				EXPECT_EQ(runtime.executeToQueryResult(*nodeOnly.root, bounds).rowCount(), 2U);
+				EXPECT_EQ(runtime.executeToQueryResult(*edgeOnly.root, bounds).rowCount(), 1U);
+			} catch (const std::runtime_error &) { continue; }
+			size_t delivered = 0U;
+			try {
+				static_cast<void>(runtime.execute(*combined.root, bounds, [&](const LogicalPlanReadRow &) {
+					++delivered;
+					return true;
+				}));
+				break;
+			} catch (const std::runtime_error &error) {
+				EXPECT_NE(std::string(error.what()).find("byte"), std::string::npos);
+				EXPECT_EQ(delivered, 0U);
+				sharedCacheRejected = true;
+				break;
+			}
+		}
+		EXPECT_TRUE(sharedCacheRejected)
+				<< "no shared-cache rejection at an allowance admitting each entity kind separately";
+		bounds.maximum_materialized_bytes = 16000U;
+		const auto repeated = parser.parseToLogical(query + " UNION ALL " + query);
+		for (size_t execution = 0U; execution < 2U; ++execution) {
+			SCOPED_TRACE(execution);
+			graph.node_shaped_batch_reads = 0U;
+			graph.edge_shaped_batch_reads = 0U;
+			const auto result = runtime.executeToQueryResult(*repeated.root, bounds);
+			ASSERT_EQ(result.rowCount(), 2U);
+			for (const auto &row: result.getRows()) {
+				EXPECT_EQ(row.at("nodeKeys").asPrimitive(), PropertyValue(2));
+				EXPECT_EQ(row.at("edgeKeys").asPrimitive(), PropertyValue(3));
+			}
+			EXPECT_EQ(graph.node_shaped_batch_reads, 1U);
+			EXPECT_EQ(graph.edge_shaped_batch_reads, 1U);
+		}
+	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, AppliesSourceEdgeAndTargetPredicatesWithoutAdjacencyDescent) {
 		DirectEdgeGraph graph = directGraph();
@@ -565,8 +206,8 @@ namespace graph::query::execution {
 				{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edges;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
+		const LogicalPlanReadRuntimeStats stats =
+				runtime.execute(traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
 					edges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
 					return true;
 				});
@@ -592,9 +233,8 @@ namespace graph::query::execution {
 		auto source = std::make_unique<logical::LogicalNodeScan>(
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
-		logical::LogicalTraversal traversal(
-				std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"weight", PropertyValue(7)}});
+		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
+											{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -620,16 +260,16 @@ namespace graph::query::execution {
 		auto source = std::make_unique<logical::LogicalNodeScan>(
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
-		logical::LogicalTraversal traversal(
-				std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
+		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
+											{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
 		LogicalPlanReadRuntimeBounds bounds = directBounds();
 		bounds.maximum_materialized_bytes = 1U * 1024U * 1024U;
 
 		// The payload is requested only for the predicate and matches no Edge. The
 		// selected-column staging boundary must still fail before full Edge materialization.
-		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
-					 std::runtime_error);
+		EXPECT_THROW(
+				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
+				std::runtime_error);
 		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
 		EXPECT_EQ(graph.edge_shaped_reads, 0U);
 	}
@@ -642,9 +282,8 @@ namespace graph::query::execution {
 		auto source = std::make_unique<logical::LogicalNodeScan>(
 				"a", std::vector<std::string>{"Person"},
 				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
-		logical::LogicalTraversal traversal(
-				std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"weight", PropertyValue(7)}, {"tier", PropertyValue(1)}});
+		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out", {}, {},
+											{{"weight", PropertyValue(7)}, {"tier", PropertyValue(1)}});
 
 		std::vector<uint64_t> edges;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
@@ -660,8 +299,7 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.edge_property_point_reads, 0U);
 		EXPECT_EQ(graph.edge_property_sorted_reads, 0U);
 		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"tier", "weight"}}));
+		EXPECT_EQ(graph.edge_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"tier", "weight"}}));
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, DeduplicatesPropertyReadsButPreservesDuplicateEdgeRows) {
@@ -669,9 +307,8 @@ namespace graph::query::execution {
 		graph.duplicate_first_edge_reference = true;
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"weight", PropertyValue(7)}});
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out", {}, {}, {{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -688,13 +325,12 @@ namespace graph::query::execution {
 		DirectEdgeGraph graph = directGraph();
 		for (uint64_t edgeId = 100U; edgeId < 800U; ++edgeId) {
 			graph.edges.emplace_back(edgeId, 1U, 2U, "KNOWS",
-					std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)}});
+									 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)}});
 		}
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"weight", PropertyValue(7)}});
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out", {}, {}, {{"weight", PropertyValue(7)}});
 		auto bounds = directBounds();
 		bounds.maximum_edge_records = 1024U;
 		bounds.maximum_edges_per_node = 1024U;
@@ -717,8 +353,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		auto source = std::make_unique<logical::LogicalNodeScan>("a");
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::move(source), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::move(source), "a", "r", "b", "KNOWS", "out");
 		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
 				expressions::BinaryOperatorType::BOP_EQUAL,
@@ -730,8 +365,8 @@ namespace graph::query::execution {
 		logical::LogicalProject project(std::move(filter), std::move(items));
 
 		std::vector<PropertyValue> weights;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				project, directBounds(), [&weights](const LogicalPlanReadRow &row) {
+		const LogicalPlanReadRuntimeStats stats =
+				runtime.execute(project, directBounds(), [&weights](const LogicalPlanReadRow &row) {
 					weights.push_back(std::get<PropertyValue>(row.values.at("weight")));
 					return true;
 				});
@@ -747,10 +382,10 @@ namespace graph::query::execution {
 		DirectEdgeGraph graph = directGraph();
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("source"), "source", "relationship", "target", "KNOWS", "out",
-				std::vector<std::string>{}, std::vector<std::pair<std::string, PropertyValue>>{},
-				{{"weight", PropertyValue(7)}});
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("source"), "source",
+											"relationship", "target", "KNOWS", "out", std::vector<std::string>{},
+											std::vector<std::pair<std::string, PropertyValue>>{},
+											{{"weight", PropertyValue(7)}});
 
 		std::vector<uint64_t> edgeIds;
 		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
@@ -770,16 +405,17 @@ namespace graph::query::execution {
 	TEST(LogicalPlanDirectEdgeRuntimeTest, GlobalEdgePropertyPathFailsClosedForMissingSourceEndpoint) {
 		DirectEdgeGraph graph = directGraph();
 		graph.edges.emplace_back(20U, 99U, 2U, "KNOWS",
-				std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)}});
+								 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(7)}});
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("source"), "source", "relationship", "target", "KNOWS", "out",
-				std::vector<std::string>{}, std::vector<std::pair<std::string, PropertyValue>>{},
-				{{"weight", PropertyValue(7)}});
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("source"), "source",
+											"relationship", "target", "KNOWS", "out", std::vector<std::string>{},
+											std::vector<std::pair<std::string, PropertyValue>>{},
+											{{"weight", PropertyValue(7)}});
 
 		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(),
-				[](const LogicalPlanReadRow &) { return true; })), std::runtime_error);
+													   [](const LogicalPlanReadRow &) { return true; })),
+					 std::runtime_error);
 		EXPECT_EQ(graph.node_existence_probes, 0U);
 		EXPECT_EQ(graph.node_existence_batch_probes, 1U);
 	}
@@ -788,8 +424,8 @@ namespace graph::query::execution {
 		DirectEdgeGraph graph = directGraph();
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a"),
+																	 "a", "r", "b", "KNOWS", "out");
 		auto weight = std::make_unique<expressions::BinaryOpExpression>(
 				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
 				expressions::BinaryOperatorType::BOP_EQUAL,
@@ -812,8 +448,7 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.edge_property_point_reads, 0U);
 		EXPECT_EQ(graph.edge_property_sorted_reads, 0U);
 		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"weight", "tier"}}));
+		EXPECT_EQ(graph.edge_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"weight", "tier"}}));
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesDeferredEdgeProjectionAcrossTheTraversal) {
@@ -821,8 +456,7 @@ namespace graph::query::execution {
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
 		auto source = std::make_unique<logical::LogicalNodeScan>("a");
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::move(source), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::move(source), "a", "r", "b", "KNOWS", "out");
 		std::vector<logical::LogicalProjectItem> items;
 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("r", "weight"), "weight");
 		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("r", "tier"), "tier");
@@ -831,13 +465,13 @@ namespace graph::query::execution {
 		std::vector<std::pair<PropertyValue, PropertyValue>> values;
 		static_cast<void>(runtime.execute(project, directBounds(), [&values](const LogicalPlanReadRow &row) {
 			values.emplace_back(std::get<PropertyValue>(row.values.at("weight")),
-					std::get<PropertyValue>(row.values.at("tier")));
+								std::get<PropertyValue>(row.values.at("tier")));
 			return true;
 		}));
 
-		EXPECT_EQ(values, (std::vector<std::pair<PropertyValue, PropertyValue>>{
-					{PropertyValue(7), PropertyValue(1)}, {PropertyValue(7), PropertyValue(2)},
-					{PropertyValue(8), PropertyValue()}}));
+		EXPECT_EQ(values, (std::vector<std::pair<PropertyValue, PropertyValue>>{{PropertyValue(7), PropertyValue(1)},
+																				{PropertyValue(7), PropertyValue(2)},
+																				{PropertyValue(8), PropertyValue()}}));
 		EXPECT_EQ(graph.edge_property_sorted_reads, 0U);
 		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
 		EXPECT_EQ(graph.edge_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"weight", "tier"}}));
@@ -850,8 +484,8 @@ namespace graph::query::execution {
 				"payload", PropertyValue(PropertyValue::Bytes(2U * 1024U * 1024U, std::byte{0})));
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a"),
+																	 "a", "r", "b", "KNOWS", "out");
 		std::vector<logical::LogicalSortItem> sortItems;
 		sortItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("r", "payload"), true);
 		logical::LogicalSort sort(std::move(traversal), std::move(sortItems));
@@ -872,16 +506,17 @@ namespace graph::query::execution {
 				"payload", PropertyValue(PropertyValue::Bytes(2U * 1024U * 1024U, std::byte{0})));
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out", {}, {},
-				{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out", {}, {},
+											{{"payload", PropertyValue(PropertyValue::Bytes(1U, std::byte{1}))}});
 		LogicalPlanReadRuntimeBounds bounds = directBounds();
 		bounds.maximum_materialized_bytes = 1U * 1024U * 1024U;
 
 		// The predicate rejects every Edge, so this assertion exercises the selected-column
 		// staging budget rather than the public complete-entity result boundary.
-		EXPECT_THROW(static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
-					 std::runtime_error);
+		EXPECT_THROW(
+				static_cast<void>(runtime.execute(traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
+				std::runtime_error);
 		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
 		EXPECT_EQ(graph.edge_read_ids, (std::vector<uint64_t>{10U, 11U, 12U}));
 	}
@@ -892,20 +527,334 @@ namespace graph::query::execution {
 				"payload", PropertyValue(PropertyValue::Bytes(2U * 1024U * 1024U, std::byte{0})));
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out");
 		LogicalPlanReadRuntimeBounds limited = directBounds();
 		limited.maximum_materialized_bytes = 1U * 1024U * 1024U;
 
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(traversal, limited)), std::runtime_error);
 	}
 
+	TEST(LogicalPlanDirectEdgeRuntimeTest, RawNodeResultPreflightsItsCompletePayloadBeforePublication) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_native_node_ref_scans = false;
+		graph.nodes.erase(2U);
+		graph.nodes.erase(3U);
+		graph.edges.clear();
+		const std::string payload(600U, 'n');
+		graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue(payload));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		graph::parser::cypher::CypherParserImpl parser;
+		const auto plan = parser.parseToLogical("MATCH (n) RETURN n");
+		const auto renamedPlan = parser.parseToLogical("MATCH (n) RETURN n AS entity");
+		ASSERT_NE(plan.root, nullptr);
+		auto constrained = directBounds();
+		bool publicationRejected = false;
+		// Locate a same-budget witness: both streaming aliases fit, but owning
+		// the complete public entity must still fail before result publication.
+		for (size_t allowance = 1500U; allowance < 8000U; allowance += 64U) {
+			constrained.maximum_materialized_bytes = allowance;
+			size_t streamed = 0U;
+			try {
+				static_cast<void>(runtime.execute(*plan.root, constrained, [&](const LogicalPlanReadRow &) {
+					++streamed;
+					return true;
+				}));
+				EXPECT_EQ(streamed, 1U);
+				streamed = 0U;
+				static_cast<void>(runtime.execute(*renamedPlan.root, constrained, [&](const LogicalPlanReadRow &row) {
+					EXPECT_TRUE(row.values.contains("entity"));
+					EXPECT_FALSE(row.values.contains("n"));
+					++streamed;
+					return true;
+				}));
+				EXPECT_EQ(streamed, 1U);
+			} catch (const std::runtime_error &) { continue; }
+			try {
+				static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+				break;
+			} catch (const std::runtime_error &) {
+				publicationRejected = true;
+				break;
+			}
+		}
+		EXPECT_TRUE(publicationRejected) << "no publication rejection at a budget admitting both streaming aliases";
+		constrained.maximum_materialized_bytes = 8000U;
+		const QueryResult result = runtime.executeToQueryResult(*plan.root, constrained);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("n").asLogicalNode().properties.at("payload"), PropertyValue(payload));
+		std::vector<logical::LogicalProjectItem> aliases;
+		aliases.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "left");
+		aliases.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "right");
+		logical::LogicalProject aliasProject(std::make_unique<logical::LogicalNodeScan>("n"), std::move(aliases));
+		const QueryResult aliasResult = runtime.executeToQueryResult(aliasProject, constrained);
+		ASSERT_EQ(aliasResult.rowCount(), 1U);
+		const auto &leftBody = std::get<std::string>(
+				aliasResult.getRows().front().at("left").asLogicalNode().properties.at("payload").getVariant());
+		const auto &rightBody = std::get<std::string>(
+				aliasResult.getRows().front().at("right").asLogicalNode().properties.at("payload").getVariant());
+		EXPECT_EQ(leftBody, payload);
+		EXPECT_EQ(rightBody, payload);
+		EXPECT_NE(leftBody.data(), rightBody.data());
+		bool invalidKeysRejectedUnderPressure = false;
+		// The valid record must still exceed the publication budget at the same
+		// allowance where the malformed record reaches Property-key validation.
+		// A smaller allowance can reject source staging before either boundary.
+		for (size_t allowance = 1500U; allowance < 8000U; allowance += 64U) {
+			constrained.maximum_materialized_bytes = allowance;
+			try {
+				static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+				break;
+			} catch (const std::runtime_error &) {}
+			graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue("duplicate"));
+			try {
+				static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained));
+			} catch (const std::runtime_error &error) {
+				invalidKeysRejectedUnderPressure =
+						std::string_view(error.what()) ==
+						"logical graph backend returned an invalid direct Property entry set";
+			}
+			graph.nodes.at(1U).properties.pop_back();
+			if (invalidKeysRejectedUnderPressure)
+				break;
+		}
+		EXPECT_TRUE(invalidKeysRejectedUnderPressure)
+				<< "invalid Property keys must not be hidden by result byte pressure";
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, RawEdgeResultPreflightsItsCompletePayloadBeforePublication) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_native_node_ref_scans = false;
+		graph.edges.resize(1U);
+		const std::string payload(1000U, 'e');
+		graph.edges.front().properties.emplace_back("payload", PropertyValue(payload));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		auto traversal = std::make_unique<logical::LogicalTraversal>(
+				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out",
+				std::vector<std::string>{}, std::vector<std::pair<std::string, PropertyValue>>{},
+				std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}});
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("r"), "edge");
+		logical::LogicalProject project(std::move(traversal), std::move(items));
+		auto constrained = directBounds();
+		constrained.maximum_materialized_bytes = 2500U;
+		size_t streamed = 0U;
+		// The complete traversal row must be admitted before Project drops a/b.
+		EXPECT_THROW(static_cast<void>(runtime.execute(project, constrained, [&](const LogicalPlanReadRow &row) {
+			EXPECT_TRUE(std::holds_alternative<storage::LogicalGraphEdge>(row.values.at("edge")));
+			EXPECT_FALSE(row.values.contains("r"));
+			++streamed;
+			return true;
+		})), std::runtime_error);
+		EXPECT_EQ(streamed, 0U);
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(project, constrained)), std::runtime_error);
+		constrained.maximum_materialized_bytes = 12000U;
+		const QueryResult result = runtime.executeToQueryResult(project, constrained);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("edge").asLogicalEdge().properties.at("payload"), PropertyValue(payload));
+		graph.edges.front().properties.emplace_back("payload", PropertyValue("duplicate"));
+		constrained.maximum_materialized_bytes = 2500U;
+		try {
+			static_cast<void>(runtime.executeToQueryResult(project, constrained));
+			FAIL() << "invalid Edge Property keys must not be hidden by result byte pressure";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical graph backend returned an invalid direct Property entry set");
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, CachedNodeReferenceResultPreservesPayloadAndRejectsDuplicates) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.erase(2U);
+		graph.nodes.erase(3U);
+		graph.edges.clear();
+		const std::string payload(600U, 'n');
+		graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue(payload));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalNodeScan scan("n");
+		auto bounds = directBounds();
+		bounds.maximum_materialized_bytes = 10000U;
+		const auto result = runtime.executeToQueryResult(scan, bounds);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("n").asLogicalNode().properties.at("payload"), PropertyValue(payload));
+		EXPECT_GT(graph.node_shaped_batch_reads, 0U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+		graph.node_shaped_batch_reads = 0U;
+		std::vector<logical::LogicalProjectItem> aliases;
+		aliases.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "left");
+		aliases.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "right");
+		logical::LogicalProject aliasProject(std::make_unique<logical::LogicalNodeScan>("n"), std::move(aliases));
+		const auto aliasResult = runtime.executeToQueryResult(aliasProject, bounds);
+		ASSERT_EQ(aliasResult.rowCount(), 1U);
+		EXPECT_EQ(aliasResult.getRows().front().at("left").asLogicalNode().properties.at("payload"),
+				  PropertyValue(payload));
+		EXPECT_EQ(aliasResult.getRows().front().at("right").asLogicalNode().properties.at("payload"),
+				  PropertyValue(payload));
+		const auto &leftPayload = std::get<std::string>(
+				aliasResult.getRows().front().at("left").asLogicalNode().properties.at("payload").getVariant());
+		const auto &rightPayload = std::get<std::string>(
+				aliasResult.getRows().front().at("right").asLogicalNode().properties.at("payload").getVariant());
+		EXPECT_NE(leftPayload.data(), rightPayload.data());
+		EXPECT_EQ(graph.node_shaped_batch_reads, 1U);
+		graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue("duplicate"));
+		try {
+			static_cast<void>(runtime.executeToQueryResult(scan, bounds));
+			FAIL() << "duplicate complete Node properties must be rejected";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical-plan result received duplicate complete Entity properties");
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, CachedEdgeReferenceResultPreservesPayloadAndRejectsDuplicates) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.edges.resize(1U);
+		const std::string payload(1000U, 'e');
+		graph.edges.front().properties.emplace_back("payload", PropertyValue(payload));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out");
+		auto bounds = directBounds();
+		bounds.maximum_materialized_bytes = 12000U;
+		const auto result = runtime.executeToQueryResult(traversal, bounds);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("r").asLogicalEdge().properties.at("payload"), PropertyValue(payload));
+		EXPECT_GT(graph.edge_shaped_batch_reads, 0U);
+		EXPECT_EQ(graph.edge_property_point_reads, 0U);
+		graph.edges.front().properties.emplace_back("payload", PropertyValue("duplicate"));
+		try {
+			static_cast<void>(runtime.executeToQueryResult(traversal, bounds));
+			FAIL() << "duplicate complete Edge properties must be rejected";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical-plan result received duplicate complete Entity properties");
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, OversizedEdgeReferenceFallbackPreservesCompleteResult) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.edges.resize(1U);
+		const std::string payload(4U * 1024U * 1024U + 128U, 'e');
+		graph.edges.front().properties.emplace_back("payload", PropertyValue(payload));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS",
+											"out");
+		auto bounds = directBounds();
+		bounds.maximum_materialized_bytes = 32U * 1024U * 1024U;
+		auto constrained = bounds;
+		constrained.maximum_materialized_bytes = 5U * 1024U * 1024U;
+		try {
+			static_cast<void>(runtime.executeToQueryResult(traversal, constrained));
+			FAIL() << "the uncached shaped Edge and its public result must fit together";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+		}
+		EXPECT_GT(graph.edge_shaped_reads, 0U);
+		for (size_t attempt = 0U; attempt < 2U; ++attempt) {
+			graph.edge_shaped_batch_reads = 0U;
+			graph.edge_shaped_reads = 0U;
+			const auto result = runtime.executeToQueryResult(traversal, bounds);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("r").asLogicalEdge().properties.at("payload"),
+					  PropertyValue(payload));
+			EXPECT_EQ(graph.edge_shaped_batch_reads, 1U);
+			EXPECT_GT(graph.edge_shaped_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, ShapedReferenceSourceAdmissionRejectsBeforePayloadCopy) {
+		for (const bool isEdge: {false, true}) {
+			SCOPED_TRACE(isEdge);
+			DirectEdgeGraph graph = directGraph();
+			graph.enable_property_tokens = true;
+			graph.enable_shaped_property_admission = true;
+			const std::string payload(4000U, isEdge ? 'e' : 'n');
+			if (isEdge) {
+				graph.edges.resize(1U);
+				graph.edges.front().properties.emplace_back("payload", PropertyValue(payload));
+			} else {
+				graph.nodes.erase(2U);
+				graph.nodes.erase(3U);
+				graph.edges.clear();
+				graph.nodes.at(1U).properties.emplace_back("payload", PropertyValue(payload));
+			}
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			auto bounds = directBounds();
+			bounds.maximum_materialized_bytes = 3000U;
+			if (isEdge) {
+				logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b",
+													"KNOWS", "out");
+				EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(traversal, bounds)), std::runtime_error);
+				EXPECT_EQ(graph.edge_shaped_admission_reads, 1U);
+				EXPECT_EQ(graph.edge_shaped_batch_reads, 0U);
+				bounds.maximum_materialized_bytes = 16000U;
+				const auto result = runtime.executeToQueryResult(traversal, bounds);
+				ASSERT_EQ(result.rowCount(), 1U);
+				EXPECT_EQ(result.getRows().front().at("r").asLogicalEdge().properties.at("payload"),
+						  PropertyValue(payload));
+				EXPECT_GT(graph.edge_shaped_batch_reads, 0U);
+			} else {
+				logical::LogicalNodeScan scan("n");
+				EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(scan, bounds)), std::runtime_error);
+				EXPECT_EQ(graph.node_shaped_admission_reads, 1U);
+				EXPECT_EQ(graph.node_shaped_batch_reads, 0U);
+				bounds.maximum_materialized_bytes = 16000U;
+				const auto result = runtime.executeToQueryResult(scan, bounds);
+				ASSERT_EQ(result.rowCount(), 1U);
+				EXPECT_EQ(result.getRows().front().at("n").asLogicalNode().properties.at("payload"),
+						  PropertyValue(payload));
+				EXPECT_GT(graph.node_shaped_batch_reads, 0U);
+			}
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, PatternNamedColumnsShareSourceAndRetainedBatchBudget) {
+		for (const bool referencePages: {false, true}) {
+			SCOPED_TRACE(referencePages);
+			DirectEdgeGraph graph = directGraph();
+			graph.nodes.clear();
+			graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Seed"}});
+			graph.nodes.emplace(
+					2U, LogicalGraphNode{2U, {"Target"}, {{"payload", PropertyValue(std::string(1200U, 'n'))}}});
+			graph.edges = {
+					LogicalGraphEdge{10U, 1U, 2U, "KNOWS", {{"payload", PropertyValue(std::string(1200U, 'e'))}}}};
+			graph.enable_property_tokens = true;
+			graph.enable_property_read_admission = true;
+			graph.enable_adjacency_reference_pages = referencePages;
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			graph::parser::cypher::CypherParserImpl parser;
+			const auto plan = parser.parseToLogical(
+					"MATCH (n:Seed) RETURN [(n)-[r:KNOWS]->(m) | size(r.payload) + size(m.payload)] AS lengths");
+			ASSERT_NE(plan.root, nullptr);
+			auto bounded = directBounds();
+			bounded.maximum_materialized_bytes = 1900U;
+			EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, bounded)), std::runtime_error);
+			// Both selected payloads together exceed the complete execution budget;
+			// preflight must reject before opening either property column.
+			EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
+			EXPECT_EQ(graph.node_property_column_admission_reads, 0U);
+			EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+			bounded.maximum_materialized_bytes = 10000U;
+			const auto result = runtime.executeToQueryResult(*plan.root, bounded);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("lengths").asPrimitive(),
+					  PropertyValue(std::vector<PropertyValue>{PropertyValue(2400)}));
+		}
+	}
+
 	TEST(LogicalPlanDirectEdgeRuntimeTest, ReusesQueryBoundEdgeMaterializationForRepeatedIntrospection) {
 		DirectEdgeGraph graph = directGraph();
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a"),
+																	 "a", "r", "b", "KNOWS", "out");
 		std::vector<std::unique_ptr<expressions::Expression>> firstArguments;
 		firstArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("r"));
 		std::vector<std::unique_ptr<expressions::Expression>> secondArguments;
@@ -925,13 +874,147 @@ namespace graph::query::execution {
 		}));
 
 		EXPECT_EQ(types, (std::vector<std::pair<PropertyValue, PropertyValue>>{
-							 {PropertyValue("KNOWS"), PropertyValue("KNOWS")},
-							 {PropertyValue("KNOWS"), PropertyValue("KNOWS")},
-							 {PropertyValue("KNOWS"), PropertyValue("KNOWS")}}));
+								 {PropertyValue("KNOWS"), PropertyValue("KNOWS")},
+								 {PropertyValue("KNOWS"), PropertyValue("KNOWS")},
+								 {PropertyValue("KNOWS"), PropertyValue("KNOWS")}}));
 		// The type-only shape is resolved once even though type(r) is evaluated twice;
 		// it does not force complete Property materialization.
 		EXPECT_EQ(graph.edge_read_ids, (std::vector<uint64_t>{10U, 11U, 12U}));
 		EXPECT_EQ(graph.edge_shaped_reads, 3U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesEntityMetadataForRepeatedIntrospectionExpressions) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("n"),
+																	 "n", "r", "m", "KNOWS", "out");
+		std::vector<std::unique_ptr<expressions::Expression>> labelArguments;
+		labelArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
+		std::vector<std::unique_ptr<expressions::Expression>> typeArguments;
+		typeArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("r"));
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("labels", std::move(labelArguments)),
+						   "node_labels");
+		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("type", std::move(typeArguments)),
+						   "edge_type");
+		std::vector<std::unique_ptr<expressions::Expression>> repeatedLabelArguments;
+		repeatedLabelArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
+		std::vector<std::unique_ptr<expressions::Expression>> repeatedTypeArguments;
+		repeatedTypeArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("r"));
+		items.emplace_back(
+				std::make_shared<expressions::FunctionCallExpression>("labels", std::move(repeatedLabelArguments)),
+				"node_labels_again");
+		items.emplace_back(
+				std::make_shared<expressions::FunctionCallExpression>("type", std::move(repeatedTypeArguments)),
+				"edge_type_again");
+		logical::LogicalProject project(std::move(traversal), std::move(items));
+
+		std::vector<std::array<PropertyValue, 4>> metadata;
+		static_cast<void>(runtime.execute(project, directBounds(), [&metadata](const LogicalPlanReadRow &row) {
+			metadata.push_back({std::get<PropertyValue>(row.values.at("node_labels")),
+								std::get<PropertyValue>(row.values.at("edge_type")),
+								std::get<PropertyValue>(row.values.at("node_labels_again")),
+								std::get<PropertyValue>(row.values.at("edge_type_again"))});
+			return true;
+		}));
+
+		EXPECT_EQ(metadata.size(), 3U);
+		EXPECT_EQ(graph.node_shaped_batch_reads, 1U);
+		EXPECT_EQ(graph.edge_shaped_batch_reads, 1U);
+		EXPECT_EQ(graph.node_shaped_reads, 0U);
+		EXPECT_EQ(graph.edge_shaped_reads, 0U);
+		EXPECT_TRUE(std::ranges::all_of(metadata, [](const auto &values) {
+			return values[0] == PropertyValue(std::vector<PropertyValue>{PropertyValue("Person")}) &&
+				   values[1] == PropertyValue("KNOWS") && values[0] == values[2] && values[1] == values[3];
+		}));
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, SplitsMetadataPrefetchWhenSourceAndRowCopiesExceedBudget) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		for (auto &[id, node]: graph.nodes) {
+			static_cast<void>(id);
+			node.labels = {std::string(2048U, 'l')};
+		}
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<std::unique_ptr<expressions::Expression>> arguments;
+		arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("labels", std::move(arguments)),
+						   "labels");
+		logical::LogicalProject project(std::make_unique<logical::LogicalNodeScan>("n"), std::move(items));
+		LogicalPlanReadRuntimeBounds limits = directBounds();
+		limits.maximum_materialized_bytes = 10U * 1024U;
+		std::vector<PropertyValue> results;
+
+		static_cast<void>(runtime.execute(project, limits, [&](const LogicalPlanReadRow &row) {
+			results.push_back(std::get<PropertyValue>(row.values.at("labels")));
+			return true;
+		}));
+
+		ASSERT_EQ(results.size(), 3U);
+		for (const PropertyValue &result: results) {
+			ASSERT_EQ(result.getList().size(), 1U);
+			EXPECT_EQ(std::get<std::string>(result.getList().front().getVariant()).size(), 2048U);
+		}
+		EXPECT_GT(graph.node_shaped_batch_reads, 1U);
+		EXPECT_EQ(graph.node_shaped_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, JoinAndOptionalMatchRetainEntityMetadataCaches) {
+		const auto labelsExpression = [] {
+			std::vector<std::unique_ptr<expressions::Expression>> arguments;
+			arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
+			return std::make_shared<expressions::FunctionCallExpression>("labels", std::move(arguments));
+		};
+		const auto makeMetadataProjection = [&] {
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "n");
+			items.emplace_back(labelsExpression(), "labels_before");
+			return std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalNodeScan>("n"),
+															 std::move(items));
+		};
+		const auto makeFinalProjection = [&](std::unique_ptr<logical::LogicalOperator> child) {
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(labelsExpression(), "labels_after");
+			return logical::LogicalProject(std::move(child), std::move(items));
+		};
+		const auto verifyResult = [](const QueryResult &result) {
+			ASSERT_EQ(result.rowCount(), 3U);
+			EXPECT_EQ(result.getRows()[0].at("labels_after").asPrimitive(),
+					  PropertyValue(std::vector<PropertyValue>{PropertyValue("Person")}));
+			EXPECT_EQ(result.getRows()[1].at("labels_after").asPrimitive(),
+					  PropertyValue(std::vector<PropertyValue>{PropertyValue("Person")}));
+			EXPECT_EQ(result.getRows()[2].at("labels_after").asPrimitive(),
+					  PropertyValue(std::vector<PropertyValue>{PropertyValue("Other")}));
+		};
+
+		DirectEdgeGraph joinGraph = directGraph();
+		joinGraph.enable_property_tokens = true;
+		DirectEdgeBackend joinBackend(joinGraph);
+		LogicalPlanReadRuntime joinRuntime(joinBackend);
+		auto join = std::make_unique<logical::LogicalJoin>(std::make_unique<logical::LogicalSingleRow>(),
+														   makeMetadataProjection());
+		const QueryResult joinResult =
+				joinRuntime.executeToQueryResult(makeFinalProjection(std::move(join)), directBounds());
+		verifyResult(joinResult);
+		EXPECT_EQ(joinGraph.node_shaped_batch_reads, 1U);
+		EXPECT_EQ(joinGraph.node_shaped_reads, 0U);
+
+		DirectEdgeGraph optionalGraph = directGraph();
+		optionalGraph.enable_property_tokens = true;
+		DirectEdgeBackend optionalBackend(optionalGraph);
+		LogicalPlanReadRuntime optionalRuntime(optionalBackend);
+		auto optional = std::make_unique<logical::LogicalOptionalMatch>(std::make_unique<logical::LogicalSingleRow>(),
+																		makeMetadataProjection());
+		const QueryResult optionalResult =
+				optionalRuntime.executeToQueryResult(makeFinalProjection(std::move(optional)), directBounds());
+		verifyResult(optionalResult);
+		EXPECT_EQ(optionalGraph.node_shaped_batch_reads, 1U);
+		EXPECT_EQ(optionalGraph.node_shaped_reads, 0U);
 	}
 
 	TEST(LogicalPlanDirectEdgeRuntimeTest, InvalidatesEntityMetadataWhenUnwindRebindsAnEntityVariable) {
@@ -941,21 +1024,22 @@ namespace graph::query::execution {
 
 		auto labelsArguments = std::vector<std::unique_ptr<expressions::Expression>>{};
 		labelsArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
-		auto labelsExpression = std::make_unique<expressions::FunctionCallExpression>(
-				"labels", std::move(labelsArguments));
+		auto labelsExpression =
+				std::make_unique<expressions::FunctionCallExpression>("labels", std::move(labelsArguments));
 		auto expectedLabels = std::make_unique<expressions::ListLiteralExpression>(
 				PropertyValue(std::vector<PropertyValue>{PropertyValue("Person")}));
 		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
 				std::move(labelsExpression), expressions::BinaryOperatorType::BOP_EQUAL, std::move(expectedLabels));
-		auto filtered = std::make_unique<logical::LogicalFilter>(
-				std::make_unique<logical::LogicalNodeScan>("n"), std::move(predicate));
-		auto rebound = std::make_unique<logical::LogicalUnwind>(
-				std::move(filtered), "n", std::vector<PropertyValue>{PropertyValue(1)});
+		auto filtered = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalNodeScan>("n"),
+																 std::move(predicate));
+		auto rebound = std::make_unique<logical::LogicalUnwind>(std::move(filtered), "n",
+																std::vector<PropertyValue>{PropertyValue(1)});
 		std::vector<logical::LogicalProjectItem> items;
 		auto reboundLabelsArguments = std::vector<std::unique_ptr<expressions::Expression>>{};
 		reboundLabelsArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("n"));
-		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>(
-				"labels", std::move(reboundLabelsArguments)), "labels");
+		items.emplace_back(
+				std::make_shared<expressions::FunctionCallExpression>("labels", std::move(reboundLabelsArguments)),
+				"labels");
 		logical::LogicalProject project(std::move(rebound), std::move(items));
 
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(project, directBounds())), std::runtime_error);
@@ -966,8 +1050,7 @@ namespace graph::query::execution {
 		graph.forced_edge_reference_type_token = 99U;
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
+		logical::LogicalTraversal traversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
 
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(traversal, directBounds())), std::runtime_error);
 	}
@@ -981,17 +1064,17 @@ namespace graph::query::execution {
 				"source", PropertyValue(PropertyValue::Bytes(5U * 1024U * 1024U, std::byte{0})));
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
+		auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a"),
+																	 "a", "r", "b", "KNOWS", "out");
 		std::vector<std::unique_ptr<expressions::Expression>> firstArguments;
 		firstArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("r"));
 		std::vector<std::unique_ptr<expressions::Expression>> secondArguments;
 		secondArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("r"));
 		std::vector<logical::LogicalProjectItem> items;
 		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("type", std::move(firstArguments)),
-								   "first_type");
+						   "first_type");
 		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("type", std::move(secondArguments)),
-								   "second_type");
+						   "second_type");
 		logical::LogicalProject project(std::move(traversal), std::move(items));
 
 		static_cast<void>(runtime.execute(project, directBounds(), [](const LogicalPlanReadRow &) { return true; }));
@@ -1000,923 +1083,589 @@ namespace graph::query::execution {
 		EXPECT_EQ(graph.edge_read_ids, (std::vector<uint64_t>{10U, 11U, 12U}));
 	}
 
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesEdgePropertySortKeysBeforeOrdering) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		std::vector<logical::LogicalSortItem> sortItems;
-		sortItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("r", "weight"), true);
-		logical::LogicalSort sort(std::move(traversal), std::move(sortItems));
-
-		std::vector<int64_t> weights;
-		static_cast<void>(runtime.execute(sort, directBounds(), [&weights](const LogicalPlanReadRow &row) {
-			weights.push_back(std::get<int64_t>(
-					std::get<LogicalGraphEdge>(row.values.at("r")).properties.front().value.getVariant()));
-			return true;
-		}));
-
-		EXPECT_EQ(weights, (std::vector<int64_t>{7, 7, 8}));
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"weight"}}));
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, PreservesReversedPropertyComparisonSemantics) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto source = std::make_unique<logical::LogicalNodeScan>("a");
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::move(source), "a", "r", "b", "KNOWS", "out");
-		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
-				std::make_unique<expressions::LiteralExpression>(int64_t{7}),
-				expressions::BinaryOperatorType::BOP_LESS,
-				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"));
-		logical::LogicalFilter filter(std::move(traversal), std::move(predicate));
-
-		std::vector<uint64_t> edgeIds;
-		static_cast<void>(runtime.execute(filter, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
-			edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-
-		EXPECT_EQ(edgeIds, std::vector<uint64_t>{12U});
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesAllSourcePredicateColumnsInOneSortedRead) {
-		DirectEdgeGraph graph = directGraph();
-		graph.nodes.at(1U).properties.emplace_back("score", PropertyValue(int64_t{10}));
-		graph.nodes.at(2U).properties.emplace_back("score", PropertyValue(int64_t{20}));
-		graph.nodes.at(3U).properties.emplace_back("score", PropertyValue(int64_t{30}));
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto source = std::make_unique<logical::LogicalNodeScan>(
-				"a", std::vector<std::string>{"Person"},
-				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)},
-																							 {"score", PropertyValue(int64_t{10})}});
-		logical::LogicalTraversal traversal(std::move(source), "a", "r", "b", "KNOWS", "out");
-
-		std::vector<uint64_t> edges;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
-			edges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-
-		EXPECT_EQ(edges, (std::vector<uint64_t>{10U, 11U}));
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_property_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank", "score"}}));
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesNodeScanPredicateColumnsBeforeRowMaterialization) {
-		DirectEdgeGraph graph = directGraph();
-		graph.nodes.at(1U).properties.emplace_back("score", PropertyValue(int64_t{10}));
-		graph.nodes.at(2U).properties.emplace_back("score", PropertyValue(int64_t{20}));
-		graph.nodes.at(3U).properties.emplace_back("score", PropertyValue(int64_t{30}));
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalNodeScan scan(
-				"n", std::vector<std::string>{"Person"},
-				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)},
-																							 {"score", PropertyValue(int64_t{10})}});
-
-		std::vector<uint64_t> nodes;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				scan, directBounds(), [&nodes](const LogicalPlanReadRow &row) {
-					nodes.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
-					return true;
-				});
-
-		EXPECT_EQ(nodes, (std::vector<uint64_t>{1U}));
-		EXPECT_EQ(stats.nodes_scanned, 3U);
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_property_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank", "score"}}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesPropertyProjectionDirectlyOverNodeScan) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n");
-		std::vector<logical::LogicalProjectItem> items;
-		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "rank"), "rank");
-		logical::LogicalProject project(std::move(scan), std::move(items));
-
-		std::vector<PropertyValue> ranks;
-		static_cast<void>(runtime.execute(project, directBounds(), [&ranks](const LogicalPlanReadRow &row) {
-			ranks.push_back(std::get<PropertyValue>(row.values.at("rank")));
-			return true;
-		}));
-
-		EXPECT_EQ(ranks, (std::vector<PropertyValue>{PropertyValue(1), PropertyValue(2), PropertyValue(3)}));
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_property_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank"}}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, DeduplicatesComplexProjectionPropertyRequestsInOneBatch) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n");
-
-		auto rankCase = std::make_shared<expressions::CaseExpression>();
-		rankCase->addBranch(
-				std::make_unique<expressions::BinaryOpExpression>(
-						std::make_unique<expressions::VariableReferenceExpression>("n", "rank"),
-						expressions::BinaryOperatorType::BOP_GREATER,
-						std::make_unique<expressions::LiteralExpression>(int64_t{1})),
-				std::make_unique<expressions::VariableReferenceExpression>("n", "rank"));
-		rankCase->setElseExpression(
-				std::make_unique<expressions::VariableReferenceExpression>("n", "rank"));
-
-		std::vector<std::unique_ptr<expressions::Expression>> functionArguments;
-		functionArguments.push_back(
-				std::make_unique<expressions::VariableReferenceExpression>("n", "rank"));
-		auto rankText = std::make_shared<expressions::FunctionCallExpression>(
-				"toString", std::move(functionArguments));
-		auto selected = std::make_shared<expressions::InExpression>(
-				std::make_unique<expressions::VariableReferenceExpression>("n", "rank"),
-				std::vector<PropertyValue>{PropertyValue(int64_t{1}), PropertyValue(int64_t{3})});
-
-		std::vector<logical::LogicalProjectItem> items;
-		items.emplace_back(std::move(rankCase), "rank_case");
-		items.emplace_back(std::move(rankText), "rank_text");
-		items.emplace_back(std::move(selected), "selected");
-		logical::LogicalProject project(std::move(scan), std::move(items));
-
-		std::vector<LogicalPlanReadRow> rows;
-		static_cast<void>(runtime.execute(project, directBounds(), [&rows](const LogicalPlanReadRow &row) {
-			rows.push_back(row);
-			return true;
-		}));
-
-		ASSERT_EQ(rows.size(), 3U);
-		for (size_t index = 0U; index < rows.size(); ++index) {
-			const int64_t rank = static_cast<int64_t>(index + 1U);
-			EXPECT_EQ(std::get<PropertyValue>(rows[index].values.at("rank_case")), PropertyValue(rank));
-			EXPECT_EQ(std::get<PropertyValue>(rows[index].values.at("rank_text")),
-					PropertyValue(std::to_string(rank)));
-			EXPECT_EQ(std::get<PropertyValue>(rows[index].values.at("selected")),
-					PropertyValue(rank != 2));
-		}
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank"}}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesPropertySubsetOfMixedProjection) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n");
-		std::vector<logical::LogicalProjectItem> items;
-		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "rank"), "rank");
-		items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "entity");
-		logical::LogicalProject project(std::move(scan), std::move(items));
-
-		std::vector<PropertyValue> ranks;
-		std::vector<uint64_t> entityIds;
-		static_cast<void>(runtime.execute(project, directBounds(), [&](const LogicalPlanReadRow &row) {
-			ranks.push_back(std::get<PropertyValue>(row.values.at("rank")));
-			entityIds.push_back(std::get<LogicalGraphNode>(row.values.at("entity")).node_id);
-			return true;
-		}));
-
-		EXPECT_EQ(ranks, (std::vector<PropertyValue>{PropertyValue(1), PropertyValue(2), PropertyValue(3)}));
-		EXPECT_EQ(entityIds, (std::vector<uint64_t>{1U, 2U, 3U}));
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank"}}));
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_read_ids, (std::vector<uint64_t>{1U, 2U, 3U}));
-		EXPECT_EQ(graph.node_shaped_reads, 3U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, TopologyOnlyExistsUsesReferencePagesWithoutEntityMaterialization) {
-		DirectEdgeGraph graph = directGraph();
-		graph.enable_adjacency_reference_pages = true;
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n");
-		std::vector<logical::LogicalProjectItem> items;
-		items.emplace_back(std::make_shared<expressions::ExistsExpression>(
-				"(n)-[:KNOWS]->()", "n", "KNOWS", "", expressions::PatternDirection::PAT_OUTGOING),
-				"has_outgoing_knows");
-		logical::LogicalProject project(std::move(scan), std::move(items));
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				project, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("has_outgoing_knows")));
-					return true;
-				});
-
-		EXPECT_EQ(results, (std::vector<PropertyValue>{PropertyValue(true), PropertyValue(true), PropertyValue(false)}));
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-		EXPECT_EQ(graph.adjacency_ref_scans, 3U);
-		EXPECT_EQ(graph.adjacency_ref_records, 3U);
-		EXPECT_EQ(graph.node_existence_probes, 0U);
-		EXPECT_EQ(graph.node_existence_batch_probes, 2U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-		EXPECT_EQ(stats.nodes_scanned, 3U);
-		EXPECT_EQ(stats.edges_scanned, 3U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchesTargetNodePredicatesByDistinctSortedTargetIds) {
-		DirectEdgeGraph graph = directGraph();
-		graph.nodes.at(3U).labels = {"Person"};
-		graph.edges.emplace_back(13U, 1U, 2U, "KNOWS",
-								 std::vector<storage::LogicalGraphPropertyEntry>{{"weight", PropertyValue(9)}});
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto source = std::make_unique<logical::LogicalNodeScan>(
-				"a", std::vector<std::string>{"Person"},
-				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(1)}});
-		logical::LogicalTraversal traversal(
-				std::move(source), "a", "r", "b", "KNOWS", "out", std::vector<std::string>{"Person"},
-				std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(2)}});
-
-		std::vector<uint64_t> edges;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
-			edges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-
-		EXPECT_EQ(edges, (std::vector<uint64_t>{10U, 13U}));
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_property_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 2U);
-		EXPECT_EQ(graph.node_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"rank"}, {"rank"}}));
-		EXPECT_EQ(graph.node_label_sorted_reads, 1U);
-		EXPECT_EQ(graph.node_label_sorted_ids, (std::vector<std::vector<uint64_t>>{{2U, 3U}}));
-		EXPECT_EQ(graph.node_label_point_reads, 0U);
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, CountsNodesFromReferencesWithoutMaterializingNodeRows) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
-		logical::LogicalAggregate aggregate(
-				std::move(scan), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("n"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("count")));
-					return true;
-				});
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{2})});
-		EXPECT_EQ(stats.nodes_scanned, 3U);
-		EXPECT_EQ(stats.rows_emitted, 1U);
-		EXPECT_EQ(graph.node_label_match_scans, 1U);
-		EXPECT_EQ(graph.node_label_match_records, 3U);
-		EXPECT_EQ(graph.node_label_point_reads, 0U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsInvalidNodeReferencesAtTheDirectCountBoundary) {
-		for (const EntityRef reference: {
-				 EntityRef{0U, false, 0U, 0U, 0U},
-				 EntityRef{10U, true, 1U, 2U, 1U},
-		}) {
+	TEST(LogicalPlanDirectEdgeRuntimeTest, BorrowedUnwindKeepsEntityScalarConversionAndSuppression) {
+		for (const bool scalarAsRow: {false, true}) {
 			DirectEdgeGraph graph = directGraph();
-			graph.forced_node_reference = reference;
 			DirectEdgeBackend backend(graph);
 			LogicalPlanReadRuntime runtime(backend);
-			auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
-			logical::LogicalAggregate aggregate(
-					std::move(scan), {},
-					{{"count", std::make_shared<expressions::VariableReferenceExpression>("n"), "count", false}});
-
-			EXPECT_THROW(static_cast<void>(runtime.execute(
-					aggregate, directBounds(), [](const LogicalPlanReadRow &) { return true; })), std::runtime_error);
-		}
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsInvalidEdgeReferencesAtTheDirectTraversalBoundary) {
-		for (const EntityRef reference: {
-				 EntityRef{0U, true, 1U, 2U, 1U},
-				 EntityRef{1U, false, 0U, 0U, 0U},
-				 EntityRef{10U, true, 0U, 2U, 1U},
-				 EntityRef{10U, true, 1U, 0U, 1U},
-		}) {
-			DirectEdgeGraph graph = directGraph();
-			graph.forced_edge_reference = reference;
-			DirectEdgeBackend backend(graph);
-			LogicalPlanReadRuntime runtime(backend);
-			logical::LogicalTraversal traversal(
-					std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-
-			EXPECT_THROW(static_cast<void>(runtime.execute(
-					traversal, directBounds(), [](const LogicalPlanReadRow &) { return true; })), std::runtime_error);
-		}
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, AggregatesNodePropertiesThroughOneSelectedColumnBatch) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n");
-		logical::LogicalAggregate aggregate(
-				std::move(scan), {},
-				{{"sum", std::make_shared<expressions::VariableReferenceExpression>("n", "rank"), "total", false}});
-
-		std::vector<PropertyValue> results;
-		static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-			results.push_back(std::get<PropertyValue>(row.values.at("total")));
-			return true;
-		}));
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{6})});
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"rank"}}));
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, SharesOneBatchAcrossGroupedAndMultipleAggregatePropertyExpressions) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto group = std::make_shared<expressions::VariableReferenceExpression>("n", "rank");
-		auto value = std::make_shared<expressions::VariableReferenceExpression>("n", "rank");
-		logical::LogicalAggregate aggregate(
-				std::make_unique<logical::LogicalNodeScan>("n"), {group},
-				{{"sum", value, "total", false}, {"avg", value, "average", false}}, {"rank"});
-
-		std::map<int64_t, std::pair<int64_t, double>> results;
-		static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-			const int64_t rank = std::get<int64_t>(std::get<PropertyValue>(row.values.at("rank")).getVariant());
-			results.emplace(rank,
-					std::make_pair(std::get<int64_t>(std::get<PropertyValue>(row.values.at("total")).getVariant()),
-							std::get<double>(std::get<PropertyValue>(row.values.at("average")).getVariant())));
-			return true;
-		}));
-
-		ASSERT_EQ(results.size(), 3U);
-		EXPECT_EQ(results.at(1).first, 1);
-		EXPECT_EQ(results.at(2).first, 2);
-		EXPECT_EQ(results.at(3).first, 3);
-		EXPECT_DOUBLE_EQ(results.at(1).second, 1.0);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.node_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"rank"}}));
-		EXPECT_EQ(graph.node_property_point_reads, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, AggregatesEdgePropertiesThroughOneSelectedColumnBatch) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		logical::LogicalAggregate aggregate(
-				std::move(traversal), {},
-				{{"sum", std::make_shared<expressions::VariableReferenceExpression>("r", "weight"), "total", false}});
-
-		std::vector<PropertyValue> results;
-		static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-			results.push_back(std::get<PropertyValue>(row.values.at("total")));
-			return true;
-		}));
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{22})});
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"weight"}}));
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, CountsEdgePropertyMatchesThroughSortedColumnsWithoutRowMaterialization) {
-		DirectEdgeGraph graph = directGraph();
-		std::swap(graph.edges[0], graph.edges[1]);
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto seed = std::make_unique<logical::LogicalNodeScan>("a");
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::move(seed), "a", "r", "b", "KNOWS", "out", std::vector<std::string>{},
-				std::vector<std::pair<std::string, PropertyValue>>{},
-				std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}, {"tier", PropertyValue(1)}});
-		logical::LogicalAggregate aggregate(
-				std::move(traversal), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("r"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("count")));
-					return true;
-				});
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{1})});
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.edge_property_sorted_reads, 0U);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"tier", "weight"}}));
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-		EXPECT_EQ(stats.edges_scanned, 3U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, FusesFilteredEdgeCountIntoTheSelectedColumnScan) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		auto weight = std::make_unique<expressions::BinaryOpExpression>(
-				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
-				expressions::BinaryOperatorType::BOP_EQUAL,
-				std::make_unique<expressions::LiteralExpression>(int64_t{7}));
-		auto tier = std::make_unique<expressions::BinaryOpExpression>(
-				std::make_unique<expressions::LiteralExpression>(int64_t{1}),
-				expressions::BinaryOperatorType::BOP_EQUAL,
-				std::make_unique<expressions::VariableReferenceExpression>("r", "tier"));
-		auto filter = std::make_unique<logical::LogicalFilter>(
-				std::move(traversal), std::make_shared<expressions::BinaryOpExpression>(
-						std::move(weight), expressions::BinaryOperatorType::BOP_AND, std::move(tier)));
-		logical::LogicalAggregate aggregate(
-				std::move(filter), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("r"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("count")));
-					return true;
-				});
-
-		EXPECT_EQ(results, (std::vector<PropertyValue>{PropertyValue(int64_t{1})}));
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_keys,
-				  (std::vector<std::vector<std::string>>{{"weight", "tier"}}));
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-		EXPECT_EQ(graph.node_existence_batch_probes, 1U);
-		EXPECT_EQ(stats.edges_scanned, 3U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, FilteredEdgeCountValidatesEndpointsOnceAndFailsClosed) {
-		DirectEdgeGraph graph = directGraph();
-		graph.nodes.erase(3U);
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
-				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
-				expressions::BinaryOperatorType::BOP_EQUAL,
-				std::make_unique<expressions::LiteralExpression>(int64_t{7}));
-		auto filter = std::make_unique<logical::LogicalFilter>(std::move(traversal), std::move(predicate));
-		logical::LogicalAggregate aggregate(
-				std::move(filter), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("r"), "count", false}});
-
-		EXPECT_THROW(static_cast<void>(runtime.execute(
-				aggregate, directBounds(), [](const LogicalPlanReadRow &) { return true; })), std::runtime_error);
-		EXPECT_EQ(graph.node_existence_batch_probes, 1U);
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, ShortCircuitsContradictoryInlineAndFilterEdgeCounts) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out",
-				std::vector<std::string>{}, std::vector<std::pair<std::string, PropertyValue>>{},
-				std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}});
-		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
-				std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
-				expressions::BinaryOperatorType::BOP_EQUAL,
-				std::make_unique<expressions::LiteralExpression>(int64_t{8}));
-		auto filter = std::make_unique<logical::LogicalFilter>(std::move(traversal), std::move(predicate));
-		logical::LogicalAggregate aggregate(
-				std::move(filter), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("r"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-			results.push_back(std::get<PropertyValue>(row.values.at("count")));
-			return true;
-		}));
-
-		EXPECT_EQ(results, (std::vector<PropertyValue>{PropertyValue(int64_t{0})}));
-		EXPECT_EQ(graph.edge_ref_scans, 0U);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, CountsUnconstrainedEdgesThroughReferencesWithoutTypeMaterialization) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto seed = std::make_unique<logical::LogicalNodeScan>("a");
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::move(seed), "a", "r", "b", "", "out");
-		logical::LogicalAggregate aggregate(
-				std::move(traversal), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("r"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("count")));
-					return true;
-				});
-
-		EXPECT_EQ(results, (std::vector<PropertyValue>{PropertyValue(int64_t{3})}));
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-		EXPECT_EQ(graph.edge_ref_records, 3U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.edge_property_point_reads, 0U);
-		EXPECT_EQ(graph.edge_property_sorted_reads, 0U);
-		EXPECT_EQ(stats.edges_scanned, 3U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, DoesNotMaterializeUnboundTopologyOnlyTargetNodes) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "", "KNOWS", "out");
-
-		std::vector<uint64_t> edgeIds;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
-			edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-
-		EXPECT_EQ(edgeIds, (std::vector<uint64_t>{10U, 11U, 12U}));
-		// Public materialization still validates the bound source Node, but a
-		// topology-only traversal must never read an unbound target (Node 3 is
-		// only a target in this graph).
-		EXPECT_EQ(graph.node_read_ids, (std::vector<uint64_t>{1U, 2U}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsAnUnknownNativeRelationshipTypeBeforeScanningEdges) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "MISSING", "out");
-
-		std::vector<uint64_t> edges;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				traversal, directBounds(), [&edges](const LogicalPlanReadRow &row) {
-					edges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-					return true;
-				});
-
-		EXPECT_TRUE(edges.empty());
-		EXPECT_EQ(graph.edge_ref_scans, 0U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(stats.edges_scanned, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, DoesNotApplyDirectNodeCountWhenAParameterPredicateFiltersTheScan) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
-		scan->setParameterPropertyPredicates({{"rank", "rank"}});
-		logical::LogicalAggregate aggregate(
-				std::move(scan), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("n"), "count", false}});
-		QueryContext context;
-		context.parameters.emplace("rank", PropertyValue(int64_t{1}));
-
-		std::vector<PropertyValue> results;
-		const LogicalPlanReadRuntimeStats stats = runtime.execute(
-				aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-					results.push_back(std::get<PropertyValue>(row.values.at("count")));
-					return true;
-				}, context);
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{1})});
-		EXPECT_EQ(stats.nodes_scanned, 3U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, EnforcesGlobalAndPerSourceEdgeBounds) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto makeTraversal = [] {
-			return logical::LogicalTraversal(std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-		};
-
-		auto globalBounds = directBounds();
-		globalBounds.maximum_edge_records = 1U;
-		auto globalTraversal = makeTraversal();
-		EXPECT_THROW(static_cast<void>(runtime.execute(globalTraversal, globalBounds,
-															 [](const LogicalPlanReadRow &) { return true; })),
-					 std::runtime_error);
-
-		graph.topology_records = 0U;
-		auto perSourceBounds = directBounds();
-		perSourceBounds.maximum_edges_per_node = 1U;
-		perSourceBounds.maximum_adjacency_page_records = 1U;
-		auto perSourceTraversal = makeTraversal();
-		std::vector<uint64_t> edges;
-		static_cast<void>(runtime.execute(perSourceTraversal, perSourceBounds,
-													 [&edges](const LogicalPlanReadRow &row) {
-														edges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-														return true;
-													 }));
-		EXPECT_EQ(edges, (std::vector<uint64_t>{10U, 12U}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, AcceptsUnorderedPhysicalTopologyAndHonorsEarlyStop) {
-		DirectEdgeGraph unordered = directGraph();
-		std::swap(unordered.edges[0], unordered.edges[1]);
-		DirectEdgeBackend unorderedBackend(unordered);
-		LogicalPlanReadRuntime unorderedRuntime(unorderedBackend);
-		logical::LogicalTraversal unorderedTraversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-		std::vector<uint64_t> unorderedEdges;
-		static_cast<void>(unorderedRuntime.execute(unorderedTraversal, directBounds(), [&unorderedEdges](const LogicalPlanReadRow &row) {
-			unorderedEdges.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-		EXPECT_EQ(unorderedEdges, (std::vector<uint64_t>{11U, 10U, 12U}));
-		EXPECT_EQ(unordered.edge_ref_scans, 1U);
-		EXPECT_EQ(unordered.topology_scans, 0U);
-
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-		std::vector<uint64_t> sourceNodes;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [](const LogicalPlanReadRow &) { return false; }));
-		EXPECT_EQ(graph.edge_ref_records, 1U);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.adjacency_scans, 0U);
-
-		graph.edge_ref_records = 0U;
-		logical::LogicalTraversal materializedSourceTraversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-		static_cast<void>(runtime.execute(materializedSourceTraversal, directBounds(),
-				[&sourceNodes](const LogicalPlanReadRow &row) {
-					sourceNodes.push_back(std::get<LogicalGraphNode>(row.values.at("a")).node_id);
-					return true;
-				}));
-		EXPECT_EQ(sourceNodes, (std::vector<uint64_t>{1U, 1U, 2U}));
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, LimitStopsTopologyOnlyDirectTraversalBeforeReadAhead) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		logical::LogicalLimit limit(std::move(traversal), 1);
-
-		const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
-		graph::debug::PerfTrace::reset();
-		graph::debug::PerfTrace::setValueCollectionEnabled(true);
-		std::vector<uint64_t> edgeIds;
-		static_cast<void>(runtime.execute(limit, directBounds(), [&edgeIds](const LogicalPlanReadRow &row) {
-			edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-			return true;
-		}));
-		const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
-		graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
-
-		EXPECT_EQ(edgeIds, (std::vector<uint64_t>{10U}));
-		// A topology-only direct traversal uses its single-record path, allowing
-		// LIMIT to stop the native cursor before it observes another Edge.
-		EXPECT_EQ(graph.edge_ref_scans, 1U);
-		EXPECT_EQ(graph.edge_ref_records, 1U);
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
-		// One shaped read is necessary to bind the returned relationship, but no
-		// additional relationship can be materialized after LIMIT has stopped it.
-		EXPECT_EQ(graph.edge_shaped_reads, 1U);
-		ASSERT_TRUE(trace.contains("logical_plan.direct_edge_records"));
-		EXPECT_EQ(trace.at("logical_plan.direct_edge_records").totalValue, 1);
-		ASSERT_TRUE(trace.contains("logical_plan.limit.delivered_rows"));
-		EXPECT_EQ(trace.at("logical_plan.limit.delivered_rows").totalValue, 1);
-		ASSERT_TRUE(trace.contains("logical_plan.limit.early_stop"));
-		EXPECT_EQ(trace.at("logical_plan.limit.early_stop").totalValue, 1);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, RejectsAnUnincrementableGlobalEdgeBound) {
-		DirectEdgeGraph graph = directGraph();
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "", "out");
-		auto bounds = directBounds();
-		bounds.maximum_edge_records = std::numeric_limits<size_t>::max();
-		EXPECT_THROW(static_cast<void>(runtime.execute(
-					 traversal, bounds, [](const LogicalPlanReadRow &) { return true; })),
-					 std::invalid_argument);
-		EXPECT_EQ(graph.topology_scans, 0U);
-		EXPECT_EQ(graph.edge_ref_scans, 0U);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchAdjacencyCountPreservesDirectionAndSelfLoopSemantics) {
-		for (const auto &[direction, expected]:
-				 std::vector<std::pair<std::string, int64_t>>{{"out", 4}, {"in", 4}, {"both", 7}}) {
-			DirectEdgeGraph graph = directGraph();
-			graph.enable_batch_adjacency_reference_scan = true;
-			graph.edges.emplace_back(13U, 1U, 1U, "KNOWS",
-					std::vector<storage::LogicalGraphPropertyEntry>{});
-			DirectEdgeBackend backend(graph);
-			LogicalPlanReadRuntime runtime(backend);
-			auto traversal = std::make_unique<logical::LogicalTraversal>(
-					std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", direction);
-			logical::LogicalAggregate aggregate(
-					std::move(traversal), {},
-					{{"count", std::make_shared<expressions::VariableReferenceExpression>("b"), "count", false}});
-
-			std::vector<PropertyValue> results;
-			static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-				results.push_back(std::get<PropertyValue>(row.values.at("count")));
+			logical::LogicalUnwind root(std::make_unique<logical::LogicalNodeScan>("n"), "id",
+										std::make_shared<expressions::VariableReferenceExpression>("n"), scalarAsRow);
+			std::vector<PropertyValue> ids;
+			static_cast<void>(runtime.execute(root, directBounds(), [&](const LogicalPlanReadRow &row) {
+				const auto &node = std::get<LogicalGraphNode>(row.values.at("n"));
+				const auto &id = std::get<PropertyValue>(row.values.at("id"));
+				EXPECT_EQ(id, PropertyValue(node.node_id));
+				ids.push_back(id);
 				return true;
 			}));
-
-			EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(expected)}) << direction;
-			EXPECT_EQ(graph.batch_adjacency_ref_scans, direction == "both" ? 2U : 1U) << direction;
-			EXPECT_EQ(graph.edge_ref_scans, 0U) << direction;
-			EXPECT_EQ(graph.adjacency_ref_scans, 0U) << direction;
-			EXPECT_GT(graph.node_existence_batch_probes, 0U) << direction;
+			EXPECT_EQ(ids, scalarAsRow
+								   ? (std::vector<PropertyValue>{PropertyValue(1), PropertyValue(2), PropertyValue(3)})
+								   : std::vector<PropertyValue>{});
 		}
 	}
 
-	TEST(LogicalPlanDirectEdgeRuntimeTest, BatchAdjacencyCountAppliesTypeLabelsAndEndpointLiveness) {
+	TEST(LogicalPlanDirectEdgeRuntimeTest, SubqueryOuterAndImportedRowsShareTheExecutionBudget) {
 		DirectEdgeGraph graph = directGraph();
-		graph.enable_batch_adjacency_reference_scan = true;
-		graph.edges.emplace_back(13U, 1U, 2U, "OTHER",
-				std::vector<storage::LogicalGraphPropertyEntry>{});
 		DirectEdgeBackend backend(graph);
 		LogicalPlanReadRuntime runtime(backend);
-		auto traversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out",
-				std::vector<std::string>{"Person"});
-		logical::LogicalAggregate aggregate(
-				std::move(traversal), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("b"), "count", false}});
-
-		std::vector<PropertyValue> results;
-		static_cast<void>(runtime.execute(aggregate, directBounds(), [&results](const LogicalPlanReadRow &row) {
-			results.push_back(std::get<PropertyValue>(row.values.at("count")));
-			return true;
-		}));
-
-		EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{2})});
-		EXPECT_EQ(graph.batch_adjacency_ref_scans, 1U);
-		EXPECT_GT(graph.node_label_sorted_reads, 0U);
-
-		graph.nodes.erase(3U);
-		auto invalidTraversal = std::make_unique<logical::LogicalTraversal>(
-				std::make_unique<logical::LogicalNodeScan>("a"), "a", "r", "b", "KNOWS", "out");
-		logical::LogicalAggregate invalidAggregate(
-				std::move(invalidTraversal), {},
-				{{"count", std::make_shared<expressions::VariableReferenceExpression>("b"), "count", false}});
-		EXPECT_THROW(static_cast<void>(runtime.execute(invalidAggregate, directBounds(),
-													   [](const LogicalPlanReadRow &) { return true; })),
-					 std::runtime_error);
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, NativeAdjacencySkipsTargetIoAfterEdgePredicatesRejectTheBatch) {
-		DirectEdgeGraph graph = directGraph();
-		graph.enable_adjacency_reference_pages = true;
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>(
-						"a", std::vector<std::string>{"Person"},
-						std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(int64_t{1})}}),
-				"a", "r", "b", "KNOWS", "out", std::vector<std::string>{},
-				std::vector<std::pair<std::string, PropertyValue>>{},
-				std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue()}});
-
-		std::vector<LogicalPlanReadRow> rows;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [&rows](const LogicalPlanReadRow &row) {
-			rows.push_back(row);
-			return true;
-		}));
-
-		EXPECT_TRUE(rows.empty());
-		EXPECT_EQ(graph.edge_property_column_batch_reads, 0U);
-		EXPECT_EQ(graph.node_existence_batch_probes, 0U);
-		EXPECT_EQ(graph.node_label_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_property_column_batch_reads, 1U); // Source predicate only.
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, NativeAdjacencyRejectsInvalidTargetPropertyDefinitions) {
-		for (const auto &targetProperties:
-			 {std::vector<std::pair<std::string, PropertyValue>>{{"", PropertyValue(int64_t{2})}},
-			  std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(int64_t{2})},
-																 {"rank", PropertyValue(int64_t{2})}}}) {
-			DirectEdgeGraph graph = directGraph();
-			graph.enable_adjacency_reference_pages = true;
-			DirectEdgeBackend backend(graph);
-			LogicalPlanReadRuntime runtime(backend);
-			logical::LogicalTraversal traversal(
-					std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Person"}), "a", "r", "b",
-					"KNOWS", "out", std::vector<std::string>{}, targetProperties);
-
-			EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(),
-														   [](const LogicalPlanReadRow &) { return true; })),
-						 std::invalid_argument);
-		}
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, NativeAdjacencyTreatsTargetLabelMissAsAFilter) {
-		DirectEdgeGraph graph = directGraph();
-		graph.enable_adjacency_reference_pages = true;
-		DirectEdgeBackend backend(graph);
-		LogicalPlanReadRuntime runtime(backend);
-		logical::LogicalTraversal traversal(
-				std::make_unique<logical::LogicalNodeScan>(
-						"a", std::vector<std::string>{},
-						std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(int64_t{1})}}),
-				"a", "r", "b", "KNOWS", "out", std::vector<std::string>{"Employee"});
-
-		std::vector<LogicalPlanReadRow> rows;
-		static_cast<void>(runtime.execute(traversal, directBounds(), [&rows](const LogicalPlanReadRow &row) {
-			rows.push_back(row);
-			return true;
-		}));
-
-		EXPECT_TRUE(rows.empty());
-		EXPECT_GT(graph.node_label_sorted_reads, 0U);
-		EXPECT_EQ(graph.node_read_ids, std::vector<uint64_t>{});
-	}
-
-	TEST(LogicalPlanDirectEdgeRuntimeTest, NativeAdjacencyRejectsMissingEndpointsAndBatchCardinalityChanges) {
-		auto makeTraversal = [] {
-			return logical::LogicalTraversal(
-					std::make_unique<logical::LogicalNodeScan>(
-							"a", std::vector<std::string>{},
-							std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(int64_t{1})}}),
-					"a", "r", "b", "KNOWS", "out");
+		const PropertyValue payload(std::string(3000U, 'p'));
+		const auto makeInput = [&]() {
+			return std::make_unique<logical::LogicalUnwind>(std::make_unique<logical::LogicalSingleRow>(), "outer",
+															std::vector<PropertyValue>{payload});
 		};
-		for (const auto &configure: {
-					 std::function<void(DirectEdgeGraph &)>{[](DirectEdgeGraph &graph) { graph.nodes.erase(3U); }},
-					 std::function<void(DirectEdgeGraph &)>{
-							 [](DirectEdgeGraph &graph) { graph.truncate_node_existence_batch = true; }},
-			 }) {
-			DirectEdgeGraph graph = directGraph();
-			graph.enable_adjacency_reference_pages = true;
-			configure(graph);
-			DirectEdgeBackend backend(graph);
-			LogicalPlanReadRuntime runtime(backend);
-			auto traversal = makeTraversal();
-			EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(),
-														   [](const LogicalPlanReadRow &) { return true; })),
-						 std::runtime_error);
+		std::vector<logical::LogicalProjectItem> items;
+		std::vector<std::unique_ptr<expressions::Expression>> arguments;
+		arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("outer"));
+		items.emplace_back(std::make_shared<expressions::FunctionCallExpression>("size", std::move(arguments)), "size");
+		auto body = std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalSingleRow>(),
+															  std::move(items));
+		logical::LogicalCallSubquery root(makeInput(), std::move(body), {"outer"}, {"size"});
+		auto independent = makeInput();
+		auto bounds = directBounds();
+		bounds.maximum_materialized_bytes = 5000U;
+		size_t delivered = 0U;
+		EXPECT_NO_THROW(static_cast<void>(runtime.execute(*independent, bounds, [&](const LogicalPlanReadRow &) {
+			++delivered;
+			return true;
+		})));
+		EXPECT_EQ(delivered, 1U);
+		delivered = 0U;
+		try {
+			static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &) {
+				++delivered;
+				return true;
+			}));
+			FAIL() << "outer and imported copies must share the execution allowance";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical-plan CallSubquery imports exceeded its shared byte bound");
+		}
+		EXPECT_EQ(delivered, 0U);
+		bounds.maximum_materialized_bytes = 16000U;
+		for (const bool continueVisiting: {false, true}) {
+			delivered = 0U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) {
+				++delivered;
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("outer")), payload);
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("size")), PropertyValue(3000));
+				return continueVisiting;
+			})));
+			EXPECT_EQ(delivered, 1U);
 		}
 	}
 
-	TEST(LogicalPlanDirectEdgeRuntimeTest, NativeAdjacencyRejectsCorruptedSelectedColumnCardinality) {
-		for (const bool corruptEdgeColumn: {false, true}) {
+	TEST(LogicalPlanDirectEdgeRuntimeTest, UnitSubqueryReleasesImportedRowsBeforeDownstreamSort) {
+		DirectEdgeGraph graph = directGraph();
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		const PropertyValue payload(std::string(3000U, 'p'));
+		auto input = std::make_unique<logical::LogicalUnwind>(std::make_unique<logical::LogicalSingleRow>(), "outer",
+															  std::vector<PropertyValue>{payload});
+		auto noRows = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalSingleRow>(),
+															   std::make_shared<expressions::LiteralExpression>(false));
+		auto unit = std::make_unique<logical::LogicalCallSubquery>(
+				std::move(input), std::move(noRows), std::vector<std::string>{"outer"}, std::vector<std::string>{});
+		std::vector<logical::LogicalSortItem> keys;
+		keys.emplace_back(std::make_shared<expressions::LiteralExpression>(std::string(2000U, 'k')), true);
+		logical::LogicalSort root(std::move(unit), std::move(keys));
+		auto bounds = directBounds();
+		// The allowance fits both 3 KiB input owners, including row metadata,
+		// or the output plus its 2 KiB key, but not the stale import plus Sort.
+		bounds.maximum_materialized_bytes = 7500U;
+		for (size_t execution = 0U; execution < 2U; ++execution) {
+			SCOPED_TRACE(execution);
+			size_t delivered = 0U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) {
+				++delivered;
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("outer")), payload);
+				return true;
+			})));
+			EXPECT_EQ(delivered, 1U);
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedSortPrefetchesOuterPropertyAndTransfersRows) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
+		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
+		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
+		logical::LogicalSort outer(std::move(inner), std::move(outerKeys));
+		auto constrained = directBounds();
+		// Include buffered/source/output row frames and key/Property slots.
+		constrained.maximum_materialized_bytes =
+				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 3U);
+		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
+		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 3U);
+		EXPECT_EQ(result.getRows()[2].at("n").asNode().getId(), 1U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+		EXPECT_EQ(graph.node_property_column_batch_keys, (std::vector<std::vector<std::string>>{{"priority"}}));
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, FilterBetweenSortsTransfersSelectedRowReservations) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
+		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
+		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+				std::make_unique<expressions::VariableReferenceExpression>("n", "priority"),
+				expressions::BinaryOperatorType::BOP_GREATER,
+				std::make_unique<expressions::LiteralExpression>(int64_t{1}));
+		auto filtered = std::make_unique<logical::LogicalFilter>(std::move(inner), std::move(predicate));
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n", "priority"), true);
+		logical::LogicalSort outer(std::move(filtered), std::move(outerKeys));
+		auto constrained = directBounds();
+		constrained.maximum_materialized_bytes = 3000U + sizeof(LogicalPlanReadRow);
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 3U);
+		EXPECT_EQ(result.getRows()[1].at("n").asNode().getId(), 1U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, ProjectBetweenSortsTransfersProjectedRowReservations) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
+		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
+		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		std::vector<logical::LogicalProjectItem> projectedItems;
+		projectedItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "m");
+		auto projected = std::make_unique<logical::LogicalProject>(std::move(inner), std::move(projectedItems));
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("m", "priority"), true);
+		logical::LogicalSort outer(std::move(projected), std::move(outerKeys));
+		auto constrained = directBounds();
+		// Include buffered/source/output row frames and key/Property slots.
+		constrained.maximum_materialized_bytes =
+				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U + sizeof(LogicalPlanReadRow) + resultEntityCapacityDelta(graph) + entityCacheMetadataDelta(graph);
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 3U);
+		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 2U);
+		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+		EXPECT_EQ(result.getRows()[2].at("m").asNode().getId(), 1U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, DistinctProjectBetweenSortsReleasesDuplicateRowReservations) {
+		DirectEdgeGraph graph = directGraph();
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		std::vector<logical::LogicalProjectItem> projectedItems;
+		projectedItems.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{1}), "value");
+		auto projected = std::make_unique<logical::LogicalProject>(std::move(inner), std::move(projectedItems), true);
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("value"), true);
+		logical::LogicalSort outer(std::move(projected), std::move(outerKeys));
+		auto constrained = directBounds();
+		constrained.maximum_materialized_bytes = 3000U;
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(1));
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, SortPreservesProjectedFilteredRowsWithoutOuterPrefetch) {
+		DirectEdgeGraph graph = directGraph();
+		graph.enable_property_tokens = true;
+		graph.nodes.at(1U).properties.emplace_back("priority", PropertyValue(3));
+		graph.nodes.at(2U).properties.emplace_back("priority", PropertyValue(1));
+		graph.nodes.at(3U).properties.emplace_back("priority", PropertyValue(2));
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		std::vector<logical::LogicalProjectItem> projectedItems;
+		projectedItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "m");
+		auto projected = std::make_unique<logical::LogicalProject>(std::move(inner), std::move(projectedItems));
+		auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+				std::make_unique<expressions::VariableReferenceExpression>("m", "priority"),
+				expressions::BinaryOperatorType::BOP_GREATER,
+				std::make_unique<expressions::LiteralExpression>(int64_t{1}));
+		auto filtered = std::make_unique<logical::LogicalFilter>(std::move(projected), std::move(predicate));
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		logical::LogicalSort outer(std::move(filtered), std::move(outerKeys));
+		auto constrained = directBounds();
+		// Include buffered/source/output row frames and key/Property slots.
+		constrained.maximum_materialized_bytes =
+				8U * sizeof(LogicalPlanReadRow) + 12U * sizeof(PropertyValue) + 824U;
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows()[0].at("m").asNode().getId(), 1U);
+		EXPECT_EQ(result.getRows()[1].at("m").asNode().getId(), 3U);
+		EXPECT_EQ(graph.node_property_column_batch_reads, 1U);
+		EXPECT_EQ(graph.node_property_point_reads, 0U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, SortReceivesWindowedRowsThroughSkipAndLimit) {
+		DirectEdgeGraph graph = directGraph();
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		auto skipped = std::make_unique<logical::LogicalSkip>(std::move(inner), 1);
+		auto limited = std::make_unique<logical::LogicalLimit>(std::move(skipped), 1);
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		logical::LogicalSort outer(std::move(limited), std::move(outerKeys));
+		auto constrained = directBounds();
+		constrained.maximum_materialized_bytes = 3000U;
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 2U);
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge) {
+		DirectEdgeGraph graph = directGraph();
+		DirectEdgeBackend backend(graph);
+		LogicalPlanReadRuntime runtime(backend);
+		std::vector<logical::LogicalSortItem> innerKeys;
+		innerKeys.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t{0}), true);
+		auto inner = std::make_unique<logical::LogicalSort>(std::make_unique<logical::LogicalNodeScan>("n"),
+															std::move(innerKeys));
+		auto expanded = std::make_unique<logical::LogicalUnwind>(
+				std::move(inner), "item", std::vector<PropertyValue>{PropertyValue(2), PropertyValue(1)});
+		std::vector<logical::LogicalSortItem> outerKeys;
+		outerKeys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("item"), true);
+		logical::LogicalSort outer(std::move(expanded), std::move(outerKeys));
+		auto constrained = directBounds();
+		// Six expanded rows coexist with retained source frames, sorting keys
+		// and result publication. Account for actual platform slot sizes.
+		constrained.maximum_materialized_bytes =
+				16U * sizeof(LogicalPlanReadRow) + 24U * sizeof(PropertyValue) + 3648U;
+		const QueryResult result = runtime.executeToQueryResult(outer, constrained);
+		ASSERT_EQ(result.rowCount(), 6U);
+		for (size_t index = 0U; index < 6U; ++index) {
+			EXPECT_EQ(result.getRows()[index].at("item").asPrimitive(), PropertyValue(index < 3U ? 1 : 2));
+			EXPECT_EQ(result.getRows()[index].at("n").asNode().getId(), index % 3U + 1U);
+		}
+	}
+
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, OwnedSubqueryReturnsPreserveLargePayloadDuplicatesAndVisitorStop) {
+		for (const bool stopEarly: {false, true}) {
+			SCOPED_TRACE(stopEarly);
 			DirectEdgeGraph graph = directGraph();
-			graph.enable_adjacency_reference_pages = true;
-			graph.truncate_edge_property_batch = corruptEdgeColumn;
-			graph.truncate_node_property_batch = !corruptEdgeColumn;
 			DirectEdgeBackend backend(graph);
 			LogicalPlanReadRuntime runtime(backend);
-			logical::LogicalTraversal traversal(
-					std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Person"}), "a", "r", "b",
-					"KNOWS", "out", std::vector<std::string>{},
-					std::vector<std::pair<std::string, PropertyValue>>{{"rank", PropertyValue(int64_t{2})}},
-					std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(int64_t{7})}});
+			const PropertyValue payload(std::string(8192U, 'x'));
+			auto input = std::make_unique<logical::LogicalUnwind>(
+					std::make_unique<logical::LogicalSingleRow>(), "outer",
+					std::vector<PropertyValue>{PropertyValue(1), PropertyValue(2)});
+			auto body =
+					std::make_unique<logical::LogicalUnwind>(std::make_unique<logical::LogicalSingleRow>(), "returned",
+															 std::vector<PropertyValue>{payload, payload});
+			logical::LogicalCallSubquery root(std::move(input), std::move(body), {"outer"}, {"returned"});
+			std::vector<PropertyValue> outers;
+			static_cast<void>(runtime.execute(root, directBounds(), [&](const LogicalPlanReadRow &row) {
+				outers.push_back(std::get<PropertyValue>(row.values.at("outer")));
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("returned")), payload);
+				EXPECT_EQ(row.values.size(), 2U);
+				return !stopEarly;
+			}));
+			EXPECT_EQ(outers, stopEarly ? (std::vector<PropertyValue>{PropertyValue(1)})
+										: (std::vector<PropertyValue>{PropertyValue(1), PropertyValue(1),
+																	  PropertyValue(2), PropertyValue(2)}));
+		}
+	}
 
-			EXPECT_THROW(static_cast<void>(runtime.execute(traversal, directBounds(),
-														   [](const LogicalPlanReadRow &) { return true; })),
+	TEST(LogicalPlanDirectEdgeRuntimeTest, CorrelatedSubqueryAdmitsCombinedOutputBesideLiveImports) {
+		for (const bool sorted: {false, true}) {
+			SCOPED_TRACE(sorted);
+			DirectEdgeGraph graph = directGraph();
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			auto input = std::make_unique<logical::LogicalUnwind>(
+					std::make_unique<logical::LogicalSingleRow>(), "outer",
+					std::vector<PropertyValue>{PropertyValue(std::string(3000U, 'o'))});
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(std::make_shared<expressions::LiteralExpression>(PropertyValue(std::string(3000U, 'r'))),
+							   "returned");
+			auto body = std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalSingleRow>(),
+																  std::move(items));
+			std::unique_ptr<logical::LogicalOperator> plan = std::make_unique<logical::LogicalCallSubquery>(
+					std::move(input), std::move(body), std::vector<std::string>{"outer"},
+					std::vector<std::string>{"returned"});
+			if (sorted) {
+				std::vector<logical::LogicalSortItem> keys;
+				keys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("returned"), true);
+				plan = std::make_unique<logical::LogicalSort>(std::move(plan), std::move(keys));
+			}
+			auto constrained = directBounds();
+			constrained.maximum_materialized_bytes = 10000U + sizeof(LogicalPlanReadRow);
+			size_t delivered = 0U;
+			try {
+				static_cast<void>(runtime.execute(*plan, constrained, [&](const LogicalPlanReadRow &) {
+					++delivered;
+					return true;
+				}));
+				FAIL() << "subquery output must overlap its live outer and import rows";
+			} catch (const std::runtime_error &error) {
+				EXPECT_TRUE(std::string(error.what()) ==
+									"logical-plan CallSubquery output exceeded its shared byte bound" ||
+							std::string(error.what()) == "shared materialization exceeded its byte bound");
+			}
+			EXPECT_EQ(delivered, 0U);
+			constrained.maximum_materialized_bytes = sorted ? 30000U : 20000U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan, constrained, [&](const LogicalPlanReadRow &row) {
+				++delivered;
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("outer")), PropertyValue(std::string(3000U, 'o')));
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("returned")), PropertyValue(std::string(3000U, 'r')));
+				return true;
+			})));
+			EXPECT_EQ(delivered, 1U);
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, JoinBatchBudgetStillRejectsOversizedRowsDiscardedBySkip) {
+		for (const bool optional: {false, true}) {
+			for (const int64_t skip: {0, 1}) {
+				for (const size_t budget: {size_t{5000U}, size_t{12000U}}) {
+					SCOPED_TRACE(optional);
+					SCOPED_TRACE(skip);
+					SCOPED_TRACE(budget);
+					DirectEdgeGraph graph = directGraph();
+					DirectEdgeBackend backend(graph);
+					LogicalPlanReadRuntime runtime(backend);
+					auto left = std::make_unique<logical::LogicalUnwind>(
+							std::make_unique<logical::LogicalSingleRow>(), "left",
+							std::vector<PropertyValue>{PropertyValue(std::string(3000U, 'a'))});
+					auto right = std::make_unique<logical::LogicalUnwind>(
+							std::make_unique<logical::LogicalSingleRow>(), "right",
+							std::vector<PropertyValue>{PropertyValue(std::string(3000U, 'b'))});
+					std::unique_ptr<logical::LogicalOperator> joined;
+					if (optional)
+						joined = std::make_unique<logical::LogicalOptionalMatch>(std::move(left), std::move(right));
+					else
+						joined = std::make_unique<logical::LogicalJoin>(std::move(left), std::move(right));
+					logical::LogicalSkip root(std::move(joined), skip);
+					auto bounds = directBounds();
+					bounds.maximum_materialized_bytes = budget;
+					size_t delivered = 0U;
+					const auto run = [&] {
+						return runtime.execute(root, bounds, [&](const LogicalPlanReadRow &row) {
+							++delivered;
+							EXPECT_EQ(std::get<PropertyValue>(row.values.at("left")),
+									  PropertyValue(std::string(3000U, 'a')));
+							EXPECT_EQ(std::get<PropertyValue>(row.values.at("right")),
+									  PropertyValue(std::string(3000U, 'b')));
+							return true;
+						});
+					};
+					if (budget == 5000U) {
+						try {
+							static_cast<void>(run());
+							FAIL() << "expected joined row rejection";
+						} catch (const std::runtime_error &error) {
+							// The retained right side and left probe now exhaust the common
+							// allowance before SKIP can buffer the oversized combined row.
+							EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+						}
+						EXPECT_EQ(delivered, 0U);
+					} else {
+						EXPECT_NO_THROW(static_cast<void>(run()));
+						EXPECT_EQ(delivered, skip == 0 ? 1U : 0U);
+					}
+				}
+			}
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, NestedJoinAndOptionalBuffersShareTheExecutionBudget) {
+		for (const bool optional: {false, true}) {
+			SCOPED_TRACE(optional);
+			DirectEdgeGraph graph = directGraph();
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			const auto makeRows = [](const std::string &column, char first) {
+				return std::make_unique<logical::LogicalUnwind>(
+						std::make_unique<logical::LogicalSingleRow>(), column,
+						std::vector<PropertyValue>{PropertyValue(std::string(1000U, first)),
+												   PropertyValue(std::string(1000U, static_cast<char>(first + 1)))});
+			};
+			const auto makeJoin = [optional](std::unique_ptr<logical::LogicalOperator> left,
+											 std::unique_ptr<logical::LogicalOperator> right)
+					-> std::unique_ptr<logical::LogicalOperator> {
+				if (optional)
+					return std::make_unique<logical::LogicalOptionalMatch>(std::move(left), std::move(right));
+				return std::make_unique<logical::LogicalJoin>(std::move(left), std::move(right));
+			};
+			auto independent = makeJoin(std::make_unique<logical::LogicalSingleRow>(), makeRows("inner", 'c'));
+			auto nested = makeJoin(makeJoin(std::make_unique<logical::LogicalSingleRow>(), makeRows("inner", 'c')),
+								   makeRows("outer", 'a'));
+			auto bounds = directBounds();
+			// Both retained right rows coexist with a separately owned output
+			// row until the public visitor consumes it.
+			bounds.maximum_materialized_bytes = 5000U;
+			size_t delivered = 0U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(*independent, bounds, [&](const LogicalPlanReadRow &) {
+				++delivered;
+				return true;
+			})));
+			EXPECT_EQ(delivered, 2U);
+			delivered = 0U;
+			try {
+				static_cast<void>(runtime.execute(*nested, bounds, [&](const LogicalPlanReadRow &) {
+					++delivered;
+					return true;
+				}));
+				FAIL() << "nested retained sides must share one execution allowance";
+			} catch (const std::runtime_error &error) {
+				EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+			}
+			EXPECT_EQ(delivered, 0U);
+			bounds.maximum_materialized_bytes = 12000U;
+			for (const bool stopAfterFirst: {true, false}) {
+				SCOPED_TRACE(stopAfterFirst);
+				std::vector<std::string> order;
+				EXPECT_NO_THROW(static_cast<void>(runtime.execute(*nested, bounds, [&](const LogicalPlanReadRow &row) {
+					const auto inner =
+							std::get<std::string>(std::get<PropertyValue>(row.values.at("inner")).getVariant());
+					const auto outer =
+							std::get<std::string>(std::get<PropertyValue>(row.values.at("outer")).getVariant());
+					order.push_back(std::string{inner.front(), outer.front()});
+					return !stopAfterFirst;
+				})));
+				EXPECT_EQ(order, stopAfterFirst ? std::vector<std::string>{"ca"}
+												: (std::vector<std::string>{"ca", "cb", "da", "db"}));
+			}
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, JoinChargesBufferedRowsOnceAndStillEnforcesItsByteBound) {
+		const std::vector<PropertyValue> values{PropertyValue(std::string(4096U, 'a')),
+												PropertyValue(std::string(4096U, 'a')),
+												PropertyValue(std::string(4096U, 'b'))};
+		for (const bool optional: {false, true}) {
+			for (const size_t byteBudget: {size_t{20U * 1024U}, size_t{8U * 1024U}}) {
+				SCOPED_TRACE(optional);
+				SCOPED_TRACE(byteBudget);
+				DirectEdgeGraph graph = directGraph();
+				DirectEdgeBackend backend(graph);
+				LogicalPlanReadRuntime runtime(backend);
+				auto right = std::make_unique<logical::LogicalUnwind>(std::make_unique<logical::LogicalSingleRow>(),
+																	  "value", values);
+				std::unique_ptr<logical::LogicalOperator> root;
+				if (optional) {
+					root = std::make_unique<logical::LogicalOptionalMatch>(
+							std::make_unique<logical::LogicalSingleRow>(), std::move(right));
+				} else {
+					root = std::make_unique<logical::LogicalJoin>(std::make_unique<logical::LogicalSingleRow>(),
+																  std::move(right));
+				}
+				LogicalPlanReadRuntimeBounds bounds = directBounds();
+				bounds.maximum_materialized_bytes = byteBudget;
+				std::vector<PropertyValue> delivered;
+				const auto run = [&]() {
+					return runtime.execute(*root, bounds, [&](const LogicalPlanReadRow &row) {
+						delivered.push_back(std::get<PropertyValue>(row.values.at("value")));
+						return true;
+					});
+				};
+				if (byteBudget == 20U * 1024U) {
+					// Three 4 KiB retained right rows and a 4 KiB copied output row
+					// coexist; row/index overhead makes 16 KiB insufficient.
+					EXPECT_NO_THROW(static_cast<void>(run()));
+					EXPECT_EQ(delivered, values);
+				} else {
+					try {
+						static_cast<void>(run());
+						FAIL() << "right-side rows and index must stay within the byte budget";
+					} catch (const std::runtime_error &error) {
+						// UNWIND now admits the next owned payload before copying it,
+						// so shared-budget rejection may precede the receiving buffer check.
+						const std::string message(error.what());
+						EXPECT_TRUE(message == "shared materialization exceeded its byte bound" ||
+							message == (optional ? "logical-plan OptionalMatch exceeded its materialized byte bound"
+								: "logical-plan Join exceeded its materialized byte bound"));
+					}
+					EXPECT_TRUE(delivered.empty());
+				}
+			}
+		}
+	}
+
+	TEST(LogicalPlanDirectEdgeRuntimeTest, JoinAndOptionalAdmitCombinedRowsWithRetainedPatternBytes) {
+		for (const auto [optional, sorted]:
+			 {std::pair{false, false}, std::pair{false, true}, std::pair{true, false}, std::pair{true, true}}) {
+			SCOPED_TRACE(optional);
+			SCOPED_TRACE(sorted);
+			DirectEdgeGraph graph = directGraph();
+			DirectEdgeBackend backend(graph);
+			LogicalPlanReadRuntime runtime(backend);
+			auto makePlan = [&]() -> std::unique_ptr<logical::LogicalOperator> {
+				auto left = std::make_unique<logical::LogicalUnwind>(
+						std::make_unique<logical::LogicalSingleRow>(), "left_value",
+						std::vector<PropertyValue>{PropertyValue(std::string(3000U, 'l'))});
+				auto right = std::make_unique<logical::LogicalUnwind>(
+						std::make_unique<logical::LogicalSingleRow>(), "right_value",
+						std::vector<PropertyValue>{PropertyValue(std::string(3000U, 'r'))});
+				std::unique_ptr<logical::LogicalOperator> root;
+				if (optional)
+					root = std::make_unique<logical::LogicalOptionalMatch>(std::move(left), std::move(right));
+				else
+					root = std::make_unique<logical::LogicalJoin>(std::move(left), std::move(right));
+				if (sorted) {
+					std::vector<logical::LogicalSortItem> keys;
+					keys.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("left_value"), true);
+					root = std::make_unique<logical::LogicalSort>(std::move(root), std::move(keys));
+				}
+				return root;
+			};
+			auto plan = makePlan();
+			LogicalPlanReadRuntimeBounds bounds = directBounds();
+			bounds.maximum_materialized_bytes = 8000U;
+			size_t delivered = 0U;
+			EXPECT_THROW(static_cast<void>(runtime.execute(*plan, bounds,
+														   [&](const LogicalPlanReadRow &) {
+															   ++delivered;
+															   return true;
+														   })),
 						 std::runtime_error);
+			EXPECT_EQ(delivered, 0U);
+			bounds.maximum_materialized_bytes = sorted ? 24000U : 16000U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(*plan, bounds, [&](const LogicalPlanReadRow &row) {
+				++delivered;
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("left_value")), PropertyValue(std::string(3000U, 'l')));
+				EXPECT_EQ(std::get<PropertyValue>(row.values.at("right_value")),
+						  PropertyValue(std::string(3000U, 'r')));
+				return true;
+			})));
+			EXPECT_EQ(delivered, 1U);
 		}
 	}
 

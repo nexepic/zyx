@@ -14,6 +14,7 @@
 #include <set>
 #include <stdexcept>
 #include <tuple>
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::storage {
 
@@ -670,6 +671,7 @@ namespace graph::storage {
 									"relocatable metadata batch uses a stale Superblock generation");
 		}
 		try {
+			debug::ScopedPerfTimer timer("native_graph.write.metadata.publication");
 			bootstrap.publish(candidate_, failpoint);
 			published_ = true;
 		} catch (...) {

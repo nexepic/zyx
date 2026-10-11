@@ -31,6 +31,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 #include "DatabaseBulkInternal.hpp"
 #include "PreparedQueryInternal.hpp"
@@ -562,19 +563,20 @@ namespace zyx {
 			}
 		}
 
-		void validateLogicalAlgorithmEdge(const graph::storage::LogicalGraphEdge &edge, uint64_t sourceNodeId) {
+		void validateLogicalAlgorithmEdge(const graph::storage::LogicalGraphEdgeTopology &edge, uint64_t sourceNodeId) {
 			if (edge.edge_id == 0U || edge.source_node_id != sourceNodeId || edge.target_node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid outgoing Edge");
 			}
 		}
 
 		[[nodiscard]] std::optional<graph::storage::LogicalGraphNode>
-		findLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId) {
+		findLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId,
+				const graph::storage::EntityReadShape &shape = {.include_labels = true, .all_properties = true}) {
 			if (nodeId == 0U) {
 				return std::nullopt;
 			}
 			const graph::storage::LogicalGraphNodePage page =
-					snapshot.scanNodesAfter(nodeId - 1U, 1U, LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES);
+					snapshot.scanNodesAfter(nodeId - 1U, 1U, LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES, shape);
 			if (page.nodes.size() > 1U || page.metadata_pages_visited > LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES) {
 				throw std::runtime_error("logical graph backend returned an invalid bounded Node page");
 			}
@@ -611,8 +613,9 @@ namespace zyx {
 		}
 
 		[[nodiscard]] graph::storage::LogicalGraphNode
-		readRequiredLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId) {
-			const graph::storage::LogicalGraphNode node = snapshot.readNode(nodeId);
+		readRequiredLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId,
+				const graph::storage::EntityReadShape &shape = {.include_labels = true, .all_properties = true}) {
+			const graph::storage::LogicalGraphNode node = snapshot.readNodeShaped(nodeId, shape);
 			if (node.node_id != nodeId) {
 				throw std::runtime_error("logical graph backend resolved a mismatched Node identity");
 			}
@@ -629,12 +632,12 @@ namespace zyx {
 			while (true) {
 				const size_t remaining = LOGICAL_ALGORITHM_MAXIMUM_EDGES_PER_NODE - visited;
 				const size_t pageRecords = std::min(LOGICAL_ALGORITHM_ADJACENCY_PAGE_RECORDS, remaining);
-				const graph::storage::LogicalGraphAdjacencyPage page = snapshot.scanAdjacentEdges(
+				const graph::storage::LogicalGraphAdjacencyTopologyPage page = snapshot.scanAdjacentEdgeTopologies(
 						sourceNodeId, graph::storage::LogicalGraphReadDirection::LGRD_OUTGOING, continuation, pageRecords);
 				if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
 					throw std::runtime_error("logical graph backend returned an invalid adjacency page");
 				}
-				for (const graph::storage::LogicalGraphEdge &edge: page.edges) {
+				for (const graph::storage::LogicalGraphEdgeTopology &edge: page.edges) {
 					validateLogicalAlgorithmEdge(edge, sourceNodeId);
 					if (previousEdgeId != 0U && edge.edge_id <= previousEdgeId) {
 						throw std::runtime_error("logical graph backend returned non-monotonic Edge IDs during traversal");
@@ -662,9 +665,10 @@ namespace zyx {
 
 		[[nodiscard]] std::vector<Node>
 		materializeLogicalAlgorithmPath(const graph::storage::LogicalGraphReadSnapshot &snapshot,
-															 const std::unordered_map<uint64_t, uint64_t> &parents, uint64_t endNodeId) {
+													 const std::unordered_map<uint64_t, uint64_t> &parents, uint64_t endNodeId) {
 			std::vector<uint64_t> reverseIds;
-			reverseIds.reserve(parents.size());
+			// The explored graph can be much larger than the returned path. Grow
+			// storage with the actual parent chain instead of reserving every visit.
 			uint64_t current = endNodeId;
 			while (current != 0U) {
 				if (reverseIds.size() == parents.size()) {
@@ -681,9 +685,28 @@ namespace zyx {
 
 			std::vector<Node> path;
 			path.reserve(reverseIds.size());
-			for (const uint64_t nodeId: reverseIds) {
-				const graph::storage::LogicalGraphNode node = readRequiredLogicalAlgorithmNode(snapshot, nodeId);
-				path.push_back(toPublicLogicalAlgorithmNode(node));
+			constexpr size_t maximumBatchRows = 512U;
+			for (size_t offset = 0U; offset < reverseIds.size(); offset += maximumBatchRows) {
+				const size_t count = std::min(maximumBatchRows, reverseIds.size() - offset);
+				std::vector<std::pair<uint64_t, size_t>> ordered;
+				ordered.reserve(count);
+				for (size_t row = 0U; row < count; ++row) ordered.emplace_back(reverseIds[offset + row], row);
+				std::sort(ordered.begin(), ordered.end());
+				std::vector<uint64_t> ids;
+				ids.reserve(count);
+				for (const auto &[id, row]: ordered) ids.push_back(id);
+				const auto nodes = snapshot.readNodesShapedSorted(ids, {.include_labels = true, .all_properties = true});
+				if (nodes.size() != count) {
+					throw std::runtime_error("logical graph shortest-path Node batch returned an invalid cardinality");
+				}
+				std::vector<Node> materialized(count);
+				for (size_t row = 0U; row < count; ++row) {
+					if (nodes[row].node_id != ordered[row].first) {
+						throw std::runtime_error("logical graph shortest-path Node batch returned a mismatched identity");
+					}
+					materialized[ordered[row].second] = toPublicLogicalAlgorithmNode(nodes[row]);
+				}
+				for (Node &node: materialized) path.push_back(std::move(node));
 			}
 			return path;
 		}
@@ -701,12 +724,12 @@ namespace zyx {
 			const uint64_t startNodeId = static_cast<uint64_t>(startId);
 			const uint64_t endNodeId = static_cast<uint64_t>(endId);
 			const std::optional<graph::storage::LogicalGraphNode> start =
-					findLogicalAlgorithmNode(*snapshot, startNodeId);
+					findLogicalAlgorithmNode(*snapshot, startNodeId, {});
 			if (!start.has_value()) {
 				return {};
 			}
 			if (startNodeId == endNodeId) {
-				return {toPublicLogicalAlgorithmNode(*start)};
+				return {toPublicLogicalAlgorithmNode(readRequiredLogicalAlgorithmNode(*snapshot, startNodeId))};
 			}
 			if (maxDepth <= 0) {
 				return {};
@@ -726,7 +749,7 @@ namespace zyx {
 				const QueueEntry current = queue.front();
 				queue.pop_front();
 				if (current.node_id != startNodeId) {
-					static_cast<void>(readRequiredLogicalAlgorithmNode(*snapshot, current.node_id));
+					static_cast<void>(readRequiredLogicalAlgorithmNode(*snapshot, current.node_id, {}));
 				}
 				if (current.depth >= maxDepth) {
 					continue;
@@ -734,7 +757,7 @@ namespace zyx {
 
 				bool found = false;
 				static_cast<void>(visitLogicalAlgorithmOutgoingEdges(*snapshot, current.node_id,
-																					  [&](const graph::storage::LogicalGraphEdge &edge) {
+																					  [&](const graph::storage::LogicalGraphEdgeTopology &edge) {
 					if (parents.contains(edge.target_node_id)) {
 						return true;
 					}
@@ -789,7 +812,7 @@ namespace zyx {
 					return;
 				}
 				static_cast<void>(visitLogicalAlgorithmOutgoingEdges(
-						*snapshot, currentNodeId, [&](const graph::storage::LogicalGraphEdge &edge) {
+						*snapshot, currentNodeId, [&](const graph::storage::LogicalGraphEdgeTopology &edge) {
 						if (visited.contains(edge.target_node_id)) {
 							return true;
 						}

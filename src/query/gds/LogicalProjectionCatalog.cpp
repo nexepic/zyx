@@ -163,6 +163,12 @@ namespace graph::query::gds {
 			throw std::invalid_argument("logical projection catalog name must not be empty");
 		}
 		const storage::LogicalGraphMutationFence revision = requireRevision(snapshot);
+		const auto checkPreparation = [&] {
+			if (checkpoint) checkpoint();
+			if (requireRevision(snapshot) != revision) {
+				throw std::runtime_error("logical projection snapshot changed during catalog preparation");
+			}
+		};
 		const auto buildStart = std::chrono::steady_clock::now();
 		std::shared_ptr<const LogicalGraphProjection> projection = std::make_shared<LogicalGraphProjection>(
 				LogicalGraphProjection::build(snapshot, spec, bounds, checkpoint));
@@ -173,13 +179,9 @@ namespace graph::query::gds {
 				static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 											 std::chrono::system_clock::now().time_since_epoch())
 											 .count());
-		if (checkpoint) {
-			checkpoint();
-		}
+		checkPreparation();
 		std::unique_lock lock(mutex_);
-		if (checkpoint) {
-			checkpoint();
-		}
+		checkPreparation();
 		if (entries_.contains(spec.name)) {
 			throw std::invalid_argument("logical projection catalog already contains this name");
 		}

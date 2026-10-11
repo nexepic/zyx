@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -60,7 +62,8 @@ static_assert(RSS_ENTITY_LABEL_SET_MAX_RECORD_BYTES - RSS_ENTITY_LABEL_SET_HEADE
 	class EntityLabelSetCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(std::span<const uint64_t> labelIds);
-		[[nodiscard]] static std::vector<uint64_t> decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static std::vector<uint64_t> decode(std::span<const std::byte> bytes,
+			const std::function<void(size_t)> &bufferAdmission = {});
 	};
 
 } // namespace graph::storage

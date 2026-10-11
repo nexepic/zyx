@@ -14,6 +14,7 @@
 #include <limits>
 #include <stdexcept>
 #include <utility>
+#include <type_traits>
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
@@ -89,10 +90,10 @@ namespace graph::storage {
 
 	std::vector<PropertyCollectionRootEntry>
 	PageBackedGraphReadAdapter::readProperties(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
-											   PropertyCollectionRootScanCursor *scanCursor) const {
+											   PropertyCollectionRootScanCursor *scanCursor, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		std::optional<PropertyCollectionRoot> root = scanCursor == nullptr
-															 ? properties_.readEntityOptional(snapshot, key)
-															 : scanCursor->readEntityOptional(snapshot, key);
+															 ? properties_.readEntityOptional(snapshot, key, admission, slotsAdmission)
+															 : scanCursor->readEntityOptional(snapshot, key, admission, slotsAdmission);
 		if (!root.has_value()) {
 			return {};
 		}
@@ -110,9 +111,9 @@ namespace graph::storage {
 	PageBackedGraphEdge
 	PageBackedGraphReadAdapter::materializeEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
 												const EdgeEntityRecord &record,
-												PropertyCollectionRootScanCursor *scanCursor) const {
+												PropertyCollectionRootScanCursor *scanCursor, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		return {edgeId, record.source_node_id, record.target_node_id, record.type_id,
-				readProperties(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, scanCursor)};
+				readProperties(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, scanCursor, admission, slotsAdmission)};
 	}
 
 	PageBackedGraphNode PageBackedGraphReadAdapter::readNode(const MetadataSnapshotPin &snapshot,
@@ -225,34 +226,36 @@ namespace graph::storage {
 	}
 
 	std::vector<PropertyCollectionRootEntry> PageBackedGraphReadAdapter::readNodeProperties(
-			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, NativeReadSession *session) const {
+			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
 		static_cast<void>(readNodeRecord(snapshot, nodeId, &active));
 		return readProperties(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId},
-																										 &active.propertyCursor(properties_, snapshot));
+																										 &active.propertyCursor(properties_, snapshot), admission);
 	}
 
 	std::vector<std::vector<PropertyCollectionRootEntry>> PageBackedGraphReadAdapter::readNodePropertiesSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			NativeReadSession *session) const {
+			NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
-		std::vector<std::vector<PropertyCollectionRootEntry>> result(nodeIds.size());
 		uint64_t previousId = 0U;
+		for (const uint64_t id : nodeIds) {
+			if (id == 0U || id <= previousId) {
+				throwAdapterError(FormatError::FERR_INVALID_HEADER,
+					"page-backed sorted Node Property root read requires strictly increasing Node IDs");
+			}
+			previousId = id;
+		}
+		std::vector<std::vector<PropertyCollectionRootEntry>> result(nodeIds.size());
 		PropertyCollectionRootScanCursor &cursor = active.propertyCursor(properties_, snapshot);
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
 			const uint64_t nodeId = nodeIds[index];
-			if (nodeId == 0U || nodeId <= previousId) {
-				throwAdapterError(FormatError::FERR_INVALID_HEADER,
-						"page-backed sorted Node Property root read requires strictly increasing Node IDs");
-			}
-			previousId = nodeId;
-			if (const auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId});
+			if (auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}, admission);
 				root.has_value()) {
-				result[index] = root->entries;
+				result[index] = std::move(root->entries);
 			}
 		}
 		return result;
@@ -335,7 +338,7 @@ namespace graph::storage {
 	}
 
 	bool PageBackedGraphReadAdapter::nodePropertyExists(const MetadataSnapshotPin &snapshot, const uint64_t nodeId,
-																		 const uint32_t propertyToken, NativeReadSession *session) const {
+																		 const uint32_t propertyToken, NativeReadSession *session, const bool requireNonNull) const {
 		if (nodeId == 0U || propertyToken == 0U) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 								"page-backed Node Property presence read requires nonzero identifiers");
@@ -345,15 +348,16 @@ namespace graph::storage {
 		activeSession.bind(snapshot);
 		if (const auto cachedValue = activeSession.property(false, nodeId, propertyToken); cachedValue.has_value()) {
 			const bool present = cachedValue->has_value();
+			if (requireNonNull) return present && !std::holds_alternative<std::monostate>((*cachedValue)->getVariant());
 			activeSession.putPropertyPresence(false, nodeId, propertyToken, present);
 			return present;
 		}
 		if (const auto cached = activeSession.propertyPresence(false, nodeId, propertyToken); cached.has_value()) {
-			return *cached;
+			if (!requireNonNull || !*cached) return *cached;
 		}
 		const bool present = activeSession.propertyCursor(properties_, snapshot).readEntityPropertyExists(
-				snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}, propertyToken);
-		activeSession.putPropertyPresence(false, nodeId, propertyToken, present);
+				snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}, propertyToken, requireNonNull);
+		if (!requireNonNull || present) activeSession.putPropertyPresence(false, nodeId, propertyToken, present);
 		return present;
 	}
 
@@ -416,7 +420,8 @@ namespace graph::storage {
 	std::vector<std::vector<std::optional<PropertyValue>>>
 	PageBackedGraphReadAdapter::readNodePropertyColumnsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			const std::span<const uint32_t> propertyTokens, NativeReadSession *session) const {
+			const std::span<const uint32_t> propertyTokens, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission) const {
 		if (propertyTokens.empty()) {
 			return {};
 		}
@@ -427,12 +432,6 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							  "page-backed Node Property column read result size overflows");
 		}
-		std::vector<std::vector<std::optional<PropertyValue>>> columns(
-				propertyTokens.size(), std::vector<std::optional<PropertyValue>>(nodeIds.size()));
-		std::vector<uint64_t> missingIds;
-		std::vector<size_t> missingOrdinals;
-		missingIds.reserve(nodeIds.size());
-		missingOrdinals.reserve(nodeIds.size());
 		uint64_t previousId = 0U;
 		uint32_t previousToken = 0U;
 		for (const uint32_t token: propertyTokens) {
@@ -448,21 +447,38 @@ namespace graph::storage {
 								  "page-backed Node Property columns require strictly increasing Node IDs");
 			}
 			previousId = nodeIds[owner];
-			bool missing = false;
+		}
+		std::vector<std::vector<std::optional<PropertyValue>>> columns;
+		columns.reserve(propertyTokens.size());
+		for (size_t token = 0U; token < propertyTokens.size(); ++token) columns.emplace_back(nodeIds.size());
+		const auto needsDecode = [&](uint64_t id) {
+			return std::ranges::any_of(propertyTokens, [&](uint32_t token) {
+				if (active.hasProperty(false, id, token)) return false;
+				const auto present = active.propertyPresence(false, id, token);
+				return !present.has_value() || *present;
+			});
+		};
+		const size_t missingCount = static_cast<size_t>(std::ranges::count_if(nodeIds, needsDecode));
+		std::vector<uint64_t> missingIds;
+		missingIds.reserve(missingCount);
+		debug::PerfTrace::addValue("native_graph.read.property_column_gather_capacity", static_cast<int64_t>(missingIds.capacity()));
+		for (size_t owner = 0U; owner < nodeIds.size(); ++owner) {
+			// If any token needs decoding, this owner is read as one rectangular
+			// token batch. Avoid copying/admitting cache cells that would then be
+			// decoded again and overwritten by that same immutable owner read.
+			const bool missing = needsDecode(nodeIds[owner]);
+			if (missing) {
+				missingIds.push_back(nodeIds[owner]);
+				continue;
+			}
 			for (size_t tokenIndex = 0U; tokenIndex < propertyTokens.size(); ++tokenIndex) {
 				const uint32_t token = propertyTokens[tokenIndex];
-				if (const auto cached = active.property(false, nodeIds[owner], token); cached.has_value()) {
-					columns[tokenIndex][owner] = *cached;
+				if (auto cached = active.property(false, nodeIds[owner], token, admission); cached.has_value()) {
+					columns[tokenIndex][owner] = std::move(*cached);
 				} else if (const auto present = active.propertyPresence(false, nodeIds[owner], token);
 						present.has_value() && !*present) {
 					columns[tokenIndex][owner] = std::nullopt;
-				} else {
-					missing = true;
 				}
-			}
-			if (missing) {
-				missingIds.push_back(nodeIds[owner]);
-				missingOrdinals.push_back(owner);
 			}
 		}
 		if (!missingIds.empty()) {
@@ -476,22 +492,18 @@ namespace graph::storage {
 			// Reuse the query-owned ordered cursor so the Property Directory root/leaf
 			// route and the current decoded page are shared across adjacent batches.
 			active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
-					snapshot, missingKeys, propertyTokens, entries);
+					snapshot, missingKeys, propertyTokens, entries, true, admission);
+			size_t outputOwner = 0U;
 			for (size_t owner = 0U; owner < missingIds.size(); ++owner) {
-				const size_t outputOwner = missingOrdinals[owner];
+				while (nodeIds[outputOwner] < missingIds[owner]) ++outputOwner;
 				for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-					const auto &entry = entries[owner * propertyTokens.size() + token];
-					const std::optional<PropertyValue> value = entry.has_value()
-							? std::optional<PropertyValue>{entry->value} : std::nullopt;
-					columns[token][outputOwner] = value;
+					auto &entry = entries[owner * propertyTokens.size() + token];
+					std::optional<PropertyValue> value = entry.has_value()
+							? std::optional<PropertyValue>{std::move(entry->value)} : std::nullopt;
+					// The session keeps its own snapshot-local copy; the decoded owner
+					// transfers its payload into the returned column.
 					active.putProperty(false, missingIds[owner], propertyTokens[token], value);
-				}
-			}
-		}
-		for (size_t owner = 0U; owner < nodeIds.size(); ++owner) {
-			for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-				if (const auto cached = active.property(false, nodeIds[owner], propertyTokens[token]); cached.has_value()) {
-					columns[token][owner] = *cached;
+					columns[token][outputOwner] = std::move(value);
 				}
 			}
 		}
@@ -502,19 +514,42 @@ namespace graph::storage {
 				std::vector<std::optional<size_t>>>
 	PageBackedGraphReadAdapter::readNodePropertyColumnsAndCountsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			const std::span<const uint32_t> propertyTokens, NativeReadSession *session) const {
+			const std::span<const uint32_t> propertyTokens, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *transientBufferAdmission) const {
 		if (propertyTokens.empty()) {
-			return {{}, std::vector<std::optional<size_t>>(nodeIds.size(), size_t{0U})};
-		}
-		if (nodeIds.size() > std::numeric_limits<size_t>::max() / propertyTokens.size()) {
+			if (nodeIds.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<size_t>))
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "empty combined Property count slots overflowed");
+			if (transientBufferAdmission) (*transientBufferAdmission)(nodeIds.size() * sizeof(std::optional<size_t>));
+			std::vector<std::optional<size_t>> counts(nodeIds.size(), size_t{0U});
+			if (transientBufferAdmission) (*transientBufferAdmission)(counts.capacity() * sizeof(std::optional<size_t>));
+			return {{}, std::move(counts)};
+		}		if (nodeIds.size() > std::numeric_limits<size_t>::max() / propertyTokens.size()) {
 			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							  "combined Node Property read result size overflows");
 		}
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
+		size_t stagingBytes = 0U;
+		const auto admitStaging = [&](size_t extra) {
+			if (extra > std::numeric_limits<size_t>::max() - stagingBytes)
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "combined Property staging overflowed");
+			if (transientBufferAdmission) (*transientBufferAdmission)(stagingBytes + extra);
+		};
+		const auto reserveStaging = [&](auto &values, size_t count, bool resize = false) {
+			using Value = typename std::remove_reference_t<decltype(values)>::value_type;
+			if (count > std::numeric_limits<size_t>::max() / sizeof(Value))
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "combined Property staging slots overflowed");
+			admitStaging(count * sizeof(Value));
+			values.reserve(count);
+			admitStaging(values.capacity() * sizeof(Value));
+			stagingBytes += values.capacity() * sizeof(Value);
+			if (resize) values.resize(count);
+		};
+		const SelectedPropertyReadAdmission admitNested = [&](size_t bytes) { admitStaging(bytes); };
+
 		std::vector<EntityPropertyKey> keys;
-		keys.reserve(nodeIds.size());
+		reserveStaging(keys, nodeIds.size());
 		uint64_t previousId = 0U;
 		for (const uint64_t nodeId: nodeIds) {
 			if (nodeId == 0U || nodeId <= previousId) {
@@ -524,23 +559,23 @@ namespace graph::storage {
 			previousId = nodeId;
 			keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, nodeId});
 		}
-		std::vector<std::optional<PropertyCollectionRootEntry>> entries(
-				 nodeIds.size() * propertyTokens.size());
-		std::vector<std::optional<size_t>> counts(nodeIds.size());
-		std::vector<std::vector<std::optional<PropertyValue>>> columns(
-				propertyTokens.size(), std::vector<std::optional<PropertyValue>>(nodeIds.size()));
+		std::vector<std::optional<size_t>> counts;
+		reserveStaging(counts, nodeIds.size(), true);
+		std::vector<std::vector<std::optional<PropertyValue>>> columns;
+		reserveStaging(columns, propertyTokens.size(), true);
+		for (auto &column : columns) reserveStaging(column, nodeIds.size(), true);
 		std::vector<size_t> missingOwners;
 		std::vector<size_t> countOnlyOwners;
-		missingOwners.reserve(nodeIds.size());
-		countOnlyOwners.reserve(nodeIds.size());
+		reserveStaging(missingOwners, nodeIds.size());
+		reserveStaging(countOnlyOwners, nodeIds.size());
 		for (size_t owner = 0U; owner < nodeIds.size(); ++owner) {
-			bool missingValue = false;
-			for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-				const auto cached = active.property(false, nodeIds[owner], propertyTokens[token]);
-				if (cached.has_value()) {
-					columns[token][owner] = *cached;
-				} else {
-					missingValue = true;
+			const bool missingValue = std::ranges::any_of(propertyTokens, [&](uint32_t token) {
+				return !active.hasProperty(false, nodeIds[owner], token);
+			});
+			if (!missingValue) {
+				for (size_t token = 0U; token < propertyTokens.size(); ++token) {
+					auto cached = active.property(false, nodeIds[owner], propertyTokens[token], admission);
+					if (cached) columns[token][owner] = std::move(*cached);
 				}
 			}
 			if (missingValue) {
@@ -549,12 +584,14 @@ namespace graph::storage {
 				countOnlyOwners.push_back(owner);
 			}
 		}
+		const size_t baseStagingBytes = stagingBytes;
 		if (!missingOwners.empty()) {
 			std::vector<EntityPropertyKey> missingKeys;
-			missingKeys.reserve(missingOwners.size());
-			std::vector<std::optional<PropertyCollectionRootEntry>> missingEntries(
-					missingOwners.size() * propertyTokens.size());
-			std::vector<std::optional<size_t>> missingCounts(missingOwners.size());
+			reserveStaging(missingKeys, missingOwners.size());
+			std::vector<std::optional<PropertyCollectionRootEntry>> missingEntries;
+			reserveStaging(missingEntries, missingOwners.size() * propertyTokens.size(), true);
+			std::vector<std::optional<size_t>> missingCounts;
+			reserveStaging(missingCounts, missingOwners.size(), true);
 			for (const size_t owner: missingOwners) {
 				missingKeys.push_back(keys[owner]);
 			}
@@ -562,32 +599,40 @@ namespace graph::storage {
 			// batches. This avoids restarting the Property Directory root descent for
 			// every range batch while preserving the same snapshot and validation fence.
 			active.propertyCursor(properties_, snapshot).readEntityPropertiesAndCountsOptionalSorted(
-					snapshot, missingKeys, propertyTokens, missingEntries, missingCounts);
+					snapshot, missingKeys, propertyTokens, missingEntries, missingCounts, admission, transientBufferAdmission ? &admitNested : nullptr);
 			for (size_t index = 0U; index < missingOwners.size(); ++index) {
 				const size_t owner = missingOwners[index];
 				counts[owner] = missingCounts[index];
 				for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-					const auto &entry = missingEntries[index * propertyTokens.size() + token];
-					const std::optional<PropertyValue> value =
-							entry.has_value() ? std::optional<PropertyValue>{entry->value} : std::nullopt;
-					columns[token][owner] = value;
+					auto &entry = missingEntries[index * propertyTokens.size() + token];
+					std::optional<PropertyValue> value =
+							entry.has_value() ? std::optional<PropertyValue>{std::move(entry->value)} : std::nullopt;
 					active.putProperty(false, nodeIds[owner], propertyTokens[token], value);
+					columns[token][owner] = std::move(value);
 				}
 			}
 		}
+		stagingBytes = baseStagingBytes;
+		admitStaging(0U);
 		if (!countOnlyOwners.empty()) {
 			std::vector<EntityPropertyKey> countKeys;
 			std::vector<std::optional<size_t>> cachedCounts;
-			countKeys.reserve(countOnlyOwners.size());
-			cachedCounts.resize(countOnlyOwners.size());
+			reserveStaging(countKeys, countOnlyOwners.size());
+			reserveStaging(cachedCounts, countOnlyOwners.size(), true);
 			for (const size_t owner: countOnlyOwners) {
 				countKeys.push_back(keys[owner]);
 			}
-			active.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, countKeys, cachedCounts);
+			active.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, countKeys, cachedCounts, transientBufferAdmission ? &admitNested : nullptr);
 			for (size_t index = 0U; index < countOnlyOwners.size(); ++index) {
 				counts[countOnlyOwners[index]] = cachedCounts[index];
 			}
 		}
+		stagingBytes = baseStagingBytes - keys.capacity() * sizeof(EntityPropertyKey)
+			- missingOwners.capacity() * sizeof(size_t) - countOnlyOwners.capacity() * sizeof(size_t);
+		std::vector<EntityPropertyKey>().swap(keys);
+		std::vector<size_t>().swap(missingOwners);
+		std::vector<size_t>().swap(countOnlyOwners);
+		admitStaging(0U);
 		return {std::move(columns), std::move(counts)};
 	}
 
@@ -600,8 +645,10 @@ namespace graph::storage {
 		NativeReadSession localSession;
 		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
 		activeSession.bind(snapshot);
-		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, nodeId};
-		return properties_.readEntityPropertyCount(snapshot, key).value_or(0U);
+		const std::array<EntityPropertyKey, 1U> keys{{{EntityPropertyOwnerKind::EPOK_NODE, nodeId}}};
+		std::array<std::optional<size_t>, 1U> counts;
+		activeSession.propertyCursor(properties_, snapshot).readEntityPropertyCountsSorted(snapshot, keys, counts);
+		return counts.front().value_or(0U);
 	}
 
 	std::vector<std::optional<size_t>> PageBackedGraphReadAdapter::nodePropertyCountsSorted(
@@ -635,8 +682,16 @@ namespace graph::storage {
 		}
 		NativeReadSession localSession;
 		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
-		static_cast<void>(readNodeRecord(snapshot, nodeId, &activeSession));
+		const NodeEntityRecord record = readNodeRecord(snapshot, nodeId, &activeSession);
 		if (labelTokens.empty()) {
+			return true;
+		}
+		if (record.label_overflow.isEmpty()) {
+			for (const uint64_t token: labelTokens) {
+				if (!labels_.containsNodeLabel(snapshot, record, token)) {
+					return false;
+				}
+			}
 			return true;
 		}
 		const std::vector<uint64_t> actual = readNodeLabelTokens(snapshot, nodeId, &activeSession);
@@ -650,7 +705,8 @@ namespace graph::storage {
 
 	std::vector<bool> PageBackedGraphReadAdapter::readNodeLabelMatchesSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
-			const std::span<const uint64_t> labelTokens, NativeReadSession *session) const {
+			const std::span<const uint64_t> labelTokens, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *entityBufferAdmission) const {
 		if (nodeIds.empty()) {
 			return {};
 		}
@@ -668,9 +724,26 @@ namespace graph::storage {
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
+		size_t entityBytes = 0U;
+		const auto admitEntity = [&](size_t extra) {
+			if (extra > std::numeric_limits<size_t>::max() - entityBytes)
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "label Entity staging overflowed");
+			if (entityBufferAdmission) (*entityBufferAdmission)(entityBytes + extra);
+		};
+		if (nodeIds.size() > std::numeric_limits<size_t>::max() / sizeof(uint64_t))
+			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "label missing IDs overflowed");
+		// A word per requested bit safely covers implementation-specific block
+		// rounding before vector<bool> exposes its actual capacity.
+		admitEntity(nodeIds.size() * sizeof(uint64_t));
 		std::vector<bool> result(nodeIds.size(), false);
+		const size_t resultBytes = result.capacity() / 8U + (result.capacity() % 8U != 0U ? 1U : 0U);
+		admitEntity(resultBytes);
+		entityBytes += resultBytes;
 		std::vector<uint64_t> missingIds;
+		admitEntity(nodeIds.size() * sizeof(uint64_t));
 		missingIds.reserve(nodeIds.size());
+		admitEntity(missingIds.capacity() * sizeof(uint64_t));
+		entityBytes += missingIds.capacity() * sizeof(uint64_t);
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
 			// Label-only cache entries are not sufficient here: the batch result
 			// must retain an authenticated entity record for every requested node.
@@ -678,8 +751,10 @@ namespace graph::storage {
 				missingIds.push_back(nodeIds[index]);
 			}
 		}
-		const std::vector<std::optional<NodeEntityRecord>> records =
-				missingIds.empty() ? std::vector<std::optional<NodeEntityRecord>>{} : entities_.readNodesSorted(snapshot, missingIds);
+		auto records =
+				missingIds.empty() ? std::vector<std::optional<NodeEntityRecord>>{} : entities_.readNodesSorted(snapshot, missingIds, entityBufferAdmission ? admitEntity : SelectedPropertyReadAdmission{});
+		admitEntity(records.capacity() * sizeof(std::optional<NodeEntityRecord>));
+		entityBytes += records.capacity() * sizeof(std::optional<NodeEntityRecord>);
 		if (records.size() != missingIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed sorted Node label read changed record cardinality");
@@ -687,8 +762,16 @@ namespace graph::storage {
 		// Keep label evaluation independent from the bounded session cache. A
 		// caller may submit more IDs than the cache can retain, and falling back to
 		// one scalar Entity lookup per evicted ID defeats the sorted batch contract.
+		if (nodeIds.size() > std::numeric_limits<size_t>::max() / sizeof(NodeEntityRecord))
+			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "label resolved records overflowed");
+		admitEntity(nodeIds.size() * sizeof(NodeEntityRecord));
 		std::vector<NodeEntityRecord> resolved(nodeIds.size());
-		std::vector<bool> resolvedFlags(nodeIds.size(), false);
+		admitEntity(resolved.capacity() * sizeof(NodeEntityRecord));
+		entityBytes += resolved.capacity() * sizeof(NodeEntityRecord);
+		admitEntity(nodeIds.size() * sizeof(uint8_t));
+		std::vector<uint8_t> resolvedFlags(nodeIds.size(), 0U);
+		admitEntity(resolvedFlags.capacity() * sizeof(uint8_t));
+		entityBytes += resolvedFlags.capacity() * sizeof(uint8_t);
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
 			if (const std::optional<NodeEntityRecord> cached = active.node(nodeIds[index]); cached.has_value()) {
 				resolved[index] = *cached;
@@ -716,53 +799,67 @@ namespace graph::storage {
 						"page-backed sorted Node label read lost an authenticated Entity record");
 			}
 		}
-		std::vector<std::vector<uint64_t>> decodedLabels(nodeIds.size());
-		std::vector<bool> hasLabels(nodeIds.size(), false);
-		if (!labelTokens.empty()) {
-			std::vector<NodeEntityRecord> uncachedRecords;
-			std::vector<size_t> uncachedOrdinals;
-			uncachedRecords.reserve(nodeIds.size());
-			uncachedOrdinals.reserve(nodeIds.size());
-			for (size_t index = 0U; index < nodeIds.size(); ++index) {
-				if (const auto cachedLabels = active.nodeLabels(nodeIds[index]); cachedLabels.has_value()) {
-					decodedLabels[index] = *cachedLabels;
-					hasLabels[index] = true;
-				} else {
-					uncachedRecords.push_back(resolved[index]);
-					uncachedOrdinals.push_back(index);
-				}
-			}
-			if (!uncachedRecords.empty()) {
-				const std::vector<std::vector<uint64_t>> batchLabels =
-						labels_.readNodeLabelsSorted(snapshot, uncachedRecords);
-				if (batchLabels.size() != uncachedOrdinals.size()) {
-					throwAdapterError(FormatError::FERR_INVALID_STATE,
-							"page-backed sorted Node label read changed decoded batch cardinality");
-				}
-				for (size_t index = 0U; index < uncachedOrdinals.size(); ++index) {
-					const size_t ordinal = uncachedOrdinals[index];
-					decodedLabels[ordinal] = batchLabels[index];
-					hasLabels[ordinal] = true;
-					active.putNodeLabels(nodeIds[ordinal], decodedLabels[ordinal]);
-				}
-			}
+		const size_t releasedBytes = missingIds.capacity() * sizeof(uint64_t) +
+			records.capacity() * sizeof(std::optional<NodeEntityRecord>);
+		std::vector<uint64_t>().swap(missingIds);
+		std::vector<std::optional<NodeEntityRecord>>().swap(records);
+		entityBytes -= releasedBytes;
+		admitEntity(0U);
+		if (labelTokens.empty()) {
+			std::fill(result.begin(), result.end(), true);
+			std::vector<NodeEntityRecord>().swap(resolved);
+			std::vector<uint8_t>().swap(resolvedFlags);
+			entityBytes = resultBytes; admitEntity(0U);
+			return result;
 		}
+		const auto matchesLabels = [&](const std::span<const uint64_t> actual) {
+			return std::ranges::all_of(labelTokens, [&](const uint64_t token) {
+				return std::ranges::binary_search(actual, token);
+			});
+		};
+		std::vector<NodeEntityRecord> uncachedRecords;
+		std::vector<size_t> uncachedOrdinals;
+		const size_t overflowCount = static_cast<size_t>(std::ranges::count_if(resolved, [](const NodeEntityRecord &record) {
+			return !record.label_overflow.isEmpty();
+		}));
+		admitEntity(overflowCount * sizeof(NodeEntityRecord));
+		uncachedRecords.reserve(overflowCount);
+		admitEntity(uncachedRecords.capacity() * sizeof(NodeEntityRecord));
+		entityBytes += uncachedRecords.capacity() * sizeof(NodeEntityRecord);
+		admitEntity(overflowCount * sizeof(size_t));
+		uncachedOrdinals.reserve(overflowCount);
+		admitEntity(uncachedOrdinals.capacity() * sizeof(size_t));
+		entityBytes += uncachedOrdinals.capacity() * sizeof(size_t);
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
-			bool matches = true;
-			if (!labelTokens.empty()) {
-				if (!hasLabels[index]) {
-					throwAdapterError(FormatError::FERR_INVALID_STATE,
-							"page-backed sorted Node label read lost decoded labels");
-				}
-				for (const uint64_t token: labelTokens) {
-					if (!std::ranges::binary_search(decodedLabels[index], token)) {
-						matches = false;
-						break;
-					}
-				}
+			if (const auto cachedLabels = active.nodeLabelsView(nodeIds[index]); cachedLabels.has_value()) {
+				result[index] = matchesLabels(*cachedLabels);
+			} else if (resolved[index].label_overflow.isEmpty()) {
+				result[index] = std::ranges::all_of(labelTokens, [&](const uint64_t token) {
+					return labels_.containsNodeLabel(snapshot, resolved[index], token);
+				});
+			} else {
+				uncachedRecords.push_back(resolved[index]);
+				uncachedOrdinals.push_back(index);
 			}
-			result[index] = matches;
 		}
+		if (!uncachedRecords.empty()) {
+			const std::vector<std::vector<uint64_t>> batchLabels =
+				labels_.readNodeLabelsSorted(snapshot, uncachedRecords, entityBufferAdmission ? admitEntity : SelectedPropertyReadAdmission{});
+			if (batchLabels.size() != uncachedOrdinals.size()) {
+				throwAdapterError(FormatError::FERR_INVALID_STATE,
+					"page-backed sorted Node label read changed decoded batch cardinality");
+			}
+			for (size_t index = 0U; index < uncachedOrdinals.size(); ++index) {
+				const size_t ordinal = uncachedOrdinals[index];
+				result[ordinal] = matchesLabels(batchLabels[index]);
+				active.putNodeLabels(nodeIds[ordinal], batchLabels[index]);
+			}
+		}
+		std::vector<NodeEntityRecord>().swap(uncachedRecords);
+		std::vector<size_t>().swap(uncachedOrdinals);
+		std::vector<NodeEntityRecord>().swap(resolved);
+		std::vector<uint8_t>().swap(resolvedFlags);
+		entityBytes = resultBytes; admitEntity(0U);
 		return result;
 	}
 
@@ -794,7 +891,7 @@ namespace graph::storage {
 	}
 
 	bool PageBackedGraphReadAdapter::edgePropertyExists(const MetadataSnapshotPin &snapshot, const uint64_t edgeId,
-																		 const uint32_t propertyToken, NativeReadSession *session) const {
+																		 const uint32_t propertyToken, NativeReadSession *session, const bool requireNonNull) const {
 		if (edgeId == 0U || propertyToken == 0U) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 								"page-backed Edge Property presence read requires nonzero identifiers");
@@ -804,15 +901,16 @@ namespace graph::storage {
 		activeSession.bind(snapshot);
 		if (const auto cachedValue = activeSession.property(true, edgeId, propertyToken); cachedValue.has_value()) {
 			const bool present = cachedValue->has_value();
+			if (requireNonNull) return present && !std::holds_alternative<std::monostate>((*cachedValue)->getVariant());
 			activeSession.putPropertyPresence(true, edgeId, propertyToken, present);
 			return present;
 		}
 		if (const auto cached = activeSession.propertyPresence(true, edgeId, propertyToken); cached.has_value()) {
-			return *cached;
+			if (!requireNonNull || !*cached) return *cached;
 		}
 		const bool present = activeSession.propertyCursor(properties_, snapshot).readEntityPropertyExists(
-				snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, propertyToken);
-		activeSession.putPropertyPresence(true, edgeId, propertyToken, present);
+				snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, propertyToken, requireNonNull);
+		if (!requireNonNull || present) activeSession.putPropertyPresence(true, edgeId, propertyToken, present);
 		return present;
 	}
 
@@ -872,7 +970,8 @@ namespace graph::storage {
 	std::vector<std::vector<std::optional<PropertyValue>>>
 	PageBackedGraphReadAdapter::readEdgePropertyColumnsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
-			const std::span<const uint32_t> propertyTokens, NativeReadSession *session) const {
+			const std::span<const uint32_t> propertyTokens, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission) const {
 		if (propertyTokens.empty()) {
 			return {};
 		}
@@ -883,8 +982,6 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							  "page-backed Edge Property column read result size overflows");
 		}
-		std::vector<std::vector<std::optional<PropertyValue>>> columns(
-			propertyTokens.size(), std::vector<std::optional<PropertyValue>>(edgeIds.size()));
 		uint64_t previousId = 0U;
 		uint32_t previousToken = 0U;
 		for (const uint32_t token: propertyTokens) {
@@ -894,29 +991,44 @@ namespace graph::storage {
 			}
 			previousToken = token;
 		}
-		std::vector<uint64_t> missingIds;
-		std::vector<size_t> missingOrdinals;
 		for (size_t owner = 0U; owner < edgeIds.size(); ++owner) {
 			if (edgeIds[owner] == 0U || edgeIds[owner] <= previousId) {
 				throwAdapterError(FormatError::FERR_INVALID_HEADER,
 								  "page-backed Edge Property columns require strictly increasing Edge IDs");
 			}
 			previousId = edgeIds[owner];
-			bool missing = false;
+		}
+		std::vector<std::vector<std::optional<PropertyValue>>> columns;
+		columns.reserve(propertyTokens.size());
+		for (size_t token = 0U; token < propertyTokens.size(); ++token) columns.emplace_back(edgeIds.size());
+		const auto needsDecode = [&](uint64_t id) {
+			return std::ranges::any_of(propertyTokens, [&](uint32_t token) {
+				if (active.hasProperty(true, id, token)) return false;
+				const auto present = active.propertyPresence(true, id, token);
+				return !present.has_value() || *present;
+			});
+		};
+		const size_t missingCount = static_cast<size_t>(std::ranges::count_if(edgeIds, needsDecode));
+		std::vector<uint64_t> missingIds;
+		missingIds.reserve(missingCount);
+		debug::PerfTrace::addValue("native_graph.read.property_column_gather_capacity", static_cast<int64_t>(missingIds.capacity()));
+		for (size_t owner = 0U; owner < edgeIds.size(); ++owner) {
+			// If any token needs decoding, this owner is read as one rectangular
+			// token batch. Avoid copying/admitting cache cells that would then be
+			// decoded again and overwritten by that same immutable owner read.
+			const bool missing = needsDecode(edgeIds[owner]);
+			if (missing) {
+				missingIds.push_back(edgeIds[owner]);
+				continue;
+			}
 			for (size_t tokenIndex = 0U; tokenIndex < propertyTokens.size(); ++tokenIndex) {
 				const uint32_t token = propertyTokens[tokenIndex];
-				if (const auto cached = active.property(true, edgeIds[owner], token); cached.has_value()) {
-					columns[tokenIndex][owner] = *cached;
+				if (auto cached = active.property(true, edgeIds[owner], token, admission); cached.has_value()) {
+					columns[tokenIndex][owner] = std::move(*cached);
 				} else if (const auto present = active.propertyPresence(true, edgeIds[owner], token);
 						present.has_value() && !*present) {
 					columns[tokenIndex][owner] = std::nullopt;
-				} else {
-					missing = true;
 				}
-			}
-			if (missing) {
-				missingIds.push_back(edgeIds[owner]);
-				missingOrdinals.push_back(owner);
 			}
 		}
 		if (!missingIds.empty()) {
@@ -928,22 +1040,18 @@ namespace graph::storage {
 			std::vector<std::optional<PropertyCollectionRootEntry>> entries(
 				missingIds.size() * propertyTokens.size());
 			active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
-					snapshot, missingKeys, propertyTokens, entries);
+					snapshot, missingKeys, propertyTokens, entries, true, admission);
+			size_t outputOwner = 0U;
 			for (size_t owner = 0U; owner < missingIds.size(); ++owner) {
-				const size_t outputOwner = missingOrdinals[owner];
+				while (edgeIds[outputOwner] < missingIds[owner]) ++outputOwner;
 				for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-					const auto &entry = entries[owner * propertyTokens.size() + token];
-					const std::optional<PropertyValue> value = entry.has_value()
-							? std::optional<PropertyValue>{entry->value} : std::nullopt;
-					columns[token][outputOwner] = value;
+					auto &entry = entries[owner * propertyTokens.size() + token];
+					std::optional<PropertyValue> value = entry.has_value()
+							? std::optional<PropertyValue>{std::move(entry->value)} : std::nullopt;
+					// The session keeps its own snapshot-local copy; the decoded owner
+					// transfers its payload into the returned column.
 					active.putProperty(true, missingIds[owner], propertyTokens[token], value);
-				}
-			}
-		}
-		for (size_t owner = 0U; owner < edgeIds.size(); ++owner) {
-			for (size_t token = 0U; token < propertyTokens.size(); ++token) {
-				if (const auto cached = active.property(true, edgeIds[owner], propertyTokens[token]); cached.has_value()) {
-					columns[token][owner] = *cached;
+					columns[token][outputOwner] = std::move(value);
 				}
 			}
 		}
@@ -962,7 +1070,8 @@ namespace graph::storage {
 	void PageBackedGraphReadAdapter::validateNodeExactPropertiesSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds, const uint64_t labelToken,
 			const std::span<const uint32_t> propertyTokens, const std::span<const PropertyValue> expectedValues,
-			const size_t maximumPropertyEntries, NativeReadSession *session) const {
+			const size_t maximumPropertyEntries, NativeReadSession *session,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *transientBufferAdmission) const {
 		if (nodeIds.empty() || labelToken == 0U || maximumPropertyEntries == 0U ||
 			propertyTokens.empty() || propertyTokens.size() != expectedValues.size() ||
 			propertyTokens.size() > maximumPropertyEntries ||
@@ -972,7 +1081,26 @@ namespace graph::storage {
 		}
 		NativeReadSession localSession;
 		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
-		std::vector<size_t> predicateOrdinals(propertyTokens.size());
+		size_t stagingBytes = 0U;
+		const auto admitStaging = [&](size_t bytes) {
+			if (bytes > std::numeric_limits<size_t>::max() - stagingBytes)
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "exact verification staging overflowed");
+			if (transientBufferAdmission) (*transientBufferAdmission)(stagingBytes + bytes);
+		};
+		const auto reserveStaging = [&](auto &values, size_t count, bool resize = false) {
+			using Value = typename std::remove_reference_t<decltype(values)>::value_type;
+			if (count > std::numeric_limits<size_t>::max() / sizeof(Value))
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "exact verification slots overflowed");
+			admitStaging(count * sizeof(Value));
+			values.reserve(count);
+			admitStaging(values.capacity() * sizeof(Value));
+			stagingBytes += values.capacity() * sizeof(Value);
+			if (resize) values.resize(count);
+		};
+		const SelectedPropertyReadAdmission admitNested = [&](size_t bytes) { admitStaging(bytes); };
+
+		std::vector<size_t> predicateOrdinals;
+		reserveStaging(predicateOrdinals, propertyTokens.size(), true);
 		for (size_t index = 0U; index < predicateOrdinals.size(); ++index) {
 			if (propertyTokens[index] == 0U || expectedValues[index].getType() == PropertyType::NULL_TYPE) {
 				throwAdapterError(FormatError::FERR_INVALID_HEADER,
@@ -984,20 +1112,17 @@ namespace graph::storage {
 			return propertyTokens[left] < propertyTokens[right];
 		});
 		std::vector<uint32_t> sortedTokens;
-		std::vector<PropertyValue> sortedExpected;
-		sortedTokens.reserve(propertyTokens.size());
-		sortedExpected.reserve(expectedValues.size());
+		reserveStaging(sortedTokens, propertyTokens.size());
 		for (const size_t ordinal: predicateOrdinals) {
 			if (!sortedTokens.empty() && sortedTokens.back() == propertyTokens[ordinal]) {
 				throwAdapterError(FormatError::FERR_INVALID_HEADER,
 								  "page-backed exact Node batch verification has duplicate Property tokens");
 			}
 			sortedTokens.push_back(propertyTokens[ordinal]);
-			sortedExpected.push_back(expectedValues[ordinal]);
 		}
 
 		std::vector<EntityPropertyKey> keys;
-		keys.reserve(nodeIds.size());
+		reserveStaging(keys, nodeIds.size());
 		uint64_t previousNodeId = 0U;
 		for (const uint64_t nodeId: nodeIds) {
 			if (nodeId == 0U || nodeId <= previousNodeId) {
@@ -1010,7 +1135,12 @@ namespace graph::storage {
 		// Candidate verification is already a sorted batch. Resolve the Entity Map
 		// once and group records by Entity page instead of descending the directory
 		// independently for every candidate.
-		const std::vector<std::optional<NodeEntityRecord>> records = entities_.readNodesSorted(snapshot, nodeIds);
+		if (nodeIds.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<NodeEntityRecord>))
+			throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "exact Node record slots overflowed");
+		admitStaging(nodeIds.size() * sizeof(std::optional<NodeEntityRecord>));
+		auto records = entities_.readNodesSorted(snapshot, nodeIds, transientBufferAdmission ? admitNested : SelectedPropertyReadAdmission{});
+		admitStaging(records.capacity() * sizeof(std::optional<NodeEntityRecord>));
+		stagingBytes += records.capacity() * sizeof(std::optional<NodeEntityRecord>);
 		if (records.size() != nodeIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed exact Node batch verification changed Entity record cardinality");
@@ -1022,8 +1152,7 @@ namespace graph::storage {
 			}
 			const NodeEntityRecord &record = *records[index];
 			activeSession.putNode(nodeIds[index], record);
-			const std::vector<uint64_t> labels = labels_.readNodeLabels(snapshot, record);
-			if (std::ranges::find(labels, labelToken) == labels.end()) {
+			if (!labels_.containsNodeLabel(snapshot, record, labelToken, transientBufferAdmission ? admitNested : SelectedPropertyReadAdmission{})) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed exact Node batch verification found a candidate outside the indexed label");
 			}
@@ -1031,9 +1160,12 @@ namespace graph::storage {
 		// Count and selected-value validation share the same owner-keyed directory
 		// location. Resolve both in one merge so digest-collision candidates do not
 		// reopen the Property Directory or page route for the same root.
-		std::vector<std::optional<size_t>> propertyCounts(keys.size());
-		std::vector<std::optional<PropertyCollectionRootEntry>> selected(keys.size() * sortedTokens.size());
-		properties_.readEntityPropertiesAndCountsOptionalSorted(snapshot, keys, sortedTokens, selected, propertyCounts);
+		std::vector<std::optional<size_t>> propertyCounts;
+		reserveStaging(propertyCounts, keys.size(), true);
+		std::vector<std::optional<PropertyCollectionRootEntry>> selected;
+		reserveStaging(selected, keys.size() * sortedTokens.size(), true);
+		activeSession.propertyCursor(properties_, snapshot).readEntityPropertiesAndCountsOptionalSorted(
+				snapshot, keys, sortedTokens, selected, propertyCounts, admission, transientBufferAdmission ? &admitNested : nullptr);
 		for (const std::optional<size_t> count: propertyCounts) {
 			if (!count.has_value() || *count > maximumPropertyEntries) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
@@ -1043,12 +1175,19 @@ namespace graph::storage {
 		for (size_t owner = 0U; owner < keys.size(); ++owner) {
 			for (size_t token = 0U; token < sortedTokens.size(); ++token) {
 				const auto &entry = selected[owner * sortedTokens.size() + token];
-				if (!entry.has_value() || entry->value != sortedExpected[token]) {
+				if (!entry.has_value() || entry->value != expectedValues[predicateOrdinals[token]]) {
 					throwAdapterError(FormatError::FERR_INVALID_STATE,
 									  "page-backed exact Node batch verification found a stale indexed Property");
 				}
 			}
 		}
+		std::vector<size_t>().swap(predicateOrdinals);
+		std::vector<uint32_t>().swap(sortedTokens);
+		std::vector<EntityPropertyKey>().swap(keys);
+		std::vector<std::optional<NodeEntityRecord>>().swap(records);
+		std::vector<std::optional<size_t>>().swap(propertyCounts);
+		std::vector<std::optional<PropertyCollectionRootEntry>>().swap(selected);
+		if (transientBufferAdmission) (*transientBufferAdmission)(0U);
 	}
 
 	PageBackedGraphEdge PageBackedGraphReadAdapter::readEdge(const MetadataSnapshotPin &snapshot,
@@ -1095,7 +1234,7 @@ namespace graph::storage {
 	}
 
 	std::vector<PropertyCollectionRootEntry> PageBackedGraphReadAdapter::readEdgeProperties(
-			const MetadataSnapshotPin &snapshot, const uint64_t edgeId, NativeReadSession *session) const {
+			const MetadataSnapshotPin &snapshot, const uint64_t edgeId, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		if (edgeId == 0U) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed Edge Property root read requires a nonzero logical Edge ID");
@@ -1104,28 +1243,30 @@ namespace graph::storage {
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
 		return readProperties(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId},
-																										 &active.propertyCursor(properties_, snapshot));
+																										 &active.propertyCursor(properties_, snapshot), admission);
 	}
 
 	std::vector<std::vector<PropertyCollectionRootEntry>> PageBackedGraphReadAdapter::readEdgePropertiesSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
-			NativeReadSession *session) const {
+			NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
-		std::vector<std::vector<PropertyCollectionRootEntry>> result(edgeIds.size());
 		uint64_t previousId = 0U;
+		for (const uint64_t id : edgeIds) {
+			if (id == 0U || id <= previousId) {
+				throwAdapterError(FormatError::FERR_INVALID_HEADER,
+					"page-backed sorted Edge Property root read requires strictly increasing Edge IDs");
+			}
+			previousId = id;
+		}
+		std::vector<std::vector<PropertyCollectionRootEntry>> result(edgeIds.size());
 		PropertyCollectionRootScanCursor &cursor = active.propertyCursor(properties_, snapshot);
 		for (size_t index = 0U; index < edgeIds.size(); ++index) {
 			const uint64_t edgeId = edgeIds[index];
-			if (edgeId == 0U || edgeId <= previousId) {
-				throwAdapterError(FormatError::FERR_INVALID_HEADER,
-						"page-backed sorted Edge Property root read requires strictly increasing Edge IDs");
-			}
-			previousId = edgeId;
-			if (const auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId});
+			if (auto root = cursor.readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}, admission);
 				root.has_value()) {
-				result[index] = root->entries;
+				result[index] = std::move(root->entries);
 			}
 		}
 		return result;
@@ -1258,35 +1399,19 @@ namespace graph::storage {
 					activeSession.putNode(nodeId, record);
 					bool labelsMatch = true;
 					if (!labelTokens.empty()) {
-						const std::vector<uint64_t> actual = [&]() {
-							if (const auto cached = activeSession.nodeLabels(nodeId); cached.has_value()) {
-								return *cached;
+						if (record.label_overflow.isEmpty()) {
+							labelsMatch = std::ranges::all_of(labelTokens, [&](const uint64_t token) {
+								return labels_.containsNodeLabel(snapshot, record, token);
+							});
+						} else {
+							auto actual = activeSession.nodeLabels(nodeId);
+							if (!actual.has_value()) {
+								actual = labels_.readNodeLabels(snapshot, record);
+								activeSession.putNodeLabels(nodeId, *actual);
 							}
-							const auto inlineEnd = record.inline_label_ids.begin() + record.inline_label_count;
-							bool allInline = true;
-							for (const uint64_t token: labelTokens) {
-								if (!std::ranges::binary_search(record.inline_label_ids.begin(), inlineEnd, token)) {
-									allInline = false;
-									break;
-								}
-							}
-			if (record.label_overflow.isEmpty()) {
-				std::vector<uint64_t> inlineLabels(record.inline_label_ids.begin(), inlineEnd);
-				activeSession.putNodeLabels(nodeId, inlineLabels);
-				return inlineLabels;
-			}
-			if (allInline) {
-				return std::vector<uint64_t>(record.inline_label_ids.begin(), inlineEnd);
-			}
-							const std::vector<uint64_t> labels = labels_.readNodeLabels(snapshot, record);
-							activeSession.putNodeLabels(nodeId, labels);
-							return labels;
-						}();
-						for (const uint64_t token: labelTokens) {
-							if (!std::ranges::binary_search(actual, token)) {
-								labelsMatch = false;
-								break;
-							}
+							labelsMatch = std::ranges::all_of(labelTokens, [&](const uint64_t token) {
+								return std::ranges::binary_search(*actual, token);
+							});
 						}
 					}
 					return visitor({nodeId, false, 0U, 0U, 0U}, labelsMatch);
@@ -1387,12 +1512,22 @@ namespace graph::storage {
 	}
 
 	PageBackedGraphNodePage PageBackedGraphReadAdapter::scanNodesAfter(const MetadataSnapshotPin &snapshot,
-																										   uint64_t afterNodeId, size_t maximumRecords,
-																										   size_t maximumMetadataPages,
-																										   NativeReadSession *session) const {
+																														 uint64_t afterNodeId, size_t maximumRecords,
+																														 size_t maximumMetadataPages,
+																														 NativeReadSession *session) const {
+		return scanNodesAfter(snapshot, afterNodeId, maximumRecords, maximumMetadataPages,
+																														  EntityReadShape{.include_labels = true, .all_properties = true}, session);
+	}
+
+	PageBackedGraphNodePage PageBackedGraphReadAdapter::scanNodesAfter(const MetadataSnapshotPin &snapshot,
+																														 uint64_t afterNodeId, size_t maximumRecords,
+																														 size_t maximumMetadataPages,
+																														 const EntityReadShape &shape,
+																														 NativeReadSession *session) const {
+		validateEntityReadShape(shape);
 		if (maximumRecords == 0U || maximumMetadataPages == 0U) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
-							  "page-backed graph resumable Node scan requires positive bounds");
+								  "page-backed graph resumable Node scan requires positive bounds");
 		}
 		PageBackedGraphNodePage result;
 		size_t metadataPagesVisited = 0U;
@@ -1420,17 +1555,37 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 					"page-backed Node scan changed its fixed-record cardinality");
 		}
-		const std::vector<std::vector<uint64_t>> labelSets =
-				labels_.readNodeLabelsSorted(snapshot, records);
+		const std::vector<std::vector<uint64_t>> labelSets = shape.include_labels
+				? labels_.readNodeLabelsSorted(snapshot, records)
+				: std::vector<std::vector<uint64_t>>(nodeIds.size());
 		if (labelSets.size() != nodeIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
-					"page-backed Node scan changed its label cardinality");
+									"page-backed Node scan changed its label cardinality");
 		}
-		const std::vector<std::vector<PropertyCollectionRootEntry>> propertySets =
-				readNodePropertiesSorted(snapshot, nodeIds, &activeSession);
+		std::vector<std::vector<PropertyCollectionRootEntry>> propertySets(nodeIds.size());
+		if (shape.all_properties) {
+			propertySets = readNodePropertiesSorted(snapshot, nodeIds, &activeSession);
+		} else {
+			// Gather all requested fields in one owner/token batch rather than
+			// reopening the same Property owner separately for every token.
+			auto columns = readNodePropertyColumnsSorted(snapshot, nodeIds, shape.property_tokens, &activeSession);
+			if (columns.size() != shape.property_tokens.size()) {
+				throwAdapterError(FormatError::FERR_INVALID_STATE, "page-backed selected Node scan changed its column cardinality");
+			}
+			for (size_t column = 0U; column < columns.size(); ++column) {
+				if (columns[column].size() != nodeIds.size()) {
+					throwAdapterError(FormatError::FERR_INVALID_STATE, "page-backed selected Node scan changed its Property cardinality");
+				}
+				for (size_t index = 0U; index < nodeIds.size(); ++index) {
+					if (columns[column][index]) {
+						propertySets[index].push_back({shape.property_tokens[column], std::move(*columns[column][index])});
+					}
+				}
+			}
+		}
 		if (propertySets.size() != nodeIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
-					"page-backed Node scan changed its Property cardinality");
+									"page-backed Node scan changed its Property cardinality");
 		}
 		result.nodes.reserve(nodeIds.size());
 		for (size_t index = 0U; index < nodeIds.size(); ++index) {
@@ -1444,14 +1599,16 @@ namespace graph::storage {
 	PageBackedGraphAdjacencyPage PageBackedGraphReadAdapter::scanAdjacentEdges(
 			const MetadataSnapshotPin &snapshot, uint64_t nodeId, PageBackedGraphReadDirection direction,
 			std::optional<PageBackedGraphAdjacencyContinuation> continuation, size_t maximumRecords,
-			NativeReadSession *session) const {
-		return scanAdjacentEdges(snapshot, nodeId, direction, continuation, maximumRecords, nullptr, session);
+			NativeReadSession *session, const SelectedPropertyReadAdmission *admission,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
+		return scanAdjacentEdges(snapshot, nodeId, direction, continuation, maximumRecords, nullptr, session, admission, retainedBufferAdmission);
 	}
 
 	PageBackedGraphAdjacencyPage PageBackedGraphReadAdapter::scanAdjacentEdges(
 		const MetadataSnapshotPin &snapshot, uint64_t nodeId, PageBackedGraphReadDirection direction,
 		std::optional<PageBackedGraphAdjacencyContinuation> continuation, size_t maximumRecords,
-		PropertyCollectionRootScanCursor *propertyCursor, NativeReadSession *session) const {
+		PropertyCollectionRootScanCursor *propertyCursor, NativeReadSession *session, const SelectedPropertyReadAdmission *admission,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		if (nodeId == 0U || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max()) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed graph adjacency scan requires a Node ID and positive record bound");
@@ -1481,8 +1638,16 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed graph adjacency scan has an invalid configured edge bound");
 		}
+		const auto admitBuffers = [&](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "adjacency buffer admission size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes);
+			return bytes;
+		};
 		const GlobalAdjacencyRange edgeIds = adjacency_.scan(snapshot, adjacencyDirection, nodeId, boundedRecords + 1U,
-																									 adjacencyContinuation);
+																									 adjacencyContinuation, retainedBufferAdmission);
 		if (continuation.has_value() &&
 			(edgeIds.edge_ids.empty() || edgeIds.edge_ids.front() != continuation->next_edge_id)) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
@@ -1497,30 +1662,44 @@ namespace graph::storage {
 		}
 		PageBackedGraphAdjacencyPage result;
 		const size_t resultCount = std::min(boundedRecords, edgeIds.edge_ids.size());
+		const size_t sourceIdsBytes = admitBuffers(0U, edgeIds.edge_ids.capacity(), sizeof(uint64_t));
+		admitBuffers(sourceIdsBytes, resultCount, sizeof(PageBackedGraphEdge));
 		result.edges.reserve(resultCount);
+		const size_t outputBytes = admitBuffers(sourceIdsBytes, result.edges.capacity(), sizeof(PageBackedGraphEdge));
+		admitBuffers(outputBytes, resultCount, sizeof(std::optional<EdgeEntityRecord>));
+		std::vector<std::optional<EdgeEntityRecord>> cachedRecords(resultCount);
+		const size_t cachedBytes = admitBuffers(outputBytes, cachedRecords.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+		// Capture hits before inserting misses can evict records needed by this page.
 		// Adjacency IDs are returned in logical order. Resolve only cache misses in
 		// one sorted Entity-Map/page-local batch, then restore that order while
 		// materializing the public page. This removes one Directory descent per Edge
 		// without exposing physical locations or changing duplicate/order semantics.
 		std::vector<uint64_t> missingEdgeIds;
+		admitBuffers(cachedBytes, resultCount, sizeof(uint64_t));
 		missingEdgeIds.reserve(resultCount);
+		const size_t gatherBytes = admitBuffers(cachedBytes, missingEdgeIds.capacity(), sizeof(uint64_t));
 		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
 			const uint64_t edgeId = edgeIds.edge_ids[ordinal];
-			if (!readSession.edge(edgeId).has_value()) {
+			cachedRecords[ordinal] = readSession.edge(edgeId);
+			if (!cachedRecords[ordinal].has_value()) {
 				missingEdgeIds.push_back(edgeId);
 			}
 		}
 		std::ranges::sort(missingEdgeIds);
 		missingEdgeIds.erase(std::unique(missingEdgeIds.begin(), missingEdgeIds.end()), missingEdgeIds.end());
 		const std::vector<std::optional<EdgeEntityRecord>> missingRecords =
-				entities_.readEdgesSorted(snapshot, missingEdgeIds);
+				entities_.readEdgesSorted(snapshot, missingEdgeIds,
+				[&](size_t bytes) { admitBuffers(gatherBytes, bytes, 1U); });
+		admitBuffers(gatherBytes, missingRecords.capacity(), sizeof(std::optional<EdgeEntityRecord>));
 		if (missingRecords.size() != missingEdgeIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed graph adjacency batch changed Edge record cardinality");
 		}
+		const size_t sourceBufferBytes = admitBuffers(gatherBytes, missingRecords.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+		size_t propertySlotsBytes = 0U;
 		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
 			const uint64_t edgeId = edgeIds.edge_ids[ordinal];
-			std::optional<EdgeEntityRecord> cached = readSession.edge(edgeId);
+			std::optional<EdgeEntityRecord> cached = cachedRecords[ordinal];
 			if (!cached.has_value()) {
 				const auto position = std::ranges::lower_bound(missingEdgeIds, edgeId);
 				if (position == missingEdgeIds.end() || *position != edgeId) {
@@ -1540,7 +1719,19 @@ namespace graph::storage {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph adjacency record has an inconsistent endpoint");
 			}
-			result.edges.push_back(materializeEdge(snapshot, edgeId, edge, propertyCursor));
+			size_t currentSlots = 0U;
+			const SelectedPropertyReadAdmission slotsAdmission = [&](size_t bytes) {
+				currentSlots = bytes;
+				if (propertySlotsBytes > std::numeric_limits<size_t>::max() - sourceBufferBytes) {
+					throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "adjacency source slots overflowed");
+				}
+				admitBuffers(sourceBufferBytes + propertySlotsBytes, bytes, 1U);
+			};
+			result.edges.push_back(materializeEdge(snapshot, edgeId, edge, propertyCursor, admission, &slotsAdmission));
+			if (currentSlots > std::numeric_limits<size_t>::max() - propertySlotsBytes) {
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "adjacency Property slots overflowed");
+			}
+			propertySlotsBytes += currentSlots;
 		}
 		if (edgeIds.edge_ids.size() > resultCount) {
 			if (result.edges.empty()) { // a continuation requires a positive bounded result count.
@@ -1550,13 +1741,15 @@ namespace graph::storage {
 			result.continuation = PageBackedGraphAdjacencyContinuation{result.edges.back().edge_id,
 																												   edgeIds.edge_ids[resultCount]};
 		}
+		admitBuffers(propertySlotsBytes, result.edges.capacity(), sizeof(PageBackedGraphEdge));
 		return result;
 	}
 
 	PageBackedGraphAdjacencyTopologyPage PageBackedGraphReadAdapter::scanAdjacentEdgeTopologies(
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, const PageBackedGraphReadDirection direction,
 			const std::optional<PageBackedGraphAdjacencyContinuation> continuation,
-			const size_t maximumRecords, NativeReadSession *session) const {
+			const size_t maximumRecords, NativeReadSession *session,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		if (nodeId == 0U || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max()) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed graph adjacency topology scan requires a Node ID and positive record bound");
@@ -1586,8 +1779,16 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed graph adjacency topology scan has an invalid configured edge bound");
 		}
-		const GlobalAdjacencyRange edgeIds =
-				adjacency_.scan(snapshot, adjacencyDirection, nodeId, boundedRecords + 1U, adjacencyContinuation);
+		const auto admitBuffers = [&](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "topology buffer admission size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes);
+			return bytes;
+		};
+		GlobalAdjacencyRange edgeIds =
+				adjacency_.scan(snapshot, adjacencyDirection, nodeId, boundedRecords + 1U, adjacencyContinuation, retainedBufferAdmission);
 		if (continuation.has_value() &&
 			(edgeIds.edge_ids.empty() || edgeIds.edge_ids.front() != continuation->next_edge_id)) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
@@ -1599,44 +1800,56 @@ namespace graph::storage {
 		};
 		PageBackedGraphAdjacencyTopologyPage result;
 		const size_t resultCount = std::min(boundedRecords, edgeIds.edge_ids.size());
-		result.edge_ids.reserve(resultCount);
-		result.edges.reserve(resultCount);
+		const size_t sourceIdsBytes = admitBuffers(0U, edgeIds.edge_ids.capacity(), sizeof(uint64_t));
 		const std::span<const uint64_t> requestedEdgeIds(edgeIds.edge_ids.data(), resultCount);
-		std::vector<uint64_t> missingEdgeIds;
-		std::vector<size_t> missingOrdinals;
-		missingEdgeIds.reserve(resultCount);
-		missingOrdinals.reserve(resultCount);
-		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
-			if (!readSession.edge(requestedEdgeIds[ordinal]).has_value()) {
-				missingEdgeIds.push_back(requestedEdgeIds[ordinal]);
-				missingOrdinals.push_back(ordinal);
-			}
-		}
-		const std::vector<std::optional<EdgeEntityRecord>> missingRecords =
-				entities_.readEdgesSorted(snapshot, missingEdgeIds);
-		if (missingRecords.size() != missingOrdinals.size()) {
-			throwAdapterError(FormatError::FERR_INVALID_STATE,
-					"page-backed graph adjacency topology batch changed its cardinality");
-		}
+		// Capture cached hits before admitting any new records: insertions may
+		// evict later hits when this page exceeds the session cache capacity.
+		admitBuffers(sourceIdsBytes, resultCount, sizeof(std::optional<EdgeEntityRecord>));
 		std::vector<std::optional<EdgeEntityRecord>> records(resultCount);
-		std::vector<bool> wasMissing(resultCount, false);
+		const size_t sourceRecordsBytes = admitBuffers(sourceIdsBytes, records.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+		std::vector<uint64_t> missingEdgeIds;
+		size_t missingCount = 0U;
 		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
 			records[ordinal] = readSession.edge(requestedEdgeIds[ordinal]);
-			wasMissing[ordinal] = !records[ordinal].has_value();
+			if (!records[ordinal].has_value()) ++missingCount;
 		}
-		for (size_t index = 0U; index < missingOrdinals.size(); ++index) {
-			records[missingOrdinals[index]] = missingRecords[index];
+		admitBuffers(sourceRecordsBytes, missingCount, sizeof(uint64_t));
+		missingEdgeIds.reserve(missingCount);
+		const size_t gatherBytes = admitBuffers(sourceRecordsBytes, missingEdgeIds.capacity(), sizeof(uint64_t));
+		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
+			if (!records[ordinal].has_value()) missingEdgeIds.push_back(requestedEdgeIds[ordinal]);
 		}
+		{
+			admitBuffers(gatherBytes, missingCount, sizeof(std::optional<EdgeEntityRecord>));
+			const auto missingRecords = entities_.readEdgesSorted(snapshot, missingEdgeIds,
+				[&](size_t bytes) { admitBuffers(gatherBytes, bytes, 1U); });
+			admitBuffers(gatherBytes, missingRecords.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+			if (missingRecords.size() != missingEdgeIds.size()) {
+				throwAdapterError(FormatError::FERR_INVALID_STATE,
+					"page-backed graph adjacency topology batch changed its cardinality");
+			}
+			size_t missingIndex = 0U;
+			for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
+				if (records[ordinal].has_value()) continue;
+				records[ordinal] = missingRecords[missingIndex++];
+				if (records[ordinal].has_value()) readSession.putEdge(requestedEdgeIds[ordinal], *records[ordinal]);
+			}
+		} // Batch staging releases before output publication.
+		admitBuffers(gatherBytes, 0U, 0U);
+		std::vector<uint64_t>().swap(missingEdgeIds);
+		admitBuffers(sourceRecordsBytes, resultCount, sizeof(uint64_t) + sizeof(EdgeEntityRecord));
+		result.edge_ids.reserve(resultCount);
+		const size_t outputIdsBytes = admitBuffers(sourceRecordsBytes, result.edge_ids.capacity(), sizeof(uint64_t));
+		admitBuffers(outputIdsBytes, resultCount, sizeof(EdgeEntityRecord));
+		result.edges.reserve(resultCount);
+		admitBuffers(outputIdsBytes, result.edges.capacity(), sizeof(EdgeEntityRecord));
 		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
 			const uint64_t edgeId = requestedEdgeIds[ordinal];
 			if (!records[ordinal].has_value()) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
-									  "page-backed graph adjacency topology references a missing Edge");
+					"page-backed graph adjacency topology references a missing Edge");
 			}
 			const EdgeEntityRecord edge = *records[ordinal];
-			if (wasMissing[ordinal]) {
-				readSession.putEdge(edgeId, edge);
-			}
 			if (!endpointMatches(edge)) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph adjacency topology has an inconsistent endpoint");
@@ -1655,6 +1868,10 @@ namespace graph::storage {
 			}
 			result.continuation = {result.edge_ids.back(), edgeIds.edge_ids[resultCount]};
 		}
+		std::vector<std::optional<EdgeEntityRecord>>().swap(records);
+		std::vector<uint64_t>().swap(edgeIds.edge_ids);
+		const size_t finalIdsBytes = result.edge_ids.capacity() * sizeof(uint64_t);
+		admitBuffers(finalIdsBytes, result.edges.capacity(), sizeof(EdgeEntityRecord));
 		return result;
 	}
 
@@ -1809,7 +2026,8 @@ namespace graph::storage {
 	bool PageBackedGraphReadAdapter::visitAdjacentEdgeRefsForNodesUntil(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
 			const PageBackedGraphReadDirection direction, const size_t maximumRecords,
-			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session) const {
+			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		if (nodeIds.empty() || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max() || !visitor ||
 				!std::ranges::is_sorted(nodeIds) || std::ranges::adjacent_find(nodeIds) != nodeIds.end()) {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
@@ -1820,8 +2038,20 @@ namespace graph::storage {
 		NativeReadSession localSession;
 		NativeReadSession &active = session == nullptr ? localSession : *session;
 		active.bind(snapshot);
+		size_t cursorBoundaryBytes = 0U;
+		const auto admit = [&](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "batch adjacency admission size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			if (bytes > std::numeric_limits<size_t>::max() - cursorBoundaryBytes)
+				throwAdapterError(FormatError::FERR_ARITHMETIC_OVERFLOW, "batch adjacency cursor admission overflowed");
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes + cursorBoundaryBytes);
+			return bytes;
+		};
 		std::vector<std::pair<uint64_t, uint64_t>> keys;
-		keys.reserve(std::min(maximumRecords, MULTI_NODE_ADJACENCY_BATCH_ENTRIES));
+		const size_t keyLimit = std::min(maximumRecords, MULTI_NODE_ADJACENCY_BATCH_ENTRIES);
+		size_t keyBytes = 0U;
 		bool stoppedByVisitor = false;
 		bool boundExceeded = false;
 		size_t matchedRecords = 0U;
@@ -1830,22 +2060,32 @@ namespace graph::storage {
 				return true;
 			}
 			std::vector<uint64_t> edgeIds;
+			admit(keyBytes, keys.size(), sizeof(uint64_t));
 			edgeIds.reserve(keys.size());
+			const size_t gatherBytes = admit(keyBytes, edgeIds.capacity(), sizeof(uint64_t));
 			for (const auto &[nodeId, edgeId]: keys) {
 				static_cast<void>(nodeId);
 				edgeIds.push_back(edgeId);
 			}
-			std::ranges::sort(edgeIds);
+			size_t comparisons = 0U;
+			std::sort(edgeIds.begin(), edgeIds.end(), [&](uint64_t left, uint64_t right) {
+				if ((comparisons++ & 255U) == 0U) admit(gatherBytes, 0U, 0U);
+				return left < right;
+			});
 			if (const auto duplicate = std::ranges::adjacent_find(edgeIds); duplicate != edgeIds.end()) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 						"page-backed batch adjacency traversal returned a duplicate Edge");
 			}
-			const std::vector<std::optional<EdgeEntityRecord>> records = entities_.readEdgesSorted(snapshot, edgeIds);
+			admit(gatherBytes, edgeIds.size(), sizeof(std::optional<EdgeEntityRecord>));
+			const std::vector<std::optional<EdgeEntityRecord>> records = entities_.readEdgesSorted(snapshot, edgeIds,
+				[&](size_t bytes) { admit(gatherBytes, bytes, 1U); });
+			const size_t workingBytes = admit(gatherBytes, records.capacity(), sizeof(std::optional<EdgeEntityRecord>));
 			if (records.size() != edgeIds.size()) {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 						"page-backed batch adjacency traversal changed Edge cardinality");
 			}
 			for (const auto &[nodeId, edgeId]: keys) {
+				admit(workingBytes, 0U, 0U);
 				const auto position = std::ranges::lower_bound(edgeIds, edgeId);
 				if (position == edgeIds.end() || *position != edgeId) {
 					throwAdapterError(FormatError::FERR_INVALID_STATE,
@@ -1880,17 +2120,50 @@ namespace graph::storage {
 						return false;
 					}
 					++matchedRecords;
+					admit(keyBytes, 0U, 0U);
+					if (keys.size() == keys.capacity()) {
+						const size_t next = keys.capacity() == 0U ? 1U :
+							keys.capacity() + std::min(keys.capacity(), keyLimit - keys.capacity());
+						bool grow = true;
+						try {
+							// The old key buffer is gone before gather/record allocation.
+							// Admit that future frame separately from the reserve overlap.
+							admit(0U, next, sizeof(keys.front()) + sizeof(uint64_t) +
+								sizeof(std::optional<EdgeEntityRecord>) + sizeof(std::optional<EntityPageLocation>) + sizeof(size_t));
+						} catch (const LogicalGraphBufferPressure &) {
+							if (keys.empty()) throw;
+							if (!flush()) return false;
+							admit(keyBytes, 0U, 0U);
+							grow = false;
+						}
+						if (grow) {
+							admit(keyBytes, next, sizeof(keys.front()));
+							keys.reserve(next);
+							keyBytes = admit(0U, keys.capacity(), sizeof(keys.front()));
+						}
+					}
 					keys.emplace_back(nodeId, edgeId);
-					return keys.size() != MULTI_NODE_ADJACENCY_BATCH_ENTRIES || flush();
+					return keys.size() != keyLimit || flush();
+				}, [&](size_t bytes) {
+					cursorBoundaryBytes = bytes;
+					admit(keyBytes, 0U, 0U);
 				});
+		// The range cursor has been destroyed; remaining keys survive the final flush.
+		cursorBoundaryBytes = 0U;
+		admit(keyBytes, 0U, 0U);
 		if (stoppedByVisitor) {
+			std::vector<std::pair<uint64_t, uint64_t>>{}.swap(keys);
+			admit(0U, 0U, 0U);
 			return false;
 		}
 		if (boundExceeded || !exhausted) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed batch adjacency traversal exceeded its Edge bound");
 		}
-		return flush();
+		const bool result = flush();
+		std::vector<std::pair<uint64_t, uint64_t>>{}.swap(keys);
+		admit(0U, 0U, 0U);
+		return result;
 	}
 
 } // namespace graph::storage

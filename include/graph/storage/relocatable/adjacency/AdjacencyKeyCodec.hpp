@@ -45,6 +45,8 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const GlobalAdjacencyKey &key);
 		[[nodiscard]] static GlobalAdjacencyKey decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static std::array<std::byte, RSS_GLOBAL_ADJACENCY_KEY_BYTES>
+		lowerBoundFixed(GlobalAdjacencyDirection direction, uint64_t nodeId);
 		[[nodiscard]] static std::vector<std::byte> lowerBound(GlobalAdjacencyDirection direction, uint64_t nodeId);
 		[[nodiscard]] static bool matchesNodeDirection(std::span<const std::byte> bytes,
 															 GlobalAdjacencyDirection direction, uint64_t nodeId);

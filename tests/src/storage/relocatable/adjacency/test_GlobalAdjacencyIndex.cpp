@@ -6,6 +6,8 @@
  * Licensed under the Apache License, Version 2.0.
  */
 
+#include <algorithm>
+#include <stdexcept>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -542,4 +544,131 @@ TEST_F(GlobalAdjacencyIndexTest, BoundsAndValidatesLogicalRangeCursorsBeforeRead
 	expectFormatError(
 			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 1U, zeroEdge)); },
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, AdmitsIdBufferGrowthPeaksAndRetriesWithoutMaterializingForeignRanges) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY);
+	for (uint64_t edgeId = 1U; edgeId <= 40U; ++edgeId) {
+		root.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, edgeId}), 0U});
+	}
+	root.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 8U, 1U}), 0U});
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(101U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+		LogSequenceNumber(2U)).has_value());
+	const IndexRootLocation location{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&location, 1U), {}, LogSequenceNumber(3U)));
+	GlobalAdjacencyIndex index(pages, *metadata);
+	auto snapshot = metadata->openSnapshot();
+	size_t peakBytes = 0U;
+	EXPECT_THROW(static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 40U, {},
+		[&](size_t bytes) {
+			peakBytes = std::max(peakBytes, bytes);
+			if (bytes > 383U) throw std::runtime_error("ID allocation peak rejected");
+		})), std::runtime_error);
+	// Growing from 16 to 32 IDs must admit both buffers before allocation.
+	EXPECT_EQ(peakBytes, 48U * sizeof(uint64_t));
+	peakBytes = 0U;
+	size_t retainedBytes = 0U;
+	const auto result = index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 40U, {},
+		[&](size_t bytes) { peakBytes = std::max(peakBytes, bytes); retainedBytes = bytes; });
+	ASSERT_EQ(result.edge_ids.size(), 40U);
+	for (size_t ordinal = 0U; ordinal < 40U; ++ordinal) EXPECT_EQ(result.edge_ids[ordinal], ordinal + 1U);
+	EXPECT_FALSE(result.continuation.has_value());
+	EXPECT_EQ(peakBytes, 72U * sizeof(uint64_t));
+	EXPECT_EQ(retainedBytes, result.edge_ids.capacity() * sizeof(uint64_t));
+	// A huge logical limit must neither reserve its full size nor collect Node 8.
+	const auto sparse = index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 8U, 1'000'000U);
+	ASSERT_EQ(sparse.edge_ids, (std::vector<uint64_t>{1U}));
+	EXPECT_LE(sparse.edge_ids.capacity(), 16U);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, AdmitsLeafBoundaryKeyAlongsideIdsAndReleasesItBeforeReturn) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	auto root = internal(PageId(100U), PageId(101U),
+		{GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+		LogSequenceNumber(2U)).has_value());
+	auto left = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(102U), LogSequenceNumber(3U));
+	for (uint64_t id: {1U, 2U})
+		left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, id}), 0U});
+	auto right = leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+		RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX}, left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+		RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX}, right, LogSequenceNumber(4U)));
+	const IndexRootLocation location{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&location, 1U), {}, LogSequenceNumber(5U)));
+	GlobalAdjacencyIndex index(pages, *metadata);
+	auto snapshot = metadata->openSnapshot();
+	size_t peak = 0U;
+	EXPECT_THROW(static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 3U, {},
+		[&](size_t bytes) { peak = std::max(peak, bytes); if (bytes > 3U * sizeof(uint64_t))
+			throw std::runtime_error("leaf boundary budget rejected"); })), std::runtime_error);
+	const size_t keyBytes = AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}).size();
+	EXPECT_EQ(peak, 3U * sizeof(uint64_t) + keyBytes);
+	size_t retained = 0U;
+	const auto admit = [&](size_t bytes) { peak = std::max(peak, bytes); retained = bytes; };
+	const auto all = index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 3U, {}, admit);
+	EXPECT_EQ(all.edge_ids, (std::vector<uint64_t>{1U, 2U, 3U}));
+	EXPECT_FALSE(all.continuation.has_value());
+	EXPECT_EQ(retained, all.edge_ids.capacity() * sizeof(uint64_t));
+	const auto first = index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 2U, {}, admit);
+	EXPECT_EQ(first.edge_ids, (std::vector<uint64_t>{1U, 2U}));
+	ASSERT_TRUE(first.continuation.has_value());
+	EXPECT_EQ(retained, first.edge_ids.capacity() * sizeof(uint64_t));
+	const auto last = index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 2U, first.continuation, admit);
+	EXPECT_EQ(last.edge_ids, (std::vector<uint64_t>{3U}));
+	EXPECT_FALSE(last.continuation.has_value());
+	EXPECT_EQ(retained, last.edge_ids.capacity() * sizeof(uint64_t));
+}
+
+TEST_F(GlobalAdjacencyIndexTest, MultiNodeTraversalAdmitsBoundaryKeyAndRetriesAfterRejection) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	auto root = internal(PageId(100U), PageId(101U),
+		{GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+		LogSequenceNumber(2U)).has_value());
+	auto left = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(102U), LogSequenceNumber(3U));
+	for (uint64_t id: {1U, 2U})
+		left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, id}), 0U});
+	auto right = leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+		RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX}, left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+		RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX}, right, LogSequenceNumber(4U)));
+	const IndexRootLocation location{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&location, 1U), {}, LogSequenceNumber(5U)));
+	GlobalAdjacencyIndex index(pages, *metadata);
+	auto snapshot = metadata->openSnapshot();
+	const std::array<uint64_t, 1U> nodes{7U};
+	size_t delivered = 0U;
+	EXPECT_THROW(static_cast<void>(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+		[&](uint64_t, uint64_t) { ++delivered; return true; },
+		[](size_t bytes) { if (bytes != 0U) throw std::runtime_error("boundary rejected"); })), std::runtime_error);
+	EXPECT_EQ(delivered, 0U);
+	// A throwing checkpoint must cancel root descent before any key delivery.
+	delivered = 0U;
+	size_t checkpoints = 0U;
+	EXPECT_THROW(static_cast<void>(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+		[&](uint64_t, uint64_t) { ++delivered; return true; },
+		[&](size_t bytes) { ++checkpoints; EXPECT_EQ(bytes, 0U); throw std::runtime_error("cancel descent"); })),
+		std::runtime_error);
+	EXPECT_EQ(checkpoints, 1U);
+	EXPECT_EQ(delivered, 0U);
+
+	std::vector<uint64_t> ids;
+	size_t peak = 0U;
+	EXPECT_TRUE(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+		[&](uint64_t node, uint64_t edge) { EXPECT_EQ(node, 7U); ids.push_back(edge); return true; },
+		[&](size_t bytes) { peak = std::max(peak, bytes); }));
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U, 2U, 3U}));
+	EXPECT_GE(peak, AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}).size());
 }

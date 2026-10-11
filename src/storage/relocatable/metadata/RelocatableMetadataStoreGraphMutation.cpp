@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 #include <algorithm>
 #include <array>
@@ -26,6 +27,8 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
+#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphFinalPublication.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphLargeValuePlanner.hpp"
@@ -788,8 +791,21 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native graph page transaction does not own its logical-ID lease capability");
 		}
+		// Construct the read-only adapter before acquiring the publication barrier:
+		// its allocator attaches through openSnapshot(). Actual schema reads below
+		// use the writer-fenced pin, so no stale schema is accepted.
+		std::unique_ptr<SlottedPagePool> deferredSchemaPool;
+		if (deferredIndexPlanner || earlyPublicationPlanner || deferredIndexPlansPlanner) {
+			deferredSchemaPool = std::make_unique<SlottedPagePool>(
+					io_, *this, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+		}
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
+		// The writer fences this published generation until this call returns.
+		// Reuse only immutable raw decodes through the existing bounded context;
+		// StorageIO mutation epochs invalidate it and candidate generations are excluded.
+		MetadataPageReadContext::Scope writerReads(
+				std::make_shared<MetadataPageReadContext>(current), *io_);
 		if (derivedState.external_private_tail_reservation.has_value()) {
 			const PhysicalSlotRange tail = *derivedState.external_private_tail_reservation;
 			const uint64_t fileSize = io_->fileSize();
@@ -2333,9 +2349,19 @@ namespace graph::storage {
 				const NativeGraphIndexTreeMutation &mutation = plan.mutation;
 				const bool replacesRoot = mutation.replacement_root.has_value();
 				const bool retiresRoot = mutation.retire_root;
-				const bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+				bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
 											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+				if (!allowedIndexId && isSystemCatalogIndexDefinitionId(mutation.index_id) &&
+						replacesRoot && mutation.expected_root.has_value()) {
+					// Logical members are admitted only by their authenticated published
+					// schema in this writer-fenced snapshot, never by an arbitrary ID.
+					BTreePageStore schemaPages(*deferredSchemaPool, *this);
+					SystemCatalog schema(schemaPages, *this);
+					const auto definition = schema.findIndexDefinitionById(*deferredPlanningSnapshot, mutation.index_id);
+					allowedIndexId = definition.has_value() && definition->kind == IndexDefinitionKind::IDK_LABEL &&
+							definition->entity_kind == IndexDefinitionEntityKind::IDEK_EDGE;
+				}
 				if (!plan.preparer || !allowedIndexId || // effective index mutations are assembled only from authenticated preparers and allowed IDs.
 					std::ranges::any_of(effectiveIndexMutations,
 										[&mutation](const NativeGraphIndexTreeMutation &existing) {
@@ -3066,8 +3092,11 @@ namespace graph::storage {
 		if (hasLargeValueRetirements) {
 			largeValueRetirementPreparer(largeValueRetirementBatches);
 		}
-		preparer(materializations, appendMaterializations, newPoolMaterializations, propertyMaterializations,
-				 propertyPageBatchMaterializations, largeValueMaterializations);
+		{
+			debug::ScopedPerfTimer preparationTimer("native_graph.mutation.prepare_materializations");
+			preparer(materializations, appendMaterializations, newPoolMaterializations, propertyMaterializations,
+					 propertyPageBatchMaterializations, largeValueMaterializations);
+		}
 		if (!vectorBootstrapMaterializations.empty()) {
 			vectorBootstrapPreparer(vectorBootstrapMaterializations);
 		}
@@ -4813,7 +4842,7 @@ namespace graph::storage {
 									debug::ScopedPerfTimer indexTimer("native_graph.streamed.final.index_plan");
 									NativeGraphDeferredIndexPlans indexPlans = NativeStreamedGraphPublicationIndexPlanner::plan(
 											catalog, adjacencyPages, largeValueStore, *this, prepared, request.index_planning,
-											{context.private_segments, context.private_segment_reader, context.current_snapshot}, checkpointLsn);
+											{context.private_segments, context.private_segment_reader, context.current_snapshot}, checkpointLsn, &publication);
 								for (NativeGraphDeferredIndexPlan &indexPlan: indexPlans.plans) {
 									context.deferred_index_plan_sink(std::move(indexPlan));
 								}

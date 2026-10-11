@@ -114,6 +114,7 @@ namespace graph::storage {
 		// one DDL work unit. It prevents a corrupted/oversized bootstrap request
 		// from retaining an unbounded candidate publication in memory.
 		size_t maximum_pages = 0U;
+		std::function<void()> checkpoint{};
 	};
 
 	struct NativeGraphVectorDeltaOptions {

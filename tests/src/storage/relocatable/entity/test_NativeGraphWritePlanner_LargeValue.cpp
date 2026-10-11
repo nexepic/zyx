@@ -1177,3 +1177,26 @@ TEST_F(NativeGraphLargeValueMutationTest, RejectsExternalMutationOfReservedConte
 			 FormatException);
 	EXPECT_THROW(transaction.stageScalarIndexDrop(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, 1U), FormatException);
 }
+
+TEST_F(NativeGraphLargeValueMutationTest, RollbackOfWidePropertyReplacementPreservesPublishedValueAndGeneration) {
+ const std::string original(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 101U, 'r');
+ BTreePageStore indexes(*slotted_pages_, *metadata_);
+ NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+ PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+ NativeGraphMutationExecutor executor(writer, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_,
+  largeValueTokens(), [](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+  [](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+ LogicalGraphMutationBatch create; create.node_creates = {{{"Person"}, {{"body", PropertyValue(original)}}}};
+ const auto created = executor.execute(create);
+ ASSERT_EQ(created.result.created_node_ids.size(), 1U); const auto id = created.result.created_node_ids.front();
+ auto before = metadata_->openSnapshot();
+ const auto reference = storedLargeValueReference(before, *metadata_, *slotted_pages_, id).value;
+ auto transaction = writer.beginTransaction();
+ transaction.replaceNodeProperty(entityPropertyRoot(id, std::string(original.size() * 2U, 's')));
+ transaction.rollback();
+ auto after = metadata_->openSnapshot();
+ EXPECT_EQ(after.superblock().generation, before.superblock().generation);
+ EXPECT_EQ(storedLargeValueReference(after, *metadata_, *slotted_pages_, id).value.value_id, reference.value_id);
+ EXPECT_EQ(graph.readNode(after, id).properties.front().value, PropertyValue(original));
+ EXPECT_EQ(graph.readNode(before, id).properties.front().value, PropertyValue(original));
+}

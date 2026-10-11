@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 namespace graph::storage {
 
@@ -69,13 +70,13 @@ namespace graph::storage {
 	} // namespace
 
 	MetadataSnapshotPin::MetadataSnapshotPin(std::shared_ptr<MetadataSnapshotRegistryState> state,
-											 Superblock superblock) :
-		state_(std::move(state)), superblock_(superblock) {}
+											 Superblock superblock, std::shared_ptr<MetadataPageReadContext> readContext) noexcept :
+		state_(std::move(state)), superblock_(superblock), read_context_(std::move(readContext)) {}
 
 	MetadataSnapshotPin::~MetadataSnapshotPin() { release(); }
 
 	MetadataSnapshotPin::MetadataSnapshotPin(MetadataSnapshotPin &&other) noexcept :
-		state_(std::move(other.state_)), superblock_(other.superblock_) {
+		state_(std::move(other.state_)), superblock_(other.superblock_), read_context_(std::move(other.read_context_)) {
 		other.superblock_ = {};
 	}
 
@@ -84,6 +85,7 @@ namespace graph::storage {
 			release();
 			state_ = std::move(other.state_);
 			superblock_ = other.superblock_;
+			read_context_ = std::move(other.read_context_);
 			other.superblock_ = {};
 		}
 		return *this;
@@ -92,6 +94,7 @@ namespace graph::storage {
 	void MetadataSnapshotPin::release() {
 		if (state_) {
 			releaseSnapshot(state_, superblock_);
+			read_context_.reset();
 			state_.reset();
 			superblock_ = {};
 		}
@@ -122,6 +125,8 @@ namespace graph::storage {
 		std::shared_lock lock(state_->publication_mutex);
 		const Superblock snapshot = state_->bootstrap->recover();
 		static_cast<void>(SuperblockCodec::encode(snapshot));
+		// Allocate before registration so an allocation failure cannot leak a pin.
+		auto readContext = std::make_shared<MetadataPageReadContext>(snapshot);
 		{
 			std::lock_guard snapshotsLock(state_->snapshots_mutex);
 			auto [position, inserted] =
@@ -133,7 +138,7 @@ namespace graph::storage {
 			}
 			++position->second.second;
 		}
-		return MetadataSnapshotPin(state_, snapshot);
+		return MetadataSnapshotPin(state_, snapshot, std::move(readContext));
 	}
 
 	MetadataWriteGuard MetadataSnapshotRegistry::beginWrite() {
@@ -149,6 +154,8 @@ namespace graph::storage {
 					"relocatable current snapshot pin requires this registry's active writer and durable root");
 		}
 		static_cast<void>(SuperblockCodec::encode(current));
+		// Allocate before registration so an allocation failure cannot leak a pin.
+		auto readContext = std::make_shared<MetadataPageReadContext>(current);
 		{
 			std::lock_guard snapshotsLock(state_->snapshots_mutex);
 			auto [position, inserted] =
@@ -160,7 +167,7 @@ namespace graph::storage {
 			}
 			++position->second.second;
 		}
-		return MetadataSnapshotPin(state_, current);
+		return MetadataSnapshotPin(state_, current, std::move(readContext));
 	}
 
 	void MetadataSnapshotRegistry::reclaimAfterPublication(const MetadataWriteGuard &guard,

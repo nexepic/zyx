@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <span>
 #include <vector>
@@ -127,6 +128,8 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] static SlottedPage create(PageId pageId, Generation pageGeneration);
+		// Validate allocation metadata without constructing/checksumming a page.
+		static void validateOwner(const PageOwnerHeader &owner);
 		[[nodiscard]] static SlottedPage create(const PageOwnerHeader &owner);
 		[[nodiscard]] static SlottedPage open(std::span<const std::byte> bytes);
 		[[nodiscard]] static SlottedPage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
@@ -154,7 +157,11 @@ namespace graph::storage {
 		void rebindOwner(const PageOwnerHeader &owner);
 
 		[[nodiscard]] SlottedSlotReference insert(std::span<const std::byte> value);
-		[[nodiscard]] std::vector<std::byte> read(const SlottedSlotReference &reference) const;
+		[[nodiscard]] size_t retainedBufferBytes() const;
+		// Admission runs under the page latch before copying and after capacity is
+		// known. The callback may throw, but must not reenter this page.
+		[[nodiscard]] std::vector<std::byte> read(const SlottedSlotReference &reference,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		void overwrite(const SlottedSlotReference &reference, std::span<const std::byte> value);
 		void erase(const SlottedSlotReference &reference);
 		void compact();

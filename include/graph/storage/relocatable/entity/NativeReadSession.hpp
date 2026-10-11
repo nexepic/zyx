@@ -15,6 +15,7 @@
 #include <functional>
 #include <limits>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -38,10 +39,14 @@ namespace graph::storage {
 	public:
 		static constexpr size_t MAXIMUM_CACHED_ENTITY_RECORDS = 128U;
 		static constexpr size_t MAXIMUM_CACHED_TOKEN_NAMES = 128U;
+		// Per namespace, including both copies of name-to-token keys (map/FIFO).
+		// This bounds logical string payload, not allocator overhead or query RSS.
+		static constexpr size_t MAXIMUM_CACHED_TOKEN_NAME_BYTES = 512U * 1024U;
 		static constexpr size_t MAXIMUM_CACHED_SCHEMA_DEFINITIONS = 64U;
 		static constexpr size_t MAXIMUM_CACHED_SCHEMA_DEFINITION_BYTES = 512U * 1024U;
 		static constexpr size_t MAXIMUM_CACHED_PROPERTIES = 512U;
 		static constexpr size_t MAXIMUM_CACHED_NODE_LABEL_SETS = 256U;
+		static constexpr size_t MAXIMUM_CACHED_NODE_LABEL_BYTES = 64U * 1024U;
 		// Property values may own strings, lists, maps, or binary payloads. Keep
 		// the entry cap and add a byte cap so one large value cannot consume an
 		// unbounded fraction of a query session's memory.
@@ -105,11 +110,25 @@ namespace graph::storage {
 			}
 			return std::nullopt;
 		}
+		// Borrow only until the next session mutation, clear, or snapshot bind.
+		[[nodiscard]] std::optional<std::span<const uint64_t>> nodeLabelsView(uint64_t id) const {
+			const auto found = node_label_cache_.find(id);
+			if (found == node_label_cache_.end()) return std::nullopt;
+			return std::span<const uint64_t>(found->second);
+		}
 		void putNodeLabels(uint64_t id, const std::vector<uint64_t> &labels) const {
-			if (id == 0U || labels.size() > MAXIMUM_CACHED_NODE_LABEL_SETS) {
+			const auto discardPrevious = [&]() {
+				if (const auto found = node_label_cache_.find(id); found != node_label_cache_.end()) {
+					node_label_cache_bytes_ -= found->second.capacity() * sizeof(uint64_t);
+					node_label_cache_.erase(found);
+					std::erase(node_label_order_, id);
+				}
+			};
+			if (id == 0U || labels.size() > MAXIMUM_CACHED_NODE_LABEL_BYTES / sizeof(uint64_t)) {
 				if (id == 0U) {
 					throw std::invalid_argument("native read session Node label cache requires a nonzero identifier");
 				}
+				discardPrevious();
 				return;
 			}
 			for (size_t index = 0U; index < labels.size(); ++index) {
@@ -117,17 +136,33 @@ namespace graph::storage {
 					throw std::invalid_argument("native read session Node label cache requires ordered nonzero tokens");
 				}
 			}
-			const auto found = node_label_cache_.find(id);
-			if (found != node_label_cache_.end()) {
-				found->second = labels;
-				return;
-			}
-			if (node_label_cache_.size() == MAXIMUM_CACHED_NODE_LABEL_SETS) {
-				node_label_cache_.erase(node_label_order_.front());
+			std::vector<uint64_t> replacement(labels);
+			const size_t bytes = replacement.capacity() * sizeof(uint64_t);
+			if (bytes > MAXIMUM_CACHED_NODE_LABEL_BYTES) { discardPrevious(); return; }
+			const auto evictOldest = [&]() {
+				const auto oldest = node_label_cache_.find(node_label_order_.front());
+				node_label_cache_bytes_ -= oldest->second.capacity() * sizeof(uint64_t);
+				node_label_cache_.erase(oldest);
 				node_label_order_.pop_front();
+			};
+			if (const auto found = node_label_cache_.find(id); found != node_label_cache_.end()) {
+				node_label_cache_bytes_ -= found->second.capacity() * sizeof(uint64_t);
+				found->second.swap(replacement);
+				node_label_cache_bytes_ += bytes;
+			} else {
+				while (!node_label_order_.empty() &&
+					(node_label_cache_.size() >= MAXIMUM_CACHED_NODE_LABEL_SETS ||
+					 bytes > MAXIMUM_CACHED_NODE_LABEL_BYTES - node_label_cache_bytes_)) evictOldest();
+				node_label_order_.push_back(id);
+				try {
+					node_label_cache_.emplace(id, std::move(replacement));
+				} catch (...) {
+					node_label_order_.pop_back();
+					throw;
+				}
+				node_label_cache_bytes_ += bytes;
 			}
-			node_label_order_.push_back(id);
-			node_label_cache_.emplace(id, labels);
+			while (node_label_cache_bytes_ > MAXIMUM_CACHED_NODE_LABEL_BYTES) evictOldest();
 		}
 		void putNode(uint64_t id, const NodeEntityRecord &value) const {
 			put(node_cache_, node_order_, id, value);
@@ -136,54 +171,47 @@ namespace graph::storage {
 			put(edge_cache_, edge_order_, id, value);
 		}
 
+		// Test presence without copying a potentially large cached payload.
+		[[nodiscard]] bool hasProperty(bool isEdge, uint64_t entityId, uint32_t token) const {
+			return property_cache_.contains(PropertyCacheKey{isEdge, entityId, token});
+		}
+
 		// The outer optional distinguishes a cache miss from a cached absent value.
 		// Property values are snapshot-bound through bind(), so this cache is safe
 		// for repeated expression/projection reads within one query session.
 		[[nodiscard]] std::optional<std::optional<PropertyValue>> property(
-				bool isEdge, uint64_t entityId, uint32_t token) const {
+				bool isEdge, uint64_t entityId, uint32_t token,
+				const SelectedPropertyReadAdmission *admission = nullptr) const {
 			const auto found = property_cache_.find(PropertyCacheKey{isEdge, entityId, token});
 			if (found == property_cache_.end()) {
 				return std::nullopt;
 			}
+			if (admission != nullptr && found->second.has_value()) {
+				const size_t valueBytes = CanonicalPropertyValueCodec::encodedSize(*found->second);
+				if (valueBytes > std::numeric_limits<size_t>::max() - sizeof(uint32_t)) {
+					throw std::overflow_error("cached Property entry size overflowed");
+				}
+				(*admission)(valueBytes + sizeof(uint32_t));
+			}
 			return found->second.has_value() ? std::optional<std::optional<PropertyValue>>{found->second}
 											 : std::optional<std::optional<PropertyValue>>{std::optional<PropertyValue>{}};
 		}
+		// Borrow lvalues until cache admission; consume rvalues only if retained.
 		void putProperty(bool isEdge, uint64_t entityId, uint32_t token,
-						 std::optional<PropertyValue> value) const {
-			if (entityId == 0U || token == 0U) {
-				throw std::invalid_argument("native read session Property cache requires nonzero identifiers");
-			}
-			const PropertyCacheKey key{isEdge, entityId, token};
-			const size_t valueBytes = value.has_value() ? propertyValueBytes(*value) : 0U;
-			if (valueBytes > MAXIMUM_CACHED_PROPERTY_BYTES) {
-				// Do not retain an oversized value. Remove an older entry for the same
-				// key so a stale cached value cannot survive a deliberate bypass.
-				if (const auto found = property_cache_.find(key); found != property_cache_.end()) {
-					property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
-					property_cache_.erase(found);
-					std::erase(property_order_, key);
-				}
-				return;
-			}
-			if (const auto found = property_cache_.find(key); found != property_cache_.end()) {
-				property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
-				found->second = std::move(value);
-				property_cache_bytes_ += valueBytes;
-				return;
-			}
-			while (!property_order_.empty() &&
-				   (property_cache_.size() >= MAXIMUM_CACHED_PROPERTIES ||
-					property_cache_bytes_ > MAXIMUM_CACHED_PROPERTY_BYTES - valueBytes)) {
-				const PropertyCacheKey evicted = property_order_.front();
-				property_order_.pop_front();
-				if (const auto found = property_cache_.find(evicted); found != property_cache_.end()) {
-					property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
-					property_cache_.erase(found);
-				}
-			}
-			property_order_.push_back(key);
-			property_cache_.emplace(key, std::move(value));
-			property_cache_bytes_ += valueBytes;
+				const std::optional<PropertyValue> &value) const {
+			putPropertyImpl(isEdge, entityId, token, value);
+		}
+		void putProperty(bool isEdge, uint64_t entityId, uint32_t token,
+				std::optional<PropertyValue> &&value) const {
+			putPropertyImpl(isEdge, entityId, token, std::move(value));
+		}
+
+		// Avoid an implicit optional payload copy/move before cache admission.
+		void putProperty(bool isEdge, uint64_t entityId, uint32_t token, const PropertyValue &value) const {
+			putPropertyImpl(isEdge, entityId, token, value);
+		}
+		void putProperty(bool isEdge, uint64_t entityId, uint32_t token, PropertyValue &&value) const {
+			putPropertyImpl(isEdge, entityId, token, std::move(value));
 		}
 
 		// Presence is cached separately from decoded values so COUNT(property) can
@@ -209,9 +237,13 @@ namespace graph::storage {
 			property_presence_cache_.emplace(key, present);
 		}
 
-		[[nodiscard]] std::optional<std::string> tokenName(TokenNameKind kind, uint64_t tokenId) const {
+		[[nodiscard]] std::optional<std::string> tokenName(TokenNameKind kind, uint64_t tokenId,
+				const std::function<void(size_t)> &copyAdmission = {}) const {
 			const auto found = token_name_cache_.find(TokenNameKey{kind, tokenId});
 			if (found != token_name_cache_.end()) {
+				// Admit the owned copy before its string allocation; rejection leaves
+				// the snapshot-local cached name and its retention budget intact.
+				if (copyAdmission) copyAdmission(found->second.capacity());
 				return found->second;
 			}
 			return std::nullopt;
@@ -228,22 +260,11 @@ namespace graph::storage {
 			return found->second == 0U ? std::optional<std::optional<uint32_t>>{std::optional<uint32_t>{}}
 											 : std::optional<std::optional<uint32_t>>{found->second};
 		}
-		void putPropertyToken(std::string name, std::optional<uint32_t> token) const {
+		void putPropertyToken(std::string_view name, std::optional<uint32_t> token) const {
 			if (name.empty() || (token.has_value() && *token == 0U)) {
 				throw std::invalid_argument("native read session Property token cache requires a name and nonzero token");
 			}
-			const uint32_t stored = token.value_or(0U);
-			const auto found = property_token_cache_.find(name);
-			if (found != property_token_cache_.end()) {
-				found->second = stored;
-				return;
-			}
-			if (property_token_cache_.size() == MAXIMUM_CACHED_TOKEN_NAMES) {
-				property_token_cache_.erase(property_token_order_.front());
-				property_token_order_.pop_front();
-			}
-			property_token_order_.push_back(name);
-			property_token_cache_.emplace(std::move(name), stored);
+			putNamedToken(property_token_cache_, property_token_order_, property_token_bytes_, name, token.value_or(0U));
 		}
 		[[nodiscard]] std::optional<std::optional<uint64_t>> nodeLabelToken(std::string_view name) const {
 			const auto found = node_label_token_cache_.find(name);
@@ -253,22 +274,11 @@ namespace graph::storage {
 			return found->second == 0U ? std::optional<std::optional<uint64_t>>{std::optional<uint64_t>{}}
 													 : std::optional<std::optional<uint64_t>>{found->second};
 		}
-		void putNodeLabelToken(std::string name, std::optional<uint64_t> token) const {
+		void putNodeLabelToken(std::string_view name, std::optional<uint64_t> token) const {
 			if (name.empty() || (token.has_value() && *token == 0U)) {
 				throw std::invalid_argument("native read session Node-label token cache requires a name and nonzero token");
 			}
-			const uint64_t stored = token.value_or(0U);
-			const auto found = node_label_token_cache_.find(name);
-			if (found != node_label_token_cache_.end()) {
-				found->second = stored;
-				return;
-			}
-			if (node_label_token_cache_.size() == MAXIMUM_CACHED_TOKEN_NAMES) {
-				node_label_token_cache_.erase(node_label_token_order_.front());
-				node_label_token_order_.pop_front();
-			}
-			node_label_token_order_.push_back(name);
-			node_label_token_cache_.emplace(std::move(name), stored);
+			putNamedToken(node_label_token_cache_, node_label_token_order_, node_label_token_bytes_, name, token.value_or(0U));
 		}
 		// Relationship-type names are resolved repeatedly by topology-only
 		// operators. Cache both hits and misses in the same snapshot-bound,
@@ -281,41 +291,51 @@ namespace graph::storage {
 			return found->second == 0U ? std::optional<std::optional<uint64_t>>{std::optional<uint64_t>{}}
 													 : std::optional<std::optional<uint64_t>>{found->second};
 		}
-		void putRelationshipTypeToken(std::string name, std::optional<uint64_t> token) const {
+		void putRelationshipTypeToken(std::string_view name, std::optional<uint64_t> token) const {
 			if (name.empty() || (token.has_value() && *token == 0U)) {
 				throw std::invalid_argument(
 						"native read session relationship-type token cache requires a name and nonzero token");
 			}
-			const uint64_t stored = token.value_or(0U);
-			const auto found = relationship_type_token_cache_.find(name);
-			if (found != relationship_type_token_cache_.end()) {
-				found->second = stored;
-				return;
-			}
-			if (relationship_type_token_cache_.size() == MAXIMUM_CACHED_TOKEN_NAMES) {
-				relationship_type_token_cache_.erase(relationship_type_token_order_.front());
-				relationship_type_token_order_.pop_front();
-			}
-			relationship_type_token_order_.push_back(name);
-			relationship_type_token_cache_.emplace(std::move(name), stored);
+			putNamedToken(relationship_type_token_cache_, relationship_type_token_order_, relationship_type_token_bytes_, name, token.value_or(0U));
 		}
-		void putTokenName(TokenNameKind kind, uint64_t tokenId, std::string name) const {
+		void putTokenName(TokenNameKind kind, uint64_t tokenId, std::string_view name) const {
 			if (tokenId == 0U || name.empty()) {
 				throw std::invalid_argument("native read session token names require nonzero IDs and values");
 			}
 			const TokenNameKey key{kind, tokenId};
 			const auto found = token_name_cache_.find(key);
-			if (found != token_name_cache_.end()) {
-				found->second = std::move(name);
+			const size_t oldBytes = found == token_name_cache_.end() ? 0U : found->second.size();
+			if (name.size() > MAXIMUM_CACHED_TOKEN_NAME_BYTES) {
+				if (found != token_name_cache_.end()) {
+					token_name_bytes_ -= oldBytes;
+					token_name_cache_.erase(found);
+					std::erase(token_name_order_, key);
+				}
 				return;
 			}
-			if (token_name_cache_.size() == MAXIMUM_CACHED_TOKEN_NAMES) {
-				const TokenNameKey evicted = token_name_order_.front();
-				token_name_order_.pop_front();
-				token_name_cache_.erase(evicted);
+			while ((found == token_name_cache_.end() && token_name_cache_.size() >= MAXIMUM_CACHED_TOKEN_NAMES) ||
+				   token_name_bytes_ - oldBytes > MAXIMUM_CACHED_TOKEN_NAME_BYTES - name.size()) {
+				// Preserve the original FIFO position of an updated key.
+				const auto evicted = std::find_if(token_name_order_.begin(), token_name_order_.end(),
+						[&key](const TokenNameKey &candidate) { return candidate != key; });
+				const auto entry = token_name_cache_.find(*evicted);
+				token_name_bytes_ -= entry->second.size();
+				token_name_cache_.erase(entry);
+				token_name_order_.erase(evicted);
 			}
-			token_name_order_.push_back(key);
-			token_name_cache_.emplace(key, std::move(name));
+			if (found != token_name_cache_.end()) {
+				found->second = std::string(name);
+				token_name_bytes_ = token_name_bytes_ - oldBytes + name.size();
+				return;
+			}
+			const auto inserted = token_name_cache_.emplace(key, name).first;
+			try {
+				token_name_order_.push_back(key);
+			} catch (...) {
+				token_name_cache_.erase(inserted);
+				throw;
+			}
+			token_name_bytes_ += name.size();
 		}
 
 		// Schema lists are immutable for a bound metadata generation. Cache only a
@@ -372,6 +392,84 @@ namespace graph::storage {
 		}
 
 	private:
+		template <typename Cache>
+		static void putNamedToken(Cache &cache, std::deque<std::string> &order, size_t &bytes,
+				std::string_view name, typename Cache::mapped_type token) {
+			if (const auto found = cache.find(name); found != cache.end()) {
+				found->second = token;
+				return;
+			}
+			// Check before constructing either retained name copy. Cache bypass
+			// still permits the caller to use the resolved token for this read.
+			if (name.size() > MAXIMUM_CACHED_TOKEN_NAME_BYTES / 2U) return;
+			const size_t nameBytes = name.size() * 2U;
+			while (!order.empty() && (cache.size() >= MAXIMUM_CACHED_TOKEN_NAMES ||
+					bytes > MAXIMUM_CACHED_TOKEN_NAME_BYTES - nameBytes)) {
+				bytes -= order.front().size() * 2U;
+				cache.erase(order.front());
+				order.pop_front();
+			}
+			const auto inserted = cache.emplace(std::string(name), token).first;
+			try {
+				order.push_back(inserted->first);
+			} catch (...) {
+				cache.erase(inserted);
+				throw;
+			}
+			bytes += nameBytes;
+		}
+
+		template <typename Value>
+		void putPropertyImpl(bool isEdge, uint64_t entityId, uint32_t token, Value &&value) const {
+			if (entityId == 0U || token == 0U) {
+				throw std::invalid_argument("native read session Property cache requires nonzero identifiers");
+			}
+			const PropertyCacheKey key{isEdge, entityId, token};
+			const size_t valueBytes = [&] {
+				if constexpr (std::is_same_v<std::remove_cvref_t<Value>, PropertyValue>) return propertyValueBytes(value);
+				else return value.has_value() ? propertyValueBytes(*value) : 0U;
+			}();
+			// Remove the old payload before admitting its replacement. Updates share
+			// the same retained-byte cap as new keys and refresh FIFO insertion order.
+			if (const auto found = property_cache_.find(key); found != property_cache_.end()) {
+				property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
+				property_cache_.erase(found);
+				std::erase(property_order_, key);
+			}
+			if (valueBytes > MAXIMUM_CACHED_PROPERTY_BYTES) return;
+			while (!property_order_.empty() &&
+				   (property_cache_.size() >= MAXIMUM_CACHED_PROPERTIES ||
+					property_cache_bytes_ > MAXIMUM_CACHED_PROPERTY_BYTES - valueBytes)) {
+				const PropertyCacheKey evicted = property_order_.front();
+				property_order_.pop_front();
+				if (const auto found = property_cache_.find(evicted); found != property_cache_.end()) {
+					property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
+					property_cache_.erase(found);
+				}
+			}
+			const auto inserted = property_cache_.emplace(key, std::forward<Value>(value)).first;
+			const size_t retainedBytes = inserted->second.has_value() ? propertyValueBytes(*inserted->second) : 0U;
+			if (retainedBytes > MAXIMUM_CACHED_PROPERTY_BYTES) {
+				property_cache_.erase(inserted);
+				return;
+			}
+			while (!property_order_.empty() && property_cache_bytes_ > MAXIMUM_CACHED_PROPERTY_BYTES - retainedBytes) {
+				const PropertyCacheKey evicted = property_order_.front();
+				property_order_.pop_front();
+				if (const auto found = property_cache_.find(evicted); found != property_cache_.end()) {
+					property_cache_bytes_ -= found->second.has_value() ? propertyValueBytes(*found->second) : 0U;
+					property_cache_.erase(found);
+				}
+			}
+			try {
+				property_order_.push_back(key);
+			} catch (...) {
+				property_cache_.erase(inserted);
+				throw;
+			}
+			property_cache_bytes_ += retainedBytes;
+		}
+
 		[[nodiscard]] static size_t propertyValueBytes(const PropertyValue &value) {
 			constexpr size_t MAX_DEPTH = 64U;
 			constexpr size_t OVER_BUDGET = MAXIMUM_CACHED_PROPERTY_BYTES + 1U;
@@ -383,12 +481,12 @@ namespace graph::storage {
 						[&self, depth](const auto &stored) -> size_t {
 							using T = std::decay_t<decltype(stored)>;
 							if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, PropertyValue::Bytes>) {
-								return stored.size() > MAXIMUM_CACHED_PROPERTY_BYTES ? OVER_BUDGET : stored.size();
+								return stored.capacity() > MAXIMUM_CACHED_PROPERTY_BYTES ? OVER_BUDGET : stored.capacity();
 							} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
-								if (stored.size() > MAXIMUM_CACHED_PROPERTY_BYTES / sizeof(PropertyValue)) {
+								if (stored.capacity() > MAXIMUM_CACHED_PROPERTY_BYTES / sizeof(PropertyValue)) {
 									return OVER_BUDGET;
 								}
-								size_t bytes = stored.size() * sizeof(PropertyValue);
+								size_t bytes = stored.capacity() * sizeof(PropertyValue);
 								for (const PropertyValue &item: stored) {
 									const size_t itemBytes = self(self, item, depth + 1U);
 									if (itemBytes > MAXIMUM_CACHED_PROPERTY_BYTES ||
@@ -404,16 +502,18 @@ namespace graph::storage {
 									return OVER_BUDGET;
 								}
 								size_t bytes = stored.size() * sizeof(std::pair<const std::string, PropertyValue>);
+								if (stored.bucket_count() > (MAXIMUM_CACHED_PROPERTY_BYTES - bytes) / sizeof(void *)) return OVER_BUDGET;
+								bytes += stored.bucket_count() * sizeof(void *);
 								for (const auto &[key, item]: stored) {
 									const size_t valueBytes = self(self, item, depth + 1U);
 									if (valueBytes > MAXIMUM_CACHED_PROPERTY_BYTES) {
 										return OVER_BUDGET;
 									}
-									if (key.size() > MAXIMUM_CACHED_PROPERTY_BYTES -
+									if (key.capacity() > MAXIMUM_CACHED_PROPERTY_BYTES -
 											valueBytes) {
 										return OVER_BUDGET;
 									}
-									const size_t itemBytes = key.size() + valueBytes;
+									const size_t itemBytes = key.capacity() + valueBytes;
 									if (itemBytes > MAXIMUM_CACHED_PROPERTY_BYTES - bytes) {
 										return OVER_BUDGET;
 									}
@@ -434,19 +534,25 @@ namespace graph::storage {
 			if (definitions.size() > MAXIMUM_CACHED_SCHEMA_DEFINITIONS) {
 				return false;
 			}
-			size_t bytes = 0U;
+			if (definitions.capacity() > MAXIMUM_CACHED_SCHEMA_DEFINITION_BYTES / sizeof(Definition)) {
+				return false;
+			}
+			size_t bytes = definitions.capacity() * sizeof(Definition);
+			const auto admit = [&](size_t retained) {
+				if (retained > MAXIMUM_CACHED_SCHEMA_DEFINITION_BYTES - bytes) return false;
+				bytes += retained;
+				return true;
+			};
 			for (const Definition &definition: definitions) {
-				size_t entryBytes = definition.name.size();
+				if (!admit(definition.name.capacity()) ||
+						definition.property_names.capacity() > (MAXIMUM_CACHED_SCHEMA_DEFINITION_BYTES - bytes) / sizeof(std::string) ||
+						!admit(definition.property_names.capacity() * sizeof(std::string))) return false;
 				for (const std::string &propertyName: definition.property_names) {
-					if (entryBytes > std::numeric_limits<size_t>::max() - propertyName.size()) {
-						return false;
-					}
-					entryBytes += propertyName.size();
+					if (!admit(propertyName.capacity())) return false;
 				}
-				if (entryBytes > MAXIMUM_CACHED_SCHEMA_DEFINITION_BYTES - bytes) {
-					return false;
+				if constexpr (requires { definition.vector_metric; }) {
+					if (!admit(definition.vector_metric.capacity())) return false;
 				}
-				bytes += entryBytes;
 			}
 			return true;
 		}
@@ -459,12 +565,21 @@ namespace graph::storage {
 				found->second = value;
 				return;
 			}
-			if (cache.size() == MAXIMUM_CACHED_ENTITY_RECORDS) {
+			// Commit the two cache indexes together. If either allocation fails,
+			// leave the existing FIFO and entries intact instead of retaining a
+			// stale order ID or evicting a useful entry before admission succeeds.
+			const auto [inserted, didInsert] = cache.emplace(id, value);
+			if (!didInsert) return;
+			try {
+				order.push_back(id);
+			} catch (...) {
+				cache.erase(inserted);
+				throw;
+			}
+			if (cache.size() > MAXIMUM_CACHED_ENTITY_RECORDS) {
 				cache.erase(order.front());
 				order.pop_front();
 			}
-			order.push_back(id);
-			cache.emplace(id, value);
 		}
 
 		struct TokenNameKey {
@@ -505,6 +620,7 @@ namespace graph::storage {
 		mutable std::unordered_map<uint64_t, EdgeEntityRecord> edge_cache_;
 		mutable std::unordered_map<uint64_t, bool> node_existence_cache_;
 		mutable std::unordered_map<uint64_t, std::vector<uint64_t>> node_label_cache_;
+		mutable size_t node_label_cache_bytes_ = 0U;
 		mutable std::deque<uint64_t> node_order_;
 		mutable std::deque<uint64_t> edge_order_;
 		mutable std::deque<uint64_t> node_existence_order_;
@@ -517,13 +633,17 @@ namespace graph::storage {
 		mutable size_t property_cache_bytes_ = 0U;
 		mutable std::unordered_map<TokenNameKey, std::string, TokenNameKeyHash> token_name_cache_;
 		mutable std::deque<TokenNameKey> token_name_order_;
+		mutable size_t token_name_bytes_ = 0U;
 		mutable std::unordered_map<std::string, uint32_t, TransparentStringHash, std::equal_to<>> property_token_cache_;
 		mutable std::deque<std::string> property_token_order_;
+		mutable size_t property_token_bytes_ = 0U;
 		mutable std::unordered_map<std::string, uint64_t, TransparentStringHash, std::equal_to<>> node_label_token_cache_;
 		mutable std::deque<std::string> node_label_token_order_;
+		mutable size_t node_label_token_bytes_ = 0U;
 		mutable std::unordered_map<std::string, uint64_t, TransparentStringHash, std::equal_to<>>
 				relationship_type_token_cache_;
 		mutable std::deque<std::string> relationship_type_token_order_;
+		mutable size_t relationship_type_token_bytes_ = 0U;
 		mutable std::optional<std::vector<IndexDefinition>> index_definitions_;
 		mutable std::optional<std::vector<ConstraintDefinition>> constraint_definitions_;
 		mutable std::optional<std::vector<CatalogEntry>> entity_page_pools_;

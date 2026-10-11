@@ -34,7 +34,8 @@ namespace graph::storage {
 	GlobalAdjacencyRange GlobalAdjacencyIndex::scan(const MetadataSnapshotPin &snapshot,
 																		GlobalAdjacencyDirection direction, uint64_t nodeId,
 																		size_t maximumEntries,
-																		std::optional<GlobalAdjacencyContinuation> continuation) const {
+																		std::optional<GlobalAdjacencyContinuation> continuation,
+			const std::function<void(size_t)> &retainedIdAdmission) const {
 		if (!snapshot.isValid()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "global adjacency range requires a live metadata snapshot");
@@ -68,15 +69,29 @@ namespace graph::storage {
 			lowerBound = AdjacencyKeyCodec::lowerBound(direction, nodeId);
 		}
 
-		const std::vector<BTreePageEntry> entries =
-				index_.scan(snapshot, lowerBound, maximumEntries + 1U, BufferPoolReadHint::BPRH_NORMAL);
-		result.edge_ids.reserve(std::min(maximumEntries, entries.size()));
-		for (const BTreePageEntry &entry: entries) {
-			if (entry.value_or_child != 0U) {
+		size_t boundaryKeyBytes = 0U;
+		const auto admitCapacity = [&](size_t capacity) {
+			if (capacity > std::numeric_limits<size_t>::max() / sizeof(uint64_t)) {
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "global adjacency ID capacity overflowed");
+			}
+			const size_t idBytes = capacity * sizeof(uint64_t);
+			if (boundaryKeyBytes > std::numeric_limits<size_t>::max() - idBytes)
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "global adjacency boundary capacity overflowed");
+			if (retainedIdAdmission) retainedIdAdmission(idBytes + boundaryKeyBytes);
+		};
+		const auto admitBoundary = [&](size_t bytes) {
+			boundaryKeyBytes = bytes;
+			admitCapacity(result.edge_ids.capacity());
+		};
+		{
+			BTreeIndex::RangeCursor cursor = index_.openRangeCursor(
+				snapshot, lowerBound, maximumEntries + 1U, BufferPoolReadHint::BPRH_NORMAL);
+		while (const auto entry = cursor.next(admitBoundary)) {
+			if (entry->value_or_child != 0U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "global adjacency tree decoded a nonempty leaf value");
 			}
-			const GlobalAdjacencyKey key = AdjacencyKeyCodec::decode(entry.key);
+			const GlobalAdjacencyKey key = AdjacencyKeyCodec::decode(entry->key);
 			if (key.direction != direction || key.node_id != nodeId) {
 				break;
 			}
@@ -84,14 +99,31 @@ namespace graph::storage {
 				result.continuation = {snapshot.superblock().generation, direction, nodeId, result.edge_ids.back()};
 				break;
 			}
+			if (result.edge_ids.size() == result.edge_ids.capacity()) {
+				const size_t capacity = result.edge_ids.capacity();
+				const size_t next = capacity == 0U ? std::min<size_t>(maximumEntries, 16U)
+					: (capacity > maximumEntries / 2U ? maximumEntries : capacity * 2U);
+				if (next > std::numeric_limits<size_t>::max() - capacity) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "global adjacency growth peak overflowed");
+				}
+				admitCapacity(capacity + next);
+				result.edge_ids.reserve(next);
+				admitCapacity(result.edge_ids.capacity());
+			}
 			result.edge_ids.push_back(key.edge_id);
 		}
+		}
+		// The cursor may still own a boundary key when lookahead stops this scan.
+		// Reconcile only after its storage has actually been released.
+		boundaryKeyBytes = 0U;
+		admitCapacity(result.edge_ids.capacity());
 		return result;
 	}
 
 	bool GlobalAdjacencyIndex::visitForNodes(const MetadataSnapshotPin &snapshot,
 			const GlobalAdjacencyDirection direction, const std::span<const uint64_t> nodeIds,
-			const size_t maximumEntries, const std::function<bool(uint64_t, uint64_t)> &visitor) const {
+			const size_t maximumEntries, const std::function<bool(uint64_t, uint64_t)> &visitor,
+			const std::function<void(size_t)> &boundaryKeyAdmission) const {
 		if (!snapshot.isValid() || !isDirection(direction) || nodeIds.empty() || maximumEntries == 0U || !visitor) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "global adjacency multi-node scan requires a snapshot, nodes, bound, and visitor");
@@ -100,9 +132,20 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "global adjacency multi-node scan requires strictly increasing Node IDs");
 		}
-		const std::vector<std::byte> lowerBound = AdjacencyKeyCodec::lowerBound(direction, nodeIds.front());
+		const auto lowerBound = AdjacencyKeyCodec::lowerBoundFixed(direction, nodeIds.front());
+		size_t boundaryBytes = 0U;
+		class AdmissionCheckpoint final : public CancellationCheckpoint {
+		public:
+			AdmissionCheckpoint(const std::function<void(size_t)> &admission, const size_t &bytes)
+				: admission_(admission), bytes_(bytes) {}
+			void check() const override { if (admission_) admission_(bytes_); }
+		private:
+			const std::function<void(size_t)> &admission_;
+			const size_t &bytes_;
+		} checkpoint(boundaryKeyAdmission, boundaryBytes);
 		BTreeIndex::RangeCursor cursor = index_.openRangeCursor(snapshot, lowerBound,
-											 maximumEntries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			maximumEntries, BufferPoolReadHint::BPRH_SEQUENTIAL, false,
+			boundaryKeyAdmission ? &checkpoint : nullptr);
 		size_t scanned = 0U;
 		size_t matched = 0U;
 		for (;;) {
@@ -113,10 +156,16 @@ namespace graph::storage {
 			if (scanned == maximumEntries) {
 				return false;
 			}
-			const std::optional<BTreePageEntry> entry = cursor.next();
+			const std::optional<BTreePageEntry> entry = cursor.next([&](size_t bytes) {
+				boundaryBytes = bytes;
+				if (boundaryKeyAdmission) boundaryKeyAdmission(bytes);
+			});
 			if (!entry.has_value()) {
 				return true;
 			}
+			if (entry->key.capacity() > std::numeric_limits<size_t>::max() - boundaryBytes)
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "adjacency key admission overflowed");
+			if (boundaryKeyAdmission) boundaryKeyAdmission(boundaryBytes + entry->key.capacity());
 			++scanned;
 			if (entry->value_or_child != 0U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,

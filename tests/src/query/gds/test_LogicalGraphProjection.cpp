@@ -73,7 +73,14 @@ namespace graph::query::gds {
 		std::vector<storage::LogicalGraphEdge> edges;
 		mutable size_t full_edge_reads = 0U;
 		mutable size_t topology_reads = 0U;
-		mutable size_t batched_property_reads = 0U;
+			mutable size_t batched_property_reads = 0U;
+			mutable std::vector<size_t> batched_property_read_sizes;
+			bool support_property_read_admission = false;
+			mutable size_t admitted_property_values_copied = 0U;
+			mutable size_t legacy_property_values_copied = 0U;
+			mutable std::vector<storage::EntityReadShape> node_scan_shapes;
+			mutable size_t node_scan_property_rows = 0U;
+			bool return_full_nodes_for_shaped_scan = false;
 			bool return_mismatched_adjacency = false;
 			bool return_unbounded_adjacency_page = false;
 			bool paginate_adjacency = false;
@@ -148,6 +155,31 @@ namespace graph::query::gds {
 			return page;
 			}
 
+			[[nodiscard]] storage::LogicalGraphNodePage scanNodesAfter(
+					const uint64_t afterNodeId, const size_t maximumRecords, const size_t maximumMetadataPages,
+					const storage::EntityReadShape &shape) const override {
+				storage::validateEntityReadShape(shape);
+				node_scan_shapes.push_back(shape);
+				storage::LogicalGraphNodePage page = scanNodesAfter(afterNodeId, maximumRecords, maximumMetadataPages);
+				if (return_full_nodes_for_shaped_scan) {
+					for (const storage::LogicalGraphNode &node: page.nodes) {
+						if (!node.properties.empty()) ++node_scan_property_rows;
+					}
+					return page;
+				}
+				if (!shape.include_labels) {
+					for (storage::LogicalGraphNode &node: page.nodes) {
+						node.labels.clear();
+					}
+				}
+				if (!shape.all_properties && shape.property_tokens.empty()) {
+					for (storage::LogicalGraphNode &node: page.nodes) {
+						node.properties.clear();
+					}
+				}
+				return page;
+			}
+
 			[[nodiscard]] storage::LogicalGraphAdjacencyPage
 			scanAdjacentEdges(const uint64_t nodeId, const storage::LogicalGraphReadDirection direction,
 							  const std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
@@ -202,6 +234,7 @@ namespace graph::query::gds {
 			[[nodiscard]] std::vector<PropertyValue> readEdgePropertiesSorted(
 					const std::span<const uint64_t> edgeIds, const std::string_view key) const override {
 				++batched_property_reads;
+				batched_property_read_sizes.push_back(edgeIds.size());
 				std::vector<PropertyValue> result;
 				result.reserve(edgeIds.size());
 				for (const uint64_t edgeId: edgeIds) {
@@ -210,9 +243,38 @@ namespace graph::query::gds {
 						throw std::out_of_range("unknown relationship");
 					}
 					const auto property = std::ranges::find(edge->properties, key, &storage::LogicalGraphPropertyEntry::key);
+					++legacy_property_values_copied;
 					result.push_back(property == edge->properties.end() ? PropertyValue() : property->value);
 				}
 				return result;
+			}
+
+			[[nodiscard]] bool supportsPropertyReadAdmission() const override {
+				return support_property_read_admission;
+			}
+
+			[[nodiscard]] std::vector<std::vector<PropertyValue>> readEdgePropertyColumnsSortedWithAdmission(
+					const std::span<const uint64_t> edgeIds, const std::span<const std::string_view> keys,
+					const std::function<void(size_t)> &admission) const override {
+				if (!support_property_read_admission || keys.size() != 1U) {
+					throw std::logic_error("unexpected selected-Property admission request");
+				}
+				++batched_property_reads;
+				batched_property_read_sizes.push_back(edgeIds.size());
+				std::vector<PropertyValue> values;
+				values.reserve(edgeIds.size());
+				for (const uint64_t edgeId: edgeIds) {
+					const auto edge = std::ranges::find(edges, edgeId, &storage::LogicalGraphEdge::edge_id);
+					if (edge == edges.end()) throw std::out_of_range("unknown relationship");
+					const auto property = std::ranges::find(edge->properties, keys.front(), &storage::LogicalGraphPropertyEntry::key);
+					const PropertyValue *value = property == edge->properties.end() ? nullptr : &property->value;
+					const size_t bytes = value == nullptr ? property_utils::getPropertyValueSize(PropertyValue())
+							: property_utils::getPropertyValueSize(*value);
+					admission(bytes);
+					++admitted_property_values_copied;
+					values.push_back(value == nullptr ? PropertyValue() : *value);
+				}
+				return {std::move(values)};
 			}
 
 			void visitEdges(const size_t maximumRecords,
@@ -299,6 +361,10 @@ namespace graph::query::gds {
 		EXPECT_GT(snapshot.topology_reads, 0U);
 		EXPECT_EQ(snapshot.full_edge_reads, 0U);
 		EXPECT_EQ(snapshot.batched_property_reads, 1U);
+		ASSERT_FALSE(snapshot.node_scan_shapes.empty());
+		for (const storage::EntityReadShape &shape: snapshot.node_scan_shapes) {
+			EXPECT_EQ(shape, (storage::EntityReadShape{.include_labels = true}));
+		}
 		EXPECT_GT(projection.estimatedMemoryBytes(), sizeof(LogicalGraphProjection));
 		const std::shared_ptr<const LogicalProjectionCsr> firstCsr = projection.csr();
 		const std::shared_ptr<const LogicalProjectionCsr> secondCsr = projection.csr();
@@ -307,6 +373,110 @@ namespace graph::query::gds {
 		EXPECT_EQ(firstCsr->offsets, (std::vector<size_t>{0U, 1U, 1U}));
 		EXPECT_EQ(firstCsr->target_node_ids, (std::vector<uint64_t>{3U}));
 		EXPECT_EQ(firstCsr->weights, (std::vector<double>{2.5}));
+	}
+
+	TEST(LogicalGraphProjectionTest, ReadsLargeWeightColumnsInBoundedEdgeBatches) {
+		Snapshot snapshot;
+		snapshot.support_property_read_admission = true;
+		snapshot.paginate_adjacency = true;
+		snapshot.adjacency_page_limit_override = 256U;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}};
+		snapshot.edges.reserve(300U);
+		for (uint64_t edgeId = 1U; edgeId <= 300U; ++edgeId) {
+			snapshot.edges.push_back({edgeId, 1U, 2U, "CALLS", {property("cost", PropertyValue(2.0))}});
+		}
+		LogicalGraphProjectionSpec spec;
+		spec.name = "batched-weight-column";
+		spec.relationships = {{.type = "CALLS",
+				.weight = {.kind = LogicalProjectionWeightKind::LPWK_PROPERTY, .property_name = "cost"}}};
+		LogicalProjectionBuildBounds projectionBounds = bounds();
+		projectionBounds.maximum_edges_per_node = 512U;
+		projectionBounds.maximum_property_bytes = 300U * sizeof(double);
+
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(snapshot, spec, projectionBounds);
+
+		EXPECT_EQ(projection.edgeCount(), 300U);
+		ASSERT_EQ(projection.outgoing(1U).size(), 300U);
+		EXPECT_DOUBLE_EQ(projection.outgoing(1U).front().weight, 2.0);
+		EXPECT_DOUBLE_EQ(projection.outgoing(1U).back().weight, 2.0);
+		EXPECT_EQ(snapshot.batched_property_read_sizes, (std::vector<size_t>{256U, 44U}));
+		EXPECT_EQ(snapshot.admitted_property_values_copied, 300U);
+
+		snapshot.batched_property_reads = 0U;
+		snapshot.batched_property_read_sizes.clear();
+		snapshot.admitted_property_values_copied = 0U;
+		projectionBounds.maximum_property_bytes = 280U * sizeof(double);
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, projectionBounds)),
+				std::runtime_error);
+		EXPECT_EQ(snapshot.batched_property_read_sizes, (std::vector<size_t>{256U, 44U}));
+		EXPECT_EQ(snapshot.admitted_property_values_copied, 280U);
+	}
+
+	TEST(LogicalGraphProjectionTest, RequestsIdentityOnlyNodeScanWithoutLabelFilter) {
+		Snapshot snapshot;
+		snapshot.nodes = {
+				{1U, {"Code"}, {property("source", PropertyValue("a"))}},
+				{2U, {"Person"}, {property("source", PropertyValue("b"))}},
+		};
+		snapshot.edges = {{11U, 1U, 2U, "CALLS", {}}};
+
+		LogicalGraphProjectionSpec spec;
+		spec.name = "all-nodes";
+		spec.relationships = {{.type = "CALLS",
+								.orientation = LogicalProjectionOrientation::LPO_NATURAL,
+								.weight = {.kind = LogicalProjectionWeightKind::LPWK_CONSTANT, .constant_weight = 1.0}}};
+
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(snapshot, spec, bounds());
+		EXPECT_EQ(projection.nodeIds(), (std::vector<uint64_t>{1U, 2U}));
+		EXPECT_EQ(projection.edgeCount(), 1U);
+		ASSERT_FALSE(snapshot.node_scan_shapes.empty());
+		for (const storage::EntityReadShape &shape: snapshot.node_scan_shapes) {
+			EXPECT_EQ(shape, (storage::EntityReadShape{}));
+		}
+	}
+
+	TEST(LogicalGraphProjectionTest, ShapedNodeScanMatchesCompleteNodeScanProjection) {
+		Snapshot shapedSnapshot;
+		shapedSnapshot.nodes = {
+				{1U, {"Code"}, {property("source", PropertyValue(std::string(4096U, 'a')))}},
+				{2U, {"Person"}, {property("source", PropertyValue(std::string(4096U, 'b')))}},
+				{3U, {"Code", "Service"}, {property("source", PropertyValue(std::string(4096U, 'c')))}},
+		};
+		shapedSnapshot.edges = {
+				{11U, 1U, 3U, "CALLS", {property("cost", PropertyValue(2.5))}},
+				{12U, 1U, 2U, "CALLS", {property("cost", PropertyValue(9.0))}},
+				{13U, 3U, 1U, "IMPORTS", {}},
+		};
+		Snapshot completeSnapshot = shapedSnapshot;
+		completeSnapshot.return_full_nodes_for_shaped_scan = true;
+
+		LogicalGraphProjectionSpec spec;
+		spec.name = "shape-equivalence";
+		spec.node_labels = {"Code"};
+		spec.relationships = {{.type = "CALLS",
+				.orientation = LogicalProjectionOrientation::LPO_NATURAL,
+				.weight = {.kind = LogicalProjectionWeightKind::LPWK_PROPERTY,
+						.property_name = "cost", .default_weight = 1.0}}};
+
+		const LogicalGraphProjection shaped = LogicalGraphProjection::build(shapedSnapshot, spec, bounds());
+		const LogicalGraphProjection complete = LogicalGraphProjection::build(completeSnapshot, spec, bounds());
+
+		EXPECT_EQ(shaped.nodeIds(), complete.nodeIds());
+		EXPECT_EQ(shaped.nodeIds(), (std::vector<uint64_t>{1U, 3U}));
+		EXPECT_EQ(shaped.edgeCount(), complete.edgeCount());
+		EXPECT_EQ(shaped.outgoing(1U), complete.outgoing(1U));
+		EXPECT_EQ(shaped.incoming(3U), complete.incoming(3U));
+		EXPECT_EQ(shaped.csr()->node_ids, complete.csr()->node_ids);
+		EXPECT_EQ(shaped.csr()->offsets, complete.csr()->offsets);
+		EXPECT_EQ(shaped.csr()->target_node_ids, complete.csr()->target_node_ids);
+		EXPECT_EQ(shaped.csr()->weights, complete.csr()->weights);
+		EXPECT_EQ(shapedSnapshot.node_scan_property_rows, 0U);
+		EXPECT_EQ(completeSnapshot.node_scan_property_rows, 3U);
+		ASSERT_FALSE(shapedSnapshot.node_scan_shapes.empty());
+		for (const storage::EntityReadShape &shape: shapedSnapshot.node_scan_shapes) {
+			EXPECT_EQ(shape, (storage::EntityReadShape{.include_labels = true}));
+		}
+		EXPECT_EQ(shapedSnapshot.batched_property_reads, completeSnapshot.batched_property_reads);
 	}
 
 	TEST(LogicalGraphProjectionTest, AppliesUndirectedAndReverseOrientationsWithoutDuplicatingSelfLoops) {
@@ -444,13 +614,13 @@ namespace graph::query::gds {
 	TEST(LogicalGraphProjectionTest, RejectsAMalformedAdjacencyCursorThatExceedsItsAdvertisedBound) {
 		Snapshot snapshot;
 		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
-		snapshot.edges = {{1U, 1U, 2U, "CALLS", {}}, {2U, 1U, 3U, "CALLS", {}}};
+		for (uint64_t id = 1U; id <= 257U; ++id) snapshot.edges.push_back({id, 1U, 2U, "CALLS", {}});
 		snapshot.return_unbounded_adjacency_page = true;
 
 		LogicalGraphProjectionSpec spec;
 		spec.name = "malformed-adjacency-page";
 		const LogicalProjectionBuildBounds tightBounds{
-				.maximum_nodes = 3U, .maximum_metadata_pages = 1U, .maximum_edges_per_node = 1U};
+				.maximum_nodes = 3U, .maximum_metadata_pages = 1U, .maximum_edges_per_node = 512U};
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, tightBounds)), std::runtime_error);
 	}
 
@@ -565,6 +735,23 @@ namespace graph::query::gds {
 		LogicalProjectionBuildBounds limited = bounds();
 		limited.maximum_property_bytes = 16U;
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, limited)), std::runtime_error);
+	}
+
+	TEST(LogicalGraphProjectionTest, AdmitsWeightPayloadBeforeSelectedColumnCopy) {
+		Snapshot snapshot;
+		snapshot.support_property_read_admission = true;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}};
+		snapshot.edges = {{1U, 1U, 2U, "CALLS", {property("cost", PropertyValue(std::string(128U, 'x')))}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "admitted-weight-column";
+		spec.relationships = {{.type = "CALLS",
+				.weight = {.kind = LogicalProjectionWeightKind::LPWK_PROPERTY, .property_name = "cost"}}};
+		LogicalProjectionBuildBounds limited = bounds();
+		limited.maximum_property_bytes = 16U;
+
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, limited)), std::runtime_error);
+		EXPECT_EQ(snapshot.admitted_property_values_copied, 0U);
+		EXPECT_EQ(snapshot.legacy_property_values_copied, 0U);
 	}
 
 	TEST(LogicalProjectionCatalogTest, OwnsImmutableProjectionsAndReportsSnapshotStaleness) {
@@ -940,7 +1127,9 @@ namespace graph::query::gds {
 			}
 		});
 		for (size_t index = 0U; index < CREATOR_COUNT; ++index) {
-			creators.emplace_back([&catalog, &snapshot, &failures, index] {
+			// Snapshot instrumentation records mutable scan vectors. Give each
+			// creator its own reader for the same immutable graph/revision.
+			creators.emplace_back([&catalog, snapshot, &failures, index] {
 				try {
 					LogicalGraphProjectionSpec spec;
 					spec.name = "projection-" + std::to_string(index);
@@ -1061,6 +1250,16 @@ namespace graph::query::gds {
 		EXPECT_EQ(path.node_ids, (std::vector<uint64_t>{1U, 2U, 3U}));
 		EXPECT_EQ(path.step_weights, (std::vector<double>{0.0, 1.0, 2.0}));
 		EXPECT_DOUBLE_EQ(path.total_weight, 3.0);
+		auto stateLimited = algorithmBounds();
+		stateLimited.maximum_materialized_bytes = 120U; // 5 Nodes x (distance, parent, parent weight).
+		try {
+			static_cast<void>(LogicalGraphAlgorithms::dijkstra(projection, 1U, 3U, stateLimited));
+			FAIL() << "Dijkstra accepted its frontier beyond the configured byte limit";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical Dijkstra exceeded its materialized state byte bound");
+		}
+		stateLimited.maximum_materialized_bytes = 4096U;
+		EXPECT_EQ(LogicalGraphAlgorithms::dijkstra(projection, 1U, 3U, stateLimited), path);
 		EXPECT_TRUE(LogicalGraphAlgorithms::dijkstra(projection, 1U, 99U, algorithmBounds()).node_ids.empty());
 
 		const std::vector<LogicalGdsNodeScore> scores = LogicalGraphAlgorithms::pageRank(
@@ -1080,6 +1279,61 @@ namespace graph::query::gds {
 		ASSERT_NE(nodeThree, scores.end());
 		ASSERT_NE(nodeOne, scores.end());
 		EXPECT_GT(nodeThree->score, nodeOne->score);
+		auto byteLimited = algorithmBounds();
+		byteLimited.maximum_materialized_bytes = 159U; // 5 Nodes x two score arrays plus returned scores.
+		try {
+			static_cast<void>(LogicalGraphAlgorithms::pageRank(
+					projection, {.maximum_iterations = 32U, .damping_factor = 0.85, .tolerance = 1.0e-12}, byteLimited));
+			FAIL() << "PageRank allocated its state and result beyond the configured byte limit";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical PageRank exceeded its materialized byte bound");
+		}
+		byteLimited.maximum_materialized_bytes = 119U; // 5 parent slots plus returned components.
+		try {
+			static_cast<void>(LogicalGraphAlgorithms::weaklyConnectedComponents(projection, byteLimited));
+			FAIL() << "WCC allocated its parent and result arrays beyond the configured byte limit";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical WCC exceeded its materialized byte bound");
+		}
+	}
+
+	TEST(LogicalGraphAlgorithmsTest, RejectsProjectionAndLookupIndexBoundsBeforeMaterializingCsr) {
+		Snapshot snapshot;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "algorithm-preflight";
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(snapshot, spec, bounds());
+		ASSERT_FALSE(projection.csrCacheState().materialized);
+
+		auto nodeLimited = algorithmBounds();
+		nodeLimited.maximum_nodes = 2U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::weaklyConnectedComponents(projection, nodeLimited)),
+				 std::runtime_error);
+		EXPECT_FALSE(projection.csrCacheState().materialized);
+
+		auto byteLimited = algorithmBounds();
+		byteLimited.maximum_materialized_bytes = 3U *
+				(sizeof(std::pair<const uint64_t, size_t>) + 3U * sizeof(void *)) - 1U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::pageRank(projection, {}, byteLimited)),
+				 std::runtime_error);
+		EXPECT_FALSE(projection.csrCacheState().materialized);
+	}
+
+	TEST(LogicalGraphAlgorithmsTest, ChecksCancellationWhileValidatingCsrRouting) {
+		Snapshot snapshot;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
+		snapshot.edges = {{1U, 1U, 2U, "CALLS", {}}, {2U, 2U, 3U, "CALLS", {}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "cancel-csr-validation";
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(snapshot, spec, bounds());
+		size_t checkpoints = 0U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::weaklyConnectedComponents(
+				projection, algorithmBounds(), [&checkpoints] {
+					if (++checkpoints == 3U) throw std::runtime_error("cancel CSR validation");
+				})), std::runtime_error);
+		EXPECT_EQ(checkpoints, 3U);
+		EXPECT_TRUE(projection.csrCacheState().materialized);
+		EXPECT_EQ(LogicalGraphAlgorithms::weaklyConnectedComponents(projection, algorithmBounds()).size(), 3U);
 	}
 
 	TEST(LogicalGraphAlgorithmsTest, KeepsDijkstraParentChainsAcyclicAcrossZeroWeightCycles) {
@@ -1632,6 +1886,11 @@ namespace graph::query::gds {
 		EXPECT_DOUBLE_EQ(isolated->score, 0.0);
 		EXPECT_EQ(LogicalGraphAlgorithms::betweennessCentrality(projection, {.sampling_size = 2U}, algorithmBounds()),
 				  LogicalGraphAlgorithms::betweennessCentrality(projection, {.sampling_size = 2U}, algorithmBounds()));
+		auto betweennessByteBound = algorithmBounds();
+		betweennessByteBound.maximum_materialized_bytes = 1U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::betweennessCentrality(
+				projection, {}, betweennessByteBound)),
+				 std::runtime_error);
 
 		const std::vector<LogicalGdsNodeScore> closeness =
 				LogicalGraphAlgorithms::closenessCentrality(projection, algorithmBounds());
@@ -1644,6 +1903,10 @@ namespace graph::query::gds {
 		EXPECT_DOUBLE_EQ(closenessMiddle->score, 1.0);
 		EXPECT_DOUBLE_EQ(closenessFirst->score, 2.0 / 3.0);
 		EXPECT_DOUBLE_EQ(closenessIsolated->score, 0.0);
+		auto byteBound = algorithmBounds();
+		byteBound.maximum_materialized_bytes = 1U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::closenessCentrality(projection, byteBound)),
+				 std::runtime_error);
 
 		auto workBound = algorithmBounds();
 		workBound.maximum_work_units = 1U;
@@ -1702,6 +1965,11 @@ namespace graph::query::gds {
 		constrained.maximum_work_units = 1U;
 		EXPECT_THROW(
 				static_cast<void>(LogicalGraphAlgorithms::leiden(projection, {.maximum_iterations = 1U}, constrained)),
+				std::runtime_error);
+		auto byteLimited = algorithmBounds();
+		byteLimited.maximum_materialized_bytes = 1U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::leiden(
+					projection, {.maximum_iterations = 8U, .maximum_levels = 4U}, byteLimited)),
 				std::runtime_error);
 	}
 

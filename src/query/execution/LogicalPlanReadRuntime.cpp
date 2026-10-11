@@ -1,3 +1,4 @@
+#include "query/execution/OrderByComparison.hpp"
 /**
  * @file LogicalPlanReadRuntime.cpp
  * @brief Streaming logical-plan runtime over the format-independent graph reader.
@@ -7,6 +8,13 @@
  **/
 
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "query/execution/GuardedIdGather.hpp"
+#include "query/execution/BudgetMemoryResource.hpp"
+#include "graph/query/execution/StringBufferBytes.hpp"
+#include "graph/query/execution/RetainedPropertyBytes.hpp"
+#include "graph/query/execution/GuardedPropertyCopy.hpp"
+#include "graph/query/execution/GuardedRowCopy.hpp"
+#include "graph/query/execution/GuardedEntityCopy.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -25,18 +33,23 @@
 #include <string_view>
 #include <system_error>
 #include <tuple>
+#include <type_traits>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 
 #include "graph/core/Types.hpp"
 #include "graph/debug/PerfTrace.hpp"
-#include "graph/query/execution/LogicalAggregateAccumulator.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "graph/query/execution/BoundedBatch.hpp"
 #include "graph/query/execution/CsvReader.hpp"
+#include "graph/query/execution/LogicalAggregateAccumulator.hpp"
+#include "graph/query/execution/Record.hpp"
 #include "graph/query/execution/SelectionVector.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExpressionUtils.hpp"
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
@@ -48,7 +61,6 @@
 #include "graph/query/expressions/QuantifierFunctionExpression.hpp"
 #include "graph/query/expressions/ReduceExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
-#include "graph/query/execution/Record.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
@@ -67,7 +79,6 @@
 #include "graph/query/logical/operators/LogicalUnion.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
 #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
-#include "graph/query/QueryPlan.hpp"
 
 namespace graph::query::execution {
 
@@ -75,10 +86,42 @@ namespace graph::query::execution {
 
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 		using InternalVisitor = std::function<bool(LogicalPlanReadRow)>;
+		using ChargedRowVisitor = std::function<bool(LogicalPlanReadRow, MaterializedByteReservation)>;
+		[[nodiscard]] constexpr bool supportsChargedRowHandoff(logical::LogicalOpType type) {
+			return type == logical::LogicalOpType::LOP_SORT || type == logical::LogicalOpType::LOP_FILTER ||
+				   type == logical::LogicalOpType::LOP_PROJECT || type == logical::LogicalOpType::LOP_LIMIT ||
+				   type == logical::LogicalOpType::LOP_SKIP || type == logical::LogicalOpType::LOP_UNWIND ||
+				   type == logical::LogicalOpType::LOP_UNION || type == logical::LogicalOpType::LOP_JOIN ||
+				   type == logical::LogicalOpType::LOP_OPTIONAL_MATCH ||
+				   type == logical::LogicalOpType::LOP_CALL_SUBQUERY || type == logical::LogicalOpType::LOP_LOAD_CSV ||
+				   type == logical::LogicalOpType::LOP_TRAVERSAL;
+		}
 		// Property batches are bounded independently of the result bound.  The
 		// value is a memory-safety policy, not a semantic limit; callers can still
 		// lower it through the existing maximum_rows bound.
 		constexpr size_t DEFAULT_PROPERTY_BATCH_ROWS = 512U;
+
+		enum class ShortestPathResultMode { SPR_FULL, SPR_SIZE, SPR_LENGTH };
+
+		void validateTraversalTargetProperties(const logical::LogicalTraversal &traversal) {
+			const auto &targetPredicates = traversal.getTargetProperties();
+			for (size_t index = 0U; index < targetPredicates.size(); ++index) {
+				const auto &key = targetPredicates[index].first;
+				if (key.empty() || std::any_of(targetPredicates.begin(),
+						targetPredicates.begin() + index,
+						[&](const auto &predicate) { return predicate.first == key; })) {
+					throw std::invalid_argument("logical-plan target Property predicate has an "
+												"empty or duplicate key");
+				}
+			}
+		}
+
+		struct ScopedPropertyColumns {
+			const std::string *variable = nullptr;
+			const std::vector<std::string> *keys = nullptr;
+			std::vector<uint64_t> ids;
+			std::vector<std::vector<PropertyValue>> columns;
+		};
 
 		struct ExecutionState {
 			storage::LogicalGraphReadSnapshot &snapshot;
@@ -89,17 +132,30 @@ namespace graph::query::execution {
 			// Public row callbacks and mutation planning retain fully materialized
 			// entities. Only the result pipeline owns the deferred-row contract.
 			bool allow_deferred_entity_refs = false;
+			// QueryResult consumers may safely read ahead within a bounded batch. Public
+			// row visitors keep this disabled so cancellation never materializes a later
+			// path row that the caller did not request.
+			bool allow_cross_row_entity_batches = false;
+			size_t resident_output_batch_bytes = 0U;
+			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes};
+			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
+			MaterializedByteReservation final_result_reservation{&materialized_budget};
+			size_t final_result_bytes = 0U;
 			// Logical snapshots are immutable. A small per-query cache avoids repeated
 			// point reads when a high-degree adjacency list shares targets. The byte
 			// budget is independent of the entry bound: a single LargeValue-bearing
 			// entity must not turn this convenience cache into an unbounded copy of
 			// the Property store.
-			std::unordered_map<uint64_t, storage::LogicalGraphNode> node_cache;
+			detail::BudgetMemoryResource entity_cache_memory{materialized_budget};
+			std::pmr::unordered_map<uint64_t, storage::LogicalGraphNode> node_cache{&entity_cache_memory};
 			// Keep the same bounded reuse for Edge references that cross a result
 			// boundary more than once (for example, a repeated path or projection).
-			std::unordered_map<uint64_t, storage::LogicalGraphEdge> edge_cache{};
+			std::pmr::unordered_map<uint64_t, storage::LogicalGraphEdge> edge_cache{&entity_cache_memory};
 			size_t materialized_cache_bytes = 0U;
+			const ScopedPropertyColumns *property_columns = nullptr;
 		};
+
+		using ExecutionFinalizer = std::function<void(ExecutionState &, bool)>;
 
 		constexpr size_t MAXIMUM_MATERIALIZED_CACHE_BYTES = 4U * 1024U * 1024U;
 
@@ -115,6 +171,24 @@ namespace graph::query::execution {
 			return {.include_labels = false, .include_type = true, .all_properties = true};
 		}
 
+		// Pattern-local bindings are materialized only with the fields required by
+		// their WHERE/map expressions, including explicit complete-map needs. A null
+		// plan means an unsupported scope, preserving the complete-read fallback.
+		// Unresolved tokens use the named-column boundary and its backend fallback. Complete-map EXISTS retains its
+		// lazy visitor.
+		struct PatternBindingReadShape {
+			storage::EntityReadShape target;
+			storage::EntityReadShape relationship;
+			std::vector<std::string> target_named_properties;
+			std::vector<std::string> relationship_named_properties;
+		};
+
+		[[nodiscard]] std::optional<PatternBindingReadShape>
+		inspectPatternBindingReadShape(const expressions::Expression *whereExpression,
+									   const expressions::Expression *mapExpression, std::string_view targetVariable,
+									   std::string_view relationshipVariable,
+									   storage::LogicalGraphReadSnapshot &snapshot);
+
 		[[nodiscard]] size_t checkedSizeAdd(size_t left, size_t right, const char *message) {
 			if (right > std::numeric_limits<size_t>::max() - left) {
 				throw std::overflow_error(message);
@@ -129,159 +203,320 @@ namespace graph::query::execution {
 			return left * right;
 		}
 
-		[[nodiscard]] size_t distinctKeyStorageBytes(std::string_view key, const char *message) {
-			// Charge hash-node metadata as well as the encoded key payload so many
-			// tiny distinct keys cannot bypass the materialization budget.
-			return checkedSizeAdd(key.size(), sizeof(std::string) + sizeof(void *), message);
+		[[nodiscard]] size_t csvStringCapacityBytes(const std::string &value) {
+			return detail::dynamicStringBufferBytes(value);
 		}
 
-		[[nodiscard]] size_t logicalNodeCacheBytes(const storage::LogicalGraphNode &node) {
+		[[nodiscard]] size_t logicalNodeCacheBytes(const storage::LogicalGraphNode &node, const QueryContext *context) {
+			if (context != nullptr) context->checkGuardNow();
 			size_t bytes = sizeof(node);
-			bytes = checkedSizeAdd(bytes, checkedSizeMul(node.labels.size(), sizeof(std::string),
-					"logical-plan Node cache size overflowed"),
+			bytes = checkedSizeAdd(
+					bytes,
+					checkedSizeMul(node.labels.capacity(), sizeof(std::string), "logical-plan Node cache size overflowed"),
 					"logical-plan Node cache size overflowed");
+			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
-				bytes = checkedSizeAdd(bytes, label.size(), "logical-plan Node cache size overflowed");
+				if (--labelsUntilGuard == 0U) {
+					if (context != nullptr) context->checkGuardNow();
+					labelsUntilGuard = 256U;
+				}
+				bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan Node cache size overflowed");
 			}
-			bytes = checkedSizeAdd(bytes, checkedSizeMul(node.properties.size(), sizeof(storage::LogicalGraphPropertyEntry),
-					"logical-plan Node cache size overflowed"),
-					"logical-plan Node cache size overflowed");
+			bytes = checkedSizeAdd(bytes,
+								   checkedSizeMul(node.properties.capacity(), sizeof(storage::LogicalGraphPropertyEntry),
+												  "logical-plan Node cache size overflowed"),
+								   "logical-plan Node cache size overflowed");
 			for (const storage::LogicalGraphPropertyEntry &entry: node.properties) {
-				bytes = checkedSizeAdd(bytes, entry.key.size(), "logical-plan Node cache size overflowed");
-				bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(entry.value),
-						"logical-plan Node cache size overflowed");
+				bytes = checkedSizeAdd(bytes, std::max(entry.key.size(), detail::dynamicStringBufferBytes(entry.key)), "logical-plan Node cache size overflowed");
+				bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(entry.value, [&] { if (context != nullptr) context->checkGuardNow(); }),
+									   "logical-plan Node cache size overflowed");
 			}
 			return bytes;
 		}
 
-		[[nodiscard]] size_t logicalEdgeCacheBytes(const storage::LogicalGraphEdge &edge) {
+		[[nodiscard]] size_t logicalEdgeCacheBytes(const storage::LogicalGraphEdge &edge, const QueryContext *context) {
+			if (context != nullptr) context->checkGuardNow();
 			size_t bytes = sizeof(edge);
-			bytes = checkedSizeAdd(bytes, edge.type.size(), "logical-plan Edge cache size overflowed");
-			bytes = checkedSizeAdd(bytes, checkedSizeMul(edge.properties.size(), sizeof(storage::LogicalGraphPropertyEntry),
-					"logical-plan Edge cache size overflowed"),
-					"logical-plan Edge cache size overflowed");
+			bytes = checkedSizeAdd(bytes, std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)), "logical-plan Edge cache size overflowed");
+			bytes = checkedSizeAdd(bytes,
+								   checkedSizeMul(edge.properties.capacity(), sizeof(storage::LogicalGraphPropertyEntry),
+												  "logical-plan Edge cache size overflowed"),
+								   "logical-plan Edge cache size overflowed");
 			for (const storage::LogicalGraphPropertyEntry &entry: edge.properties) {
-				bytes = checkedSizeAdd(bytes, entry.key.size(), "logical-plan Edge cache size overflowed");
-				bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(entry.value),
-						"logical-plan Edge cache size overflowed");
+				bytes = checkedSizeAdd(bytes, std::max(entry.key.size(), detail::dynamicStringBufferBytes(entry.key)), "logical-plan Edge cache size overflowed");
+				bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(entry.value, [&] { if (context != nullptr) context->checkGuardNow(); }),
+									   "logical-plan Edge cache size overflowed");
 			}
 			return bytes;
 		}
 
-		[[nodiscard]] size_t logicalReadValueBytes(const LogicalPlanReadValue &value) {
+		[[nodiscard]] size_t logicalReadValueBytes(const LogicalPlanReadValue &value, const QueryContext *context = nullptr) {
 			if (const auto *property = std::get_if<PropertyValue>(&value)) {
-				return property_utils::getPropertyValueSize(*property);
+				return detail::retainedPropertyValueBytes(*property, [&] { if (context != nullptr) context->checkGuardNow(); });
 			}
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				return logicalNodeCacheBytes(*node);
+				return logicalNodeCacheBytes(*node, context);
 			}
 			if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
-				return logicalEdgeCacheBytes(*edge);
+				return logicalEdgeCacheBytes(*edge, context);
 			}
 			return sizeof(storage::EntityRef);
 		}
 
-		[[nodiscard]] size_t logicalReadRowBytes(const LogicalPlanReadRow &row) {
+		template<typename Include>
+		[[nodiscard]] size_t logicalReadRowBytesIncluding(const LogicalPlanReadRow &row, Include includes, const QueryContext *context = nullptr, bool includeValues = true, bool excludeBoundEntityCaches = false) {
+			if (context != nullptr) context->checkGuardNow();
 			size_t bytes = sizeof(row);
+			const auto invalidatedCache = [&](const std::string &alias) {
+				if (!excludeBoundEntityCaches) return false;
+				const auto binding = row.values.find(alias);
+				return binding != row.values.end() &&
+					(std::holds_alternative<storage::LogicalGraphNode>(binding->second) ||
+					 std::holds_alternative<storage::LogicalGraphEdge>(binding->second));
+			};
+			size_t untilCheckpoint = 256U;
+			const auto checkpoint = [&] {
+				if (--untilCheckpoint == 0U) {
+					if (context != nullptr) context->checkGuardNow();
+					untilCheckpoint = 256U;
+				}
+			};
 			for (const auto &[name, value]: row.values) {
+				checkpoint();
+				if (!includeValues || !includes(name))
+					continue;
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row materialization size overflowed");
 				bytes = checkedSizeAdd(bytes, sizeof(value), "logical-plan row materialization size overflowed");
-				bytes = checkedSizeAdd(bytes, logicalReadValueBytes(value),
-						"logical-plan row materialization size overflowed");
+				bytes = checkedSizeAdd(bytes, logicalReadValueBytes(value, context),
+									   "logical-plan row materialization size overflowed");
 			}
 			for (const auto &[name, properties]: row.property_cache) {
+				checkpoint();
+				if (!includes(name) || invalidatedCache(name))
+					continue;
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row materialization size overflowed");
 				for (const auto &[key, value]: properties) {
 					bytes = checkedSizeAdd(bytes, key.size(), "logical-plan row materialization size overflowed");
-					bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value),
-							"logical-plan row materialization size overflowed");
+					bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); }),
+										   "logical-plan row materialization size overflowed");
 				}
 			}
 			for (const auto &[name, metadata]: row.entity_metadata_cache) {
+				checkpoint();
+				if (!includes(name) || invalidatedCache(name))
+					continue;
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row metadata size overflowed");
 				for (const auto &[key, value]: metadata) {
 					bytes = checkedSizeAdd(bytes, key.size(), "logical-plan row metadata size overflowed");
-					bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value),
-							"logical-plan row metadata size overflowed");
+					bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); }),
+										   "logical-plan row metadata size overflowed");
 				}
+			}
+			for (const auto &[name, path]: row.path_cache) {
+				checkpoint();
+				if (!includes(name))
+					continue;
+				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan row path materialization size overflowed");
+				// Entity estimates include live record objects; charge only spare outer slots here.
+				bytes = checkedSizeAdd(bytes, checkedSizeMul(path.nodes.capacity() - path.nodes.size(),
+					sizeof(storage::LogicalGraphNode), "logical-plan row path materialization size overflowed"),
+					"logical-plan row path materialization size overflowed");
+				bytes = checkedSizeAdd(bytes, checkedSizeMul(path.edges.capacity() - path.edges.size(),
+					sizeof(storage::LogicalGraphEdge), "logical-plan row path materialization size overflowed"),
+					"logical-plan row path materialization size overflowed");
+				for (const storage::LogicalGraphNode &node: path.nodes) {
+					bytes = checkedSizeAdd(bytes, logicalNodeCacheBytes(node, context),
+										   "logical-plan row path materialization size overflowed");
+				}
+				for (const storage::LogicalGraphEdge &edge: path.edges) {
+					bytes = checkedSizeAdd(bytes, logicalEdgeCacheBytes(edge, context),
+										   "logical-plan row path materialization size overflowed");
+				}
+				bytes = checkedSizeAdd(bytes,
+									   checkedSizeMul(path.node_refs.capacity(), sizeof(storage::EntityRef),
+													  "logical-plan row path materialization size overflowed"),
+									   "logical-plan row path materialization size overflowed");
+				bytes = checkedSizeAdd(bytes,
+									   checkedSizeMul(path.edge_refs.capacity(), sizeof(storage::EntityRef),
+													  "logical-plan row path materialization size overflowed"),
+									   "logical-plan row path materialization size overflowed");
 			}
 			return bytes;
 		}
 
+		[[nodiscard]] size_t logicalReadRowBytes(const LogicalPlanReadRow &row, const QueryContext *context = nullptr) {
+			return logicalReadRowBytesIncluding(row, [](const std::string &) { return true; }, context);
+		}
+
 		void enforceMaterializedRowBound(const LogicalPlanReadRow &row, const ExecutionState &state) {
-			if (logicalReadRowBytes(row) > state.bounds.maximum_materialized_bytes) {
+			if (logicalReadRowBytes(row, state.context) > state.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan row exceeded its materialized byte bound");
 			}
 		}
 
-		[[nodiscard]] size_t propertyMapBytes(const PropertyMap &properties, const char *message) {
-			size_t bytes = sizeof(properties);
-			for (const auto &[key, value]: properties) {
-				bytes = checkedSizeAdd(bytes, key.size(), message);
-				bytes = checkedSizeAdd(bytes, sizeof(PropertyValue), message);
-				bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value), message);
+		[[nodiscard]] size_t propertyMapBytes(const PropertyMap &properties, const char *message,
+			const QueryContext *context = nullptr) {
+			return detail::retainedPropertyMapBytes(properties, [&] {
+				if (context != nullptr) context->checkGuardNow();
+			});
+		}
+
+		[[nodiscard]] size_t
+		directPropertyMapStorageBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+									  const char *message, const QueryContext *context) {
+			size_t bytes = checkedSizeAdd(
+					sizeof(PropertyMap),
+					checkedSizeMul(entries.size(), sizeof(PropertyMap::value_type) + sizeof(void *), message), message);
+			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
+				bytes = checkedSizeAdd(bytes, entry.key.size(), message);
+				bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(entry.value, [&] { if (context != nullptr) context->checkGuardNow(); }), message);
 			}
 			return bytes;
 		}
 
-		[[nodiscard]] size_t resultValueBytes(const ResultValue &value) {
+		[[nodiscard]] size_t resultValueBytes(const ResultValue &value, const QueryContext *context) {
+			if (context != nullptr) context->checkGuardNow();
 			constexpr const char *message = "logical-plan result materialization size overflowed";
 			if (value.isPrimitive()) {
-				return property_utils::getPropertyValueSize(value.asPrimitive());
+				return detail::retainedPropertyValueBytes(value.asPrimitive(), [&] { if (context != nullptr) context->checkGuardNow(); });
 			}
 			if (value.isLogicalNode()) {
 				const LogicalNodeResult &node = value.asLogicalNode();
-				size_t bytes = sizeof(node);
+				size_t bytes = checkedSizeAdd(sizeof(node),
+					checkedSizeMul(node.labels.capacity(), sizeof(std::string), message), message);
+				size_t labelsUntilGuard = 256U;
 				for (const std::string &label: node.labels) {
-					bytes = checkedSizeAdd(bytes, label.size(), message);
+					if (--labelsUntilGuard == 0U) {
+						if (context != nullptr) context->checkGuardNow();
+						labelsUntilGuard = 256U;
+					}
+					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), message);
 				}
-				return checkedSizeAdd(bytes, propertyMapBytes(node.properties, message), message);
+				return checkedSizeAdd(bytes, propertyMapBytes(node.properties, message, context), message);
 			}
 			if (value.isLogicalEdge()) {
 				const LogicalEdgeResult &edge = value.asLogicalEdge();
-				const size_t bytes = checkedSizeAdd(sizeof(edge), edge.type.size(), message);
-				return checkedSizeAdd(bytes, propertyMapBytes(edge.properties, message), message);
+				const size_t bytes = checkedSizeAdd(sizeof(edge), std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)), message);
+				return checkedSizeAdd(bytes, propertyMapBytes(edge.properties, message, context), message);
 			}
 			throw std::logic_error("logical-plan runtime produced a physical Entity result");
 		}
 
-		void enforceMaterializedResultRowBound(const QueryResult::Row &row, const ExecutionState &state) {
+		[[nodiscard]] size_t materializedResultRowBytes(const QueryResult::Row &row, const ExecutionState &state) {
 			size_t bytes = sizeof(row);
 			for (const auto &[name, value]: row) {
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan result row size overflowed");
 				bytes = checkedSizeAdd(bytes, sizeof(value), "logical-plan result row size overflowed");
-				bytes = checkedSizeAdd(bytes, resultValueBytes(value), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, resultValueBytes(value, state.context), "logical-plan result row size overflowed");
 			}
 			if (bytes > state.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 			}
+			return bytes;
 		}
 
-		[[nodiscard]] size_t propertyColumnBytes(
-				const std::vector<std::vector<PropertyValue>> &columns,
-				const std::vector<std::string_view> &keys, const char *message) {
-			size_t bytes = 0U;
+		[[nodiscard]] size_t queryResultColumnStorageBytes(const std::vector<std::string> &columns) {
+			constexpr const char *message = "logical-plan result column storage size overflowed";
+			size_t bytes = checkedSizeMul(columns.capacity(), sizeof(std::string), message);
+			for (const std::string &column: columns) {
+				// The string object is included in its vector slot. Charge only the
+				// out-of-line character allocation when it exceeds inline storage.
+				bytes = checkedSizeAdd(bytes, detail::dynamicStringBufferBytes(column), message);
+			}
+			return bytes;
+		}
+
+		void appendMaterializedResultRow(QueryResult &result, QueryResult::Row &&row, ExecutionState &state,
+			MaterializedByteReservation &&rowReservation) {
+			const size_t rowBytes = materializedResultRowBytes(row, state);
+			const size_t previousBytes = state.final_result_bytes;
+			state.final_result_reservation.absorb(std::move(rowReservation));
+			size_t nextBytes = checkedSizeAdd(previousBytes, rowBytes, "logical-plan result retention size overflowed");
+			const size_t currentCapacity = result.getRows().capacity();
+			if (result.getRows().size() == currentCapacity) {
+				const size_t minimumCapacity =
+						checkedSizeAdd(result.getRows().size(), 1U, "logical-plan result row capacity overflowed");
+				const size_t doubledCapacity =
+						currentCapacity == 0U
+								? minimumCapacity
+								: checkedSizeMul(currentCapacity, 2U, "logical-plan result row capacity overflowed");
+				const size_t requestedCapacity = std::max(minimumCapacity, doubledCapacity);
+				const size_t requestedGrowthBytes = checkedSizeMul(requestedCapacity, sizeof(QueryResult::Row),
+																   "logical-plan result row capacity overflowed");
+				const size_t transientBytes =
+						checkedSizeAdd(nextBytes, requestedGrowthBytes, "logical-plan result growth peak overflowed");
+				state.final_result_reservation.set(transientBytes);
+				try {
+					result.reserveRows(requestedCapacity);
+				} catch (...) {
+					state.final_result_reservation.set(previousBytes);
+					throw;
+				}
+				const size_t oldCapacityBytes = checkedSizeMul(currentCapacity, sizeof(QueryResult::Row),
+															   "logical-plan result row capacity overflowed");
+				const size_t actualCapacityBytes = checkedSizeMul(result.getRows().capacity(), sizeof(QueryResult::Row),
+																  "logical-plan result row capacity overflowed");
+				const size_t retainedPayloadBytes = previousBytes - oldCapacityBytes;
+				nextBytes = checkedSizeAdd(
+						checkedSizeAdd(retainedPayloadBytes, rowBytes, "logical-plan result retention size overflowed"),
+						actualCapacityBytes, "logical-plan result retention size overflowed");
+				state.final_result_reservation.set(nextBytes);
+			} else {
+				state.final_result_reservation.set(nextBytes);
+			}
+			try {
+				result.addRow(std::move(row));
+			} catch (...) {
+				state.final_result_reservation.set(previousBytes);
+				throw;
+			}
+			state.final_result_bytes = nextBytes;
+		}
+
+		[[nodiscard]] size_t propertyColumnBytes(const std::vector<std::vector<PropertyValue>> &columns,
+												 std::span<const std::string_view> keys, const char *message, const QueryContext *context) {
+			if (context != nullptr) context->checkGuardNow();
+			size_t bytes = checkedSizeMul(columns.capacity(), sizeof(std::vector<PropertyValue>), message);
 			for (size_t column = 0U; column < columns.size(); ++column) {
+				bytes = checkedSizeAdd(bytes, checkedSizeMul(columns[column].capacity(), sizeof(PropertyValue), message), message);
 				if (column < keys.size()) {
 					bytes = checkedSizeAdd(bytes, keys[column].size(), message);
 				}
 				for (const PropertyValue &value: columns[column]) {
-					bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value), message);
+					bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); }), message);
 				}
 			}
 			return bytes;
 		}
 
-		[[nodiscard]] size_t logicalIndexCandidateBatchBytes(const storage::IndexCandidateBatch &batch) {
+		[[nodiscard]] PropertyValue copyReservedPropertyValue(const PropertyValue &source,
+				ExecutionState &state, MaterializedByteReservation &reservation) {
+			const auto checkpoint = [&] { if (state.context != nullptr) state.context->checkGuardNow(); };
+			const size_t previous = reservation.bytes();
+			constexpr const char *message = "logical-plan copied Property payload size overflowed";
+			reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(source, checkpoint), message));
+			try {
+				PropertyValue copy = detail::copyPropertyValueGuarded(source, checkpoint);
+				reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(copy, checkpoint), message));
+				return copy;
+			} catch (...) {
+				reservation.set(previous);
+				throw;
+			}
+		}
+
+		[[nodiscard]] size_t logicalIndexCandidateBatchBytes(const storage::IndexCandidateBatch &batch, const QueryContext *context) {
+			if (context != nullptr) context->checkGuardNow();
 			constexpr const char *message = "logical-plan index candidate batch size overflowed";
 			size_t bytes = checkedSizeMul(batch.candidates.capacity(), sizeof(storage::EntityRef), message);
-			for (const storage::IndexCandidateBatch::VerifiedPropertyColumn &column:
-					batch.verified_property_columns) {
-				bytes = checkedSizeAdd(bytes, column.key.capacity(), message);
-				bytes = checkedSizeAdd(bytes,
-						checkedSizeMul(column.values.capacity(), sizeof(PropertyValue), message), message);
+			bytes = checkedSizeAdd(bytes, checkedSizeMul(batch.verified_property_columns.capacity(),
+				sizeof(storage::IndexCandidateBatch::VerifiedPropertyColumn), message), message);
+			for (const storage::IndexCandidateBatch::VerifiedPropertyColumn &column: batch.verified_property_columns) {
+				bytes = checkedSizeAdd(bytes, std::max(column.key.capacity(), detail::dynamicStringBufferBytes(column.key)), message);
+				bytes = checkedSizeAdd(bytes, checkedSizeMul(column.values.capacity(), sizeof(PropertyValue), message),
+									   message);
 				for (const PropertyValue &value: column.values) {
-					bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value), message);
+					bytes = checkedSizeAdd(bytes, detail::retainedPropertyValueBytes(value, [&] { if (context != nullptr) context->checkGuardNow(); }), message);
 				}
 			}
 			return bytes;
@@ -293,41 +528,117 @@ namespace graph::query::execution {
 			}
 		}
 
-		void validateNode(const storage::LogicalGraphNode &node);
+		// Copy/accounting helpers already bound work between checkpoints. Do not
+		// apply the per-row guard sampling interval a second time at that boundary.
+		void checkGuardNow(const ExecutionState &state) {
+			if (state.context != nullptr) state.context->checkGuardNow();
+		}
+
+		void validateNode(const storage::LogicalGraphNode &node, ExecutionState &state);
 		void validateEdge(const storage::LogicalGraphEdge &edge);
 
-		void cacheNodeRecord(ExecutionState &state, const storage::LogicalGraphNode &node) {
-			if (state.node_cache.contains(node.node_id)) {
+		template<typename Record, typename Cache>
+		void cacheEntityRecord(ExecutionState &state, Cache &cache, uint64_t id, Record &&record, size_t bytes,
+							   size_t maximumRecords) {
+			if (cache.contains(id) || cache.size() >= maximumRecords ||
+				bytes > MAXIMUM_MATERIALIZED_CACHE_BYTES -
+								std::min(state.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES)) {
 				return;
 			}
-			const size_t bytes = logicalNodeCacheBytes(node);
-			if (state.node_cache.size() < state.bounds.maximum_node_records &&
-				bytes <= MAXIMUM_MATERIALIZED_CACHE_BYTES -
-													std::min(state.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES) &&
-				state.node_cache.emplace(node.node_id, node).second) {
-				state.materialized_cache_bytes += bytes;
+			const size_t previousBytes = state.materialized_cache_bytes;
+			const size_t previousReservedBytes = state.materialized_cache_reservation.bytes();
+			using CachedRecord = typename Cache::mapped_type;
+			state.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
+				"logical-plan Entity cache payload size overflowed"));
+			try {
+				CachedRecord retained = [&]() -> CachedRecord {
+					if constexpr (std::is_lvalue_reference_v<Record>) {
+						return detail::copyLogicalEntityGuarded(record, [&] {
+							if (state.context != nullptr) state.context->checkGuardNow();
+						});
+					} else {
+						return std::forward<Record>(record);
+					}
+				}();
+				if constexpr (std::is_same_v<CachedRecord, storage::LogicalGraphNode>)
+					bytes = logicalNodeCacheBytes(retained, state.context);
+				else
+					bytes = logicalEdgeCacheBytes(retained, state.context);
+				const size_t retainedBytes = checkedSizeAdd(previousBytes, bytes,
+					"logical-plan Entity cache size overflowed");
+				if (retainedBytes > MAXIMUM_MATERIALIZED_CACHE_BYTES)
+					throw std::runtime_error("logical-plan Entity cache exceeded its byte bound");
+				state.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
+					"logical-plan Entity cache payload size overflowed"));
+				if (!cache.emplace(id, std::move(retained)).second) {
+					state.materialized_cache_reservation.set(previousReservedBytes);
+					return;
+				}
+				state.materialized_cache_bytes = retainedBytes;
+			} catch (...) {
+				state.materialized_cache_reservation.set(previousReservedBytes);
+				throw;
 			}
 		}
 
+		void cacheNodeRecord(ExecutionState &state, const storage::LogicalGraphNode &node) {
+			cacheEntityRecord(state, state.node_cache, node.node_id, node, logicalNodeCacheBytes(node, state.context),
+							  state.bounds.maximum_node_records);
+		}
+		void cacheNodeRecord(ExecutionState &state, storage::LogicalGraphNode &&node) {
+			const uint64_t id = node.node_id;
+			const size_t bytes = logicalNodeCacheBytes(node, state.context);
+			cacheEntityRecord(state, state.node_cache, id, std::move(node), bytes, state.bounds.maximum_node_records);
+		}
+
 		void cacheEdgeRecord(ExecutionState &state, const storage::LogicalGraphEdge &edge) {
-			if (state.edge_cache.contains(edge.edge_id)) {
-				return;
+			cacheEntityRecord(state, state.edge_cache, edge.edge_id, edge, logicalEdgeCacheBytes(edge, state.context),
+							  state.bounds.maximum_edge_records);
+		}
+		void cacheEdgeRecord(ExecutionState &state, storage::LogicalGraphEdge &&edge) {
+			const uint64_t id = edge.edge_id;
+			const size_t bytes = logicalEdgeCacheBytes(edge, state.context);
+			cacheEntityRecord(state, state.edge_cache, id, std::move(edge), bytes, state.bounds.maximum_edge_records);
+		}
+
+		// Borrow complete cache records while preparing an independently owned output.
+		// unordered_map rehash preserves references; callers finish using this borrow
+		// before invoking downstream visitors.
+		[[nodiscard]] const storage::LogicalGraphNode &readNodeCachedBorrowed(ExecutionState &state, uint64_t nodeId,
+				std::optional<storage::LogicalGraphNode> &uncached, MaterializedByteReservation &uncachedBytes) {
+			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) return cached->second;
+			storage::LogicalGraphNode node;
+			if (state.snapshot.supportsShapedPropertyReadAdmission()) {
+				uncachedBytes.set(sizeof(storage::LogicalGraphNode));
+				const std::array<uint64_t, 1U> ids{nodeId};
+				auto records = state.snapshot.readNodesShapedSortedWithAdmission(ids, completeNodeReadShape(), [&](size_t bytes) {
+					checkGuardNow(state);
+					uncachedBytes.set(checkedSizeAdd(uncachedBytes.bytes(), bytes, "logical-plan target source size overflowed"));
+				});
+				if (records.size() != 1U) throw std::runtime_error("logical graph backend changed typed Node batch cardinality");
+				node = std::move(records.front());
+			} else {
+				node = state.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
 			}
-			const size_t bytes = logicalEdgeCacheBytes(edge);
-			if (state.edge_cache.size() < state.bounds.maximum_edge_records &&
-				bytes <= MAXIMUM_MATERIALIZED_CACHE_BYTES -
-													std::min(state.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES) &&
-				state.edge_cache.emplace(edge.edge_id, edge).second) {
-				state.materialized_cache_bytes += bytes;
-			}
+			validateNode(node, state);
+			if (node.node_id != nodeId) throw std::runtime_error("logical graph shaped Node read changed logical identity");
+			// Cache admission owns the moved payload; no clone is constructed here.
+			uncachedBytes.reset();
+			cacheNodeRecord(state, std::move(node));
+			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) return cached->second;
+			uncachedBytes.set(logicalNodeCacheBytes(node, state.context));
+			uncached.emplace(std::move(node));
+			return *uncached;
 		}
 
 		[[nodiscard]] storage::LogicalGraphNode readNodeCached(ExecutionState &state, uint64_t nodeId) {
 			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) {
-				return cached->second;
+				return detail::copyLogicalEntityGuarded(cached->second, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				});
 			}
 			storage::LogicalGraphNode node = state.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
-			validateNode(node);
+			validateNode(node, state);
 			if (node.node_id != nodeId) {
 				throw std::runtime_error("logical graph shaped Node read changed logical identity");
 			}
@@ -337,7 +648,9 @@ namespace graph::query::execution {
 
 		[[nodiscard]] storage::LogicalGraphEdge readEdgeCached(ExecutionState &state, uint64_t edgeId) {
 			if (const auto cached = state.edge_cache.find(edgeId); cached != state.edge_cache.end()) {
-				return cached->second;
+				return detail::copyLogicalEntityGuarded(cached->second, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				});
 			}
 			storage::LogicalGraphEdge edge = state.snapshot.readEdgeShaped(edgeId, completeEdgeReadShape());
 			validateEdge(edge);
@@ -353,11 +666,9 @@ namespace graph::query::execution {
 				bounds.maximum_metadata_pages_per_node_page == 0U || bounds.maximum_edges_per_node == 0U ||
 				bounds.maximum_edge_records == 0U ||
 				bounds.maximum_edge_records == std::numeric_limits<size_t>::max() ||
-				bounds.maximum_adjacency_page_records == 0U ||
-				bounds.maximum_property_entries == 0U ||
+				bounds.maximum_adjacency_page_records == 0U || bounds.maximum_property_entries == 0U ||
 				bounds.maximum_rows == 0U || bounds.maximum_distinct_rows == 0U ||
-				bounds.maximum_materialized_bytes == 0U ||
-				bounds.maximum_candidate_bytes == 0U ||
+				bounds.maximum_materialized_bytes == 0U || bounds.maximum_candidate_bytes == 0U ||
 				bounds.maximum_node_page_records > bounds.maximum_node_records ||
 				bounds.maximum_adjacency_page_records > bounds.maximum_edges_per_node) {
 				throw std::invalid_argument(
@@ -376,7 +687,7 @@ namespace graph::query::execution {
 		void validateAdjacentEdgeOrder(uint64_t edgeId, uint64_t &previousEdgeId, const char *context) {
 			if (edgeId == 0U || (previousEdgeId != 0U && edgeId <= previousEdgeId)) {
 				throw std::runtime_error(std::string("logical graph backend returned non-monotonic ") + context +
-								 " adjacency Edge IDs");
+										 " adjacency Edge IDs");
 			}
 			previousEdgeId = edgeId;
 		}
@@ -443,7 +754,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] bool isWithinImportRoot(const std::filesystem::path &candidate,
-													 const std::filesystem::path &root) {
+											  const std::filesystem::path &root) {
 			auto candidatePart = candidate.begin();
 			for (auto rootPart = root.begin(); rootPart != root.end(); ++rootPart, ++candidatePart) {
 				if (candidatePart == candidate.end() || *candidatePart != *rootPart) {
@@ -476,8 +787,8 @@ namespace graph::query::execution {
 			}
 
 			std::error_code error;
-			const std::filesystem::path root = std::filesystem::weakly_canonical(*context.csv_import_policy.import_root,
-																											 error);
+			const std::filesystem::path root =
+					std::filesystem::weakly_canonical(*context.csv_import_policy.import_root, error);
 			if (error || !std::filesystem::is_directory(root, error) || error) {
 				throw std::runtime_error("logical LOAD CSV import root is inaccessible");
 			}
@@ -557,7 +868,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] std::pair<int, int> addMonthsToYearMonth(int year, int month, int64_t months) {
 			const int64_t zeroBasedMonth = checkedAdd(checkedMultiply(static_cast<int64_t>(year), 12LL),
-																	 checkedAdd(static_cast<int64_t>(month) - 1LL, months));
+													  checkedAdd(static_cast<int64_t>(month) - 1LL, months));
 			int64_t resultYear = zeroBasedMonth / 12LL;
 			int64_t resultMonth = zeroBasedMonth % 12LL;
 			if (resultMonth < 0LL) {
@@ -579,7 +890,8 @@ namespace graph::query::execution {
 		[[nodiscard]] PropertyValue addDurationToDate(const TemporalDate &date, const TemporalDuration &duration) {
 			const auto [year, month] = addMonthsToYearMonth(date.year(), date.month(), duration.months);
 			const TemporalDate monthAdjusted = TemporalDate::fromYMD(year, month, date.day());
-			const int64_t epochDays = checkedAdd(static_cast<int64_t>(monthAdjusted.epochDays), durationWholeDays(duration));
+			const int64_t epochDays =
+					checkedAdd(static_cast<int64_t>(monthAdjusted.epochDays), durationWholeDays(duration));
 			if (epochDays < static_cast<int64_t>(std::numeric_limits<int32_t>::min()) ||
 				epochDays > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
 				throw std::overflow_error("logical-plan temporal date overflowed");
@@ -588,10 +900,10 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue addDurationToDateTime(const TemporalDateTime &dateTime,
-																	 const TemporalDuration &duration) {
+														  const TemporalDuration &duration) {
 			const auto [year, month] = addMonthsToYearMonth(dateTime.year(), dateTime.month(), duration.months);
-			TemporalDateTime result = TemporalDateTime::fromComponents(
-				year, month, dateTime.day(), dateTime.hour(), dateTime.minute(), dateTime.second());
+			TemporalDateTime result = TemporalDateTime::fromComponents(year, month, dateTime.day(), dateTime.hour(),
+																	   dateTime.minute(), dateTime.second());
 			constexpr int64_t MILLIS_PER_DAY = 86'400LL * 1'000LL;
 			const int64_t dayMillis = checkedMultiply(duration.days, MILLIS_PER_DAY);
 			const int64_t nanosMillis = duration.nanos / 1'000'000LL;
@@ -602,27 +914,42 @@ namespace graph::query::execution {
 		[[nodiscard]] PropertyValue temporalComponent(const PropertyValue &value, std::string_view component) {
 			if (value.getType() == PropertyType::DATE) {
 				const TemporalDate &date = std::get<TemporalDate>(value.getVariant());
-				if (component == "year") return PropertyValue(static_cast<int64_t>(date.year()));
-				if (component == "month") return PropertyValue(static_cast<int64_t>(date.month()));
-				if (component == "day") return PropertyValue(static_cast<int64_t>(date.day()));
-				if (component == "epochDays") return PropertyValue(static_cast<int64_t>(date.epochDays));
+				if (component == "year")
+					return PropertyValue(static_cast<int64_t>(date.year()));
+				if (component == "month")
+					return PropertyValue(static_cast<int64_t>(date.month()));
+				if (component == "day")
+					return PropertyValue(static_cast<int64_t>(date.day()));
+				if (component == "epochDays")
+					return PropertyValue(static_cast<int64_t>(date.epochDays));
 			}
 			if (value.getType() == PropertyType::DATETIME) {
 				const TemporalDateTime &dateTime = std::get<TemporalDateTime>(value.getVariant());
-				if (component == "year") return PropertyValue(static_cast<int64_t>(dateTime.year()));
-				if (component == "month") return PropertyValue(static_cast<int64_t>(dateTime.month()));
-				if (component == "day") return PropertyValue(static_cast<int64_t>(dateTime.day()));
-				if (component == "hour") return PropertyValue(static_cast<int64_t>(dateTime.hour()));
-				if (component == "minute") return PropertyValue(static_cast<int64_t>(dateTime.minute()));
-				if (component == "second") return PropertyValue(static_cast<int64_t>(dateTime.second()));
-				if (component == "epochMillis") return PropertyValue(dateTime.epochMillis);
+				if (component == "year")
+					return PropertyValue(static_cast<int64_t>(dateTime.year()));
+				if (component == "month")
+					return PropertyValue(static_cast<int64_t>(dateTime.month()));
+				if (component == "day")
+					return PropertyValue(static_cast<int64_t>(dateTime.day()));
+				if (component == "hour")
+					return PropertyValue(static_cast<int64_t>(dateTime.hour()));
+				if (component == "minute")
+					return PropertyValue(static_cast<int64_t>(dateTime.minute()));
+				if (component == "second")
+					return PropertyValue(static_cast<int64_t>(dateTime.second()));
+				if (component == "epochMillis")
+					return PropertyValue(dateTime.epochMillis);
 			}
 			if (value.getType() == PropertyType::DURATION) {
 				const TemporalDuration &duration = std::get<TemporalDuration>(value.getVariant());
-				if (component == "months") return PropertyValue(duration.months);
-				if (component == "days") return PropertyValue(duration.days);
-				if (component == "seconds") return PropertyValue(duration.nanos / 1'000'000'000LL);
-				if (component == "nanoseconds") return PropertyValue(duration.nanos);
+				if (component == "months")
+					return PropertyValue(duration.months);
+				if (component == "days")
+					return PropertyValue(duration.days);
+				if (component == "seconds")
+					return PropertyValue(duration.nanos / 1'000'000'000LL);
+				if (component == "nanoseconds")
+					return PropertyValue(duration.nanos);
 			}
 			return PropertyValue();
 		}
@@ -640,21 +967,37 @@ namespace graph::query::execution {
 			return PropertyValue(std::get<storage::EntityRef>(value).entity_id);
 		}
 
-		void validateNode(const storage::LogicalGraphNode &node) {
+		void validateNode(const storage::LogicalGraphNode &node, ExecutionState &state) {
+			if (state.context != nullptr) state.context->checkGuardNow();
 			if (node.node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid Node");
 			}
-			std::unordered_set<std::string_view> labels;
+			detail::BudgetMemoryResource labelMemory(state.materialized_budget);
+			std::pmr::unordered_set<std::string_view> labels(&labelMemory);
 			labels.reserve(node.labels.size());
+			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
+				if (--labelsUntilGuard == 0U) {
+					if (state.context != nullptr) state.context->checkGuardNow();
+					labelsUntilGuard = 256U;
+				}
 				if (label.empty() || !labels.insert(label).second) {
 					throw std::runtime_error("logical graph backend returned an invalid Node label set");
 				}
 			}
 		}
 
+		void validateNodeIdentity(ExecutionState &state, uint64_t nodeId) {
+			checkGuard(state);
+			const auto node = state.snapshot.readNodeShaped(nodeId, {});
+			validateNode(node, state);
+			if (node.node_id != nodeId) {
+				throw std::runtime_error("logical graph endpoint identity changed during validation");
+			}
+		}
+
 		void validateEdge(const storage::LogicalGraphEdge &edge) {
-		if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
+			if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid Edge");
 			}
 		}
@@ -685,31 +1028,163 @@ namespace graph::query::execution {
 			}
 		}
 
-		void validateEdgeReferenceRecord(const storage::EntityRef &reference,
-				const storage::LogicalGraphEdge &edge, ExecutionState &state, const char *context) {
+		void validateEdgeReferenceRecord(const storage::EntityRef &reference, const storage::LogicalGraphEdge &edge,
+										 ExecutionState &state, const char *context) {
 			validateEdge(edge);
 			if (edge.edge_id != reference.entity_id || edge.source_node_id != reference.source_node_id ||
 				edge.target_node_id != reference.target_node_id) {
-				throw std::runtime_error(std::string(context) + " topology disagrees with its materialized relationship");
+				throw std::runtime_error(std::string(context) +
+										 " topology disagrees with its materialized relationship");
 			}
-			if (reference.type_token != 0U && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+			if (reference.type_token != 0U && state.snapshot.supportsNativeRelationshipTypeTokens(edge.type)) {
 				const std::optional<uint64_t> resolved = state.snapshot.findRelationshipTypeToken(edge.type);
 				if (!resolved.has_value() || *resolved != reference.type_token) {
 					throw std::runtime_error(std::string(context) +
-							" relationship type disagrees with its materialized relationship");
+											 " relationship type disagrees with its materialized relationship");
 				}
 			}
 		}
 
-		[[nodiscard]] std::vector<storage::LogicalGraphNode> materializeNodeReferences(
-				std::span<const storage::EntityRef> references, ExecutionState &state) {
+		void appendMissingReferenceId(std::vector<uint64_t> &ids, uint64_t id, size_t maximumCount,
+									  MaterializedByteReservation &slots) {
+			if (ids.size() == ids.capacity()) {
+				const size_t previousBytes = slots.bytes();
+				const size_t capacity = ids.capacity();
+				const size_t nextCapacity =
+						capacity == 0U
+								? 1U
+								: std::min(maximumCount, capacity > maximumCount / 2U ? maximumCount : capacity * 2U);
+				slots.set(checkedSizeMul(nextCapacity, sizeof(uint64_t),
+										 "logical-plan reference ID buffer size overflowed"));
+				try {
+					ids.reserve(nextCapacity);
+					slots.set(checkedSizeMul(ids.capacity(), sizeof(uint64_t),
+											 "logical-plan reference ID buffer size overflowed"));
+				} catch (...) {
+					slots.set(previousBytes);
+					throw;
+				}
+			}
+			ids.push_back(id);
+		}
+
+		template<typename Record>
+		void appendReferenceFallback(std::vector<Record> &records, Record &&record, size_t recordBytes,
+									 size_t maximumCount, size_t &heapBytes, MaterializedByteReservation &reservation) {
+			const size_t nextHeapBytes = checkedSizeAdd(heapBytes, recordBytes - sizeof(Record),
+														"logical-plan reference fallback size overflowed");
+			const size_t previousBytes = reservation.bytes();
+			const size_t capacity = records.capacity();
+			const size_t nextCapacity =
+					records.size() == capacity
+							? (capacity == 0U ? 1U
+											  : std::min(maximumCount,
+														 capacity > maximumCount / 2U ? maximumCount : capacity * 2U))
+							: capacity;
+			reservation.set(checkedSizeAdd(
+					nextHeapBytes,
+					checkedSizeMul(nextCapacity, sizeof(Record), "logical-plan reference fallback size overflowed"),
+					"logical-plan reference fallback size overflowed"));
+			try {
+				if (nextCapacity != capacity)
+					records.reserve(nextCapacity);
+				reservation.set(checkedSizeAdd(nextHeapBytes,
+											   checkedSizeMul(records.capacity(), sizeof(Record),
+															  "logical-plan reference fallback size overflowed"),
+											   "logical-plan reference fallback size overflowed"));
+				records.push_back(std::move(record));
+			} catch (...) {
+				reservation.set(previousBytes);
+				throw;
+			}
+			heapBytes = nextHeapBytes;
+		}
+
+		[[nodiscard]] std::vector<storage::LogicalGraphNode>
+		readNodesShapedSortedBudgeted(ExecutionState &state, std::span<const uint64_t> ids,
+									  const storage::EntityReadShape &shape,
+									  MaterializedByteReservation *retainedSource = nullptr) {
+			MaterializedByteReservation temporarySource(&state.materialized_budget);
+			MaterializedByteReservation &sourceBytes = retainedSource == nullptr ? temporarySource : *retainedSource;
+			if (retainedSource != nullptr) {
+				sourceBytes.set(checkedSizeMul(ids.size(), sizeof(storage::LogicalGraphNode),
+											   "logical-plan shaped Node source frame size overflowed"));
+			}
+			if (!state.snapshot.supportsShapedPropertyReadAdmission()) {
+				return state.snapshot.readNodesShapedSorted(ids, shape);
+			}
+			return state.snapshot.readNodesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
+				checkGuard(state);
+				sourceBytes.set(
+						checkedSizeAdd(sourceBytes.bytes(), bytes, "logical-plan shaped Node source size overflowed"));
+			});
+		}
+
+		[[nodiscard]] std::vector<storage::LogicalGraphEdge>
+		readEdgesShapedSortedBudgeted(ExecutionState &state, std::span<const uint64_t> ids,
+									  const storage::EntityReadShape &shape,
+									  MaterializedByteReservation *retainedSource = nullptr) {
+			MaterializedByteReservation temporarySource(&state.materialized_budget);
+			MaterializedByteReservation &sourceBytes = retainedSource == nullptr ? temporarySource : *retainedSource;
+			if (retainedSource != nullptr) {
+				sourceBytes.set(checkedSizeMul(ids.size(), sizeof(storage::LogicalGraphEdge),
+											   "logical-plan shaped Edge source frame size overflowed"));
+			}
+			if (!state.snapshot.supportsShapedPropertyReadAdmission()) {
+				return state.snapshot.readEdgesShapedSorted(ids, shape);
+			}
+			return state.snapshot.readEdgesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
+				checkGuard(state);
+				sourceBytes.set(
+						checkedSizeAdd(sourceBytes.bytes(), bytes, "logical-plan shaped Edge source size overflowed"));
+			});
+		}
+
+		[[nodiscard]] size_t packedBooleanBytes(size_t capacity) {
+			constexpr size_t bitsPerByte = std::numeric_limits<unsigned char>::digits;
+			return capacity / bitsPerByte + (capacity % bitsPerByte != 0U ? 1U : 0U);
+		}
+
+		void retainShapedBatchBytes(const std::vector<storage::LogicalGraphNode> &records,
+									MaterializedByteReservation &reservation, const QueryContext *context) {
+			size_t bytes = checkedSizeMul(records.capacity(), sizeof(storage::LogicalGraphNode),
+										  "logical-plan shaped Node batch capacity overflowed");
+			for (const auto &record: records) {
+				bytes = checkedSizeAdd(bytes, logicalNodeCacheBytes(record, context) - sizeof(record),
+									   "logical-plan shaped Node batch size overflowed");
+			}
+			reservation.set(bytes);
+		}
+
+		void retainShapedBatchBytes(const std::vector<storage::LogicalGraphEdge> &records,
+									MaterializedByteReservation &reservation, const QueryContext *context) {
+			size_t bytes = checkedSizeMul(records.capacity(), sizeof(storage::LogicalGraphEdge),
+										  "logical-plan shaped Edge batch capacity overflowed");
+			for (const auto &record: records) {
+				bytes = checkedSizeAdd(bytes, logicalEdgeCacheBytes(record, context) - sizeof(record),
+									   "logical-plan shaped Edge batch size overflowed");
+			}
+			reservation.set(bytes);
+		}
+
+		void admitReferenceResultBytes(MaterializedByteReservation &reservation, size_t bytes, const char *message) {
+			if (reservation.wouldExceed(bytes))
+				throw std::runtime_error(message);
+			reservation.set(bytes);
+		}
+
+		[[nodiscard]] std::vector<storage::LogicalGraphNode>
+		materializeNodeReferences(std::span<const storage::EntityRef> references, ExecutionState &state,
+								  const bool collectResults = true,
+								  MaterializedByteReservation *resultBytes = nullptr) {
 			std::vector<uint64_t> missingIds;
-			missingIds.reserve(references.size());
+			MaterializedByteReservation missingIdSlots(&state.materialized_budget);
 			for (const storage::EntityRef &reference: references) {
-				validateNodeRef(reference,
+				validateNodeRef(
+						reference,
 						"logical-plan materialization received an invalid or Edge reference where a Node was required");
 				if (!state.node_cache.contains(reference.entity_id)) {
-					missingIds.push_back(reference.entity_id);
+					appendMissingReferenceId(missingIds, reference.entity_id, references.size(), missingIdSlots);
 				}
 			}
 			std::ranges::sort(missingIds);
@@ -718,54 +1193,122 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical-plan Node materialization exceeded its record bound");
 			}
 
+			MaterializedByteReservation fallbackBytes(&state.materialized_budget);
 			std::vector<storage::LogicalGraphNode> loaded;
-			loaded.reserve(missingIds.size());
+			size_t fallbackHeapBytes = 0U;
+			// A record enters this fallback only when the shared cache declines it.
 			for (size_t offset = 0U; offset < missingIds.size();) {
 				checkGuard(state);
-				const size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-				const std::vector<storage::LogicalGraphNode> batch = state.snapshot.readNodesShapedSorted(
-						std::span<const uint64_t>(missingIds).subspan(offset, end - offset), completeNodeReadShape());
-				if (batch.size() != end - offset) {
-					throw std::runtime_error("logical-plan shaped Node batch changed result cardinality");
+				size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
+				MaterializedByteReservation sourceBytes(&state.materialized_budget);
+				std::vector<storage::LogicalGraphNode> batch;
+				while (true) {
+					const auto ids = std::span<const uint64_t>(missingIds).subspan(offset, end - offset);
+					try {
+						batch = readNodesShapedSortedBudgeted(state, ids, completeNodeReadShape(), &sourceBytes);
+						if (batch.size() != end - offset) {
+							throw std::runtime_error("logical-plan shaped Node batch changed result cardinality");
+						}
+						for (size_t index = 0U; index < batch.size(); ++index) {
+							validateNode(batch[index], state);
+							if (batch[index].node_id != missingIds[offset + index]) {
+								throw std::runtime_error("logical-plan shaped Node batch changed logical ID order");
+							}
+						}
+						retainShapedBatchBytes(batch, sourceBytes, state.context);
+						break;
+					} catch (const std::runtime_error &error) {
+						if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" ||
+							end - offset == 1U) {
+							throw;
+						}
+						std::vector<storage::LogicalGraphNode>().swap(batch);
+						sourceBytes.reset();
+						end = offset + std::max<size_t>(1U, (end - offset) / 2U);
+					}
 				}
 				for (size_t index = 0U; index < batch.size(); ++index) {
-					validateNode(batch[index]);
-					if (batch[index].node_id != missingIds[offset + index]) {
-						throw std::runtime_error("logical-plan shaped Node batch changed logical ID order");
+					const uint64_t id = batch[index].node_id;
+					const size_t recordBytes = logicalNodeCacheBytes(batch[index], state.context);
+					const size_t previousSourceBytes = sourceBytes.bytes();
+					// The vector frame remains live, but its heap payload is transferred
+					// to either the cache or the fallback buffer.
+					sourceBytes.set(previousSourceBytes - (recordBytes - sizeof(storage::LogicalGraphNode)));
+					cacheNodeRecord(state, std::move(batch[index]));
+					if (!state.node_cache.contains(id) && collectResults) {
+						appendReferenceFallback(loaded, std::move(batch[index]), recordBytes, missingIds.size(),
+												fallbackHeapBytes, fallbackBytes);
+					} else if (!state.node_cache.contains(id)) {
+						sourceBytes.set(previousSourceBytes);
 					}
-					cacheNodeRecord(state, batch[index]);
-					loaded.push_back(batch[index]);
 				}
 				offset = end;
 			}
 
+			if (!collectResults)
+				return {};
 			std::vector<storage::LogicalGraphNode> result;
-			result.reserve(references.size());
+			if (resultBytes != nullptr) {
+				const size_t slotBytes = checkedSizeMul(references.size(), sizeof(storage::LogicalGraphNode),
+														"logical-plan Node reference result capacity overflowed");
+				admitReferenceResultBytes(*resultBytes, slotBytes,
+										  "logical-plan Node reference result exceeded its shared byte bound");
+				try {
+					result.reserve(references.size());
+				} catch (...) {
+					resultBytes->reset();
+					throw;
+				}
+				admitReferenceResultBytes(*resultBytes,
+										  checkedSizeMul(result.capacity(), sizeof(storage::LogicalGraphNode),
+														 "logical-plan Node reference result capacity overflowed"),
+										  "logical-plan Node reference result exceeded its shared byte bound");
+			} else {
+				result.reserve(references.size());
+			}
+			const auto appendResult = [&](const storage::LogicalGraphNode &node) {
+				const size_t previousBytes = resultBytes == nullptr ? 0U : resultBytes->bytes();
+				if (resultBytes != nullptr) {
+					admitReferenceResultBytes(*resultBytes,
+											  checkedSizeAdd(previousBytes, logicalNodeCacheBytes(node, state.context) - sizeof(node),
+															 "logical-plan Node reference result size overflowed"),
+											  "logical-plan Node reference result exceeded its shared byte bound");
+				}
+				try {
+					result.push_back(node);
+				} catch (...) {
+					if (resultBytes != nullptr)
+						resultBytes->set(previousBytes);
+					throw;
+				}
+			};
 			for (const storage::EntityRef &reference: references) {
 				if (const auto cached = state.node_cache.find(reference.entity_id); cached != state.node_cache.end()) {
-					validateNode(cached->second);
-					result.push_back(cached->second);
+					validateNode(cached->second, state);
+					appendResult(cached->second);
 					continue;
 				}
-				const auto position = std::ranges::lower_bound(
-						loaded, reference.entity_id, {}, &storage::LogicalGraphNode::node_id);
+				const auto position =
+						std::ranges::lower_bound(loaded, reference.entity_id, {}, &storage::LogicalGraphNode::node_id);
 				if (position == loaded.end() || position->node_id != reference.entity_id) {
 					throw std::runtime_error("logical-plan shaped Node batch lost a requested Node");
 				}
-				result.push_back(*position);
+				appendResult(*position);
 			}
 			return result;
 		}
 
-		[[nodiscard]] std::vector<storage::LogicalGraphEdge> materializeEdgeReferences(
-				std::span<const storage::EntityRef> references, ExecutionState &state) {
+		[[nodiscard]] std::vector<storage::LogicalGraphEdge>
+		materializeEdgeReferences(std::span<const storage::EntityRef> references, ExecutionState &state,
+								  const bool collectResults = true,
+								  MaterializedByteReservation *resultBytes = nullptr) {
 			std::vector<uint64_t> missingIds;
-			missingIds.reserve(references.size());
+			MaterializedByteReservation missingIdSlots(&state.materialized_budget);
 			for (const storage::EntityRef &reference: references) {
-				validateEdgeRef(reference,
-						"logical-plan materialization received an invalid or Node reference where an Edge was required");
+				validateEdgeRef(reference, "logical-plan materialization received an invalid or Node reference where "
+										   "an Edge was required");
 				if (!state.edge_cache.contains(reference.entity_id)) {
-					missingIds.push_back(reference.entity_id);
+					appendMissingReferenceId(missingIds, reference.entity_id, references.size(), missingIdSlots);
 				}
 			}
 			std::ranges::sort(missingIds);
@@ -774,82 +1317,168 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical-plan Edge materialization exceeded its record bound");
 			}
 
+			MaterializedByteReservation fallbackBytes(&state.materialized_budget);
 			std::vector<storage::LogicalGraphEdge> loaded;
-			loaded.reserve(missingIds.size());
+			size_t fallbackHeapBytes = 0U;
 			for (size_t offset = 0U; offset < missingIds.size();) {
 				checkGuard(state);
-				const size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-				const std::vector<storage::LogicalGraphEdge> batch = state.snapshot.readEdgesShapedSorted(
-						std::span<const uint64_t>(missingIds).subspan(offset, end - offset), completeEdgeReadShape());
-				if (batch.size() != end - offset) {
-					throw std::runtime_error("logical-plan shaped Edge batch changed result cardinality");
+				size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
+				MaterializedByteReservation sourceBytes(&state.materialized_budget);
+				std::vector<storage::LogicalGraphEdge> batch;
+				while (true) {
+					const auto ids = std::span<const uint64_t>(missingIds).subspan(offset, end - offset);
+					try {
+						batch = readEdgesShapedSortedBudgeted(state, ids, completeEdgeReadShape(), &sourceBytes);
+						if (batch.size() != end - offset) {
+							throw std::runtime_error("logical-plan shaped Edge batch changed result cardinality");
+						}
+						for (size_t index = 0U; index < batch.size(); ++index) {
+							validateEdge(batch[index]);
+							if (batch[index].edge_id != missingIds[offset + index]) {
+								throw std::runtime_error("logical-plan shaped Edge batch changed logical ID order");
+							}
+						}
+						retainShapedBatchBytes(batch, sourceBytes, state.context);
+						break;
+					} catch (const std::runtime_error &error) {
+						if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" ||
+							end - offset == 1U) {
+							throw;
+						}
+						std::vector<storage::LogicalGraphEdge>().swap(batch);
+						sourceBytes.reset();
+						end = offset + std::max<size_t>(1U, (end - offset) / 2U);
+					}
 				}
 				for (size_t index = 0U; index < batch.size(); ++index) {
-					validateEdge(batch[index]);
-					if (batch[index].edge_id != missingIds[offset + index]) {
-						throw std::runtime_error("logical-plan shaped Edge batch changed logical ID order");
+					const uint64_t id = batch[index].edge_id;
+					const size_t recordBytes = logicalEdgeCacheBytes(batch[index], state.context);
+					const size_t previousSourceBytes = sourceBytes.bytes();
+					sourceBytes.set(previousSourceBytes - (recordBytes - sizeof(storage::LogicalGraphEdge)));
+					cacheEdgeRecord(state, std::move(batch[index]));
+					if (!state.edge_cache.contains(id)) {
+						appendReferenceFallback(loaded, std::move(batch[index]), recordBytes, missingIds.size(),
+												fallbackHeapBytes, fallbackBytes);
 					}
-					cacheEdgeRecord(state, batch[index]);
-					loaded.push_back(batch[index]);
 				}
 				offset = end;
 			}
 
 			std::vector<storage::LogicalGraphEdge> result;
-			result.reserve(references.size());
+			if (collectResults) {
+				if (resultBytes != nullptr) {
+					const size_t slotBytes = checkedSizeMul(references.size(), sizeof(storage::LogicalGraphEdge),
+															"logical-plan Edge reference result capacity overflowed");
+					admitReferenceResultBytes(*resultBytes, slotBytes,
+											  "logical-plan Edge reference result exceeded its shared byte bound");
+					try {
+						result.reserve(references.size());
+					} catch (...) {
+						resultBytes->reset();
+						throw;
+					}
+					admitReferenceResultBytes(*resultBytes,
+											  checkedSizeMul(result.capacity(), sizeof(storage::LogicalGraphEdge),
+															 "logical-plan Edge reference result capacity overflowed"),
+											  "logical-plan Edge reference result exceeded its shared byte bound");
+				} else {
+					result.reserve(references.size());
+				}
+			}
 			for (const storage::EntityRef &reference: references) {
 				const storage::LogicalGraphEdge *edge = nullptr;
 				if (const auto cached = state.edge_cache.find(reference.entity_id); cached != state.edge_cache.end()) {
 					edge = &cached->second;
 				} else {
-					const auto position = std::ranges::lower_bound(
-							loaded, reference.entity_id, {}, &storage::LogicalGraphEdge::edge_id);
+					const auto position = std::ranges::lower_bound(loaded, reference.entity_id, {},
+																   &storage::LogicalGraphEdge::edge_id);
 					if (position == loaded.end() || position->edge_id != reference.entity_id) {
 						throw std::runtime_error("logical-plan shaped Edge batch lost a requested relationship");
 					}
 					edge = &*position;
 				}
 				validateEdgeReferenceRecord(reference, *edge, state, "logical graph Entity reference");
-				result.push_back(*edge);
+				if (collectResults) {
+					const size_t previousBytes = resultBytes == nullptr ? 0U : resultBytes->bytes();
+					if (resultBytes != nullptr) {
+						admitReferenceResultBytes(*resultBytes,
+												  checkedSizeAdd(previousBytes,
+																 logicalEdgeCacheBytes(*edge, state.context) - sizeof(*edge),
+																 "logical-plan Edge reference result size overflowed"),
+												  "logical-plan Edge reference result exceeded its shared byte bound");
+					}
+					try {
+						result.push_back(*edge);
+					} catch (...) {
+						if (resultBytes != nullptr)
+							resultBytes->set(previousBytes);
+						throw;
+					}
+				}
 			}
 			return result;
 		}
 
 		[[nodiscard]] storage::LogicalGraphNode materializeNodeValue(ExecutionState &state,
-				const LogicalPlanReadValue &value) {
+																	 const LogicalPlanReadValue &value) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				validateNode(*node);
-				return *node;
+				validateNode(*node, state);
+				return detail::copyLogicalEntityGuarded(*node, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				});
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-				validateNodeRef(*reference,
+				validateNodeRef(
+						*reference,
 						"logical-plan expected a Node reference but received an invalid or relationship reference");
 				return readNodeCached(state, reference->entity_id);
 			}
 			throw std::runtime_error("logical-plan expected a Node variable");
 		}
 
-		[[nodiscard]] uint64_t nodeBindingId(const LogicalPlanReadValue &value) {
+		[[nodiscard]] uint64_t nodeBindingId(const LogicalPlanReadValue &value, ExecutionState &state) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				validateNode(*node);
+				validateNode(*node, state);
 				return node->node_id;
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-				validateNodeRef(*reference,
+				validateNodeRef(
+						*reference,
 						"logical-plan expected a Node reference but received an invalid or relationship reference");
 				return reference->entity_id;
 			}
 			throw std::runtime_error("logical-plan expected a Node variable");
 		}
 
+		[[nodiscard]] storage::LogicalGraphNode patternSourceIdentity(ExecutionState &state,
+																	  const LogicalPlanReadValue &value) {
+			const uint64_t id = nodeBindingId(value, state);
+			if (std::holds_alternative<storage::EntityRef>(value)) {
+				if (!state.snapshot.supportsNodeExistenceProbes()) {
+					validateNodeIdentity(state, id);
+					return {id, {}, {}};
+				}
+				checkGuard(state);
+				const std::array<uint64_t, 1U> ids{id};
+				const auto present = state.snapshot.containsNodesSorted(ids);
+				if (present.size() != 1U || !present.front()) {
+					throw std::runtime_error("logical-plan pattern source is missing from its pinned snapshot");
+				}
+			}
+			return {id, {}, {}};
+		}
+
 		[[nodiscard]] storage::LogicalGraphEdge materializeEdgeValue(ExecutionState &state,
-				const LogicalPlanReadValue &value) {
+																	 const LogicalPlanReadValue &value) {
 			if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
 				validateEdge(*edge);
-				return *edge;
+				return detail::copyLogicalEntityGuarded(*edge, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				});
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-				validateEdgeRef(*reference,
+				validateEdgeRef(
+						*reference,
 						"logical-plan expected a relationship reference but received an invalid or Node reference");
 				const storage::LogicalGraphEdge edge = readEdgeCached(state, reference->entity_id);
 				validateEdgeReferenceRecord(*reference, edge, state, "logical graph Entity reference");
@@ -859,7 +1488,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyMap readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
-																						  ExecutionState &state) {
+													   ExecutionState &state) {
 			if (entries.size() > state.bounds.maximum_property_entries) {
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
@@ -869,7 +1498,9 @@ namespace graph::query::execution {
 			properties.reserve(entries.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
 				checkGuard(state);
-				if (entry.key.empty() || !properties.emplace(entry.key, entry.value).second) {
+				if (entry.key.empty() || !properties.emplace(entry.key, detail::copyPropertyValueGuarded(entry.value, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				})).second) {
 					throw std::runtime_error("logical graph backend returned an invalid direct Property entry set");
 				}
 			}
@@ -877,13 +1508,13 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyMap readNodeProperties(storage::LogicalGraphReadSnapshot &snapshot,
-																									 const storage::LogicalGraphNode &node, ExecutionState &state) {
+													 const storage::LogicalGraphNode &node, ExecutionState &state) {
 			static_cast<void>(snapshot);
 			return readInlineProperties(node.properties, state);
 		}
 
 		[[nodiscard]] PropertyMap readEdgeProperties(storage::LogicalGraphReadSnapshot &snapshot,
-																									 const storage::LogicalGraphEdge &edge, ExecutionState &state) {
+													 const storage::LogicalGraphEdge &edge, ExecutionState &state) {
 			static_cast<void>(snapshot);
 			return readInlineProperties(edge.properties, state);
 		}
@@ -906,7 +1537,7 @@ namespace graph::query::execution {
 									   const storage::LogicalGraphNode &node, const std::vector<std::string> &labels,
 									   const std::vector<std::pair<std::string, PropertyValue>> &predicates,
 									   ExecutionState &state) {
-			validateNode(node);
+			validateNode(node, state);
 			std::unordered_set<std::string_view> actualLabels(node.labels.begin(), node.labels.end());
 			std::unordered_set<std::string_view> requiredLabels;
 			requiredLabels.reserve(labels.size());
@@ -925,11 +1556,12 @@ namespace graph::query::execution {
 			return propertiesMatch(readNodeProperties(snapshot, node, state), predicates);
 		}
 
-		[[nodiscard]] bool nodeScanMatches(storage::LogicalGraphReadSnapshot &snapshot,
-										   const storage::LogicalGraphNode &node, const logical::LogicalNodeScan &scan,
-										   const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
-										   ExecutionState &state) {
-			validateNode(node);
+		[[nodiscard]] bool
+		nodeScanMatches(storage::LogicalGraphReadSnapshot &snapshot, const storage::LogicalGraphNode &node,
+						const logical::LogicalNodeScan &scan,
+						const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
+						ExecutionState &state) {
+			validateNode(node, state);
 			std::unordered_set<std::string_view> actualLabels(node.labels.begin(), node.labels.end());
 			std::unordered_set<std::string_view> requiredLabels;
 			requiredLabels.reserve(scan.getLabels().size());
@@ -997,7 +1629,8 @@ namespace graph::query::execution {
 			for (const auto &[key, value]: scan.getPropertyPredicates()) {
 				static_cast<void>(value);
 				if (key.empty() || !keys.insert(key).second) {
-					throw std::invalid_argument("logical-plan Node scan has an empty or duplicate Property predicate key");
+					throw std::invalid_argument(
+							"logical-plan Node scan has an empty or duplicate Property predicate key");
 				}
 			}
 			std::vector<std::pair<std::string, PropertyValue>> result;
@@ -1005,8 +1638,8 @@ namespace graph::query::execution {
 			for (const logical::ParameterPropertyPredicate &predicate: scan.getParameterPropertyPredicates()) {
 				checkGuard(state);
 				if (predicate.key.empty() || predicate.parameter_name.empty() || !keys.insert(predicate.key).second) {
-					throw std::invalid_argument(
-							"logical-plan Node scan has an empty, duplicate, or conflicting parameter Property predicate key");
+					throw std::invalid_argument("logical-plan Node scan has an empty, duplicate, or conflicting "
+												"parameter Property predicate key");
 				}
 				if (state.context == nullptr) {
 					throw std::runtime_error("logical-plan parameter equality predicate requires a QueryContext");
@@ -1053,16 +1686,142 @@ namespace graph::query::execution {
 			return found->second;
 		}
 
+		[[nodiscard]] storage::LogicalGraphAdjacencyTopologyPage readTopologyPageBudgeted(
+			ExecutionState &state, uint64_t nodeId, storage::LogicalGraphReadDirection direction,
+			std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+			MaterializedByteReservation &sourceBytes) {
+			struct SourcePressure {};
+			const auto admit = [&](size_t bytes) {
+				checkGuard(state);
+				if (sourceBytes.wouldExceed(bytes)) throw SourcePressure{};
+				sourceBytes.set(bytes);
+			};
+			size_t requested = maximumRecords;
+			for (;;) {
+				checkGuard(state);
+				try {
+					auto page = state.snapshot.supportsAdjacencyTopologyBufferAdmission()
+						? state.snapshot.scanAdjacentEdgeTopologiesWithBufferAdmission(nodeId, direction, continuation, requested, admit)
+						: state.snapshot.scanAdjacentEdgeTopologies(nodeId, direction, continuation, requested);
+					if (page.edges.size() > requested || (page.edges.empty() && page.continuation))
+						throw std::runtime_error("logical graph topology source returned an invalid page shape");
+					uint64_t previous = continuation ? continuation->previous_edge_id : 0U;
+					if (continuation && (page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))
+						throw std::runtime_error("logical graph topology source returned a discontinuous page");
+					size_t bytes = checkedSizeMul(page.edges.capacity(), sizeof(storage::LogicalGraphEdgeTopology),
+						"logical-plan topology capacity overflowed");
+					for (const auto &edge: page.edges) {
+						validateEdge(edge);
+						if (edge.edge_id <= previous ||
+							(direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING ? edge.source_node_id : edge.target_node_id) != nodeId)
+							throw std::runtime_error("logical graph topology source returned invalid order or endpoint");
+						previous = edge.edge_id;
+						bytes = checkedSizeAdd(bytes, edge.type.capacity(), "logical-plan topology names overflowed");
+					}
+					if (page.continuation && (page.continuation->previous_edge_id != previous || page.continuation->next_edge_id <= previous))
+						throw std::runtime_error("logical graph topology source returned an invalid continuation");
+					admit(bytes);
+					return page;
+				} catch (const SourcePressure &) {
+					sourceBytes.reset();
+					if (requested <= 1U) throw std::runtime_error("shared materialization exceeded its byte bound");
+					requested = std::max<size_t>(1U, requested / 2U);
+				}
+			}
+		}
+
+		[[nodiscard]] storage::LogicalGraphAdjacencyReferencePage readReferencePageBudgeted(
+			ExecutionState &state, uint64_t nodeId, storage::LogicalGraphReadDirection direction,
+			std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+			MaterializedByteReservation &sourceBytes) {
+			struct SourcePressure {};
+			const auto admit = [&](size_t bytes) {
+				checkGuard(state);
+				if (sourceBytes.wouldExceed(bytes)) throw SourcePressure{};
+				sourceBytes.set(bytes);
+			};
+			size_t requested = maximumRecords;
+			for (;;) {
+				checkGuard(state);
+				try {
+					auto page = state.snapshot.supportsAdjacencyReferenceBufferAdmission()
+						? state.snapshot.scanAdjacentEdgeRefsWithBufferAdmission(nodeId, direction, continuation, requested, admit)
+						: state.snapshot.scanAdjacentEdgeRefs(nodeId, direction, continuation, requested);
+					if (page.edges.size() > requested || (page.edges.empty() && page.continuation))
+						throw std::runtime_error("logical graph reference source returned an invalid page shape");
+					admit(checkedSizeMul(page.edges.capacity(), sizeof(storage::EntityRef),
+						"logical-plan reference capacity overflowed"));
+					return page;
+				} catch (const SourcePressure &) {
+					sourceBytes.reset();
+					if (requested <= 1U) throw std::runtime_error("shared materialization exceeded its byte bound");
+					requested = std::max<size_t>(1U, requested / 2U);
+				}
+			}
+		}
+
+		[[nodiscard]] PropertyValue readSelectedPropertyBudgeted(storage::LogicalGraphReadSnapshot &snapshot,
+			uint64_t id, bool edge, std::string_view key, ExecutionState &state) {
+			checkGuard(state);
+			if (!snapshot.supportsPropertyReadAdmission())
+				return edge ? snapshot.readEdgeProperty(id, key) : snapshot.readNodeProperty(id, key);
+			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			sourceBytes.set(sizeof(std::vector<PropertyValue>) + sizeof(PropertyValue));
+			const std::function<void(size_t)> admission = [&](size_t bytes) {
+				checkGuard(state);
+				sourceBytes.set(checkedSizeAdd(sourceBytes.bytes(), bytes,
+					"logical-plan selected Property source size overflowed"));
+			};
+			const std::span<const uint64_t> ids(&id, 1U);
+			const std::span<const std::string_view> keys(&key, 1U);
+			auto columns = edge ? snapshot.readEdgePropertyColumnsSortedWithAdmission(ids, keys, admission)
+				: snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keys, admission);
+			if (columns.size() != 1U || columns.front().size() != 1U)
+				throw std::runtime_error("logical graph selected Property columns changed their shape");
+			const size_t frames = checkedSizeAdd(
+				checkedSizeMul(columns.capacity(), sizeof(std::vector<PropertyValue>),
+					"logical-plan selected Property column size overflowed"),
+				checkedSizeMul(columns.front().capacity(), sizeof(PropertyValue),
+					"logical-plan selected Property row size overflowed"),
+				"logical-plan selected Property frame size overflowed");
+			sourceBytes.set(checkedSizeAdd(frames, property_utils::getPropertyValueSize(columns.front().front()),
+				"logical-plan selected Property payload size overflowed"));
+			checkGuard(state);
+			return std::move(columns.front().front());
+		}
+
 		[[nodiscard]] PropertyValue readProperty(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
 												 const std::string &variable, const std::string &key,
 												 ExecutionState &state) {
 			if (key.empty()) {
 				throw std::invalid_argument("logical-plan Property access has an empty key");
 			}
+			const auto copyResult = [&](const PropertyValue &source, bool borrowed = false) {
+				// Fixed scalar alternatives cannot allocate payload buffers. Their
+				// owning output slots remain charged by the receiving row/container.
+				switch (source.getType()) {
+					case PropertyType::NULL_TYPE:
+					case PropertyType::BOOLEAN:
+					case PropertyType::INTEGER:
+					case PropertyType::DOUBLE:
+					case PropertyType::DATE:
+					case PropertyType::DATETIME:
+					case PropertyType::DURATION:
+						return source;
+					default: break;
+				}
+				MaterializedByteReservation copyBytes(&state.materialized_budget);
+				PropertyValue copied = copyReservedPropertyValue(source, state, copyBytes);
+				debug::PerfTrace::addValue("logical_plan.property.owned_result_copy_bytes",
+					static_cast<int64_t>(copyBytes.bytes()));
+				if (borrowed) debug::PerfTrace::addValue("logical_plan.prefetch.borrowed_value_copy_bytes",
+					static_cast<int64_t>(copyBytes.bytes()));
+				return copied;
+			};
 			if (const auto cached = row.property_cache.find(variable); cached != row.property_cache.end()) {
 				const auto found = cached->second.find(key);
 				if (found != cached->second.end()) {
-					return found->second;
+					return copyResult(found->second);
 				}
 				if (row.complete_entity_property_cache.contains(variable)) {
 					return PropertyValue();
@@ -1076,6 +1835,18 @@ namespace graph::query::execution {
 				}
 			}
 			const LogicalPlanReadValue &binding = requireBinding(row, variable);
+			if (const auto *reference = std::get_if<storage::EntityRef>(&binding);
+				reference != nullptr && !reference->is_edge && state.property_columns != nullptr &&
+				*state.property_columns->variable == variable) {
+				validateNodeRef(*reference, "logical-plan borrowed Property received an invalid Node reference");
+				const auto &view = *state.property_columns;
+				const auto id = std::ranges::lower_bound(view.ids, reference->entity_id);
+				const auto keyPosition = std::ranges::find(*view.keys, key);
+				if (id != view.ids.end() && *id == reference->entity_id && keyPosition != view.keys->end()) {
+					debug::PerfTrace::addValue("logical_plan.prefetch.borrowed_values", 1);
+					return copyResult(view.columns[keyPosition - view.keys->begin()][id - view.ids.begin()], true);
+				}
+			}
 			if (const PropertyValue *value = std::get_if<PropertyValue>(&binding)) {
 				if (value->getType() == PropertyType::DATE || value->getType() == PropertyType::DATETIME ||
 					value->getType() == PropertyType::DURATION) {
@@ -1084,64 +1855,74 @@ namespace graph::query::execution {
 				if (value->getType() != PropertyType::MAP) {
 					return PropertyValue();
 				}
-				const auto [cached, inserted] = row.property_cache.emplace(variable, value->getMap());
-				static_cast<void>(inserted);
-				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : found->second;
+				const auto &properties = value->getMap();
+				const auto found = properties.find(key);
+				return found == properties.end() ? PropertyValue() : copyResult(found->second);
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&binding)) {
 				auto [cached, inserted] =
 						row.property_cache.emplace(variable, readNodeProperties(snapshot, *node, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : found->second;
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&binding)) {
-				auto [cached, inserted] = row.property_cache.emplace(variable, readEdgeProperties(snapshot, *edge, state));
+				auto [cached, inserted] =
+						row.property_cache.emplace(variable, readEdgeProperties(snapshot, *edge, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
-				return found == cached->second.end() ? PropertyValue() : found->second;
+				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
 			}
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(binding);
 			validateEntityRef(reference);
 			// Native snapshots resolve the property name to a token and decode only
 			// the requested value. The virtual default retains complete-read
 			// compatibility for non-native logical backends.
-			const PropertyValue value = reference.is_edge ? snapshot.readEdgeProperty(reference.entity_id, key)
-																	 : snapshot.readNodeProperty(reference.entity_id, key);
-			row.property_cache[variable].insert_or_assign(key, value);
-			return value;
+			PropertyValue value = readSelectedPropertyBudgeted(
+				snapshot, reference.entity_id, reference.is_edge, key, state);
+			// The selected value is already owned. Transfer it into the row cache;
+			// only the independent expression result needs a payload copy.
+			const auto [cached, inserted] = row.property_cache[variable].insert_or_assign(key, std::move(value));
+			static_cast<void>(inserted);
+			return copyResult(cached->second);
 		}
 
-		[[nodiscard]] bool nodeRefScanMatches(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
-																									 const std::string &variable,
-																									 const logical::LogicalNodeScan &scan,
-																									 const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
-																									 ExecutionState &state,
-																									 const bool labelsAlreadyMatched = false) {
+		[[nodiscard]] bool
+		nodeRefScanMatches(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
+						   const std::string &variable, const logical::LogicalNodeScan &scan,
+						   const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
+						   ExecutionState &state, const bool labelsAlreadyMatched = false) {
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(requireBinding(row, variable));
 			validateNodeRef(reference, "logical-plan Node predicate received an invalid or Edge reference");
 			if (!labelsAlreadyMatched && !snapshot.nodeHasLabels(reference.entity_id, scan.getLabels())) {
 				return false;
 			}
-			const auto equals = [&](const std::pair<std::string, PropertyValue> &predicate) {
+			const auto inspectProperty = [&](const std::string &key, const auto &inspect) {
+				if (const auto cached = row.property_cache.find(variable); cached != row.property_cache.end()) {
+					if (const auto found = cached->second.find(key); found != cached->second.end()) {
+						return inspect(found->second);
+					}
+				}
+				return inspect(readProperty(snapshot, row, variable, key, state));
+			};
+			const auto equals = [&](const std::string &key, const PropertyValue &expected) {
 				checkGuard(state);
-				if (predicate.first.empty()) {
+				if (key.empty()) {
 					throw std::invalid_argument("logical-plan Property predicate has an empty key");
 				}
-				if (isNull(predicate.second)) {
+				if (isNull(expected)) {
 					return false;
 				}
-				const PropertyValue actual = readProperty(snapshot, row, variable, predicate.first, state);
-				return !isNull(actual) && actual == predicate.second;
+				return inspectProperty(
+						key, [&](const PropertyValue &actual) { return !isNull(actual) && actual == expected; });
 			};
 			for (const auto &predicate: scan.getPropertyPredicates()) {
-				if (!equals(predicate)) {
+				if (!equals(predicate.first, predicate.second)) {
 					return false;
 				}
 			}
 			for (const auto &predicate: parameterPredicates) {
-				if (!equals(predicate)) {
+				if (!equals(predicate.first, predicate.second)) {
 					return false;
 				}
 			}
@@ -1150,25 +1931,22 @@ namespace graph::query::execution {
 				if (range.key.empty()) {
 					throw std::invalid_argument("logical-plan Node range predicate has an empty key");
 				}
-				const PropertyValue actual = readProperty(snapshot, row, variable, range.key, state);
-				if (isNull(actual)) {
+				const bool matches = inspectProperty(range.key, [&](const PropertyValue &actual) {
+					return !isNull(actual) &&
+						   (isNull(range.minValue) ||
+							!(range.minInclusive ? actual < range.minValue : actual <= range.minValue)) &&
+						   (isNull(range.maxValue) ||
+							!(range.maxInclusive ? actual > range.maxValue : actual >= range.maxValue));
+				});
+				if (!matches)
 					return false;
-				}
-				if (!isNull(range.minValue) &&
-					(range.minInclusive ? actual < range.minValue : actual <= range.minValue)) {
-					return false;
-				}
-				if (!isNull(range.maxValue) &&
-					(range.maxInclusive ? actual > range.maxValue : actual >= range.maxValue)) {
-					return false;
-				}
 			}
 			if (const auto &composite = scan.getCompositeEquality(); composite.has_value()) {
 				if (composite->keys.empty() || composite->keys.size() != composite->values.size()) {
 					throw std::invalid_argument("logical-plan Node composite predicate has an invalid shape");
 				}
 				for (size_t index = 0U; index < composite->keys.size(); ++index) {
-					if (!equals({composite->keys[index], composite->values[index]})) {
+					if (!equals(composite->keys[index], composite->values[index])) {
 						return false;
 					}
 				}
@@ -1177,20 +1955,23 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] const PropertyMap &readBindingProperties(storage::LogicalGraphReadSnapshot &snapshot,
-																	 LogicalPlanReadRow &row,
-																	 const std::string &variable,
-																	 ExecutionState &state) {
+															   LogicalPlanReadRow &row, const std::string &variable,
+															   ExecutionState &state) {
 			const LogicalPlanReadValue &binding = requireBinding(row, variable);
 			const bool isEntityReference = std::holds_alternative<storage::EntityRef>(binding);
-			if (const auto cached = row.property_cache.find(variable); cached != row.property_cache.end() &&
+			if (const auto cached = row.property_cache.find(variable);
+				cached != row.property_cache.end() &&
 				(!isEntityReference || row.complete_entity_property_cache.contains(variable))) {
 				return cached->second;
 			}
 			if (const PropertyValue *value = std::get_if<PropertyValue>(&binding)) {
 				if (value->getType() != PropertyType::MAP) {
-					throw std::runtime_error("logical-plan entity Property function requires a node, relationship, or Map");
+					throw std::runtime_error(
+							"logical-plan entity Property function requires a node, relationship, or Map");
 				}
-				return row.property_cache.emplace(variable, value->getMap()).first->second;
+				return row.property_cache.emplace(variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				})).first->second;
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&binding)) {
 				return row.property_cache.emplace(variable, readNodeProperties(snapshot, *node, state)).first->second;
@@ -1201,12 +1982,18 @@ namespace graph::query::execution {
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(binding);
 			validateEntityRef(reference);
 			PropertyMap complete = reference.is_edge
-											? readEdgeProperties(snapshot, materializeEdgeValue(state, binding), state)
-											: readNodeProperties(snapshot, materializeNodeValue(state, binding), state);
+										   ? readEdgeProperties(snapshot, materializeEdgeValue(state, binding), state)
+										   : readNodeProperties(snapshot, materializeNodeValue(state, binding), state);
 			auto [cached, inserted] = row.property_cache.insert_or_assign(variable, std::move(complete));
 			static_cast<void>(inserted);
 			row.complete_entity_property_cache.insert(variable);
 			return cached->second;
+		}
+
+		[[nodiscard]] size_t retainedExpressionValueBytes(const PropertyValue &value, const ExecutionState &state) {
+			return detail::retainedPropertyValueBytes(value, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
 		}
 
 		// List comprehensions, reducers, and quantifiers bind short-lived scalar
@@ -1214,11 +2001,36 @@ namespace graph::query::execution {
 		// expression from corrupting an outer row binding with the same name.
 		class ScopedRowBinding final {
 		public:
-			ScopedRowBinding(LogicalPlanReadRow &row, std::string variable, LogicalPlanReadValue value) :
-					row_(row), variable_(std::move(variable)) {
-				if (variable_.empty()) {
+			template<typename Value>
+			ScopedRowBinding(LogicalPlanReadRow &row, std::string_view variable, const Value &value,
+							 ExecutionState &state) : row_(row), binding_bytes_(&state.materialized_budget) {
+				if (variable.empty()) {
 					throw std::invalid_argument("logical-plan temporary variable name cannot be empty");
 				}
+				size_t bytes = checkedSizeAdd(variable.size(), sizeof(LogicalPlanReadValue),
+											  "logical-plan scoped binding size overflowed");
+				bytes = checkedSizeAdd(bytes, bindingPayloadBytes(value, state),
+									   "logical-plan scoped binding size overflowed");
+				binding_bytes_.set(bytes);
+				variable_.assign(variable);
+				if (const auto previous = row_.values.find(variable_); previous != row_.values.end()) {
+					bytes = checkedSizeAdd(bytes, logicalReadValueBytes(previous->second, state.context),
+										   "logical-plan scoped binding size overflowed");
+					bytes = checkedSizeAdd(bytes, sizeof(LogicalPlanReadValue),
+										   "logical-plan scoped binding size overflowed");
+				}
+				if (const auto previous = row_.property_cache.find(variable_); previous != row_.property_cache.end()) {
+					bytes = checkedSizeAdd(
+							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.context),
+							"logical-plan scoped binding size overflowed");
+				}
+				if (const auto previous = row_.entity_metadata_cache.find(variable_);
+					previous != row_.entity_metadata_cache.end()) {
+					bytes = checkedSizeAdd(
+							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.context),
+							"logical-plan scoped binding size overflowed");
+				}
+				binding_bytes_.set(bytes);
 				if (const auto previous = row_.values.find(variable_); previous != row_.values.end()) {
 					previous_value_ = previous->second;
 				}
@@ -1230,7 +2042,7 @@ namespace graph::query::execution {
 					previous != row_.entity_metadata_cache.end()) {
 					previous_metadata_ = previous->second;
 				}
-				row_.values.insert_or_assign(variable_, std::move(value));
+				row_.values.insert_or_assign(variable_, LogicalPlanReadValue(value));
 				row_.property_cache.erase(variable_);
 				row_.complete_entity_property_cache.erase(variable_);
 				row_.entity_metadata_cache.erase(variable_);
@@ -1264,7 +2076,18 @@ namespace graph::query::execution {
 			ScopedRowBinding &operator=(const ScopedRowBinding &) = delete;
 
 		private:
+			[[nodiscard]] static size_t bindingPayloadBytes(const PropertyValue &value, const ExecutionState &state) {
+				return retainedExpressionValueBytes(value, state);
+			}
+			[[nodiscard]] static size_t bindingPayloadBytes(const storage::LogicalGraphNode &value, const ExecutionState &state) {
+				return logicalNodeCacheBytes(value, state.context);
+			}
+			[[nodiscard]] static size_t bindingPayloadBytes(const storage::LogicalGraphEdge &value, const ExecutionState &state) {
+				return logicalEdgeCacheBytes(value, state.context);
+			}
+
 			LogicalPlanReadRow &row_;
+			MaterializedByteReservation binding_bytes_;
 			std::string variable_;
 			std::optional<LogicalPlanReadValue> previous_value_;
 			std::optional<PropertyMap> previous_properties_;
@@ -1272,21 +2095,34 @@ namespace graph::query::execution {
 			std::optional<std::unordered_map<std::string, PropertyValue>> previous_metadata_;
 		};
 
-		[[nodiscard]] const std::vector<PropertyValue> &requireBoundedList(const PropertyValue &value,
-																				const ExecutionState &state,
-																				const char *operation) {
+		[[nodiscard]] const std::vector<PropertyValue> &
+		requireBoundedList(const PropertyValue &value, const ExecutionState &state, const char *operation) {
 			if (value.getType() != PropertyType::LIST) {
 				throw std::runtime_error(std::string("logical-plan ") + operation + " requires a List value");
 			}
 			const std::vector<PropertyValue> &list = value.getList();
 			if (list.size() > state.bounds.maximum_rows) {
-				throw std::runtime_error(std::string("logical-plan ") + operation + " exceeded the configured List bound");
+				throw std::runtime_error(std::string("logical-plan ") + operation +
+										 " exceeded the configured List bound");
 			}
 			return list;
 		}
 
-		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
-													 LogicalPlanReadRow &row, ExecutionState &state);
+		[[nodiscard]] size_t materializedListStorageBytes(const PropertyValue &value, const ExecutionState &state) {
+			const auto estimates = detail::propertyBufferEstimates(value, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
+			const size_t logicalBytes = checkedSizeAdd(estimates.logicalBytes,
+								  checkedSizeMul(value.getList().capacity(), sizeof(PropertyValue),
+												 "logical-plan List capacity overflowed"),
+								  "logical-plan List storage size overflowed");
+			return std::max(logicalBytes, estimates.heapBytes);
+		}
+
+		[[nodiscard]] PropertyValue
+		evaluateScalarExpression(const expressions::Expression &expression, LogicalPlanReadRow &row,
+								 ExecutionState &state,
+								 ShortestPathResultMode shortestMode = ShortestPathResultMode::SPR_FULL);
 
 		using PatternMatchVisitor =
 				std::function<bool(const storage::LogicalGraphEdge &, const storage::LogicalGraphNode &)>;
@@ -1295,15 +2131,15 @@ namespace graph::query::execution {
 		// Edge or target Node.  The native reference page is already authenticated
 		// against the pinned snapshot; endpoint probes retain the fail-closed
 		// invariant while keeping the hot path independent of Property pages.
-		[[nodiscard]] std::optional<bool> findPatternReferenceMatch(
-				const uint64_t sourceNodeId, const std::string &edgeType,
-				expressions::PatternDirection direction, ExecutionState &state) {
-			if (!state.snapshot.supportsNativeAdjacentEdgeRefScans() ||
-					!state.snapshot.supportsNodeExistenceProbes() ||
-					(!edgeType.empty() && !state.snapshot.supportsNativeRelationshipTypeTokens()) ||
-					(direction != expressions::PatternDirection::PAT_OUTGOING &&
-						direction != expressions::PatternDirection::PAT_INCOMING &&
-						direction != expressions::PatternDirection::PAT_BOTH)) {
+		[[nodiscard]] std::optional<bool> findPatternReferenceMatch(const uint64_t sourceNodeId,
+																	const std::string &edgeType,
+																	expressions::PatternDirection direction,
+																	ExecutionState &state) {
+			if (!state.snapshot.supportsNativeAdjacentEdgeRefScans() || !state.snapshot.supportsNodeExistenceProbes() ||
+				(!edgeType.empty() && !state.snapshot.supportsNativeRelationshipTypeTokens(edgeType)) ||
+				(direction != expressions::PatternDirection::PAT_OUTGOING &&
+				 direction != expressions::PatternDirection::PAT_INCOMING &&
+				 direction != expressions::PatternDirection::PAT_BOTH)) {
 				return std::nullopt;
 			}
 			if (sourceNodeId == 0U) {
@@ -1322,49 +2158,52 @@ namespace graph::query::execution {
 				uint64_t previousEdgeId = 0U;
 				for (;;) {
 					if (sourceEdges == state.bounds.maximum_edges_per_node) {
-						throw std::runtime_error(
-								"logical-plan pattern expression exceeded its per-Node Edge bound");
+						throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
 					}
-					const size_t pageRecords = std::min(
-							state.bounds.maximum_edges_per_node - sourceEdges,
-							state.bounds.maximum_adjacency_page_records);
-					const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-							sourceNodeId, adjacencyDirection, continuation, pageRecords);
-					if (page.edges.size() > pageRecords ||
-							(page.edges.empty() && page.continuation.has_value()) ||
-							(continuation.has_value() &&
-									(page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id))) {
+					const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
+														state.bounds.maximum_adjacency_page_records);
+					MaterializedByteReservation referenceBytes(&state.materialized_budget);
+					const auto page = readReferencePageBudgeted(state, sourceNodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
+					if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
+						(continuation.has_value() &&
+						 (page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id))) {
 						throw std::runtime_error(
 								"logical graph backend returned an invalid pattern-expression reference page");
 					}
 					// Validate and filter the complete page before probing endpoints.  The
 					// endpoint requests are then sorted/deduplicated for one bounded
 					// Directory lookup, while candidates retain their original order.
-						std::vector<const storage::EntityRef *> candidates;
-						candidates.reserve(page.edges.size());
+					MaterializedByteReservation candidateBytes(&state.materialized_budget);
+					candidateBytes.set(checkedSizeMul(page.edges.size(), sizeof(const storage::EntityRef *),
+						"logical-plan pattern candidate slots overflowed"));
+					std::vector<const storage::EntityRef *> candidates;
+					candidates.reserve(page.edges.size());
+					candidateBytes.set(checkedSizeMul(candidates.capacity(), sizeof(const storage::EntityRef *),
+						"logical-plan pattern candidate capacity overflowed"));
 					for (const storage::EntityRef &reference: page.edges) {
 						checkGuard(state);
 						validateEdgeRef(reference,
-								"logical graph backend returned an invalid pattern-expression reference");
+										"logical graph backend returned an invalid pattern-expression reference");
 						if (reference.entity_id <= previousEdgeId) {
 							throw std::runtime_error(
 									"logical graph backend returned an invalid pattern-expression reference");
 						}
 						previousEdgeId = reference.entity_id;
-						const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-								? reference.source_node_id == sourceNodeId
-								: reference.target_node_id == sourceNodeId;
+						const bool endpointMatches =
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? reference.source_node_id == sourceNodeId
+										: reference.target_node_id == sourceNodeId;
 						if (!endpointMatches) {
 							throw std::runtime_error(
 									"logical graph backend returned an invalid pattern-expression endpoint");
 						}
 						incrementBounded(sourceEdges,
-								"logical-plan pattern-expression per-Node Edge counter overflowed");
+										 "logical-plan pattern-expression per-Node Edge counter overflowed");
 						incrementBounded(state.stats.edges_scanned,
-								"logical-plan pattern-expression Edge counter overflowed");
+										 "logical-plan pattern-expression Edge counter overflowed");
 						if (direction == expressions::PatternDirection::PAT_BOTH &&
-								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-								reference.source_node_id == sourceNodeId) {
+							adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+							reference.source_node_id == sourceNodeId) {
 							continue;
 						}
 						if (edgeTypeToken.has_value() && reference.type_token != *edgeTypeToken) {
@@ -1377,24 +2216,44 @@ namespace graph::query::execution {
 							return false;
 						}
 					} else if (state.snapshot.supportsNodeExistenceProbes()) {
+						MaterializedByteReservation targetBytes(&state.materialized_budget);
+						targetBytes.set(checkedSizeMul(candidates.size(), sizeof(uint64_t),
+							"logical-plan pattern endpoint slots overflowed"));
 						std::vector<uint64_t> targetIds;
 						targetIds.reserve(candidates.size());
+						targetBytes.set(checkedSizeMul(targetIds.capacity(), sizeof(uint64_t),
+							"logical-plan pattern endpoint capacity overflowed"));
 						for (const storage::EntityRef *reference: candidates) {
 							targetIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-									? reference->target_node_id : reference->source_node_id);
+														? reference->target_node_id
+														: reference->source_node_id);
 						}
-						std::ranges::sort(targetIds);
-						targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
+						detail::sortUniqueIdsGuarded(targetIds, [&] {
+							if (state.context != nullptr) state.context->checkGuardNow();
+						});
+						MaterializedByteReservation presenceBytes(&state.materialized_budget);
+						// Reserve a complete machine word for the final partial bit block.
+						const auto presenceSize = [&](size_t bits) {
+							return checkedSizeMul(bits / 8U + (bits % 8U != 0U), 1U,
+								"logical-plan pattern presence capacity overflowed");
+						};
+						presenceBytes.set(checkedSizeAdd(presenceSize(targetIds.size()), sizeof(size_t),
+							"logical-plan pattern presence slots overflowed"));
 						const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
+						presenceBytes.set(presenceSize(present.capacity()));
+						checkGuard(state);
 						if (present.size() != targetIds.size()) {
-							throw std::runtime_error("logical graph backend changed pattern-expression endpoint cardinality");
+							throw std::runtime_error(
+									"logical graph backend changed pattern-expression endpoint cardinality");
 						}
 						for (const storage::EntityRef *reference: candidates) {
-							const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-									? reference->target_node_id : reference->source_node_id;
+							const uint64_t targetId =
+									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? reference->target_node_id
+											: reference->source_node_id;
 							const auto position = std::ranges::lower_bound(targetIds, targetId);
 							if (position == targetIds.end() || *position != targetId ||
-									!present[static_cast<size_t>(position - targetIds.begin())]) {
+								!present[static_cast<size_t>(position - targetIds.begin())]) {
 								throw std::runtime_error(
 										"logical graph backend returned an Edge topology with a missing endpoint");
 							}
@@ -1403,8 +2262,10 @@ namespace graph::query::execution {
 					} else {
 						// Preserve the defensive fallback for logical readers that do not
 						// implement the optional batch probe.
-						const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-								? candidates.front()->target_node_id : candidates.front()->source_node_id;
+						const uint64_t targetId =
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? candidates.front()->target_node_id
+										: candidates.front()->source_node_id;
 						if (!state.snapshot.containsNode(targetId)) {
 							throw std::runtime_error(
 									"logical graph backend returned an Edge topology with a missing endpoint");
@@ -1415,45 +2276,178 @@ namespace graph::query::execution {
 						return false;
 					}
 					if (page.edges.empty() || page.continuation->previous_edge_id != page.edges.back().entity_id ||
-							page.continuation->next_edge_id == 0U ||
-							page.continuation->previous_edge_id == page.continuation->next_edge_id) {
+						page.continuation->next_edge_id == 0U ||
+						page.continuation->previous_edge_id == page.continuation->next_edge_id) {
 						throw std::runtime_error(
 								"logical graph backend returned an incomplete pattern-expression reference scan");
 					}
 					continuation = page.continuation;
 				}
 			};
-		if (direction == expressions::PatternDirection::PAT_OUTGOING ||
+			if (direction == expressions::PatternDirection::PAT_OUTGOING ||
 				direction == expressions::PatternDirection::PAT_BOTH) {
-			if (scanDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING)) {
-				return true;
+				if (scanDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING)) {
+					return true;
+				}
 			}
-		}
-		if (direction == expressions::PatternDirection::PAT_INCOMING ||
+			if (direction == expressions::PatternDirection::PAT_INCOMING ||
 				direction == expressions::PatternDirection::PAT_BOTH) {
-			if (scanDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING)) {
-				return true;
+				if (scanDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING)) {
+					return true;
+				}
 			}
-		}
-		return false;
+			return false;
 		}
 
 		[[nodiscard]] bool visitPatternTargets(const storage::LogicalGraphNode &source, const std::string &edgeType,
-												 std::string_view targetLabel,
-												 expressions::PatternDirection direction, ExecutionState &state,
-												 const PatternMatchVisitor &visitor) {
+											   std::string_view targetLabel, expressions::PatternDirection direction,
+											   ExecutionState &state, const PatternMatchVisitor &visitor,
+											   const PatternBindingReadShape *bindingShape = nullptr,
+											   bool lazyCandidates = false) {
 			if (!visitor) {
 				throw std::invalid_argument("logical-plan pattern expression requires a target visitor");
 			}
-			validateNode(source);
+			validateNode(source, state);
+			const auto validateCandidate = [&](const storage::LogicalGraphEdge &edge,
+											   const storage::LogicalGraphNode &target) {
+				validateNode(target, state);
+				validateEdge(edge);
+				if (lazyCandidates && (target.properties.size() > state.bounds.maximum_property_entries ||
+									   edge.properties.size() > state.bounds.maximum_property_entries ||
+									   checkedSizeAdd(logicalNodeCacheBytes(target, state.context), logicalEdgeCacheBytes(edge, state.context),
+													  "logical-plan EXISTS candidate byte count overflowed") >
+											   state.bounds.maximum_materialized_bytes)) {
+					throw std::runtime_error("logical-plan EXISTS candidate exceeded its Property or byte bound");
+				}
+			};
+
+			const auto appendNamedProperties = [&](auto &records, const std::vector<uint64_t> &ids,
+												   const std::vector<std::string> &keys, bool edgeRecords,
+												   MaterializedByteReservation &recordBytes) {
+				if (ids.empty() || keys.empty())
+					return;
+				if (keys.size() > state.bounds.maximum_property_entries) {
+					throw std::runtime_error("logical-plan pattern named columns exceeded their Property bound");
+				}
+				for (size_t index = 0U; index < records.size(); ++index) {
+					const auto &record = records[index];
+					uint64_t id;
+					if constexpr (requires { record.node_id; })
+						id = record.node_id;
+					else
+						id = record.edge_id;
+					if (id != ids[index])
+						throw std::runtime_error("logical graph pattern named columns changed entity order");
+				}
+				std::vector<std::string_view> keyViews;
+				keyViews.reserve(keys.size());
+				for (const auto &key: keys) {
+					if (std::ranges::any_of(records, [&](const auto &record) {
+							return std::ranges::find(record.properties, key,
+													 &storage::LogicalGraphPropertyEntry::key) ==
+								   record.properties.end();
+						}))
+						keyViews.push_back(key);
+				}
+				// Compatibility readers may already return complete records despite
+				// the shape. Reuse those fields instead of issuing a redundant column read.
+				if (keyViews.empty())
+					return;
+				checkGuard(state);
+				MaterializedByteReservation columnBytes(&state.materialized_budget);
+				const size_t columnFrames = checkedSizeAdd(
+						checkedSizeMul(keyViews.size(), sizeof(std::vector<PropertyValue>),
+									   "logical-plan pattern column frame size overflowed"),
+						checkedSizeMul(checkedSizeMul(keyViews.size(), ids.size(),
+													  "logical-plan pattern column frame size overflowed"),
+									   sizeof(PropertyValue), "logical-plan pattern column frame size overflowed"),
+						"logical-plan pattern column frame size overflowed");
+				columnBytes.set(columnFrames);
+				const std::function<void(size_t)> admitProperty = [&](size_t bytes) {
+					checkGuard(state);
+					columnBytes.set(checkedSizeAdd(columnBytes.bytes(), bytes,
+												   "logical-plan pattern Property source size overflowed"));
+				};
+				const bool sourceAdmission = state.snapshot.supportsPropertyReadAdmission();
+				auto columns =
+						edgeRecords ? (sourceAdmission ? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+																 ids, keyViews, admitProperty)
+													   : state.snapshot.readEdgePropertyColumnsSorted(ids, keyViews))
+									: (sourceAdmission ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+																 ids, keyViews, admitProperty)
+													   : state.snapshot.readNodePropertyColumnsSorted(ids, keyViews));
+				if (columns.size() != keyViews.size()) {
+					throw std::runtime_error("logical graph pattern named columns changed column count");
+				}
+				size_t retainedColumns = checkedSizeMul(columns.capacity(), sizeof(std::vector<PropertyValue>),
+														"logical-plan pattern column size overflowed");
+				for (const auto &column: columns) {
+					if (column.size() != ids.size()) {
+						throw std::runtime_error("logical graph pattern named columns changed row count");
+					}
+					retainedColumns = checkedSizeAdd(retainedColumns,
+													 checkedSizeMul(column.capacity(), sizeof(PropertyValue),
+																	"logical-plan pattern column size overflowed"),
+													 "logical-plan pattern column size overflowed");
+					for (const PropertyValue &value: column) {
+						retainedColumns = checkedSizeAdd(retainedColumns, property_utils::getPropertyValueSize(value),
+														 "logical-plan pattern column size overflowed");
+					}
+				}
+				columnBytes.set(retainedColumns);
+				for (size_t column = 0U; column < keyViews.size(); ++column) {
+					for (size_t index = 0U; index < records.size(); ++index) {
+						checkGuard(state);
+						auto &entries = records[index].properties;
+						const auto existing =
+								std::ranges::find(entries, keyViews[column], &storage::LogicalGraphPropertyEntry::key);
+						const size_t transferred = property_utils::getPropertyValueSize(columns[column][index]);
+						const size_t previousValue =
+								existing == entries.end() ? 0U : property_utils::getPropertyValueSize(existing->value);
+						const size_t entryGrowth =
+								existing == entries.end()
+										? checkedSizeAdd(sizeof(storage::LogicalGraphPropertyEntry),
+														 keyViews[column].size(),
+														 "logical-plan pattern Property entry size overflowed")
+										: 0U;
+						columnBytes.set(columnBytes.bytes() - transferred);
+						recordBytes.set(
+								checkedSizeAdd(recordBytes.bytes(),
+											   checkedSizeAdd(entryGrowth, transferred,
+															  "logical-plan pattern Property handoff size overflowed"),
+											   "logical-plan pattern Property handoff size overflowed"));
+						if (existing == entries.end())
+							entries.push_back({std::string(keyViews[column]), std::move(columns[column][index])});
+						else
+							existing->value = std::move(columns[column][index]);
+						recordBytes.set(recordBytes.bytes() - previousValue);
+					}
+				}
+				size_t bytes = 0U;
+				for (const auto &record: records) {
+					size_t recordBytes;
+					if constexpr (requires { record.node_id; })
+						recordBytes = logicalNodeCacheBytes(record, state.context);
+					else
+						recordBytes = logicalEdgeCacheBytes(record, state.context);
+					bytes = checkedSizeAdd(bytes, recordBytes, "logical-plan pattern named columns size overflowed");
+					if (record.properties.size() > state.bounds.maximum_property_entries ||
+						bytes > state.bounds.maximum_materialized_bytes) {
+						throw std::runtime_error(
+								"logical-plan pattern named columns exceeded their materialized bound");
+					}
+				}
+			};
+
 			if (direction != expressions::PatternDirection::PAT_OUTGOING &&
 				direction != expressions::PatternDirection::PAT_INCOMING &&
 				direction != expressions::PatternDirection::PAT_BOTH) {
 				throw std::invalid_argument("logical-plan pattern expression has an unknown direction");
 			}
 			std::optional<uint64_t> edgeTypeToken;
-			const bool canUseReferencePages = state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
-					(edgeType.empty() || state.snapshot.supportsNativeRelationshipTypeTokens());
+			const bool canUseReferencePages =
+					state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+					(edgeType.empty() || state.snapshot.supportsNativeRelationshipTypeTokens(edgeType));
 			if (canUseReferencePages && !edgeType.empty()) {
 				edgeTypeToken = state.snapshot.findRelationshipTypeToken(edgeType);
 				if (!edgeTypeToken.has_value()) {
@@ -1464,116 +2458,304 @@ namespace graph::query::execution {
 			// The target label predicate is fixed for this pattern invocation. Keep a
 			// bounded per-invocation cache so repeated targets in a supernode do not
 			// reopen the same Entity Map entry for the same logical predicate.
-			std::unordered_map<uint64_t, bool> targetLabelMatches;
+			using LabelMatch = std::pair<uint64_t, bool>;
+			MaterializedByteReservation labelCacheBytes(&state.materialized_budget);
+			std::vector<LabelMatch> targetLabelMatches;
+			const auto cachedLabel = [&](uint64_t id) {
+				return std::ranges::find(targetLabelMatches, id, &LabelMatch::first);
+			};
+			MaterializedByteReservation labelFilterBytes(&state.materialized_budget);
+			std::vector<std::string> targetLabelFilter;
 			if (!targetLabel.empty()) {
-				targetLabelMatches.reserve(std::min(state.bounds.maximum_rows, size_t{64U}));
+				const size_t nameBytes = std::max(targetLabel.size(), std::string{}.capacity());
+				labelFilterBytes.set(checkedSizeAdd(sizeof(std::string), nameBytes,
+					"logical-plan pattern label filter slots overflowed"));
+				targetLabelFilter.reserve(1U);
+				labelFilterBytes.set(checkedSizeAdd(checkedSizeMul(targetLabelFilter.capacity(), sizeof(std::string),
+					"logical-plan pattern label filter capacity overflowed"), nameBytes,
+					"logical-plan pattern label filter name overflowed"));
+				targetLabelFilter.emplace_back(targetLabel);
+				labelFilterBytes.set(checkedSizeAdd(checkedSizeMul(targetLabelFilter.capacity(), sizeof(std::string),
+					"logical-plan pattern label filter capacity overflowed"), targetLabelFilter.front().capacity(),
+					"logical-plan pattern label filter name overflowed"));
 			}
-			const std::vector<std::string> targetLabelFilter =
-					targetLabel.empty() ? std::vector<std::string>{} : std::vector<std::string>{std::string(targetLabel)};
 			const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
 				uint64_t previousEdgeId = 0U;
 				if (canUseReferencePages) {
 					for (;;) {
 						if (sourceEdges == state.bounds.maximum_edges_per_node) {
-							throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
+							throw std::runtime_error(
+									"logical-plan pattern expression exceeded its per-Node Edge bound");
 						}
-						const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-																			 state.bounds.maximum_adjacency_page_records);
-						const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-								 source.node_id, adjacencyDirection, continuation, pageRecords);
+						const size_t pageRecords =
+								std::min(state.bounds.maximum_edges_per_node - sourceEdges,
+										 lazyCandidates ? size_t{1U} : state.bounds.maximum_adjacency_page_records);
+						MaterializedByteReservation referenceBytes(&state.materialized_budget);
+						const auto page = readReferencePageBudgeted(state, source.node_id, adjacencyDirection, continuation, pageRecords, referenceBytes);
 						if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
-							throw std::runtime_error("logical graph backend returned an invalid pattern-expression adjacency reference page");
+							throw std::runtime_error("logical graph backend returned an invalid pattern-expression "
+													 "adjacency reference page");
 						}
 						if (continuation.has_value() &&
-								(page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id)) {
-							throw std::runtime_error("logical graph backend returned a discontinuous pattern-expression adjacency reference page");
+							(page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id)) {
+							throw std::runtime_error("logical graph backend returned a discontinuous "
+													 "pattern-expression adjacency reference page");
 						}
 						// Validate and filter the whole bounded reference page first.  A
 						// single sorted label-column lookup then serves all distinct target
 						// Nodes on the page instead of reopening the Entity Map per Edge.
+						MaterializedByteReservation candidateBytes(&state.materialized_budget);
+						candidateBytes.set(checkedSizeMul(page.edges.size(), sizeof(const storage::EntityRef *),
+							"logical-plan pattern candidate slots overflowed"));
 						std::vector<const storage::EntityRef *> candidates;
 						candidates.reserve(page.edges.size());
+						candidateBytes.set(checkedSizeMul(candidates.capacity(), sizeof(const storage::EntityRef *),
+							"logical-plan pattern candidate capacity overflowed"));
 						for (const storage::EntityRef &reference: page.edges) {
 							checkGuard(state);
-							validateEdgeRef(reference,
+							validateEdgeRef(
+									reference,
 									"logical graph backend returned an invalid pattern-expression adjacency reference");
 							if (reference.entity_id <= previousEdgeId) {
-								throw std::runtime_error("logical graph backend returned an invalid pattern-expression adjacency reference");
+								throw std::runtime_error("logical graph backend returned an invalid pattern-expression "
+														 "adjacency reference");
 							}
 							previousEdgeId = reference.entity_id;
-							const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																			 ? reference.source_node_id == source.node_id
-																			 : reference.target_node_id == source.node_id;
+							const bool endpointMatches =
+									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? reference.source_node_id == source.node_id
+											: reference.target_node_id == source.node_id;
 							if (!endpointMatches) {
-								throw std::runtime_error("logical graph backend returned an invalid pattern-expression Edge reference");
+								throw std::runtime_error(
+										"logical graph backend returned an invalid pattern-expression Edge reference");
 							}
 							incrementBounded(sourceEdges,
-												 "logical-plan pattern-expression per-Node Edge counter overflowed");
+											 "logical-plan pattern-expression per-Node Edge counter overflowed");
 							incrementBounded(state.stats.edges_scanned,
 											 "logical-plan pattern-expression Edge counter overflowed");
 							if (direction == expressions::PatternDirection::PAT_BOTH &&
-									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-									reference.source_node_id == source.node_id) {
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+								reference.source_node_id == source.node_id) {
 								continue;
 							}
 							if (edgeTypeToken.has_value() && reference.type_token != *edgeTypeToken) {
 								continue;
 							}
-							const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																				? reference.target_node_id
-																				: reference.source_node_id;
+							const uint64_t targetId =
+									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? reference.target_node_id
+											: reference.source_node_id;
 							static_cast<void>(targetId);
 							candidates.push_back(&reference);
 						}
-						std::unordered_map<uint64_t, bool> pageLabelMatches;
-						if (!targetLabel.empty() && !candidates.empty()) {
-							std::vector<uint64_t> targetIds;
-							targetIds.reserve(candidates.size());
-							for (const storage::EntityRef *candidate: candidates) {
-								const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-										? candidate->target_node_id : candidate->source_node_id;
-								if (targetLabelMatches.find(targetId) == targetLabelMatches.end()) {
-									targetIds.push_back(targetId);
-								}
+						if (state.snapshot.supportsNodeExistenceProbes() && !candidates.empty()) {
+							detail::BudgetMemoryResource endpointMemory(state.materialized_budget);
+							std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
+							endpointIds.reserve(candidates.size());
+							for (const auto *candidate: candidates) {
+								endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? candidate->target_node_id : candidate->source_node_id);
 							}
-							std::ranges::sort(targetIds);
-							targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
+							detail::sortUniqueIdsGuarded(endpointIds, [&] {
+								if (state.context != nullptr) state.context->checkGuardNow();
+							});
+							MaterializedByteReservation presenceBytes(&state.materialized_budget);
+							presenceBytes.set(packedBooleanBytes(endpointIds.size()));
+							const auto present = state.snapshot.containsNodesSorted(endpointIds);
+							presenceBytes.set(packedBooleanBytes(present.capacity()));
+							checkGuard(state);
+							if (present.size() != endpointIds.size()) {
+								throw std::runtime_error("logical graph backend changed pattern-expression endpoint cardinality");
+							}
+							if (std::ranges::any_of(present, [](bool value) { return !value; })) {
+								throw std::runtime_error("logical graph backend returned a pattern-expression Edge with a missing endpoint");
+							}
+						}
+						MaterializedByteReservation labelIdsBytes(&state.materialized_budget);
+						MaterializedByteReservation labelBitsBytes(&state.materialized_budget);
+						std::vector<uint64_t> targetIds;
+						std::vector<bool> matches;
+						if (!targetLabel.empty() && !candidates.empty()) {
+							labelIdsBytes.set(checkedSizeMul(candidates.size(), sizeof(uint64_t),
+								"logical-plan pattern label slots overflowed"));
+							targetIds.reserve(candidates.size());
+							labelIdsBytes.set(checkedSizeMul(targetIds.capacity(), sizeof(uint64_t),
+								"logical-plan pattern label capacity overflowed"));
+							for (const auto *candidate: candidates) {
+								const uint64_t id = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+									? candidate->target_node_id : candidate->source_node_id;
+								if (cachedLabel(id) == targetLabelMatches.end()) targetIds.push_back(id);
+							}
+							detail::sortUniqueIdsGuarded(targetIds, [&] {
+								if (state.context != nullptr) state.context->checkGuardNow();
+							});
 							if (!targetIds.empty()) {
-								const std::vector<bool> matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, targetLabelFilter);
-								if (matches.size() != targetIds.size()) {
+								labelBitsBytes.set(checkedSizeAdd(targetIds.size() / 8U + (targetIds.size() % 8U != 0U),
+									sizeof(size_t), "logical-plan pattern label bit slots overflowed"));
+								matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, targetLabelFilter);
+								labelBitsBytes.set(matches.capacity() / 8U + (matches.capacity() % 8U != 0U));
+								checkGuard(state);
+								if (matches.size() != targetIds.size())
 									throw std::runtime_error("logical graph backend changed pattern-expression target label cardinality");
-								}
-								for (size_t index = 0U; index < targetIds.size(); ++index) {
-									pageLabelMatches.emplace(targetIds[index], matches[index]);
-									if (targetLabelMatches.size() < std::min(state.bounds.maximum_rows, size_t{64U})) {
-										targetLabelMatches.emplace(targetIds[index], matches[index]);
+								const size_t cacheLimit = std::min(state.bounds.maximum_rows, size_t{64U});
+								for (size_t index = 0U; index < targetIds.size() && targetLabelMatches.size() < cacheLimit; ++index) {
+									if (targetLabelMatches.size() == targetLabelMatches.capacity()) {
+										const size_t old = targetLabelMatches.capacity();
+										const size_t next = old == 0U ? std::min(cacheLimit, size_t{8U}) : old + std::min(old, cacheLimit - old);
+										const size_t peak = (old + next) * sizeof(LabelMatch);
+										if (labelCacheBytes.wouldExceed(peak)) break; // Cache insertion is optional.
+										labelCacheBytes.set(peak);
+										targetLabelMatches.reserve(next);
+										labelCacheBytes.set(targetLabelMatches.capacity() * sizeof(LabelMatch));
 									}
+									targetLabelMatches.emplace_back(targetIds[index], matches[index]);
 								}
 							}
 						}
+						size_t matchingCount = 0U;
 						for (const storage::EntityRef *referencePointer: candidates) {
 							const storage::EntityRef &reference = *referencePointer;
-							const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																				? reference.target_node_id
-																				: reference.source_node_id;
+							const uint64_t targetId =
+									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? reference.target_node_id
+											: reference.source_node_id;
 							if (!targetLabel.empty()) {
-								const auto cached = targetLabelMatches.find(targetId);
-								const auto pageCached = pageLabelMatches.find(targetId);
+								const auto cached = cachedLabel(targetId);
+								const auto position = std::ranges::lower_bound(targetIds, targetId);
 								const bool labelsMatch = cached != targetLabelMatches.end() ? cached->second
-																				: (pageCached != pageLabelMatches.end() && pageCached->second);
+									: (position != targetIds.end() && *position == targetId && matches[position - targetIds.begin()]);
 								if (!labelsMatch) {
 									continue;
 								}
 							}
-							const storage::LogicalGraphEdge edge = readEdgeCached(state, reference.entity_id);
-							if (edge.source_node_id != reference.source_node_id ||
+							candidates[matchingCount++] = referencePointer;
+						}
+						candidates.resize(matchingCount);
+						std::vector<uint64_t>().swap(targetIds);
+						std::vector<bool>().swap(matches);
+						labelIdsBytes.reset();
+						labelBitsBytes.reset();
+						if (bindingShape == nullptr) {
+							// Complete/fallback paths retain the original lazy visitor
+							// contract.  In particular, EXISTS may stop after the first
+							// match and must not read the rest of the page speculatively.
+							for (const storage::EntityRef *referencePointer: candidates) {
+								const storage::EntityRef &reference = *referencePointer;
+								const storage::LogicalGraphEdge edge = readEdgeCached(state, reference.entity_id);
+								if (edge.source_node_id != reference.source_node_id ||
 									edge.target_node_id != reference.target_node_id ||
 									(!edgeType.empty() && edge.type != edgeType)) {
-								throw std::runtime_error("logical graph backend returned an adjacency reference with mismatched Edge data");
+									throw std::runtime_error("logical graph backend returned an adjacency reference "
+															 "with mismatched Edge data");
+								}
+								const uint64_t targetId =
+										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+												? reference.target_node_id
+												: reference.source_node_id;
+								const storage::LogicalGraphNode target = readNodeCached(state, targetId);
+								if (!visitor(edge, target)) {
+									return false;
+								}
 							}
-							const storage::LogicalGraphNode target = readNodeCached(state, targetId);
-							if (!visitor(edge, target)) {
+							if (!page.continuation.has_value()) {
+								return true;
+							}
+							if (sourceEdges == state.bounds.maximum_edges_per_node || page.edges.empty() ||
+								page.continuation->previous_edge_id != page.edges.back().entity_id ||
+								page.continuation->next_edge_id == 0U ||
+								page.continuation->previous_edge_id == page.continuation->next_edge_id) {
+								throw std::runtime_error("logical graph backend returned an incomplete "
+														 "pattern-expression adjacency reference scan");
+							}
+							continuation = page.continuation;
+							continue;
+						}
+						MaterializedByteReservation gatherBytes(&state.materialized_budget);
+						gatherBytes.set(checkedSizeMul(candidates.size(), 2U * sizeof(uint64_t),
+							"logical-plan pattern gather slots overflowed"));
+						std::vector<uint64_t> pageEdgeIds;
+						pageEdgeIds.reserve(candidates.size());
+						gatherBytes.set(checkedSizeMul(checkedSizeAdd(pageEdgeIds.capacity(), candidates.size(),
+							"logical-plan pattern gather slots overflowed"), sizeof(uint64_t),
+							"logical-plan pattern gather capacity overflowed"));
+						std::vector<uint64_t> pageTargetIds;
+						pageTargetIds.reserve(candidates.size());
+						gatherBytes.set(checkedSizeMul(checkedSizeAdd(pageEdgeIds.capacity(), pageTargetIds.capacity(),
+							"logical-plan pattern gather capacity overflowed"), sizeof(uint64_t),
+							"logical-plan pattern gather capacity overflowed"));
+						for (const storage::EntityRef *referencePointer: candidates) {
+							pageEdgeIds.push_back(referencePointer->entity_id);
+							pageTargetIds.push_back(adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? referencePointer->target_node_id
+															: referencePointer->source_node_id);
+						}
+						detail::sortUniqueIdsGuarded(pageEdgeIds, [&] {
+							if (state.context != nullptr) state.context->checkGuardNow();
+						});
+						detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
+							if (state.context != nullptr) state.context->checkGuardNow();
+						});
+						storage::EntityReadShape edgeShape =
+								bindingShape == nullptr ? completeEdgeReadShape() : bindingShape->relationship;
+						if (!edgeType.empty()) {
+							edgeShape.include_type = true;
+						}
+						storage::EntityReadShape targetShape =
+								bindingShape == nullptr ? completeNodeReadShape() : bindingShape->target;
+						targetShape.include_labels = targetShape.include_labels || !targetLabel.empty();
+						MaterializedByteReservation pageEdgeBytes(&state.materialized_budget);
+						std::vector<storage::LogicalGraphEdge> pageEdges =
+								pageEdgeIds.empty()
+										? std::vector<storage::LogicalGraphEdge>{}
+										: readEdgesShapedSortedBudgeted(state, pageEdgeIds, edgeShape, &pageEdgeBytes);
+						if (pageEdges.size() != pageEdgeIds.size()) {
+							throw std::runtime_error(
+									"logical graph backend changed pattern-expression Edge batch cardinality");
+						}
+						retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.context);
+						MaterializedByteReservation pageTargetBytes(&state.materialized_budget);
+						std::vector<storage::LogicalGraphNode> pageTargets =
+								pageTargetIds.empty() ? std::vector<storage::LogicalGraphNode>{}
+													  : readNodesShapedSortedBudgeted(state, pageTargetIds, targetShape,
+																					  &pageTargetBytes);
+						if (pageTargets.size() != pageTargetIds.size()) {
+							throw std::runtime_error(
+									"logical graph backend changed pattern-expression target batch cardinality");
+						}
+						retainShapedBatchBytes(pageTargets, pageTargetBytes, state.context);
+						if (bindingShape != nullptr) {
+							appendNamedProperties(pageEdges, pageEdgeIds, bindingShape->relationship_named_properties,
+												  true, pageEdgeBytes);
+							retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.context);
+							appendNamedProperties(pageTargets, pageTargetIds, bindingShape->target_named_properties,
+												  false, pageTargetBytes);
+							retainShapedBatchBytes(pageTargets, pageTargetBytes, state.context);
+						}
+						for (const storage::EntityRef *referencePointer: candidates) {
+							const storage::EntityRef &reference = *referencePointer;
+							const uint64_t targetId =
+									adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? reference.target_node_id
+											: reference.source_node_id;
+							const auto edgePosition = std::ranges::lower_bound(pageEdges, reference.entity_id, {},
+																			   &storage::LogicalGraphEdge::edge_id);
+							const auto targetPosition = std::ranges::lower_bound(pageTargets, targetId, {},
+																				 &storage::LogicalGraphNode::node_id);
+							if (edgePosition == pageEdges.end() || targetPosition == pageTargets.end() ||
+								edgePosition->edge_id != reference.entity_id || targetPosition->node_id != targetId) {
+								throw std::runtime_error("logical graph backend lost a pattern-expression batch entry");
+							}
+							const storage::LogicalGraphEdge &edge = *edgePosition;
+							if (edge.source_node_id != reference.source_node_id ||
+								edge.target_node_id != reference.target_node_id ||
+								(!edgeType.empty() && edge.type != edgeType)) {
+								throw std::runtime_error("logical graph backend returned an adjacency reference with "
+														 "mismatched Edge data");
+							}
+							validateCandidate(edge, *targetPosition);
+							if (!visitor(edge, *targetPosition)) {
 								return false;
 							}
 						}
@@ -1581,10 +2763,11 @@ namespace graph::query::execution {
 							return true;
 						}
 						if (sourceEdges == state.bounds.maximum_edges_per_node || page.edges.empty() ||
-								page.continuation->previous_edge_id != page.edges.back().entity_id ||
-								page.continuation->next_edge_id == 0U ||
-								page.continuation->previous_edge_id == page.continuation->next_edge_id) {
-							throw std::runtime_error("logical graph backend returned an incomplete pattern-expression adjacency reference scan");
+							page.continuation->previous_edge_id != page.edges.back().entity_id ||
+							page.continuation->next_edge_id == 0U ||
+							page.continuation->previous_edge_id == page.continuation->next_edge_id) {
+							throw std::runtime_error("logical graph backend returned an incomplete pattern-expression "
+													 "adjacency reference scan");
 						}
 						continuation = page.continuation;
 					}
@@ -1593,77 +2776,179 @@ namespace graph::query::execution {
 					if (sourceEdges == state.bounds.maximum_edges_per_node) {
 						throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
 					}
-					const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-														 state.bounds.maximum_adjacency_page_records);
+					const size_t pageRecords =
+							std::min(state.bounds.maximum_edges_per_node - sourceEdges,
+									 lazyCandidates ? size_t{1U} : state.bounds.maximum_adjacency_page_records);
 					// The pattern visitor has no Edge Property predicate on this path.
 					// Scan topology first, then materialize the selected full Edge batch
 					// only for candidates that survive endpoint/type validation.
-					const storage::LogicalGraphAdjacencyTopologyPage page = state.snapshot.scanAdjacentEdgeTopologies(
-							source.node_id, adjacencyDirection, continuation, pageRecords);
+					MaterializedByteReservation topologyBytes(&state.materialized_budget);
+					const auto page = readTopologyPageBudgeted(state, source.node_id,
+						adjacencyDirection, continuation, pageRecords, topologyBytes);
 					if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
-						throw std::runtime_error("logical graph backend returned an invalid pattern-expression adjacency page");
+						throw std::runtime_error(
+								"logical graph backend returned an invalid pattern-expression adjacency page");
 					}
 					if (continuation.has_value() &&
 						(page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id)) {
-						throw std::runtime_error("logical graph backend returned a discontinuous pattern-expression adjacency page");
+						throw std::runtime_error(
+								"logical graph backend returned a discontinuous pattern-expression adjacency page");
 					}
 					// A complete adjacency page still exposes endpoint IDs independently of
 					// the target Node payload. Authenticate the distinct endpoint set once
 					// before the per-match materialization loop so parallel edges do not
 					// repeat an Entity Directory descent. Readers without the optional batch
 					// probe retain the complete-read fallback below.
+					MaterializedByteReservation endpointIdsBytes(&state.materialized_budget);
+					endpointIdsBytes.set(checkedSizeMul(page.edges.size(), sizeof(uint64_t),
+						"logical-plan pattern topology endpoint slots overflowed"));
 					std::vector<uint64_t> pageTargetIds;
-					if (state.snapshot.supportsNodeExistenceProbes()) {
-						pageTargetIds.reserve(page.edges.size());
-						for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
-							checkGuard(state);
-							validateEdge(edge);
-							const bool selfLoopDuplicate = direction == expressions::PatternDirection::PAT_BOTH &&
+					pageTargetIds.reserve(page.edges.size());
+					endpointIdsBytes.set(checkedSizeMul(pageTargetIds.capacity(), sizeof(uint64_t),
+						"logical-plan pattern topology endpoint capacity overflowed"));
+					for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
+						checkGuard(state);
+						validateEdge(edge);
+						const bool selfLoopDuplicate =
+								direction == expressions::PatternDirection::PAT_BOTH &&
 								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
 								edge.source_node_id == source.node_id;
-							if (!selfLoopDuplicate && (edgeType.empty() || edge.type == edgeType)) {
-								pageTargetIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-										? edge.target_node_id : edge.source_node_id);
+						if (!selfLoopDuplicate && (edgeType.empty() || edge.type == edgeType)) {
+							pageTargetIds.push_back(adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? edge.target_node_id
+															: edge.source_node_id);
+						}
+					}
+					detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
+						if (state.context != nullptr) state.context->checkGuardNow();
+					});
+					MaterializedByteReservation presenceBytes(&state.materialized_budget);
+					if (state.snapshot.supportsNodeExistenceProbes()) {
+						presenceBytes.set(checkedSizeAdd(pageTargetIds.size() / 8U + (pageTargetIds.size() % 8U != 0U),
+							sizeof(size_t), "logical-plan pattern topology presence slots overflowed"));
+					}
+					const std::vector<bool> pageTargetPresent =
+							state.snapshot.supportsNodeExistenceProbes()
+									? state.snapshot.containsNodesSorted(pageTargetIds)
+									: std::vector<bool>{};
+					presenceBytes.set(pageTargetPresent.capacity() / 8U + (pageTargetPresent.capacity() % 8U != 0U));
+					checkGuard(state);
+					if (state.snapshot.supportsNodeExistenceProbes() &&
+						pageTargetPresent.size() != pageTargetIds.size()) {
+						throw std::runtime_error(
+								"logical graph backend changed pattern-expression endpoint cardinality");
+					}
+					if (state.snapshot.supportsNodeExistenceProbes() &&
+						std::ranges::any_of(pageTargetPresent, [](bool present) { return !present; })) {
+						throw std::runtime_error("logical graph backend returned a pattern-expression Edge "
+												 "with a missing endpoint");
+					}
+					if (!targetLabel.empty() && !pageTargetIds.empty()) {
+						MaterializedByteReservation labelBytes(&state.materialized_budget);
+						labelBytes.set(packedBooleanBytes(pageTargetIds.size()));
+						std::vector<bool> labels;
+						if (state.snapshot.supportsNodeExistenceProbes()) {
+							labels = state.snapshot.readNodeLabelMatchesSorted(pageTargetIds, targetLabelFilter);
+						} else {
+							MaterializedByteReservation nodesBytes(&state.materialized_budget);
+							const auto nodes = readNodesShapedSortedBudgeted(
+									state, pageTargetIds, {.include_labels = true}, &nodesBytes);
+							if (nodes.size() != pageTargetIds.size()) {
+								throw std::runtime_error("logical graph backend changed pattern-expression target batch cardinality");
+							}
+							labels.reserve(nodes.size());
+							for (size_t index = 0U; index < nodes.size(); ++index) {
+								if (nodes[index].node_id != pageTargetIds[index]) {
+									throw std::runtime_error("logical graph backend returned mismatched pattern-expression target identity");
+								}
+								labels.push_back(std::ranges::find(nodes[index].labels, targetLabel) != nodes[index].labels.end());
 							}
 						}
-						std::ranges::sort(pageTargetIds);
-						pageTargetIds.erase(std::unique(pageTargetIds.begin(), pageTargetIds.end()), pageTargetIds.end());
+						labelBytes.set(packedBooleanBytes(labels.capacity()));
+						checkGuard(state);
+						if (labels.size() != pageTargetIds.size()) {
+							throw std::runtime_error("logical graph backend changed pattern-expression target label cardinality");
+						}
+						size_t accepted = 0U;
+						for (size_t index = 0U; index < labels.size(); ++index) {
+							if (labels[index]) pageTargetIds[accepted++] = pageTargetIds[index];
+						}
+						pageTargetIds.resize(accepted);
 					}
-					const std::vector<bool> pageTargetPresent = state.snapshot.supportsNodeExistenceProbes()
-							? state.snapshot.containsNodesSorted(pageTargetIds) : std::vector<bool>{};
-					if (pageTargetPresent.size() != pageTargetIds.size()) {
-						throw std::runtime_error("logical graph backend changed pattern-expression endpoint cardinality");
-					}
+					MaterializedByteReservation edgeIdsBytes(&state.materialized_budget);
+					edgeIdsBytes.set(checkedSizeMul(page.edges.size(), sizeof(uint64_t),
+						"logical-plan pattern topology Edge slots overflowed"));
 					std::vector<uint64_t> pageEdgeIds;
 					pageEdgeIds.reserve(page.edges.size());
+					edgeIdsBytes.set(checkedSizeMul(pageEdgeIds.capacity(), sizeof(uint64_t),
+						"logical-plan pattern topology Edge capacity overflowed"));
 					for (const storage::LogicalGraphEdgeTopology &candidate: page.edges) {
 						// Do not decode complete Edge payloads for candidates that are
 						// guaranteed to be discarded by direction/type semantics.  The
 						// topology page remains the validation source; only surviving IDs
 						// enter the bounded shaped batch below.
-						const bool selfLoopDuplicate = direction == expressions::PatternDirection::PAT_BOTH &&
-							adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-							candidate.source_node_id == source.node_id;
-						if (!selfLoopDuplicate && (edgeType.empty() || candidate.type == edgeType)) {
+						const bool selfLoopDuplicate =
+								direction == expressions::PatternDirection::PAT_BOTH &&
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+								candidate.source_node_id == source.node_id;
+						const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+								? candidate.target_node_id : candidate.source_node_id;
+						if (!selfLoopDuplicate && (edgeType.empty() || candidate.type == edgeType) &&
+							(targetLabel.empty() || std::ranges::binary_search(pageTargetIds, targetId))) {
 							pageEdgeIds.push_back(candidate.edge_id);
 						}
 					}
-					std::ranges::sort(pageEdgeIds);
-					pageEdgeIds.erase(std::unique(pageEdgeIds.begin(), pageEdgeIds.end()), pageEdgeIds.end());
-					const std::vector<storage::LogicalGraphEdge> pageEdgeRecords =
-							state.snapshot.readEdgesShapedSorted(pageEdgeIds, completeEdgeReadShape());
+					detail::sortUniqueIdsGuarded(pageEdgeIds, [&] {
+						if (state.context != nullptr) state.context->checkGuardNow();
+					});
+					storage::EntityReadShape edgeShape =
+							bindingShape == nullptr ? completeEdgeReadShape() : bindingShape->relationship;
+					if (!edgeType.empty()) {
+						edgeShape.include_type = true;
+					}
+					storage::EntityReadShape targetShape =
+							bindingShape == nullptr ? completeNodeReadShape() : bindingShape->target;
+					targetShape.include_labels = targetShape.include_labels || !targetLabel.empty();
+					MaterializedByteReservation pageEdgeBytes(&state.materialized_budget);
+					std::vector<storage::LogicalGraphEdge> pageEdgeRecords =
+							pageEdgeIds.empty()
+									? std::vector<storage::LogicalGraphEdge>{}
+									: readEdgesShapedSortedBudgeted(state, pageEdgeIds, edgeShape, &pageEdgeBytes);
 					if (pageEdgeRecords.size() != pageEdgeIds.size()) {
-						throw std::runtime_error("logical graph backend changed pattern-expression Edge batch cardinality");
+						throw std::runtime_error(
+								"logical graph backend changed pattern-expression Edge batch cardinality");
+					}
+					retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.context);
+					MaterializedByteReservation pageTargetBytes(&state.materialized_budget);
+					std::vector<storage::LogicalGraphNode> pageTargetRecords =
+							pageTargetIds.empty() ? std::vector<storage::LogicalGraphNode>{}
+												  : readNodesShapedSortedBudgeted(state, pageTargetIds, targetShape,
+																				  &pageTargetBytes);
+					if (pageTargetRecords.size() != pageTargetIds.size()) {
+						throw std::runtime_error(
+								"logical graph backend changed pattern-expression target batch cardinality");
+					}
+					retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.context);
+					if (bindingShape != nullptr) {
+						appendNamedProperties(pageEdgeRecords, pageEdgeIds, bindingShape->relationship_named_properties,
+											  true, pageEdgeBytes);
+						retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.context);
+						appendNamedProperties(pageTargetRecords, pageTargetIds, bindingShape->target_named_properties,
+											  false, pageTargetBytes);
+						retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.context);
 					}
 					for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 						checkGuard(state);
 						validateEdge(edge);
 						validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "pattern-expression");
-						const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-														 ? edge.source_node_id == source.node_id
-														 : edge.target_node_id == source.node_id;
+						const bool endpointMatches =
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? edge.source_node_id == source.node_id
+										: edge.target_node_id == source.node_id;
 						if (!endpointMatches) {
-							throw std::runtime_error("logical graph backend returned an invalid pattern-expression Edge");
+							throw std::runtime_error(
+									"logical graph backend returned an invalid pattern-expression Edge");
 						}
 						incrementBounded(sourceEdges,
 										 "logical-plan pattern-expression per-Node Edge counter overflowed");
@@ -1680,34 +2965,39 @@ namespace graph::query::execution {
 						if (!edgeType.empty() && edge.type != edgeType) {
 							continue;
 						}
-						const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																	  ? edge.target_node_id
-																	  : edge.source_node_id;
-						if (!pageTargetIds.empty() && state.snapshot.supportsNodeExistenceProbes()) {
-							const auto endpoint = std::ranges::lower_bound(pageTargetIds, targetId);
-							if (endpoint == pageTargetIds.end() || *endpoint != targetId ||
-								!pageTargetPresent[static_cast<size_t>(endpoint - pageTargetIds.begin())]) {
-								throw std::runtime_error(
-										"logical graph backend returned a pattern-expression Edge with a missing endpoint");
-							}
+						const uint64_t targetId =
+								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? edge.target_node_id
+										: edge.source_node_id;
+						if (!targetLabel.empty() && !std::ranges::binary_search(pageTargetIds, targetId)) {
+							continue;
 						}
 						const auto edgePosition = std::ranges::lower_bound(pageEdgeIds, edge.edge_id);
 						if (edgePosition == pageEdgeIds.end() || *edgePosition != edge.edge_id) {
-							throw std::runtime_error("logical graph backend lost a pattern-expression Edge batch entry");
+							throw std::runtime_error(
+									"logical graph backend lost a pattern-expression Edge batch entry");
 						}
 						const storage::LogicalGraphEdge &materializedEdge =
 								pageEdgeRecords[static_cast<size_t>(edgePosition - pageEdgeIds.begin())];
-						if (materializedEdge.edge_id != edge.edge_id || materializedEdge.source_node_id != edge.source_node_id ||
-								materializedEdge.target_node_id != edge.target_node_id ||
-								(!edgeType.empty() && materializedEdge.type != edgeType)) {
-							throw std::runtime_error("logical graph backend returned an adjacency Edge with mismatched batch data");
+						if (materializedEdge.edge_id != edge.edge_id ||
+							materializedEdge.source_node_id != edge.source_node_id ||
+							materializedEdge.target_node_id != edge.target_node_id ||
+							(!edgeType.empty() && materializedEdge.type != edgeType)) {
+							throw std::runtime_error(
+									"logical graph backend returned an adjacency Edge with mismatched batch data");
 						}
-						const storage::LogicalGraphNode target = readNodeCached(state, targetId);
+						const auto targetPosition = std::ranges::lower_bound(pageTargetRecords, targetId, {},
+																			 &storage::LogicalGraphNode::node_id);
+						if (targetPosition == pageTargetRecords.end() || targetPosition->node_id != targetId) {
+							throw std::runtime_error(
+									"logical graph backend lost a pattern-expression target batch entry");
+						}
 						if (!targetLabel.empty() &&
-							std::ranges::find(target.labels, targetLabel) == target.labels.end()) {
+							std::ranges::find(targetPosition->labels, targetLabel) == targetPosition->labels.end()) {
 							continue;
 						}
-						if (!visitor(materializedEdge, target)) {
+						validateCandidate(materializedEdge, *targetPosition);
+						if (!visitor(materializedEdge, *targetPosition)) {
 							return false;
 						}
 					}
@@ -1718,7 +3008,8 @@ namespace graph::query::execution {
 						page.continuation->previous_edge_id != page.edges.back().edge_id ||
 						page.continuation->next_edge_id == 0U ||
 						page.continuation->previous_edge_id == page.continuation->next_edge_id) {
-						throw std::runtime_error("logical graph backend returned an incomplete pattern-expression adjacency scan");
+						throw std::runtime_error(
+								"logical graph backend returned an incomplete pattern-expression adjacency scan");
 					}
 					continuation = page.continuation;
 				}
@@ -1766,7 +3057,8 @@ namespace graph::query::execution {
 						// its column name (for example `WITH n.value`). Resolve that
 						// projected column before interpreting the same text as a property
 						// access on a variable that is no longer in scope.
-						if (const auto projected = row.values.find(reference.toString()); projected != row.values.end()) {
+						if (const auto projected = row.values.find(reference.toString());
+							projected != row.values.end()) {
 							return projected->second;
 						}
 						return readProperty(state.snapshot, row, reference.getVariableName(),
@@ -1791,15 +3083,33 @@ namespace graph::query::execution {
 						if (list.getValue().getList().size() > state.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
 						}
+						MaterializedByteReservation copyBytes(&state.materialized_budget);
+						copyBytes.set(materializedListStorageBytes(list.getValue(), state));
 						return list.getValue();
 					}
 					if (list.getElements().size() > state.bounds.maximum_rows) {
 						throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
 					}
+					MaterializedByteReservation valuesReservation(&state.materialized_budget);
+					valuesReservation.set(
+							checkedSizeAdd(sizeof(uint32_t),
+										   checkedSizeMul(list.getElements().size(), sizeof(PropertyValue),
+														  "logical-plan List literal capacity overflowed"),
+										   "logical-plan List literal size overflowed"));
 					std::vector<PropertyValue> values;
 					values.reserve(list.getElements().size());
+					const size_t valuesCapacityBytes =
+							checkedSizeAdd(sizeof(uint32_t),
+										   checkedSizeMul(values.capacity(), sizeof(PropertyValue),
+														  "logical-plan List literal capacity overflowed"),
+										   "logical-plan List literal size overflowed");
+					valuesReservation.set(valuesCapacityBytes);
 					for (const auto &element: list.getElements()) {
-						values.push_back(scalarValue(evaluateExpression(*element, row, state)));
+						PropertyValue value = scalarValue(evaluateExpression(*element, row, state));
+						valuesReservation.set(checkedSizeAdd(valuesReservation.bytes(),
+															 retainedExpressionValueBytes(value, state),
+															 "logical-plan List literal size overflowed"));
+						values.push_back(std::move(value));
 					}
 					return PropertyValue(std::move(values));
 				}
@@ -1809,7 +3119,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue arithmetic(expressions::BinaryOperatorType operation, const PropertyValue &left,
-																	   const PropertyValue &right) {
+											   const PropertyValue &right) {
 			if (isNull(left) || isNull(right)) {
 				return PropertyValue();
 			}
@@ -1818,65 +3128,68 @@ namespace graph::query::execution {
 			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DATE &&
 				rightType == PropertyType::DURATION) {
 				return addDurationToDate(std::get<TemporalDate>(left.getVariant()),
-													 std::get<TemporalDuration>(right.getVariant()));
+										 std::get<TemporalDuration>(right.getVariant()));
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DURATION &&
 				rightType == PropertyType::DATE) {
 				return addDurationToDate(std::get<TemporalDate>(right.getVariant()),
-													 std::get<TemporalDuration>(left.getVariant()));
+										 std::get<TemporalDuration>(left.getVariant()));
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DATETIME &&
 				rightType == PropertyType::DURATION) {
 				return addDurationToDateTime(std::get<TemporalDateTime>(left.getVariant()),
-														 std::get<TemporalDuration>(right.getVariant()));
+											 std::get<TemporalDuration>(right.getVariant()));
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DURATION &&
 				rightType == PropertyType::DATETIME) {
 				return addDurationToDateTime(std::get<TemporalDateTime>(right.getVariant()),
-														 std::get<TemporalDuration>(left.getVariant()));
+											 std::get<TemporalDuration>(left.getVariant()));
 			}
 			if (leftType == PropertyType::DURATION && rightType == PropertyType::DURATION) {
 				const TemporalDuration &leftDuration = std::get<TemporalDuration>(left.getVariant());
 				const TemporalDuration &rightDuration = std::get<TemporalDuration>(right.getVariant());
 				if (operation == expressions::BinaryOperatorType::BOP_ADD) {
 					return PropertyValue(TemporalDuration{checkedAdd(leftDuration.months, rightDuration.months),
-							checkedAdd(leftDuration.days, rightDuration.days), checkedAdd(leftDuration.nanos, rightDuration.nanos)});
+														  checkedAdd(leftDuration.days, rightDuration.days),
+														  checkedAdd(leftDuration.nanos, rightDuration.nanos)});
 				}
 				if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT) {
 					return PropertyValue(TemporalDuration{checkedSubtract(leftDuration.months, rightDuration.months),
-							checkedSubtract(leftDuration.days, rightDuration.days),
-							checkedSubtract(leftDuration.nanos, rightDuration.nanos)});
+														  checkedSubtract(leftDuration.days, rightDuration.days),
+														  checkedSubtract(leftDuration.nanos, rightDuration.nanos)});
 				}
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATE &&
 				rightType == PropertyType::DURATION) {
 				const TemporalDuration &duration = std::get<TemporalDuration>(right.getVariant());
 				return addDurationToDate(std::get<TemporalDate>(left.getVariant()),
-													 TemporalDuration{checkedSubtract(0LL, duration.months),
-																		checkedSubtract(0LL, duration.days),
-																		checkedSubtract(0LL, duration.nanos)});
+										 TemporalDuration{checkedSubtract(0LL, duration.months),
+														  checkedSubtract(0LL, duration.days),
+														  checkedSubtract(0LL, duration.nanos)});
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATETIME &&
 				rightType == PropertyType::DURATION) {
 				const TemporalDuration &duration = std::get<TemporalDuration>(right.getVariant());
 				return addDurationToDateTime(std::get<TemporalDateTime>(left.getVariant()),
-														 TemporalDuration{checkedSubtract(0LL, duration.months),
-																		 checkedSubtract(0LL, duration.days),
-																		 checkedSubtract(0LL, duration.nanos)});
+											 TemporalDuration{checkedSubtract(0LL, duration.months),
+															  checkedSubtract(0LL, duration.days),
+															  checkedSubtract(0LL, duration.nanos)});
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATE &&
 				rightType == PropertyType::DATE) {
 				const TemporalDate &leftDate = std::get<TemporalDate>(left.getVariant());
 				const TemporalDate &rightDate = std::get<TemporalDate>(right.getVariant());
-				return PropertyValue(TemporalDuration{0LL, static_cast<int64_t>(leftDate.epochDays) - rightDate.epochDays, 0LL});
+				return PropertyValue(
+						TemporalDuration{0LL, static_cast<int64_t>(leftDate.epochDays) - rightDate.epochDays, 0LL});
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATETIME &&
 				rightType == PropertyType::DATETIME) {
 				constexpr int64_t MILLIS_PER_DAY = 86'400LL * 1'000LL;
-				const int64_t milliseconds = checkedSubtract(std::get<TemporalDateTime>(left.getVariant()).epochMillis,
-																									 std::get<TemporalDateTime>(right.getVariant()).epochMillis);
+				const int64_t milliseconds =
+						checkedSubtract(std::get<TemporalDateTime>(left.getVariant()).epochMillis,
+										std::get<TemporalDateTime>(right.getVariant()).epochMillis);
 				return PropertyValue(TemporalDuration{0LL, milliseconds / MILLIS_PER_DAY,
-																			 (milliseconds % MILLIS_PER_DAY) * 1'000'000LL});
+													  (milliseconds % MILLIS_PER_DAY) * 1'000'000LL});
 			}
 			if (operation == expressions::BinaryOperatorType::BOP_ADD &&
 				(leftType == PropertyType::STRING || rightType == PropertyType::STRING)) {
@@ -1999,7 +3312,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue stringOperation(expressions::BinaryOperatorType operation,
-															 const PropertyValue &left, const PropertyValue &right) {
+													const PropertyValue &left, const PropertyValue &right) {
 			if (isNull(left) || isNull(right)) {
 				return PropertyValue();
 			}
@@ -2014,8 +3327,8 @@ namespace graph::query::execution {
 					return PropertyValue(leftString.find(rightString) != std::string::npos);
 				case expressions::BinaryOperatorType::BOP_REGEX_MATCH:
 					try {
-						return PropertyValue(std::regex_match(leftString,
-																			   std::regex(rightString, std::regex_constants::ECMAScript)));
+						return PropertyValue(std::regex_match(
+								leftString, std::regex(rightString, std::regex_constants::ECMAScript)));
 					} catch (const std::regex_error &) {
 						throw std::runtime_error("logical-plan received an invalid regular expression");
 					}
@@ -2026,29 +3339,28 @@ namespace graph::query::execution {
 
 		[[nodiscard]] std::string lowerCase(std::string_view value) {
 			std::string result(value);
-			std::ranges::transform(result, result.begin(), [](unsigned char character) {
-				return static_cast<char>(std::tolower(character));
-			});
+			std::ranges::transform(result, result.begin(),
+								   [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
 			return result;
 		}
 
 		void requireScalarFunctionArgumentType(const PropertyValue &value, const PropertyType expected,
-																std::string_view functionName, const size_t argumentIndex) {
+											   std::string_view functionName, const size_t argumentIndex) {
 			if (isNull(value) || value.getType() == expected) {
 				return;
 			}
 			throw std::runtime_error("logical-plan " + std::string(functionName) + "() argument " +
-							 std::to_string(argumentIndex + 1U) + " has an invalid type");
+									 std::to_string(argumentIndex + 1U) + " has an invalid type");
 		}
 
 		void requireScalarFunctionArgumentOneOf(const PropertyValue &value, const PropertyType first,
-																 const PropertyType second, std::string_view functionName,
-																 const size_t argumentIndex) {
+												const PropertyType second, std::string_view functionName,
+												const size_t argumentIndex) {
 			if (isNull(value) || value.getType() == first || value.getType() == second) {
 				return;
 			}
 			throw std::runtime_error("logical-plan " + std::string(functionName) + "() argument " +
-							 std::to_string(argumentIndex + 1U) + " has an invalid type");
+									 std::to_string(argumentIndex + 1U) + " has an invalid type");
 		}
 
 		// The legacy FunctionRegistry remains a storage-neutral implementation
@@ -2056,27 +3368,27 @@ namespace graph::query::execution {
 		// contract. Validate it here instead of inheriting permissive display
 		// conversion behavior.
 		void validateNativeScalarFunctionTypes(const std::string_view functionName,
-																 const std::vector<PropertyValue> &arguments) {
+											   const std::vector<PropertyValue> &arguments) {
 			const bool unaryNumeric = functionName == "abs" || functionName == "ceil" || functionName == "floor" ||
-										  functionName == "round" || functionName == "sqrt" || functionName == "sign" ||
-										  functionName == "log" || functionName == "log10" || functionName == "exp" ||
-										  functionName == "sin" || functionName == "cos" || functionName == "tan" ||
-										  functionName == "asin" || functionName == "acos" || functionName == "atan";
+									  functionName == "round" || functionName == "sqrt" || functionName == "sign" ||
+									  functionName == "log" || functionName == "log10" || functionName == "exp" ||
+									  functionName == "sin" || functionName == "cos" || functionName == "tan" ||
+									  functionName == "asin" || functionName == "acos" || functionName == "atan";
 			if (unaryNumeric) {
-				requireScalarFunctionArgumentOneOf(
-						arguments.front(), PropertyType::INTEGER, PropertyType::DOUBLE, functionName, 0U);
+				requireScalarFunctionArgumentOneOf(arguments.front(), PropertyType::INTEGER, PropertyType::DOUBLE,
+												   functionName, 0U);
 				return;
 			}
 			if (functionName == "pow" || functionName == "atan2") {
 				for (size_t index = 0U; index < arguments.size(); ++index) {
-					requireScalarFunctionArgumentOneOf(
-							arguments[index], PropertyType::INTEGER, PropertyType::DOUBLE, functionName, index);
+					requireScalarFunctionArgumentOneOf(arguments[index], PropertyType::INTEGER, PropertyType::DOUBLE,
+													   functionName, index);
 				}
 				return;
 			}
-			const bool unaryString = functionName == "upper" || functionName == "lower" ||
-									 functionName == "toupper" || functionName == "tolower" ||
-									 functionName == "trim" || functionName == "ltrim" || functionName == "rtrim";
+			const bool unaryString = functionName == "upper" || functionName == "lower" || functionName == "toupper" ||
+									 functionName == "tolower" || functionName == "trim" || functionName == "ltrim" ||
+									 functionName == "rtrim";
 			if (unaryString) {
 				requireScalarFunctionArgumentType(arguments.front(), PropertyType::STRING, functionName, 0U);
 				return;
@@ -2090,7 +3402,7 @@ namespace graph::query::execution {
 				return;
 			}
 			if (functionName == "startswith" || functionName == "endswith" || functionName == "contains" ||
-					functionName == "split") {
+				functionName == "split") {
 				requireScalarFunctionArgumentType(arguments[0], PropertyType::STRING, functionName, 0U);
 				requireScalarFunctionArgumentType(arguments[1], PropertyType::STRING, functionName, 1U);
 				return;
@@ -2107,12 +3419,12 @@ namespace graph::query::execution {
 				return;
 			}
 			if (functionName == "length" || functionName == "size" || functionName == "reverse") {
-				requireScalarFunctionArgumentOneOf(
-						arguments.front(), PropertyType::STRING, PropertyType::LIST, functionName, 0U);
+				requireScalarFunctionArgumentOneOf(arguments.front(), PropertyType::STRING, PropertyType::LIST,
+												   functionName, 0U);
 				return;
 			}
-			if (functionName == "head" || functionName == "tail" || functionName == "last" ||
-					functionName == "nodes" || functionName == "relationships") {
+			if (functionName == "head" || functionName == "tail" || functionName == "last" || functionName == "nodes" ||
+				functionName == "relationships") {
 				requireScalarFunctionArgumentType(arguments.front(), PropertyType::LIST, functionName, 0U);
 			}
 		}
@@ -2147,13 +3459,13 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue evaluateEntityFunction(const expressions::FunctionCallExpression &function,
-																					 LogicalPlanReadRow &row,
-																					 ExecutionState &state) {
+														   LogicalPlanReadRow &row, ExecutionState &state) {
 			const std::vector<std::unique_ptr<expressions::Expression>> &arguments = function.getArguments();
 			if (arguments.size() != 1U || arguments.front() == nullptr) {
 				throw std::runtime_error("logical-plan entity function requires exactly one variable argument");
 			}
-			const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(arguments.front().get());
+			const auto *reference =
+					dynamic_cast<const expressions::VariableReferenceExpression *>(arguments.front().get());
 			if (reference == nullptr || reference->hasProperty()) {
 				throw std::runtime_error("logical-plan entity function requires a bare variable argument");
 			}
@@ -2184,8 +3496,7 @@ namespace graph::query::execution {
 				// an introspection function. Complete Node values already carry labels.
 				const storage::LogicalGraphNode node = [&]() {
 					if (const auto *referenceValue = std::get_if<storage::EntityRef>(&binding)) {
-						validateNodeRef(*referenceValue,
-								"logical-plan labels() requires a valid node variable");
+						validateNodeRef(*referenceValue, "logical-plan labels() requires a valid node variable");
 						return state.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
 					}
 					return materializeNodeValue(state, binding);
@@ -2212,8 +3523,7 @@ namespace graph::query::execution {
 				// type() is topology metadata. Resolve just the relationship type for a
 				// deferred Edge reference; full Edge properties are unnecessary here.
 				if (const auto *referenceValue = std::get_if<storage::EntityRef>(&binding)) {
-					validateEdgeRef(*referenceValue,
-							"logical-plan type() requires a valid relationship variable");
+					validateEdgeRef(*referenceValue, "logical-plan type() requires a valid relationship variable");
 					PropertyValue result(
 							state.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
 					row.entity_metadata_cache[reference->getVariableName()].insert_or_assign(name, result);
@@ -2234,7 +3544,8 @@ namespace graph::query::execution {
 				throw std::runtime_error(
 						"logical-plan entity Property function requires a node, relationship, or Map variable");
 			}
-			const PropertyMap &properties = readBindingProperties(state.snapshot, row, reference->getVariableName(), state);
+			const PropertyMap &properties =
+					readBindingProperties(state.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
 				return PropertyValue(properties);
 			}
@@ -2257,7 +3568,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue evaluateRangeFunction(const std::vector<PropertyValue> &arguments,
-																				  const ExecutionState &state) {
+														  ExecutionState &state) {
 			if (arguments.size() < 2U || arguments.size() > 3U ||
 				std::ranges::any_of(arguments, [](const PropertyValue &argument) { return isNull(argument); })) {
 				return PropertyValue();
@@ -2266,8 +3577,9 @@ namespace graph::query::execution {
 				if (const auto *integer = std::get_if<int64_t>(&value.getVariant())) {
 					return *integer;
 				}
-				if (const auto *number = std::get_if<double>(&value.getVariant()); number != nullptr &&
-					std::isfinite(*number) && *number >= static_cast<double>(std::numeric_limits<int64_t>::min()) &&
+				if (const auto *number = std::get_if<double>(&value.getVariant());
+					number != nullptr && std::isfinite(*number) &&
+					*number >= static_cast<double>(std::numeric_limits<int64_t>::min()) &&
 					*number < static_cast<double>(std::numeric_limits<int64_t>::max())) {
 					return static_cast<int64_t>(*number);
 				}
@@ -2279,14 +3591,54 @@ namespace graph::query::execution {
 			if (step == 0) {
 				throw std::runtime_error("range() step cannot be zero");
 			}
+			MaterializedByteReservation listBytes(&state.materialized_budget);
 			std::vector<PropertyValue> result;
-			result.reserve(std::min<size_t>(state.bounds.maximum_rows, 16U));
+			size_t payloadBytes = 0U;
+			const auto admitListBytes = [&](size_t capacity, size_t payload) {
+				const size_t bytes =
+						checkedSizeAdd(sizeof(uint32_t),
+									   checkedSizeAdd(checkedSizeMul(capacity, sizeof(PropertyValue),
+																	 "logical-plan range() capacity overflowed"),
+													  payload, "logical-plan range() storage size overflowed"),
+									   "logical-plan range() storage size overflowed");
+				if (listBytes.wouldExceed(bytes)) {
+					throw std::runtime_error("logical-plan range() exceeded its shared byte bound");
+				}
+				listBytes.set(bytes);
+			};
+			const bool hasValues = step > 0 ? start <= end : start >= end;
+			if (hasValues && state.bounds.maximum_rows != 0U) {
+				const uint64_t distance = step > 0 ? static_cast<uint64_t>(end) - static_cast<uint64_t>(start)
+												   : static_cast<uint64_t>(start) - static_cast<uint64_t>(end);
+				const uint64_t magnitude =
+						step > 0 ? static_cast<uint64_t>(step) : uint64_t{0} - static_cast<uint64_t>(step);
+				const uint64_t additionalValues = distance / magnitude;
+				const size_t initialCapacity =
+						std::min(state.bounds.maximum_rows,
+								 additionalValues >= 15U ? size_t{16} : static_cast<size_t>(additionalValues + 1U));
+				admitListBytes(initialCapacity, sizeof(int64_t));
+				result.reserve(initialCapacity);
+				admitListBytes(result.capacity(), sizeof(int64_t));
+			}
 			int64_t current = start;
 			while ((step > 0 && current <= end) || (step < 0 && current >= end)) {
+				checkGuard(state);
 				if (result.size() == state.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan range() exceeded the configured List bound");
 				}
+				const size_t nextPayloadBytes =
+						checkedSizeAdd(payloadBytes, sizeof(int64_t), "logical-plan range() payload size overflowed");
+				if (result.size() == result.capacity()) {
+					const size_t capacity = result.capacity();
+					const size_t nextCapacity = capacity == 0U								? 1U
+												: capacity > state.bounds.maximum_rows / 2U ? state.bounds.maximum_rows
+																							: capacity * 2U;
+					admitListBytes(nextCapacity, nextPayloadBytes);
+					result.reserve(nextCapacity);
+				}
+				admitListBytes(result.capacity(), nextPayloadBytes);
 				result.emplace_back(current);
+				payloadBytes = nextPayloadBytes;
 				if ((step > 0 && current > std::numeric_limits<int64_t>::max() - step) ||
 					(step < 0 && current < std::numeric_limits<int64_t>::min() - step)) {
 					break;
@@ -2297,8 +3649,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue evaluateFunctionExpression(const expressions::FunctionCallExpression &function,
-																	LogicalPlanReadRow &row,
-																	ExecutionState &state) {
+															   LogicalPlanReadRow &row, ExecutionState &state) {
 			const expressions::ScalarFunction *registered =
 					expressions::FunctionRegistry::getInstance().lookupScalarFunction(function.getFunctionName());
 			if (registered == nullptr) {
@@ -2313,19 +3664,55 @@ namespace graph::query::execution {
 			if (dynamic_cast<const expressions::EntityIntrospectionFunction *>(registered) != nullptr) {
 				return evaluateEntityFunction(function, row, state);
 			}
+			const std::string normalizedName = lowerCase(function.getFunctionName());
+			if ((normalizedName == "size" || normalizedName == "length") && function.getArgumentCount() == 1U) {
+				const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(
+						function.getArguments().front().get());
+				if (reference != nullptr && !reference->hasProperty()) {
+					const auto cached = row.entity_metadata_cache.find(reference->getVariableName());
+					if (cached != row.entity_metadata_cache.end()) {
+						const auto scalar = cached->second.find("$shortest_path_" + normalizedName);
+						if (scalar != cached->second.end())
+							return scalar->second;
+					}
+				}
+			}
+			if ((normalizedName == "size" || normalizedName == "length") && function.getArgumentCount() == 1U &&
+				function.getArguments().front() != nullptr &&
+				function.getArguments().front()->getExpressionType() == expressions::ExpressionType::SHORTEST_PATH) {
+				return evaluateScalarExpression(*function.getArguments().front(), row, state,
+												normalizedName == "size" ? ShortestPathResultMode::SPR_SIZE
+																		 : ShortestPathResultMode::SPR_LENGTH);
+			}
 			std::vector<PropertyValue> arguments;
+			MaterializedByteReservation argumentBytes(&state.materialized_budget);
+			const size_t requestedArgumentSlotsBytes =
+					checkedSizeMul(function.getArgumentCount(), sizeof(PropertyValue),
+								   "logical-plan scalar function argument storage size overflowed");
+			argumentBytes.set(requestedArgumentSlotsBytes);
 			arguments.reserve(function.getArgumentCount());
+			const size_t argumentSlotsBytes =
+					checkedSizeMul(arguments.capacity(), sizeof(PropertyValue),
+								   "logical-plan scalar function argument storage size overflowed");
+			argumentBytes.set(argumentSlotsBytes);
+			size_t argumentPayloadBytes = 0U;
 			for (const std::unique_ptr<expressions::Expression> &argument: function.getArguments()) {
 				if (argument == nullptr) {
 					throw std::logic_error("logical-plan scalar function has a null argument expression");
 				}
 				PropertyValue value = scalarValue(evaluateExpression(*argument, row, state));
 				if (value.getType() == PropertyType::LIST && value.getList().size() > state.bounds.maximum_rows) {
-					throw std::runtime_error("logical-plan scalar function received a List exceeding the configured List bound");
+					throw std::runtime_error(
+							"logical-plan scalar function received a List exceeding the configured List bound");
 				}
+				const size_t nextPayloadBytes =
+						checkedSizeAdd(argumentPayloadBytes, retainedExpressionValueBytes(value, state),
+									   "logical-plan scalar function argument payload size overflowed");
+				argumentBytes.set(checkedSizeAdd(argumentSlotsBytes, nextPayloadBytes,
+												 "logical-plan scalar function argument storage size overflowed"));
 				arguments.push_back(std::move(value));
+				argumentPayloadBytes = nextPayloadBytes;
 			}
-			const std::string normalizedName = lowerCase(function.getFunctionName());
 			if (normalizedName == "range") {
 				return evaluateRangeFunction(arguments, state);
 			}
@@ -2367,13 +3754,15 @@ namespace graph::query::execution {
 					emptyRecord, parameters, {.maximum_collection_elements = state.bounds.maximum_rows});
 			PropertyValue result = registered->evaluate(arguments, evaluationContext);
 			if (result.getType() == PropertyType::LIST && result.getList().size() > state.bounds.maximum_rows) {
-				throw std::runtime_error("logical-plan scalar function returned a List exceeding the configured List bound");
+				throw std::runtime_error(
+						"logical-plan scalar function returned a List exceeding the configured List bound");
 			}
 			return result;
 		}
 
 		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
-																		 LogicalPlanReadRow &row, ExecutionState &state) {
+															 LogicalPlanReadRow &row, ExecutionState &state,
+															 ShortestPathResultMode shortestMode) {
 			using expressions::BinaryOperatorType;
 			using expressions::ExpressionType;
 			switch (expression.getExpressionType()) {
@@ -2386,6 +3775,8 @@ namespace graph::query::execution {
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
 					const PropertyValue left = scalarValue(evaluateExpression(*binary.getLeft(), row, state));
+					MaterializedByteReservation operandBytes(&state.materialized_budget);
+					operandBytes.set(retainedExpressionValueBytes(left, state));
 					const BinaryOperatorType operation = binary.getOperator();
 					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
 						const std::optional<bool> leftBoolean = booleanOrNull(left);
@@ -2395,6 +3786,8 @@ namespace graph::query::execution {
 						}
 					}
 					const PropertyValue right = scalarValue(evaluateExpression(*binary.getRight(), row, state));
+					operandBytes.set(checkedSizeAdd(operandBytes.bytes(), retainedExpressionValueBytes(right, state),
+													"logical-plan binary operand storage size overflowed"));
 					if (expressions::isArithmeticOperator(operation)) {
 						return arithmetic(operation, left, right);
 					}
@@ -2444,12 +3837,17 @@ namespace graph::query::execution {
 					if (isNull(actual)) {
 						return PropertyValue();
 					}
+					MaterializedByteReservation operandBytes(&state.materialized_budget);
+					operandBytes.set(retainedExpressionValueBytes(actual, state));
 					if (in.hasDynamicList()) {
 						const PropertyValue candidates =
 								scalarValue(evaluateExpression(*in.getListExpression(), row, state));
 						if (isNull(candidates)) {
 							return PropertyValue();
 						}
+						operandBytes.set(checkedSizeAdd(operandBytes.bytes(),
+														retainedExpressionValueBytes(candidates, state),
+														"logical-plan IN operand storage size overflowed"));
 						bool sawNull = false;
 						for (const PropertyValue &candidate: requireBoundedList(candidates, state, "IN")) {
 							if (isNull(candidate)) {
@@ -2481,19 +3879,26 @@ namespace graph::query::execution {
 					return PropertyValue(isNullExpression.isNegated() ? !null : null);
 				}
 				case ExpressionType::FUNCTION_CALL: {
-					return evaluateFunctionExpression(dynamic_cast<const expressions::FunctionCallExpression &>(expression), row,
-																			 state);
+					return evaluateFunctionExpression(
+							dynamic_cast<const expressions::FunctionCallExpression &>(expression), row, state);
 				}
 				case ExpressionType::CASE_EXPRESSION: {
 					const auto &caseExpression = dynamic_cast<const expressions::CaseExpression &>(expression);
 					if (caseExpression.isSimpleCase()) {
 						const PropertyValue comparisonValue =
 								scalarValue(evaluateExpression(*caseExpression.getComparisonExpression(), row, state));
+						MaterializedByteReservation comparisonBytes(&state.materialized_budget);
+						comparisonBytes.set(retainedExpressionValueBytes(comparisonValue, state));
 						for (const expressions::CaseBranch &branch: caseExpression.getBranches()) {
 							if (!branch.whenExpression || !branch.thenExpression) {
 								throw std::logic_error("logical-plan CASE expression has an incomplete branch");
 							}
-							const PropertyValue whenValue = scalarValue(evaluateExpression(*branch.whenExpression, row, state));
+							const PropertyValue whenValue =
+									scalarValue(evaluateExpression(*branch.whenExpression, row, state));
+							// Only the current WHEN value coexists with the comparison.
+							// Release its charge before evaluating the next branch.
+							MaterializedByteReservation whenBytes(&state.materialized_budget);
+							whenBytes.set(retainedExpressionValueBytes(whenValue, state));
 							if (!isNull(whenValue) && comparisonValue == whenValue) {
 								return scalarValue(evaluateExpression(*branch.thenExpression, row, state));
 							}
@@ -2503,33 +3908,35 @@ namespace graph::query::execution {
 							if (!branch.whenExpression || !branch.thenExpression) {
 								throw std::logic_error("logical-plan CASE expression has an incomplete branch");
 							}
-							const std::optional<bool> predicate = booleanOrNull(
-									scalarValue(evaluateExpression(*branch.whenExpression, row, state)));
+							const std::optional<bool> predicate =
+									booleanOrNull(scalarValue(evaluateExpression(*branch.whenExpression, row, state)));
 							if (predicate == true) {
 								return scalarValue(evaluateExpression(*branch.thenExpression, row, state));
 							}
 						}
 					}
 					return caseExpression.getElseExpression() == nullptr
-							   ? PropertyValue()
-							   : scalarValue(evaluateExpression(*caseExpression.getElseExpression(), row, state));
+								   ? PropertyValue()
+								   : scalarValue(evaluateExpression(*caseExpression.getElseExpression(), row, state));
 				}
 				case ExpressionType::LIST_SLICE: {
 					const auto &slice = dynamic_cast<const expressions::ListSliceExpression &>(expression);
 					if (slice.getList() == nullptr) {
 						throw std::logic_error("logical-plan List slice has no source expression");
 					}
-					const PropertyValue listValue = scalarValue(evaluateExpression(*slice.getList(), row, state));
+					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					PropertyValue listValue = scalarValue(evaluateExpression(*slice.getList(), row, state));
 					if (isNull(listValue)) {
 						return PropertyValue();
 					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "List slice");
+					sourceListBytes.set(materializedListStorageBytes(listValue, state));
 					if (list.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
 						throw std::overflow_error("logical-plan List slice length exceeds signed index capacity");
 					}
 					const int64_t length = static_cast<int64_t>(list.size());
 					const auto evaluateIndex = [&](const expressions::Expression *indexExpression,
-																						 const char *description) -> int64_t {
+												   const char *description) -> int64_t {
 						if (indexExpression == nullptr) {
 							throw std::logic_error(std::string("logical-plan List slice has no ") + description);
 						}
@@ -2547,21 +3954,47 @@ namespace graph::query::execution {
 					};
 					if (!slice.hasRange()) {
 						const int64_t index = normalize(evaluateIndex(slice.getStart(), "index"));
-						return index < 0 || index >= length ? PropertyValue() : list[static_cast<size_t>(index)];
+						if (index < 0 || index >= length)
+							return PropertyValue();
+						MaterializedByteReservation selectedBytes(&state.materialized_budget);
+						selectedBytes.set(retainedExpressionValueBytes(list[static_cast<size_t>(index)], state));
+						return list[static_cast<size_t>(index)];
 					}
-					int64_t start = slice.getStart() == nullptr ? 0 : normalize(evaluateIndex(slice.getStart(), "start"));
+					int64_t start =
+							slice.getStart() == nullptr ? 0 : normalize(evaluateIndex(slice.getStart(), "start"));
 					int64_t end = slice.getEnd() == nullptr ? length : normalize(evaluateIndex(slice.getEnd(), "end"));
 					start = std::clamp(start, int64_t{0}, length);
 					end = std::clamp(end, int64_t{0}, length);
+					if (start == 0 && end == length)
+						return listValue;
+					const size_t resultCount = static_cast<size_t>(std::max(int64_t{0}, end - start));
+					size_t resultSize =
+							checkedSizeAdd(sizeof(uint32_t),
+										   checkedSizeMul(resultCount, sizeof(PropertyValue),
+														  "logical-plan List slice result capacity overflowed"),
+										   "logical-plan List slice result size overflowed");
+					for (int64_t index = start; index < end; ++index) {
+						resultSize = checkedSizeAdd(
+								resultSize, retainedExpressionValueBytes(list[static_cast<size_t>(index)], state),
+								"logical-plan List slice result size overflowed");
+					}
+					MaterializedByteReservation resultBytes(&state.materialized_budget);
+					resultBytes.set(resultSize);
 					std::vector<PropertyValue> result;
-					result.reserve(static_cast<size_t>(std::max(int64_t{0}, end - start)));
+					result.reserve(resultCount);
+					resultBytes.set(
+							checkedSizeAdd(resultSize,
+										   checkedSizeMul(result.capacity() - resultCount, sizeof(PropertyValue),
+														  "logical-plan List slice result capacity overflowed"),
+										   "logical-plan List slice result size overflowed"));
 					for (int64_t index = start; index < end; ++index) {
 						result.push_back(list[static_cast<size_t>(index)]);
 					}
 					return PropertyValue(std::move(result));
 				}
 				case ExpressionType::LIST_COMPREHENSION: {
-					const auto &comprehension = dynamic_cast<const expressions::ListComprehensionExpression &>(expression);
+					const auto &comprehension =
+							dynamic_cast<const expressions::ListComprehensionExpression &>(expression);
 					if (comprehension.getListExpr() == nullptr || comprehension.getVariable().empty()) {
 						throw std::logic_error("logical-plan List comprehension has no source or variable");
 					}
@@ -2571,62 +4004,113 @@ namespace graph::query::execution {
 						return PropertyValue();
 					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "List comprehension");
-					if (comprehension.getType() == expressions::ListComprehensionExpression::ComprehensionType::COMP_REDUCE) {
+					if (comprehension.getType() ==
+						expressions::ListComprehensionExpression::ComprehensionType::COMP_REDUCE) {
 						throw std::logic_error("logical-plan List comprehension cannot use a reduce mode");
 					}
+					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					sourceListBytes.set(materializedListStorageBytes(listValue, state));
+					MaterializedByteReservation resultBytes(&state.materialized_budget);
 					std::vector<PropertyValue> result;
-					result.reserve(list.size());
+					size_t resultPayloadBytes = sizeof(uint32_t);
 					for (const PropertyValue &element: list) {
-						ScopedRowBinding binding(row, comprehension.getVariable(), element);
+						ScopedRowBinding binding(row, comprehension.getVariable(), element, state);
 						if (comprehension.getWhereExpr() != nullptr) {
 							const PropertyValue predicate =
 									scalarValue(evaluateExpression(*comprehension.getWhereExpr(), row, state));
 							if (!isNull(predicate) && predicate.getType() != PropertyType::BOOLEAN) {
-								throw std::runtime_error("logical-plan List comprehension predicate must be Boolean or NULL");
+								throw std::runtime_error(
+										"logical-plan List comprehension predicate must be Boolean or NULL");
 							}
 							if (isNull(predicate) || !std::get<bool>(predicate.getVariant())) {
 								continue;
 							}
 						}
-						if (comprehension.getMapExpr() != nullptr) {
-							result.push_back(scalarValue(evaluateExpression(*comprehension.getMapExpr(), row, state)));
-						} else {
-							result.push_back(element);
+						PropertyValue mapped =
+								comprehension.getMapExpr() != nullptr
+										? scalarValue(evaluateExpression(*comprehension.getMapExpr(), row, state))
+										: element;
+						const size_t nextPayloadBytes =
+								checkedSizeAdd(resultPayloadBytes, retainedExpressionValueBytes(mapped, state),
+											   "logical-plan List comprehension result size overflowed");
+						if (nextPayloadBytes > state.bounds.maximum_materialized_bytes) {
+							throw std::runtime_error(
+									"logical-plan List comprehension exceeded its materialized byte bound");
 						}
+						const size_t nextCapacity =
+								result.size() == result.capacity()
+										? std::min(list.size(),
+												   std::max(result.size() + 1U,
+															checkedSizeMul(result.capacity(), 2U,
+																		   "logical-plan List comprehension result "
+																		   "capacity overflowed")))
+										: result.capacity();
+						resultBytes.set(checkedSizeAdd(
+								nextPayloadBytes,
+								checkedSizeMul(checkedSizeAdd(nextCapacity,
+											 nextCapacity != result.capacity() ? result.capacity() : 0U,
+											 "logical-plan List growth slot count overflowed"), sizeof(PropertyValue),
+											   "logical-plan List comprehension result capacity overflowed"),
+								"logical-plan List comprehension result size overflowed"));
+						if (nextCapacity != result.capacity()) {
+							result.reserve(nextCapacity);
+							resultBytes.set(checkedSizeAdd(
+									nextPayloadBytes,
+									checkedSizeMul(result.capacity(), sizeof(PropertyValue),
+												   "logical-plan List comprehension result capacity overflowed"),
+									"logical-plan List comprehension result size overflowed"));
+						}
+						result.push_back(std::move(mapped));
+						resultPayloadBytes = nextPayloadBytes;
 					}
 					return PropertyValue(std::move(result));
 				}
 				case ExpressionType::EXPR_REDUCE: {
 					const auto &reduce = dynamic_cast<const expressions::ReduceExpression &>(expression);
-					if (reduce.getInitialExpr() == nullptr || reduce.getListExpr() == nullptr || reduce.getBodyExpr() == nullptr ||
-						reduce.getAccumulator().empty() || reduce.getVariable().empty()) {
+					if (reduce.getInitialExpr() == nullptr || reduce.getListExpr() == nullptr ||
+						reduce.getBodyExpr() == nullptr || reduce.getAccumulator().empty() ||
+						reduce.getVariable().empty()) {
 						throw std::logic_error("logical-plan REDUCE expression is incomplete");
 					}
+					MaterializedByteReservation accumulatorBytes(&state.materialized_budget);
 					PropertyValue accumulator = scalarValue(evaluateExpression(*reduce.getInitialExpr(), row, state));
+					accumulatorBytes.set(retainedExpressionValueBytes(accumulator, state));
+					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
 					const PropertyValue listValue = scalarValue(evaluateExpression(*reduce.getListExpr(), row, state));
 					if (isNull(listValue)) {
 						return PropertyValue();
 					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "REDUCE");
+					sourceListBytes.set(materializedListStorageBytes(listValue, state));
 					for (const PropertyValue &element: list) {
-						ScopedRowBinding accumulatorBinding(row, reduce.getAccumulator(), accumulator);
-						ScopedRowBinding elementBinding(row, reduce.getVariable(), element);
-						accumulator = scalarValue(evaluateExpression(*reduce.getBodyExpr(), row, state));
+						MaterializedByteReservation nextBytes(&state.materialized_budget);
+						PropertyValue next;
+						{
+							ScopedRowBinding accumulatorBinding(row, reduce.getAccumulator(), accumulator, state);
+							ScopedRowBinding elementBinding(row, reduce.getVariable(), element, state);
+							next = scalarValue(evaluateExpression(*reduce.getBodyExpr(), row, state));
+						}
+						nextBytes.set(retainedExpressionValueBytes(next, state));
+						accumulator = std::move(next);
+						accumulatorBytes = std::move(nextBytes);
 					}
 					return accumulator;
 				}
 				case ExpressionType::EXPR_QUANTIFIER_FUNCTION: {
-					const auto &quantifier = dynamic_cast<const expressions::QuantifierFunctionExpression &>(expression);
+					const auto &quantifier =
+							dynamic_cast<const expressions::QuantifierFunctionExpression &>(expression);
 					if (quantifier.getListExpression() == nullptr || quantifier.getWhereExpression() == nullptr ||
 						quantifier.getVariable().empty()) {
 						throw std::logic_error("logical-plan quantifier expression is incomplete");
 					}
+					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
 					const PropertyValue listValue =
 							scalarValue(evaluateExpression(*quantifier.getListExpression(), row, state));
 					if (isNull(listValue)) {
 						return PropertyValue();
 					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "quantifier");
+					sourceListBytes.set(materializedListStorageBytes(listValue, state));
 					const std::string function = lowerCase(quantifier.getFunctionName());
 					if (function != "all" && function != "any" && function != "none" && function != "single") {
 						throw std::runtime_error("logical-plan quantifier function is not supported");
@@ -2634,7 +4118,7 @@ namespace graph::query::execution {
 					size_t matches = 0U;
 					bool sawNull = false;
 					for (const PropertyValue &element: list) {
-						ScopedRowBinding binding(row, quantifier.getVariable(), element);
+						ScopedRowBinding binding(row, quantifier.getVariable(), element, state);
 						const PropertyValue predicate =
 								scalarValue(evaluateExpression(*quantifier.getWhereExpression(), row, state));
 						if (isNull(predicate)) {
@@ -2681,41 +4165,103 @@ namespace graph::query::execution {
 								return PropertyValue();
 							}
 							if (value->getType() != PropertyType::MAP) {
-								throw std::runtime_error(
-											"logical-plan Map projection requires a node, relationship, map, or NULL variable");
+								throw std::runtime_error("logical-plan Map projection requires a node, relationship, "
+														 "map, or NULL variable");
 							}
 						}
 					}
+					MaterializedByteReservation resultBytes(&state.materialized_budget);
 					PropertyValue::MapType result;
+					size_t resultPayloadBytes = sizeof(uint32_t);
+					resultBytes.set(resultPayloadBytes);
+					const auto insertResult = [&](const std::string &key, const PropertyValue &value) {
+						const auto previous = result.find(key);
+						const bool newKey = previous == result.end();
+						if (newKey && result.size() == state.bounds.maximum_property_entries) {
+							throw std::runtime_error(
+									"logical-plan Map projection exceeded the configured Property bound");
+						}
+						const size_t valueBytes = property_utils::getPropertyValueSize(value);
+						size_t nextPayloadBytes = resultPayloadBytes;
+						if (newKey) {
+							nextPayloadBytes = checkedSizeAdd(
+									nextPayloadBytes,
+									checkedSizeAdd(checkedSizeAdd(key.size(), sizeof(size_t),
+																  "logical-plan Map projection result size overflowed"),
+												   valueBytes, "logical-plan Map projection result size overflowed"),
+									"logical-plan Map projection result size overflowed");
+						} else {
+							const size_t previousBytes = property_utils::getPropertyValueSize(previous->second);
+							nextPayloadBytes = checkedSizeAdd(nextPayloadBytes - previousBytes, valueBytes,
+															  "logical-plan Map projection result size overflowed");
+						}
+						const size_t nextEntries = result.size() + static_cast<size_t>(newKey);
+						const size_t entryBytes =
+								checkedSizeMul(nextEntries, sizeof(PropertyValue::MapType::value_type) + sizeof(void *),
+											   "logical-plan Map projection result capacity overflowed");
+						const size_t nextResultBytes = checkedSizeAdd(
+								nextPayloadBytes, entryBytes, "logical-plan Map projection result size overflowed");
+						if (newKey) {
+							resultBytes.set(nextResultBytes);
+							result.insert_or_assign(key, value);
+						} else {
+							MaterializedByteReservation replacementBytes(&state.materialized_budget);
+							replacementBytes.set(valueBytes);
+							result.insert_or_assign(key, value);
+							replacementBytes.reset();
+							resultBytes.set(nextResultBytes);
+						}
+						resultPayloadBytes = nextPayloadBytes;
+					};
 					for (const expressions::MapProjectionItem &item: projection.getItems()) {
-							switch (item.type) {
-							case expressions::MapProjectionItemType::MPROP_PROPERTY:
+						switch (item.type) {
+							case expressions::MapProjectionItemType::MPROP_PROPERTY: {
 								if (projection.isMapLiteral()) {
 									throw std::logic_error("logical-plan Map literal has a Property selector");
 								}
 								if (item.key.empty()) {
 									throw std::logic_error("logical-plan Map projection has an empty Property key");
 								}
-								result.insert_or_assign(item.key,
-															  readProperty(state.snapshot, row, projection.getVariable(), item.key, state));
+								const PropertyValue selected =
+										readProperty(state.snapshot, row, projection.getVariable(), item.key, state);
+								MaterializedByteReservation selectedBytes(&state.materialized_budget);
+								selectedBytes.set(property_utils::getPropertyValueSize(selected));
+								insertResult(item.key, selected);
 								break;
-							case expressions::MapProjectionItemType::MPROP_LITERAL:
+							}
+							case expressions::MapProjectionItemType::MPROP_LITERAL: {
 								if (item.key.empty()) {
 									throw std::logic_error("logical-plan Map projection has an empty literal key");
 								}
-								result.insert_or_assign(item.key, item.expression == nullptr
-																			 ? PropertyValue()
-																			 : scalarValue(evaluateExpression(*item.expression, row, state)));
+								const PropertyValue literal =
+										item.expression == nullptr
+												? PropertyValue()
+												: scalarValue(evaluateExpression(*item.expression, row, state));
+								MaterializedByteReservation literalBytes(&state.materialized_budget);
+								literalBytes.set(property_utils::getPropertyValueSize(literal));
+								insertResult(item.key, literal);
 								break;
-							case expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES:
+							}
+							case expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES: {
 								if (projection.isMapLiteral()) {
 									throw std::logic_error("logical-plan Map literal has an all-Properties selector");
 								}
-								for (const auto &[key, value]:
-										 readBindingProperties(state.snapshot, row, projection.getVariable(), state)) {
-									result.insert_or_assign(key, value);
+								MaterializedByteReservation sourceBytes(&state.materialized_budget);
+								const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
+								const auto *mapValue = std::get_if<PropertyValue>(&binding);
+								const auto cached = row.property_cache.find(projection.getVariable());
+								const PropertyMap &properties =
+										mapValue != nullptr && cached == row.property_cache.end()
+												? mapValue->getMap()
+												: readBindingProperties(state.snapshot, row, projection.getVariable(),
+																		state);
+								sourceBytes.set(propertyMapBytes(properties,
+																 "logical-plan Map projection source size overflowed"));
+								for (const auto &[key, value]: properties) {
+									insertResult(key, value);
 								}
 								break;
+							}
 						}
 					}
 					return PropertyValue(std::move(result));
@@ -2733,89 +4279,122 @@ namespace graph::query::execution {
 					if (hasRelationship && !exists.hasWhereClause() && exists.getTargetVar().empty() &&
 						exists.getTargetLabel().empty()) {
 						if (const std::optional<bool> referenceMatch = findPatternReferenceMatch(
-								nodeBindingId(source->second), exists.getRelType(), exists.getDirection(), state);
+									nodeBindingId(source->second, state), exists.getRelType(), exists.getDirection(), state);
 							referenceMatch.has_value()) {
 							return PropertyValue(*referenceMatch);
 						}
 					}
-					const storage::LogicalGraphNode sourceNode = materializeNodeValue(state, source->second);
+					const storage::LogicalGraphNode sourceNode = patternSourceIdentity(state, source->second);
 					const auto matchesWhere = [&](const storage::LogicalGraphNode *target) {
 						if (target != nullptr && !exists.getTargetVar().empty()) {
-							if (const auto bound = row.values.find(exists.getTargetVar()); bound != row.values.end() &&
-								bound->second != LogicalPlanReadValue(*target)) {
+							if (const auto bound = row.values.find(exists.getTargetVar());
+								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return false;
 							}
-							ScopedRowBinding binding(row, exists.getTargetVar(), *target);
-							return !exists.hasWhereClause() || booleanOrNull(
-										scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
+							ScopedRowBinding binding(row, exists.getTargetVar(), *target, state);
+							return !exists.hasWhereClause() ||
+								   booleanOrNull(scalarValue(
+										   evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
 						}
-						return !exists.hasWhereClause() || booleanOrNull(
-									scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
+						return !exists.hasWhereClause() || booleanOrNull(scalarValue(evaluateExpression(
+																   *exists.getWhereExpression(), row, state))) == true;
 					};
 					if (!hasRelationship) {
 						return PropertyValue(matchesWhere(nullptr));
 					}
+					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
+							exists.getWhereExpression(), nullptr, exists.getTargetVar(), {}, state.snapshot);
 					bool matched = false;
-					static_cast<void>(visitPatternTargets(sourceNode, exists.getRelType(), exists.getTargetLabel(),
-							exists.getDirection(), state,
+					static_cast<void>(visitPatternTargets(
+							sourceNode, exists.getRelType(), exists.getTargetLabel(), exists.getDirection(), state,
 							[&](const storage::LogicalGraphEdge &, const storage::LogicalGraphNode &target) {
 								if (!matchesWhere(&target)) {
 									return true;
 								}
 								matched = true;
 								return false;
-							}));
+							},
+							patternShape.has_value() ? &*patternShape : nullptr, true));
 					return PropertyValue(matched);
 				}
 				case ExpressionType::EXPR_PATTERN_COMPREHENSION: {
 					const auto &comprehension =
 							dynamic_cast<const expressions::PatternComprehensionExpression &>(expression);
 					if (comprehension.getSourceVar().empty() || comprehension.getMapExpression() == nullptr) {
-						throw std::logic_error("logical-plan Pattern comprehension has an incomplete pattern or map expression");
+						throw std::logic_error(
+								"logical-plan Pattern comprehension has an incomplete pattern or map expression");
 					}
 					const auto source = row.values.find(comprehension.getSourceVar());
 					if (source == row.values.end()) {
 						return PropertyValue(std::vector<PropertyValue>{});
 					}
-					const storage::LogicalGraphNode sourceNode = materializeNodeValue(state, source->second);
+					const storage::LogicalGraphNode sourceNode = patternSourceIdentity(state, source->second);
+					MaterializedByteReservation valuesReservation(&state.materialized_budget);
 					std::vector<PropertyValue> values;
-					size_t valuesBytes = 0U;
+					size_t valuesBytes = sizeof(uint32_t);
 					const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
 												 const storage::LogicalGraphNode *target) {
 						const auto appendBoundValue = [&]() {
-							if (comprehension.hasWhereClause() && booleanOrNull(
-									scalarValue(evaluateExpression(*comprehension.getWhereExpression(), row, state))) != true) {
+							if (comprehension.hasWhereClause() &&
+								booleanOrNull(scalarValue(
+										evaluateExpression(*comprehension.getWhereExpression(), row, state))) != true) {
 								return true;
 							}
 							if (values.size() == state.bounds.maximum_rows) {
-								throw std::runtime_error("logical-plan Pattern comprehension exceeded its result bound");
+								throw std::runtime_error(
+										"logical-plan Pattern comprehension exceeded its result bound");
 							}
 							PropertyValue mapped =
 									scalarValue(evaluateExpression(*comprehension.getMapExpression(), row, state));
-							const size_t mappedBytes = property_utils::getPropertyValueSize(mapped);
-							if (mappedBytes > state.bounds.maximum_materialized_bytes ||
-								valuesBytes > state.bounds.maximum_materialized_bytes - mappedBytes) {
-								throw std::runtime_error("logical-plan Pattern comprehension exceeded its materialized byte bound");
+							const size_t mappedBytes = retainedExpressionValueBytes(mapped, state);
+							const size_t nextValueBytes =
+									checkedSizeAdd(valuesBytes, mappedBytes,
+												   "logical-plan Pattern comprehension result size overflowed");
+							if (nextValueBytes > state.bounds.maximum_materialized_bytes) {
+								throw std::runtime_error(
+										"logical-plan Pattern comprehension exceeded its materialized byte bound");
 							}
-							valuesBytes += mappedBytes;
+							const size_t nextCapacity =
+									values.size() == values.capacity()
+											? std::min(state.bounds.maximum_rows,
+													   std::max(values.size() + 1U,
+																checkedSizeMul(values.capacity(), 2U,
+																			   "logical-plan Pattern comprehension "
+																			   "capacity overflowed")))
+											: values.capacity();
+							valuesReservation.set(checkedSizeAdd(
+									nextValueBytes,
+									checkedSizeMul(checkedSizeAdd(nextCapacity,
+												 nextCapacity != values.capacity() ? values.capacity() : 0U,
+												 "logical-plan Pattern growth slot count overflowed"), sizeof(PropertyValue),
+												   "logical-plan Pattern comprehension capacity overflowed"),
+									"logical-plan Pattern comprehension result size overflowed"));
+							if (nextCapacity != values.capacity()) {
+								values.reserve(nextCapacity);
+								valuesReservation.set(checkedSizeAdd(nextValueBytes,
+									checkedSizeMul(values.capacity(), sizeof(PropertyValue),
+										"logical-plan Pattern comprehension capacity overflowed"),
+									"logical-plan Pattern comprehension result size overflowed"));
+							}
 							values.push_back(std::move(mapped));
+							valuesBytes = nextValueBytes;
 							return true;
 						};
 						if (target != nullptr && !comprehension.getTargetVar().empty()) {
-							if (const auto bound = row.values.find(comprehension.getTargetVar()); bound != row.values.end() &&
-								bound->second != LogicalPlanReadValue(*target)) {
+							if (const auto bound = row.values.find(comprehension.getTargetVar());
+								bound != row.values.end() && nodeBindingId(bound->second, state) != target->node_id) {
 								return true;
 							}
-							ScopedRowBinding targetBinding(row, comprehension.getTargetVar(), *target);
+							ScopedRowBinding targetBinding(row, comprehension.getTargetVar(), *target, state);
 							if (edge != nullptr && !comprehension.getRelationshipVar().empty()) {
-								ScopedRowBinding relationshipBinding(
-										row, comprehension.getRelationshipVar(), *edge);
+								ScopedRowBinding relationshipBinding(row, comprehension.getRelationshipVar(), *edge,
+																	 state);
 								return appendBoundValue();
 							}
 							return appendBoundValue();
 						}
 						if (edge != nullptr && !comprehension.getRelationshipVar().empty()) {
-							ScopedRowBinding relationshipBinding(row, comprehension.getRelationshipVar(), *edge);
+							ScopedRowBinding relationshipBinding(row, comprehension.getRelationshipVar(), *edge, state);
 							return appendBoundValue();
 						}
 						return appendBoundValue();
@@ -2823,8 +4402,7 @@ namespace graph::query::execution {
 					const bool hasRelationship = comprehension.getPattern().find('-') != std::string::npos;
 					const auto finishValues = [&]() {
 						PropertyValue result(std::move(values));
-						// Include the collection envelope and nested container metadata in
-						// addition to the element payload charged above.
+						// Confirm that the incremental charge matches the returned value.
 						if (property_utils::getPropertyValueSize(result) > state.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan Pattern comprehension exceeded its materialized byte bound");
@@ -2835,11 +4413,16 @@ namespace graph::query::execution {
 						static_cast<void>(appendValue(nullptr, nullptr));
 						return finishValues();
 					}
-					static_cast<void>(visitPatternTargets(sourceNode, comprehension.getRelType(),
-							comprehension.getTargetLabel(), comprehension.getDirection(), state,
+					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
+							comprehension.getWhereExpression(), comprehension.getMapExpression(),
+							comprehension.getTargetVar(), comprehension.getRelationshipVar(), state.snapshot);
+					static_cast<void>(visitPatternTargets(
+							sourceNode, comprehension.getRelType(), comprehension.getTargetLabel(),
+							comprehension.getDirection(), state,
 							[&](const storage::LogicalGraphEdge &edge, const storage::LogicalGraphNode &target) {
 								return appendValue(&edge, &target);
-							}));
+							},
+							patternShape.has_value() ? &*patternShape : nullptr));
 					return finishValues();
 				}
 				case ExpressionType::SHORTEST_PATH: {
@@ -2863,8 +4446,8 @@ namespace graph::query::execution {
 					// endpoint's labels or Properties merely to seed the BFS. Authenticate both
 					// deferred endpoints with one sorted probe when the backend supports it;
 					// readers without that capability retain the complete-read fallback.
-					const uint64_t startNodeId = nodeBindingId(startBinding->second);
-					const uint64_t endNodeId = nodeBindingId(endBinding->second);
+					const uint64_t startNodeId = nodeBindingId(startBinding->second, state);
+					const uint64_t endNodeId = nodeBindingId(endBinding->second, state);
 					if (state.snapshot.supportsNodeExistenceProbes()) {
 						std::vector<uint64_t> endpointIds;
 						if (std::holds_alternative<storage::EntityRef>(startBinding->second)) {
@@ -2878,7 +4461,8 @@ namespace graph::query::execution {
 						if (!endpointIds.empty()) {
 							const std::vector<bool> present = state.snapshot.containsNodesSorted(endpointIds);
 							if (present.size() != endpointIds.size()) {
-								throw std::runtime_error("logical graph shortestPath endpoint probe cardinality changed");
+								throw std::runtime_error(
+										"logical graph shortestPath endpoint probe cardinality changed");
 							}
 							for (size_t index = 0U; index < endpointIds.size(); ++index) {
 								if (!present[index]) {
@@ -2888,10 +4472,10 @@ namespace graph::query::execution {
 						}
 					} else {
 						if (std::holds_alternative<storage::EntityRef>(startBinding->second)) {
-							validateNode(readNodeCached(state, startNodeId));
+							validateNodeIdentity(state, startNodeId);
 						}
 						if (std::holds_alternative<storage::EntityRef>(endBinding->second)) {
-							validateNode(readNodeCached(state, endNodeId));
+							validateNodeIdentity(state, endNodeId);
 						}
 					}
 					int maximumHops = shortest.getMaxHops();
@@ -2912,9 +4496,12 @@ namespace graph::query::execution {
 						uint64_t node_id = 0U;
 						storage::LogicalGraphEdgeTopology edge;
 					};
+					// The lease outlives the BFS containers it represents.
+					MaterializedByteReservation shortestPathStateBytes(&state.materialized_budget);
 					std::unordered_map<uint64_t, int> distances;
 					std::unordered_map<uint64_t, std::vector<Parent>> parents;
 					std::deque<uint64_t> frontier;
+					shortestPathStateBytes.set(sizeof(uint64_t) + sizeof(int) + sizeof(uint64_t));
 					distances.emplace(startNodeId, 0);
 					frontier.push_back(startNodeId);
 					size_t parentEntries = 0U;
@@ -2927,85 +4514,124 @@ namespace graph::query::execution {
 						}
 						return state.bounds.maximum_node_records * state.bounds.maximum_edges_per_node;
 					}();
-					size_t shortestPathStateBytes = 0U;
 					const auto chargeShortestPathState = [&](size_t bytes) {
-						const size_t remaining = state.bounds.maximum_materialized_bytes -
-								std::min(shortestPathStateBytes, state.bounds.maximum_materialized_bytes);
+						const size_t remaining =
+								state.bounds.maximum_materialized_bytes -
+								std::min(shortestPathStateBytes.bytes(), state.bounds.maximum_materialized_bytes);
 						if (bytes > remaining) {
-							throw std::runtime_error("logical-plan shortestPath exceeded its materialized state byte bound");
+							throw std::runtime_error(
+									"logical-plan shortestPath exceeded its materialized state byte bound");
 						}
-						shortestPathStateBytes = checkedSizeAdd(shortestPathStateBytes, bytes,
-								"logical-plan shortestPath state size overflowed");
+						shortestPathStateBytes.set(checkedSizeAdd(shortestPathStateBytes.bytes(), bytes,
+																  "logical-plan shortestPath state size overflowed"));
 					};
 					const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
 					std::optional<uint64_t> relationshipTypeToken;
-					if (!shortest.getRelType().empty() && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+					if (!shortest.getRelType().empty() &&
+						state.snapshot.supportsNativeRelationshipTypeTokens(shortest.getRelType())) {
 						relationshipTypeToken = state.snapshot.findRelationshipTypeToken(shortest.getRelType());
 						if (!relationshipTypeToken.has_value()) {
 							return PropertyValue();
 						}
 					}
-					const bool useNativeAdjacencyRefs = state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+					const bool useNativeAdjacencyRefs =
+							state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
 							(shortest.getRelType().empty() || relationshipTypeToken.has_value());
-					chargeShortestPathState(sizeof(uint64_t) + sizeof(int) + sizeof(uint64_t));
-
 					const auto visitAdjacent = [&](uint64_t nodeId, const auto &onEdge) {
 						size_t sourceEdges = 0U;
 						const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 							std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
 							uint64_t previousEdgeId = 0U;
 							for (;;) {
-								if (exploredEdges == maximumExploredEdges || sourceEdges == state.bounds.maximum_edges_per_node) {
+								if (exploredEdges == maximumExploredEdges ||
+									sourceEdges == state.bounds.maximum_edges_per_node) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its total Edge bound");
 								}
 								const size_t perNodeRemaining = state.bounds.maximum_edges_per_node - sourceEdges;
-								const size_t pageRecords = std::min(perNodeRemaining,
-																 state.bounds.maximum_adjacency_page_records);
+								const size_t pageRecords =
+										std::min(perNodeRemaining, state.bounds.maximum_adjacency_page_records);
+								MaterializedByteReservation adjacencyPageBytes(&state.materialized_budget);
 								std::vector<storage::LogicalGraphEdgeTopology> pageEdges;
 								std::optional<storage::LogicalGraphAdjacencyContinuation> pageContinuation;
 								if (useNativeAdjacencyRefs) {
-									const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-											nodeId, adjacencyDirection, continuation, pageRecords);
+									MaterializedByteReservation referenceBytes(&state.materialized_budget);
+									const auto page = readReferencePageBudgeted(state, nodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 									if (page.edges.size() > pageRecords ||
 										(page.edges.empty() && page.continuation.has_value())) {
-										throw std::runtime_error(
-												"logical graph backend returned an invalid shortestPath adjacency reference page");
+										throw std::runtime_error("logical graph backend returned an invalid "
+																 "shortestPath adjacency reference page");
 									}
 									if (continuation.has_value() &&
-										(page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id)) {
-										throw std::runtime_error(
-												"logical graph backend returned a discontinuous shortestPath adjacency reference page");
+										(page.edges.empty() ||
+										 page.edges.front().entity_id != continuation->next_edge_id)) {
+										throw std::runtime_error("logical graph backend returned a discontinuous "
+																 "shortestPath adjacency reference page");
 									}
+									// Reference source buffers have their own reservation. Charge only
+									// the projected topology here, including every retained type capacity.
+									const size_t typeCapacity = relationshipTypeToken.has_value()
+										? std::max(std::string{}.capacity(), shortest.getRelType().size()) : std::string{}.capacity();
+									size_t typeBytes = 0U;
+									for (const auto &reference: page.edges) {
+										typeBytes = checkedSizeAdd(typeBytes,
+											relationshipTypeToken && reference.type_token == *relationshipTypeToken
+												? typeCapacity : std::string{}.capacity(),
+											"logical-plan shortestPath projected type capacity overflowed");
+									}
+									const auto projectedBytes = [&](size_t capacity, size_t names) {
+										return checkedSizeAdd(checkedSizeMul(capacity, sizeof(storage::LogicalGraphEdgeTopology),
+											"logical-plan shortestPath projected capacity overflowed"), names,
+											"logical-plan shortestPath projected names overflowed");
+									};
+									adjacencyPageBytes.set(projectedBytes(page.edges.size(), typeBytes));
 									pageEdges.reserve(page.edges.size());
+									adjacencyPageBytes.set(projectedBytes(pageEdges.capacity(), typeBytes));
+									size_t actualTypeBytes = 0U;
+									size_t remainingTypeBytes = typeBytes;
 									for (const storage::EntityRef &reference: page.edges) {
-										validateEdgeRef(reference,
-												"logical graph backend returned an invalid or Node reference from a shortestPath adjacency page");
+										validateEdgeRef(reference, "logical graph backend returned an invalid or Node "
+																   "reference from a shortestPath adjacency page");
 										const bool typeMatches = !relationshipTypeToken.has_value() ||
-												reference.type_token == *relationshipTypeToken;
-										pageEdges.push_back({reference.entity_id, reference.source_node_id, reference.target_node_id,
-												typeMatches && relationshipTypeToken.has_value() ? shortest.getRelType() : std::string{}});
+																 reference.type_token == *relationshipTypeToken;
+										pageEdges.push_back({reference.entity_id, reference.source_node_id,
+															 reference.target_node_id,
+															 typeMatches && relationshipTypeToken.has_value()
+																	 ? shortest.getRelType()
+																	 : std::string{}});
+										actualTypeBytes = checkedSizeAdd(actualTypeBytes, pageEdges.back().type.capacity(),
+											"logical-plan shortestPath actual type capacity overflowed");
+										remainingTypeBytes -= typeMatches && relationshipTypeToken ? typeCapacity : std::string{}.capacity();
+										adjacencyPageBytes.set(projectedBytes(pageEdges.capacity(), checkedSizeAdd(actualTypeBytes,
+											remainingTypeBytes, "logical-plan shortestPath total type capacity overflowed")));
 									}
 									pageContinuation = page.continuation;
 								} else {
-									const storage::LogicalGraphAdjacencyTopologyPage page = state.snapshot.scanAdjacentEdgeTopologies(
-											nodeId, adjacencyDirection, continuation, pageRecords);
+									auto page = readTopologyPageBudgeted(state, nodeId, adjacencyDirection,
+										continuation, pageRecords, adjacencyPageBytes);
 									if (page.edges.size() > pageRecords ||
 										(page.edges.empty() && page.continuation.has_value())) {
-										throw std::runtime_error("logical graph backend returned an invalid shortestPath adjacency page");
+										throw std::runtime_error("logical graph backend returned an invalid "
+																 "shortestPath adjacency page");
 									}
 									if (continuation.has_value() &&
-										(page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id)) {
-										throw std::runtime_error("logical graph backend returned a discontinuous shortestPath adjacency page");
+										(page.edges.empty() ||
+										 page.edges.front().edge_id != continuation->next_edge_id)) {
+										throw std::runtime_error("logical graph backend returned a discontinuous "
+																 "shortestPath adjacency page");
 									}
-									pageEdges = page.edges;
+
+									pageEdges = std::move(page.edges);
 									pageContinuation = page.continuation;
 								}
-								if (pageEdges.size() > pageRecords || (pageEdges.empty() && pageContinuation.has_value())) {
-									throw std::runtime_error("logical graph backend returned an invalid shortestPath adjacency page");
+								if (pageEdges.size() > pageRecords ||
+									(pageEdges.empty() && pageContinuation.has_value())) {
+									throw std::runtime_error(
+											"logical graph backend returned an invalid shortestPath adjacency page");
 								}
 								if (continuation.has_value() &&
 									(pageEdges.empty() || pageEdges.front().edge_id != continuation->next_edge_id)) {
-									throw std::runtime_error("logical graph backend returned a discontinuous shortestPath adjacency page");
+									throw std::runtime_error("logical graph backend returned a discontinuous "
+															 "shortestPath adjacency page");
 								}
 								// Endpoint validation is independent of edge traversal order. Resolve
 								// each distinct endpoint once per page so parallel edges and repeated
@@ -3014,25 +4640,55 @@ namespace graph::query::execution {
 								if (supportsExistenceProbes) {
 									endpointIds.reserve(pageEdges.size());
 									for (const storage::LogicalGraphEdgeTopology &candidate: pageEdges) {
-										endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-												? candidate.target_node_id : candidate.source_node_id);
+										endpointIds.push_back(
+												adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+														? candidate.target_node_id
+														: candidate.source_node_id);
 									}
 									std::ranges::sort(endpointIds);
-									endpointIds.erase(std::unique(endpointIds.begin(), endpointIds.end()), endpointIds.end());
+									endpointIds.erase(std::unique(endpointIds.begin(), endpointIds.end()),
+													  endpointIds.end());
 								}
-								const std::vector<bool> endpointPresent = supportsExistenceProbes
-										? state.snapshot.containsNodesSorted(endpointIds) : std::vector<bool>{};
+								const size_t endpointIdBytes =
+										checkedSizeMul(endpointIds.capacity(), sizeof(uint64_t),
+													   "logical-plan shortestPath endpoint probe size overflowed");
+								// Pre-admit one machine word per result bit. This upper estimate
+								// covers packed-vector word rounding before the backend allocates it.
+								const size_t expectedPresenceBytes =
+										checkedSizeMul(endpointIds.size(), sizeof(uint64_t),
+													   "logical-plan shortestPath endpoint probe size overflowed");
+								const size_t endpointProbeBytes =
+										checkedSizeAdd(endpointIdBytes, expectedPresenceBytes,
+													   "logical-plan shortestPath endpoint probe size overflowed");
+								adjacencyPageBytes.set(
+										checkedSizeAdd(adjacencyPageBytes.bytes(), endpointProbeBytes,
+													   "logical-plan shortestPath adjacency page size overflowed"));
+								const std::vector<bool> endpointPresent =
+										supportsExistenceProbes ? state.snapshot.containsNodesSorted(endpointIds)
+																: std::vector<bool>{};
+								if (supportsExistenceProbes) {
+									const size_t actualPresenceBytes =
+											checkedSizeAdd(endpointPresent.capacity(), 7U,
+														   "logical-plan shortestPath endpoint probe size overflowed") /
+											8U;
+									adjacencyPageBytes.set(checkedSizeAdd(
+											adjacencyPageBytes.bytes() - expectedPresenceBytes, actualPresenceBytes,
+											"logical-plan shortestPath adjacency page size overflowed"));
+								}
 								for (const storage::LogicalGraphEdgeTopology &edge: pageEdges) {
 									checkGuard(state);
 									validateEdge(edge);
 									validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "shortestPath");
-									const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-															 ? edge.source_node_id == nodeId
-															 : edge.target_node_id == nodeId;
+									const bool endpointMatches =
+											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+													? edge.source_node_id == nodeId
+													: edge.target_node_id == nodeId;
 									if (!endpointMatches) {
-										throw std::runtime_error("logical graph backend returned an invalid shortestPath Edge");
+										throw std::runtime_error(
+												"logical graph backend returned an invalid shortestPath Edge");
 									}
-									incrementBounded(exploredEdges, "logical-plan shortestPath Edge counter overflowed");
+									incrementBounded(exploredEdges,
+													 "logical-plan shortestPath Edge counter overflowed");
 									incrementBounded(sourceEdges,
 													 "logical-plan shortestPath per-Node Edge counter overflowed");
 									incrementBounded(state.stats.edges_scanned,
@@ -3045,22 +4701,23 @@ namespace graph::query::execution {
 									if (!shortest.getRelType().empty() && edge.type != shortest.getRelType()) {
 										continue;
 									}
-									const uint64_t next = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																	? edge.target_node_id
-																	: edge.source_node_id;
+									const uint64_t next =
+											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+													? edge.target_node_id
+													: edge.source_node_id;
 									// A native probe authenticates the endpoint in the same pinned
-								// snapshot without materializing labels or Properties for every
-								// BFS frontier candidate. Readers without that stronger contract
-								// retain the complete-record validation fallback.
-								if (supportsExistenceProbes) {
-									const auto endpoint = std::ranges::lower_bound(endpointIds, next);
-									if (endpoint == endpointIds.end() || *endpoint != next ||
+									// snapshot without materializing labels or Properties for every
+									// BFS frontier candidate. Readers without that stronger contract
+									// authenticate identity with a shaped point read.
+									if (supportsExistenceProbes) {
+										const auto endpoint = std::ranges::lower_bound(endpointIds, next);
+										if (endpoint == endpointIds.end() || *endpoint != next ||
 											!endpointPresent[static_cast<size_t>(endpoint - endpointIds.begin())]) {
-											throw std::runtime_error(
-													"logical graph backend returned a shortestPath Edge with a missing endpoint");
+											throw std::runtime_error("logical graph backend returned a shortestPath "
+																	 "Edge with a missing endpoint");
 										}
 									} else {
-										static_cast<void>(readNodeCached(state, next));
+										validateNodeIdentity(state, next);
 									}
 									if (!onEdge(edge, next)) {
 										return false;
@@ -3073,7 +4730,8 @@ namespace graph::query::execution {
 									pageContinuation->previous_edge_id != pageEdges.back().edge_id ||
 									pageContinuation->next_edge_id == 0U ||
 									pageContinuation->previous_edge_id == pageContinuation->next_edge_id) {
-									throw std::runtime_error("logical graph backend returned an invalid shortestPath continuation");
+									throw std::runtime_error(
+											"logical graph backend returned an invalid shortestPath continuation");
 								}
 								continuation = pageContinuation;
 							}
@@ -3101,7 +4759,8 @@ namespace graph::query::execution {
 						if (currentDistance == maximumHops) {
 							continue;
 						}
-						static_cast<void>(visitAdjacent(current, [&](const storage::LogicalGraphEdgeTopology &edge, uint64_t next) {
+						static_cast<void>(visitAdjacent(current, [&](const storage::LogicalGraphEdgeTopology &edge,
+																	 uint64_t next) {
 							const int nextDistance = currentDistance + 1;
 							if (nextDistance > maximumHops) {
 								return true;
@@ -3115,24 +4774,30 @@ namespace graph::query::execution {
 							const auto existing = distances.find(next);
 							if (existing == distances.end()) {
 								if (distances.size() == state.bounds.maximum_node_records) {
-									throw std::runtime_error("logical-plan shortestPath exceeded its frontier Node bound");
+									throw std::runtime_error(
+											"logical-plan shortestPath exceeded its frontier Node bound");
 								}
+								chargeShortestPathState(sizeof(uint64_t) + sizeof(int) + sizeof(void *) +
+														sizeof(uint64_t));
 								distances.emplace(next, nextDistance);
 								frontier.push_back(next);
-								chargeShortestPathState(sizeof(uint64_t) + sizeof(int) + sizeof(void *) + sizeof(uint64_t));
 								if (parentEntries == state.bounds.maximum_rows) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its parent-DAG bound");
 								}
+								chargeShortestPathState(
+										checkedSizeAdd(sizeof(Parent), edge.type.size(),
+													   "logical-plan shortestPath parent-DAG size overflowed"));
 								parents[next].push_back({current, edge});
-								chargeShortestPathState(sizeof(Parent));
 								incrementBounded(parentEntries,
 												 "logical-plan shortestPath parent-DAG counter overflowed");
 							} else if (existing->second == nextDistance) {
 								if (parentEntries == state.bounds.maximum_rows) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its parent-DAG bound");
 								}
+								chargeShortestPathState(
+										checkedSizeAdd(sizeof(Parent), edge.type.size(),
+													   "logical-plan shortestPath parent-DAG size overflowed"));
 								parents[next].push_back({current, edge});
-								chargeShortestPathState(sizeof(Parent));
 								incrementBounded(parentEntries,
 												 "logical-plan shortestPath parent-DAG counter overflowed");
 							}
@@ -3151,122 +4816,381 @@ namespace graph::query::execution {
 						});
 					}
 
+					if (shortestMode != ShortestPathResultMode::SPR_FULL) {
+						if (!shortest.isAll()) {
+							const size_t elements =
+									checkedSizeAdd(checkedSizeMul(static_cast<size_t>(*targetDistance), size_t{2U},
+																  "logical-plan shortestPath size overflowed"),
+												   size_t{1U}, "logical-plan shortestPath size overflowed");
+							if (elements > state.bounds.maximum_rows) {
+								throw std::runtime_error("logical-plan scalar function received a List exceeding the "
+														 "configured List bound");
+							}
+							if (elements > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+								throw std::overflow_error(
+										"logical-plan shortestPath size exceeds integer result range");
+							}
+							if (shortestMode == ShortestPathResultMode::SPR_LENGTH) {
+								const auto markerMatches = [&](uint64_t id, bool edge) {
+									checkGuard(state);
+									const auto present = edge ? state.snapshot.edgePropertyExists(id, "_type")
+															  : state.snapshot.nodePropertyExists(id, "_type");
+									if (present.has_value() && !*present)
+										return true;
+									PropertyValue marker;
+									if (present.has_value()) {
+										marker = readSelectedPropertyBudgeted(state.snapshot, id, edge, "_type", state);
+									} else {
+										// Unsupported presence probes retain the complete reader
+										// fallback and distinguish a missing key from explicit NULL.
+										const auto entries = edge ? readEdgeCached(state, id).properties
+																  : readNodeCached(state, id).properties;
+										const auto field = std::ranges::find(entries, "_type",
+																			 &storage::LogicalGraphPropertyEntry::key);
+										if (field == entries.end())
+											return true;
+										marker = field->value;
+									}
+									if (property_utils::getPropertyValueSize(marker) >
+										state.bounds.maximum_materialized_bytes) {
+										throw std::runtime_error(
+												"logical-plan shortestPath marker exceeded its materialized bound");
+									}
+									return marker.getType() == PropertyType::STRING &&
+										   std::get<std::string>(marker.getVariant()) ==
+												   (edge ? "relationship" : "node");
+								};
+								uint64_t current = endNodeId;
+								for (;;) {
+									if (!markerMatches(current, false))
+										return PropertyValue(static_cast<int64_t>(elements));
+									if (current == startNodeId)
+										break;
+									const auto previous = parents.find(current);
+									if (previous == parents.end() || previous->second.empty()) {
+										throw std::runtime_error(
+												"logical-plan shortestPath has an incomplete parent DAG");
+									}
+									const Parent &parent = previous->second.front();
+									if (!markerMatches(parent.edge.edge_id, true))
+										return PropertyValue(static_cast<int64_t>(elements));
+									current = parent.node_id;
+								}
+								return PropertyValue(static_cast<int64_t>(*targetDistance));
+							}
+							return PropertyValue(static_cast<int64_t>(elements));
+						}
+						// Count paths in the parent DAG without constructing path lists or
+						// entity maps. Parallel edges retain their path multiplicity.
+						std::unordered_map<uint64_t, size_t> pathCounts;
+						std::function<size_t(uint64_t)> countPaths = [&](uint64_t id) -> size_t {
+							checkGuard(state);
+							if (id == startNodeId)
+								return 1U;
+							if (const auto cached = pathCounts.find(id); cached != pathCounts.end())
+								return cached->second;
+							const auto previous = parents.find(id);
+							if (previous == parents.end() || previous->second.empty()) {
+								throw std::runtime_error("logical-plan shortestPath has an incomplete parent DAG");
+							}
+							size_t count = 0U;
+							for (const Parent &parent: previous->second) {
+								const size_t contribution = countPaths(parent.node_id);
+								if (contribution > state.bounds.maximum_rows - count) {
+									throw std::runtime_error(
+											"logical-plan shortestPath exceeded its result-path bound");
+								}
+								count += contribution;
+							}
+							chargeShortestPathState(sizeof(std::pair<const uint64_t, size_t>));
+							pathCounts.emplace(id, count);
+							return count;
+						};
+						const size_t count = countPaths(endNodeId);
+						if (count > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+							throw std::overflow_error("logical-plan shortestPath count exceeds integer result range");
+						}
+						return PropertyValue(static_cast<int64_t>(count));
+					}
+
 					const auto idValue = [](uint64_t id) {
 						if (id > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-							throw std::overflow_error("logical-plan shortestPath cannot represent an entity ID in a Property value");
+							throw std::overflow_error(
+									"logical-plan shortestPath cannot represent an entity ID in a Property value");
 						}
 						return PropertyValue(static_cast<int64_t>(id));
 					};
 					const auto materializePath = [&](const std::vector<uint64_t> &nodeIds,
-															 const std::vector<storage::LogicalGraphEdgeTopology> &edges) {
+													 const std::vector<storage::LogicalGraphEdgeTopology> &edges,
+													 MaterializedByteReservation &outputBytes) {
+						const size_t pathElements = checkedSizeAdd(nodeIds.size(), edges.size(),
+																   "logical-plan shortestPath result size overflowed");
+						outputBytes.set(
+								checkedSizeAdd(sizeof(uint32_t),
+											   checkedSizeMul(pathElements, sizeof(PropertyValue),
+															  "logical-plan shortestPath result size overflowed"),
+											   "logical-plan shortestPath result size overflowed"));
 						std::vector<PropertyValue> path;
-						path.reserve(nodeIds.size() + edges.size());
+						path.reserve(pathElements);
+						const auto appendEntity = [&](const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+													  std::string_view type, uint64_t id) {
+							if (entries.size() > state.bounds.maximum_property_entries) {
+								throw std::runtime_error(
+										"logical graph backend returned too many direct Property entries");
+							}
+							incrementBounded(state.stats.property_sets_materialized,
+											 "logical-plan Property materialization counter overflowed");
+							MaterializedByteReservation keyBytes(&state.materialized_budget);
+							keyBytes.set(checkedSizeMul(entries.size(), sizeof(std::string_view),
+														"logical-plan shortestPath Property key size overflowed"));
+							std::vector<std::string_view> keys;
+							keys.reserve(entries.size());
+							size_t mapBytes = sizeof(uint32_t);
+							bool hasType = false;
+							bool hasId = false;
+							for (const auto &entry: entries) {
+								checkGuard(state);
+								if (entry.key.empty()) {
+									throw std::runtime_error(
+											"logical graph backend returned an invalid direct Property entry set");
+								}
+								keys.push_back(entry.key);
+								hasType |= entry.key == "_type";
+								hasId |= entry.key == "_id";
+								mapBytes = checkedSizeAdd(
+										mapBytes,
+										checkedSizeAdd(
+												checkedSizeAdd(entry.key.size(), sizeof(size_t),
+															   "logical-plan shortestPath result size overflowed"),
+												property_utils::getPropertyValueSize(entry.value),
+												"logical-plan shortestPath result size overflowed"),
+										"logical-plan shortestPath result size overflowed");
+							}
+							std::ranges::sort(keys);
+							if (std::adjacent_find(keys.begin(), keys.end()) != keys.end()) {
+								throw std::runtime_error(
+										"logical graph backend returned an invalid direct Property entry set");
+							}
+							std::vector<std::string_view>().swap(keys);
+							keyBytes.reset();
+							if (!hasType) {
+								mapBytes = checkedSizeAdd(mapBytes, sizeof(size_t) + 5U + sizeof(size_t) + type.size(),
+														  "logical-plan shortestPath result size overflowed");
+							}
+							if (!hasId) {
+								mapBytes = checkedSizeAdd(mapBytes, sizeof(size_t) + 3U + sizeof(int64_t),
+														  "logical-plan shortestPath result size overflowed");
+							}
+							outputBytes.set(checkedSizeAdd(outputBytes.bytes(), mapBytes,
+														   "logical-plan shortestPath result size overflowed"));
+							PropertyValue::MapType entityMap;
+							entityMap.reserve(checkedSizeAdd(entries.size(), 2U,
+															 "logical-plan shortestPath Property count overflowed"));
+							entityMap.emplace("_type", PropertyValue(std::string(type)));
+							entityMap.emplace("_id", idValue(id));
+							for (const auto &entry: entries) {
+								entityMap.insert_or_assign(entry.key, entry.value);
+							}
+							path.emplace_back(std::move(entityMap));
+						};
+						MaterializedByteReservation orderedNodeBytes(&state.materialized_budget);
+						orderedNodeBytes.set(
+								checkedSizeMul(nodeIds.size(), sizeof(uint64_t),
+											   "logical-plan shortestPath ordered Node ID size overflowed"));
 						std::vector<uint64_t> orderedNodeIds = nodeIds;
 						std::ranges::sort(orderedNodeIds);
-						orderedNodeIds.erase(std::unique(orderedNodeIds.begin(), orderedNodeIds.end()), orderedNodeIds.end());
-						std::unordered_map<uint64_t, storage::LogicalGraphNode> nodeRecords;
+						orderedNodeIds.erase(std::unique(orderedNodeIds.begin(), orderedNodeIds.end()),
+											 orderedNodeIds.end());
+						MaterializedByteReservation nodeRecordBytes(&state.materialized_budget);
+						nodeRecordBytes.set(checkedSizeMul(orderedNodeIds.size(), sizeof(storage::LogicalGraphNode),
+														   "logical-plan shortestPath retained Node size overflowed"));
+						std::vector<storage::LogicalGraphNode> nodeRecords;
 						nodeRecords.reserve(orderedNodeIds.size());
-						for (size_t offset = 0U; offset < orderedNodeIds.size(); offset += DEFAULT_PROPERTY_BATCH_ROWS) {
+						nodeRecordBytes.set(checkedSizeMul(nodeRecords.capacity(), sizeof(storage::LogicalGraphNode),
+														   "logical-plan shortestPath retained Node size overflowed"));
+						for (size_t offset = 0U; offset < orderedNodeIds.size();
+							 offset += DEFAULT_PROPERTY_BATCH_ROWS) {
 							const size_t count = std::min(DEFAULT_PROPERTY_BATCH_ROWS, orderedNodeIds.size() - offset);
-							const auto batch = state.snapshot.readNodesShapedSorted(
-									std::span<const uint64_t>(orderedNodeIds).subspan(offset, count), completeNodeReadShape());
+							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							auto batch = readNodesShapedSortedBudgeted(
+									state, std::span<const uint64_t>(orderedNodeIds).subspan(offset, count),
+									completeNodeReadShape(), &sourceBytes);
 							if (batch.size() != count) {
-								throw std::runtime_error("logical-plan shortestPath Node batch changed its cardinality");
+								throw std::runtime_error(
+										"logical-plan shortestPath Node batch changed its cardinality");
 							}
 							for (size_t index = 0U; index < count; ++index) {
-								validateNode(batch[index]);
+								validateNode(batch[index], state);
 								if (batch[index].node_id != orderedNodeIds[offset + index]) {
-									throw std::runtime_error("logical-plan shortestPath Node batch changed logical ID order");
+									throw std::runtime_error(
+											"logical-plan shortestPath Node batch changed logical ID order");
 								}
-								nodeRecords.emplace(batch[index].node_id, batch[index]);
+							}
+							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							for (auto &node: batch) {
+								const size_t heapBytes = logicalNodeCacheBytes(node, state.context) - sizeof(node);
+								sourceBytes.set(sourceBytes.bytes() - heapBytes);
+								nodeRecordBytes.set(
+										checkedSizeAdd(nodeRecordBytes.bytes(), heapBytes,
+													   "logical-plan shortestPath retained Node size overflowed"));
+								nodeRecords.push_back(std::move(node));
 							}
 						}
+						std::vector<uint64_t>().swap(orderedNodeIds);
+						orderedNodeBytes.reset();
 						std::vector<uint64_t> orderedEdgeIds;
+						MaterializedByteReservation orderedEdgeBytes(&state.materialized_budget);
+						orderedEdgeBytes.set(
+								checkedSizeMul(edges.size(), sizeof(uint64_t),
+											   "logical-plan shortestPath ordered Edge ID size overflowed"));
 						orderedEdgeIds.reserve(edges.size());
 						for (const auto &edge: edges) {
 							orderedEdgeIds.push_back(edge.edge_id);
 						}
 						std::ranges::sort(orderedEdgeIds);
-						orderedEdgeIds.erase(std::unique(orderedEdgeIds.begin(), orderedEdgeIds.end()), orderedEdgeIds.end());
-						std::unordered_map<uint64_t, storage::LogicalGraphEdge> edgeRecords;
+						orderedEdgeIds.erase(std::unique(orderedEdgeIds.begin(), orderedEdgeIds.end()),
+											 orderedEdgeIds.end());
+						MaterializedByteReservation edgeRecordBytes(&state.materialized_budget);
+						edgeRecordBytes.set(checkedSizeMul(orderedEdgeIds.size(), sizeof(storage::LogicalGraphEdge),
+														   "logical-plan shortestPath retained Edge size overflowed"));
+						std::vector<storage::LogicalGraphEdge> edgeRecords;
 						edgeRecords.reserve(orderedEdgeIds.size());
-						for (size_t offset = 0U; offset < orderedEdgeIds.size(); offset += DEFAULT_PROPERTY_BATCH_ROWS) {
+						edgeRecordBytes.set(checkedSizeMul(edgeRecords.capacity(), sizeof(storage::LogicalGraphEdge),
+														   "logical-plan shortestPath retained Edge size overflowed"));
+						for (size_t offset = 0U; offset < orderedEdgeIds.size();
+							 offset += DEFAULT_PROPERTY_BATCH_ROWS) {
 							const size_t count = std::min(DEFAULT_PROPERTY_BATCH_ROWS, orderedEdgeIds.size() - offset);
-							const auto batch = state.snapshot.readEdgesShapedSorted(
-									std::span<const uint64_t>(orderedEdgeIds).subspan(offset, count), completeEdgeReadShape());
+							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							auto batch = readEdgesShapedSortedBudgeted(
+									state, std::span<const uint64_t>(orderedEdgeIds).subspan(offset, count),
+									completeEdgeReadShape(), &sourceBytes);
 							if (batch.size() != count) {
-								throw std::runtime_error("logical-plan shortestPath Edge batch changed its cardinality");
+								throw std::runtime_error(
+										"logical-plan shortestPath Edge batch changed its cardinality");
 							}
 							for (size_t index = 0U; index < count; ++index) {
 								validateEdge(batch[index]);
 								if (batch[index].edge_id != orderedEdgeIds[offset + index]) {
-									throw std::runtime_error("logical-plan shortestPath Edge batch changed logical ID order");
+									throw std::runtime_error(
+											"logical-plan shortestPath Edge batch changed logical ID order");
 								}
-								edgeRecords.emplace(batch[index].edge_id, batch[index]);
+							}
+							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							for (auto &edge: batch) {
+								const size_t heapBytes = logicalEdgeCacheBytes(edge, state.context) - sizeof(edge);
+								sourceBytes.set(sourceBytes.bytes() - heapBytes);
+								edgeRecordBytes.set(
+										checkedSizeAdd(edgeRecordBytes.bytes(), heapBytes,
+													   "logical-plan shortestPath retained Edge size overflowed"));
+								edgeRecords.push_back(std::move(edge));
 							}
 						}
+						std::vector<uint64_t>().swap(orderedEdgeIds);
+						orderedEdgeBytes.reset();
 						for (size_t index = 0U; index < nodeIds.size(); ++index) {
-							const auto nodeIt = nodeRecords.find(nodeIds[index]);
-							if (nodeIt == nodeRecords.end()) {
+							const auto nodeIt = std::ranges::lower_bound(nodeRecords, nodeIds[index], {},
+																		 &storage::LogicalGraphNode::node_id);
+							if (nodeIt == nodeRecords.end() || nodeIt->node_id != nodeIds[index]) {
 								throw std::runtime_error("logical-plan shortestPath Node batch lost a path Node");
 							}
-							const storage::LogicalGraphNode &node = nodeIt->second;
-							validateNode(node);
-							PropertyValue::MapType nodeMap;
-							nodeMap.emplace("_type", PropertyValue("node"));
-							nodeMap.emplace("_id", idValue(node.node_id));
-							for (const auto &[key, value]: readNodeProperties(state.snapshot, node, state)) {
-								nodeMap.insert_or_assign(key, value);
-							}
-							path.emplace_back(std::move(nodeMap));
+							const storage::LogicalGraphNode &node = *nodeIt;
+							validateNode(node, state);
+							appendEntity(node.properties, "node", node.node_id);
 							if (index == edges.size()) {
 								continue;
 							}
 							const storage::LogicalGraphEdgeTopology &topology = edges[index];
-							const auto edgeIt = edgeRecords.find(topology.edge_id);
-							if (edgeIt == edgeRecords.end()) {
+							const auto edgeIt = std::ranges::lower_bound(edgeRecords, topology.edge_id, {},
+																		 &storage::LogicalGraphEdge::edge_id);
+							if (edgeIt == edgeRecords.end() || edgeIt->edge_id != topology.edge_id) {
 								throw std::runtime_error("logical-plan shortestPath Edge batch lost a path Edge");
 							}
-							const storage::LogicalGraphEdge &edge = edgeIt->second;
+							const storage::LogicalGraphEdge &edge = *edgeIt;
 							validateEdge(edge);
 							// A native untyped adjacency reference carries no relationship name.
 							// Its empty topology type is therefore an unknown marker, not a claim
 							// that the persisted Edge type is empty.
-							if (edge.source_node_id != topology.source_node_id || edge.target_node_id != topology.target_node_id ||
+							if (edge.source_node_id != topology.source_node_id ||
+								edge.target_node_id != topology.target_node_id ||
 								(!topology.type.empty() && edge.type != topology.type)) {
-								throw std::runtime_error(
-										"logical graph backend changed an Edge while materializing a pinned shortestPath result");
+								throw std::runtime_error("logical graph backend changed an Edge while materializing a "
+														 "pinned shortestPath result");
 							}
-							PropertyValue::MapType edgeMap;
-							edgeMap.emplace("_type", PropertyValue("relationship"));
-							edgeMap.emplace("_id", idValue(edge.edge_id));
-							for (const auto &[key, value]: readEdgeProperties(state.snapshot, edge, state)) {
-								edgeMap.insert_or_assign(key, value);
-							}
-							path.emplace_back(std::move(edgeMap));
+							appendEntity(edge.properties, "relationship", edge.edge_id);
 						}
 						return PropertyValue(std::move(path));
 					};
 
+					MaterializedByteReservation allPathReservation(&state.materialized_budget);
 					std::vector<PropertyValue> allPaths;
 					size_t allPathBytes = 0U;
-					std::vector<uint64_t> reversedNodes{endNodeId};
+					MaterializedByteReservation reversedPathBytes(&state.materialized_budget);
+					reversedPathBytes.set(sizeof(uint64_t));
+					std::vector<uint64_t> reversedNodes;
+					reversedNodes.reserve(1U);
+					reversedNodes.push_back(endNodeId);
 					std::vector<storage::LogicalGraphEdgeTopology> reversedEdges;
+					size_t reversedTypeBytes = 0U;
+					const auto reversedStorageBytes = [&](size_t nodeCapacity, size_t edgeCapacity, size_t typeBytes) {
+						return checkedSizeAdd(
+								checkedSizeAdd(checkedSizeMul(nodeCapacity, sizeof(uint64_t),
+															  "logical-plan shortestPath reverse Node size overflowed"),
+											   checkedSizeMul(edgeCapacity, sizeof(storage::LogicalGraphEdgeTopology),
+															  "logical-plan shortestPath reverse Edge size overflowed"),
+											   "logical-plan shortestPath reverse path size overflowed"),
+								typeBytes, "logical-plan shortestPath reverse path size overflowed");
+					};
 					std::function<void(uint64_t)> collectPaths = [&](uint64_t nodeId) {
 						if (allPaths.size() == state.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan shortestPath exceeded its result-path bound");
 						}
 						if (nodeId == startNodeId) {
+							MaterializedByteReservation forwardPathBytes(&state.materialized_budget);
+							size_t forwardBytes = checkedSizeAdd(
+									checkedSizeMul(reversedNodes.size(), sizeof(uint64_t),
+												   "logical-plan shortestPath forward Node size overflowed"),
+									checkedSizeMul(reversedEdges.size(), sizeof(storage::LogicalGraphEdgeTopology),
+												   "logical-plan shortestPath forward Edge size overflowed"),
+									"logical-plan shortestPath forward path size overflowed");
+							for (const auto &edge: reversedEdges) {
+								forwardBytes = checkedSizeAdd(forwardBytes, edge.type.size(),
+															  "logical-plan shortestPath forward path size overflowed");
+							}
+							forwardPathBytes.set(forwardBytes);
 							std::vector<uint64_t> nodes(reversedNodes.rbegin(), reversedNodes.rend());
-							std::vector<storage::LogicalGraphEdgeTopology> edges(reversedEdges.rbegin(), reversedEdges.rend());
-							PropertyValue path = materializePath(nodes, edges);
+							std::vector<storage::LogicalGraphEdgeTopology> edges(reversedEdges.rbegin(),
+																				 reversedEdges.rend());
+							MaterializedByteReservation pendingPathBytes(&state.materialized_budget);
+							PropertyValue path = materializePath(nodes, edges, pendingPathBytes);
 							const size_t pathBytes = property_utils::getPropertyValueSize(path);
 							if (pathBytes > state.bounds.maximum_materialized_bytes ||
 								allPathBytes > state.bounds.maximum_materialized_bytes - pathBytes) {
-								throw std::runtime_error("logical-plan shortestPath exceeded its materialized byte bound");
+								throw std::runtime_error(
+										"logical-plan shortestPath exceeded its materialized byte bound");
 							}
-							allPathBytes += pathBytes;
+							const size_t nextPathBytes = checkedSizeAdd(
+									allPathBytes, pathBytes, "logical-plan shortestPath result size overflowed");
+							const size_t nextCapacity =
+									allPaths.size() == allPaths.capacity()
+											? std::min(state.bounds.maximum_rows,
+													   std::max(allPaths.size() + 1U,
+																checkedSizeMul(allPaths.capacity(), 2U,
+																			   "logical-plan shortestPath result "
+																			   "capacity overflowed")))
+											: allPaths.capacity();
+							const size_t retainedBytes = checkedSizeAdd(
+									nextPathBytes,
+									checkedSizeMul(nextCapacity, sizeof(PropertyValue),
+												   "logical-plan shortestPath result capacity overflowed"),
+									"logical-plan shortestPath result size overflowed");
+							// The completed-path owner takes over from the construction lease.
+							// No allocation occurs between releasing and acquiring these charges.
+							pendingPathBytes.reset();
+							allPathReservation.set(retainedBytes);
+							if (nextCapacity != allPaths.capacity())
+								allPaths.reserve(nextCapacity);
 							allPaths.push_back(std::move(path));
+							allPathBytes = nextPathBytes;
 							return;
 						}
 						const auto previous = parents.find(nodeId);
@@ -3274,16 +5198,85 @@ namespace graph::query::execution {
 							throw std::runtime_error("logical-plan shortestPath has an incomplete parent DAG");
 						}
 						for (const Parent &parent: previous->second) {
+							const size_t nodeCapacity =
+									reversedNodes.size() == reversedNodes.capacity()
+											? checkedSizeMul(
+													  reversedNodes.capacity(), 2U,
+													  "logical-plan shortestPath reverse Node capacity overflowed")
+											: reversedNodes.capacity();
+							const size_t edgeCapacity =
+									reversedEdges.size() == reversedEdges.capacity()
+											? std::max(size_t{1U}, checkedSizeMul(reversedEdges.capacity(), 2U,
+																				  "logical-plan shortestPath reverse "
+																				  "Edge capacity overflowed"))
+											: reversedEdges.capacity();
+							const size_t nextTypeBytes =
+									checkedSizeAdd(reversedTypeBytes, parent.edge.type.size(),
+												   "logical-plan shortestPath reverse Edge type size overflowed");
+							reversedPathBytes.set(reversedStorageBytes(nodeCapacity, edgeCapacity, nextTypeBytes));
+							if (nodeCapacity != reversedNodes.capacity())
+								reversedNodes.reserve(nodeCapacity);
+							if (edgeCapacity != reversedEdges.capacity())
+								reversedEdges.reserve(edgeCapacity);
 							reversedNodes.push_back(parent.node_id);
 							reversedEdges.push_back(parent.edge);
+							reversedTypeBytes = nextTypeBytes;
 							collectPaths(parent.node_id);
 							reversedEdges.pop_back();
+							reversedTypeBytes -= parent.edge.type.size();
+							reversedPathBytes.set(reversedStorageBytes(reversedNodes.capacity(),
+																	   reversedEdges.capacity(), reversedTypeBytes));
 							reversedNodes.pop_back();
 							if (!shortest.isAll() && !allPaths.empty()) {
 								return;
 							}
 						}
 					};
+					if (!shortest.isAll()) {
+						uint64_t current = endNodeId;
+						while (current != startNodeId) {
+							const auto previous = parents.find(current);
+							if (previous == parents.end() || previous->second.empty()) {
+								throw std::runtime_error("logical-plan shortestPath has an incomplete parent DAG");
+							}
+							const Parent &parent = previous->second.front();
+							const size_t nodeCapacity =
+									reversedNodes.size() == reversedNodes.capacity()
+											? checkedSizeMul(
+													  reversedNodes.capacity(), 2U,
+													  "logical-plan shortestPath reverse Node capacity overflowed")
+											: reversedNodes.capacity();
+							const size_t edgeCapacity =
+									reversedEdges.size() == reversedEdges.capacity()
+											? std::max(size_t{1U}, checkedSizeMul(reversedEdges.capacity(), 2U,
+																				  "logical-plan shortestPath reverse "
+																				  "Edge capacity overflowed"))
+											: reversedEdges.capacity();
+							const size_t nextTypeBytes =
+									checkedSizeAdd(reversedTypeBytes, parent.edge.type.size(),
+												   "logical-plan shortestPath reverse Edge type size overflowed");
+							reversedPathBytes.set(reversedStorageBytes(nodeCapacity, edgeCapacity, nextTypeBytes));
+							if (nodeCapacity != reversedNodes.capacity())
+								reversedNodes.reserve(nodeCapacity);
+							if (edgeCapacity != reversedEdges.capacity())
+								reversedEdges.reserve(edgeCapacity);
+							reversedNodes.push_back(parent.node_id);
+							reversedEdges.push_back(parent.edge);
+							reversedTypeBytes = nextTypeBytes;
+							current = parent.node_id;
+						}
+						std::ranges::reverse(reversedNodes);
+						std::ranges::reverse(reversedEdges);
+						// The parent DAG and BFS frontier are no longer needed once the
+						// deterministic first shortest route is captured. Release them before
+						// reading complete Node/Edge payloads for the returned path.
+						decltype(parents){}.swap(parents);
+						decltype(distances){}.swap(distances);
+						decltype(frontier){}.swap(frontier);
+						shortestPathStateBytes.reset();
+						MaterializedByteReservation outputBytes(&state.materialized_budget);
+						return materializePath(reversedNodes, reversedEdges, outputBytes);
+					}
 					collectPaths(endNodeId);
 					if (allPaths.empty()) {
 						throw std::runtime_error("logical-plan shortestPath failed to materialize a discovered path");
@@ -3295,8 +5288,8 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] std::optional<std::pair<bool, uint64_t>> logicalEntityIdentity(
-				const LogicalPlanReadValue &candidate) {
+		[[nodiscard]] std::optional<std::pair<bool, uint64_t>>
+		logicalEntityIdentity(const LogicalPlanReadValue &candidate) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&candidate)) {
 				return std::pair<bool, uint64_t>{false, node->node_id};
 			}
@@ -3334,22 +5327,58 @@ namespace graph::query::execution {
 			return logicalValuesEqual(found->second, value);
 		}
 
+		// A bare variable projection keeps the same logical Entity binding under a
+		// new name. Transfer selected-field and metadata caches with that binding so
+		// a later Project, Sort, or Aggregate does not reread fields already resolved
+		// in the same snapshot.
+		void propagateProjectedEntityCaches(const expressions::Expression &expression, const LogicalPlanReadRow &input,
+											LogicalPlanReadRow &projected, const std::string &alias, ExecutionState &state) {
+			const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(&expression);
+			if (reference == nullptr || reference->hasProperty()) {
+				return;
+			}
+			const std::string &sourceVariable = reference->getVariableName();
+			const auto sourceValue = input.values.find(sourceVariable);
+			const auto projectedValue = projected.values.find(alias);
+			if (sourceValue == input.values.end() || projectedValue == projected.values.end() ||
+				!logicalValuesEqual(sourceValue->second, projectedValue->second)) {
+				return;
+			}
+			if (!logicalEntityIdentity(sourceValue->second).has_value()) {
+				return;
+			}
+			if (const auto properties = input.property_cache.find(sourceVariable);
+				properties != input.property_cache.end()) {
+				projected.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+				if (input.complete_entity_property_cache.contains(sourceVariable)) {
+					projected.complete_entity_property_cache.insert(alias);
+				}
+			}
+			if (const auto metadata = input.entity_metadata_cache.find(sourceVariable);
+				metadata != input.entity_metadata_cache.end()) {
+				projected.entity_metadata_cache.emplace(alias, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+			}
+		}
+
 
 		// DISTINCT needs a structural key, not a display string: PropertyValue::toString()
 		// intentionally permits human-readable ambiguity in nested lists and maps.
-		void appendDistinctUint64(std::string &output, uint64_t value) {
+		template<typename String>
+		void appendDistinctUint64(String &output, uint64_t value) {
 			for (size_t byte = 0U; byte < sizeof(value); ++byte) {
 				output.push_back(static_cast<char>(value & 0xFFU));
 				value >>= 8U;
 			}
 		}
 
-		void appendDistinctString(std::string &output, std::string_view value) {
+		template<typename String>
+		void appendDistinctString(String &output, std::string_view value) {
 			appendDistinctUint64(output, value.size());
 			output.append(value);
 		}
 
-		void appendDistinctPropertyValue(std::string &output, const PropertyValue &value) {
+		template<typename String>
+		void appendDistinctPropertyValue(String &output, const PropertyValue &value) {
 			const auto appendType = [&output](PropertyType type) {
 				output.push_back(static_cast<char>(static_cast<uint8_t>(type)));
 			};
@@ -3391,7 +5420,11 @@ namespace graph::query::execution {
 				case PropertyType::MAP: {
 					appendType(PropertyType::MAP);
 					const auto &map = value.getMap();
-					std::vector<const PropertyValue::MapType::value_type *> entries;
+					const auto scratchResource = [&]() -> std::pmr::memory_resource * {
+						if constexpr (std::is_same_v<String, std::pmr::string>) return output.get_allocator().resource();
+						else return std::pmr::new_delete_resource();
+					};
+					std::pmr::vector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
 					entries.reserve(map.size());
 					for (const auto &entry: map) {
 						entries.push_back(&entry);
@@ -3415,7 +5448,7 @@ namespace graph::query::execution {
 					appendType(PropertyType::BYTES);
 					const auto &bytes = value.getBytes();
 					appendDistinctUint64(output, bytes.size());
-					for (const std::byte byte : bytes) {
+					for (const std::byte byte: bytes) {
 						output.push_back(static_cast<char>(std::to_integer<uint8_t>(byte)));
 					}
 					return;
@@ -3430,7 +5463,8 @@ namespace graph::query::execution {
 																				 // PropertyValue.
 		}
 
-		void appendDistinctValueKey(std::string &output, const LogicalPlanReadValue &value) {
+		template<typename String>
+		void appendDistinctValueKey(String &output, const LogicalPlanReadValue &value) {
 			if (const PropertyValue *property = std::get_if<PropertyValue>(&value)) {
 				output.push_back('P');
 				appendDistinctPropertyValue(output, *property);
@@ -3452,9 +5486,9 @@ namespace graph::query::execution {
 			appendDistinctUint64(output, reference.entity_id);
 		}
 
-		[[nodiscard]] std::string distinctRowKey(const LogicalPlanReadRow &row,
-												 const std::vector<logical::LogicalProjectItem> &items) {
-			std::string result;
+		[[nodiscard]] std::pmr::string distinctRowKey(const LogicalPlanReadRow &row,
+												 const std::vector<logical::LogicalProjectItem> &items, std::pmr::memory_resource *memory) {
+			std::pmr::string result{memory};
 			for (const logical::LogicalProjectItem &item: items) {
 				const auto found = row.values.find(item.alias);
 				if (found == row.values.end()) { // ZYX_COV_EXCL_LINE: Project validates aliases and emplaces every
@@ -3467,32 +5501,126 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		[[nodiscard]] LogicalPlanReadRow normalizeOutputRow(const LogicalPlanReadRow &row,
-														const std::vector<std::string> &columns) {
+		[[nodiscard]] LogicalPlanReadRow normalizeOutputRow(LogicalPlanReadRow row,
+															const std::vector<std::string> &columns) {
 			LogicalPlanReadRow normalized;
 			normalized.values.reserve(columns.size());
 			normalized.property_cache.reserve(columns.size());
 			normalized.path_cache.reserve(columns.size());
+			// The caller transfers an owned row. Move container nodes, including
+			// caches, so normalization does not duplicate large Property/path payloads.
 			for (const std::string &column: columns) {
+				if (normalized.values.contains(column))
+					continue;
 				const auto value = row.values.find(column);
 				if (value == row.values.end()) {
 					throw std::runtime_error("logical-plan runtime child did not bind a declared output variable");
 				}
-				normalized.values.emplace(column, value->second);
+				normalized.values.insert(row.values.extract(value));
 				if (const auto properties = row.property_cache.find(column); properties != row.property_cache.end()) {
-					normalized.property_cache.emplace(column, properties->second);
+					normalized.property_cache.insert(row.property_cache.extract(properties));
 					if (row.complete_entity_property_cache.contains(column)) {
-						normalized.complete_entity_property_cache.insert(column);
+						normalized.complete_entity_property_cache.insert(
+								row.complete_entity_property_cache.extract(column));
 					}
 				}
-				if (const auto metadata = row.entity_metadata_cache.find(column); metadata != row.entity_metadata_cache.end()) {
-					normalized.entity_metadata_cache.emplace(column, metadata->second);
+				if (const auto metadata = row.entity_metadata_cache.find(column);
+					metadata != row.entity_metadata_cache.end()) {
+					normalized.entity_metadata_cache.insert(row.entity_metadata_cache.extract(metadata));
 				}
 				if (const auto path = row.path_cache.find(column); path != row.path_cache.end()) {
-					normalized.path_cache.emplace(column, path->second);
+					normalized.path_cache.insert(row.path_cache.extract(path));
 				}
 			}
 			return normalized;
+		}
+
+		void mergeCompatibleRowCaches(LogicalPlanReadRow &destination, const LogicalPlanReadRow &source, ExecutionState &state,
+									  const std::unordered_set<std::string> *excludedAliases = nullptr) {
+			const auto checkpoint = [&] { checkGuardNow(state); };
+			const auto includeAlias = [excludedAliases](const std::string &alias) {
+				return excludedAliases == nullptr || !excludedAliases->contains(alias);
+			};
+			for (const auto &[alias, properties]: source.property_cache) {
+				if (!includeAlias(alias)) {
+					continue;
+				}
+				const auto existing = destination.property_cache.find(alias);
+				if (existing != destination.property_cache.end() && existing->second != properties) {
+					throw std::runtime_error(
+							"logical-plan row combination received incompatible Property cache entries");
+				}
+				if (existing == destination.property_cache.end()) {
+					destination.property_cache.emplace(alias, detail::copyPropertyMapGuarded(properties, checkpoint));
+				}
+				if (source.complete_entity_property_cache.contains(alias)) {
+					destination.complete_entity_property_cache.insert(alias);
+				}
+			}
+			for (const auto &[alias, metadata]: source.entity_metadata_cache) {
+				if (!includeAlias(alias)) {
+					continue;
+				}
+				auto &target = destination.entity_metadata_cache[alias];
+				for (const auto &[key, value]: metadata) {
+					checkpoint();
+					const auto entry = target.find(key);
+					if (entry == target.end()) {
+						target.emplace(key, detail::copyPropertyValueGuarded(value, checkpoint));
+					} else if (entry->second != value) {
+						throw std::runtime_error(
+								"logical-plan row combination received incompatible Entity metadata cache entries");
+					}
+				}
+			}
+			for (const auto &[alias, path]: source.path_cache) {
+				if (!includeAlias(alias)) {
+					continue;
+				}
+				checkpoint();
+				const auto entry = destination.path_cache.find(alias);
+				if (entry == destination.path_cache.end()) {
+					destination.path_cache.emplace(alias, detail::copyLogicalReadPathGuarded(path, checkpoint));
+				} else if (entry->second != path) {
+					throw std::runtime_error("logical-plan row combination received incompatible path cache entries");
+				}
+			}
+		}
+
+		// The source is consumed, unlike reusable JOIN/OPTIONAL MATCH rows.
+		void mergeOwnedRowCaches(LogicalPlanReadRow &destination, LogicalPlanReadRow source) {
+			for (const auto &[alias, properties]: source.property_cache) {
+				const auto found = destination.property_cache.find(alias);
+				if (found != destination.property_cache.end() && found->second != properties) {
+					throw std::runtime_error(
+							"logical-plan row combination received incompatible Property cache entries");
+				}
+			}
+			for (const auto &[alias, metadata]: source.entity_metadata_cache) {
+				const auto found = destination.entity_metadata_cache.find(alias);
+				if (found == destination.entity_metadata_cache.end())
+					continue;
+				for (const auto &[key, value]: metadata) {
+					const auto entry = found->second.find(key);
+					if (entry != found->second.end() && entry->second != value) {
+						throw std::runtime_error(
+								"logical-plan row combination received incompatible Entity metadata cache entries");
+					}
+				}
+			}
+			for (const auto &[alias, path]: source.path_cache) {
+				const auto found = destination.path_cache.find(alias);
+				if (found != destination.path_cache.end() && found->second != path) {
+					throw std::runtime_error("logical-plan row combination received incompatible path cache entries");
+				}
+			}
+			destination.property_cache.merge(source.property_cache);
+			destination.complete_entity_property_cache.merge(source.complete_entity_property_cache);
+			destination.path_cache.merge(source.path_cache);
+			destination.entity_metadata_cache.merge(source.entity_metadata_cache);
+			for (auto &[alias, metadata]: source.entity_metadata_cache) {
+				destination.entity_metadata_cache.at(alias).merge(metadata);
+			}
 		}
 
 		[[nodiscard]] std::vector<std::string> visibleOutputColumns(const logical::LogicalOperator &root) {
@@ -3501,9 +5629,14 @@ namespace graph::query::execution {
 			return columns;
 		}
 
-		[[nodiscard]] std::string distinctUnionRowKey(const LogicalPlanReadRow &row,
-													  const std::vector<std::string> &columns) {
-			std::string result;
+		template<typename String = std::string>
+		[[nodiscard]] String distinctUnionRowKey(const LogicalPlanReadRow &row,
+													  const std::vector<std::string> &columns,
+			std::pmr::memory_resource *memory = std::pmr::new_delete_resource()) {
+			String result = [&] {
+				if constexpr (std::is_same_v<String, std::pmr::string>) return String{memory};
+				else return String{};
+			}();
 			for (const std::string &column: columns) {
 				const auto value = row.values.find(column);
 				if (value ==
@@ -3516,8 +5649,9 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		[[nodiscard]] std::string bindingKey(const LogicalPlanReadRow &row, const std::vector<std::string> &columns) {
-			std::string result;
+		[[nodiscard]] std::pmr::string bindingKey(const LogicalPlanReadRow &row,
+			const std::vector<std::string> &columns, std::pmr::memory_resource *memory) {
+			std::pmr::string result{memory};
 			for (const std::string &column: columns) {
 				const auto value = row.values.find(column);
 				if (value == row.values.end()) {
@@ -3569,7 +5703,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] double aggregatePercentile(const logical::LogicalAggItem &item, AggregateFunctionType function,
-											 ExecutionState &state) {
+												 ExecutionState &state) {
 			const bool isPercentile = function == AggregateFunctionType::AGG_PERCENTILE_DISC ||
 									  function == AggregateFunctionType::AGG_PERCENTILE_CONT;
 			if (!isPercentile) {
@@ -3595,76 +5729,462 @@ namespace graph::query::execution {
 			return percentile;
 		}
 
-		using MaterializedPropertyCache = std::unordered_map<std::string, PropertyMap>;
+		struct MaterializedEntityKey {
+			uint64_t id;
+			bool is_edge;
+			bool operator==(const MaterializedEntityKey &) const = default;
+		};
+		struct MaterializedEntityKeyHash {
+			size_t operator()(const MaterializedEntityKey &key) const noexcept {
+				return std::hash<uint64_t>{}(key.id) ^
+					(key.is_edge ? std::numeric_limits<size_t>::max() : 0U);
+			}
+		};
+		using MaterializedPropertyCache =
+			std::pmr::unordered_map<MaterializedEntityKey, PropertyMap, MaterializedEntityKeyHash>;
 		using FinalRowVisitor = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 		using BatchSelectionPredicate = std::function<bool(LogicalPlanReadRow &, ExecutionState &)>;
 
 		template<typename Entity>
-		[[nodiscard]] const PropertyMap &materializeEntityProperties(const LogicalPlanReadRow &row,
-																		 const Entity &entity, ExecutionState &state,
-																		 MaterializedPropertyCache &materialized) {
+		[[nodiscard]] const PropertyMap *findMatchingRowProperties(const LogicalPlanReadRow &row,
+																   const Entity &entity) {
+			for (const auto &[alias, candidate]: row.values) {
+				const auto *matchingEntity = std::get_if<Entity>(&candidate);
+				if (matchingEntity == nullptr || *matchingEntity != entity)
+					continue;
+				if (const auto cached = row.property_cache.find(alias); cached != row.property_cache.end()) {
+					return &cached->second;
+				}
+			}
+			return nullptr;
+		}
+
+		template<typename Entity>
+		[[nodiscard]] const PropertyMap &
+		materializeEntityProperties(const LogicalPlanReadRow &row, const Entity &entity, ExecutionState &state,
+									MaterializedPropertyCache &materialized,
+									MaterializedByteReservation *sourceBytes) {
 			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
 						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
-			const std::string cacheKey = [&entity]() {
-				if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
-					return std::string("N:") + std::to_string(entity.node_id);
-				} else {
-					return std::string("E:") + std::to_string(entity.edge_id);
-				}
+			const MaterializedEntityKey cacheKey = [&entity]() {
+				if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>)
+					return MaterializedEntityKey{entity.node_id, false};
+				else
+					return MaterializedEntityKey{entity.edge_id, true};
 			}();
 			if (const auto cached = materialized.find(cacheKey); cached != materialized.end()) {
 				return cached->second;
 			}
-			const LogicalPlanReadValue value = entity;
-			for (const auto &[alias, candidate]: row.values) {
-				if (candidate != value) {
-					continue;
-				}
-				if (const auto cached = row.property_cache.find(alias); cached != row.property_cache.end()) {
-					return materialized.emplace(cacheKey, cached->second).first->second;
-				}
+			if (const PropertyMap *cached = findMatchingRowProperties(row, entity)) {
+				return *cached;
 			}
+			size_t predictedMapBytes = 0U;
+			if (sourceBytes != nullptr) {
+				if (entity.properties.size() > state.bounds.maximum_property_entries) {
+					throw std::runtime_error("logical graph backend returned too many direct Property entries");
+				}
+				constexpr const char *message = "logical-plan NamedPath Property cache size overflowed";
+				size_t bytes = directPropertyMapStorageBytes(entity.properties, message, state.context);
+				bytes -= sizeof(PropertyMap);
+				predictedMapBytes = bytes;
+				const size_t nextBytes = checkedSizeAdd(sourceBytes->bytes(), bytes, message);
+				if (sourceBytes->wouldExceed(nextBytes)) {
+					throw std::runtime_error("logical-plan NamedPath Property cache exceeded its shared byte bound");
+				}
+				sourceBytes->set(nextBytes);
+			}
+			PropertyMap properties = [&] {
+				if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
+					validateNode(entity, state);
+					return readNodeProperties(state.snapshot, entity, state);
+				} else {
+					validateEdge(entity);
+					return readEdgeProperties(state.snapshot, entity, state);
+				}
+			}();
+			if (sourceBytes != nullptr) {
+				const size_t actualMapBytes = propertyMapBytes(properties,
+					"logical-plan NamedPath Property cache size overflowed", state.context) - sizeof(PropertyMap);
+				sourceBytes->set(checkedSizeAdd(sourceBytes->bytes() - predictedMapBytes, actualMapBytes,
+					"logical-plan NamedPath Property cache size overflowed"));
+			}
+			return materialized.emplace(cacheKey, std::move(properties)).first->second;
+		}
+
+		[[nodiscard]] PropertyMap copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
+			return detail::copyPropertyMapGuarded(properties, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
+		}
+
+		template<typename Entity>
+		[[nodiscard]] PropertyMap materializeUniqueEntityProperties(const LogicalPlanReadRow &row, const Entity &entity,
+																	ExecutionState &state) {
+			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
+						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
+			if (const PropertyMap *cached = findMatchingRowProperties(row, entity))
+				return copyResultPropertyMap(*cached, state);
 			if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
-				validateNode(entity);
-				return materialized.emplace(cacheKey, readNodeProperties(state.snapshot, entity, state)).first->second;
+				validateNode(entity, state);
+				return readNodeProperties(state.snapshot, entity, state);
 			} else {
 				validateEdge(entity);
-				return materialized.emplace(cacheKey, readEdgeProperties(state.snapshot, entity, state)).first->second;
+				return readEdgeProperties(state.snapshot, entity, state);
 			}
 		}
 
-		[[nodiscard]] ResultValue materializeResultValue(const LogicalPlanReadRow &row,
-																								 const LogicalPlanReadValue &value, ExecutionState &state,
-																								 MaterializedPropertyCache &materialized) {
-			if (const auto *property = std::get_if<PropertyValue>(&value)) {
-				return ResultValue(*property);
+		template<typename Entity>
+		[[nodiscard]] PropertyMap materializeCompleteEntityProperties(const Entity &entity, ExecutionState &state) {
+			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
+						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
+			PropertyMap properties;
+			properties.reserve(entity.properties.size());
+			for (const storage::LogicalGraphPropertyEntry &entry: entity.properties) {
+				checkGuard(state);
+				if (!properties.emplace(entry.key, detail::copyPropertyValueGuarded(entry.value, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				})).second) {
+					throw std::runtime_error("logical-plan result received duplicate complete Entity properties");
+				}
 			}
-			// A deferred reference needs a complete record for the public result's
-			// identity/topology and its properties. Read it once, then pass that
-			// record through the property materializer; doing the property lookup
-			// first and resolving the reference again used to copy/read the same
-			// cached entity twice for every result column.
-		if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-			validateEntityRef(*reference);
-			if (reference->is_edge) {
-				const storage::LogicalGraphEdge edge = readEdgeCached(state, reference->entity_id);
-				validateEdgeReferenceRecord(*reference, edge, state, "logical graph Entity reference");
-				const PropertyMap &properties = materializeEntityProperties(row, edge, state, materialized);
-				return ResultValue(
-						LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type, properties});
-			}
-			const storage::LogicalGraphNode node = readNodeCached(state, reference->entity_id);
-			const PropertyMap &properties = materializeEntityProperties(row, node, state, materialized);
-			return ResultValue(LogicalNodeResult{node.node_id, node.labels, properties});
+			return properties;
 		}
+
+		[[nodiscard]] size_t completeResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+														 ExecutionState &state) {
+			detail::BudgetMemoryResource keyMemory(state.materialized_budget);
+			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			keys.reserve(entries.size());
+			size_t bytes = sizeof(PropertyMap);
+			for (const auto &entry: entries) {
+				checkGuard(state);
+				if (!keys.insert(entry.key).second) {
+					throw std::runtime_error("logical-plan result received duplicate complete Entity properties");
+				}
+				bytes = checkedSizeAdd(bytes, entry.key.size(), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, sizeof(PropertyValue), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
+									   "logical-plan result row size overflowed");
+			}
+			return bytes;
+		}
+
+		template<typename Entity>
+		[[nodiscard]] size_t completeEntityResultBytes(const Entity &entity, ExecutionState &state) {
+			static_assert(std::is_same_v<Entity, storage::LogicalGraphNode> ||
+						  std::is_same_v<Entity, storage::LogicalGraphEdge>);
+			if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
+				size_t bytes = checkedSizeAdd(sizeof(LogicalNodeResult),
+				checkedSizeMul(entity.labels.capacity(), sizeof(std::string),
+					"logical-plan result row size overflowed"), "logical-plan result row size overflowed");
+				size_t labelsUntilGuard = 256U;
+				for (const std::string &label: entity.labels) {
+					if (--labelsUntilGuard == 0U) {
+						if (state.context != nullptr) state.context->checkGuardNow();
+						labelsUntilGuard = 256U;
+					}
+					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
+				}
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+									  "logical-plan result row size overflowed");
+			} else {
+				const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(entity.type.size(), detail::dynamicStringBufferBytes(entity.type)),
+													"logical-plan result row size overflowed");
+				return checkedSizeAdd(bytes, completeResultPropertyBytes(entity.properties, state),
+									  "logical-plan result row size overflowed");
+			}
+		}
+
+		void admitCompleteEntityResult(size_t entityBytes, size_t rowPrefixBytes, size_t columnNameBytes,
+									   ExecutionState &state, MaterializedByteReservation &reservation) {
+			size_t nextBytes =
+					checkedSizeAdd(rowPrefixBytes, columnNameBytes, "logical-plan result row size overflowed");
+			nextBytes = checkedSizeAdd(nextBytes, sizeof(ResultValue), "logical-plan result row size overflowed");
+			nextBytes = checkedSizeAdd(nextBytes, entityBytes, "logical-plan result row size overflowed");
+			if (nextBytes > state.bounds.maximum_materialized_bytes) {
+				throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
+			}
+			reservation.set(nextBytes);
+		}
+
+		[[nodiscard]] ResultValue materializeResultValue(const LogicalPlanReadRow &row,
+														 const LogicalPlanReadValue &value, ExecutionState &state,
+														 MaterializedPropertyCache &materialized, size_t rowPrefixBytes,
+														 size_t columnNameBytes, bool rowPreflighted,
+														 bool repeatedEntity, MaterializedByteReservation &outputReservation,
+			MaterializedByteReservation &propertyCacheReservation) {
+			const auto copyCheckpoint = [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			};
+			if (!rowPreflighted && !std::holds_alternative<storage::EntityRef>(value)) {
+				size_t predictedBytes;
+				if (const auto *property = std::get_if<PropertyValue>(&value))
+					predictedBytes = retainedExpressionValueBytes(*property, state);
+				else if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value))
+					predictedBytes = completeEntityResultBytes(*node, state);
+				else
+					predictedBytes = completeEntityResultBytes(std::get<storage::LogicalGraphEdge>(value), state);
+				admitCompleteEntityResult(predictedBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+			}
+			if (const auto *property = std::get_if<PropertyValue>(&value)) {
+				return ResultValue(detail::copyPropertyValueGuarded(*property, [&] {
+					if (state.context != nullptr) state.context->checkGuardNow();
+				}));
+			}
+			// Borrow a prefetched complete record while constructing the public
+			// result. Only a cache miss needs a local shaped read.
+			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
+				validateEntityRef(*reference);
+				if (reference->is_edge) {
+					MaterializedByteReservation loadedBytes(&state.materialized_budget);
+					std::optional<storage::LogicalGraphEdge> loaded;
+					const auto cached = state.edge_cache.find(reference->entity_id);
+					const storage::LogicalGraphEdge *edge = nullptr;
+					if (cached != state.edge_cache.end()) {
+						edge = &cached->second;
+					} else {
+						loaded.emplace(readEdgeCached(state, reference->entity_id));
+						edge = &*loaded;
+					}
+					validateEdgeReferenceRecord(*reference, *edge, state, "logical graph Entity reference");
+					const std::optional<size_t> entityBytes =
+							rowPreflighted ? std::nullopt
+										   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
+					if (loaded)
+						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.context));
+					if (entityBytes)
+						admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+					PropertyMap properties = materializeCompleteEntityProperties(*edge, state);
+					return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
+														 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
+				}
+				MaterializedByteReservation loadedBytes(&state.materialized_budget);
+				std::optional<storage::LogicalGraphNode> loaded;
+				const auto cached = state.node_cache.find(reference->entity_id);
+				const storage::LogicalGraphNode *node = nullptr;
+				if (cached != state.node_cache.end()) {
+					node = &cached->second;
+				} else {
+					loaded.emplace(readNodeCached(state, reference->entity_id));
+					node = &*loaded;
+				}
+				const std::optional<size_t> entityBytes =
+						rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
+				if (loaded)
+					loadedBytes.set(logicalNodeCacheBytes(*node, state.context));
+				if (entityBytes)
+					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
+				PropertyMap properties = materializeCompleteEntityProperties(*node, state);
+				return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
+			}
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				const PropertyMap &properties = materializeEntityProperties(row, *node, state, materialized);
-				return ResultValue(LogicalNodeResult{node->node_id, node->labels, properties});
+				if (!repeatedEntity) {
+					PropertyMap properties = materializeUniqueEntityProperties(row, *node, state);
+					return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), std::move(properties)});
+				}
+				const PropertyMap &properties = materializeEntityProperties(row, *node, state, materialized, &propertyCacheReservation);
+				return ResultValue(LogicalNodeResult{node->node_id, detail::copyPropertyStringsGuarded(node->labels, copyCheckpoint), copyResultPropertyMap(properties, state)});
 			}
 			const storage::LogicalGraphEdge &edge = std::get<storage::LogicalGraphEdge>(value);
-			const PropertyMap &properties = materializeEntityProperties(row, edge, state, materialized);
+			if (!repeatedEntity) {
+				PropertyMap properties = materializeUniqueEntityProperties(row, edge, state);
+				return ResultValue(LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, detail::copyPropertyStringGuarded(edge.type, copyCheckpoint),
+													 std::move(properties)});
+			}
+			const PropertyMap &properties = materializeEntityProperties(row, edge, state, materialized, &propertyCacheReservation);
 			return ResultValue(
-					LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type, properties});
+					LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, detail::copyPropertyStringGuarded(edge.type, copyCheckpoint), copyResultPropertyMap(properties, state)});
+		}
+
+		[[nodiscard]] size_t inlineResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
+													   ExecutionState &state) {
+			if (entries.size() > state.bounds.maximum_property_entries) {
+				throw std::runtime_error("logical graph backend returned too many direct Property entries");
+			}
+			detail::BudgetMemoryResource keyMemory(state.materialized_budget);
+			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
+			keys.reserve(entries.size());
+			size_t bytes = sizeof(PropertyMap);
+			for (const auto &entry: entries) {
+				checkGuard(state);
+				if (entry.key.empty() || !keys.insert(entry.key).second) {
+					throw std::runtime_error("logical graph backend returned an invalid direct Property entry set");
+				}
+				bytes = checkedSizeAdd(bytes, entry.key.size(), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, sizeof(PropertyValue), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(entry.value, state),
+									   "logical-plan result row size overflowed");
+			}
+			return bytes;
+		}
+
+		[[nodiscard]] size_t predictableEntityResultBytes(const LogicalPlanReadRow &row,
+														  const storage::LogicalGraphNode &node,
+														  ExecutionState &state) {
+			const PropertyMap *cached = findMatchingRowProperties(row, node);
+			if (cached == nullptr)
+				validateNode(node, state);
+			size_t bytes = checkedSizeAdd(sizeof(LogicalNodeResult),
+				checkedSizeMul(node.labels.capacity(), sizeof(std::string),
+					"logical-plan result row size overflowed"), "logical-plan result row size overflowed");
+			size_t labelsUntilGuard = 256U;
+			for (const std::string &label: node.labels) {
+				if (--labelsUntilGuard == 0U) {
+					if (state.context != nullptr) state.context->checkGuardNow();
+					labelsUntilGuard = 256U;
+				}
+				bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
+			}
+			return checkedSizeAdd(bytes,
+								  cached != nullptr
+										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.context)
+										  : inlineResultPropertyBytes(node.properties, state),
+								  "logical-plan result row size overflowed");
+		}
+
+		[[nodiscard]] size_t predictableEntityResultBytes(const LogicalPlanReadRow &row,
+														  const storage::LogicalGraphEdge &edge,
+														  ExecutionState &state) {
+			const PropertyMap *cached = findMatchingRowProperties(row, edge);
+			if (cached == nullptr)
+				validateEdge(edge);
+			const size_t bytes = checkedSizeAdd(sizeof(LogicalEdgeResult), std::max(edge.type.size(), detail::dynamicStringBufferBytes(edge.type)),
+												"logical-plan result row size overflowed");
+			return checkedSizeAdd(bytes,
+								  cached != nullptr
+										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.context)
+										  : inlineResultPropertyBytes(edge.properties, state),
+								  "logical-plan result row size overflowed");
+		}
+
+		[[nodiscard]] std::optional<size_t> predictableReferenceResultBytes(const storage::EntityRef &reference,
+																			ExecutionState &state) {
+			validateEntityRef(reference);
+			if (reference.is_edge) {
+				const auto cached = state.edge_cache.find(reference.entity_id);
+				if (cached == state.edge_cache.end())
+					return std::nullopt;
+				const auto &edge = cached->second;
+				validateEdgeReferenceRecord(reference, edge, state, "logical graph Entity reference");
+				return completeEntityResultBytes(edge, state);
+			}
+			const auto cached = state.node_cache.find(reference.entity_id);
+			if (cached == state.node_cache.end())
+				return std::nullopt;
+			const auto &node = cached->second;
+			validateNode(node, state);
+			return completeEntityResultBytes(node, state);
+		}
+
+		[[nodiscard]] std::optional<std::pair<bool, uint64_t>> resultEntityIdentity(const LogicalPlanReadValue &value) {
+			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
+				return std::pair{reference->is_edge, reference->entity_id};
+			}
+			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+				return std::pair{false, node->node_id};
+			}
+			if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
+				return std::pair{true, edge->edge_id};
+			}
+			return std::nullopt;
+		}
+
+		void appendLogicalResultRow(QueryResult &result, LogicalPlanReadRow &row,
+								const std::vector<std::string> &columns, ExecutionState &state) {
+			// Scalars and unique Entities whose complete records are already in
+			// memory have an exact logical result size before payloads are copied.
+			size_t predictableBytes = sizeof(QueryResult::Row);
+			bool predictable = true;
+			for (size_t columnIndex = 0U; columnIndex < columns.size(); ++columnIndex) {
+				const std::string &column = columns[columnIndex];
+				const auto found = row.values.find(column);
+				if (found == row.values.end()) {
+					throw std::runtime_error("logical-plan runtime did not bind a declared output variable");
+				}
+				predictableBytes =
+						checkedSizeAdd(predictableBytes, column.size(), "logical-plan result row size overflowed");
+				predictableBytes = checkedSizeAdd(predictableBytes, sizeof(ResultValue),
+												  "logical-plan result row size overflowed");
+				if (const auto *property = std::get_if<PropertyValue>(&found->second)) {
+					predictableBytes = checkedSizeAdd(predictableBytes, retainedExpressionValueBytes(*property, state),
+													  "logical-plan result row size overflowed");
+					continue;
+				}
+				const auto identity = resultEntityIdentity(found->second);
+				for (size_t previous = 0U; previous < columnIndex; ++previous) {
+					const auto prior = row.values.find(columns[previous]);
+					if (prior == row.values.end())
+						continue;
+					if (identity == resultEntityIdentity(prior->second)) {
+						predictable = false;
+						break;
+					}
+				}
+				if (!predictable)
+					break;
+				std::optional<size_t> entityBytes;
+				if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
+					entityBytes = predictableReferenceResultBytes(*reference, state);
+				} else if (const auto *node = std::get_if<storage::LogicalGraphNode>(&found->second)) {
+					entityBytes = predictableEntityResultBytes(row, *node, state);
+				} else {
+					entityBytes = predictableEntityResultBytes(row, std::get<storage::LogicalGraphEdge>(found->second),
+															   state);
+				}
+				if (!entityBytes) {
+					predictable = false;
+					break;
+				}
+				predictableBytes =
+						checkedSizeAdd(predictableBytes, *entityBytes, "logical-plan result row size overflowed");
+			}
+			MaterializedByteReservation outputReservation(&state.materialized_budget);
+			if (predictable) {
+				if (predictableBytes > state.bounds.maximum_materialized_bytes) {
+					throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
+				}
+				if (predictableBytes > state.materialized_budget.available()) {
+					throw std::runtime_error("shared materialization exceeded its byte bound");
+				}
+				outputReservation.set(predictableBytes);
+			}
+			MaterializedByteReservation propertyCacheReservation(&state.materialized_budget);
+			QueryResult::Row output;
+			output.reserve(columns.size());
+			detail::BudgetMemoryResource propertyCacheMemory(state.materialized_budget);
+			MaterializedPropertyCache materialized(&propertyCacheMemory);
+			size_t constructedBytes = sizeof(QueryResult::Row);
+			for (const std::string &column: columns) {
+				const auto found = row.values.find(column);
+				if (found == row.values.end()) {
+					throw std::runtime_error("logical-plan runtime did not bind a declared output variable");
+				}
+				bool repeatedEntity = false;
+				if (const auto identity = resultEntityIdentity(found->second)) {
+					for (const std::string &otherColumn: columns) {
+						if (&otherColumn == &column)
+							continue;
+						const auto other = row.values.find(otherColumn);
+						if (other != row.values.end() && resultEntityIdentity(other->second) == identity) {
+							repeatedEntity = true;
+							break;
+						}
+					}
+				}
+				ResultValue value = materializeResultValue(row, found->second, state, materialized, constructedBytes,
+														   column.size(), predictable, repeatedEntity, outputReservation, propertyCacheReservation);
+				const size_t valueBytes = resultValueBytes(value, state.context);
+				if (output.emplace(column, std::move(value)).second) {
+					constructedBytes =
+							checkedSizeAdd(constructedBytes, column.size(), "logical-plan result row size overflowed");
+					constructedBytes = checkedSizeAdd(constructedBytes, sizeof(ResultValue),
+													  "logical-plan result row size overflowed");
+					constructedBytes =
+							checkedSizeAdd(constructedBytes, valueBytes, "logical-plan result row size overflowed");
+				}
+				outputReservation.set(predictable ? std::max(predictableBytes, constructedBytes) : constructedBytes);
+			}
+			appendMaterializedResultRow(result, std::move(output), state, std::move(outputReservation));
 		}
 
 		void materializeRowEntityRefs(LogicalPlanReadRow &row, ExecutionState &state) {
@@ -3693,17 +6213,338 @@ namespace graph::query::execution {
 			}
 		}
 
+		void appendUniquePrefetchReference(std::vector<storage::EntityRef> &references,
+										   std::unordered_set<uint64_t> &ids, const storage::EntityRef &reference,
+										   MaterializedByteReservation &referenceSlots,
+										   MaterializedByteReservation &idStorage) {
+			if (ids.contains(reference.entity_id))
+				return;
+			constexpr const char *message = "logical-plan reference prefetch scratch size overflowed";
+			constexpr size_t idNodeBytes = sizeof(uint64_t) + 2U * sizeof(void *);
+			const auto admitScratch = [](MaterializedByteReservation &reservation, size_t nextBytes) {
+				if (reservation.wouldExceed(nextBytes)) {
+					throw std::runtime_error("logical-plan reference prefetch scratch exceeded its shared byte bound");
+				}
+				reservation.set(nextBytes);
+			};
+			if (references.size() == references.capacity()) {
+				const size_t nextCapacity =
+						references.capacity() == 0U ? 1U : checkedSizeMul(references.capacity(), 2U, message);
+				const size_t previousSlots = referenceSlots.bytes();
+				const size_t nextSlots = checkedSizeMul(nextCapacity, sizeof(storage::EntityRef), message);
+				admitScratch(referenceSlots, checkedSizeAdd(previousSlots, nextSlots, message));
+				try {
+					references.reserve(nextCapacity);
+				} catch (...) {
+					referenceSlots.set(previousSlots);
+					throw;
+				}
+				admitScratch(referenceSlots,
+							 checkedSizeMul(references.capacity(), sizeof(storage::EntityRef), message));
+				const size_t previousIds = idStorage.bytes();
+				const size_t plannedBuckets = checkedSizeMul(nextCapacity, 2U, message);
+				admitScratch(
+						idStorage,
+						checkedSizeAdd(previousIds, checkedSizeMul(plannedBuckets, sizeof(void *), message), message));
+				try {
+					ids.reserve(nextCapacity);
+				} catch (...) {
+					idStorage.set(previousIds);
+					throw;
+				}
+				admitScratch(idStorage,
+							 checkedSizeAdd(checkedSizeMul(ids.size(), idNodeBytes, message),
+											checkedSizeMul(ids.bucket_count(), sizeof(void *), message), message));
+			}
+			const size_t previousIds = idStorage.bytes();
+			admitScratch(idStorage, checkedSizeAdd(previousIds, idNodeBytes, message));
+			try {
+				if (!ids.insert(reference.entity_id).second) {
+					idStorage.set(previousIds);
+					return;
+				}
+			} catch (...) {
+				idStorage.set(previousIds);
+				throw;
+			}
+			references.push_back(reference);
+		}
+
+		template<typename T>
+		void reserveNamedPathSlots(std::vector<T> &values, size_t capacity, MaterializedByteReservation &slots) {
+			if (capacity <= values.capacity())
+				return;
+			constexpr const char *message = "logical-plan NamedPath scratch capacity overflowed";
+			const size_t previous = slots.bytes();
+			const size_t peakBytes = checkedSizeAdd(previous, checkedSizeMul(capacity, sizeof(T), message), message);
+			slots.set(peakBytes);
+			try {
+				values.reserve(capacity);
+			} catch (...) {
+				slots.set(previous);
+				throw;
+			}
+			slots.set(checkedSizeMul(values.capacity(), sizeof(T), message));
+		}
+
+		void appendNamedPathReference(std::vector<storage::EntityRef> &references, const storage::EntityRef &reference,
+									  size_t maximumCount, MaterializedByteReservation &slots) {
+			if (references.size() >= maximumCount) {
+				throw std::runtime_error("logical-plan NamedPath exceeded its deferred reference bound");
+			}
+			if (references.size() == references.capacity()) {
+				const size_t nextCapacity = references.capacity() == 0U ? 1U
+																		: (references.capacity() > maximumCount / 2U
+																				   ? maximumCount
+																				   : references.capacity() * 2U);
+				reserveNamedPathSlots(references, nextCapacity, slots);
+			}
+			references.push_back(reference);
+		}
+
+		void prefetchEntityRefsInRows(const std::vector<LogicalPlanReadRow> &rows, ExecutionState &state,
+									  const bool includePathReferences = false) {
+			MaterializedByteReservation nodeReferenceSlots(&state.materialized_budget);
+			MaterializedByteReservation edgeReferenceSlots(&state.materialized_budget);
+			MaterializedByteReservation nodeIdStorage(&state.materialized_budget);
+			MaterializedByteReservation edgeIdStorage(&state.materialized_budget);
+			std::vector<storage::EntityRef> nodeReferences;
+			std::vector<storage::EntityRef> edgeReferences;
+			std::unordered_set<uint64_t> nodeIds;
+			std::unordered_set<uint64_t> edgeIds;
+			const auto collectReference = [&](const storage::EntityRef &reference, const bool allowZeroNode) {
+				if (reference.entity_id == 0U && allowZeroNode) {
+					return;
+				}
+				validateEntityRef(reference);
+				if (reference.is_edge) {
+					appendUniquePrefetchReference(edgeReferences, edgeIds, reference, edgeReferenceSlots,
+												  edgeIdStorage);
+				} else {
+					appendUniquePrefetchReference(nodeReferences, nodeIds, reference, nodeReferenceSlots,
+												  nodeIdStorage);
+				}
+			};
+			for (const LogicalPlanReadRow &row: rows) {
+				for (const auto &[_, value]: row.values) {
+					const auto *reference = std::get_if<storage::EntityRef>(&value);
+					if (reference == nullptr) {
+						continue;
+					}
+					collectReference(*reference, false);
+				}
+				if (includePathReferences) {
+					for (const auto &[_, path]: row.path_cache) {
+						for (const storage::EntityRef &reference: path.node_refs) {
+							// Variable-length paths use a zero Node reference as an explicit
+							// marker for an already materialized endpoint.
+							collectReference(reference, true);
+						}
+						for (const storage::EntityRef &reference: path.edge_refs) {
+							collectReference(reference, false);
+						}
+					}
+				}
+			}
+			std::ranges::sort(nodeReferences, {}, &storage::EntityRef::entity_id);
+			std::ranges::sort(edgeReferences, {}, &storage::EntityRef::entity_id);
+			static_cast<void>(materializeNodeReferences(nodeReferences, state, false));
+			static_cast<void>(materializeEdgeReferences(edgeReferences, state, false));
+		}
+
+		void materializeEntityRefsInRows(std::vector<LogicalPlanReadRow> &rows, ExecutionState &state) {
+			prefetchEntityRefsInRows(rows, state);
+			for (LogicalPlanReadRow &row: rows) {
+				for (auto &[variable, value]: row.values) {
+					const auto *reference = std::get_if<storage::EntityRef>(&value);
+					if (reference == nullptr) {
+						continue;
+					}
+					if (reference->is_edge) {
+						const auto edge = state.edge_cache.find(reference->entity_id);
+						if (edge == state.edge_cache.end()) {
+							throw std::runtime_error("logical-plan batched Edge materialization lost a relationship");
+						}
+						validateEdgeReferenceRecord(*reference, edge->second, state,
+													"logical graph batched Entity reference");
+						value = edge->second;
+					} else {
+						const auto node = state.node_cache.find(reference->entity_id);
+						if (node == state.node_cache.end()) {
+							throw std::runtime_error("logical-plan batched Node materialization lost a Node");
+						}
+						validateNode(node->second, state);
+						value = node->second;
+					}
+					row.property_cache.erase(variable);
+					row.complete_entity_property_cache.erase(variable);
+				}
+			}
+		}
+
+		template<typename Invoke>
+		[[nodiscard]] bool invokeOutputVisitorChecked(ExecutionState &state, Invoke &&invoke) {
+			checkGuardNow(state);
+			const auto fence = state.snapshot.mutationFence();
+			const bool keepGoing = invoke();
+			// The last callback (including an early stop) may have no subsequent source checkpoint.
+			checkGuardNow(state);
+			const auto currentFence = state.snapshot.mutationFence();
+			if (fence.has_value() && currentFence != fence)
+				throw std::runtime_error("logical-plan snapshot changed during output callback");
+			return keepGoing;
+		}
+
+		template<typename Run, typename Emit>
+		[[nodiscard]] LogicalPlanReadRuntimeStats
+		executeWithBatchedOutputMaterialization(const LogicalPlanReadRuntimeBounds &bounds, Run &&run, Emit &&emit,
+												const bool preserveVisitorEarlyStop = false,
+												const bool replaceDeferredEntityRefs = true) {
+			// A public row visitor is allowed to stop the producer after the first
+			// emitted row. Keep that contract strict by flushing one row at a time;
+			// QueryResult materialization has no such callback and can use larger
+			// cross-row batches safely.
+			// Keep reserved row slots to at most 1/16 of the byte allowance where
+			// possible, leaving most of the budget for the rows and source payloads.
+			constexpr size_t outputBatchSlotBudgetDivisor = 16U;
+			const size_t slotBytes = checkedSizeMul(sizeof(LogicalPlanReadRow), outputBatchSlotBudgetDivisor,
+													"logical-plan output batch slot bound overflowed");
+			const size_t maximumOutputSlots =
+					bounds.maximum_materialized_bytes < sizeof(LogicalPlanReadRow)
+							? 0U
+							: std::max<size_t>(1U, bounds.maximum_materialized_bytes / slotBytes);
+			const size_t batchCapacity =
+					preserveVisitorEarlyStop
+							? std::min<size_t>(1U, maximumOutputSlots)
+							: std::min({DEFAULT_PROPERTY_BATCH_ROWS, bounds.maximum_rows, maximumOutputSlots});
+			if (batchCapacity == 0U) {
+				throw std::runtime_error("logical-plan output materialization exceeds its row or byte bound");
+			}
+			// The output batch is live while upstream sources (including LOAD CSV)
+			// continue reading. Charge it to their shared execution budget.
+			MaterializedByteReservation bufferedReservation;
+			bool budgetBound = false;
+			std::vector<LogicalPlanReadRow> rows;
+			rows.reserve(batchCapacity);
+			const size_t residentOutputBatchBytes = checkedSizeMul(rows.capacity(), sizeof(LogicalPlanReadRow),
+																   "logical-plan output batch storage size overflowed");
+			if (residentOutputBatchBytes >= bounds.maximum_materialized_bytes) {
+				throw std::invalid_argument("logical-plan output batch storage exhausts its materialized byte bound");
+			}
+			size_t bufferedBytes = 0U;
+			bool stoppedByVisitor = false;
+			bool finalized = false;
+			// The vector's full row-slot capacity is already reserved above. Charge
+			// only the row payload here to avoid counting each active object twice.
+			const auto outputRowPayloadBytes = [](const LogicalPlanReadRow &row, const ExecutionState &state) {
+				return logicalReadRowBytes(row, state.context) - sizeof(LogicalPlanReadRow);
+			};
+			const auto flush = [&](ExecutionState &state) {
+				if (rows.empty() || stoppedByVisitor) {
+					return !stoppedByVisitor;
+				}
+				if (replaceDeferredEntityRefs) {
+					materializeEntityRefsInRows(rows, state);
+				} else {
+					prefetchEntityRefsInRows(rows, state);
+				}
+				size_t materializedBytes = 0U;
+				for (const LogicalPlanReadRow &row: rows) {
+					materializedBytes = checkedSizeAdd(materializedBytes, outputRowPayloadBytes(row, state),
+													   "logical-plan output batch materialization size overflowed");
+				}
+				bufferedReservation.set(materializedBytes);
+				bufferedBytes = materializedBytes;
+				for (LogicalPlanReadRow &row: rows) {
+					enforceMaterializedRowBound(row, state);
+					const bool keepGoing = preserveVisitorEarlyStop
+						? invokeOutputVisitorChecked(state, [&] { return emit(row, state); })
+						: emit(row, state);
+					if (!keepGoing) {
+						stoppedByVisitor = true;
+						rows.clear();
+						bufferedReservation.reset();
+						bufferedBytes = 0U;
+						return false;
+					}
+					const size_t releasedBytes = outputRowPayloadBytes(row, state);
+					row = {};
+					bufferedReservation.set(bufferedReservation.bytes() - releasedBytes);
+				}
+				rows.clear();
+				bufferedReservation.reset();
+				bufferedBytes = 0U;
+				return true;
+			};
+			const FinalRowVisitor collect = [&](LogicalPlanReadRow &row, ExecutionState &state) {
+				if (!budgetBound) {
+					bufferedReservation = MaterializedByteReservation(&state.materialized_budget);
+					budgetBound = true;
+				}
+				const size_t rowBytes = outputRowPayloadBytes(row, state);
+				if (!rows.empty() && (rows.size() == batchCapacity ||
+									  rowBytes > bounds.maximum_materialized_bytes -
+														 std::min(bufferedBytes, bounds.maximum_materialized_bytes) ||
+									  rowBytes > state.materialized_budget.available())) {
+					if (!flush(state)) {
+						return false;
+					}
+				}
+				const size_t nextBytes = checkedSizeAdd(bufferedBytes, rowBytes,
+														"logical-plan output batch materialization size overflowed");
+				bufferedReservation.set(nextBytes);
+				try {
+					rows.push_back(std::move(row));
+				} catch (...) {
+					bufferedReservation.set(bufferedBytes);
+					throw;
+				}
+				bufferedBytes = nextBytes;
+				if (rows.size() == batchCapacity) {
+					return flush(state);
+				}
+				return true;
+			};
+			const ExecutionFinalizer finalize = [&](ExecutionState &state, bool failed) {
+				if (!finalized) {
+					finalized = true;
+					const auto release = [&] {
+						std::vector<LogicalPlanReadRow>().swap(rows);
+						// Detach while the ExecutionState budget is still alive, including zero-charge owners.
+						bufferedReservation = MaterializedByteReservation{};
+					};
+					try {
+						if (!failed && !stoppedByVisitor) static_cast<void>(flush(state));
+					} catch (...) {
+						release();
+						throw;
+					}
+					release();
+				}
+			};
+			const LogicalPlanReadRuntimeStats stats = run(collect, finalize, residentOutputBatchBytes);
+			if (!finalized) {
+				throw std::logic_error("logical-plan output materialization run did not finalize its execution state");
+			}
+			return stats;
+		}
+
 		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
-										 const InternalVisitor &visitor);
+										 const InternalVisitor &visitor,
+										 const ChargedRowVisitor *chargedReceiver = nullptr);
 
 		struct BatchableEntityPropertyPredicate {
 			std::string variable;
 			std::string key;
 		};
 
-		void appendBatchableEntityPropertyPredicate(
-				std::vector<BatchableEntityPropertyPredicate> &result,
-				BatchableEntityPropertyPredicate candidate) {
+		struct BatchableEntityMetadataPredicate {
+			std::string variable;
+			std::string function;
+		};
+
+		void appendBatchableEntityPropertyPredicate(std::vector<BatchableEntityPropertyPredicate> &result,
+													BatchableEntityPropertyPredicate candidate) {
 			const bool duplicate = std::ranges::any_of(result, [&](const auto &existing) {
 				return existing.variable == candidate.variable && existing.key == candidate.key;
 			});
@@ -3712,39 +6553,401 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] bool collectBatchableEntityPropertyPredicates(
-				const expressions::Expression &expression,
-				std::vector<BatchableEntityPropertyPredicate> &result) {
+		void appendBatchableEntityMetadataPredicate(std::vector<BatchableEntityMetadataPredicate> &result,
+													BatchableEntityMetadataPredicate candidate) {
+			const bool duplicate = std::ranges::any_of(result, [&](const auto &existing) {
+				return existing.variable == candidate.variable && existing.function == candidate.function;
+			});
+			if (!duplicate) {
+				result.push_back(std::move(candidate));
+			}
+		}
+
+		void appendCompleteEntityVariable(std::vector<std::string> &result, std::string_view variable) {
+			if (variable.empty() || std::ranges::find(result, variable) != result.end()) {
+				return;
+			}
+			result.emplace_back(variable);
+		}
+
+		// Scoped list bindings only shadow outer entities inside their bodies;
+		// source lists and REDUCE initializers still evaluate in the outer scope.
+		// Track exclusions separately from allowed pattern bindings, since the
+		// latter also enforce selected-only shape safety for properties()/keys().
+		// Identify expression shapes that require the complete Entity payload.  This
+		// is deliberately separate from selected-column discovery: a Sort or Project
+		// may contain both a safe scalar Property and `properties(n)`/`n{.*}`.  The
+		// caller can then materialize the complete bindings once per bounded batch
+		// without disabling the selected-column work for sibling expressions.
+		[[nodiscard]] bool
+		collectCompleteEntityVariables(const expressions::Expression &expression, std::vector<std::string> &result,
+									   const std::unordered_set<std::string> *allowedVariables = nullptr,
+									   const std::unordered_set<std::string> *shadowedVariables = nullptr) {
 			using ExpressionType = expressions::ExpressionType;
+			const auto collectNested = [&](const expressions::Expression *nested) {
+				return nested == nullptr ||
+					   collectCompleteEntityVariables(*nested, result, allowedVariables, shadowedVariables);
+			};
+			switch (expression.getExpressionType()) {
+				case ExpressionType::LITERAL:
+				case ExpressionType::VARIABLE_REFERENCE:
+				case ExpressionType::PROPERTY_ACCESS:
+				case ExpressionType::PARAMETER:
+				case ExpressionType::SHORTEST_PATH:
+					return true;
+				case ExpressionType::EXPR_LIST_LITERAL: {
+					const auto &list = static_cast<const expressions::ListLiteralExpression &>(expression);
+					if (list.isStatic()) {
+						return true;
+					}
+					bool complete = true;
+					for (const auto &element: list.getElements()) {
+						complete = collectNested(element.get()) && complete;
+					}
+					return complete;
+				}
+				case ExpressionType::LIST_COMPREHENSION: {
+					const auto &comprehension =
+							static_cast<const expressions::ListComprehensionExpression &>(expression);
+					const bool listComplete = collectNested(comprehension.getListExpr());
+					auto scopedVariables =
+							shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+					scopedVariables.insert(comprehension.getVariable());
+					const auto collectScoped = [&](const expressions::Expression *nested) {
+						return nested == nullptr ||
+							   collectCompleteEntityVariables(*nested, result, allowedVariables, &scopedVariables);
+					};
+					const bool whereComplete = collectScoped(comprehension.getWhereExpr());
+					const bool mapComplete = collectScoped(comprehension.getMapExpr());
+					return listComplete && whereComplete && mapComplete;
+				}
+				case ExpressionType::EXPR_REDUCE: {
+					const auto &reduce = static_cast<const expressions::ReduceExpression &>(expression);
+					const bool initialComplete = collectNested(reduce.getInitialExpr());
+					const bool listComplete = collectNested(reduce.getListExpr());
+					auto scopedVariables =
+							shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+					scopedVariables.insert(reduce.getVariable());
+					scopedVariables.insert(reduce.getAccumulator());
+					const bool bodyComplete = reduce.getBodyExpr() == nullptr ||
+											  collectCompleteEntityVariables(*reduce.getBodyExpr(), result,
+																			 allowedVariables, &scopedVariables);
+					return initialComplete && listComplete && bodyComplete;
+				}
+				case ExpressionType::EXPR_QUANTIFIER_FUNCTION: {
+					const auto &quantifier = static_cast<const expressions::QuantifierFunctionExpression &>(expression);
+					const bool listComplete = collectNested(quantifier.getListExpression());
+					auto scopedVariables =
+							shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+					scopedVariables.insert(quantifier.getVariable());
+					const bool whereComplete = quantifier.getWhereExpression() == nullptr ||
+											   collectCompleteEntityVariables(*quantifier.getWhereExpression(), result,
+																			  allowedVariables, &scopedVariables);
+					return listComplete && whereComplete;
+				}
+				case ExpressionType::BINARY_OP: {
+					const auto &binary = static_cast<const expressions::BinaryOpExpression &>(expression);
+					if (binary.getLeft() == nullptr || binary.getRight() == nullptr) {
+						return false;
+					}
+					const bool leftComplete = collectNested(binary.getLeft());
+					const bool rightComplete = collectNested(binary.getRight());
+					return leftComplete && rightComplete;
+				}
+				case ExpressionType::UNARY_OP: {
+					const auto &unary = static_cast<const expressions::UnaryOpExpression &>(expression);
+					return unary.getOperand() != nullptr && collectNested(unary.getOperand());
+				}
+				case ExpressionType::FUNCTION_CALL: {
+					const auto &function = static_cast<const expressions::FunctionCallExpression &>(expression);
+					const std::string functionName = lowerCase(function.getFunctionName());
+					if (functionName == "properties" || functionName == "keys") {
+						if (function.getArguments().size() != 1U) {
+							return false;
+						}
+						const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(
+								function.getArguments().front().get());
+						if (reference == nullptr || reference->hasProperty() || reference->getVariableName().empty()) {
+							return false;
+						}
+						if ((allowedVariables == nullptr || allowedVariables->contains(reference->getVariableName())) &&
+							(shadowedVariables == nullptr ||
+							 !shadowedVariables->contains(reference->getVariableName()))) {
+							appendCompleteEntityVariable(result, reference->getVariableName());
+						}
+						return true;
+					}
+					bool complete = true;
+					for (const auto &argument: function.getArguments()) {
+						complete = collectNested(argument.get()) && complete;
+					}
+					return complete;
+				}
+				case ExpressionType::IN_LIST: {
+					const auto &in = static_cast<const expressions::InExpression &>(expression);
+					const bool valueComplete = collectNested(in.getValue());
+					const bool listComplete = !in.hasDynamicList() || collectNested(in.getListExpression());
+					return valueComplete && listComplete;
+				}
+				case ExpressionType::IS_NULL: {
+					const auto &isNullExpression = static_cast<const expressions::IsNullExpression &>(expression);
+					return collectNested(isNullExpression.getExpression());
+				}
+				case ExpressionType::MAP_PROJECTION: {
+					const auto &projection = static_cast<const expressions::MapProjectionExpression &>(expression);
+					if (projection.isMapLiteral()) {
+						bool complete = true;
+						for (const auto &item: projection.getItems()) {
+							if (item.type == expressions::MapProjectionItemType::MPROP_PROPERTY ||
+								item.type == expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES) {
+								complete = false;
+								continue;
+							}
+							complete = collectNested(item.expression.get()) && complete;
+						}
+						return complete;
+					}
+					if (projection.getVariable().empty()) {
+						return false;
+					}
+					const bool variableAllowed =
+							(allowedVariables == nullptr || allowedVariables->contains(projection.getVariable())) &&
+							(shadowedVariables == nullptr || !shadowedVariables->contains(projection.getVariable()));
+					bool complete = true;
+					for (const auto &item: projection.getItems()) {
+						if (item.type == expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES) {
+							if (variableAllowed) {
+								appendCompleteEntityVariable(result, projection.getVariable());
+							}
+							continue;
+						}
+						if (item.type == expressions::MapProjectionItemType::MPROP_LITERAL) {
+							complete = collectNested(item.expression.get()) && complete;
+						}
+					}
+					return complete;
+				}
+				case ExpressionType::CASE_EXPRESSION: {
+					const auto &caseExpression = static_cast<const expressions::CaseExpression &>(expression);
+					bool complete = collectNested(caseExpression.getComparisonExpression());
+					for (const auto &branch: caseExpression.getBranches()) {
+						const bool whenComplete = collectNested(branch.whenExpression.get());
+						const bool thenComplete = collectNested(branch.thenExpression.get());
+						complete = whenComplete && thenComplete && complete;
+					}
+					return collectNested(caseExpression.getElseExpression()) && complete;
+				}
+				case ExpressionType::LIST_SLICE: {
+					const auto &slice = static_cast<const expressions::ListSliceExpression &>(expression);
+					const bool listComplete = collectNested(slice.getList());
+					const bool startComplete = collectNested(slice.getStart());
+					const bool endComplete = collectNested(slice.getEnd());
+					return listComplete && startComplete && endComplete;
+				}
+				case ExpressionType::EXPR_PATTERN_COMPREHENSION: {
+					const auto &pattern = static_cast<const expressions::PatternComprehensionExpression &>(expression);
+					if (pattern.getMapExpression() == nullptr)
+						return false;
+					auto scopedVariables =
+							shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+					if (!pattern.getTargetVar().empty())
+						scopedVariables.insert(pattern.getTargetVar());
+					if (!pattern.getRelationshipVar().empty())
+						scopedVariables.insert(pattern.getRelationshipVar());
+					const bool whereComplete = pattern.getWhereExpression() == nullptr ||
+											   collectCompleteEntityVariables(*pattern.getWhereExpression(), result,
+																			  allowedVariables, &scopedVariables);
+					const bool mapComplete = collectCompleteEntityVariables(*pattern.getMapExpression(), result,
+																			allowedVariables, &scopedVariables);
+					return whereComplete && mapComplete;
+				}
+				case ExpressionType::EXPR_EXISTS: {
+					const auto &exists = static_cast<const expressions::ExistsExpression &>(expression);
+					auto scopedVariables =
+							shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+					if (!exists.getTargetVar().empty())
+						scopedVariables.insert(exists.getTargetVar());
+					return exists.getWhereExpression() == nullptr ||
+						   collectCompleteEntityVariables(*exists.getWhereExpression(), result, allowedVariables,
+														  &scopedVariables);
+				}
+			}
+			return false;
+		}
+
+		// Keep complete-Entity prefetch for safe expression fragments when another
+		// fragment owns a nested graph scope that this outer-row collector cannot
+		// analyze. The recursive collector never enters those scopes, so partial
+		// discoveries from supported siblings remain safe to batch.
+		[[nodiscard]] std::vector<std::string>
+		selectBatchableCompleteEntityVariables(const std::vector<const expressions::Expression *> &candidates,
+											   const std::unordered_set<std::string> *allowedVariables = nullptr) {
+			std::vector<std::string> result;
+			for (const expressions::Expression *candidate: candidates) {
+				if (candidate == nullptr) {
+					return {};
+				}
+				std::vector<std::string> expressionVariables;
+				static_cast<void>(collectCompleteEntityVariables(*candidate, expressionVariables, allowedVariables));
+				for (const std::string &variable: expressionVariables) {
+					appendCompleteEntityVariable(result, variable);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] bool collectBatchableEntityPropertyPredicates(
+				const expressions::Expression &expression, std::vector<BatchableEntityPropertyPredicate> &result,
+				const std::unordered_set<std::string> *allowedVariables = nullptr,
+				std::vector<BatchableEntityMetadataPredicate> *metadataResult = nullptr,
+				const std::unordered_set<std::string> *shadowedVariables = nullptr) {
+			using ExpressionType = expressions::ExpressionType;
+			const auto collectNested = [&](const expressions::Expression *nested) {
+				return nested == nullptr || collectBatchableEntityPropertyPredicates(*nested, result, allowedVariables,
+																					 metadataResult, shadowedVariables);
+			};
 			if (expression.getExpressionType() == ExpressionType::PROPERTY_ACCESS) {
 				const auto &reference = static_cast<const expressions::VariableReferenceExpression &>(expression);
 				if (!reference.hasProperty() || reference.getVariableName().empty() ||
 					reference.getPropertyName().empty()) {
 					return false;
 				}
-				appendBatchableEntityPropertyPredicate(
-						result, {reference.getVariableName(), reference.getPropertyName()});
+				if ((allowedVariables != nullptr && !allowedVariables->contains(reference.getVariableName())) ||
+					(shadowedVariables != nullptr && shadowedVariables->contains(reference.getVariableName()))) {
+					// Pattern-local target/relationship bindings are populated only while
+					// visiting a candidate. They remain on the semantic evaluator path;
+					// outer-row properties can still be prefetched safely.
+					return true;
+				}
+				appendBatchableEntityPropertyPredicate(result,
+													   {reference.getVariableName(), reference.getPropertyName()});
 				return true;
 			}
+			if (expression.getExpressionType() == ExpressionType::VARIABLE_REFERENCE) {
+				// A scalar binding does not require a storage read. Treat it as a
+				// batchable leaf so comprehensions can still prefetch outer entity
+				// properties used alongside the scoped scalar.
+				const auto &reference = static_cast<const expressions::VariableReferenceExpression &>(expression);
+				return !reference.hasProperty();
+			}
+			if (expression.getExpressionType() == ExpressionType::SHORTEST_PATH)
+				return true;
 			if (expression.getExpressionType() == ExpressionType::LITERAL ||
 				expression.getExpressionType() == ExpressionType::PARAMETER) {
 				return true;
 			}
+			if (expression.getExpressionType() == ExpressionType::EXPR_LIST_LITERAL) {
+				const auto &list = static_cast<const expressions::ListLiteralExpression &>(expression);
+				if (list.isStatic()) {
+					return true;
+				}
+				for (const auto &element: list.getElements()) {
+					if (!collectNested(element.get())) {
+						return false;
+					}
+				}
+				return true;
+			}
+			if (expression.getExpressionType() == ExpressionType::LIST_COMPREHENSION) {
+				const auto &comprehension = static_cast<const expressions::ListComprehensionExpression &>(expression);
+				auto scopedVariables =
+						shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+				scopedVariables.insert(comprehension.getVariable());
+				const auto collectScoped = [&](const expressions::Expression *nested) {
+					return nested == nullptr ||
+						   collectBatchableEntityPropertyPredicates(*nested, result, allowedVariables, metadataResult,
+																	&scopedVariables);
+				};
+				return collectNested(comprehension.getListExpr()) && collectScoped(comprehension.getWhereExpr()) &&
+					   collectScoped(comprehension.getMapExpr());
+			}
+			if (expression.getExpressionType() == ExpressionType::EXPR_REDUCE) {
+				const auto &reduce = static_cast<const expressions::ReduceExpression &>(expression);
+				auto scopedVariables =
+						shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+				scopedVariables.insert(reduce.getVariable());
+				scopedVariables.insert(reduce.getAccumulator());
+				return collectNested(reduce.getInitialExpr()) && collectNested(reduce.getListExpr()) &&
+					   (reduce.getBodyExpr() == nullptr ||
+						collectBatchableEntityPropertyPredicates(*reduce.getBodyExpr(), result, allowedVariables,
+																 metadataResult, &scopedVariables));
+			}
+			if (expression.getExpressionType() == ExpressionType::EXPR_QUANTIFIER_FUNCTION) {
+				const auto &quantifier = static_cast<const expressions::QuantifierFunctionExpression &>(expression);
+				auto scopedVariables =
+						shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+				scopedVariables.insert(quantifier.getVariable());
+				return collectNested(quantifier.getListExpression()) &&
+					   (quantifier.getWhereExpression() == nullptr ||
+						collectBatchableEntityPropertyPredicates(*quantifier.getWhereExpression(), result,
+																 allowedVariables, metadataResult, &scopedVariables));
+			}
+			if (expression.getExpressionType() == ExpressionType::EXPR_PATTERN_COMPREHENSION) {
+				const auto &pattern = static_cast<const expressions::PatternComprehensionExpression &>(expression);
+				if (pattern.getMapExpression() == nullptr)
+					return false;
+				auto scopedVariables =
+						shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+				if (!pattern.getTargetVar().empty())
+					scopedVariables.insert(pattern.getTargetVar());
+				if (!pattern.getRelationshipVar().empty())
+					scopedVariables.insert(pattern.getRelationshipVar());
+				const auto collectScoped = [&](const expressions::Expression *nested) {
+					return nested == nullptr ||
+						   collectBatchableEntityPropertyPredicates(*nested, result, allowedVariables, metadataResult,
+																	&scopedVariables);
+				};
+				return collectScoped(pattern.getWhereExpression()) && collectScoped(pattern.getMapExpression());
+			}
+			if (expression.getExpressionType() == ExpressionType::EXPR_EXISTS) {
+				const auto &exists = static_cast<const expressions::ExistsExpression &>(expression);
+				auto scopedVariables =
+						shadowedVariables == nullptr ? std::unordered_set<std::string>{} : *shadowedVariables;
+				if (!exists.getTargetVar().empty())
+					scopedVariables.insert(exists.getTargetVar());
+				return exists.getWhereExpression() == nullptr ||
+					   collectBatchableEntityPropertyPredicates(*exists.getWhereExpression(), result, allowedVariables,
+																metadataResult, &scopedVariables);
+			}
 			if (expression.getExpressionType() == ExpressionType::BINARY_OP) {
 				const auto &binary = static_cast<const expressions::BinaryOpExpression &>(expression);
-				return binary.getLeft() != nullptr && binary.getRight() != nullptr &&
-					collectBatchableEntityPropertyPredicates(*binary.getLeft(), result) &&
-					collectBatchableEntityPropertyPredicates(*binary.getRight(), result);
+				return binary.getLeft() != nullptr && binary.getRight() != nullptr && collectNested(binary.getLeft()) &&
+					   collectNested(binary.getRight());
 			}
 			if (expression.getExpressionType() == ExpressionType::UNARY_OP) {
 				const auto &unary = static_cast<const expressions::UnaryOpExpression &>(expression);
-				return unary.getOperand() != nullptr &&
-					collectBatchableEntityPropertyPredicates(*unary.getOperand(), result);
+				return unary.getOperand() != nullptr && collectNested(unary.getOperand());
 			}
 			if (expression.getExpressionType() == ExpressionType::FUNCTION_CALL) {
 				const auto &function = static_cast<const expressions::FunctionCallExpression &>(expression);
+				const std::string functionName = lowerCase(function.getFunctionName());
+				if (metadataResult != nullptr && (functionName == "labels" || functionName == "type") &&
+					function.getArguments().size() == 1U) {
+					const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(
+							function.getArguments().front().get());
+					if (reference != nullptr && !reference->hasProperty() && !reference->getVariableName().empty() &&
+						(allowedVariables == nullptr || allowedVariables->contains(reference->getVariableName())) &&
+						(shadowedVariables == nullptr || !shadowedVariables->contains(reference->getVariableName()))) {
+						appendBatchableEntityMetadataPredicate(*metadataResult,
+															   {reference->getVariableName(), functionName});
+					}
+				}
+				// `properties(entity)` and `keys(entity)` observe the complete map;
+				// a selected-column pattern shape must not silently turn them into a
+				// partial map.  Other scalar/entity metadata functions are safe because
+				// pattern reads always retain labels and relationship type metadata.
+				if (allowedVariables != nullptr && (functionName == "properties" || functionName == "keys") &&
+					function.getArguments().size() == 1U) {
+					const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(
+							function.getArguments().front().get());
+					if (reference != nullptr && !reference->hasProperty() &&
+						allowedVariables->contains(reference->getVariableName()) &&
+						(shadowedVariables == nullptr || !shadowedVariables->contains(reference->getVariableName()))) {
+						return false;
+					}
+				}
 				for (const auto &argument: function.getArguments()) {
-					if (argument == nullptr || !collectBatchableEntityPropertyPredicates(*argument, result)) {
+					if (!collectNested(argument.get())) {
 						return false;
 					}
 				}
@@ -3752,244 +6955,1161 @@ namespace graph::query::execution {
 			}
 			if (expression.getExpressionType() == ExpressionType::IN_LIST) {
 				const auto &in = static_cast<const expressions::InExpression &>(expression);
-				if (in.getValue() == nullptr || !collectBatchableEntityPropertyPredicates(*in.getValue(), result)) {
+				if (!collectNested(in.getValue())) {
 					return false;
 				}
 				return !in.hasDynamicList() ||
-					(in.getListExpression() != nullptr &&
-					 collectBatchableEntityPropertyPredicates(*in.getListExpression(), result));
+					   (in.getListExpression() != nullptr && collectNested(in.getListExpression()));
 			}
 			if (expression.getExpressionType() == ExpressionType::IS_NULL) {
 				const auto &isNullExpression = static_cast<const expressions::IsNullExpression &>(expression);
-				return isNullExpression.getExpression() != nullptr &&
-					collectBatchableEntityPropertyPredicates(*isNullExpression.getExpression(), result);
+				return collectNested(isNullExpression.getExpression());
 			}
-			const auto collectOptional = [&result](const expressions::Expression *nested) {
-				return nested == nullptr || collectBatchableEntityPropertyPredicates(*nested, result);
-			};
+			if (expression.getExpressionType() == ExpressionType::MAP_PROJECTION) {
+				const auto &projection = static_cast<const expressions::MapProjectionExpression &>(expression);
+				if (projection.isMapLiteral()) {
+					for (const auto &item: projection.getItems()) {
+						if (item.type == expressions::MapProjectionItemType::MPROP_PROPERTY ||
+							item.type == expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES) {
+							// A map literal cannot select entity properties. Returning false
+							// preserves the normal evaluator's validation and NULL semantics.
+							return false;
+						}
+						if (!collectNested(item.expression.get())) {
+							return false;
+						}
+					}
+					return true;
+				}
+				if (projection.getVariable().empty()) {
+					return false;
+				}
+				const bool variableIsBatchable =
+						(allowedVariables == nullptr || allowedVariables->contains(projection.getVariable())) &&
+						(shadowedVariables == nullptr || !shadowedVariables->contains(projection.getVariable()));
+				for (const auto &item: projection.getItems()) {
+					switch (item.type) {
+						case expressions::MapProjectionItemType::MPROP_PROPERTY:
+							if (item.key.empty()) {
+								return false;
+							}
+							if (variableIsBatchable) {
+								appendBatchableEntityPropertyPredicate(result, {projection.getVariable(), item.key});
+							}
+							break;
+						case expressions::MapProjectionItemType::MPROP_LITERAL:
+							if (!collectNested(item.expression.get())) {
+								return false;
+							}
+							break;
+						case expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES:
+							// `.*` requires the complete Property map and cannot use a
+							// selected-column batch without changing its contract.
+							if (variableIsBatchable) {
+								return false;
+							}
+							break;
+					}
+				}
+				return true;
+			}
 			if (expression.getExpressionType() == ExpressionType::CASE_EXPRESSION) {
 				const auto &caseExpression = static_cast<const expressions::CaseExpression &>(expression);
-				if (!collectOptional(caseExpression.getComparisonExpression())) {
+				if (!collectNested(caseExpression.getComparisonExpression())) {
 					return false;
 				}
 				for (const auto &branch: caseExpression.getBranches()) {
-					if (!collectOptional(branch.whenExpression.get()) ||
-						!collectOptional(branch.thenExpression.get())) {
+					if (!collectNested(branch.whenExpression.get()) || !collectNested(branch.thenExpression.get())) {
 						return false;
 					}
 				}
-				return collectOptional(caseExpression.getElseExpression());
+				return collectNested(caseExpression.getElseExpression());
 			}
 			if (expression.getExpressionType() == ExpressionType::LIST_SLICE) {
 				const auto &slice = static_cast<const expressions::ListSliceExpression &>(expression);
-				return collectOptional(slice.getList()) && collectOptional(slice.getStart()) &&
-					collectOptional(slice.getEnd());
+				return collectNested(slice.getList()) && collectNested(slice.getStart()) &&
+					   collectNested(slice.getEnd());
 			}
 			return false;
 		}
 
+		// A logical operator may combine storage-backed expressions with shapes that
+		// intentionally require complete entities or scoped path evaluation.  Keep
+		// the safe subset batched instead of disabling batching for the whole operator.
+		[[nodiscard]] std::vector<const expressions::Expression *>
+		selectBatchableExpressions(const std::vector<const expressions::Expression *> &expressions) {
+			std::vector<const expressions::Expression *> selected;
+			selected.reserve(expressions.size());
+			for (const expressions::Expression *expression: expressions) {
+				if (expression == nullptr) {
+					continue;
+				}
+				std::vector<BatchableEntityPropertyPredicate> properties;
+				std::vector<BatchableEntityMetadataPredicate> metadata;
+				if (collectBatchableEntityPropertyPredicates(*expression, properties, nullptr, &metadata) &&
+					(!properties.empty() || !metadata.empty())) {
+					selected.push_back(expression);
+				}
+			}
+			return selected;
+		}
+
+		// A read-only correlated subquery executes once for each outer row, but a
+		// simple unary body can still share its imported Entity Property reads.  Walk
+		// only the expression-bearing unary operators here; anything more complex
+		// keeps the normal per-row evaluator so nested scope and cardinality semantics
+		// remain authoritative.
+		[[nodiscard]] std::vector<const expressions::Expression *>
+		collectCorrelatedSubqueryExpressions(const logical::LogicalOperator &body) {
+			std::vector<const expressions::Expression *> expressions;
+			const logical::LogicalOperator *current = &body;
+			while (current != nullptr) {
+				switch (current->getType()) {
+					case logical::LogicalOpType::LOP_PROJECT: {
+						const auto &project = dynamic_cast<const logical::LogicalProject &>(*current);
+						for (const logical::LogicalProjectItem &item: project.getItems()) {
+							expressions.push_back(item.expression.get());
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_FILTER: {
+						const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*current);
+						expressions.push_back(filter.getPredicate().get());
+						break;
+					}
+					case logical::LogicalOpType::LOP_SORT: {
+						const auto &sort = dynamic_cast<const logical::LogicalSort &>(*current);
+						for (const logical::LogicalSortItem &item: sort.getSortItems()) {
+							expressions.push_back(item.expression.get());
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_AGGREGATE: {
+						const auto &aggregate = dynamic_cast<const logical::LogicalAggregate &>(*current);
+						for (const auto &expression: aggregate.getGroupByExprs()) {
+							expressions.push_back(expression.get());
+						}
+						for (const logical::LogicalAggItem &item: aggregate.getAggregations()) {
+							expressions.push_back(item.argument.get());
+							expressions.push_back(item.extraArg.get());
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_SKIP:
+					case logical::LogicalOpType::LOP_LIMIT:
+						break;
+					case logical::LogicalOpType::LOP_UNWIND: {
+						const auto &unwind = dynamic_cast<const logical::LogicalUnwind &>(*current);
+						if (!unwind.hasLiteralList() && unwind.getListExpr() != nullptr) {
+							expressions.push_back(unwind.getListExpr().get());
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_SINGLE_ROW:
+						return expressions;
+					default:
+						return {};
+				}
+				const std::vector<logical::LogicalOperator *> children = current->getChildren();
+				if (children.size() != 1U || children.front() == nullptr) {
+					return {};
+				}
+				current = children.front();
+			}
+			return {};
+		}
+
 		// Collect direct property accesses from side-effect-free expression shapes;
 		// the original evaluator remains authoritative after the batch is filled.
-		[[nodiscard]] std::optional<std::vector<BatchableEntityPropertyPredicate>>
-		inspectBatchableEntityPropertyPredicates(const expressions::Expression &expression) {
-			std::vector<BatchableEntityPropertyPredicate> result;
-			if (!collectBatchableEntityPropertyPredicates(expression, result)) {
-				return std::nullopt;
+		[[nodiscard]] std::optional<PatternBindingReadShape>
+		inspectPatternBindingReadShape(const expressions::Expression *whereExpression,
+									   const expressions::Expression *mapExpression, std::string_view targetVariable,
+									   std::string_view relationshipVariable,
+									   storage::LogicalGraphReadSnapshot &snapshot) {
+			std::unordered_set<std::string> allowedVariables;
+			if (!targetVariable.empty()) {
+				allowedVariables.emplace(targetVariable);
 			}
-			return result;
+			if (!relationshipVariable.empty()) {
+				allowedVariables.emplace(relationshipVariable);
+			}
+			std::vector<std::string> completeVariables;
+			for (const auto *expression: {whereExpression, mapExpression}) {
+				if (expression != nullptr &&
+					!collectCompleteEntityVariables(*expression, completeVariables, &allowedVariables)) {
+					return std::nullopt;
+				}
+			}
+			auto selectedVariables = allowedVariables;
+			for (const auto &variable: completeVariables)
+				selectedVariables.erase(variable);
+			std::vector<BatchableEntityPropertyPredicate> requests;
+			for (const auto *expression: {whereExpression, mapExpression}) {
+				if (expression != nullptr &&
+					!collectBatchableEntityPropertyPredicates(*expression, requests, &selectedVariables)) {
+					return std::nullopt;
+				}
+			}
+			PatternBindingReadShape shape;
+			shape.target.include_labels = !targetVariable.empty();
+			shape.relationship.include_type = !relationshipVariable.empty();
+			shape.target.all_properties =
+					std::ranges::find(completeVariables, targetVariable) != completeVariables.end();
+			shape.relationship.all_properties =
+					std::ranges::find(completeVariables, relationshipVariable) != completeVariables.end();
+			for (const BatchableEntityPropertyPredicate &request: requests) {
+				const std::optional<uint32_t> token = snapshot.findPropertyToken(request.key);
+				storage::EntityReadShape *destination = nullptr;
+				std::vector<std::string> *namedProperties = nullptr;
+				if (request.variable == targetVariable) {
+					destination = &shape.target;
+					namedProperties = &shape.target_named_properties;
+				} else if (request.variable == relationshipVariable) {
+					destination = &shape.relationship;
+					namedProperties = &shape.relationship_named_properties;
+				} else {
+					throw std::logic_error("logical-plan pattern shape resolved an unknown scoped Entity variable");
+				}
+				if (token)
+					destination->property_tokens.push_back(*token);
+				else
+					namedProperties->push_back(request.key);
+			}
+			const auto normalize = [](storage::EntityReadShape &entityShape) {
+				std::ranges::sort(entityShape.property_tokens);
+				entityShape.property_tokens.erase(
+						std::unique(entityShape.property_tokens.begin(), entityShape.property_tokens.end()),
+						entityShape.property_tokens.end());
+				validateEntityReadShape(entityShape);
+			};
+			normalize(shape.target);
+			normalize(shape.relationship);
+			for (auto *keys: {&shape.target_named_properties, &shape.relationship_named_properties}) {
+				std::ranges::sort(*keys);
+				keys->erase(std::unique(keys->begin(), keys->end()), keys->end());
+			}
+			return shape;
 		}
 
 		// Prefetch selected Properties for any storage-neutral row producer.  Keeping
 		// this boundary independent of a particular logical operator lets filters,
 		// projections, and aggregates share the same bounded page-grouped read path.
-		[[nodiscard]] std::optional<bool> tryVisitBatchedPropertyExpressions(
-				const logical::LogicalOperator &child,
-				const std::vector<const expressions::Expression *> &expressions,
-				ExecutionState &state, const InternalVisitor &visitor,
-				const BatchSelectionPredicate &selectionPredicate = {}) {
+		[[nodiscard]] std::optional<bool>
+		tryVisitBatchedPropertyExpressions(const logical::LogicalOperator &child,
+										   const std::vector<const expressions::Expression *> &expressions,
+										   ExecutionState &state, const InternalVisitor &visitor,
+										   const BatchSelectionPredicate &selectionPredicate = {},
+										   const std::vector<std::string> &completeEntityVariables = {},
+										   const ChargedRowVisitor *chargedReceiver = nullptr,
+										   bool borrowRepeatedNodeColumns = false) {
 			if (!state.allow_deferred_entity_refs ||
 				(!state.snapshot.supportsNativeNodeRefScans() && !state.snapshot.supportsNativeEdgeRefScans())) {
 				return std::nullopt;
 			}
-		std::vector<BatchableEntityPropertyPredicate> requests;
-		for (const expressions::Expression *expression: expressions) {
-			if (expression == nullptr) {
-				return std::nullopt;
-			}
-			const auto nested = inspectBatchableEntityPropertyPredicates(*expression);
-			if (!nested.has_value()) {
-				return std::nullopt;
-			}
-			for (const auto &candidate: *nested) {
-				if (!std::ranges::any_of(requests, [&](const auto &existing) {
-						return existing.variable == candidate.variable && existing.key == candidate.key;
-					})) {
-					requests.push_back(candidate);
+			std::vector<BatchableEntityPropertyPredicate> requests;
+			std::vector<BatchableEntityMetadataPredicate> metadataRequests;
+			for (const expressions::Expression *expression: expressions) {
+				if (expression == nullptr) {
+					return std::nullopt;
 				}
-			}
-		}
-		if (requests.empty()) {
-			return std::nullopt;
-		}
-		// A property expression can outlive the entity binding that produced it
-		// (for example, an outer projection over `WITH DISTINCT n.value`).  In
-		// that shape the child row intentionally contains only the projected
-		// scalar, so this batch helper must defer to the normal evaluator rather
-		// than treating the missing binding as a corrupt storage result.
-		const std::vector<std::string> childOutputs = child.getOutputVariables();
-		for (const BatchableEntityPropertyPredicate &request: requests) {
-			if (std::ranges::find(childOutputs, request.variable) == childOutputs.end()) {
-				return std::nullopt;
-			}
-		}
-
-		struct PropertyGroup {
-			std::string variable;
-			std::vector<std::string> keys;
-		};
-		std::vector<PropertyGroup> groups;
-		for (const auto &request: requests) {
-			auto group = std::ranges::find(groups, request.variable, &PropertyGroup::variable);
-			if (group == groups.end()) {
-				groups.push_back({request.variable, {request.key}});
-			} else if (std::ranges::find(group->keys, request.key) == group->keys.end()) {
-				group->keys.push_back(request.key);
-			}
-		}
-
-		const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
-		if (batchCapacity == 0U) {
-			return std::nullopt;
-		}
-		BoundedBatch<LogicalPlanReadRow> rows(
-				batchCapacity, state.bounds.maximum_materialized_bytes,
-				[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
-		rows.reserve(batchCapacity);
-		bool stoppedByVisitor = false;
-		const auto flush = [&]() {
-			if (rows.empty()) {
-				return true;
-			}
-			for (const PropertyGroup &group: groups) {
-				std::vector<uint64_t> nodeIds;
-				std::vector<uint64_t> edgeIds;
-				for (const LogicalPlanReadRow &row: rows.values()) {
-					const auto found = row.values.find(group.variable);
-					if (found == row.values.end()) {
-						throw std::runtime_error("logical-plan Property batch lost its Entity binding");
-					}
-					if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
-						validateEntityRef(*reference);
-						const auto cached = row.property_cache.find(group.variable);
-						const bool complete = cached != row.property_cache.end() && std::ranges::all_of(group.keys,
-								[&](const std::string &key) { return cached->second.contains(key); });
-						if (!complete) {
-							(reference->is_edge ? edgeIds : nodeIds).push_back(reference->entity_id);
-						}
-					}
+				std::vector<BatchableEntityPropertyPredicate> nestedRequests;
+				if (!collectBatchableEntityPropertyPredicates(*expression, nestedRequests, nullptr,
+															  &metadataRequests)) {
+					return std::nullopt;
 				}
-				std::ranges::sort(nodeIds);
-				nodeIds.erase(std::unique(nodeIds.begin(), nodeIds.end()), nodeIds.end());
-				std::ranges::sort(edgeIds);
-				edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
-				std::vector<std::string_view> keys;
-				keys.reserve(group.keys.size());
-				for (const std::string &key: group.keys) {
-					keys.push_back(key);
-				}
-				const auto nodeColumns = nodeIds.empty()
-						? std::vector<std::vector<PropertyValue>>{}
-						: state.snapshot.readNodePropertyColumnsSorted(nodeIds, keys);
-				const auto edgeColumns = edgeIds.empty()
-						? std::vector<std::vector<PropertyValue>>{}
-						: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, keys);
-				const size_t nodeColumnBytes = propertyColumnBytes(
-						nodeColumns, keys, "logical-plan Node Property batch size overflowed");
-				const size_t edgeColumnBytes = propertyColumnBytes(
-						edgeColumns, keys, "logical-plan Edge Property batch size overflowed");
-				if (checkedSizeAdd(nodeColumnBytes, edgeColumnBytes,
-							"logical-plan Property batch size overflowed") > state.bounds.maximum_materialized_bytes) {
-					throw std::runtime_error("logical-plan Property batch exceeded its byte bound");
-				}
-				const auto fill = [&](const bool isEdge, const std::vector<uint64_t> &ids,
-						const std::vector<std::vector<PropertyValue>> &columns) {
-					if (ids.empty()) {
-						return;
-					}
-					if (columns.size() != group.keys.size() || std::ranges::any_of(columns, [&](const auto &column) {
-							return column.size() != ids.size();
+				for (const auto &candidate: nestedRequests) {
+					if (!std::ranges::any_of(requests, [&](const auto &existing) {
+							return existing.variable == candidate.variable && existing.key == candidate.key;
 						})) {
-						throw std::runtime_error("logical graph backend changed Property batch cardinality");
-					}
-					for (LogicalPlanReadRow &row: rows.values()) {
-						const auto found = row.values.find(group.variable);
-						if (found == row.values.end()) {
-							throw std::runtime_error("logical-plan Property batch lost its Entity binding");
-						}
-						const auto *reference = std::get_if<storage::EntityRef>(&found->second);
-						if (reference == nullptr || reference->is_edge != isEdge) {
-							continue;
-						}
-						const auto position = std::ranges::lower_bound(ids, reference->entity_id);
-						if (position == ids.end() || *position != reference->entity_id) {
-							continue;
-						}
-						for (size_t column = 0U; column < group.keys.size(); ++column) {
-							row.property_cache[group.variable][group.keys[column]] =
-									columns[column][static_cast<size_t>(position - ids.begin())];
-						}
-					}
-				};
-				fill(false, nodeIds, nodeColumns);
-				fill(true, edgeIds, edgeColumns);
-			}
-			// Selected columns are attached to the buffered rows during the flush;
-			// recompute the byte budget after that enrichment so LargeValue payloads
-			// are covered by the same bound as the input rows.
-			rows.recalculateBytes();
-			debug::PerfTrace::addValue("logical_plan.batch.flushes", 1);
-			debug::PerfTrace::addValue("logical_plan.batch.rows", static_cast<int64_t>(rows.size()));
-			debug::PerfTrace::addValue("logical_plan.batch.materialized_bytes", static_cast<int64_t>(rows.bytes()));
-			SelectionVector selection(rows.size());
-			if (selectionPredicate) {
-				for (size_t index = 0U; index < rows.size(); ++index) {
-					checkGuard(state);
-					if (!selectionPredicate(rows.values()[index], state)) {
-						selection.reject(index);
+						requests.push_back(candidate);
 					}
 				}
 			}
-			debug::PerfTrace::addValue("logical_plan.selection.selected_rows",
-					static_cast<int64_t>(selection.selectedCount()));
-			debug::PerfTrace::addValue("logical_plan.selection.rejected_rows",
-					static_cast<int64_t>(rows.size() - selection.selectedCount()));
-			bool keepGoing = true;
-			static_cast<void>(selection.forEachSelectedUntil([&](const size_t index) {
-				if (!keepGoing) {
-					return false;
+			if (requests.empty() && metadataRequests.empty() && completeEntityVariables.empty()) {
+				return std::nullopt;
+			}
+			// A property expression can outlive the entity binding that produced it
+			// (for example, an outer projection over `WITH DISTINCT n.value`).  In
+			// that shape the child row intentionally contains only the projected
+			// scalar, so this batch helper must defer to the normal evaluator rather
+			// than treating the missing binding as a corrupt storage result.
+			const std::vector<std::string> childOutputs = child.getOutputVariables();
+			for (const BatchableEntityPropertyPredicate &request: requests) {
+				if (std::ranges::find(childOutputs, request.variable) == childOutputs.end()) {
+					return std::nullopt;
+				}
+			}
+			for (const BatchableEntityMetadataPredicate &request: metadataRequests) {
+				if (std::ranges::find(childOutputs, request.variable) == childOutputs.end()) {
+					return std::nullopt;
+				}
+			}
+			for (const std::string &variable: completeEntityVariables) {
+				if (std::ranges::find(childOutputs, variable) == childOutputs.end()) {
+					return std::nullopt;
+				}
+			}
+
+			struct PropertyGroup {
+				std::string variable;
+				std::vector<std::string> keys;
+			};
+			std::vector<PropertyGroup> groups;
+			for (const auto &request: requests) {
+				auto group = std::ranges::find(groups, request.variable, &PropertyGroup::variable);
+				if (group == groups.end()) {
+					groups.push_back({request.variable, {request.key}});
+				} else if (std::ranges::find(group->keys, request.key) == group->keys.end()) {
+					group->keys.push_back(request.key);
+				}
+			}
+			struct MetadataGroup {
+				std::string variable;
+				bool labels = false;
+				bool type = false;
+			};
+			std::vector<MetadataGroup> metadataGroups;
+			for (const BatchableEntityMetadataPredicate &request: metadataRequests) {
+				auto group = std::ranges::find(metadataGroups, request.variable, &MetadataGroup::variable);
+				if (group == metadataGroups.end()) {
+					metadataGroups.push_back(
+							{request.variable, request.function == "labels", request.function == "type"});
+				} else if (request.function == "labels") {
+					group->labels = true;
+				} else if (request.function == "type") {
+					group->type = true;
+				}
+			}
+
+			const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
+			if (batchCapacity == 0U) {
+				return std::nullopt;
+			}
+			MaterializedByteReservation bufferedRowsBytes(&state.materialized_budget);
+			MaterializedByteReservation selectionBytes(&state.materialized_budget);
+			BoundedBatch<LogicalPlanReadRow> rows(
+					batchCapacity, state.bounds.maximum_materialized_bytes,
+					[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); });
+			rows.reserve(batchCapacity);
+			bool stoppedByVisitor = false;
+			size_t largestInputRowBytes = 0U;
+			std::function<bool()> flush;
+			struct PrefetchBytePressure {};
+			const auto putCacheValue = [&](auto &cache, const std::string &variable, const std::string &key,
+										   auto &&value) {
+				const size_t previousBytes = bufferedRowsBytes.bytes();
+				size_t nextBytes = previousBytes;
+				const auto alias = cache.find(variable);
+				if (alias == cache.end()) {
+					nextBytes =
+							checkedSizeAdd(nextBytes, variable.size(), "logical-plan prefetch cache size overflowed");
+				}
+				if (alias != cache.end() && alias->second.contains(key)) {
+					nextBytes -= retainedExpressionValueBytes(alias->second.at(key), state);
+				} else {
+					nextBytes = checkedSizeAdd(nextBytes, key.size(), "logical-plan prefetch cache size overflowed");
+				}
+				const size_t requestedPayloadBytes = retainedExpressionValueBytes(value, state);
+				nextBytes = checkedSizeAdd(nextBytes, requestedPayloadBytes,
+										   "logical-plan prefetch cache size overflowed");
+				const size_t withSelection =
+						checkedSizeAdd(nextBytes, SelectionVector::requiredStorageBytes(rows.size()),
+									   "logical-plan prefetch selection size overflowed");
+				if (nextBytes > state.bounds.maximum_materialized_bytes ||
+					bufferedRowsBytes.wouldExceed(withSelection)) {
+					throw PrefetchBytePressure{};
+				}
+				bufferedRowsBytes.set(nextBytes);
+				try {
+					if constexpr (std::is_lvalue_reference_v<decltype(value)>) {
+						PropertyValue copy = detail::copyPropertyValueGuarded(value, [&] { checkGuardNow(state); });
+						cache[variable].insert_or_assign(key, std::move(copy));
+					} else {
+						cache[variable].insert_or_assign(key, std::forward<decltype(value)>(value));
+					}
+				} catch (...) {
+					bufferedRowsBytes.set(previousBytes);
+					throw;
+				}
+				// Copying a container can change its capacity. Reconcile the owned
+				// value before a pressure-driven split transfers charges to rows.
+				const size_t retainedBytes = retainedExpressionValueBytes(cache.at(variable).at(key), state);
+				const size_t actualBytes = checkedSizeAdd(nextBytes - requestedPayloadBytes, retainedBytes,
+					"logical-plan copied cache size overflowed");
+				// If a copy unexpectedly grows beyond admission, fail closed rather
+				// than entering a split with an undercharged, already-mutated row.
+				bufferedRowsBytes.set(actualBytes);
+				if (debug::PerfTrace::areValuesEnabled()) {
+					// Diagnose row-cache scatter separately from storage reads. A diagnostic
+					// allocation failure must not reject an already admitted cache value.
+					try {
+						constexpr bool copied = std::is_lvalue_reference_v<decltype(value)>;
+						debug::PerfTrace::addValue(copied ? "logical_plan.prefetch.copied_values" : "logical_plan.prefetch.moved_values", 1);
+						debug::PerfTrace::addValue(copied ? "logical_plan.prefetch.copied_retained_bytes" : "logical_plan.prefetch.moved_retained_bytes",
+							static_cast<int64_t>(std::min(retainedBytes,static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+					} catch (...) {}
+				}
+			};
+			const auto hasMetadata = [](const LogicalPlanReadRow &row, const std::string &variable,
+										const std::string &key) {
+				const auto found = row.entity_metadata_cache.find(variable);
+				return found != row.entity_metadata_cache.end() && found->second.contains(key);
+			};
+			const auto splitBufferedRowsAndFlush = [&]() {
+				rows.recalculateBytes();
+				MaterializedByteReservation pendingBytes(std::move(bufferedRowsBytes));
+				bufferedRowsBytes = MaterializedByteReservation(&state.materialized_budget);
+				std::vector<LogicalPlanReadRow> bufferedRows = std::move(rows.values());
+				rows.clear();
+				const size_t splitCapacity = std::max<size_t>(1U, bufferedRows.size() / 2U);
+				std::reverse(bufferedRows.begin(), bufferedRows.end());
+				while (!bufferedRows.empty()) {
+					if (!rows.empty() && rows.wouldExceedBytes(bufferedRows.back()) && !flush())
+						return false;
+					const size_t rowBytes = logicalReadRowBytes(bufferedRows.back(), state.context);
+					LogicalPlanReadRow row = std::move(bufferedRows.back());
+					bufferedRows.pop_back();
+					MaterializedByteReservation rowCharge = pendingBytes.splitOff(rowBytes);
+					rows.append(std::move(row));
+					bufferedRowsBytes.absorb(std::move(rowCharge));
+					if (rows.size() == splitCapacity && !flush())
+						return false;
+				}
+				return rows.empty() || flush();
+			};
+			flush = [&]() {
+				if (rows.empty()) {
+					return true;
 				}
 				checkGuard(state);
-				keepGoing = visitor(std::move(rows.values()[index]));
-				return keepGoing;
-			}));
-			rows.clear();
-			return keepGoing;
-		};
-
-		const bool childCompleted = visitOperator(child, state, [&](LogicalPlanReadRow row) {
-			rows.append(std::move(row));
-			if (rows.size() == batchCapacity) {
-				const bool keepGoing = flush();
-				if (!keepGoing) {
-					stoppedByVisitor = true;
+				try {
+					std::optional<ScopedPropertyColumns> ownedColumns;
+					MaterializedByteReservation ownedColumnBytes(&state.materialized_budget);
+					if (!completeEntityVariables.empty()) {
+						MaterializedByteReservation referenceWorkspaceBytes(&state.materialized_budget);
+						size_t maximumNodeReferences = 0U;
+						size_t maximumEdgeReferences = 0U;
+						for (const LogicalPlanReadRow &row: rows.values()) {
+							for (const std::string &variable: completeEntityVariables) {
+								const auto found = row.values.find(variable);
+								if (found == row.values.end()) {
+									throw std::runtime_error("logical-plan complete Entity batch lost its binding");
+								}
+								if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
+									validateEntityRef(*reference);
+									size_t &count = reference->is_edge ? maximumEdgeReferences : maximumNodeReferences;
+									count = checkedSizeAdd(count, 1U,
+												  "logical-plan complete Entity reference count overflowed");
+								}
+							}
+						}
+						const auto referenceBytes = [](size_t nodeCount, size_t edgeCount) {
+							return checkedSizeAdd(
+								checkedSizeMul(nodeCount, sizeof(storage::EntityRef),
+											  "logical-plan complete Entity reference buffer size overflowed"),
+								checkedSizeMul(edgeCount, sizeof(storage::EntityRef),
+											  "logical-plan complete Entity reference buffer size overflowed"),
+								"logical-plan complete Entity reference buffer size overflowed");
+						};
+						const size_t maximumReferenceBytes =
+							referenceBytes(maximumNodeReferences, maximumEdgeReferences);
+						if (referenceWorkspaceBytes.wouldExceed(maximumReferenceBytes))
+							throw PrefetchBytePressure{};
+						referenceWorkspaceBytes.set(maximumReferenceBytes);
+						std::vector<storage::EntityRef> nodeReferences;
+						std::vector<storage::EntityRef> edgeReferences;
+						nodeReferences.reserve(maximumNodeReferences);
+						edgeReferences.reserve(maximumEdgeReferences);
+						const size_t actualReferenceBytes =
+							referenceBytes(nodeReferences.capacity(), edgeReferences.capacity());
+						if (referenceWorkspaceBytes.wouldExceed(actualReferenceBytes))
+							throw PrefetchBytePressure{};
+						referenceWorkspaceBytes.set(actualReferenceBytes);
+						for (const LogicalPlanReadRow &row: rows.values()) {
+							for (const std::string &variable: completeEntityVariables) {
+								const auto found = row.values.find(variable);
+								if (found == row.values.end()) {
+									throw std::runtime_error("logical-plan complete Entity batch lost its binding");
+								}
+								if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
+									validateEntityRef(*reference);
+									(reference->is_edge ? edgeReferences : nodeReferences).push_back(*reference);
+								}
+							}
+						}
+						const auto materializeForPrefetch = [](auto &&materialize) {
+							try {
+								materialize();
+							} catch (const std::runtime_error &error) {
+								if (std::string_view(error.what()) != "shared materialization exceeded its byte bound")
+									throw;
+								throw PrefetchBytePressure{};
+							}
+						};
+						if (!nodeReferences.empty()) {
+							materializeForPrefetch([&] {
+								static_cast<void>(materializeNodeReferences(nodeReferences, state, false));
+							});
+						}
+						if (!edgeReferences.empty()) {
+							materializeForPrefetch([&] {
+								static_cast<void>(materializeEdgeReferences(edgeReferences, state, false));
+							});
+						}
+					}
+					if (!metadataGroups.empty()) {
+						MaterializedByteReservation metadataWorkspaceBytes(&state.materialized_budget);
+						size_t maximumNodeIds = 0U;
+						size_t maximumEdgeIds = 0U;
+						for (const MetadataGroup &group: metadataGroups) {
+							for (const LogicalPlanReadRow &row: rows.values()) {
+								const auto found = row.values.find(group.variable);
+								if (found == row.values.end()) {
+									throw std::runtime_error("logical-plan metadata batch lost its Entity binding");
+								}
+								const auto *reference = std::get_if<storage::EntityRef>(&found->second);
+								if (reference == nullptr)
+									continue;
+								validateEntityRef(*reference);
+								const auto cached = row.entity_metadata_cache.find(group.variable);
+								if (!reference->is_edge && group.labels &&
+									(cached == row.entity_metadata_cache.end() || !cached->second.contains("labels")) &&
+									!state.node_cache.contains(reference->entity_id)) {
+									maximumNodeIds = checkedSizeAdd(maximumNodeIds, 1U,
+																	"logical-plan metadata Node ID count overflowed");
+								}
+								if (reference->is_edge && group.type &&
+									(cached == row.entity_metadata_cache.end() || !cached->second.contains("type")) &&
+									!state.edge_cache.contains(reference->entity_id)) {
+									maximumEdgeIds = checkedSizeAdd(maximumEdgeIds, 1U,
+																	"logical-plan metadata Edge ID count overflowed");
+								}
+							}
+						}
+						const size_t maximumIdBytes =
+								checkedSizeAdd(checkedSizeMul(maximumNodeIds, sizeof(uint64_t),
+															  "logical-plan metadata ID scratch size overflowed"),
+											   checkedSizeMul(maximumEdgeIds, sizeof(uint64_t),
+															  "logical-plan metadata ID scratch size overflowed"),
+											   "logical-plan metadata ID scratch size overflowed");
+						metadataWorkspaceBytes.set(maximumIdBytes);
+						std::vector<uint64_t> nodeIds;
+						std::vector<uint64_t> edgeIds;
+						nodeIds.reserve(maximumNodeIds);
+						edgeIds.reserve(maximumEdgeIds);
+						metadataWorkspaceBytes.set(
+								checkedSizeAdd(checkedSizeMul(nodeIds.capacity(), sizeof(uint64_t),
+															  "logical-plan metadata Node ID capacity overflowed"),
+											   checkedSizeMul(edgeIds.capacity(), sizeof(uint64_t),
+															  "logical-plan metadata Edge ID capacity overflowed"),
+											   "logical-plan metadata ID capacity overflowed"));
+						for (const MetadataGroup &group: metadataGroups) {
+							for (const LogicalPlanReadRow &row: rows.values()) {
+								const auto found = row.values.find(group.variable);
+								if (found == row.values.end()) {
+									throw std::runtime_error("logical-plan metadata batch lost its Entity binding");
+								}
+								const auto cached = row.entity_metadata_cache.find(group.variable);
+								const auto *reference = std::get_if<storage::EntityRef>(&found->second);
+								if (reference == nullptr) {
+									continue;
+								}
+								validateEntityRef(*reference);
+								if (!reference->is_edge && group.labels &&
+									(cached == row.entity_metadata_cache.end() || !cached->second.contains("labels"))) {
+									if (!state.node_cache.contains(reference->entity_id)) {
+										nodeIds.push_back(reference->entity_id);
+									}
+								}
+								if (reference->is_edge && group.type &&
+									(cached == row.entity_metadata_cache.end() || !cached->second.contains("type"))) {
+									if (!state.edge_cache.contains(reference->entity_id)) {
+										edgeIds.push_back(reference->entity_id);
+									}
+								}
+							}
+						}
+						std::ranges::sort(nodeIds);
+						nodeIds.erase(std::unique(nodeIds.begin(), nodeIds.end()), nodeIds.end());
+						std::ranges::sort(edgeIds);
+						edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
+						if (nodeIds.size() > state.bounds.maximum_node_records ||
+							edgeIds.size() > state.bounds.maximum_edge_records) {
+							throw std::runtime_error("logical-plan metadata batch exceeded its Entity bound");
+						}
+						std::vector<storage::LogicalGraphNode> loadedNodes;
+						std::vector<storage::LogicalGraphEdge> loadedEdges;
+						const auto metadataFrameBytes = [&](const size_t nodeCapacity, const size_t edgeCapacity) {
+							return checkedSizeAdd(
+									checkedSizeAdd(checkedSizeMul(nodeIds.capacity(), sizeof(uint64_t),
+																  "logical-plan metadata ID capacity overflowed"),
+												   checkedSizeMul(edgeIds.capacity(), sizeof(uint64_t),
+																  "logical-plan metadata ID capacity overflowed"),
+												   "logical-plan metadata ID capacity overflowed"),
+									checkedSizeAdd(checkedSizeMul(nodeCapacity, sizeof(storage::LogicalGraphNode),
+																  "logical-plan metadata Node frame size overflowed"),
+												   checkedSizeMul(edgeCapacity, sizeof(storage::LogicalGraphEdge),
+																  "logical-plan metadata Edge frame size overflowed"),
+												   "logical-plan metadata record frame size overflowed"),
+									"logical-plan metadata workspace frame size overflowed");
+						};
+						metadataWorkspaceBytes.set(metadataFrameBytes(nodeIds.size(), edgeIds.size()));
+						loadedNodes.reserve(nodeIds.size());
+						loadedEdges.reserve(edgeIds.size());
+						metadataWorkspaceBytes.set(metadataFrameBytes(loadedNodes.capacity(), loadedEdges.capacity()));
+						for (size_t offset = 0U; offset < nodeIds.size();) {
+							checkGuard(state);
+							const size_t end = std::min(nodeIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
+							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							std::vector<storage::LogicalGraphNode> batch = readNodesShapedSortedBudgeted(
+									state, std::span<const uint64_t>(nodeIds).subspan(offset, end - offset),
+									{.include_labels = true}, &sourceBytes);
+							if (batch.size() != end - offset) {
+								throw std::runtime_error(
+										"logical graph backend changed metadata Node batch cardinality");
+							}
+							for (size_t index = 0U; index < batch.size(); ++index) {
+								validateNode(batch[index], state);
+								if (batch[index].node_id != nodeIds[offset + index]) {
+									throw std::runtime_error(
+											"logical graph metadata Node batch changed logical ID order");
+								}
+							}
+							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							size_t batchPayloadBytes = 0U;
+							for (const storage::LogicalGraphNode &node: batch) {
+								batchPayloadBytes =
+										checkedSizeAdd(batchPayloadBytes, logicalNodeCacheBytes(node, state.context) - sizeof(node),
+													   "logical-plan metadata Node payload size overflowed");
+							}
+							for (storage::LogicalGraphNode &node: batch)
+								loadedNodes.push_back(std::move(node));
+							metadataWorkspaceBytes.absorb(sourceBytes.splitOff(batchPayloadBytes));
+							offset = end;
+						}
+						for (size_t offset = 0U; offset < edgeIds.size();) {
+							checkGuard(state);
+							const size_t end = std::min(edgeIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
+							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							std::vector<storage::LogicalGraphEdge> batch = readEdgesShapedSortedBudgeted(
+									state, std::span<const uint64_t>(edgeIds).subspan(offset, end - offset),
+									{.include_type = true}, &sourceBytes);
+							if (batch.size() != end - offset) {
+								throw std::runtime_error(
+										"logical graph backend changed metadata Edge batch cardinality");
+							}
+							for (size_t index = 0U; index < batch.size(); ++index) {
+								validateEdge(batch[index]);
+								if (batch[index].edge_id != edgeIds[offset + index]) {
+									throw std::runtime_error(
+											"logical graph metadata Edge batch changed logical ID order");
+								}
+							}
+							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							size_t batchPayloadBytes = 0U;
+							for (const storage::LogicalGraphEdge &edge: batch) {
+								batchPayloadBytes =
+										checkedSizeAdd(batchPayloadBytes, logicalEdgeCacheBytes(edge, state.context) - sizeof(edge),
+													   "logical-plan metadata Edge payload size overflowed");
+							}
+							for (storage::LogicalGraphEdge &edge: batch)
+								loadedEdges.push_back(std::move(edge));
+							metadataWorkspaceBytes.absorb(sourceBytes.splitOff(batchPayloadBytes));
+							offset = end;
+						}
+						const auto putLabels = [&](LogicalPlanReadRow &row, const std::string &variable,
+												   const std::vector<std::string> &labels) {
+							std::vector<PropertyValue> values;
+							values.reserve(labels.size());
+							for (const std::string &label: labels) {
+								values.emplace_back(label);
+							}
+							putCacheValue(row.entity_metadata_cache, variable, "labels",
+										  PropertyValue(std::move(values)));
+						};
+						const auto putType = [&](LogicalPlanReadRow &row, const std::string &variable,
+												 const std::string &type) {
+							putCacheValue(row.entity_metadata_cache, variable, "type", PropertyValue(type));
+						};
+						for (LogicalPlanReadRow &row: rows.values()) {
+							for (const MetadataGroup &group: metadataGroups) {
+								const auto found = row.values.find(group.variable);
+								if (found == row.values.end()) {
+									throw std::runtime_error("logical-plan metadata batch lost its Entity binding");
+								}
+								if (const auto *node = std::get_if<storage::LogicalGraphNode>(&found->second)) {
+									if (group.labels && !hasMetadata(row, group.variable, "labels")) {
+										putLabels(row, group.variable, node->labels);
+									}
+									continue;
+								}
+								if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&found->second)) {
+									if (group.type && !hasMetadata(row, group.variable, "type")) {
+										putType(row, group.variable, edge->type);
+									}
+									continue;
+								}
+								const auto *reference = std::get_if<storage::EntityRef>(&found->second);
+								if (reference == nullptr) {
+									continue;
+								}
+								validateEntityRef(*reference);
+								if (!reference->is_edge && group.labels &&
+									!hasMetadata(row, group.variable, "labels")) {
+									const auto position = std::ranges::lower_bound(
+											loadedNodes, reference->entity_id, {}, &storage::LogicalGraphNode::node_id);
+									if (position != loadedNodes.end() && position->node_id == reference->entity_id) {
+										putLabels(row, group.variable, position->labels);
+									} else {
+										const auto cached = state.node_cache.find(reference->entity_id);
+										if (cached == state.node_cache.end()) {
+											throw std::runtime_error(
+													"logical-plan metadata batch lost a requested Node");
+										}
+										putLabels(row, group.variable, cached->second.labels);
+									}
+								}
+								if (reference->is_edge && group.type && !hasMetadata(row, group.variable, "type")) {
+									const auto position = std::ranges::lower_bound(
+											loadedEdges, reference->entity_id, {}, &storage::LogicalGraphEdge::edge_id);
+									if (position != loadedEdges.end() && position->edge_id == reference->entity_id) {
+										validateEdgeReferenceRecord(*reference, *position, state,
+																	"logical-plan metadata batch relationship");
+										putType(row, group.variable, position->type);
+									} else {
+										const auto cached = state.edge_cache.find(reference->entity_id);
+										if (cached == state.edge_cache.end()) {
+											throw std::runtime_error(
+													"logical-plan metadata batch lost a requested relationship");
+										}
+										validateEdgeReferenceRecord(*reference, cached->second, state,
+																	"logical-plan metadata batch relationship");
+										putType(row, group.variable, cached->second.type);
+									}
+								}
+							}
+						}
+					}
+					for (const PropertyGroup &group: groups) {
+						// IDs can contain at most one binding per buffered row. Reserve that
+						// temporary gather space before either vector starts growing.
+						MaterializedByteReservation propertyReadBytes(&state.materialized_budget);
+						const size_t maximumIdScratch = checkedSizeMul(
+								checkedSizeMul(rows.size(), 2U, "logical-plan Property ID scratch size overflowed"),
+								sizeof(uint64_t), "logical-plan Property ID scratch size overflowed");
+						const size_t maximumKeyViewScratch =
+								checkedSizeMul(group.keys.size(), sizeof(std::string_view),
+											   "logical-plan Property key-view size overflowed");
+						propertyReadBytes.set(checkedSizeAdd(maximumIdScratch, maximumKeyViewScratch,
+															 "logical-plan Property gather scratch size overflowed"));
+						std::vector<uint64_t> nodeIds;
+						std::vector<uint64_t> edgeIds;
+						for (LogicalPlanReadRow &row: rows.values()) {
+							const auto found = row.values.find(group.variable);
+							if (found == row.values.end()) {
+								throw std::runtime_error("logical-plan Property batch lost its Entity binding");
+							}
+							if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
+								validateEntityRef(*reference);
+								if (reference->is_edge) {
+									if (const auto cached = state.edge_cache.find(reference->entity_id);
+										cached != state.edge_cache.end()) {
+										for (const std::string &key: group.keys) {
+											const auto property =
+													std::ranges::find(cached->second.properties, key,
+																	  &storage::LogicalGraphPropertyEntry::key);
+											const PropertyValue *value = property == cached->second.properties.end()
+																				 ? nullptr
+																				 : &property->value;
+											if (value == nullptr)
+												putCacheValue(row.property_cache, group.variable, key, PropertyValue());
+											else
+												putCacheValue(row.property_cache, group.variable, key, *value);
+										}
+										continue;
+									}
+								} else if (const auto cached = state.node_cache.find(reference->entity_id);
+										   cached != state.node_cache.end()) {
+									for (const std::string &key: group.keys) {
+										const auto property =
+												std::ranges::find(cached->second.properties, key,
+																  &storage::LogicalGraphPropertyEntry::key);
+										const PropertyValue *value = property == cached->second.properties.end()
+																			 ? nullptr
+																			 : &property->value;
+										if (value == nullptr)
+											putCacheValue(row.property_cache, group.variable, key, PropertyValue());
+										else
+											putCacheValue(row.property_cache, group.variable, key, *value);
+									}
+									continue;
+								}
+								const auto cached = row.property_cache.find(group.variable);
+								const bool complete = cached != row.property_cache.end() &&
+													  std::ranges::all_of(group.keys, [&](const std::string &key) {
+														  return cached->second.contains(key);
+													  });
+								if (!complete) {
+									(reference->is_edge ? edgeIds : nodeIds).push_back(reference->entity_id);
+								}
+							}
+						}
+						std::ranges::sort(nodeIds);
+						nodeIds.erase(std::unique(nodeIds.begin(), nodeIds.end()), nodeIds.end());
+						std::ranges::sort(edgeIds);
+						edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
+						std::vector<std::string_view> keys;
+						keys.reserve(group.keys.size());
+						for (const std::string &key: group.keys) {
+							keys.push_back(key);
+						}
+						const auto columnFrameBytes = [&](const size_t idCount) {
+							if (idCount == 0U)
+								return size_t{0U};
+							return checkedSizeAdd(
+									checkedSizeMul(keys.size(), sizeof(std::vector<PropertyValue>),
+												   "logical-plan Property column frame size overflowed"),
+									checkedSizeMul(checkedSizeMul(keys.size(), idCount,
+																  "logical-plan Property column frame size overflowed"),
+												   sizeof(PropertyValue),
+												   "logical-plan Property column frame size overflowed"),
+									"logical-plan Property column frame size overflowed");
+						};
+						const size_t idStorageBytes =
+								checkedSizeAdd(checkedSizeMul(nodeIds.capacity(), sizeof(uint64_t),
+															  "logical-plan Property ID storage size overflowed"),
+											   checkedSizeMul(edgeIds.capacity(), sizeof(uint64_t),
+															  "logical-plan Property ID storage size overflowed"),
+											   "logical-plan Property ID storage size overflowed");
+						const size_t columnStructures = checkedSizeAdd(
+								checkedSizeAdd(idStorageBytes,
+											   checkedSizeMul(keys.capacity(), sizeof(std::string_view),
+															  "logical-plan Property key-view size overflowed"),
+											   "logical-plan Property gather structure size overflowed"),
+								checkedSizeAdd(columnFrameBytes(nodeIds.size()), columnFrameBytes(edgeIds.size()),
+											   "logical-plan Property column frame size overflowed"),
+								"logical-plan Property gather structure size overflowed");
+						// IDs and key views now have their actual capacities. Keep their
+						// charge while replacing the conservative gather reservation with
+						// the exact column-frame reservation before storage allocates results.
+						propertyReadBytes.set(columnStructures);
+						const std::function<void(size_t)> admitProperty = [&](size_t bytes) {
+							const size_t next = checkedSizeAdd(propertyReadBytes.bytes(), bytes,
+															   "logical-plan Property source size overflowed");
+							if (propertyReadBytes.wouldExceed(next))
+								throw PrefetchBytePressure{};
+							propertyReadBytes.set(next);
+							debug::PerfTrace::addValue(
+									"logical_plan.property_source.admitted_bytes",
+									static_cast<int64_t>(
+											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+						};
+						const bool sourceAdmission = state.snapshot.supportsPropertyReadAdmission();
+						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
+										   : sourceAdmission
+												   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+															 nodeIds, keys, admitProperty)
+												   : state.snapshot.readNodePropertyColumnsSorted(nodeIds, keys);
+						auto edgeColumns = edgeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
+										   : sourceAdmission
+												   ? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+															 edgeIds, keys, admitProperty)
+												   : state.snapshot.readEdgePropertyColumnsSorted(edgeIds, keys);
+						// Invalid storage output must fail before budget retries. Otherwise
+						// smaller reads could conceal corruption in the original batch.
+						const auto validateColumns = [&](const std::vector<uint64_t> &ids,
+														 const std::vector<std::vector<PropertyValue>> &columns) {
+							const size_t expectedColumns = ids.empty() ? 0U : group.keys.size();
+							if (columns.size() != expectedColumns ||
+								std::ranges::any_of(columns,
+													[&](const auto &column) { return column.size() != ids.size(); })) {
+								throw std::runtime_error("logical graph backend changed Property batch cardinality");
+							}
+						};
+						validateColumns(nodeIds, nodeColumns);
+						validateColumns(edgeIds, edgeColumns);
+						const auto columnPayloadBytes = [&](const auto &columns, const char *message) {
+							size_t bytes = 0U;
+							for (const auto &column: columns) {
+								for (const PropertyValue &value: column) {
+									bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(value), message);
+								}
+							}
+							return bytes;
+						};
+						const size_t nodeColumnBytes =
+								columnPayloadBytes(nodeColumns, "logical-plan Node Property batch size overflowed");
+						const size_t edgeColumnBytes =
+								columnPayloadBytes(edgeColumns, "logical-plan Edge Property batch size overflowed");
+						const size_t retainedColumns = checkedSizeAdd(nodeColumnBytes, edgeColumnBytes,
+																	  "logical-plan Property batch size overflowed");
+						const size_t retainedWorkingSet = checkedSizeAdd(
+								columnStructures, retainedColumns, "logical-plan Property working set size overflowed");
+						if (retainedWorkingSet > state.bounds.maximum_materialized_bytes) {
+							if (rows.size() > 1U) {
+								throw PrefetchBytePressure{};
+							}
+							throw std::runtime_error("logical-plan Property batch exceeded its byte bound");
+						}
+						// Rebase source wire admission to the existing retained-column
+						// estimate once the complete shape has been authenticated. Readers
+						// without source admission only gain this post-read reservation.
+						if (propertyReadBytes.wouldExceed(retainedWorkingSet))
+							throw PrefetchBytePressure{};
+						propertyReadBytes.set(retainedWorkingSet);
+						if (borrowRepeatedNodeColumns && groups.size() == 1U && metadataGroups.empty() &&
+							completeEntityVariables.empty() && edgeIds.empty() && !nodeIds.empty() && nodeIds.size() < rows.size()) {
+							ownedColumns.emplace(ScopedPropertyColumns{&group.variable, &group.keys, std::move(nodeIds), std::move(nodeColumns)});
+							ownedColumnBytes.absorb(std::move(propertyReadBytes));
+						} else {
+							const auto fill = [&](const bool isEdge, const std::vector<uint64_t> &ids,
+												  std::vector<std::vector<PropertyValue>> &columns) {
+								if (ids.empty()) {
+									return;
+								}
+								// Earlier duplicate bindings keep independent copies; the final
+								// consumer takes ownership of the decoded column payload.
+								std::vector<size_t> lastRow(ids.size(), rows.size());
+								for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+									const auto found = rows.values()[rowIndex].values.find(group.variable);
+									if (found == rows.values()[rowIndex].values.end())
+										continue;
+									const auto *reference = std::get_if<storage::EntityRef>(&found->second);
+									if (reference == nullptr || reference->is_edge != isEdge)
+										continue;
+									const auto position = std::ranges::lower_bound(ids, reference->entity_id);
+									if (position != ids.end() && *position == reference->entity_id) {
+										lastRow[static_cast<size_t>(position - ids.begin())] = rowIndex;
+									}
+								}
+								for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+									LogicalPlanReadRow &row = rows.values()[rowIndex];
+									const auto found = row.values.find(group.variable);
+									if (found == row.values.end()) {
+										throw std::runtime_error("logical-plan Property batch lost its Entity binding");
+									}
+									const auto *reference = std::get_if<storage::EntityRef>(&found->second);
+									if (reference == nullptr || reference->is_edge != isEdge) {
+										continue;
+									}
+									const auto position = std::ranges::lower_bound(ids, reference->entity_id);
+									if (position == ids.end() || *position != reference->entity_id) {
+										continue;
+									}
+									const size_t ordinal = static_cast<size_t>(position - ids.begin());
+									for (size_t column = 0U; column < group.keys.size(); ++column) {
+										if (lastRow[ordinal] == rowIndex) {
+											const size_t previous = propertyReadBytes.bytes();
+											const size_t transferred =
+													property_utils::getPropertyValueSize(columns[column][ordinal]);
+											propertyReadBytes.set(previous - transferred);
+											try {
+												putCacheValue(row.property_cache, group.variable, group.keys[column],
+															  std::move(columns[column][ordinal]));
+											} catch (...) {
+												propertyReadBytes.set(previous);
+												throw;
+											}
+										} else {
+											putCacheValue(row.property_cache, group.variable, group.keys[column],
+														  std::as_const(columns[column][ordinal]));
+										}
+									}
+								}
+							};
+							fill(false, nodeIds, nodeColumns);
+							fill(true, edgeIds, edgeColumns);
+							// The output rows now own the selected values. Drop the temporary
+							// column matrices and gather vectors before charging downstream row
+							// enrichment; retaining their empty/moved-from slots would inflate the
+							// true peak and could reject a batch that fits after transfer.
+							std::vector<std::vector<PropertyValue>>().swap(nodeColumns);
+							std::vector<std::vector<PropertyValue>>().swap(edgeColumns);
+							std::vector<uint64_t>().swap(nodeIds);
+							std::vector<uint64_t>().swap(edgeIds);
+							std::vector<std::string_view>().swap(keys);
+							propertyReadBytes.set(0U);
+						}
+					}
+					// Selected columns are attached to the buffered rows during the flush;
+					// recompute the byte budget after that enrichment so LargeValue payloads
+					// are covered by the same bound as the input rows.
+					const size_t bitmapBytes = SelectionVector::requiredStorageBytes(rows.size());
+					const size_t sharedAvailable =
+							checkedSizeAdd(state.materialized_budget.available(), bufferedRowsBytes.bytes(),
+										   "logical-plan prefetch allowance overflowed");
+					const size_t enrichedLimit = std::min(state.bounds.maximum_materialized_bytes,
+														  sharedAvailable - std::min(sharedAvailable, bitmapBytes));
+					size_t enrichedBytes = 0U;
+					for (const LogicalPlanReadRow &row: rows.values()) {
+						const size_t rowBytes = logicalReadRowBytes(row, state.context);
+						if (rowBytes > enrichedLimit - std::min(enrichedBytes, enrichedLimit)) {
+							if (rows.size() > 1U) {
+								throw PrefetchBytePressure{};
+							}
+							throw std::runtime_error("bounded batch exceeded its byte limit");
+						}
+						enrichedBytes += rowBytes;
+					}
+					rows.recalculateBytes();
+					debug::PerfTrace::addValue("logical_plan.batch.flushes", 1);
+					debug::PerfTrace::addValue("logical_plan.batch.rows", static_cast<int64_t>(rows.size()));
+					debug::PerfTrace::addValue("logical_plan.batch.materialized_bytes",
+											   static_cast<int64_t>(rows.bytes()));
+					bufferedRowsBytes.set(rows.bytes());
+					struct ColumnScope {
+						ExecutionState &state; const ScopedPropertyColumns *previous;
+						~ColumnScope() { state.property_columns = previous; }
+					} columnScope{state, state.property_columns};
+					if (ownedColumns) state.property_columns = &*ownedColumns;
+					selectionBytes.set(SelectionVector::requiredStorageBytes(rows.size()));
+					SelectionVector selection(rows.size());
+					if (selectionPredicate) {
+						for (size_t index = 0U; index < rows.size(); ++index) {
+							checkGuard(state);
+							if (!selectionPredicate(rows.values()[index], state)) {
+								selection.reject(index);
+							}
+						}
+					}
+					debug::PerfTrace::addValue("logical_plan.selection.selected_rows",
+											   static_cast<int64_t>(selection.selectedCount()));
+					debug::PerfTrace::addValue("logical_plan.selection.rejected_rows",
+											   static_cast<int64_t>(rows.size() - selection.selectedCount()));
+					if (ownedColumns && selectionPredicate) {
+						// Filter rows may outlive this flush in downstream batching. Keep
+						// independent caches for selected rows only; rejected rows never
+						// receive the repeated property payload. Release columns before
+						// handing any row to a downstream owner.
+						auto &columns = *ownedColumns;
+						const size_t scratchBytes = checkedSizeMul(columns.ids.size(), sizeof(size_t),
+							"logical-plan selected scatter size overflowed");
+						if (scratchBytes > state.materialized_budget.available()) throw PrefetchBytePressure{};
+						detail::BudgetMemoryResource scatterMemory(state.materialized_budget);
+						std::pmr::vector<size_t> lastSelected(columns.ids.size(), rows.size(), &scatterMemory);
+						const auto ordinalFor = [&](const LogicalPlanReadRow &row) -> std::optional<size_t> {
+							const auto *reference = std::get_if<storage::EntityRef>(&row.values.at(*columns.variable));
+							if (reference == nullptr || reference->is_edge) return std::nullopt;
+							const auto position = std::ranges::lower_bound(columns.ids, reference->entity_id);
+							if (position == columns.ids.end() || *position != reference->entity_id)
+								throw std::runtime_error("logical-plan selected column lost its Node binding");
+							return static_cast<size_t>(position - columns.ids.begin());
+						};
+						for (size_t index = 0U; index < rows.size(); ++index) {
+							if (!selection.includes(index)) continue;
+							if (const auto ordinal = ordinalFor(rows.values()[index])) lastSelected[*ordinal] = index;
+						}
+						for (size_t index = 0U; index < rows.size(); ++index) {
+							if (!selection.includes(index)) continue;
+							auto &row = rows.values()[index];
+							const auto selectedOrdinal = ordinalFor(row);
+							if (!selectedOrdinal) continue;
+							const size_t ordinal = *selectedOrdinal;
+							for (size_t column = 0U; column < columns.keys->size(); ++column) {
+								if (lastSelected[ordinal] == index) {
+									const size_t previous = ownedColumnBytes.bytes();
+									const size_t transferred = property_utils::getPropertyValueSize(columns.columns[column][ordinal]);
+									ownedColumnBytes.set(previous - transferred);
+									try {
+										putCacheValue(row.property_cache, *columns.variable, (*columns.keys)[column],
+											std::move(columns.columns[column][ordinal]));
+									} catch (...) { ownedColumnBytes.set(previous); throw; }
+								} else {
+									putCacheValue(row.property_cache, *columns.variable, (*columns.keys)[column],
+										std::as_const(columns.columns[column][ordinal]));
+								}
+							}
+						}
+						state.property_columns = columnScope.previous;
+						ownedColumns.reset();
+						ownedColumnBytes.reset();
+					}
+					// Predicates can populate additional caches. Reconcile those before
+					// removing rows so each handoff refunds the current payload size.
+					rows.recalculateBytes();
+					bufferedRowsBytes.set(rows.bytes());
+					std::reverse(rows.values().begin(), rows.values().end());
+					bool keepGoing = true;
+					const size_t rowCount = rows.size();
+					for (size_t index = 0U; index < rowCount; ++index) {
+						checkGuard(state);
+						LogicalPlanReadRow row = rows.popBack();
+						if (selection.includes(index)) {
+							if (chargedReceiver != nullptr) {
+								MaterializedByteReservation rowCharge =
+										bufferedRowsBytes.splitOff(logicalReadRowBytes(row, state.context));
+								if (!(*chargedReceiver)(std::move(row), std::move(rowCharge))) {
+									keepGoing = false;
+									break;
+								}
+							} else {
+								bufferedRowsBytes.set(rows.bytes());
+								if (!visitor(std::move(row))) {
+									keepGoing = false;
+									break;
+								}
+							}
+						} else {
+							bufferedRowsBytes.set(rows.bytes());
+						}
+					}
+					rows.clear();
+					bufferedRowsBytes.reset();
+					selectionBytes.reset();
+					largestInputRowBytes = 0U;
+					return keepGoing;
+				} catch (const PrefetchBytePressure &) {
+					if (rows.size() > 1U)
+						return splitBufferedRowsAndFlush();
+					throw std::runtime_error("bounded batch exceeded its byte limit");
 				}
-				return keepGoing;
+			};
+
+			const auto acceptInput = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+				// Leave room for cache enrichment rather than filling the entire
+				// allowance with input references before their payload sizes are known.
+				const size_t rowBytes = logicalReadRowBytes(row, state.context);
+				const size_t batchAllowance =
+						checkedSizeAdd(checkedSizeAdd(state.materialized_budget.available(), bufferedRowsBytes.bytes(),
+													  "logical-plan prefetch input allowance overflowed"),
+									   charge.bytes(), "logical-plan prefetch input allowance overflowed");
+				const size_t headroom = checkedSizeMul(std::max(largestInputRowBytes, rowBytes), 2U,
+													   "logical-plan prefetch input headroom overflowed");
+				const size_t inputAllowance = batchAllowance - std::min(batchAllowance, headroom);
+				if (!rows.empty() && (rows.wouldExceedBytes(row) ||
+									  rowBytes > inputAllowance - std::min(rows.bytes(), inputAllowance))) {
+					if (!flush()) {
+						stoppedByVisitor = true;
+						return false;
+					}
+				}
+				rows.append(std::move(row));
+				if (charge.bytes() == 0U)
+					bufferedRowsBytes.set(rows.bytes());
+				else
+					bufferedRowsBytes.absorb(std::move(charge));
+				largestInputRowBytes = std::max(largestInputRowBytes, rowBytes);
+				// A first cache-enriched row can already consume the headroom. Flush
+				// it now so the upstream source can admit the next selected payload.
+				if (rows.size() == batchCapacity || rows.bytes() > inputAllowance) {
+					const bool keepGoing = flush();
+					if (!keepGoing) {
+						stoppedByVisitor = true;
+					}
+					return keepGoing;
+				}
+				return true;
+			};
+			const ChargedRowVisitor chargedInput = acceptInput;
+			const bool childCompleted = visitOperator(
+					child, state,
+					[&](LogicalPlanReadRow row) {
+						return acceptInput(std::move(row), MaterializedByteReservation(&state.materialized_budget));
+					},
+					supportsChargedRowHandoff(child.getType()) ? &chargedInput : nullptr);
+			if (stoppedByVisitor || !flush()) {
+				return false;
 			}
-			return true;
-		});
-		if (stoppedByVisitor || !flush()) {
-			return false;
-		}
 			return childCompleted;
 		}
 
@@ -3999,13 +8119,42 @@ namespace graph::query::execution {
 		// hint rather than a second predicate implementation.  We intentionally
 		// accept conjunctions of edge-property/literal equalities only; OR, dynamic
 		// expressions, and comparisons with unknown values retain the generic path.
-		[[nodiscard]] std::optional<std::vector<std::pair<std::string, PropertyValue>>>
-		inspectDirectEdgePropertyFilter(const expressions::Expression &expression, const std::string &edgeVariable,
-										 ExecutionState &state) {
+		// Views are valid for this synchronous execution: the logical plan owns
+		// literal payloads and inline predicate values throughout the call.
+		struct DirectEdgePredicateView {
+			std::string_view key;
+			const PropertyValue *value = nullptr;
+			const std::string *text = nullptr;
+			PropertyValue scalar;
+
+			[[nodiscard]] bool matches(const PropertyValue &actual) const {
+				if (text != nullptr) {
+					const auto *actualText = std::get_if<std::string>(&actual.getVariant());
+					return actualText != nullptr && *actualText == *text;
+				}
+				return actual == (value == nullptr ? scalar : *value);
+			}
+			[[nodiscard]] bool sameValue(const DirectEdgePredicateView &other) const {
+				if (text == nullptr)
+					return other.matches(value == nullptr ? scalar : *value);
+				if (other.text != nullptr)
+					return *text == *other.text;
+				const auto &actual = other.value == nullptr ? other.scalar : *other.value;
+				const auto *otherText = std::get_if<std::string>(&actual.getVariant());
+				return otherText != nullptr && *text == *otherText;
+			}
+			[[nodiscard]] PropertyValue copyValue() const {
+				return text != nullptr ? PropertyValue(*text) : value == nullptr ? scalar : *value;
+			}
+		};
+
+		[[nodiscard]] std::optional<std::vector<DirectEdgePredicateView>>
+		inspectDirectEdgePropertyFilterViews(const expressions::Expression &expression,
+											 const std::string &edgeVariable) {
 			if (edgeVariable.empty()) {
 				return std::nullopt;
 			}
-			std::vector<std::pair<std::string, PropertyValue>> result;
+			std::vector<DirectEdgePredicateView> result;
 			const auto visit = [&](const auto &self, const expressions::Expression &current) -> bool {
 				using ExpressionType = expressions::ExpressionType;
 				if (current.getExpressionType() == ExpressionType::BINARY_OP) {
@@ -4019,8 +8168,10 @@ namespace graph::query::execution {
 					if (binary->getOperator() != expressions::BinaryOperatorType::BOP_EQUAL) {
 						return false;
 					}
-					const auto *left = dynamic_cast<const expressions::VariableReferenceExpression *>(binary->getLeft());
-					const auto *right = dynamic_cast<const expressions::VariableReferenceExpression *>(binary->getRight());
+					const auto *left =
+							dynamic_cast<const expressions::VariableReferenceExpression *>(binary->getLeft());
+					const auto *right =
+							dynamic_cast<const expressions::VariableReferenceExpression *>(binary->getRight());
 					const expressions::VariableReferenceExpression *property = nullptr;
 					const expressions::Expression *literal = nullptr;
 					if (left != nullptr && left->hasProperty() && left->getVariableName() == edgeVariable) {
@@ -4031,20 +8182,30 @@ namespace graph::query::execution {
 						literal = binary->getLeft();
 					}
 					if (property == nullptr || literal == nullptr ||
-						literal->getExpressionType() != ExpressionType::LITERAL || property->getPropertyName().empty()) {
+						literal->getExpressionType() != ExpressionType::LITERAL ||
+						property->getPropertyName().empty()) {
 						return false;
 					}
-					LogicalPlanReadRow emptyRow;
-					const PropertyValue value = scalarValue(evaluateExpression(*literal, emptyRow, state));
-					if (isNull(value)) {
+					const auto &constant = dynamic_cast<const expressions::LiteralExpression &>(*literal);
+					DirectEdgePredicateView predicate{property->getPropertyName(), nullptr, nullptr, PropertyValue()};
+					if (constant.isNull())
 						return false;
-					}
-					const auto existing = std::ranges::find(result, property->getPropertyName(),
-							&std::pair<std::string, PropertyValue>::first);
-					if (existing != result.end()) {
-						return existing->second == value;
-					}
-					result.emplace_back(property->getPropertyName(), value);
+					if (constant.isPropertyValue()) {
+						predicate.value = &constant.getPropertyValue();
+						if (isNull(*predicate.value))
+							return false;
+					} else if (constant.isString())
+						predicate.text = &constant.getStringValue();
+					else if (constant.isBoolean())
+						predicate.scalar = PropertyValue(constant.getBooleanValue());
+					else if (constant.isInteger())
+						predicate.scalar = PropertyValue(constant.getIntegerValue());
+					else
+						predicate.scalar = PropertyValue(constant.getDoubleValue());
+					const auto existing = std::ranges::find(result, predicate.key, &DirectEdgePredicateView::key);
+					if (existing != result.end())
+						return existing->sameValue(predicate);
+					result.push_back(std::move(predicate));
 					return true;
 				}
 				return false;
@@ -4055,12 +8216,25 @@ namespace graph::query::execution {
 			return result;
 		}
 
+		[[nodiscard]] std::optional<std::vector<std::pair<std::string, PropertyValue>>>
+		inspectDirectEdgePropertyFilter(const expressions::Expression &expression, const std::string &edgeVariable,
+										ExecutionState &) {
+			const auto views = inspectDirectEdgePropertyFilterViews(expression, edgeVariable);
+			if (!views.has_value())
+				return std::nullopt;
+			std::vector<std::pair<std::string, PropertyValue>> result;
+			result.reserve(views->size());
+			for (const auto &view: *views)
+				result.emplace_back(std::string(view.key), view.copyValue());
+			return result;
+		}
+
 		// COUNT(*) and COUNT(n) over a simple Node scan need only logical IDs and,
 		// when present, label tokens. Keep this a logical-shape path so every
 		// equivalent plan can reuse it without manufacturing per-Node rows.
 		[[nodiscard]] std::optional<bool> tryVisitDirectNodeCount(const logical::LogicalAggregate &aggregate,
-																		ExecutionState &state,
-																		const InternalVisitor &visitor) {
+																  ExecutionState &state,
+																  const InternalVisitor &visitor) {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
@@ -4094,8 +8268,10 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			if (count.argument != nullptr) {
-				const auto *variable = dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
-				if (variable == nullptr || variable->hasProperty() || variable->getVariableName() != scan.getVariable()) {
+				const auto *variable =
+						dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
+				if (variable == nullptr || variable->hasProperty() ||
+					variable->getVariableName() != scan.getVariable()) {
 					return std::nullopt;
 				}
 			}
@@ -4106,14 +8282,13 @@ namespace graph::query::execution {
 			auto visitReference = [&](const storage::EntityRef &reference, bool labelsMatch) {
 				checkGuard(state);
 				validateNodeRef(reference,
-						"logical graph direct Node count returned an invalid or non-monotonic Node reference");
+								"logical graph direct Node count returned an invalid or non-monotonic Node reference");
 				if (reference.entity_id <= previousNodeId) {
 					throw std::runtime_error(
 							"logical graph direct Node count returned an invalid or non-monotonic Node reference");
 				}
 				previousNodeId = reference.entity_id;
-				incrementBounded(state.stats.nodes_scanned,
-								 "logical-plan direct Node count counter overflowed");
+				incrementBounded(state.stats.nodes_scanned, "logical-plan direct Node count counter overflowed");
 				if (!labelsMatch) {
 					return true;
 				}
@@ -4125,9 +8300,12 @@ namespace graph::query::execution {
 			};
 			if (scan.getLabels().empty()) {
 				state.snapshot.visitNodeRefs(state.bounds.maximum_node_records,
-						[&visitReference](const storage::EntityRef &reference) { return visitReference(reference, true); });
+											 [&visitReference](const storage::EntityRef &reference) {
+												 return visitReference(reference, true);
+											 });
 			} else {
-				state.snapshot.visitNodeRefsWithLabelMatches(state.bounds.maximum_node_records, scan.getLabels(),
+				state.snapshot.visitNodeRefsForLabelPredicate(
+						state.bounds.maximum_node_records, scan.getLabels(),
 						[&visitReference](const storage::EntityRef &reference, bool labelsMatch) {
 							return visitReference(reference, labelsMatch);
 						});
@@ -4145,8 +8323,9 @@ namespace graph::query::execution {
 		// is deliberately expressed in terms of logical operator shape rather than a
 		// Cypher string: it removes one B+Tree root descent per intermediate source
 		// while preserving path multiplicity and all query resource bounds.
-		[[nodiscard]] std::optional<bool> tryVisitBatchedVariableLengthCount(
-				const logical::LogicalAggregate &aggregate, ExecutionState &state, const InternalVisitor &visitor) {
+		[[nodiscard]] std::optional<bool> tryVisitBatchedVariableLengthCount(const logical::LogicalAggregate &aggregate,
+																			 ExecutionState &state,
+																			 const InternalVisitor &visitor) {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
@@ -4193,8 +8372,7 @@ namespace graph::query::execution {
 			int maximumHops = traversal.getMaxHops();
 			if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
 				if (*state.context->maxVarLengthDepth < 0) {
-					throw std::invalid_argument(
-							"logical-plan variable-length count has a negative query depth bound");
+					throw std::invalid_argument("logical-plan variable-length count has a negative query depth bound");
 				}
 				maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
 			}
@@ -4204,7 +8382,7 @@ namespace graph::query::execution {
 
 			std::optional<uint64_t> relationshipTypeToken;
 			if (!traversal.getEdgeType().empty()) {
-				if (!state.snapshot.supportsNativeRelationshipTypeTokens()) {
+				if (!state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 					return std::nullopt;
 				}
 				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
@@ -4244,10 +8422,8 @@ namespace graph::query::execution {
 				bool operator==(const AdjacentRecord &) const = default;
 			};
 			const auto pathBytes = [](const FrontierPath &path) {
-				return checkedSizeAdd(sizeof(FrontierPath),
-						checkedSizeMul(path.visited_node_ids.capacity(), sizeof(uint64_t),
-								"logical-plan variable-length frontier size overflowed"),
-						"logical-plan variable-length frontier size overflowed");
+				return checkedSizeMul(path.visited_node_ids.capacity(), sizeof(uint64_t),
+									  "logical-plan variable-length frontier size overflowed");
 			};
 			const auto incrementResult = [&](uint64_t &resultCount) {
 				if (resultCount == state.bounds.maximum_rows) {
@@ -4261,20 +8437,34 @@ namespace graph::query::execution {
 
 			debug::ScopedPerfTimer timer("logical_plan.batched_variable_length_count");
 			std::vector<FrontierPath> frontier;
-			frontier.reserve(std::min(state.bounds.maximum_node_records, size_t{4'096U}));
 			size_t frontierBytes = 0U;
 			uint64_t resultCount = 0U;
 			static_cast<void>(visitOperator(sourceScan, state, [&](LogicalPlanReadRow row) {
 				checkGuard(state);
 				const LogicalPlanReadValue &binding = requireBinding(row, traversal.getSourceVar());
-				const uint64_t sourceId = nodeBindingId(binding);
+				const uint64_t sourceId = nodeBindingId(binding, state);
 				if (sourceId == 0U || frontier.size() == state.bounds.maximum_node_records) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its source Node bound");
 				}
 				if (traversal.getMinHops() == 0 && maximumHops >= 0) {
-					const storage::LogicalGraphNode source = materializeNodeValue(state, binding);
+					storage::LogicalGraphNode source;
+					if (traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()) {
+						source = patternSourceIdentity(state, binding);
+					} else {
+						const std::array<uint64_t, 1U> ids{sourceId};
+						const auto batch = readNodesShapedSortedBudgeted(state, ids, targetShape);
+						if (batch.size() != 1U || batch.front().node_id != sourceId) {
+							throw std::runtime_error("logical graph zero-hop target changed cardinality or identity");
+						}
+						source = batch.front();
+						validateNode(source, state);
+						if (source.properties.size() > state.bounds.maximum_property_entries ||
+							logicalNodeCacheBytes(source, state.context) > state.bounds.maximum_materialized_bytes) {
+							throw std::runtime_error("logical-plan zero-hop target exceeded its materialized bound");
+						}
+					}
 					if (nodeMatches(state.snapshot, source, traversal.getTargetLabels(),
-							traversal.getTargetProperties(), state)) {
+									traversal.getTargetProperties(), state)) {
 						incrementResult(resultCount);
 					}
 				}
@@ -4282,12 +8472,19 @@ namespace graph::query::execution {
 				path.current_node_id = sourceId;
 				path.visited_node_ids.reserve(1U);
 				path.visited_node_ids.push_back(sourceId);
-				frontierBytes = checkedSizeAdd(frontierBytes, pathBytes(path),
-						"logical-plan variable-length frontier size overflowed");
+				const size_t pathPayloadBytes = pathBytes(path);
+				const size_t previousCapacity = frontier.capacity();
+				frontier.push_back(std::move(path));
+				const size_t addedSlotBytes =
+						checkedSizeMul(frontier.capacity() - previousCapacity, sizeof(FrontierPath),
+									   "logical-plan variable-length frontier size overflowed");
+				frontierBytes = checkedSizeAdd(frontierBytes,
+											   checkedSizeAdd(pathPayloadBytes, addedSlotBytes,
+															  "logical-plan variable-length frontier size overflowed"),
+											   "logical-plan variable-length frontier size overflowed");
 				if (frontierBytes > state.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
-				frontier.push_back(std::move(path));
 				return true;
 			}));
 			std::ranges::sort(frontier, {}, &FrontierPath::current_node_id);
@@ -4310,24 +8507,24 @@ namespace graph::query::execution {
 				}
 
 				std::vector<size_t> edgeCounts(currentNodeIds.size(), 0U);
-				const size_t layerFixedBytes = checkedSizeAdd(
-						checkedSizeMul(currentNodeIds.capacity(), sizeof(uint64_t),
-								"logical-plan variable-length layer size overflowed"),
-						checkedSizeMul(edgeCounts.capacity(), sizeof(size_t),
-								"logical-plan variable-length layer size overflowed"),
-						"logical-plan variable-length layer size overflowed");
-				const size_t frontierAndLayerBytes = checkedSizeAdd(frontierBytes, layerFixedBytes,
-						"logical-plan variable-length layer size overflowed");
+				const size_t layerFixedBytes =
+						checkedSizeAdd(checkedSizeMul(currentNodeIds.capacity(), sizeof(uint64_t),
+													  "logical-plan variable-length layer size overflowed"),
+									   checkedSizeMul(edgeCounts.capacity(), sizeof(size_t),
+													  "logical-plan variable-length layer size overflowed"),
+									   "logical-plan variable-length layer size overflowed");
+				const size_t frontierAndLayerBytes = checkedSizeAdd(
+						frontierBytes, layerFixedBytes, "logical-plan variable-length layer size overflowed");
 				if (frontierAndLayerBytes >= state.bounds.maximum_materialized_bytes) {
-					throw std::runtime_error(
-							"logical-plan variable-length count exceeded its materialized byte bound");
+					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 				const size_t maximumAdjacencyRecords =
 						(state.bounds.maximum_materialized_bytes - frontierAndLayerBytes) / sizeof(AdjacentRecord);
 				std::vector<AdjacentRecord> adjacency;
-				const size_t estimatedAdjacency = std::min(state.bounds.maximum_edge_records,
-						checkedSizeMul(currentNodeIds.size(), size_t{4U},
-								"logical-plan variable-length adjacency capacity overflowed"));
+				const size_t estimatedAdjacency =
+						std::min(state.bounds.maximum_edge_records,
+								 checkedSizeMul(currentNodeIds.size(), size_t{4U},
+												"logical-plan variable-length adjacency capacity overflowed"));
 				adjacency.reserve(std::min(estimatedAdjacency, maximumAdjacencyRecords));
 				const auto appendAdjacency = [&](const AdjacentRecord record) {
 					if (adjacency.size() == maximumAdjacencyRecords) {
@@ -4336,9 +8533,10 @@ namespace graph::query::execution {
 					}
 					if (adjacency.size() == adjacency.capacity()) {
 						const size_t doubled = adjacency.capacity() == 0U
-								? 1U
-								: (adjacency.capacity() > maximumAdjacencyRecords / 2U
-										? maximumAdjacencyRecords : adjacency.capacity() * 2U);
+													   ? 1U
+													   : (adjacency.capacity() > maximumAdjacencyRecords / 2U
+																  ? maximumAdjacencyRecords
+																  : adjacency.capacity() * 2U);
 						adjacency.reserve(std::min(maximumAdjacencyRecords, doubled));
 					}
 					adjacency.push_back(record);
@@ -4348,13 +8546,14 @@ namespace graph::query::execution {
 						throw std::runtime_error("logical-plan variable-length count exceeded its Edge bound");
 					}
 					const size_t remaining = state.bounds.maximum_edge_records - scannedEdges;
-					const size_t edgeVisitBound = checkedSizeAdd(
-							remaining, 1U, "logical-plan variable-length Edge bound overflowed");
+					const size_t edgeVisitBound =
+							checkedSizeAdd(remaining, 1U, "logical-plan variable-length Edge bound overflowed");
 					state.snapshot.visitAdjacentEdgeRefsForNodes(
 							currentNodeIds, adjacencyDirection, edgeVisitBound,
 							[&](const storage::EntityRef &reference) {
 								checkGuard(state);
-								validateEdgeRef(reference,
+								validateEdgeRef(
+										reference,
 										"logical graph batch adjacency returned an invalid or non-Edge reference");
 								if (scannedEdges == state.bounds.maximum_edge_records) {
 									throw std::runtime_error(
@@ -4362,7 +8561,7 @@ namespace graph::query::execution {
 								}
 								++scannedEdges;
 								incrementBounded(state.stats.edges_scanned,
-										"logical-plan variable-length Edge counter overflowed");
+												 "logical-plan variable-length Edge counter overflowed");
 								const uint64_t sourceId =
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 												? reference.source_node_id
@@ -4372,11 +8571,12 @@ namespace graph::query::execution {
 												? reference.target_node_id
 												: reference.source_node_id;
 								const auto source = std::ranges::lower_bound(currentNodeIds, sourceId);
-				if (source == currentNodeIds.end() || *source != sourceId) {
+								if (source == currentNodeIds.end() || *source != sourceId) {
 									throw std::runtime_error(
 											"logical graph batch adjacency returned an inconsistent endpoint");
 								}
-								const bool duplicateSelfLoop = traversal.getDirection() == "both" &&
+								const bool duplicateSelfLoop =
+										traversal.getDirection() == "both" &&
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
 										reference.source_node_id == reference.target_node_id;
 								if (duplicateSelfLoop) {
@@ -4415,17 +8615,17 @@ namespace graph::query::execution {
 					break;
 				}
 				const size_t adjacencyBytes = checkedSizeMul(adjacency.capacity(), sizeof(AdjacentRecord),
-						"logical-plan variable-length adjacency size overflowed");
+															 "logical-plan variable-length adjacency size overflowed");
 				const size_t layerBytes = checkedSizeAdd(layerFixedBytes, adjacencyBytes,
-						"logical-plan variable-length layer size overflowed");
-				const size_t retainedLayerBytes = checkedSizeAdd(frontierBytes, layerBytes,
-						"logical-plan variable-length layer size overflowed");
-				const size_t targetVectorBytes = checkedSizeMul(adjacency.size(), sizeof(uint64_t),
-						"logical-plan variable-length target vector size overflowed");
+														 "logical-plan variable-length layer size overflowed");
+				const size_t retainedLayerBytes =
+						checkedSizeAdd(frontierBytes, layerBytes, "logical-plan variable-length layer size overflowed");
+				const size_t targetVectorBytes =
+						checkedSizeMul(adjacency.size(), sizeof(uint64_t),
+									   "logical-plan variable-length target vector size overflowed");
 				if (targetVectorBytes > state.bounds.maximum_materialized_bytes -
-						std::min(retainedLayerBytes, state.bounds.maximum_materialized_bytes)) {
-					throw std::runtime_error(
-							"logical-plan variable-length count exceeded its materialized byte bound");
+												std::min(retainedLayerBytes, state.bounds.maximum_materialized_bytes)) {
+					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 
 				std::vector<uint64_t> targetNodeIds;
@@ -4449,44 +8649,44 @@ namespace graph::query::execution {
 					std::fill(targetMatches.begin(), targetMatches.end(), uint8_t{1U});
 				} else {
 					const std::vector<storage::LogicalGraphNode> targets =
-							state.snapshot.readNodesShapedSorted(targetNodeIds, targetShape);
+							readNodesShapedSortedBudgeted(state, targetNodeIds, targetShape);
 					if (targets.size() != targetNodeIds.size()) {
-						throw std::runtime_error(
-								"logical graph backend changed variable-length target cardinality");
+						throw std::runtime_error("logical graph backend changed variable-length target cardinality");
 					}
 					size_t targetBytes = 0U;
 					for (size_t index = 0U; index < targets.size(); ++index) {
 						if (targets[index].node_id != targetNodeIds[index]) {
-							throw std::runtime_error(
-									"logical graph backend changed variable-length target identity");
+							throw std::runtime_error("logical graph backend changed variable-length target identity");
 						}
-						targetBytes = checkedSizeAdd(targetBytes, logicalNodeCacheBytes(targets[index]),
-								"logical-plan variable-length target batch size overflowed");
-						const size_t stagedBytes = checkedSizeAdd(retainedLayerBytes,
+						targetBytes = checkedSizeAdd(targetBytes, logicalNodeCacheBytes(targets[index], state.context),
+													 "logical-plan variable-length target batch size overflowed");
+						const size_t stagedBytes = checkedSizeAdd(
+								retainedLayerBytes,
 								checkedSizeAdd(targetVectorBytes, targetBytes,
-										"logical-plan variable-length target batch size overflowed"),
+											   "logical-plan variable-length target batch size overflowed"),
 								"logical-plan variable-length target batch size overflowed");
 						if (stagedBytes > state.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan variable-length count exceeded its materialized byte bound");
 						}
-						targetMatches[index] = nodeMatches(state.snapshot, targets[index],
-								traversal.getTargetLabels(), traversal.getTargetProperties(), state);
+						targetMatches[index] = nodeMatches(state.snapshot, targets[index], traversal.getTargetLabels(),
+														   traversal.getTargetProperties(), state);
 					}
 				}
 
 				std::vector<FrontierPath> nextFrontier;
 				size_t nextFrontierBytes = 0U;
-				const size_t retainedBytes = checkedSizeAdd(retainedLayerBytes,
-						checkedSizeAdd(targetVectorBytes, targetMatches.capacity() * sizeof(uint8_t),
-								"logical-plan variable-length layer size overflowed"),
-						"logical-plan variable-length layer size overflowed");
+				const size_t retainedBytes =
+						checkedSizeAdd(retainedLayerBytes,
+									   checkedSizeAdd(targetVectorBytes, targetMatches.capacity() * sizeof(uint8_t),
+													  "logical-plan variable-length layer size overflowed"),
+									   "logical-plan variable-length layer size overflowed");
 				for (const FrontierPath &path: frontier) {
 					checkGuard(state);
 					const auto first = std::ranges::lower_bound(adjacency, path.current_node_id, {},
-							&AdjacentRecord::source_node_id);
+																&AdjacentRecord::source_node_id);
 					const auto last = std::ranges::upper_bound(adjacency, path.current_node_id, {},
-							&AdjacentRecord::source_node_id);
+															   &AdjacentRecord::source_node_id);
 					for (auto candidate = first; candidate != last; ++candidate) {
 						if (std::ranges::find(path.visited_node_ids, candidate->target_node_id) !=
 							path.visited_node_ids.end()) {
@@ -4507,17 +8707,25 @@ namespace graph::query::execution {
 						next.current_node_id = candidate->target_node_id;
 						next.visited_node_ids.reserve(path.visited_node_ids.size() + 1U);
 						next.visited_node_ids.insert(next.visited_node_ids.end(), path.visited_node_ids.begin(),
-								path.visited_node_ids.end());
+													 path.visited_node_ids.end());
 						next.visited_node_ids.push_back(candidate->target_node_id);
-						nextFrontierBytes = checkedSizeAdd(nextFrontierBytes, pathBytes(next),
-								"logical-plan variable-length frontier size overflowed");
+						const size_t nextPathBytes = pathBytes(next);
+						const size_t previousCapacity = nextFrontier.capacity();
+						nextFrontier.push_back(std::move(next));
+						const size_t addedSlotBytes =
+								checkedSizeMul(nextFrontier.capacity() - previousCapacity, sizeof(FrontierPath),
+											   "logical-plan variable-length frontier size overflowed");
+						nextFrontierBytes =
+								checkedSizeAdd(nextFrontierBytes,
+											   checkedSizeAdd(nextPathBytes, addedSlotBytes,
+															  "logical-plan variable-length frontier size overflowed"),
+											   "logical-plan variable-length frontier size overflowed");
 						if (checkedSizeAdd(retainedBytes, nextFrontierBytes,
-								"logical-plan variable-length frontier size overflowed") >
+										   "logical-plan variable-length frontier size overflowed") >
 							state.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan variable-length count exceeded its materialized byte bound");
 						}
-						nextFrontier.push_back(std::move(next));
 					}
 				}
 				frontier = std::move(nextFrontier);
@@ -4529,116 +8737,263 @@ namespace graph::query::execution {
 			return visitor(std::move(result));
 		}
 
-		[[nodiscard]] std::optional<bool> tryVisitAnchoredTwoHopRelationshipCount(
-				const logical::LogicalAggregate &aggregate, ExecutionState &state, const InternalVisitor &visitor) {
+		[[nodiscard]] std::optional<bool>
+		tryVisitAnchoredTwoHopRelationshipCount(const logical::LogicalAggregate &aggregate, ExecutionState &state,
+												const InternalVisitor &visitor) {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
-			if (!groupExpressions.empty() || aggregations.size() != 1U || !state.snapshot.supportsNativeEdgeRefScans() ||
-				!state.snapshot.supportsNodeExistenceProbes()) {
+			if (!groupExpressions.empty() || aggregations.size() != 1U ||
+				!state.snapshot.supportsNativeEdgeRefScans() || !state.snapshot.supportsNodeExistenceProbes()) {
 				return std::nullopt;
 			}
 			const logical::LogicalAggItem &count = aggregations.front();
-			if (count.functionName != "count" || count.distinct || count.alias.empty() || count.extraArg || !count.argument) {
+			if (count.functionName != "count" || count.distinct || count.alias.empty() || count.extraArg ||
+				!count.argument) {
 				return std::nullopt;
 			}
-			const auto *countVariable = dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
-		if (countVariable == nullptr || countVariable->hasProperty()) {
+			const auto *countVariable =
+					dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
+			if (countVariable == nullptr || countVariable->hasProperty()) {
 				return std::nullopt;
 			}
-		const std::vector<logical::LogicalOperator *> aggregateChildren = aggregate.getChildren();
-		if (debug::PerfTrace::areValuesEnabled() && !aggregateChildren.empty() && aggregateChildren.front() != nullptr) {
-			debug::PerfTrace::addValue("logical_plan.two_hop.aggregate_child_type",
-					static_cast<int64_t>(aggregateChildren.front()->getType()));
-		}
-		if (aggregateChildren.size() != 1U || aggregateChildren.front() == nullptr ||
+			const std::vector<logical::LogicalOperator *> aggregateChildren = aggregate.getChildren();
+			if (debug::PerfTrace::areValuesEnabled() && !aggregateChildren.empty() &&
+				aggregateChildren.front() != nullptr) {
+				debug::PerfTrace::addValue("logical_plan.two_hop.aggregate_child_type",
+										   static_cast<int64_t>(aggregateChildren.front()->getType()));
+			}
+			if (aggregateChildren.size() != 1U || aggregateChildren.front() == nullptr ||
 				aggregateChildren.front()->getType() != logical::LogicalOpType::LOP_TRAVERSAL) {
-			return std::nullopt;
-		}
-		const auto &outer = dynamic_cast<const logical::LogicalTraversal &>(*aggregateChildren.front());
-		if (outer.getTargetVar().empty() || countVariable->getVariableName() != outer.getTargetVar() ||
+				return std::nullopt;
+			}
+			const auto &outer = dynamic_cast<const logical::LogicalTraversal &>(*aggregateChildren.front());
+			if (outer.getTargetVar().empty() || countVariable->getVariableName() != outer.getTargetVar() ||
 				!outer.getEdgeProperties().empty() || !outer.getTargetProperties().empty() ||
 				(outer.getDirection() != "out" && outer.getDirection() != "in" && outer.getDirection() != "both")) {
-			return std::nullopt;
-		}
-		const std::vector<logical::LogicalOperator *> outerChildren = outer.getChildren();
-		if (outerChildren.size() != 1U || outerChildren.front() == nullptr ||
+				return std::nullopt;
+			}
+			const std::vector<logical::LogicalOperator *> outerChildren = outer.getChildren();
+			if (outerChildren.size() != 1U || outerChildren.front() == nullptr ||
 				outerChildren.front()->getType() != logical::LogicalOpType::LOP_TRAVERSAL) {
-			return std::nullopt;
-		}
-		const auto &inner = dynamic_cast<const logical::LogicalTraversal &>(*outerChildren.front());
-		if (inner.getTargetVar().empty() || inner.getTargetVar() != outer.getSourceVar() ||
+				return std::nullopt;
+			}
+			const auto &inner = dynamic_cast<const logical::LogicalTraversal &>(*outerChildren.front());
+			if (inner.getTargetVar().empty() || inner.getTargetVar() != outer.getSourceVar() ||
 				!inner.getEdgeProperties().empty() || !inner.getTargetProperties().empty() ||
 				!inner.getTargetProperties().empty() ||
 				(inner.getDirection() != "out" && inner.getDirection() != "in" && inner.getDirection() != "both")) {
-			return std::nullopt;
-		}
-		const std::vector<logical::LogicalOperator *> innerChildren = inner.getChildren();
-		if (innerChildren.size() != 1U || innerChildren.front() == nullptr ||
+				return std::nullopt;
+			}
+			const std::vector<logical::LogicalOperator *> innerChildren = inner.getChildren();
+			if (innerChildren.size() != 1U || innerChildren.front() == nullptr ||
 				innerChildren.front()->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
-			return std::nullopt;
-		}
-		const auto &seed = dynamic_cast<const logical::LogicalNodeScan &>(*innerChildren.front());
-		if (seed.getVariable() != inner.getSourceVar()) {
-			return std::nullopt;
-		}
-		if (state.bounds.maximum_rows == std::numeric_limits<size_t>::max() ||
+				return std::nullopt;
+			}
+			const auto &seed = dynamic_cast<const logical::LogicalNodeScan &>(*innerChildren.front());
+			if (seed.getVariable() != inner.getSourceVar()) {
+				return std::nullopt;
+			}
+			if (state.bounds.maximum_rows == std::numeric_limits<size_t>::max() ||
 				state.bounds.maximum_edge_records == std::numeric_limits<size_t>::max()) {
-			throw std::overflow_error("logical-plan two-hop relationship count bound overflowed");
-		}
-		std::optional<uint64_t> innerType;
-		if (!inner.getEdgeType().empty()) {
-			if (!state.snapshot.supportsNativeRelationshipTypeTokens()) {
-				return std::nullopt;
+				throw std::overflow_error("logical-plan two-hop relationship count bound overflowed");
 			}
-			innerType = state.snapshot.findRelationshipTypeToken(inner.getEdgeType());
-			if (!innerType.has_value()) {
-				LogicalPlanReadRow result;
-				result.values.emplace(count.alias, PropertyValue(int64_t{0}));
-				return visitor(std::move(result));
+			std::optional<uint64_t> innerType;
+			if (!inner.getEdgeType().empty()) {
+				if (!state.snapshot.supportsNativeRelationshipTypeTokens(inner.getEdgeType())) {
+					return std::nullopt;
+				}
+				innerType = state.snapshot.findRelationshipTypeToken(inner.getEdgeType());
+				if (!innerType.has_value()) {
+					LogicalPlanReadRow result;
+					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
+					return visitor(std::move(result));
+				}
 			}
-		}
-		std::optional<uint64_t> outerType;
-		if (!outer.getEdgeType().empty()) {
-			if (!state.snapshot.supportsNativeRelationshipTypeTokens()) {
-				return std::nullopt;
+			std::optional<uint64_t> outerType;
+			if (!outer.getEdgeType().empty()) {
+				if (!state.snapshot.supportsNativeRelationshipTypeTokens(outer.getEdgeType())) {
+					return std::nullopt;
+				}
+				outerType = state.snapshot.findRelationshipTypeToken(outer.getEdgeType());
+				if (!outerType.has_value()) {
+					LogicalPlanReadRow result;
+					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
+					return visitor(std::move(result));
+				}
 			}
-			outerType = state.snapshot.findRelationshipTypeToken(outer.getEdgeType());
-			if (!outerType.has_value()) {
-				LogicalPlanReadRow result;
-				result.values.emplace(count.alias, PropertyValue(int64_t{0}));
-				return visitor(std::move(result));
-			}
-		}
 
-		std::vector<uint64_t> seedIds;
-		seedIds.reserve(std::min(state.bounds.maximum_node_records, size_t{4'096U}));
-		static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
-			const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()));
-			if (id == 0U || seedIds.size() == state.bounds.maximum_node_records) {
-				throw std::runtime_error("logical-plan two-hop relationship count exceeded its source Node bound");
-			}
-			seedIds.push_back(id);
-			return true;
-		}));
-		std::ranges::sort(seedIds);
-		seedIds.erase(std::unique(seedIds.begin(), seedIds.end()), seedIds.end());
+			detail::BudgetMemoryResource intermediateMemory(state.materialized_budget);
+			const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
+			const auto visitBatchRefs = [&](std::span<const uint64_t> sources,
+				storage::LogicalGraphReadDirection direction, size_t bound,
+				const std::function<bool(const storage::EntityRef &)> &consume) {
+				if (state.snapshot.supportsBatchAdjacencyReferenceBufferAdmission()) {
+					MaterializedByteReservation sourceBytes(&state.materialized_budget);
+					state.snapshot.visitAdjacentEdgeRefsForNodesWithBufferAdmission(sources, direction, bound, consume,
+						[&](size_t bytes) {
+							if (state.context != nullptr) state.context->checkGuardNow();
+							if (sourceBytes.wouldExceed(bytes)) throw storage::LogicalGraphBufferPressure();
+							sourceBytes.set(bytes);
+						});
+				} else {
+					state.snapshot.visitAdjacentEdgeRefsForNodes(sources, direction, bound, consume);
+				}
+			};
 
-		using Multiplicity = uint64_t;
-		const auto expand = [&](const std::vector<uint64_t> &sources, const std::string &direction,
-								 const std::optional<uint64_t> &type, std::unordered_map<uint64_t, Multiplicity> *next) {
-			std::unordered_set<uint64_t> sourceSet;
-			sourceSet.reserve(sources.size());
-			for (const uint64_t id: sources) {
+			std::pmr::vector<uint64_t> seedIds(&intermediateMemory);
+			static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
+				const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()), state);
+				if (id == 0U || seedIds.size() == state.bounds.maximum_node_records) {
+					throw std::runtime_error("logical-plan two-hop relationship count exceeded its source Node bound");
+				}
+				seedIds.push_back(id);
+				return true;
+			}));
+			detail::sortUniqueIdsGuarded(seedIds, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
+
+			using Multiplicity = uint64_t;
+			const auto expand = [&](const std::pmr::vector<uint64_t> &sources, const std::string &direction,
+									const std::optional<uint64_t> &type,
+									std::pmr::unordered_map<uint64_t, Multiplicity> *next) {
+				std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
+				sourceSet.reserve(sources.size());
+				for (const uint64_t id: sources) {
+					checkGuard(state);
+					sourceSet.insert(id);
+				}
+				std::pmr::unordered_map<uint64_t, size_t> sourceEdgeCounts(&intermediateMemory);
+				sourceEdgeCounts.reserve(sources.size());
+				std::pmr::vector<uint64_t> targetIds(&intermediateMemory);
+				size_t scanned = 0U;
+				const auto consume = [&](const storage::EntityRef &reference) {
+					checkGuard(state);
+					validateEdgeRef(reference,
+									"logical-plan two-hop relationship count received an invalid or Node reference");
+					if (scanned == state.bounds.maximum_edge_records) {
+						throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
+					}
+					++scanned;
+					incrementBounded(state.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
+					const bool outgoing = sourceSet.contains(reference.source_node_id);
+					const bool incoming = sourceSet.contains(reference.target_node_id);
+					const auto consumeOne = [&](const uint64_t sourceId, const uint64_t targetId) {
+						if (sourceEdgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
+							throw std::runtime_error(
+									"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
+						}
+						++sourceEdgeCounts[sourceId];
+						if (type.has_value() && reference.type_token != *type) {
+							return;
+						}
+						if (next != nullptr) {
+							const Multiplicity previous = next->contains(targetId) ? next->at(targetId) : 0U;
+							const Multiplicity increment = sources.empty() ? 0U : 1U;
+							if (previous > std::numeric_limits<Multiplicity>::max() - increment) {
+								throw std::overflow_error("logical-plan two-hop path multiplicity overflowed");
+							}
+							next->insert_or_assign(targetId, previous + increment);
+							// Probe each distinct endpoint once; multiplicity stays in the map.
+							if (previous == 0U) targetIds.push_back(targetId);
+						}
+					};
+					if (direction == "out" || direction == "both") {
+						if (outgoing)
+							consumeOne(reference.source_node_id, reference.target_node_id);
+					}
+					if ((direction == "in" || direction == "both") && incoming &&
+						!(outgoing && reference.source_node_id == reference.target_node_id)) {
+						consumeOne(reference.target_node_id, reference.source_node_id);
+					}
+					return true;
+				};
+				const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
+					if (scanned == state.bounds.maximum_edge_records) {
+						throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
+					}
+					const size_t remaining = state.bounds.maximum_edge_records - scanned;
+					const size_t edgeVisitBound =
+							checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
+					visitBatchRefs(sources, adjacencyDirection, edgeVisitBound, consume);
+				};
+				if (direction == "out" || direction == "both") {
+					visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
+				}
+				if (direction == "in" || direction == "both") {
+					visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
+				}
+				if (next != nullptr) {
+					if (next->size() > state.bounds.maximum_node_records) {
+						throw std::runtime_error(
+								"logical-plan two-hop relationship count exceeded its intermediate Node bound");
+					}
+					detail::sortUniqueIdsGuarded(targetIds, [&] {
+						if (state.context != nullptr) state.context->checkGuardNow();
+					});
+					MaterializedByteReservation presentBytes(&state.materialized_budget);
+					presentBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+						"logical-plan two-hop bit slots overflowed"));
+					const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
+					presentBytes.set(bitBytes(present.capacity()));
+					checkGuard(state);
+					if (present.size() != targetIds.size() ||
+						std::ranges::any_of(present, [](bool value) { return !value; })) {
+						throw std::runtime_error(
+								"logical graph backend returned an Edge topology with a missing endpoint");
+					}
+					const std::vector<std::string> &labels = inner.getTargetLabels();
+					if (!labels.empty()) {
+						MaterializedByteReservation matchesBytes(&state.materialized_budget);
+						matchesBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+							"logical-plan two-hop bit slots overflowed"));
+						const std::vector<bool> matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
+						matchesBytes.set(bitBytes(matches.capacity()));
+						checkGuard(state);
+						if (matches.size() != targetIds.size()) {
+							throw std::runtime_error(
+									"logical graph backend changed two-hop intermediate label cardinality");
+						}
+						for (size_t index = 0U; index < targetIds.size(); ++index) {
+							checkGuard(state);
+							if (!matches[index]) {
+								next->erase(targetIds[index]);
+							}
+						}
+					}
+				}
+			};
+			std::pmr::unordered_map<uint64_t, Multiplicity> intermediate(&intermediateMemory);
+			if (!seedIds.empty()) {
+				expand(seedIds, inner.getDirection(), innerType, &intermediate);
+			}
+			std::pmr::vector<uint64_t> intermediateIds(&intermediateMemory);
+			intermediateIds.reserve(intermediate.size());
+			for (const auto &[id, multiplicity]: intermediate) {
+				checkGuard(state);
+				static_cast<void>(multiplicity);
+				intermediateIds.push_back(id);
+			}
+			detail::sortUniqueIdsGuarded(intermediateIds, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
+			uint64_t resultCount = 0U;
+			// The second pass retains multiplicity from the first hop.  It uses the same
+			// endpoint/type checks but does not materialize intermediate rows.
+			std::pmr::unordered_set<uint64_t> sourceSet(&intermediateMemory);
+			sourceSet.reserve(intermediate.size());
+			for (const uint64_t id: intermediateIds) {
+				checkGuard(state);
 				sourceSet.insert(id);
 			}
-			std::unordered_map<uint64_t, size_t> sourceEdgeCounts;
-			sourceEdgeCounts.reserve(sources.size());
-			std::vector<uint64_t> targetIds;
+			std::pmr::unordered_map<uint64_t, size_t> edgeCounts(&intermediateMemory);
+			std::pmr::unordered_map<uint64_t, Multiplicity> finalCandidates(&intermediateMemory);
+			std::pmr::vector<uint64_t> finalTargetIds(&intermediateMemory);
 			size_t scanned = 0U;
-			const auto consume = [&](const storage::EntityRef &reference) {
+			const auto consumeOuterReference = [&](const storage::EntityRef &reference) {
 				checkGuard(state);
 				validateEdgeRef(reference,
-						"logical-plan two-hop relationship count received an invalid or Node reference");
+								"logical-plan two-hop relationship count received an invalid or Node reference");
 				if (scanned == state.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 				}
@@ -4646,175 +9001,94 @@ namespace graph::query::execution {
 				incrementBounded(state.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
 				const bool outgoing = sourceSet.contains(reference.source_node_id);
 				const bool incoming = sourceSet.contains(reference.target_node_id);
-				const auto consumeOne = [&](const uint64_t sourceId, const uint64_t targetId) {
-					if (sourceEdgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
-						throw std::runtime_error("logical-plan two-hop relationship count exceeded its per-Node Edge bound");
+				const auto consume = [&](uint64_t sourceId, uint64_t targetId) {
+					if (edgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
+						throw std::runtime_error(
+								"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
 					}
-					++sourceEdgeCounts[sourceId];
-					if (type.has_value() && reference.type_token != *type) {
+					++edgeCounts[sourceId];
+					if ((outerType.has_value() && reference.type_token != *outerType))
 						return;
+					const uint64_t multiplicity = intermediate.at(sourceId);
+					const auto [entry, inserted] = finalCandidates.try_emplace(targetId, 0U);
+					if (entry->second > std::numeric_limits<uint64_t>::max() - multiplicity) {
+						throw std::overflow_error("logical-plan two-hop relationship count overflowed");
 					}
-					if (next != nullptr) {
-						const Multiplicity previous = next->contains(targetId) ? next->at(targetId) : 0U;
-						const Multiplicity increment = sources.empty() ? 0U : 1U;
-						if (previous > std::numeric_limits<Multiplicity>::max() - increment) {
-							throw std::overflow_error("logical-plan two-hop path multiplicity overflowed");
-						}
-						next->insert_or_assign(targetId, previous + increment);
-						targetIds.push_back(targetId);
-					}
+					entry->second += multiplicity;
+					if (inserted) finalTargetIds.push_back(targetId);
 				};
-				if (direction == "out" || direction == "both") {
-					if (outgoing) consumeOne(reference.source_node_id, reference.target_node_id);
+				if (outer.getDirection() == "out" || outer.getDirection() == "both") {
+					if (outgoing)
+						consume(reference.source_node_id, reference.target_node_id);
 				}
-				if ((direction == "in" || direction == "both") && incoming &&
-						!(outgoing && reference.source_node_id == reference.target_node_id)) {
-					consumeOne(reference.target_node_id, reference.source_node_id);
+				if ((outer.getDirection() == "in" || outer.getDirection() == "both") && incoming &&
+					!(outgoing && reference.source_node_id == reference.target_node_id)) {
+					consume(reference.target_node_id, reference.source_node_id);
 				}
 				return true;
 			};
-			const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
+			const auto visitOuterDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
 				if (scanned == state.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 				}
 				const size_t remaining = state.bounds.maximum_edge_records - scanned;
-				const size_t edgeVisitBound = checkedSizeAdd(remaining, 1U,
-												"logical-plan two-hop Edge bound overflowed");
-				state.snapshot.visitAdjacentEdgeRefsForNodes(sources, adjacencyDirection, edgeVisitBound,
-						consume);
-			};
-			if (direction == "out" || direction == "both") {
-				visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
-			}
-			if (direction == "in" || direction == "both") {
-				visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
-			}
-			if (next != nullptr) {
-				if (next->size() > state.bounds.maximum_node_records) {
-					throw std::runtime_error("logical-plan two-hop relationship count exceeded its intermediate Node bound");
-				}
-				std::ranges::sort(targetIds);
-				targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
-				const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
-				if (present.size() != targetIds.size() || std::ranges::any_of(present, [](bool value) { return !value; })) {
-					throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
-				}
-				const std::vector<std::string> &labels = inner.getTargetLabels();
-				if (!labels.empty()) {
-					const std::vector<bool> matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
-					if (matches.size() != targetIds.size()) {
-						throw std::runtime_error("logical graph backend changed two-hop intermediate label cardinality");
-					}
-					for (size_t index = 0U; index < targetIds.size(); ++index) {
-						if (!matches[index]) {
-							next->erase(targetIds[index]);
-						}
-					}
-				}
-			}
-		};
-		std::unordered_map<uint64_t, Multiplicity> intermediate;
-		if (!seedIds.empty()) {
-			expand(seedIds, inner.getDirection(), innerType, &intermediate);
-		}
-		std::vector<uint64_t> intermediateIds;
-		intermediateIds.reserve(intermediate.size());
-		for (const auto &[id, multiplicity]: intermediate) {
-			static_cast<void>(multiplicity);
-			intermediateIds.push_back(id);
-		}
-		std::ranges::sort(intermediateIds);
-		intermediateIds.erase(std::unique(intermediateIds.begin(), intermediateIds.end()), intermediateIds.end());
-		uint64_t resultCount = 0U;
-		// The second pass retains multiplicity from the first hop.  It uses the same
-		// endpoint/type checks but does not materialize intermediate rows.
-		std::unordered_set<uint64_t> sourceSet;
-		sourceSet.reserve(intermediate.size());
-		for (const uint64_t id: intermediateIds) sourceSet.insert(id);
-		std::unordered_map<uint64_t, size_t> edgeCounts;
-		struct FinalCandidate { uint64_t source_id = 0U; uint64_t target_id = 0U; uint64_t multiplicity = 0U; };
-		std::vector<FinalCandidate> finalCandidates;
-		std::vector<uint64_t> finalTargetIds;
-		size_t scanned = 0U;
-		const auto consumeOuterReference = [&](const storage::EntityRef &reference) {
-			checkGuard(state);
-			validateEdgeRef(reference,
-					"logical-plan two-hop relationship count received an invalid or Node reference");
-			if (scanned == state.bounds.maximum_edge_records) {
-				throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
-			}
-			++scanned;
-			incrementBounded(state.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
-			const bool outgoing = sourceSet.contains(reference.source_node_id);
-			const bool incoming = sourceSet.contains(reference.target_node_id);
-			const auto consume = [&](uint64_t sourceId, uint64_t targetId) {
-				if (edgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
-					throw std::runtime_error("logical-plan two-hop relationship count exceeded its per-Node Edge bound");
-				}
-				++edgeCounts[sourceId];
-				if ((outerType.has_value() && reference.type_token != *outerType)) return;
-				const uint64_t multiplicity = intermediate.at(sourceId);
-				finalCandidates.push_back({sourceId, targetId, multiplicity});
-				finalTargetIds.push_back(targetId);
+				const size_t edgeVisitBound =
+						checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
+				visitBatchRefs(intermediateIds, adjacencyDirection, edgeVisitBound,
+															 consumeOuterReference);
 			};
 			if (outer.getDirection() == "out" || outer.getDirection() == "both") {
-				if (outgoing) consume(reference.source_node_id, reference.target_node_id);
+				visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
 			}
-			if ((outer.getDirection() == "in" || outer.getDirection() == "both") && incoming &&
-					!(outgoing && reference.source_node_id == reference.target_node_id)) {
-				consume(reference.target_node_id, reference.source_node_id);
+			if (outer.getDirection() == "in" || outer.getDirection() == "both") {
+				visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
 			}
-			return true;
-		};
-		const auto visitOuterDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
-			if (scanned == state.bounds.maximum_edge_records) {
-				throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
-			}
-			const size_t remaining = state.bounds.maximum_edge_records - scanned;
-			const size_t edgeVisitBound = checkedSizeAdd(remaining, 1U,
-												"logical-plan two-hop Edge bound overflowed");
-			state.snapshot.visitAdjacentEdgeRefsForNodes(intermediateIds, adjacencyDirection, edgeVisitBound,
-					consumeOuterReference);
-		};
-		if (outer.getDirection() == "out" || outer.getDirection() == "both") {
-			visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
-		}
-		if (outer.getDirection() == "in" || outer.getDirection() == "both") {
-			visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
-		}
-		std::ranges::sort(finalTargetIds);
-		finalTargetIds.erase(std::unique(finalTargetIds.begin(), finalTargetIds.end()), finalTargetIds.end());
-		const std::vector<bool> finalPresent = state.snapshot.containsNodesSorted(finalTargetIds);
-		if (finalPresent.size() != finalTargetIds.size() ||
+			detail::sortUniqueIdsGuarded(finalTargetIds, [&] {
+				if (state.context != nullptr) state.context->checkGuardNow();
+			});
+			MaterializedByteReservation finalPresentBytes(&state.materialized_budget);
+			finalPresentBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
+				"logical-plan two-hop bit slots overflowed"));
+			const std::vector<bool> finalPresent = state.snapshot.containsNodesSorted(finalTargetIds);
+			finalPresentBytes.set(bitBytes(finalPresent.capacity()));
+			checkGuard(state);
+			if (finalPresent.size() != finalTargetIds.size() ||
 				std::ranges::any_of(finalPresent, [](bool value) { return !value; })) {
-			throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
-		}
-		std::vector<bool> finalLabels(finalTargetIds.size(), true);
-		if (!outer.getTargetLabels().empty()) {
-			finalLabels = state.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
-			if (finalLabels.size() != finalTargetIds.size()) {
-				throw std::runtime_error("logical graph backend changed two-hop target label cardinality");
+				throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
 			}
-		}
-		for (const FinalCandidate &candidate: finalCandidates) {
-			const auto position = std::ranges::lower_bound(finalTargetIds, candidate.target_id);
-			if (position == finalTargetIds.end() || !finalLabels[static_cast<size_t>(position - finalTargetIds.begin())]) {
-				continue;
+			MaterializedByteReservation finalLabelBytes(&state.materialized_budget);
+			std::vector<bool> finalLabels;
+			if (!outer.getTargetLabels().empty()) {
+				finalLabelBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
+					"logical-plan two-hop label bit slots overflowed"));
+				finalLabels = state.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
+				finalLabelBytes.set(bitBytes(finalLabels.capacity()));
+				checkGuard(state);
+				if (finalLabels.size() != finalTargetIds.size()) {
+					throw std::runtime_error("logical graph backend changed two-hop target label cardinality");
+				}
 			}
-			if (resultCount > std::numeric_limits<uint64_t>::max() - candidate.multiplicity) {
-				throw std::overflow_error("logical-plan two-hop relationship count overflowed");
+			for (const auto &[targetId, multiplicity]: finalCandidates) {
+				checkGuard(state);
+				const auto position = std::ranges::lower_bound(finalTargetIds, targetId);
+				if (position == finalTargetIds.end() ||
+					(!finalLabels.empty() && !finalLabels[static_cast<size_t>(position - finalTargetIds.begin())])) {
+					continue;
+				}
+				if (resultCount > std::numeric_limits<uint64_t>::max() - multiplicity) {
+					throw std::overflow_error("logical-plan two-hop relationship count overflowed");
+				}
+				resultCount += multiplicity;
+				if (resultCount > state.bounds.maximum_rows) {
+					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+				}
 			}
-			resultCount += candidate.multiplicity;
-			if (resultCount > state.bounds.maximum_rows) {
-				throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+			LogicalPlanReadRow result;
+			if (resultCount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+				throw std::overflow_error("logical-plan two-hop relationship count exceeds integer result range");
 			}
-		}
-		LogicalPlanReadRow result;
-		if (resultCount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-			throw std::overflow_error("logical-plan two-hop relationship count exceeds integer result range");
-		}
-		result.values.emplace(count.alias, PropertyValue(static_cast<int64_t>(resultCount)));
-		return visitor(std::move(result));
+			result.values.emplace(count.alias, PropertyValue(static_cast<int64_t>(resultCount)));
+			return visitor(std::move(result));
 		}
 
 		[[nodiscard]] std::optional<bool> tryVisitAnchoredRelationshipCount(const logical::LogicalAggregate &aggregate,
@@ -4862,7 +9136,8 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			std::optional<uint64_t> relationshipTypeToken;
-			if (!traversal.getEdgeType().empty() && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+			if (!traversal.getEdgeType().empty() &&
+				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					LogicalPlanReadRow result;
@@ -4871,14 +9146,14 @@ namespace graph::query::execution {
 				}
 			}
 			const bool useNativeAdjacencyRefs = state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
-					(traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
-			// Selected nullable columns cannot distinguish a missing Property from a
-			// stored NULL. Retain the complete-node path for nullable predicates;
-			// non-null predicates can be validated through bounded column reads.
-			const bool targetPropertiesCanBeSelected = useNativeAdjacencyRefs &&
-				!traversal.getTargetProperties().empty() &&
-				!std::ranges::any_of(traversal.getTargetProperties(),
-						[](const auto &predicate) { return isNull(predicate.second); });
+												(traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
+			// Nullable columns need a presence probe to distinguish stored NULL
+			// from an absent Property without loading unrelated values.
+			const bool targetPropertiesCanBeSelected =
+					useNativeAdjacencyRefs && !traversal.getTargetProperties().empty() &&
+					(state.snapshot.supportsPropertyPresenceProbes() ||
+					 !std::ranges::any_of(traversal.getTargetProperties(),
+						[](const auto &predicate) { return isNull(predicate.second); }));
 
 			debug::ScopedPerfTimer timer("logical_plan.anchored_relationship_count");
 			size_t inputRows = 0U;
@@ -4888,7 +9163,7 @@ namespace graph::query::execution {
 				// The topology cursor needs only the stable logical ID. Keep a native
 				// deferred source as a reference instead of reopening its full Node record;
 				// source labels and predicates were already validated by the scan.
-				const uint64_t sourceNodeId = nodeBindingId(sourceBinding);
+				const uint64_t sourceNodeId = nodeBindingId(sourceBinding, state);
 				size_t sourceEdges = 0U;
 				struct PendingTarget {
 					uint64_t edge_id = 0U;
@@ -4896,24 +9171,25 @@ namespace graph::query::execution {
 					uint64_t target_node_id = 0U;
 					bool type_matches = false;
 				};
+				MaterializedByteReservation pendingBytes(&state.materialized_budget);
 				std::vector<PendingTarget> pendingTargets;
-			std::unordered_map<uint64_t, bool> targetLabelCache;
+				using LabelMatch = std::pair<uint64_t, bool>;
+				MaterializedByteReservation labelCacheBytes(&state.materialized_budget);
+				std::vector<LabelMatch> targetLabelCache;
+				const auto cachedLabel = [&](uint64_t id) { return std::ranges::find(targetLabelCache, id, &LabelMatch::first); };
 				// Target Property values are stable for the pinned snapshot.  Keep a
 				// bounded per-source cache so a super-node whose adjacency spans many
 				// pages does not reread the same target on every page flush.
-				std::unordered_map<uint64_t, std::vector<PropertyValue>> targetPropertyCache;
-			size_t targetPropertyCacheBytes = 0U;
-			const size_t targetCacheReserve = std::min(state.bounds.maximum_edges_per_node,
-					state.bounds.maximum_adjacency_page_records);
-			if (!traversal.getTargetLabels().empty()) {
-				targetLabelCache.reserve(targetCacheReserve);
-			}
-			if (targetPropertiesCanBeSelected) {
-				targetPropertyCache.reserve(targetCacheReserve);
-				}
-				const size_t targetBatchCapacity = std::max<size_t>(1U, std::min(
-						state.bounds.maximum_adjacency_page_records, state.bounds.maximum_edges_per_node));
-				pendingTargets.reserve(targetBatchCapacity);
+				using PropertyCacheEntry = std::pair<uint64_t, std::vector<PropertyValue>>;
+				MaterializedByteReservation propertyCacheSlots(&state.materialized_budget);
+				MaterializedByteReservation targetPropertyCacheReservation(&state.materialized_budget);
+				std::vector<PropertyCacheEntry> targetPropertyCache;
+				const auto cachedProperties = [&](uint64_t id) {
+					return std::ranges::find(targetPropertyCache, id, &PropertyCacheEntry::first);
+				};
+				size_t targetPropertyCacheBytes = 0U;
+				const size_t targetBatchCapacity = std::max<size_t>(
+						1U, std::min(state.bounds.maximum_adjacency_page_records, state.bounds.maximum_edges_per_node));
 				const auto visitDirection = [&](storage::LogicalGraphReadDirection direction) {
 					uint64_t previousEdgeId = 0U;
 					const auto flushTargets = [&]() {
@@ -4924,130 +9200,198 @@ namespace graph::query::execution {
 						// same bounded target validation batch.  The latter used to fall
 						// through to one existence/label read per Edge even though COUNT
 						// has no visitor early-termination boundary.
+						MaterializedByteReservation targetIdsBytes(&state.materialized_budget);
 						std::vector<uint64_t> targetIds;
 						if (useNativeAdjacencyRefs ||
 							(traversal.getTargetProperties().empty() &&
-								(!traversal.getTargetLabels().empty() || supportsExistenceProbes))) {
+							 (!traversal.getTargetLabels().empty() || supportsExistenceProbes))) {
+							targetIdsBytes.set(checkedSizeMul(pendingTargets.size(), sizeof(uint64_t),
+								"logical-plan anchored endpoint slots overflowed"));
 							targetIds.reserve(pendingTargets.size());
+							targetIdsBytes.set(checkedSizeMul(targetIds.capacity(), sizeof(uint64_t),
+								"logical-plan anchored endpoint capacity overflowed"));
 							for (const PendingTarget &candidate: pendingTargets) {
 								targetIds.push_back(candidate.target_node_id);
 							}
-							std::ranges::sort(targetIds);
-							targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
+							detail::sortUniqueIdsGuarded(targetIds, [&] {
+								if (state.context != nullptr) state.context->checkGuardNow();
+							});
 						}
-						std::vector<bool> labelsMatch(targetIds.size(), traversal.getTargetLabels().empty());
+						const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
+						MaterializedByteReservation labelBitsBytes(&state.materialized_budget);
+						std::vector<bool> labelsMatch;
 						if (!traversal.getTargetLabels().empty()) {
+							labelBitsBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+								"logical-plan anchored label bit slots overflowed"));
+							labelsMatch.resize(targetIds.size());
+							labelBitsBytes.set(bitBytes(labelsMatch.capacity()));
+							MaterializedByteReservation uncachedIdsBytes(&state.materialized_budget);
+							uncachedIdsBytes.set(checkedSizeMul(targetIds.size(), sizeof(uint64_t),
+								"logical-plan anchored cold label slots overflowed"));
 							std::vector<uint64_t> uncachedIds;
 							uncachedIds.reserve(targetIds.size());
-							for (const uint64_t targetId: targetIds) {
-								if (!targetLabelCache.contains(targetId)) {
-									uncachedIds.push_back(targetId);
-								}
+							uncachedIdsBytes.set(checkedSizeMul(uncachedIds.capacity(), sizeof(uint64_t),
+								"logical-plan anchored cold label capacity overflowed"));
+							for (size_t index = 0U; index < targetIds.size(); ++index) {
+								const auto cached = cachedLabel(targetIds[index]);
+								if (cached == targetLabelCache.end()) uncachedIds.push_back(targetIds[index]);
+								else labelsMatch[index] = cached->second;
 							}
 							if (!uncachedIds.empty()) {
-								const std::vector<bool> resolved =
-										state.snapshot.readNodeLabelMatchesSorted(uncachedIds, traversal.getTargetLabels());
+								MaterializedByteReservation resolvedBitsBytes(&state.materialized_budget);
+								resolvedBitsBytes.set(checkedSizeAdd(bitBytes(uncachedIds.size()), sizeof(size_t),
+									"logical-plan anchored resolved bit slots overflowed"));
+								const std::vector<bool> resolved = state.snapshot.readNodeLabelMatchesSorted(
+										uncachedIds, traversal.getTargetLabels());
+								resolvedBitsBytes.set(bitBytes(resolved.capacity()));
+								checkGuard(state);
 								if (resolved.size() != uncachedIds.size()) {
-									throw std::runtime_error("logical graph backend changed anchored target label-match cardinality");
+									throw std::runtime_error(
+											"logical graph backend changed anchored target label-match cardinality");
 								}
+								const size_t cacheLimit = std::min(state.bounds.maximum_edges_per_node, size_t{64U});
 								for (size_t index = 0U; index < uncachedIds.size(); ++index) {
-									if (targetLabelCache.size() < state.bounds.maximum_edges_per_node) {
-										targetLabelCache.emplace(uncachedIds[index], resolved[index]);
+									const auto position = std::ranges::lower_bound(targetIds, uncachedIds[index]);
+									labelsMatch[static_cast<size_t>(position - targetIds.begin())] = resolved[index];
+									if (targetLabelCache.size() == cacheLimit) continue;
+									if (targetLabelCache.size() == targetLabelCache.capacity()) {
+										const size_t old = targetLabelCache.capacity();
+										const size_t next = old == 0U ? std::min(cacheLimit, size_t{8U}) : old + std::min(old, cacheLimit - old);
+										const size_t peak = (old + next) * sizeof(LabelMatch);
+										if (labelCacheBytes.wouldExceed(peak)) continue;
+										labelCacheBytes.set(peak);
+										targetLabelCache.reserve(next);
+										labelCacheBytes.set(targetLabelCache.capacity() * sizeof(LabelMatch));
+										debug::PerfTrace::addValue("logical_plan.anchored_label_cache_capacity", static_cast<int64_t>(targetLabelCache.capacity()));
 									}
+									targetLabelCache.emplace_back(uncachedIds[index], resolved[index]);
 								}
-							}
-							for (size_t index = 0U; index < targetIds.size(); ++index) {
-								const auto found = targetLabelCache.find(targetIds[index]);
-								if (found == targetLabelCache.end()) {
-									throw std::runtime_error("logical graph backend lost an anchored target label result");
-								}
-								labelsMatch[index] = found->second;
 							}
 						}
-						std::vector<std::string> targetPropertyKeys;
-						std::vector<std::vector<PropertyValue>> targetPropertyColumns;
+						MaterializedByteReservation keySlotsBytes(&state.materialized_budget);
+						MaterializedByteReservation coldIdsBytes(&state.materialized_budget);
+						MaterializedByteReservation targetPropertyReadBytes(&state.materialized_budget);
+						std::vector<std::string_view> targetPropertyKeys;
+						std::vector<std::vector<PropertyValue>> resolvedPropertyColumns;
+						std::vector<uint64_t> uncachedPropertyIds;
+						size_t targetPropertyStructureBytes = 0U;
 						if (targetPropertiesCanBeSelected) {
 							// Keep the current flush complete even when the cross-page cache
 							// reaches its byte budget. Oversized values are used once and are
 							// deliberately not retained for later adjacency pages.
-							std::unordered_map<uint64_t, std::vector<PropertyValue>> resolvedPropertyValues;
-							resolvedPropertyValues.reserve(targetIds.size());
+							for (const auto &predicate: traversal.getTargetProperties())
+								if (predicate.first.empty()) throw std::invalid_argument("logical-plan target Node Property predicate has an empty key");
+							keySlotsBytes.set(checkedSizeMul(traversal.getTargetProperties().size(), sizeof(std::string_view),
+								"logical-plan anchored key view slots overflowed"));
+							targetPropertyKeys.reserve(traversal.getTargetProperties().size());
+							keySlotsBytes.set(checkedSizeMul(targetPropertyKeys.capacity(), sizeof(std::string_view),
+								"logical-plan anchored key view capacity overflowed"));
 							for (const auto &[key, expected]: traversal.getTargetProperties()) {
 								static_cast<void>(expected);
 								if (key.empty()) {
-									throw std::invalid_argument("logical-plan target Node Property predicate has an empty key");
+									throw std::invalid_argument(
+											"logical-plan target Node Property predicate has an empty key");
 								}
 								if (std::ranges::find(targetPropertyKeys, key) == targetPropertyKeys.end()) {
 									targetPropertyKeys.push_back(key);
 								}
 							}
-							std::vector<std::string_view> keyViews;
-							keyViews.reserve(targetPropertyKeys.size());
-							for (const std::string &key: targetPropertyKeys) {
-								keyViews.push_back(key);
-							}
-							std::vector<uint64_t> uncachedPropertyIds;
-							uncachedPropertyIds.reserve(targetIds.size());
+							const auto &keyViews = targetPropertyKeys; // Borrow stable plan-owned names.
+							const size_t coldCount = static_cast<size_t>(std::ranges::count_if(targetIds,
+								[&](uint64_t id) { return cachedProperties(id) == targetPropertyCache.end(); }));
+							coldIdsBytes.set(checkedSizeMul(coldCount, sizeof(uint64_t), "logical-plan anchored cold owner slots overflowed"));
+							uncachedPropertyIds.reserve(coldCount);
+							coldIdsBytes.set(checkedSizeMul(uncachedPropertyIds.capacity(), sizeof(uint64_t),
+								"logical-plan anchored cold owner capacity overflowed"));
 							for (const uint64_t targetId: targetIds) {
-								if (const auto cached = targetPropertyCache.find(targetId); cached != targetPropertyCache.end()) {
-									resolvedPropertyValues.emplace(targetId, cached->second);
-								} else {
+								if (cachedProperties(targetId) == targetPropertyCache.end()) {
 									uncachedPropertyIds.push_back(targetId);
 								}
 							}
 							if (!uncachedPropertyIds.empty()) {
-								const std::vector<std::vector<PropertyValue>> resolved =
-										state.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
-								if (resolved.size() != targetPropertyKeys.size()) {
+								targetPropertyStructureBytes = checkedSizeAdd(
+										checkedSizeMul(
+												keyViews.size(), sizeof(std::vector<PropertyValue>),
+												"logical-plan anchored target Property column structure overflowed"),
+										checkedSizeMul(
+												checkedSizeMul(keyViews.size(), uncachedPropertyIds.size(),
+															   "logical-plan anchored target Property column structure "
+															   "overflowed"),
+												sizeof(PropertyValue),
+												"logical-plan anchored target Property column structure overflowed"),
+										"logical-plan anchored target Property column structure overflowed");
+								targetPropertyReadBytes.set(targetPropertyStructureBytes);
+								const std::function<void(size_t)> admission = [&](size_t bytes) {
+									checkGuard(state);
+									targetPropertyReadBytes.set(checkedSizeAdd(targetPropertyReadBytes.bytes(), bytes,
+										"logical-plan anchored target Property batch size overflowed"));
+								};
+								resolvedPropertyColumns = state.snapshot.supportsPropertyReadAdmission()
+									? state.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission)
+									: state.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
+								if (resolvedPropertyColumns.size() != targetPropertyKeys.size())
 									throw std::runtime_error("logical graph backend changed anchored target Property column cardinality");
-								}
-							for (size_t ordinal = 0U; ordinal < uncachedPropertyIds.size(); ++ordinal) {
-									std::vector<PropertyValue> values;
-									values.reserve(targetPropertyKeys.size());
-									for (const auto &column: resolved) {
-										if (column.size() != uncachedPropertyIds.size()) {
-											throw std::runtime_error("logical graph backend changed anchored target Property result cardinality");
-										}
-										values.push_back(column[ordinal]);
-									}
-								const uint64_t targetId = uncachedPropertyIds[ordinal];
-								resolvedPropertyValues.emplace(targetId, values);
-								if (targetPropertyCache.size() < state.bounds.maximum_edges_per_node) {
-									size_t valueBytes = sizeof(uint64_t) + sizeof(std::vector<PropertyValue>);
-									for (const PropertyValue &value: values) {
-										valueBytes = checkedSizeAdd(valueBytes, sizeof(PropertyValue),
-												"logical-plan anchored target Property cache size overflowed");
-										valueBytes = checkedSizeAdd(valueBytes, property_utils::getPropertyValueSize(value),
-												"logical-plan anchored target Property cache size overflowed");
-									}
-									if (valueBytes <= MAXIMUM_MATERIALIZED_CACHE_BYTES -
-											std::min(targetPropertyCacheBytes, MAXIMUM_MATERIALIZED_CACHE_BYTES)) {
-										targetPropertyCache.emplace(targetId, values);
-										targetPropertyCacheBytes = checkedSizeAdd(targetPropertyCacheBytes, valueBytes,
-											"logical-plan anchored target Property cache size overflowed");
-									}
-								}
+								for (const auto &column: resolvedPropertyColumns)
+									if (column.size() != uncachedPropertyIds.size())
+										throw std::runtime_error("logical graph backend changed anchored target Property result cardinality");
 							}
+							size_t actualColumnsBytes = checkedSizeMul(resolvedPropertyColumns.capacity(), sizeof(std::vector<PropertyValue>),
+								"logical-plan anchored column capacity overflowed");
+							for (const auto &column: resolvedPropertyColumns) {
+								actualColumnsBytes = checkedSizeAdd(actualColumnsBytes, checkedSizeMul(column.capacity(), sizeof(PropertyValue),
+									"logical-plan anchored column value capacity overflowed"), "logical-plan anchored column size overflowed");
+								for (const auto &value: column) actualColumnsBytes = checkedSizeAdd(actualColumnsBytes,
+									property_utils::getPropertyValueSize(value), "logical-plan anchored column payload overflowed");
 							}
-							targetPropertyColumns.assign(targetPropertyKeys.size(), {});
-							for (auto &column: targetPropertyColumns) {
-								column.reserve(targetIds.size());
-							}
-							for (const uint64_t targetId: targetIds) {
-								const auto found = resolvedPropertyValues.find(targetId);
-								if (found == resolvedPropertyValues.end() || found->second.size() != targetPropertyKeys.size()) {
-									throw std::runtime_error("logical graph backend lost anchored target Property values");
+							targetPropertyReadBytes.set(actualColumnsBytes);
+							checkGuard(state);
+							const size_t cacheLimit = std::min(state.bounds.maximum_edges_per_node, size_t{64U});
+							for (size_t ordinal = 0U; ordinal < uncachedPropertyIds.size() && targetPropertyCache.size() < cacheLimit; ++ordinal) {
+								size_t payloadBytes = 0U;
+								for (const auto &column: resolvedPropertyColumns)
+									payloadBytes = checkedSizeAdd(payloadBytes, property_utils::getPropertyValueSize(column[ordinal]),
+										"logical-plan anchored Property cache payload overflowed");
+								const size_t valueBytes = checkedSizeAdd(payloadBytes,
+									checkedSizeMul(targetPropertyKeys.size(), sizeof(PropertyValue), "logical-plan anchored Property cache slots overflowed"),
+									"logical-plan anchored Property cache size overflowed");
+								const size_t nextValues = checkedSizeAdd(targetPropertyCacheBytes, valueBytes,
+									"logical-plan anchored Property cache size overflowed");
+								const size_t old = targetPropertyCache.capacity();
+								const bool grow = targetPropertyCache.size() == old;
+								const size_t next = grow ? (old == 0U ? std::min(cacheLimit, size_t{8U}) : old + std::min(old, cacheLimit - old)) : old;
+								const size_t extraSlots = grow ? next * sizeof(PropertyCacheEntry) : 0U;
+								const size_t combined = checkedSizeAdd(nextValues, extraSlots, "logical-plan anchored Property cache peak overflowed");
+								if (checkedSizeAdd(combined, propertyCacheSlots.bytes(), "logical-plan anchored Property cache limit overflowed")
+									> MAXIMUM_MATERIALIZED_CACHE_BYTES || targetPropertyCacheReservation.wouldExceed(combined)) continue;
+								targetPropertyCacheReservation.set(nextValues);
+								if (grow) {
+									propertyCacheSlots.set((old + next) * sizeof(PropertyCacheEntry));
+									targetPropertyCache.reserve(next);
+									propertyCacheSlots.set(targetPropertyCache.capacity() * sizeof(PropertyCacheEntry));
 								}
-								for (size_t column = 0U; column < targetPropertyKeys.size(); ++column) {
-									targetPropertyColumns[column].push_back(found->second[column]);
-								}
+								std::vector<PropertyValue> values;
+								values.reserve(targetPropertyKeys.size());
+								const size_t actualBytes = checkedSizeAdd(payloadBytes,
+									checkedSizeMul(values.capacity(), sizeof(PropertyValue), "logical-plan anchored Property cache capacity overflowed"),
+									"logical-plan anchored Property cache capacity overflowed");
+								targetPropertyCacheReservation.set(checkedSizeAdd(targetPropertyCacheBytes, actualBytes,
+									"logical-plan anchored Property cache actual size overflowed"));
+								for (const auto &column: resolvedPropertyColumns) values.push_back(column[ordinal]);
+								targetPropertyCache.emplace_back(uncachedPropertyIds[ordinal], std::move(values));
+								targetPropertyCacheBytes += actualBytes;
 							}
 						}
+						MaterializedByteReservation existenceBytes(&state.materialized_budget);
 						std::vector<bool> targetExists;
 						if (state.snapshot.supportsNodeExistenceProbes()) {
+							existenceBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
+								"logical-plan anchored existence bit slots overflowed"));
 							targetExists = state.snapshot.containsNodesSorted(targetIds);
+							existenceBytes.set(bitBytes(targetExists.capacity()));
+							checkGuard(state);
 							if (targetExists.size() != targetIds.size()) {
-								throw std::runtime_error("logical graph backend changed anchored target existence cardinality");
+								throw std::runtime_error(
+										"logical graph backend changed anchored target existence cardinality");
 							}
 						}
 						for (const PendingTarget &candidate: pendingTargets) {
@@ -5061,7 +9405,8 @@ namespace graph::query::execution {
 							}
 							const size_t ordinal = static_cast<size_t>(position - targetIds.begin());
 							if (!targetExists.empty() && !targetExists[ordinal]) {
-								throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
+								throw std::runtime_error(
+										"logical graph backend returned an Edge topology with a missing endpoint");
 							}
 							if (!labelsMatch.empty() && !labelsMatch[ordinal]) {
 								continue;
@@ -5072,13 +9417,35 @@ namespace graph::query::execution {
 									const auto &[key, expected] = traversal.getTargetProperties()[index];
 									const auto keyPosition = std::ranges::find(targetPropertyKeys, key);
 									if (keyPosition == targetPropertyKeys.end()) {
-										throw std::logic_error("logical-plan anchored target Property column is missing");
+										throw std::logic_error(
+												"logical-plan anchored target Property column is missing");
 									}
-									const size_t columnIndex = static_cast<size_t>(keyPosition - targetPropertyKeys.begin());
-									if (isNull(targetPropertyColumns[columnIndex][ordinal]) ||
-										targetPropertyColumns[columnIndex][ordinal] != expected) {
+									const size_t columnIndex =
+											static_cast<size_t>(keyPosition - targetPropertyKeys.begin());
+									const auto cached = cachedProperties(candidate.target_node_id);
+									const PropertyValue *actual = nullptr;
+									if (cached != targetPropertyCache.end()) {
+										actual = &cached->second[columnIndex];
+									} else {
+										const auto propertyRow =
+												std::ranges::lower_bound(uncachedPropertyIds, candidate.target_node_id);
+										if (propertyRow == uncachedPropertyIds.end() ||
+											*propertyRow != candidate.target_node_id) {
+											throw std::runtime_error(
+													"logical graph backend lost anchored target Property values");
+										}
+										actual = &resolvedPropertyColumns[columnIndex][static_cast<size_t>(
+												propertyRow - uncachedPropertyIds.begin())];
+									}
+									if (actual == nullptr || *actual != expected) {
 										matches = false;
 										break;
+									}
+									if (isNull(*actual)) {
+										checkGuardNow(state);
+										const auto present = state.snapshot.nodePropertyExists(candidate.target_node_id, key);
+										if (!present) throw std::runtime_error("anchored count Property presence probe is unavailable");
+										if (!*present) { matches = false; break; }
 									}
 								}
 							}
@@ -5094,57 +9461,84 @@ namespace graph::query::execution {
 						return true;
 					};
 					const auto consumeTopology = [&](const uint64_t edgeId, const uint64_t edgeSourceNodeId,
-														 const uint64_t edgeTargetNodeId, const bool typeMatches) {
+													 const uint64_t edgeTargetNodeId, const bool typeMatches) {
 						checkGuard(state);
 						if (sourceEdges == state.bounds.maximum_edges_per_node) {
-							throw std::runtime_error("logical-plan anchored relationship count exceeded its per-Node Edge bound");
+							throw std::runtime_error(
+									"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 						}
 						validateAdjacentEdgeOrder(edgeId, previousEdgeId, "anchored relationship count");
 						const bool endpointMatches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-														 ? edgeSourceNodeId == sourceNodeId
-														 : edgeTargetNodeId == sourceNodeId;
+															 ? edgeSourceNodeId == sourceNodeId
+															 : edgeTargetNodeId == sourceNodeId;
 						if (!endpointMatches) {
-							throw std::runtime_error("logical graph backend returned an invalid anchored relationship topology");
+							throw std::runtime_error(
+									"logical graph backend returned an invalid anchored relationship topology");
 						}
 						++sourceEdges;
 						incrementBounded(state.stats.edges_scanned,
 										 "logical-plan anchored relationship Edge counter overflowed");
 						if (traversal.getDirection() == "both" &&
-							 direction == storage::LogicalGraphReadDirection::LGRD_INCOMING && edgeSourceNodeId == sourceNodeId) {
+							direction == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+							edgeSourceNodeId == sourceNodeId) {
 							return true;
 						}
 						if (!typeMatches) {
 							return true;
 						}
 						const uint64_t targetId = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-												 ? edgeTargetNodeId
-												 : edgeSourceNodeId;
-					// Native reference pages already expose the complete endpoint set for
-					// this bounded batch. Keep endpoint liveness in that same batch even
-					// when no target label/property predicate is present.
+														  ? edgeTargetNodeId
+														  : edgeSourceNodeId;
+						// Native reference pages already expose the complete endpoint set for
+						// this bounded batch. Keep endpoint liveness in that same batch even
+						// when no target label/property predicate is present.
 						const bool requiresBatchedTargetRead =
-							(useNativeAdjacencyRefs && targetPropertiesCanBeSelected) ||
-							(traversal.getTargetProperties().empty() &&
-								(!traversal.getTargetLabels().empty() || supportsExistenceProbes));
+								(useNativeAdjacencyRefs && targetPropertiesCanBeSelected) ||
+								(traversal.getTargetProperties().empty() &&
+								 (!traversal.getTargetLabels().empty() || supportsExistenceProbes));
 						if (!requiresBatchedTargetRead) {
-								if (!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty()) {
-									const storage::LogicalGraphNode target = readNodeCached(state, targetId);
-									if (!nodeMatches(state.snapshot, target, traversal.getTargetLabels(),
+							if (!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty()) {
+								const storage::LogicalGraphNode target = readNodeCached(state, targetId);
+								if (!nodeMatches(state.snapshot, target, traversal.getTargetLabels(),
 												 traversal.getTargetProperties(), state)) {
-										return true;
+									return true;
+								}
+							} else if (supportsExistenceProbes) {
+								if (!state.snapshot.containsNode(targetId)) {
+									throw std::runtime_error(
+											"logical graph backend returned an Edge topology with a missing endpoint");
+								}
+							} else {
+								validateNodeIdentity(state, targetId);
+							}
+						}
+						// A native reference batch validates all target endpoints in
+						// flushTargets().  Do not probe this endpoint eagerly here: doing
+						// so turns a page-bounded batch into one Directory lookup per Edge.
+						if (requiresBatchedTargetRead) {
+							if (pendingTargets.size() == pendingTargets.capacity()) {
+								const size_t old = pendingTargets.capacity();
+								size_t next = old == 0U ? std::min(targetBatchCapacity, size_t{16U})
+									: old + std::min(old, targetBatchCapacity - old);
+								size_t peak = checkedSizeMul(old + next, sizeof(PendingTarget),
+									"logical-plan anchored pending capacity overflowed");
+								if (pendingBytes.wouldExceed(peak)) {
+									if (old != 0U) {
+										if (!flushTargets()) return false;
+									} else {
+										next = 1U;
+										peak = sizeof(PendingTarget);
 									}
-								} else if (supportsExistenceProbes) {
-																	 if (!state.snapshot.containsNode(targetId)) {
-										throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
-									}
-								} else {
-									validateNode(readNodeCached(state, targetId));
+								}
+								if (pendingTargets.size() == pendingTargets.capacity()) {
+									pendingBytes.set(peak);
+									pendingTargets.reserve(next);
+									debug::PerfTrace::addValue("logical_plan.anchored_pending_capacity",
+										static_cast<int64_t>(std::min(pendingTargets.capacity(), static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+									pendingBytes.set(checkedSizeMul(pendingTargets.capacity(), sizeof(PendingTarget),
+										"logical-plan anchored pending capacity overflowed"));
 								}
 							}
-							// A native reference batch validates all target endpoints in
-							// flushTargets().  Do not probe this endpoint eagerly here: doing
-							// so turns a page-bounded batch into one Directory lookup per Edge.
-						if (requiresBatchedTargetRead) {
 							pendingTargets.push_back({edgeId, edgeSourceNodeId, edgeTargetNodeId, typeMatches});
 							if (pendingTargets.size() >= targetBatchCapacity) {
 								return flushTargets();
@@ -5161,18 +9555,17 @@ namespace graph::query::execution {
 						// Ask for one bounded probe so an additional Edge is rejected rather
 						// than silently truncating the aggregate input.
 						if (useNativeAdjacencyRefs) {
-							const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-															 sourceNodeId, direction, std::nullopt, 1U);
+							MaterializedByteReservation referenceBytes(&state.materialized_budget);
+							const auto page = readReferencePageBudgeted(state, sourceNodeId, direction, std::nullopt, 1U, referenceBytes);
 							if (!page.edges.empty()) {
 								throw std::runtime_error(
 										"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 							}
 						} else {
 							state.snapshot.visitAdjacentEdgeTopologies(
-									 sourceNodeId, direction, 1U,
-									[](const storage::LogicalGraphEdgeTopology &) -> bool {
-										throw std::runtime_error(
-													"logical-plan anchored relationship count exceeded its per-Node Edge bound");
+									sourceNodeId, direction, 1U, [](const storage::LogicalGraphEdgeTopology &) -> bool {
+										throw std::runtime_error("logical-plan anchored relationship count exceeded "
+																 "its per-Node Edge bound");
 									});
 						}
 						return;
@@ -5185,49 +9578,51 @@ namespace graph::query::execution {
 								throw std::runtime_error(
 										"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 							}
-							const size_t pageRecords = std::min(
-									state.bounds.maximum_edges_per_node - sourceEdges,
-									state.bounds.maximum_adjacency_page_records);
-							const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-														 sourceNodeId, direction, continuation, pageRecords);
-							if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
+							const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
+																state.bounds.maximum_adjacency_page_records);
+							MaterializedByteReservation referenceBytes(&state.materialized_budget);
+							const auto page = readReferencePageBudgeted(state, sourceNodeId, direction, continuation, pageRecords, referenceBytes);
+							if (page.edges.size() > pageRecords ||
+								(page.edges.empty() && page.continuation.has_value()) ||
 								(continuation.has_value() &&
 								 (page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id))) {
-								throw std::runtime_error(
-										"logical graph backend returned an invalid anchored relationship reference page");
+								throw std::runtime_error("logical graph backend returned an invalid anchored "
+														 "relationship reference page");
 							}
 							for (const storage::EntityRef &reference: page.edges) {
-								validateEdgeRef(reference,
-										"logical graph backend returned an invalid or Node reference from an anchored relationship page");
+								validateEdgeRef(reference, "logical graph backend returned an invalid or Node "
+														   "reference from an anchored relationship page");
 								const bool typeMatches = !relationshipTypeToken.has_value() ||
-										reference.type_token == *relationshipTypeToken;
-								if (!consumeTopology(reference.entity_id, reference.source_node_id, reference.target_node_id,
-																 typeMatches)) {
+														 reference.type_token == *relationshipTypeToken;
+								if (!consumeTopology(reference.entity_id, reference.source_node_id,
+													 reference.target_node_id, typeMatches)) {
 									return;
 								}
-								}
-								if (!page.continuation.has_value()) {
-									if (!flushTargets()) {
-										return;
-									}
-									return;
 							}
-							if (page.edges.empty() || page.continuation->previous_edge_id != page.edges.back().entity_id ||
+							if (!page.continuation.has_value()) {
+								if (!flushTargets()) {
+									return;
+								}
+								return;
+							}
+							if (page.edges.empty() ||
+								page.continuation->previous_edge_id != page.edges.back().entity_id ||
 								page.continuation->next_edge_id == 0U ||
 								page.continuation->previous_edge_id == page.continuation->next_edge_id) {
-								throw std::runtime_error(
-										"logical graph backend returned an invalid anchored relationship reference continuation");
+								throw std::runtime_error("logical graph backend returned an invalid anchored "
+														 "relationship reference continuation");
 							}
 							continuation = page.continuation;
 						}
 					}
-						state.snapshot.visitAdjacentEdgeTopologies(
-													 sourceNodeId, direction, directionLimit,
-								[&](const storage::LogicalGraphEdgeTopology &edge) {
-									return consumeTopology(edge.edge_id, edge.source_node_id, edge.target_node_id,
-												 traversal.getEdgeType().empty() || edge.type == traversal.getEdgeType());
-								});
-						flushTargets();
+					state.snapshot.visitAdjacentEdgeTopologies(
+							sourceNodeId, direction, directionLimit,
+							[&](const storage::LogicalGraphEdgeTopology &edge) {
+								return consumeTopology(edge.edge_id, edge.source_node_id, edge.target_node_id,
+													   traversal.getEdgeType().empty() ||
+															   edge.type == traversal.getEdgeType());
+							});
+					flushTargets();
 				};
 				if (traversal.getDirection() == "out" || traversal.getDirection() == "both") {
 					visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
@@ -5239,33 +9634,35 @@ namespace graph::query::execution {
 			};
 			const InternalVisitor sourceVisitor = visitSource;
 			const bool canUseGlobalSourceSet = traversal.getTargetProperties().empty() && supportsExistenceProbes &&
-				state.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
-				(traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
+											   state.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
+											   (traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
 			if (!canUseGlobalSourceSet) {
 				static_cast<void>(visitOperator(seed, state, sourceVisitor));
 			} else {
 				std::vector<uint64_t> sourceIds;
 				sourceIds.reserve(std::min(state.bounds.maximum_node_records,
-						state.bounds.maximum_adjacency_page_records * size_t{2U}));
+										   state.bounds.maximum_adjacency_page_records * size_t{2U}));
 				static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
-					const uint64_t sourceId = nodeBindingId(requireBinding(row, traversal.getSourceVar()));
+					const uint64_t sourceId = nodeBindingId(requireBinding(row, traversal.getSourceVar()), state);
 					if (sourceId == 0U) {
-						throw std::runtime_error("logical-plan anchored relationship count returned an invalid source Node");
+						throw std::runtime_error(
+								"logical-plan anchored relationship count returned an invalid source Node");
 					}
 					if (sourceIds.size() == state.bounds.maximum_node_records) {
-						throw std::runtime_error("logical-plan anchored relationship count exceeded its source Node bound");
+						throw std::runtime_error(
+								"logical-plan anchored relationship count exceeded its source Node bound");
 					}
-						 sourceIds.push_back(sourceId);
+					sourceIds.push_back(sourceId);
 					return true;
 				}));
 				std::ranges::sort(sourceIds);
 				sourceIds.erase(std::unique(sourceIds.begin(), sourceIds.end()), sourceIds.end());
 				const size_t globalSourceThreshold = std::max<size_t>(1U, state.bounds.maximum_adjacency_page_records);
 				if (sourceIds.size() < globalSourceThreshold) {
-					for (const uint64_t sourceId : sourceIds) {
+					for (const uint64_t sourceId: sourceIds) {
 						LogicalPlanReadRow row;
 						row.values.emplace(traversal.getSourceVar(),
-								LogicalPlanReadValue(storage::EntityRef{sourceId, false, 0U, 0U, 0U}));
+										   LogicalPlanReadValue(storage::EntityRef{sourceId, false, 0U, 0U, 0U}));
 						static_cast<void>(visitSource(std::move(row)));
 					}
 				} else {
@@ -5274,15 +9671,16 @@ namespace graph::query::execution {
 					};
 					std::unordered_set<uint64_t> sourceSet;
 					sourceSet.reserve(sourceIds.size());
-					for (const uint64_t sourceId : sourceIds) {
+					for (const uint64_t sourceId: sourceIds) {
 						static_cast<void>(sourceSet.insert(sourceId));
 					}
 					std::unordered_map<uint64_t, size_t> sourceEdgeCounts;
 					sourceEdgeCounts.reserve(sourceIds.size());
 					size_t globalEdgesScanned = 0U;
 					std::vector<PendingGlobalEdge> pending;
-					const size_t globalBatchCapacity = std::max<size_t>(1U, std::min(
-							state.bounds.maximum_adjacency_page_records, state.bounds.maximum_edge_records));
+					const size_t globalBatchCapacity =
+							std::max<size_t>(1U, std::min(state.bounds.maximum_adjacency_page_records,
+														  state.bounds.maximum_edge_records));
 					pending.reserve(globalBatchCapacity);
 					const auto flushGlobal = [&]() {
 						if (pending.empty()) {
@@ -5290,26 +9688,31 @@ namespace graph::query::execution {
 						}
 						std::vector<uint64_t> targetIds;
 						targetIds.reserve(pending.size());
-						for (const PendingGlobalEdge &candidate : pending) {
+						for (const PendingGlobalEdge &candidate: pending) {
 							targetIds.push_back(candidate.target_node_id);
 						}
-						std::ranges::sort(targetIds);
-						targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
+						detail::sortUniqueIdsGuarded(targetIds, [&] {
+							if (state.context != nullptr) state.context->checkGuardNow();
+						});
 						const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
 						if (present.size() != targetIds.size()) {
-							throw std::runtime_error("logical graph backend changed anchored global target existence cardinality");
+							throw std::runtime_error(
+									"logical graph backend changed anchored global target existence cardinality");
 						}
 						const std::vector<bool> labelsMatch = traversal.getTargetLabels().empty()
-								? std::vector<bool>(targetIds.size(), true)
-								: state.snapshot.readNodeLabelMatchesSorted(targetIds, traversal.getTargetLabels());
+																	  ? std::vector<bool>(targetIds.size(), true)
+																	  : state.snapshot.readNodeLabelMatchesSorted(
+																				targetIds, traversal.getTargetLabels());
 						if (labelsMatch.size() != targetIds.size()) {
-							throw std::runtime_error("logical graph backend changed anchored global target label cardinality");
+							throw std::runtime_error(
+									"logical graph backend changed anchored global target label cardinality");
 						}
-						for (const PendingGlobalEdge &candidate : pending) {
+						for (const PendingGlobalEdge &candidate: pending) {
 							const auto position = std::ranges::lower_bound(targetIds, candidate.target_node_id);
 							if (position == targetIds.end() || *position != candidate.target_node_id ||
 								!present[static_cast<size_t>(position - targetIds.begin())]) {
-								throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
+								throw std::runtime_error(
+										"logical graph backend returned an Edge topology with a missing endpoint");
 							}
 							if (!labelsMatch[static_cast<size_t>(position - targetIds.begin())]) {
 								continue;
@@ -5323,51 +9726,58 @@ namespace graph::query::execution {
 					};
 					const auto visitGlobalDirection = [&](const storage::LogicalGraphReadDirection direction) {
 						if (globalEdgesScanned == state.bounds.maximum_edge_records) {
-							throw std::runtime_error("logical-plan anchored global relationship count exceeded its Edge bound");
+							throw std::runtime_error(
+									"logical-plan anchored global relationship count exceeded its Edge bound");
 						}
 						const size_t remaining = state.bounds.maximum_edge_records - globalEdgesScanned;
-						const size_t edgeVisitBound = checkedSizeAdd(remaining, 1U,
-								"logical-plan anchored global Edge bound overflowed");
-					state.snapshot.visitAdjacentEdgeRefsForNodes(sourceIds, direction, edgeVisitBound,
-							[&](const storage::EntityRef &reference) {
-						checkGuard(state);
-						validateEdgeRef(reference,
-								"logical-plan anchored global relationship count received an invalid or Node reference");
-						if (globalEdgesScanned == state.bounds.maximum_edge_records) {
-							throw std::runtime_error("logical-plan anchored global relationship count exceeded its Edge bound");
-						}
-						incrementBounded(globalEdgesScanned, "logical-plan anchored global Edge counter overflowed");
-						incrementBounded(state.stats.edges_scanned,
-								"logical-plan anchored global Edge statistics overflowed");
-						const bool outgoing = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING;
-						const uint64_t sourceId = outgoing ? reference.source_node_id : reference.target_node_id;
-						if (!sourceSet.contains(sourceId)) {
-							return true;
-						}
-						const auto countSourceEdge = [&](const uint64_t sourceId) {
-							const size_t count = sourceEdgeCounts[sourceId];
-							if (count == state.bounds.maximum_edges_per_node) {
-								throw std::runtime_error("logical-plan anchored relationship count exceeded its per-Node Edge bound");
-							}
-							sourceEdgeCounts[sourceId] = count + 1U;
-						};
-						countSourceEdge(sourceId);
-						// BOTH visits the incoming and outgoing indexes independently. A
-						// self-loop is one adjacency row for its source and must not be
-						// emitted again by the incoming pass.
-						if (traversal.getDirection() == "both" && !outgoing &&
-							reference.source_node_id == reference.target_node_id) {
-							return true;
-						}
-						if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
-							return true;
-						}
-						pending.push_back({outgoing ? reference.target_node_id : reference.source_node_id});
-						if (pending.size() >= globalBatchCapacity) {
-							flushGlobal();
-						}
-						return true;
-						});
+						const size_t edgeVisitBound =
+								checkedSizeAdd(remaining, 1U, "logical-plan anchored global Edge bound overflowed");
+						state.snapshot.visitAdjacentEdgeRefsForNodes(
+								sourceIds, direction, edgeVisitBound, [&](const storage::EntityRef &reference) {
+									checkGuard(state);
+									validateEdgeRef(reference, "logical-plan anchored global relationship count "
+															   "received an invalid or Node reference");
+									if (globalEdgesScanned == state.bounds.maximum_edge_records) {
+										throw std::runtime_error("logical-plan anchored global relationship count "
+																 "exceeded its Edge bound");
+									}
+									incrementBounded(globalEdgesScanned,
+													 "logical-plan anchored global Edge counter overflowed");
+									incrementBounded(state.stats.edges_scanned,
+													 "logical-plan anchored global Edge statistics overflowed");
+									const bool outgoing =
+											direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING;
+									const uint64_t sourceId =
+											outgoing ? reference.source_node_id : reference.target_node_id;
+									if (!sourceSet.contains(sourceId)) {
+										return true;
+									}
+									const auto countSourceEdge = [&](const uint64_t sourceId) {
+										const size_t count = sourceEdgeCounts[sourceId];
+										if (count == state.bounds.maximum_edges_per_node) {
+											throw std::runtime_error("logical-plan anchored relationship count "
+																	 "exceeded its per-Node Edge bound");
+										}
+										sourceEdgeCounts[sourceId] = count + 1U;
+									};
+									countSourceEdge(sourceId);
+									// BOTH visits the incoming and outgoing indexes independently. A
+									// self-loop is one adjacency row for its source and must not be
+									// emitted again by the incoming pass.
+									if (traversal.getDirection() == "both" && !outgoing &&
+										reference.source_node_id == reference.target_node_id) {
+										return true;
+									}
+									if (relationshipTypeToken.has_value() &&
+										reference.type_token != *relationshipTypeToken) {
+										return true;
+									}
+									pending.push_back({outgoing ? reference.target_node_id : reference.source_node_id});
+									if (pending.size() >= globalBatchCapacity) {
+										flushGlobal();
+									}
+									return true;
+								});
 					};
 					if (traversal.getDirection() == "out" || traversal.getDirection() == "both") {
 						visitGlobalDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
@@ -5383,9 +9793,9 @@ namespace graph::query::execution {
 			return visitor(std::move(result));
 		}
 
-		[[nodiscard]] std::optional<bool>
-		tryVisitDirectRelationshipCount(const logical::LogicalAggregate &aggregate, ExecutionState &state,
-												const InternalVisitor &visitor) {
+		[[nodiscard]] std::optional<bool> tryVisitDirectRelationshipCount(const logical::LogicalAggregate &aggregate,
+																		  ExecutionState &state,
+																		  const InternalVisitor &visitor) {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U) {
@@ -5401,7 +9811,8 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			const logical::LogicalOperator *traversalOperator = aggregateChildren.front();
-			std::vector<std::pair<std::string, PropertyValue>> pushedEdgePredicates;
+			MaterializedByteReservation predicateViewBytes(&state.materialized_budget);
+			std::vector<DirectEdgePredicateView> pushedEdgePredicates;
 			if (traversalOperator->getType() == logical::LogicalOpType::LOP_FILTER) {
 				const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*traversalOperator);
 				if (!filter.getPredicate()) {
@@ -5412,12 +9823,12 @@ namespace graph::query::execution {
 					return std::nullopt;
 				}
 				const auto &filteredTraversal = dynamic_cast<const logical::LogicalTraversal &>(filterChild);
-				const auto inspected = inspectDirectEdgePropertyFilter(
-						*filter.getPredicate(), filteredTraversal.getEdgeVar(), state);
+				auto inspected =
+						inspectDirectEdgePropertyFilterViews(*filter.getPredicate(), filteredTraversal.getEdgeVar());
 				if (!inspected.has_value()) {
 					return std::nullopt;
 				}
-				pushedEdgePredicates = *inspected;
+				pushedEdgePredicates = std::move(*inspected);
 				traversalOperator = &filterChild;
 			}
 			if (traversalOperator->getType() != logical::LogicalOpType::LOP_TRAVERSAL) {
@@ -5429,7 +9840,8 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			if (count.argument) {
-				const auto *variable = dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
+				const auto *variable =
+						dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
 				if (variable == nullptr || variable->hasProperty() ||
 					variable->getVariableName() != traversal.getEdgeVar()) {
 					return std::nullopt;
@@ -5460,34 +9872,46 @@ namespace graph::query::execution {
 			// restarted the Entity Directory cursor hundreds of times on large scans.
 			// No result is emitted before this set is authenticated.
 			const size_t endpointCacheCapacity = state.bounds.maximum_node_records;
+			MaterializedByteReservation endpointBytes(&state.materialized_budget);
 			std::unordered_set<uint64_t> endpointsToValidate;
-			endpointsToValidate.reserve(std::min(endpointCacheCapacity,
-					state.bounds.maximum_adjacency_page_records));
+			// Charge the key plus conservative node/bucket links before inserting.
+			// Do not reserve from the adjacency page bound: a large configured page
+			// may otherwise allocate an endpoint table before the shared byte budget
+			// has admitted any endpoint.
+			constexpr size_t endpointEntryBytes = sizeof(uint64_t) + 2U * sizeof(void *);
 			const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
 			const auto validateEndpoints = [&]() {
+				MaterializedByteReservation endpointScratch(&state.materialized_budget);
+				endpointScratch.set(checkedSizeMul(endpointsToValidate.size(), sizeof(uint64_t),
+												   "logical-plan count endpoint scratch overflowed"));
 				std::vector<uint64_t> endpointIds(endpointsToValidate.begin(), endpointsToValidate.end());
 				if (endpointIds.empty()) {
 					return;
 				}
 				std::ranges::sort(endpointIds);
 				if (supportsExistenceProbes) {
+					endpointScratch.set(
+							checkedSizeAdd(endpointScratch.bytes(),
+										   endpointIds.size() / 8U + static_cast<size_t>(endpointIds.size() % 8U != 0U),
+										   "logical-plan count endpoint presence scratch overflowed"));
 					const std::vector<bool> present = state.snapshot.containsNodesSorted(endpointIds);
 					if (present.size() != endpointIds.size()) {
 						throw std::runtime_error("logical graph backend changed Node existence batch cardinality");
 					}
 					for (size_t index = 0U; index < endpointIds.size(); ++index) {
 						if (!present[index]) {
-							throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
+							throw std::runtime_error(
+									"logical graph backend returned an Edge topology with a missing endpoint");
 						}
 					}
 				} else {
-					for (const uint64_t nodeId : endpointIds) {
-						validateNode(readNodeCached(state, nodeId));
+					for (const uint64_t nodeId: endpointIds) {
+						validateNodeIdentity(state, nodeId);
 					}
 				}
 			};
 
-			std::vector<std::pair<std::string, PropertyValue>> edgePredicates;
+			std::vector<DirectEdgePredicateView> edgePredicates;
 			edgePredicates.reserve(traversal.getEdgeProperties().size() + pushedEdgePredicates.size());
 			for (const auto &[key, expected]: traversal.getEdgeProperties()) {
 				if (key.empty()) {
@@ -5498,15 +9922,14 @@ namespace graph::query::execution {
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
 					return visitor(std::move(result));
 				}
-				edgePredicates.emplace_back(key, expected);
+				edgePredicates.push_back({key, &expected, nullptr, PropertyValue()});
 			}
-			std::ranges::sort(edgePredicates, {}, &std::pair<std::string, PropertyValue>::first);
-			for (const auto &[key, expected]: pushedEdgePredicates) {
-				const auto existing = std::ranges::find(edgePredicates, key,
-						&std::pair<std::string, PropertyValue>::first);
-				if (existing == edgePredicates.end()) {
-					edgePredicates.emplace_back(key, expected);
-				} else if (existing->second != expected) {
+			std::ranges::sort(edgePredicates, {}, &DirectEdgePredicateView::key);
+			for (const auto &predicate: pushedEdgePredicates) {
+				const auto existing = std::ranges::find(edgePredicates, predicate.key, &DirectEdgePredicateView::key);
+				if (existing == edgePredicates.end())
+					edgePredicates.push_back(predicate);
+				else if (!existing->sameValue(predicate)) {
 					LogicalPlanReadRow result;
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
 					return visitor(std::move(result));
@@ -5514,12 +9937,12 @@ namespace graph::query::execution {
 			}
 			std::vector<std::string_view> edgePropertyKeys;
 			edgePropertyKeys.reserve(edgePredicates.size());
-			for (const auto &[key, expected]: edgePredicates) {
-				static_cast<void>(expected);
-				edgePropertyKeys.push_back(key);
+			for (const auto &predicate: edgePredicates) {
+				edgePropertyKeys.push_back(predicate.key);
 			}
 			std::optional<uint64_t> relationshipTypeToken;
-			if (!traversal.getEdgeType().empty() && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+			if (!traversal.getEdgeType().empty() &&
+				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					LogicalPlanReadRow result;
@@ -5528,6 +9951,15 @@ namespace graph::query::execution {
 				}
 			}
 
+			// Only view/scalar slots are retained here; payloads stay in the plan.
+			predicateViewBytes.set(
+					checkedSizeAdd(checkedSizeMul(checkedSizeAdd(edgePredicates.size(), pushedEdgePredicates.size(),
+																 "logical-plan count predicate count overflowed"),
+												  sizeof(DirectEdgePredicateView),
+												  "logical-plan count predicate view size overflowed"),
+								   checkedSizeMul(edgePropertyKeys.size(), sizeof(std::string_view),
+												  "logical-plan count predicate key view size overflowed"),
+								   "logical-plan count predicate scratch overflowed"));
 			size_t inputRows = 0U;
 			size_t edgeRecords = 0U;
 			// Keep topology-only counts batched as well.  A batch of one was useful
@@ -5535,9 +9967,15 @@ namespace graph::query::execution {
 			// per-edge callback and prevents the same bounded execution substrate
 			// from amortizing validation and selection work when no Property column
 			// is requested.
-			const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records,
-												 state.bounds.maximum_rows});
-			std::vector<storage::LogicalGraphEdgeTopology> pending;
+			const size_t batchCapacity = std::min(
+					{DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records, state.bounds.maximum_rows});
+			BoundedBatch<storage::LogicalGraphEdgeTopology> pending(
+					batchCapacity, state.bounds.maximum_materialized_bytes,
+					[](const auto &edge) {
+						return checkedSizeAdd(sizeof(storage::LogicalGraphEdgeTopology), edge.type.size(),
+											  "logical-plan count topology size overflowed");
+					},
+					&state.materialized_budget);
 			pending.reserve(batchCapacity);
 			const auto countTopology = [&](const storage::LogicalGraphEdgeTopology &edge) {
 				if (inputRows == state.bounds.maximum_rows) {
@@ -5549,120 +9987,184 @@ namespace graph::query::execution {
 				if (pending.empty()) {
 					return;
 				}
-				for (const auto &edge : pending) {
+				for (const auto &edge: pending.values()) {
 					for (const uint64_t endpointId: {edge.source_node_id, edge.target_node_id}) {
 						if (!endpointsToValidate.contains(endpointId) &&
 							endpointsToValidate.size() == endpointCacheCapacity) {
 							throw std::runtime_error(
 									"logical-plan direct relationship count exceeded its endpoint Node bound");
 						}
-						static_cast<void>(endpointsToValidate.insert(endpointId));
+						if (!endpointsToValidate.contains(endpointId)) {
+							const size_t previous = endpointBytes.bytes();
+							endpointBytes.set(checkedSizeAdd(previous, endpointEntryBytes,
+															 "logical-plan count endpoint size overflowed"));
+							try {
+								endpointsToValidate.insert(endpointId);
+							} catch (...) {
+								endpointBytes.set(previous);
+								throw;
+							}
+						}
 					}
 				}
 				if (edgePredicates.empty()) {
-					for (const storage::LogicalGraphEdgeTopology &edge: pending) {
+					for (const storage::LogicalGraphEdgeTopology &edge: pending.values()) {
 						countTopology(edge);
 					}
 					pending.clear();
 					return;
 				}
+				MaterializedByteReservation ordinalBytes(&state.materialized_budget);
+				ordinalBytes.set(
+						checkedSizeMul(pending.size(), sizeof(size_t), "logical-plan count ordinal size overflowed"));
 				std::vector<size_t> sortedOrdinals(pending.size());
 				for (size_t index = 0U; index < sortedOrdinals.size(); ++index) {
 					sortedOrdinals[index] = index;
 				}
 				std::ranges::sort(sortedOrdinals, [&pending](const size_t left, const size_t right) {
-					return pending[left].edge_id < pending[right].edge_id;
+					return pending.values()[left].edge_id < pending.values()[right].edge_id;
 				});
-				std::vector<uint64_t> edgeIds;
-				edgeIds.reserve(pending.size());
-				for (const size_t ordinal: sortedOrdinals) {
-					const uint64_t edgeId = pending[ordinal].edge_id;
-					if (!edgeIds.empty() && edgeId == edgeIds.back()) {
-						throw std::runtime_error("logical graph direct relationship count returned duplicate Edge IDs");
-					}
-					edgeIds.push_back(edgeId);
-				}
+				MaterializedByteReservation selectionBytes(&state.materialized_budget);
+				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
 				SelectionVector selection(pending.size());
-												const std::vector<std::vector<PropertyValue>> sortedColumns =
-														state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
-											const size_t selectedEdgeBytes = propertyColumnBytes(
-													sortedColumns, edgePropertyKeys, "logical-plan direct Edge Property batch size overflowed");
-											if (selectedEdgeBytes > state.bounds.maximum_materialized_bytes) {
-												throw std::runtime_error("logical-plan direct Edge Property batch exceeded its byte bound");
-											}
-				if (sortedColumns.size() != edgePredicates.size()) {
-					throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
-				}
-				for (size_t propertyIndex = 0U; propertyIndex < edgePredicates.size(); ++propertyIndex) {
-					const auto &[key, expected] = edgePredicates[propertyIndex];
-					static_cast<void>(key);
-					const std::vector<PropertyValue> &sortedValues = sortedColumns[propertyIndex];
-					if (sortedValues.size() != pending.size()) {
-						throw std::runtime_error(
-								"logical graph backend changed sorted Edge Property result cardinality");
-					}
-					for (size_t index = 0U; index < sortedValues.size(); ++index) {
-						const size_t original = sortedOrdinals[index];
-						if (selection.includes(original) &&
-							(isNull(sortedValues[index]) || sortedValues[index] != expected)) {
-							selection.reject(original);
+				struct CountPropertyBytePressure {};
+				std::function<void(size_t, size_t)> selectRange;
+				selectRange = [&](size_t begin, size_t end) {
+					try {
+						MaterializedByteReservation idBytes(&state.materialized_budget);
+						const size_t requestedIds =
+								checkedSizeMul(end - begin, sizeof(uint64_t), "logical-plan count ID size overflowed");
+						if (idBytes.wouldExceed(requestedIds))
+							throw CountPropertyBytePressure{};
+						idBytes.set(requestedIds);
+						std::vector<uint64_t> edgeIds;
+						edgeIds.reserve(end - begin);
+						for (size_t index = begin; index < end; ++index) {
+							const uint64_t id = pending.values()[sortedOrdinals[index]].edge_id;
+							if (!edgeIds.empty() && edgeIds.back() == id) {
+								throw std::runtime_error(
+										"logical graph direct relationship count returned duplicate Edge IDs");
+							}
+							edgeIds.push_back(id);
+						}
+						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						const std::function<void(size_t)> admission = [&](size_t bytes) {
+							checkGuard(state);
+							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
+															   "logical-plan count source size overflowed");
+							if (columnBytes.wouldExceed(next))
+								throw CountPropertyBytePressure{};
+							columnBytes.set(next);
+							debug::PerfTrace::addValue(
+									"logical_plan.direct_relationship_count_source_bytes",
+									static_cast<int64_t>(
+											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+						};
+						const auto sortedColumns =
+								state.snapshot.supportsPropertyReadAdmission()
+										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+												  edgeIds, edgePropertyKeys, admission)
+										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						if (sortedColumns.size() != edgePredicates.size()) {
+							throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
+						}
+						for (const auto &column: sortedColumns) {
+							if (column.size() != end - begin) {
+								throw std::runtime_error(
+										"logical graph backend changed sorted Edge Property result cardinality");
+							}
+						}
+						const size_t retained =
+								propertyColumnBytes(sortedColumns, edgePropertyKeys,
+													"logical-plan direct Edge Property batch size overflowed", state.context);
+						if (columnBytes.wouldExceed(retained))
+							throw CountPropertyBytePressure{};
+						columnBytes.set(retained);
+						for (size_t property = 0U; property < edgePredicates.size(); ++property) {
+							for (size_t index = 0U; index < end - begin; ++index) {
+								const size_t original = sortedOrdinals[begin + index];
+								if (selection.includes(original) &&
+									(isNull(sortedColumns[property][index]) ||
+									 !edgePredicates[property].matches(sortedColumns[property][index])))
+									selection.reject(original);
+							}
+						}
+						return;
+					} catch (const CountPropertyBytePressure &) {
+						// Destroy columns and refund their lease before issuing a smaller read.
+						if (end - begin == 1U) {
+							throw std::runtime_error("logical-plan direct Edge Property batch exceeded its byte bound");
 						}
 					}
-				}
+					debug::PerfTrace::addValue("logical_plan.direct_relationship_count_split_batches", 1);
+					const size_t middle = begin + (end - begin) / 2U;
+					selectRange(begin, middle);
+					selectRange(middle, end);
+				};
+				selectRange(0U, pending.size());
 				for (size_t index = 0U; index < pending.size(); ++index) {
 					if (!selection.includes(index)) {
 						continue;
 					}
-					countTopology(pending[index]);
+					countTopology(pending.values()[index]);
 				}
 				pending.clear();
 			};
 			const auto consumeTopology = [&](const storage::LogicalGraphEdgeTopology &edge) {
-						checkGuard(state);
-						if (edgeRecords == state.bounds.maximum_edge_records) {
-							throw std::runtime_error("logical-plan direct relationship count exceeded its Edge record bound");
-						}
-						incrementBounded(edgeRecords, "logical-plan direct relationship count Edge counter overflowed");
-						incrementBounded(state.stats.edges_scanned,
-										 "logical-plan read runtime Edge counter overflowed");
-						if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
-							throw std::runtime_error(
-									"logical graph backend returned an Edge topology with invalid identity or endpoints");
-						}
-						if (!relationshipTypeToken.has_value() && !traversal.getEdgeType().empty() &&
-							edge.type != traversal.getEdgeType()) {
-							return true;
-						}
-						pending.push_back(edge);
-						if (pending.size() == batchCapacity) {
-							flushPending();
-						}
-						return true;
-				};
+				checkGuard(state);
+				if (edgeRecords == state.bounds.maximum_edge_records) {
+					throw std::runtime_error("logical-plan direct relationship count exceeded its Edge record bound");
+				}
+				incrementBounded(edgeRecords, "logical-plan direct relationship count Edge counter overflowed");
+				incrementBounded(state.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
+				if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
+					throw std::runtime_error(
+							"logical graph backend returned an Edge topology with invalid identity or endpoints");
+				}
+				if (!relationshipTypeToken.has_value() && !traversal.getEdgeType().empty() &&
+					edge.type != traversal.getEdgeType()) {
+					return true;
+				}
+				if (!pending.empty() && pending.wouldExceedBytes(edge))
+					flushPending();
+				pending.append(edge);
+				if (pending.size() == batchCapacity) {
+					flushPending();
+				}
+				return true;
+			};
 			// The default Edge-reference implementation projects complete Edge records.
 			// Use it only when the snapshot explicitly provides the native cheap path;
 			// generic readers retain their topology-only projection.
-			const size_t edgeVisitBound = checkedSizeAdd(state.bounds.maximum_edge_records, 1U,
-					"logical-plan direct relationship count Edge bound overflowed");
+			const size_t edgeVisitBound =
+					checkedSizeAdd(state.bounds.maximum_edge_records, 1U,
+								   "logical-plan direct relationship count Edge bound overflowed");
 			if (state.snapshot.supportsNativeEdgeRefScans() &&
 				(traversal.getEdgeType().empty() || relationshipTypeToken.has_value())) {
-				state.snapshot.visitEdgeRefs(edgeVisitBound,
-						[&consumeTopology, &relationshipTypeToken](const storage::EntityRef &reference) {
-							validateEdgeRef(reference,
+				state.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
+																	 const storage::EntityRef &reference) {
+					validateEdgeRef(reference,
 									"logical-plan direct relationship count received an invalid or Node reference");
-							if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
-								return true;
-							}
-							return consumeTopology({reference.entity_id, reference.source_node_id, reference.target_node_id, {}});
-						});
+					if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
+						return true;
+					}
+					return consumeTopology(
+							{reference.entity_id, reference.source_node_id, reference.target_node_id, {}});
+				});
 			} else {
 				state.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
 			}
 			flushPending();
 			validateEndpoints();
+			endpointsToValidate.clear();
+			endpointBytes.reset();
+			std::vector<DirectEdgePredicateView>{}.swap(edgePredicates);
+			std::vector<DirectEdgePredicateView>{}.swap(pushedEdgePredicates);
+			std::vector<std::string_view>{}.swap(edgePropertyKeys);
+			predicateViewBytes.reset();
 			if (debug::PerfTrace::areValuesEnabled()) {
 				debug::PerfTrace::addValue("logical_plan.direct_relationship_count_edge_records",
-						static_cast<int64_t>(edgeRecords));
+										   static_cast<int64_t>(edgeRecords));
 			}
 
 			LogicalPlanReadRow result;
@@ -5670,17 +10172,16 @@ namespace graph::query::execution {
 			return visitor(std::move(result));
 		}
 
-		[[nodiscard]] std::optional<bool>
-		tryVisitDirectTraversal(const logical::LogicalTraversal &traversal, ExecutionState &state,
-								 const InternalVisitor &visitor,
-								 const std::vector<std::pair<std::string, PropertyValue>> *additionalEdgeProperties = nullptr) {
+		[[nodiscard]] std::optional<bool> tryVisitDirectTraversal(
+				const logical::LogicalTraversal &traversal, ExecutionState &state, const InternalVisitor &visitor,
+				const std::vector<std::pair<std::string, PropertyValue>> *additionalEdgeProperties = nullptr) {
 			if (!state.allow_deferred_entity_refs || !state.snapshot.supportsNativeNodeRefScans() ||
 				!state.snapshot.supportsNativeEdgeRefScans() ||
 				(traversal.getDirection() != "out" && traversal.getDirection() != "in")) {
 				return std::nullopt;
 			}
-			const bool hasAdditionalEdgeProperties = additionalEdgeProperties != nullptr &&
-				!additionalEdgeProperties->empty();
+			const bool hasAdditionalEdgeProperties =
+					additionalEdgeProperties != nullptr && !additionalEdgeProperties->empty();
 			const std::vector<logical::LogicalOperator *> children = traversal.getChildren();
 			if (children.size() != 1U || children.front() == nullptr ||
 				children.front()->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
@@ -5689,14 +10190,16 @@ namespace graph::query::execution {
 			const auto &sourceScan = dynamic_cast<const logical::LogicalNodeScan &>(*children.front());
 			// An unanchored topology traversal is cheaper as one global Edge scan;
 			// constrained sources retain the adjacency cursor for locality.
-			const bool sourceConstrained = !sourceScan.getLabels().empty() || !sourceScan.getPropertyPredicates().empty() ||
-				!sourceScan.getRangePredicates().empty() || sourceScan.getCompositeEquality().has_value() ||
-				!sourceScan.getParameterPropertyPredicates().empty();
+			const bool sourceConstrained =
+					!sourceScan.getLabels().empty() || !sourceScan.getPropertyPredicates().empty() ||
+					!sourceScan.getRangePredicates().empty() || sourceScan.getCompositeEquality().has_value() ||
+					!sourceScan.getParameterPropertyPredicates().empty();
 			if (sourceConstrained && state.snapshot.supportsNativeAdjacentEdgeRefScans()) {
 				return std::nullopt;
 			}
 			if (sourceScan.getVariable() != traversal.getSourceVar() ||
-				((!traversal.getEdgeProperties().empty() || hasAdditionalEdgeProperties) && traversal.getEdgeVar().empty()) ||
+				((!traversal.getEdgeProperties().empty() || hasAdditionalEdgeProperties) &&
+				 traversal.getEdgeVar().empty()) ||
 				(!traversal.getTargetProperties().empty() && traversal.getTargetVar().empty())) {
 				return std::nullopt;
 			}
@@ -5725,7 +10228,8 @@ namespace graph::query::execution {
 			if (globalEdgePath) {
 				sourceOrdinals.reserve(std::min(state.bounds.maximum_node_records, size_t{4'096U}));
 			} else {
-				state.snapshot.visitNodeRefsWithLabelMatches(state.bounds.maximum_node_records, sourceScan.getLabels(),
+				state.snapshot.visitNodeRefsForLabelPredicate(
+						state.bounds.maximum_node_records, sourceScan.getLabels(),
 						[&](const storage::EntityRef &reference, const bool labelsMatch) {
 							checkGuard(state);
 							if (reference.is_edge || reference.entity_id == 0U) {
@@ -5744,8 +10248,9 @@ namespace graph::query::execution {
 				}
 				std::ranges::sort(sources, {}, &SourceRow::node_id);
 				if (const auto duplicate = std::ranges::adjacent_find(sources, {}, &SourceRow::node_id);
-						duplicate != sources.end()) {
-					throw std::runtime_error("logical graph direct traversal returned duplicate source Node references");
+					duplicate != sources.end()) {
+					throw std::runtime_error(
+							"logical graph direct traversal returned duplicate source Node references");
 				}
 			}
 
@@ -5798,8 +10303,29 @@ namespace graph::query::execution {
 				for (const std::string &key: sourcePropertyKeys) {
 					sourcePropertyKeyViews.push_back(key);
 				}
+				MaterializedByteReservation sourcePropertyBytes(&state.materialized_budget);
+				const size_t sourceFrames = checkedSizeAdd(
+						checkedSizeMul(sourcePropertyKeyViews.size(), sizeof(std::vector<PropertyValue>),
+									   "logical-plan source Property frame size overflowed"),
+						checkedSizeMul(checkedSizeMul(sourcePropertyKeyViews.size(), sourceIds.size(),
+													  "logical-plan source Property frame size overflowed"),
+									   sizeof(PropertyValue), "logical-plan source Property frame size overflowed"),
+						"logical-plan source Property frame size overflowed");
+				const size_t sourceIdBytes = checkedSizeMul(sourceIds.capacity(), sizeof(uint64_t),
+															"logical-plan source Property ID size overflowed");
+				sourcePropertyBytes.set(checkedSizeAdd(sourceFrames, sourceIdBytes,
+													   "logical-plan source Property batch size overflowed"));
+				const std::function<void(size_t)> admitSourceProperty = [&](size_t bytes) {
+					checkGuard(state);
+					sourcePropertyBytes.set(checkedSizeAdd(sourcePropertyBytes.bytes(), bytes,
+														   "logical-plan source Property payload size overflowed"));
+				};
+				const bool supportsSourceAdmission = state.snapshot.supportsPropertyReadAdmission();
 				std::vector<std::vector<PropertyValue>> sourceValues =
-						state.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
+						supportsSourceAdmission
+								? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+										  sourceIds, sourcePropertyKeyViews, admitSourceProperty)
+								: state.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
 				if (sourceValues.size() != sourcePropertyKeys.size()) {
 					throw std::runtime_error("logical graph backend changed source Node Property column cardinality");
 				}
@@ -5808,10 +10334,21 @@ namespace graph::query::execution {
 						throw std::runtime_error(
 								"logical graph backend changed sorted Node Property result cardinality");
 					}
+				}
+				const size_t retainedSourceBytes = propertyColumnBytes(
+						sourceValues, sourcePropertyKeyViews, "logical-plan source Property batch size overflowed", state.context);
+				const size_t retainedSourceBatchBytes =
+						checkedSizeAdd(sourceIdBytes, std::max(sourceFrames, retainedSourceBytes),
+									   "logical-plan source Property batch size overflowed");
+				if (sourcePropertyBytes.wouldExceed(retainedSourceBatchBytes)) {
+					throw std::runtime_error("shared materialization exceeded its byte bound");
+				}
+				sourcePropertyBytes.set(retainedSourceBatchBytes);
+				for (size_t column = 0U; column < sourcePropertyKeys.size(); ++column) {
 					sourceColumns.push_back({sourcePropertyKeys[column], std::move(sourceValues[column])});
 				}
-				const auto sourceValue = [&sourceColumns](const size_t sourceIndex, const std::string &key)
-						-> const PropertyValue & {
+				const auto sourceValue = [&sourceColumns](const size_t sourceIndex,
+														  const std::string &key) -> const PropertyValue & {
 					const auto found = std::ranges::find(sourceColumns, key, &SourcePropertyColumn::key);
 					if (found == sourceColumns.end()) { // ZYX_COV_EXCL_LINE: keys are collected before column reads.
 						throw std::logic_error("logical-plan source Property column is missing its requested key");
@@ -5858,10 +10395,13 @@ namespace graph::query::execution {
 					SourceRow selected = std::move(sources[sourceIndex]);
 					LogicalPlanReadRow row;
 					row.values.emplace(sourceScan.getVariable(),
-								   storage::EntityRef{selected.node_id, false, 0U, 0U, 0U});
-					for (const SourcePropertyColumn &column: sourceColumns) {
-						row.property_cache[sourceScan.getVariable()].insert_or_assign(column.key,
-																					column.values[sourceIndex]);
+									   storage::EntityRef{selected.node_id, false, 0U, 0U, 0U});
+					for (SourcePropertyColumn &column: sourceColumns) {
+						// The temporary sorted columns have no later consumer. Transfer
+						// each surviving value into the row cache instead of keeping a
+						// second owned copy alive until the whole source batch is done.
+						row.property_cache[sourceScan.getVariable()].insert_or_assign(
+								column.key, std::move(column.values[sourceIndex]));
 					}
 					selected.cached_row.emplace(std::move(row));
 					selectedSources.push_back(std::move(selected));
@@ -5874,7 +10414,7 @@ namespace graph::query::execution {
 
 			std::vector<std::pair<std::string, PropertyValue>> edgePredicates;
 			edgePredicates.reserve(traversal.getEdgeProperties().size() +
-				(hasAdditionalEdgeProperties ? additionalEdgeProperties->size() : 0U));
+								   (hasAdditionalEdgeProperties ? additionalEdgeProperties->size() : 0U));
 			for (const auto &[key, expected]: traversal.getEdgeProperties()) {
 				if (key.empty()) {
 					throw std::invalid_argument("logical-plan Edge Property predicate has an empty key");
@@ -5890,8 +10430,8 @@ namespace graph::query::execution {
 					if (key.empty()) {
 						throw std::invalid_argument("logical-plan Edge Property predicate has an empty key");
 					}
-					const auto existing = std::ranges::find(edgePredicates, key,
-							&std::pair<std::string, PropertyValue>::first);
+					const auto existing =
+							std::ranges::find(edgePredicates, key, &std::pair<std::string, PropertyValue>::first);
 					if (existing != edgePredicates.end()) {
 						if (existing->second != expected) {
 							// A contradictory pushed hint can never match.  Retain the
@@ -5911,8 +10451,10 @@ namespace graph::query::execution {
 			}
 			const std::vector<std::pair<std::string, PropertyValue>> &targetPredicates =
 					traversal.getTargetProperties();
+			validateTraversalTargetProperties(traversal);
 			std::optional<uint64_t> relationshipTypeToken;
-			if (!traversal.getEdgeType().empty() && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+			if (!traversal.getEdgeType().empty() &&
+				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					return true;
@@ -5937,47 +10479,58 @@ namespace graph::query::execution {
 			// Property-bearing traversals use bounded batches; topology-only rows
 			// remain one-at-a-time so a visitor can stop before the next physical
 			// Edge is fetched (an observable early-termination contract).
-			const size_t edgeBatchCapacity = edgePredicates.empty() && targetPredicates.empty()
-													 ? size_t{1U}
-													 : std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records,
-																	 state.bounds.maximum_rows});
-			std::vector<PendingEdge> pending;
+			const size_t desiredEdgeBatchCapacity =
+					edgePredicates.empty() && targetPredicates.empty()
+							? size_t{1U}
+							: std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records,
+										state.bounds.maximum_rows});
+			const size_t edgeBatchCapacity = std::min(desiredEdgeBatchCapacity,
+					std::max<size_t>(1U, state.materialized_budget.available() / (8U * sizeof(PendingEdge))));
+			detail::BudgetMemoryResource pendingMemory(state.materialized_budget);
+			std::pmr::vector<PendingEdge> pending{&pendingMemory};
 			pending.reserve(edgeBatchCapacity);
-				const auto flushPending = [&]() {
-					if (pending.empty()) {
-						return continueVisitor;
+			const auto flushPending = [&]() {
+				if (pending.empty()) {
+					return continueVisitor;
+				}
+				// Property-bearing global traversals already admit a bounded batch.
+				// Validate all newly observed source endpoints in that same batch so
+				// one Entity Directory descent is not paid per Edge.  Topology-only
+				// traversal keeps edgeBatchCapacity == 1 and therefore retains its
+				// strict visitor early-termination contract.
+				if (globalEdgePath && state.snapshot.supportsNodeExistenceProbes()) {
+					std::vector<uint64_t> sourceIds;
+					sourceIds.reserve(pending.size());
+					for (const PendingEdge &candidate: pending) {
+						if (candidate.source_ordinal >= sources.size()) {
+							throw std::runtime_error("logical graph direct traversal lost a source ordinal");
+						}
+						sourceIds.push_back(sources[candidate.source_ordinal].node_id);
 					}
-					// Property-bearing global traversals already admit a bounded batch.
-					// Validate all newly observed source endpoints in that same batch so
-					// one Entity Directory descent is not paid per Edge.  Topology-only
-					// traversal keeps edgeBatchCapacity == 1 and therefore retains its
-					// strict visitor early-termination contract.
-					if (globalEdgePath && state.snapshot.supportsNodeExistenceProbes()) {
-						std::vector<uint64_t> sourceIds;
-						sourceIds.reserve(pending.size());
-						for (const PendingEdge &candidate: pending) {
-							if (candidate.source_ordinal >= sources.size()) {
-								throw std::runtime_error("logical graph direct traversal lost a source ordinal");
-							}
-							sourceIds.push_back(sources[candidate.source_ordinal].node_id);
-						}
-						std::ranges::sort(sourceIds);
-						sourceIds.erase(std::unique(sourceIds.begin(), sourceIds.end()), sourceIds.end());
-						debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_requests", 1);
-						debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_ids",
-								static_cast<int64_t>(sourceIds.size()));
-						const std::vector<bool> present = state.snapshot.containsNodesSorted(sourceIds);
-						if (present.size() != sourceIds.size()) {
-							throw std::runtime_error("logical graph backend changed direct traversal source cardinality");
-						}
-						if (std::ranges::any_of(present, [](const bool value) { return !value; })) {
-							throw std::runtime_error(
-									"logical graph backend returned an Edge topology with a missing source Node");
-						}
+					std::ranges::sort(sourceIds);
+					sourceIds.erase(std::unique(sourceIds.begin(), sourceIds.end()), sourceIds.end());
+					debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_requests", 1);
+					debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_ids",
+											   static_cast<int64_t>(sourceIds.size()));
+					const std::vector<bool> present = state.snapshot.containsNodesSorted(sourceIds);
+					if (present.size() != sourceIds.size()) {
+						throw std::runtime_error("logical graph backend changed direct traversal source cardinality");
 					}
-					SelectionVector selection(pending.size());
+					if (std::ranges::any_of(present, [](const bool value) { return !value; })) {
+						throw std::runtime_error(
+								"logical graph backend returned an Edge topology with a missing source Node");
+					}
+				}
+				MaterializedByteReservation selectionBytes(&state.materialized_budget);
+				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
+				SelectionVector selection(pending.size());
+				MaterializedByteReservation selectedPropertyBytes(&state.materialized_budget);
+				MaterializedByteReservation reorderedPropertyBytes(&state.materialized_budget);
 				std::vector<std::vector<PropertyValue>> selectedProperties;
 				if (!edgePredicates.empty()) {
+					MaterializedByteReservation orderingBytes(&state.materialized_budget);
+					orderingBytes.set(checkedSizeMul(pending.size(), 2U * sizeof(size_t) + sizeof(uint64_t),
+						"logical-plan direct traversal ordering size overflowed"));
 					std::vector<size_t> sortedOrdinals(pending.size());
 					for (size_t index = 0U; index < sortedOrdinals.size(); ++index) {
 						sortedOrdinals[index] = index;
@@ -5988,6 +10541,12 @@ namespace graph::query::execution {
 					std::vector<uint64_t> edgeIds;
 					edgeIds.reserve(pending.size());
 					std::vector<size_t> uniqueOrdinals(pending.size());
+					orderingBytes.set(checkedSizeAdd(
+						checkedSizeMul(sortedOrdinals.capacity() + uniqueOrdinals.capacity(), sizeof(size_t),
+							"logical-plan direct traversal ordering capacity overflowed"),
+						checkedSizeMul(edgeIds.capacity(), sizeof(uint64_t),
+							"logical-plan direct traversal Edge ID capacity overflowed"),
+						"logical-plan direct traversal ordering capacity overflowed"));
 					for (const size_t ordinal: sortedOrdinals) {
 						const uint64_t edgeId = pending[ordinal].topology.edge_id;
 						if (edgeIds.empty() || edgeId != edgeIds.back()) {
@@ -5995,33 +10554,76 @@ namespace graph::query::execution {
 						}
 						uniqueOrdinals[ordinal] = edgeIds.size() - 1U;
 					}
-					if (std::ranges::any_of(edgePredicates, [](const auto &predicate) {
-						return isNull(predicate.second);
-					})) {
+					if (std::ranges::any_of(edgePredicates,
+											[](const auto &predicate) { return isNull(predicate.second); })) {
 						selection.rejectAll();
 					} else {
-						const std::vector<std::vector<PropertyValue>> sortedColumns =
-								state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
-						const size_t selectedEdgeBytes = propertyColumnBytes(
-								sortedColumns, edgePropertyKeys,
-								"logical-plan direct traversal Edge Property batch size overflowed");
-						if (selectedEdgeBytes > state.bounds.maximum_materialized_bytes) {
+						size_t keyBytes = 0U;
+						for (const std::string_view key: edgePropertyKeys) {
+							keyBytes =
+									checkedSizeAdd(keyBytes, key.size(),
+												   "logical-plan direct traversal Edge Property key size overflowed");
+						}
+						if (selectedPropertyBytes.wouldExceed(keyBytes)) {
 							throw std::runtime_error(
 									"logical-plan direct traversal Edge Property batch exceeded its byte bound");
 						}
+						selectedPropertyBytes.set(keyBytes);
+						const std::function<void(size_t)> admission = [&](size_t bytes) {
+							checkGuard(state);
+							const size_t next =
+									checkedSizeAdd(selectedPropertyBytes.bytes(), bytes,
+												   "logical-plan direct traversal Edge Property batch size overflowed");
+							if (selectedPropertyBytes.wouldExceed(next)) {
+								throw std::runtime_error("logical-plan direct traversal Edge Property batch "
+														 "exceeded its byte bound");
+							}
+							selectedPropertyBytes.set(next);
+						};
+						auto sortedColumns =
+								state.snapshot.supportsPropertyReadAdmission()
+										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+												  edgeIds, edgePropertyKeys, admission)
+										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+						const size_t selectedEdgeBytes = propertyColumnBytes(
+								sortedColumns, edgePropertyKeys,
+								"logical-plan direct traversal Edge Property batch size overflowed", state.context);
+						if (selectedPropertyBytes.wouldExceed(selectedEdgeBytes)) {
+							throw std::runtime_error(
+									"logical-plan direct traversal Edge Property batch exceeded its byte bound");
+						}
+						selectedPropertyBytes.set(selectedEdgeBytes);
 						if (sortedColumns.size() != edgePredicates.size()) {
 							throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
 						}
+						reorderedPropertyBytes.set(checkedSizeMul(edgePredicates.size(), sizeof(std::vector<PropertyValue>),
+							"logical-plan reordered Property column size overflowed"));
 						selectedProperties.resize(edgePredicates.size());
+						reorderedPropertyBytes.set(checkedSizeMul(selectedProperties.capacity(), sizeof(std::vector<PropertyValue>),
+							"logical-plan reordered Property column size overflowed"));
 						for (size_t propertyIndex = 0U; propertyIndex < edgePredicates.size(); ++propertyIndex) {
 							const std::vector<PropertyValue> &sortedValues = sortedColumns[propertyIndex];
 							if (sortedValues.size() != edgeIds.size()) {
 								throw std::runtime_error(
 										"logical graph backend changed sorted Edge Property result cardinality");
 							}
+							const size_t previousBytes = reorderedPropertyBytes.bytes();
+							reorderedPropertyBytes.set(checkedSizeAdd(previousBytes,
+								checkedSizeMul(pending.size(), sizeof(PropertyValue), "logical-plan reordered Property slot size overflowed"),
+								"logical-plan reordered Property size overflowed"));
 							std::vector<PropertyValue> values(pending.size());
+							reorderedPropertyBytes.set(checkedSizeAdd(previousBytes,
+								checkedSizeMul(values.capacity(), sizeof(PropertyValue), "logical-plan reordered Property slot size overflowed"),
+								"logical-plan reordered Property size overflowed"));
 							for (const size_t ordinal: sortedOrdinals) {
-								values[ordinal] = sortedValues[uniqueOrdinals[ordinal]];
+								const auto checkpoint = [&] { checkGuardNow(state); };
+								const PropertyValue &source = sortedValues[uniqueOrdinals[ordinal]];
+								const size_t beforeCopy = reorderedPropertyBytes.bytes();
+								reorderedPropertyBytes.set(checkedSizeAdd(beforeCopy,
+									detail::retainedPropertyValueBytes(source, checkpoint), "logical-plan reordered Property payload size overflowed"));
+								values[ordinal] = detail::copyPropertyValueGuarded(source, checkpoint);
+								reorderedPropertyBytes.set(checkedSizeAdd(beforeCopy,
+									detail::retainedPropertyValueBytes(values[ordinal], checkpoint), "logical-plan reordered Property payload size overflowed"));
 							}
 							selection.forEachSelected([&](const size_t index) {
 								if (isNull(values[index]) || values[index] != edgePredicates[propertyIndex].second) {
@@ -6033,6 +10635,9 @@ namespace graph::query::execution {
 					}
 				}
 
+				// Sorted source columns have been destroyed; reordered copies retain their own reservation.
+				selectedPropertyBytes.reset();
+
 				struct TargetCandidate {
 					LogicalPlanReadRow row;
 					uint64_t target_id = 0U;
@@ -6042,30 +10647,40 @@ namespace graph::query::execution {
 				// not consume a selected-Property read. Binding is checked first because
 				// a repeated variable can reject a non-self traversal before any target
 				// access is observable.
+				MaterializedByteReservation targetCopiedPropertyBytes(&state.materialized_budget);
 				std::vector<TargetCandidate> targets;
 				targets.reserve(pending.size());
 				selection.forEachSelected([&](const size_t index) {
 					checkGuard(state);
 					const PendingEdge &candidate = pending[index];
 					SourceRow &source = sources[candidate.source_ordinal];
-					const uint64_t targetId = traversal.getDirection() == "out"
-															 ? candidate.topology.target_node_id
-															 : candidate.topology.source_node_id;
-					LogicalPlanReadRow expanded = source.cached_row.has_value() ? *source.cached_row : LogicalPlanReadRow{};
+					const uint64_t targetId = traversal.getDirection() == "out" ? candidate.topology.target_node_id
+																				: candidate.topology.source_node_id;
+					LogicalPlanReadRow expanded;
+					if (source.cached_row.has_value()) {
+						const size_t previous = targetCopiedPropertyBytes.bytes();
+						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(*source.cached_row, state.context),
+							"logical-plan expanded row size overflowed"));
+						expanded = detail::copyLogicalReadRowGuarded(*source.cached_row, [&] { checkGuardNow(state); });
+						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(expanded, state.context),
+							"logical-plan expanded row size overflowed"));
+					}
 					if (!source.cached_row.has_value()) {
 						expanded.values.emplace(sourceScan.getVariable(),
-													storage::EntityRef{source.node_id, false, 0U, 0U, 0U});
+												storage::EntityRef{source.node_id, false, 0U, 0U, 0U});
 					}
-					const storage::EntityRef edgeRef{candidate.topology.edge_id, true, candidate.topology.source_node_id,
-																		 candidate.topology.target_node_id, candidate.type_token};
+					const storage::EntityRef edgeRef{candidate.topology.edge_id, true,
+													 candidate.topology.source_node_id,
+													 candidate.topology.target_node_id, candidate.type_token};
 					const storage::EntityRef targetRef{targetId, false, 0U, 0U, 0U};
-						if (!bindValue(expanded, traversal.getEdgeVar(), edgeRef) ||
-							!bindValue(expanded, traversal.getTargetVar(), targetRef)) {
-							return;
+					if (!bindValue(expanded, traversal.getEdgeVar(), edgeRef) ||
+						!bindValue(expanded, traversal.getTargetVar(), targetRef)) {
+						return;
 					}
 					for (size_t propertyIndex = 0U; propertyIndex < edgePredicates.size(); ++propertyIndex) {
 						expanded.property_cache[traversal.getEdgeVar()].insert_or_assign(
-								edgePredicates[propertyIndex].first, selectedProperties[propertyIndex][index]);
+								edgePredicates[propertyIndex].first, copyReservedPropertyValue(
+							selectedProperties[propertyIndex][index], state, targetCopiedPropertyBytes));
 					}
 					targets.push_back({std::move(expanded), targetId, 0U});
 				});
@@ -6081,8 +10696,9 @@ namespace graph::query::execution {
 							targetIds.push_back(target.target_id);
 						}
 					}
-					std::ranges::sort(targetIds);
-					targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
+					detail::sortUniqueIdsGuarded(targetIds, [&] {
+						if (state.context != nullptr) state.context->checkGuardNow();
+					});
 					const std::vector<bool> labelsMatch =
 							state.snapshot.readNodeLabelMatchesSorted(targetIds, traversal.getTargetLabels());
 					if (labelsMatch.size() != targetIds.size()) {
@@ -6140,15 +10756,44 @@ namespace graph::query::execution {
 						for (const std::string &key: targetPropertyKeys) {
 							targetPropertyKeyViews.push_back(key);
 						}
-										const std::vector<std::vector<PropertyValue>> targetValues =
-													state.snapshot.readNodePropertyColumnsSorted(targetIds, targetPropertyKeyViews);
-										const size_t selectedTargetBytes = propertyColumnBytes(
-												targetValues, targetPropertyKeyViews, "logical-plan direct target Property batch size overflowed");
-										if (selectedTargetBytes > state.bounds.maximum_materialized_bytes) {
-											throw std::runtime_error("logical-plan direct target Property batch exceeded its byte bound");
-										}
+						MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+						size_t targetKeyBytes = 0U;
+						for (const std::string_view key: targetPropertyKeyViews) {
+							targetKeyBytes = checkedSizeAdd(targetKeyBytes, key.size(),
+															"logical-plan direct target Property key size overflowed");
+						}
+						if (targetPropertyBytes.wouldExceed(targetKeyBytes)) {
+							throw std::runtime_error(
+									"logical-plan direct target Property batch exceeded its byte bound");
+						}
+						targetPropertyBytes.set(targetKeyBytes);
+						const std::function<void(size_t)> targetAdmission = [&](size_t bytes) {
+							checkGuard(state);
+							const size_t next =
+									checkedSizeAdd(targetPropertyBytes.bytes(), bytes,
+												   "logical-plan direct target Property batch size overflowed");
+							if (targetPropertyBytes.wouldExceed(next)) {
+								throw std::runtime_error(
+										"logical-plan direct target Property batch exceeded its byte bound");
+							}
+							targetPropertyBytes.set(next);
+						};
+						auto targetValues = state.snapshot.supportsPropertyReadAdmission()
+													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+															  targetIds, targetPropertyKeyViews, targetAdmission)
+													: state.snapshot.readNodePropertyColumnsSorted(
+															  targetIds, targetPropertyKeyViews);
+						const size_t selectedTargetPayloadBytes =
+								propertyColumnBytes(targetValues, targetPropertyKeyViews,
+													"logical-plan direct target Property batch size overflowed", state.context);
+						if (targetPropertyBytes.wouldExceed(selectedTargetPayloadBytes)) {
+							throw std::runtime_error(
+									"logical-plan direct target Property batch exceeded its byte bound");
+						}
+						targetPropertyBytes.set(selectedTargetPayloadBytes);
 						if (targetValues.size() != targetPropertyKeys.size()) {
-							throw std::runtime_error("logical graph backend changed target Node Property column cardinality");
+							throw std::runtime_error(
+									"logical graph backend changed target Node Property column cardinality");
 						}
 						std::vector<TargetPropertyColumn> targetColumns;
 						targetColumns.reserve(targetPropertyKeys.size());
@@ -6157,15 +10802,17 @@ namespace graph::query::execution {
 								throw std::runtime_error(
 										"logical graph backend changed sorted target Node Property result cardinality");
 							}
-							targetColumns.push_back({targetPropertyKeys[column], targetValues[column]});
+							targetColumns.push_back({targetPropertyKeys[column], std::move(targetValues[column])});
 						}
 						for (TargetCandidate &target: targets) {
 							checkGuard(state);
 							bool matchesTarget = true;
 							for (const auto &[key, expected]: targetPredicates) {
 								const auto column = std::ranges::find(targetColumns, key, &TargetPropertyColumn::key);
-								if (column == targetColumns.end()) { // ZYX_COV_EXCL_LINE: keys are collected before column reads.
-									throw std::logic_error("logical-plan target Property column is missing its requested key");
+								if (column ==
+									targetColumns.end()) { // ZYX_COV_EXCL_LINE: keys are collected before column reads.
+									throw std::logic_error(
+											"logical-plan target Property column is missing its requested key");
 								}
 								const PropertyValue &actual = column->values[target.property_ordinal];
 								if (isNull(actual) || actual != expected) {
@@ -6198,90 +10845,87 @@ namespace graph::query::execution {
 				return continueVisitor;
 			};
 			const auto consumeTopology = [&](const storage::LogicalGraphEdgeTopology &edge,
-												 const uint64_t typeToken = 0U) {
-						checkGuard(state);
-						validateEdge(edge);
-						if (edgeRecords == state.bounds.maximum_edge_records) {
-							throw std::runtime_error("logical-plan direct traversal exceeded its global Edge bound");
-						}
-						incrementBounded(edgeRecords, "logical-plan direct traversal Edge counter overflowed");
-						incrementBounded(state.stats.edges_scanned,
-										 "logical-plan read runtime Edge counter overflowed");
+											 const uint64_t typeToken = 0U) {
+				checkGuard(state);
+				validateEdge(edge);
+				if (edgeRecords == state.bounds.maximum_edge_records) {
+					throw std::runtime_error("logical-plan direct traversal exceeded its global Edge bound");
+				}
+				incrementBounded(edgeRecords, "logical-plan direct traversal Edge counter overflowed");
+				incrementBounded(state.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
 
-						const uint64_t sourceId = traversal.getDirection() == "out" ? edge.source_node_id
-																		 : edge.target_node_id;
-						size_t sourceOrdinal = 0U;
-						if (globalEdgePath) {
-							if (sourceId == 0U) {
-								throw std::runtime_error("logical graph direct traversal returned a zero source Node ID");
-							}
-							const auto existing = sourceOrdinals.find(sourceId);
-							if (existing == sourceOrdinals.end()) {
-				if (sources.size() == state.bounds.maximum_node_records) {
-					throw std::runtime_error(
-							"logical-plan direct traversal exceeded its source Node record bound");
-				}
-				// Property-bearing batches validate source liveness in flushPending().
-				// Keep the scalar check only for topology-only batches, whose capacity is
-				// intentionally one to preserve strict early termination.
-				if (state.snapshot.supportsNodeExistenceProbes() && edgeBatchCapacity == 1U &&
-						!state.snapshot.containsNode(sourceId)) {
-					return true;
-				}
-				sourceOrdinal = sources.size();
-								sourceOrdinals.emplace(sourceId, sourceOrdinal);
-								sources.push_back({sourceId, std::nullopt, 0U});
-							} else {
-								sourceOrdinal = existing->second;
-							}
-						} else {
-							auto source = std::ranges::lower_bound(sources, sourceId, {}, &SourceRow::node_id);
-							if (source == sources.end() || source->node_id != sourceId ||
-								source->edges_seen == state.bounds.maximum_edges_per_node) {
-								return true;
-							}
-							incrementBounded(source->edges_seen,
-											 "logical-plan direct traversal per-Node Edge counter overflowed");
-							sourceOrdinal = static_cast<size_t>(source - sources.begin());
+				const uint64_t sourceId = traversal.getDirection() == "out" ? edge.source_node_id : edge.target_node_id;
+				size_t sourceOrdinal = 0U;
+				if (globalEdgePath) {
+					if (sourceId == 0U) {
+						throw std::runtime_error("logical graph direct traversal returned a zero source Node ID");
+					}
+					const auto existing = sourceOrdinals.find(sourceId);
+					if (existing == sourceOrdinals.end()) {
+						if (sources.size() == state.bounds.maximum_node_records) {
+							throw std::runtime_error(
+									"logical-plan direct traversal exceeded its source Node record bound");
 						}
-						if (globalEdgePath) {
-							SourceRow &source = sources[sourceOrdinal];
-							if (source.edges_seen == state.bounds.maximum_edges_per_node) {
-								return true;
-							}
-							incrementBounded(source.edges_seen,
-										 "logical-plan direct traversal per-Node Edge counter overflowed");
-						}
-						if (!relationshipTypeToken.has_value() && !traversal.getEdgeType().empty() &&
-							edge.type != traversal.getEdgeType()) {
+						// Property-bearing batches validate source liveness in flushPending().
+						// Keep the scalar check only for topology-only batches, whose capacity is
+						// intentionally one to preserve strict early termination.
+						if (state.snapshot.supportsNodeExistenceProbes() && edgeBatchCapacity == 1U &&
+							!state.snapshot.containsNode(sourceId)) {
 							return true;
 						}
-						pending.push_back({edge, typeToken, sourceOrdinal});
-						return pending.size() != edgeBatchCapacity || flushPending();
-				};
+						sourceOrdinal = sources.size();
+						sourceOrdinals.emplace(sourceId, sourceOrdinal);
+						sources.push_back({sourceId, std::nullopt, 0U});
+					} else {
+						sourceOrdinal = existing->second;
+					}
+				} else {
+					auto source = std::ranges::lower_bound(sources, sourceId, {}, &SourceRow::node_id);
+					if (source == sources.end() || source->node_id != sourceId ||
+						source->edges_seen == state.bounds.maximum_edges_per_node) {
+						return true;
+					}
+					incrementBounded(source->edges_seen,
+									 "logical-plan direct traversal per-Node Edge counter overflowed");
+					sourceOrdinal = static_cast<size_t>(source - sources.begin());
+				}
+				if (globalEdgePath) {
+					SourceRow &source = sources[sourceOrdinal];
+					if (source.edges_seen == state.bounds.maximum_edges_per_node) {
+						return true;
+					}
+					incrementBounded(source.edges_seen,
+									 "logical-plan direct traversal per-Node Edge counter overflowed");
+				}
+				if (!relationshipTypeToken.has_value() && !traversal.getEdgeType().empty() &&
+					edge.type != traversal.getEdgeType()) {
+					return true;
+				}
+				pending.push_back({{edge.edge_id, edge.source_node_id, edge.target_node_id, {}}, typeToken, sourceOrdinal});
+				return pending.size() != edgeBatchCapacity || flushPending();
+			};
 			const size_t edgeVisitBound = checkedSizeAdd(state.bounds.maximum_edge_records, 1U,
-					"logical-plan direct traversal Edge bound overflowed");
+														 "logical-plan direct traversal Edge bound overflowed");
 			if (traversal.getEdgeType().empty() || relationshipTypeToken.has_value()) {
-				state.snapshot.visitEdgeRefs(edgeVisitBound,
-						[&consumeTopology, &relationshipTypeToken](const storage::EntityRef &reference) {
-							validateEdgeRef(reference,
-									"logical-plan direct traversal received an invalid or Node reference");
-							if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
-								return true;
-							}
-							return consumeTopology({reference.entity_id, reference.source_node_id, reference.target_node_id, {}},
-												   reference.type_token);
-						});
+				state.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
+																	 const storage::EntityRef &reference) {
+					validateEdgeRef(reference, "logical-plan direct traversal received an invalid or Node reference");
+					if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
+						return true;
+					}
+					return consumeTopology(
+							{reference.entity_id, reference.source_node_id, reference.target_node_id, {}},
+							reference.type_token);
+				});
 			} else {
 				state.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
 			}
 			if (continueVisitor) {
 				static_cast<void>(flushPending());
 			}
-			const int64_t tracedEdgeRecords =
-					edgeRecords > static_cast<size_t>(std::numeric_limits<int64_t>::max())
-							? std::numeric_limits<int64_t>::max()
-							: static_cast<int64_t>(edgeRecords);
+			const int64_t tracedEdgeRecords = edgeRecords > static_cast<size_t>(std::numeric_limits<int64_t>::max())
+													  ? std::numeric_limits<int64_t>::max()
+													  : static_cast<int64_t>(edgeRecords);
 			debug::PerfTrace::addValue("logical_plan.direct_edge_records", tracedEdgeRecords);
 			return continueVisitor;
 		}
@@ -6291,16 +10935,15 @@ namespace graph::query::execution {
 		// the scan order before exposing rows to the logical runtime.
 		[[nodiscard]] std::optional<bool>
 		tryVisitBatchedNativeNodeRefScan(const logical::LogicalNodeScan &scan,
-									 const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
-									 ExecutionState &state, const InternalVisitor &visitor) {
+										 const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
+										 ExecutionState &state, const InternalVisitor &visitor) {
 			if (!state.allow_deferred_entity_refs || !state.snapshot.supportsNativeNodeRefScans()) {
 				return std::nullopt;
 			}
 
-			std::vector<std::pair<std::string, PropertyValue>> equalityPredicates = scan.getPropertyPredicates();
-			equalityPredicates.insert(equalityPredicates.end(), parameterPredicates.begin(), parameterPredicates.end());
 			std::vector<std::string> propertyKeys;
-			propertyKeys.reserve(equalityPredicates.size() + scan.getRangePredicates().size());
+			propertyKeys.reserve(scan.getPropertyPredicates().size() + parameterPredicates.size() +
+								 scan.getRangePredicates().size());
 			const auto appendKey = [&propertyKeys](const std::string &key) {
 				if (key.empty()) {
 					throw std::invalid_argument("logical-plan Node Property predicate has an empty key");
@@ -6309,13 +10952,16 @@ namespace graph::query::execution {
 					propertyKeys.push_back(key);
 				}
 			};
-			for (const auto &[key, expected]: equalityPredicates) {
-				if (isNull(expected)) {
-					// The established row-at-a-time path preserves its existing bounded
-					// accounting for an impossible equality predicate.
-					return std::nullopt;
+			const auto collectEqualityKeys = [&](const auto &predicates) {
+				for (const auto &[key, expected]: predicates) {
+					if (isNull(expected))
+						return false;
+					appendKey(key);
 				}
-				appendKey(key);
+				return true;
+			};
+			if (!collectEqualityKeys(scan.getPropertyPredicates()) || !collectEqualityKeys(parameterPredicates)) {
+				return std::nullopt;
 			}
 			for (const logical::RangePredicate &range: scan.getRangePredicates()) {
 				appendKey(range.key);
@@ -6338,78 +10984,152 @@ namespace graph::query::execution {
 			struct PendingNodeRef {
 				storage::EntityRef reference;
 			};
-			const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_node_records,
-														 state.bounds.maximum_rows});
-			std::vector<PendingNodeRef> pending;
+			// Keep reference buffering below a quarter of the available allowance so
+			// IDs, ordinal mappings, selected values and a row can coexist at flush.
+			const size_t byteBatchCapacity =
+					std::max<size_t>(1U, state.materialized_budget.available() / sizeof(PendingNodeRef) / 4U);
+			const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS, byteBatchCapacity,
+												   state.bounds.maximum_node_records, state.bounds.maximum_rows});
+			BoundedBatch<PendingNodeRef> pending(
+					batchCapacity, state.bounds.maximum_materialized_bytes,
+					[](const auto &) { return sizeof(PendingNodeRef); }, &state.materialized_budget);
 			pending.reserve(batchCapacity);
 			bool continueVisitor = true;
 			const auto flushPending = [&]() {
 				if (pending.empty()) {
 					return continueVisitor;
 				}
-				std::vector<size_t> sortedOrdinals(pending.size());
-				std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), size_t{0U});
-				std::ranges::sort(sortedOrdinals, [&pending](const size_t left, const size_t right) {
-					return pending[left].reference.entity_id < pending[right].reference.entity_id;
-				});
-				std::vector<uint64_t> nodeIds;
-				nodeIds.reserve(pending.size());
-				for (const size_t ordinal: sortedOrdinals) {
-					const uint64_t nodeId = pending[ordinal].reference.entity_id;
-					if (!nodeIds.empty() && nodeId == nodeIds.back()) {
-						throw std::runtime_error("logical graph native Node reference scan returned duplicate Node IDs");
-					}
-					nodeIds.push_back(nodeId);
-				}
 				std::vector<std::string_view> keyViews;
 				keyViews.reserve(propertyKeys.size());
-				for (const std::string &key: propertyKeys) {
+				for (const auto &key: propertyKeys)
 					keyViews.push_back(key);
-				}
-				const std::vector<std::vector<PropertyValue>> sortedColumns =
-						state.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
-				if (sortedColumns.size() != propertyKeys.size()) {
-					throw std::runtime_error("logical graph backend changed Node Property column cardinality");
-				}
-				std::vector<std::vector<PropertyValue>> columns(
-						propertyKeys.size(), std::vector<PropertyValue>(pending.size()));
-				for (size_t column = 0U; column < sortedColumns.size(); ++column) {
-					if (sortedColumns[column].size() != pending.size()) {
-						throw std::runtime_error(
-								"logical graph backend changed sorted Node Property result cardinality");
+				struct NodeColumnBytePressure {};
+				std::function<bool(size_t, size_t)> processRange;
+				processRange = [&](size_t begin, size_t end) -> bool {
+					try {
+						MaterializedByteReservation lookupBytes(&state.materialized_budget);
+						const size_t scratch = checkedSizeMul(end - begin, sizeof(uint64_t) + 2U * sizeof(size_t),
+															  "logical-plan Node column lookup size overflowed");
+						if (lookupBytes.wouldExceed(scratch))
+							throw NodeColumnBytePressure{};
+						lookupBytes.set(scratch);
+						std::vector<size_t> sortedOrdinals(end - begin);
+						std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), begin);
+						std::ranges::sort(sortedOrdinals, [&](size_t left, size_t right) {
+							return pending.values()[left].reference.entity_id <
+								   pending.values()[right].reference.entity_id;
+						});
+						std::vector<uint64_t> nodeIds;
+						nodeIds.reserve(end - begin);
+						std::vector<size_t> lookupOrdinals(end - begin);
+						for (size_t sorted = 0U; sorted < sortedOrdinals.size(); ++sorted) {
+							const size_t original = sortedOrdinals[sorted];
+							const uint64_t id = pending.values()[original].reference.entity_id;
+							if (!nodeIds.empty() && nodeIds.back() == id) {
+								throw std::runtime_error(
+										"logical graph native Node reference scan returned duplicate Node IDs");
+							}
+							nodeIds.push_back(id);
+							lookupOrdinals[original - begin] = sorted;
+						}
+						MaterializedByteReservation rowBytes(&state.materialized_budget);
+						LogicalPlanReadRow row;
+						const auto prepareRow = [&](const storage::EntityRef &reference) {
+							row.values.emplace(scan.getVariable(), reference);
+							for (const auto &key: propertyKeys)
+								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
+						};
+						prepareRow(pending.values()[begin].reference);
+						const size_t structuralBytes = logicalReadRowBytes(row, state.context);
+						if (rowBytes.wouldExceed(structuralBytes))
+							throw NodeColumnBytePressure{};
+						rowBytes.set(structuralBytes);
+						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						const std::function<void(size_t)> admission = [&](size_t bytes) {
+							checkGuard(state);
+							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
+															   "logical-plan Node source size overflowed");
+							if (columnBytes.wouldExceed(next))
+								throw NodeColumnBytePressure{};
+							columnBytes.set(next);
+							graph::debug::PerfTrace::addValue(
+									"logical_plan.node_predicate_source_bytes",
+									static_cast<int64_t>(
+											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+						};
+						auto columns = state.snapshot.supportsPropertyReadAdmission()
+											   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+														 nodeIds, keyViews, admission)
+											   : state.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
+						if (columns.size() != propertyKeys.size()) {
+							throw std::runtime_error("logical graph backend changed Node Property column cardinality");
+						}
+						for (const auto &column: columns) {
+							if (column.size() != end - begin) {
+								throw std::runtime_error(
+										"logical graph backend changed sorted Node Property result cardinality");
+							}
+						}
+						const size_t retained =
+								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.context);
+						if (columnBytes.wouldExceed(retained))
+							throw NodeColumnBytePressure{};
+						columnBytes.set(retained);
+						// No byte-pressure retry is issued after a row is delivered: only
+						// pre-read/pre-delivery pressure may split this original scan range.
+						for (size_t index = begin; index < end && continueVisitor; ++index) {
+							checkGuard(state);
+							if (index != begin) {
+								row = LogicalPlanReadRow{};
+								prepareRow(pending.values()[index].reference);
+								rowBytes.set(structuralBytes);
+							}
+							const size_t sorted = lookupOrdinals[index - begin];
+							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
+								const size_t valueBytes = detail::retainedPropertyValueBytes(columns[column][sorted], [&] { checkGuardNow(state); });
+								columnBytes.set(columnBytes.bytes() - valueBytes);
+								rowBytes.set(checkedSizeAdd(rowBytes.bytes() - 1U, valueBytes,
+															"logical-plan Node row size overflowed"));
+								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
+										std::move(columns[column][sorted]);
+							}
+							if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
+												   state, true)) {
+								rowBytes.reset();
+								continueVisitor = visitor(std::move(row));
+							} else {
+								row = LogicalPlanReadRow{};
+								rowBytes.reset();
+							}
+						}
+						return continueVisitor;
+					} catch (const NodeColumnBytePressure &) {
+						if (end - begin == 1U)
+							throw std::runtime_error("logical-plan Node Property batch exceeded its byte bound");
 					}
-					for (size_t sorted = 0U; sorted < sortedOrdinals.size(); ++sorted) {
-						columns[column][sortedOrdinals[sorted]] = sortedColumns[column][sorted];
-					}
-				}
-				for (size_t index = 0U; index < pending.size() && continueVisitor; ++index) {
-					checkGuard(state);
-					LogicalPlanReadRow row;
-					row.values.emplace(scan.getVariable(), pending[index].reference);
-					for (size_t column = 0U; column < propertyKeys.size(); ++column) {
-						row.property_cache[scan.getVariable()].insert_or_assign(propertyKeys[column], columns[column][index]);
-					}
-					if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates, state,
-																 true)) {
-						continueVisitor = visitor(std::move(row));
-					}
-				}
+					graph::debug::PerfTrace::addValue("logical_plan.node_predicate_split_batches", 1);
+					const size_t middle = begin + (end - begin) / 2U;
+					return processRange(begin, middle) && processRange(middle, end);
+				};
+				continueVisitor = processRange(0U, pending.size());
 				pending.clear();
 				return continueVisitor;
 			};
 
-			state.snapshot.visitNodeRefsWithLabelMatches(
+			state.snapshot.visitNodeRefsForLabelPredicate(
 					state.bounds.maximum_node_records, scan.getLabels(),
 					[&](const storage::EntityRef &reference, const bool labelsMatch) {
 						checkGuard(state);
 						validateNodeRef(reference,
-								"logical graph backend returned an invalid or Edge reference from a Node scan");
+										"logical graph backend returned an invalid or Edge reference from a Node scan");
 						incrementBounded(state.stats.nodes_scanned,
 										 "logical-plan read runtime Node counter overflowed");
 						if (!labelsMatch) {
 							return true;
 						}
-						pending.push_back({reference});
+						if (!pending.empty() && pending.wouldExceedBytes(PendingNodeRef{reference}) && !flushPending())
+							return false;
+						pending.append(PendingNodeRef{reference});
 						return pending.size() != batchCapacity || flushPending();
 					});
 			if (continueVisitor) {
@@ -6421,17 +11141,16 @@ namespace graph::query::execution {
 		// Consume one authenticated native index batch.  Keeping this logic in a
 		// batch-local helper lets a cursor stop after the downstream LIMIT without
 		// collecting the complete index result in memory.
-		[[nodiscard]] bool
-		visitIndexedCandidateBatch(const storage::IndexCandidateBatch &nativeCandidates,
-								   const logical::LogicalNodeScan &scan,
-								   const std::vector<std::pair<std::string, PropertyValue>> &equalityPredicates,
-								   const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
-								   size_t &candidateRecords, std::unordered_set<uint64_t> &seenCandidateIds,
-								   ExecutionState &state, const InternalVisitor &visitor) {
+		[[nodiscard]] bool visitIndexedCandidateBatch(
+				const storage::IndexCandidateBatch &nativeCandidates, const logical::LogicalNodeScan &scan,
+				const std::vector<std::pair<std::string, PropertyValue>> &equalityPredicates,
+				const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates, size_t &candidateRecords,
+				std::unordered_set<uint64_t> &seenCandidateIds, MaterializedByteReservation &seenCandidateBytes,
+				ExecutionState &state, const InternalVisitor &visitor) {
 			if (nativeCandidates.snapshot_generation == 0U) {
 				throw std::runtime_error("logical graph native indexed Node candidates have no snapshot generation");
 			}
-			const size_t candidateBytes = logicalIndexCandidateBatchBytes(nativeCandidates);
+			const size_t candidateBytes = logicalIndexCandidateBatchBytes(nativeCandidates, state.context);
 			if (candidateBytes > state.bounds.maximum_candidate_bytes) {
 				throw std::runtime_error("logical graph indexed Node candidate batch exceeded its byte bound");
 			}
@@ -6484,9 +11203,23 @@ namespace graph::query::execution {
 					}
 				}
 			}
+			// The immutable producer batch stays alive while rows are handed downstream.
+			// Reserve its retained storage as well as each independent row-cache copy.
+			MaterializedByteReservation verifiedCandidateBytes(&state.materialized_budget);
+			if (nativeCandidates.predicates_verified)
+				verifiedCandidateBytes.set(candidateBytes);
+			MaterializedByteReservation candidateScratchBytes(&state.materialized_budget);
+			const bool residualColumns = !nativeCandidates.predicates_verified && state.snapshot.supportsNativeNodeRefScans() &&
+				!nativeCandidates.candidates.empty();
+			if (!residualColumns) {
+				candidateScratchBytes.set(checkedSizeAdd(
+					checkedSizeMul(nativeCandidates.candidates.size(), sizeof(uint64_t), "logical-plan candidate scratch overflowed"),
+					nativeCandidates.candidates.size() / 8U + (nativeCandidates.candidates.size() % 8U != 0U),
+					"logical-plan candidate scratch overflowed"));
+			}
 			uint64_t previousNodeId = 0U;
 			std::vector<uint64_t> candidateNodeIds;
-			candidateNodeIds.reserve(nativeCandidates.candidates.size());
+			if (!residualColumns) candidateNodeIds.reserve(nativeCandidates.candidates.size());
 			for (const storage::EntityRef &candidate: nativeCandidates.candidates) {
 				validateNodeRef(candidate,
 								"logical graph indexed Node lookup returned invalid or non-monotonic Node references");
@@ -6495,14 +11228,25 @@ namespace graph::query::execution {
 							"logical graph indexed Node lookup returned a non-monotonic candidate batch");
 				}
 				previousNodeId = candidate.entity_id;
-				if (!seenCandidateIds.insert(candidate.entity_id).second) {
+				if (seenCandidateIds.contains(candidate.entity_id)) {
 					throw std::runtime_error("logical graph indexed Node lookup returned duplicate Node references");
 				}
-				candidateNodeIds.push_back(candidate.entity_id);
+
+				if (!residualColumns) candidateNodeIds.push_back(candidate.entity_id);
 			}
-			std::vector<bool> candidateLabelsMatch(nativeCandidates.candidates.size(), true);
-			if (!nativeCandidates.label_scope_verified && nativeCandidates.predicates_verified &&
-				!candidateNodeIds.empty() && !scan.getLabels().empty()) {
+			const auto rememberCandidate = [&](uint64_t id) {
+				const size_t previousSeenBytes = seenCandidateBytes.bytes();
+				seenCandidateBytes.set(checkedSizeAdd(previousSeenBytes, sizeof(uint64_t),
+													  "logical-plan candidate seen-ID size overflowed"));
+				try {
+					seenCandidateIds.insert(id);
+				} catch (...) {
+					seenCandidateBytes.set(previousSeenBytes);
+					throw;
+				}
+			};
+			std::vector<bool> candidateLabelsMatch(residualColumns ? 0U : nativeCandidates.candidates.size(), true);
+			if (!nativeCandidates.label_scope_verified && !candidateNodeIds.empty() && !scan.getLabels().empty()) {
 				candidateLabelsMatch = state.snapshot.readNodeLabelMatchesSorted(candidateNodeIds, scan.getLabels());
 				if (candidateLabelsMatch.size() != candidateNodeIds.size()) {
 					throw std::runtime_error("logical graph backend changed indexed Node label-match cardinality");
@@ -6512,18 +11256,216 @@ namespace graph::query::execution {
 							"logical graph native indexed Node candidates violate the requested label scope");
 				}
 			}
+			// An index candidate stream is only an access path.  When the index does
+			// not already provide verified predicate columns, validate the residual
+			// predicates as one selected-column batch instead of reopening a complete
+			// Node for every candidate.  Complete materialization remains limited to
+			// candidates that survive the batch; deferred consumers can keep the
+			// authenticated EntityRef all the way to their result boundary.
+			if (residualColumns) {
+				std::vector<std::string> propertyKeys;
+				const auto appendPropertyKey = [&propertyKeys](const std::string &key) {
+					if (key.empty()) {
+						throw std::invalid_argument("logical-plan indexed Node predicate has an empty Property key");
+					}
+					if (std::ranges::find(propertyKeys, key) == propertyKeys.end()) {
+						propertyKeys.push_back(key);
+					}
+				};
+				for (const auto &[key, value]: scan.getPropertyPredicates()) {
+					static_cast<void>(value);
+					appendPropertyKey(key);
+				}
+				for (const auto &[key, value]: parameterPredicates) {
+					static_cast<void>(value);
+					appendPropertyKey(key);
+				}
+				for (const logical::RangePredicate &range: scan.getRangePredicates()) {
+					appendPropertyKey(range.key);
+				}
+				if (const auto &composite = scan.getCompositeEquality(); composite.has_value()) {
+					if (composite->keys.empty() || composite->keys.size() != composite->values.size()) {
+						throw std::invalid_argument(
+								"logical-plan indexed Node composite predicate has an invalid shape");
+					}
+					for (const std::string &key: composite->keys) {
+						appendPropertyKey(key);
+					}
+				}
+				std::vector<std::string_view> keyViews;
+				keyViews.reserve(propertyKeys.size());
+				for (const std::string &key: propertyKeys) {
+					keyViews.push_back(key);
+				}
+				const size_t minimumCandidateBytes =
+						checkedSizeAdd(sizeof(storage::EntityRef),
+									   checkedSizeMul(propertyKeys.size(), sizeof(PropertyValue),
+													  "logical-plan indexed Node batch capacity overflowed"),
+									   "logical-plan indexed Node batch capacity overflowed");
+				const size_t byteBatchCapacity =
+						std::max<size_t>(1U, state.bounds.maximum_materialized_bytes / minimumCandidateBytes);
+				// Adapt the row cap before reading. Admission-capable readers reserve
+				// payload bytes at the source; compatibility readers are checked on
+				// return. Pre-delivery pressure can further split these ranges.
+				const size_t candidateBatchCapacity =
+						std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_node_records,
+								  state.bounds.maximum_rows, byteBatchCapacity});
+				if (candidateBatchCapacity == 0U) {
+					throw std::runtime_error("logical-plan indexed Node Property batch has no positive capacity");
+				}
+				struct IndexedColumnBytePressure {};
+				std::function<bool(size_t, size_t)> processRange;
+				processRange = [&](size_t offset, size_t count) -> bool {
+					try {
+						checkGuard(state);
+						MaterializedByteReservation idBytes(&state.materialized_budget);
+						const size_t idSlots = checkedSizeMul(count, sizeof(uint64_t), "logical-plan residual IDs overflowed");
+						if (idBytes.wouldExceed(idSlots)) throw IndexedColumnBytePressure{};
+						idBytes.set(idSlots);
+						std::vector<uint64_t> batchIds;
+						batchIds.reserve(count);
+						idBytes.set(checkedSizeMul(batchIds.capacity(), sizeof(uint64_t), "logical-plan residual IDs overflowed"));
+						for (size_t i = 0U; i < count; ++i) batchIds.push_back(nativeCandidates.candidates[offset + i].entity_id);
+						std::vector<bool> labelsMatch;
+						if (!nativeCandidates.label_scope_verified && !scan.getLabels().empty()) {
+							const size_t labelSlots = checkedSizeAdd(idSlots, count / 8U + (count % 8U != 0U), "logical-plan residual labels overflowed");
+							if (idBytes.wouldExceed(labelSlots)) throw IndexedColumnBytePressure{};
+							idBytes.set(labelSlots);
+							labelsMatch = state.snapshot.readNodeLabelMatchesSorted(batchIds, scan.getLabels());
+							if (labelsMatch.size() != count) throw std::runtime_error("logical graph indexed Node labels changed cardinality");
+							idBytes.set(checkedSizeAdd(idSlots, labelsMatch.capacity() / 8U + (labelsMatch.capacity() % 8U != 0U), "logical-plan residual labels overflowed"));
+						}
+						MaterializedByteReservation rowBytes(&state.materialized_budget);
+						LogicalPlanReadRow row;
+						const auto prepareRow = [&](const storage::EntityRef &candidate) {
+							row.values.emplace(scan.getVariable(), candidate);
+							for (const auto &key: propertyKeys)
+								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
+						};
+						prepareRow(nativeCandidates.candidates[offset]);
+						const size_t structuralBytes = logicalReadRowBytes(row, state.context);
+						if (rowBytes.wouldExceed(structuralBytes))
+							throw IndexedColumnBytePressure{};
+						rowBytes.set(structuralBytes);
+						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						const std::function<void(size_t)> admission = [&](size_t bytes) {
+							checkGuard(state);
+							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
+															   "logical-plan indexed Node source size overflowed");
+							if (columnBytes.wouldExceed(next))
+								throw IndexedColumnBytePressure{};
+							columnBytes.set(next);
+							debug::PerfTrace::addValue(
+									"logical_plan.index_predicate_source_bytes",
+									static_cast<int64_t>(
+											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
+						};
+						auto columns = propertyKeys.empty() ? std::vector<std::vector<PropertyValue>>{}
+									   : state.snapshot.supportsPropertyReadAdmission()
+											   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+														 batchIds, keyViews, admission)
+											   : state.snapshot.readNodePropertyColumnsSorted(batchIds, keyViews);
+						if (columns.size() != propertyKeys.size() ||
+							std::ranges::any_of(columns, [&](const auto &column) { return column.size() != count; }))
+							throw std::runtime_error(
+									"logical graph backend changed indexed Node Property column cardinality");
+						const size_t selectedBytes = propertyColumnBytes(
+								columns, keyViews, "logical-plan indexed Node Property batch size overflowed", state.context);
+						if (columnBytes.wouldExceed(selectedBytes))
+							throw IndexedColumnBytePressure{};
+						columnBytes.set(selectedBytes);
+						for (size_t batchIndex = 0U; batchIndex < count; ++batchIndex) {
+							checkGuard(state);
+							const size_t candidateIndex = offset + batchIndex;
+							const auto &candidate = nativeCandidates.candidates[candidateIndex];
+							rememberCandidate(candidate.entity_id);
+							incrementBounded(state.stats.nodes_scanned,
+											 "logical-plan indexed Node lookup counter overflowed");
+							if (batchIndex != 0U) {
+								row = LogicalPlanReadRow{};
+								prepareRow(candidate);
+								rowBytes.set(structuralBytes);
+							}
+							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
+								const size_t valueBytes =
+										detail::retainedPropertyValueBytes(columns[column][batchIndex], [&] { checkGuardNow(state); });
+								columnBytes.set(columnBytes.bytes() - valueBytes);
+								rowBytes.set(checkedSizeAdd(rowBytes.bytes() - 1U, valueBytes,
+															"logical-plan indexed Node row size overflowed"));
+								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
+										std::move(columns[column][batchIndex]);
+							}
+							if (!nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
+													state, labelsMatch.empty() || labelsMatch[batchIndex])) {
+								row = LogicalPlanReadRow{};
+								rowBytes.reset();
+								continue;
+							}
+							if (!state.allow_deferred_entity_refs) {
+								auto node = readNodeCached(state, candidate.entity_id);
+								if (!nodeScanMatches(state.snapshot, node, scan, parameterPredicates, state)) {
+									throw std::runtime_error(
+											"logical graph indexed Node candidate changed during materialization");
+								}
+								row.values[scan.getVariable()] = std::move(node);
+								row.property_cache.erase(scan.getVariable());
+								rowBytes.set(logicalReadRowBytes(row, state.context));
+							}
+							rowBytes.reset();
+							if (!visitor(std::move(row)))
+								return false;
+						}
+						return true;
+					} catch (const IndexedColumnBytePressure &) {
+						if (count == 1U)
+							throw std::runtime_error(
+									"logical-plan indexed Node Property batch exceeded its byte bound");
+					}
+					debug::PerfTrace::addValue("logical_plan.index_predicate_split_batches", 1);
+					const size_t left = count / 2U;
+					return processRange(offset, left) && processRange(offset + left, count - left);
+				};
+				for (size_t offset = 0U; offset < nativeCandidates.candidates.size(); offset += candidateBatchCapacity) {
+					if (!processRange(offset, std::min(candidateBatchCapacity, nativeCandidates.candidates.size() - offset)))
+						return false;
+				}
+				return true;
+			}
 			for (size_t candidateIndex = 0U; candidateIndex < nativeCandidates.candidates.size(); ++candidateIndex) {
 				checkGuard(state);
 				const storage::EntityRef &candidate = nativeCandidates.candidates[candidateIndex];
+				rememberCandidate(candidate.entity_id);
 				incrementBounded(state.stats.nodes_scanned, "logical-plan indexed Node lookup counter overflowed");
 				if ((nativeCandidates.exact_match_verified || nativeCandidates.predicates_verified) &&
 					state.allow_deferred_entity_refs && state.snapshot.supportsNativeNodeRefScans()) {
+					MaterializedByteReservation rowBytes(&state.materialized_budget);
 					LogicalPlanReadRow row;
 					row.values.emplace(scan.getVariable(), candidate);
+					rowBytes.set(logicalReadRowBytes(row, state.context));
+					const auto copyProperty = [&](const std::string &key, const PropertyValue &value) {
+						size_t previous = 0U;
+						if (const auto cache = row.property_cache.find(scan.getVariable());
+							cache != row.property_cache.end()) {
+							if (const auto found = cache->second.find(key); found != cache->second.end()) {
+								previous =
+										checkedSizeAdd(key.size(), property_utils::getPropertyValueSize(found->second),
+													   "logical-plan candidate row size overflowed");
+							}
+						}
+						const size_t next =
+								checkedSizeAdd(rowBytes.bytes() - previous,
+											   checkedSizeAdd(key.size(), property_utils::getPropertyValueSize(value),
+															  "logical-plan candidate row size overflowed"),
+											   "logical-plan candidate row size overflowed");
+						rowBytes.set(next);
+						row.property_cache[scan.getVariable()].insert_or_assign(key, value);
+					};
+					// Include the cache variable name before publishing any owned values.
+					rowBytes.set(checkedSizeAdd(rowBytes.bytes(), scan.getVariable().size(),
+												"logical-plan candidate row size overflowed"));
 					if (nativeCandidates.predicates_verified) {
 						for (const auto &column: nativeCandidates.verified_property_columns) {
-							row.property_cache[scan.getVariable()].insert_or_assign(column.key,
-																					column.values[candidateIndex]);
+							copyProperty(column.key, column.values[candidateIndex]);
 						}
 						if (!nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 												state, candidateLabelsMatch[candidateIndex])) {
@@ -6532,9 +11474,10 @@ namespace graph::query::execution {
 						}
 					} else {
 						for (const auto &[key, value]: equalityPredicates) {
-							row.property_cache[scan.getVariable()].insert_or_assign(key, value);
+							copyProperty(key, value);
 						}
 					}
+					rowBytes.reset();
 					if (!visitor(std::move(row))) {
 						return false;
 					}
@@ -6553,15 +11496,17 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
-										 const InternalVisitor &visitor) {
+										 const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver) {
 			checkGuard(state);
 			switch (op.getType()) {
-				case logical::LogicalOpType::LOP_SINGLE_ROW:
+				case logical::LogicalOpType::LOP_SINGLE_ROW: {
 					if (!op.getChildren().empty()) { // ZYX_COV_EXCL_LINE: LogicalSingleRow is a concrete leaf and
 													 // cannot own a child.
 						throw std::runtime_error("logical SingleRow unexpectedly has a child");
 					}
-					return state.injected_row == nullptr ? visitor({}) : visitor(*state.injected_row);
+					return state.injected_row == nullptr ? visitor({}) :
+						visitor(detail::copyLogicalReadRowGuarded(*state.injected_row, [&] { checkGuardNow(state); }));
+				}
 				case logical::LogicalOpType::LOP_NODE_SCAN: {
 					const auto &scan = dynamic_cast<const logical::LogicalNodeScan &>(op);
 					if (!scan.getChildren().empty() || scan.getVariable().empty()) {
@@ -6601,7 +11546,7 @@ namespace graph::query::execution {
 							// runtime so native and compatibility producers expose the
 							// same query-facing resource failure.
 							if (std::string_view(error.what()) ==
-									"logical graph candidate stream exceeded its byte bound") {
+								"logical graph candidate stream exceeded its byte bound") {
 								throw std::runtime_error(
 										"logical graph indexed Node candidate batch exceeded its byte bound");
 							}
@@ -6609,18 +11554,25 @@ namespace graph::query::execution {
 						}
 					};
 					size_t indexedCandidateRecords = 0U;
+					MaterializedByteReservation seenIndexedCandidateBytes(&state.materialized_budget);
 					std::unordered_set<uint64_t> seenIndexedCandidateIds;
 					const auto candidateVisitor = [&](const storage::IndexCandidateBatch &batch) {
 						return visitIndexedCandidateBatch(batch, scan, equalityPredicates, *parameterPredicates,
-													  indexedCandidateRecords, seenIndexedCandidateIds, state, visitor);
+														  indexedCandidateRecords, seenIndexedCandidateIds,
+														  seenIndexedCandidateBytes, state, visitor);
 					};
 					if (exactPropertyLookup && state.snapshot.supportsNativeExactNodeCandidates()) {
 						if (const auto streamed = consumeCandidateStream([&] {
-									return state.snapshot.visitNodeCandidatesByExactProperties(
-											scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
-											state.bounds.maximum_property_entries, state.bounds.maximum_candidate_bytes,
-											candidateVisitor);
-								});
+								return state.snapshot.visitNodeCandidatesByExactProperties(
+										scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
+										state.bounds.maximum_property_entries,
+										state.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.bounds.maximum_candidate_bytes,
+														   std::max<size_t>(1U,
+																			state.materialized_budget.available() / 2U))
+												: state.bounds.maximum_candidate_bytes,
+										candidateVisitor);
+							});
 							streamed.has_value()) {
 							return *streamed;
 						}
@@ -6628,13 +11580,18 @@ namespace graph::query::execution {
 					if (rangePropertyLookup && state.snapshot.supportsNativeRangeNodeCandidates()) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
 						if (const auto streamed = consumeCandidateStream([&] {
-									return state.snapshot.visitNodeCandidatesByPropertyRange(
-											scan.getLabels(),
-											{range.key, range.minValue, range.maxValue, range.minInclusive,
-											 range.maxInclusive},
+								return state.snapshot.visitNodeCandidatesByPropertyRange(
+										scan.getLabels(),
+										{range.key, range.minValue, range.maxValue, range.minInclusive,
+										 range.maxInclusive},
 										state.bounds.maximum_node_records, state.bounds.maximum_property_entries,
-										state.bounds.maximum_candidate_bytes, candidateVisitor);
-								});
+										state.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.bounds.maximum_candidate_bytes,
+														   std::max<size_t>(1U,
+																			state.materialized_budget.available() / 2U))
+												: state.bounds.maximum_candidate_bytes,
+										candidateVisitor);
+							});
 							streamed.has_value()) {
 							return *streamed;
 						}
@@ -6642,14 +11599,19 @@ namespace graph::query::execution {
 					if (compositeRangePropertyLookup && state.snapshot.supportsNativeRangeNodeCandidates()) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
 						if (const auto streamed = consumeCandidateStream([&] {
-									return state.snapshot.visitNodeCandidatesByCompositePropertyRange(
+								return state.snapshot.visitNodeCandidatesByCompositePropertyRange(
 										scan.getLabels(),
 										{equalityPredicates,
 										 {range.key, range.minValue, range.maxValue, range.minInclusive,
 										  range.maxInclusive}},
 										state.bounds.maximum_node_records, state.bounds.maximum_property_entries,
-										state.bounds.maximum_candidate_bytes, candidateVisitor);
-								});
+										state.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.bounds.maximum_candidate_bytes,
+														   std::max<size_t>(1U,
+																			state.materialized_budget.available() / 2U))
+												: state.bounds.maximum_candidate_bytes,
+										candidateVisitor);
+							});
 							streamed.has_value()) {
 							return *streamed;
 						}
@@ -6701,7 +11663,7 @@ namespace graph::query::execution {
 								exactIndexCandidates.has_value() ? *exactIndexCandidates : *rangeIndexCandidates;
 						return visitIndexedCandidateBatch(nativeCandidates, scan, equalityPredicates,
 														  *parameterPredicates, indexedCandidateRecords,
-														  seenIndexedCandidateIds, state,
+														  seenIndexedCandidateIds, seenIndexedCandidateBytes, state,
 														  visitor);
 					}
 					if (indexNodes.has_value()) {
@@ -6711,7 +11673,7 @@ namespace graph::query::execution {
 						uint64_t previousNodeId = 0U;
 						for (const storage::LogicalGraphNode &node: *indexNodes) {
 							checkGuard(state);
-							validateNode(node);
+							validateNode(node, state);
 							if (node.node_id <= previousNodeId) {
 								throw std::runtime_error(
 										"logical graph indexed Node lookup returned non-monotonic Node IDs");
@@ -6747,24 +11709,25 @@ namespace graph::query::execution {
 						// Keep label evaluation on the page-local reference scan. The native
 						// adapter resolves label tokens once and reports a match fact, avoiding
 						// a second point Entity-Map read for every scanned Node.
-						state.snapshot.visitNodeRefsWithLabelMatches(state.bounds.maximum_node_records, scan.getLabels(),
-															 [&](const storage::EntityRef &reference, const bool labelsMatch) {
-							checkGuard(state);
-			validateNodeRef(reference,
-					"logical graph backend returned an invalid or Edge reference from a Node scan");
-								incrementBounded(state.stats.nodes_scanned,
-														 "logical-plan read runtime Node counter overflowed");
-							if (!labelsMatch) {
-								return true;
-							}
-							LogicalPlanReadRow row;
-							row.values.emplace(scan.getVariable(), reference);
-							if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan,
-															 *parameterPredicates, state, true)) {
-									continueVisitor = visitor(std::move(row));
-								}
-								return continueVisitor;
-						});
+						state.snapshot.visitNodeRefsForLabelPredicate(
+								state.bounds.maximum_node_records, scan.getLabels(),
+								[&](const storage::EntityRef &reference, const bool labelsMatch) {
+									checkGuard(state);
+									validateNodeRef(reference, "logical graph backend returned an invalid or Edge "
+															   "reference from a Node scan");
+									incrementBounded(state.stats.nodes_scanned,
+													 "logical-plan read runtime Node counter overflowed");
+									if (!labelsMatch) {
+										return true;
+									}
+									LogicalPlanReadRow row;
+									row.values.emplace(scan.getVariable(), reference);
+									if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan,
+														   *parameterPredicates, state, true)) {
+										continueVisitor = visitor(std::move(row));
+									}
+									return continueVisitor;
+								});
 						return continueVisitor;
 					}
 					uint64_t afterNodeId = 0U;
@@ -6814,6 +11777,18 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan Filter has no predicate");
 					}
 					const logical::LogicalOperator &filterChild = requireOnlyChild(filter);
+					const auto acceptFilteredRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+						const PropertyValue result = evaluateScalarExpression(*filter.getPredicate(), row, state);
+						if (booleanOrNull(result) != true)
+							return true;
+						if (chargedReceiver != nullptr) {
+							if (charge.bytes() != 0U)
+								charge.set(logicalReadRowBytes(row, state.context));
+							return (*chargedReceiver)(std::move(row), std::move(charge));
+						}
+						charge.reset();
+						return visitor(std::move(row));
+					};
 					// A WHERE clause directly above a single-hop traversal is a common
 					// shape for Edge-property predicates.  Feed its safe equality
 					// constraints into the same global topology path used by inline
@@ -6821,50 +11796,60 @@ namespace graph::query::execution {
 					// the semantic authority.
 					if (filterChild.getType() == logical::LogicalOpType::LOP_TRAVERSAL) {
 						const auto &traversal = dynamic_cast<const logical::LogicalTraversal &>(filterChild);
-						if (const auto edgeProperties = inspectDirectEdgePropertyFilter(
-								*filter.getPredicate(), traversal.getEdgeVar(), state);
+						if (const auto edgeProperties = inspectDirectEdgePropertyFilter(*filter.getPredicate(),
+																						traversal.getEdgeVar(), state);
 							edgeProperties.has_value()) {
 							if (const std::optional<bool> direct = tryVisitDirectTraversal(
-									traversal, state,
-									[&](LogicalPlanReadRow row) {
-										const PropertyValue result = evaluateScalarExpression(*filter.getPredicate(), row, state);
-										return booleanOrNull(result) == true ? visitor(std::move(row)) : true;
-									}, &*edgeProperties);
+										traversal, state,
+										[&](LogicalPlanReadRow row) {
+											const PropertyValue result =
+													evaluateScalarExpression(*filter.getPredicate(), row, state);
+											return booleanOrNull(result) == true ? visitor(std::move(row)) : true;
+										},
+										&*edgeProperties);
 								direct.has_value()) {
 								return *direct;
 							}
 						}
 					}
-						// The optimizer stores literal predicates on a NodeScan so the scan can
-						// use an exact/range/composite index.  Do not let the generic property
-						// prefetch path consume that scan first: it would enumerate every Node,
-						// defeating the index and LIMIT early-stop contract.  Residual predicates
-						// remain authoritative in the normal Filter evaluator below and can still
-						// use the candidate row's selected-property cache.
-						const auto *filterScan = dynamic_cast<const logical::LogicalNodeScan *>(&filterChild);
-						const bool hasIndexableScanShape = filterScan != nullptr &&
-							(!filterScan->getPropertyPredicates().empty() || !filterScan->getRangePredicates().empty() ||
-							 filterScan->getCompositeEquality().has_value());
-						if (!hasIndexableScanShape) {
-							const std::vector<const expressions::Expression *> propertyExpressions{filter.getPredicate().get()};
-							if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
+					// The optimizer stores literal predicates on a NodeScan so the scan can
+					// use an exact/range/composite index.  Do not let the generic property
+					// prefetch path consume that scan first: it would enumerate every Node,
+					// defeating the index and LIMIT early-stop contract.  Residual predicates
+					// remain authoritative in the normal Filter evaluator below and can still
+					// use the candidate row's selected-property cache.
+					const auto *filterScan = dynamic_cast<const logical::LogicalNodeScan *>(&filterChild);
+					const bool hasIndexableScanShape =
+							filterScan != nullptr && (!filterScan->getPropertyPredicates().empty() ||
+													  !filterScan->getRangePredicates().empty() ||
+													  filterScan->getCompositeEquality().has_value());
+					if (!hasIndexableScanShape) {
+						const std::vector<const expressions::Expression *> candidates{filter.getPredicate().get()};
+						const std::vector<const expressions::Expression *> propertyExpressions =
+								selectBatchableExpressions(candidates);
+						const std::vector<std::string> completeEntityVariables =
+								selectBatchableCompleteEntityVariables(candidates);
+						if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
 									filterChild, propertyExpressions, state,
-									[&](LogicalPlanReadRow row) {
-										return visitor(std::move(row));
-									},
-								[&](LogicalPlanReadRow &row, ExecutionState &predicateState) {
-										const PropertyValue result = evaluateScalarExpression(*filter.getPredicate(), row, predicateState);
+									[&](LogicalPlanReadRow row) { return visitor(std::move(row)); },
+									[&](LogicalPlanReadRow &row, ExecutionState &predicateState) {
+										const PropertyValue result =
+												evaluateScalarExpression(*filter.getPredicate(), row, predicateState);
 										return booleanOrNull(result) == true;
-									});
-								batched.has_value()) {
-								return *batched;
-							}
+									},
+									completeEntityVariables, chargedReceiver, true);
+							batched.has_value()) {
+							return *batched;
 						}
-					return visitOperator(filterChild, state, [&](LogicalPlanReadRow row) {
-						const PropertyValue result = evaluateScalarExpression(*filter.getPredicate(), row, state);
-						const std::optional<bool> predicate = booleanOrNull(result);
-						return predicate == true ? visitor(std::move(row)) : true;
-					});
+					}
+					const ChargedRowVisitor chargedInput = acceptFilteredRow;
+					return visitOperator(
+							filterChild, state,
+							[&](LogicalPlanReadRow row) {
+								return acceptFilteredRow(std::move(row),
+														 MaterializedByteReservation(&state.materialized_budget));
+							},
+							supportsChargedRowHandoff(filterChild.getType()) ? &chargedInput : nullptr);
 				}
 				case logical::LogicalOpType::LOP_PROJECT: {
 					const auto &project = dynamic_cast<const logical::LogicalProject &>(op);
@@ -6874,62 +11859,302 @@ namespace graph::query::execution {
 					}
 					std::unordered_set<std::string> aliases;
 					aliases.reserve(items.size());
-						for (const logical::LogicalProjectItem &item: items) {
-							if (item.alias.empty() || !item.expression || !aliases.insert(item.alias).second) {
-								throw std::invalid_argument("logical-plan Project has an invalid output item");
+					for (const logical::LogicalProjectItem &item: items) {
+						if (item.alias.empty() || !item.expression || !aliases.insert(item.alias).second) {
+							throw std::invalid_argument("logical-plan Project has an invalid output item");
+						}
+					}
+					detail::BudgetMemoryResource distinctMemory(state.materialized_budget);
+					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					const auto *identityReference =
+							items.size() == 1U && !project.isDistinct()
+									? dynamic_cast<const expressions::VariableReferenceExpression *>(
+											  items.front().expression.get())
+									: nullptr;
+					const bool canForwardIdentity = identityReference != nullptr && !identityReference->hasProperty();
+					const auto projectRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+						if (!project.isDistinct() && items.size() == 1U) {
+							const auto *propertyReference =
+									dynamic_cast<const expressions::VariableReferenceExpression *>(
+											items.front().expression.get());
+							if (propertyReference != nullptr && propertyReference->hasProperty()) {
+								auto cachedEntity = row.property_cache.find(propertyReference->getVariableName());
+								if (cachedEntity != row.property_cache.end()) {
+									auto cachedValue = cachedEntity->second.find(propertyReference->getPropertyName());
+									if (cachedValue != cachedEntity->second.end()) {
+										PropertyValue projectedValue = std::move(cachedValue->second);
+										row.values.clear();
+										row.property_cache.clear();
+										row.complete_entity_property_cache.clear();
+										row.entity_metadata_cache.clear();
+										row.path_cache.clear();
+										row.values.emplace(items.front().alias, std::move(projectedValue));
+										charge.set(logicalReadRowBytes(row, state.context));
+										if (chargedReceiver != nullptr) {
+											return (*chargedReceiver)(std::move(row), std::move(charge));
+										}
+										charge.reset();
+										return visitor(std::move(row));
+									}
+								}
 							}
 						}
-					std::unordered_set<std::string> distinctRows;
-				size_t distinctBytes = 0U;
-					const auto emitProjectedRow = [&](LogicalPlanReadRow row) {
-							LogicalPlanReadRow projected;
-							projected.values.reserve(items.size());
-							for (const logical::LogicalProjectItem &item: items) {
+						if (!project.isDistinct() && items.size() == 1U) {
+							const auto *function = dynamic_cast<const expressions::FunctionCallExpression *>(
+									items.front().expression.get());
+							const auto *entityFunction =
+									function == nullptr
+											? nullptr
+											: dynamic_cast<const expressions::EntityIntrospectionFunction *>(
+													  expressions::FunctionRegistry::getInstance().lookupScalarFunction(
+															  function->getFunctionName()));
+							if (function != nullptr && entityFunction != nullptr &&
+								lowerCase(function->getFunctionName()) == "id" && function->getArgumentCount() == 1U) {
+								const PropertyValue identity =
+										evaluateScalarExpression(*items.front().expression, row, state);
+								row.values.clear();
+								row.property_cache.clear();
+								row.complete_entity_property_cache.clear();
+								row.entity_metadata_cache.clear();
+								row.path_cache.clear();
+								row.values.emplace(items.front().alias, identity);
+								charge.set(logicalReadRowBytes(row, state.context));
+								if (chargedReceiver != nullptr) {
+									return (*chargedReceiver)(std::move(row), std::move(charge));
+								}
+								charge.reset();
+								return visitor(std::move(row));
+							}
+						}
+						if (canForwardIdentity && row.values.contains(identityReference->getVariableName())) {
+							const std::string &source = identityReference->getVariableName();
+							const std::string &alias = items.front().alias;
+							auto forwarded = std::move(row.values.at(source));
+							row.values.clear();
+							row.values.emplace(alias, std::move(forwarded));
+							const auto retainAndRenameAlias = [&](auto &cache) {
+								auto entry = cache.find(source);
+								if (entry == cache.end()) {
+									cache.clear();
+									return;
+								}
+								if (source == alias) {
+									std::erase_if(cache,
+												  [&](const auto &candidate) { return candidate.first != alias; });
+									return;
+								}
+								auto retained = cache.extract(entry);
+								cache.clear();
+								retained.key() = alias;
+								cache.insert(std::move(retained));
+							};
+							retainAndRenameAlias(row.property_cache);
+							if (source != alias && row.complete_entity_property_cache.erase(source) != 0U) {
+								row.complete_entity_property_cache.clear();
+								row.complete_entity_property_cache.insert(alias);
+							} else {
+								std::erase_if(row.complete_entity_property_cache,
+											  [&](const std::string &variable) { return variable != alias; });
+							}
+							retainAndRenameAlias(row.entity_metadata_cache);
+							retainAndRenameAlias(row.path_cache);
+							charge.set(logicalReadRowBytes(row, state.context));
+							if (chargedReceiver != nullptr) {
+								return (*chargedReceiver)(std::move(row), std::move(charge));
+							}
+							charge.reset();
+							return visitor(std::move(row));
+						}
+						const size_t inputBytes = logicalReadRowBytes(row, state.context);
+						if (charge.bytes() == 0U)
+							charge.set(inputBytes);
+						const size_t inputChargeBytes = charge.bytes();
+						size_t projectedBytes = 0U;
+						LogicalPlanReadRow projected;
+						projected.values.reserve(items.size());
+						for (const logical::LogicalProjectItem &item: items) {
 							checkGuard(state);
 							projected.values.emplace(item.alias, evaluateExpression(*item.expression, row, state));
+							propagateProjectedEntityCaches(*item.expression, row, projected, item.alias, state);
+							projectedBytes = logicalReadRowBytes(projected, state.context);
+							charge.set(checkedSizeAdd(inputChargeBytes, projectedBytes,
+													  "logical-plan Project live row size overflowed"));
 						}
 						if (project.isDistinct()) {
-							const std::string key = distinctRowKey(projected, items);
+							auto key = distinctRowKey(projected, items, &distinctMemory);
 							if (distinctRows.contains(key)) {
 								return true;
 							}
 							if (distinctRows.size() == state.bounds.maximum_distinct_rows) {
 								throw std::runtime_error("logical-plan DISTINCT exceeded its row bound");
 							}
-							const size_t keyBytes = distinctKeyStorageBytes(
-									key, "logical-plan DISTINCT materialization size overflowed");
-							if (keyBytes > state.bounds.maximum_materialized_bytes -
-									std::min(distinctBytes, state.bounds.maximum_materialized_bytes)) {
-								throw std::runtime_error("logical-plan DISTINCT exceeded its materialized byte bound");
-							}
-								static_cast<void>(distinctRows.insert(key));
-							distinctBytes = checkedSizeAdd(distinctBytes, keyBytes,
-									"logical-plan DISTINCT materialization size overflowed");
-							}
-							return visitor(std::move(projected));
-						};
+							distinctRows.insert(std::move(key));
+						}
+						row = {};
+						if (chargedReceiver != nullptr) {
+							charge.set(projectedBytes);
+							return (*chargedReceiver)(std::move(projected), std::move(charge));
+						}
+						charge.reset();
+						return visitor(std::move(projected));
+					};
+					const auto emitProjectedRow = [&](LogicalPlanReadRow row) {
+						return projectRow(std::move(row), MaterializedByteReservation(&state.materialized_budget));
+					};
+					const ChargedRowVisitor chargedProject = projectRow;
 
-						const logical::LogicalOperator &projectChild = requireOnlyChild(project);
-						std::vector<const expressions::Expression *> projectionExpressions;
-						projectionExpressions.reserve(items.size());
-						for (const logical::LogicalProjectItem &item: items) {
-							// A projection may mix batchable Property expressions with entity,
-							// path, or function expressions that intentionally remain on the
-							// semantic evaluator.  Prefetch the supported subset instead of
-							// discarding batching for the whole projection.
-							const auto properties = inspectBatchableEntityPropertyPredicates(*item.expression);
-							if (properties.has_value() && !properties->empty()) {
-								projectionExpressions.push_back(item.expression.get());
+					const logical::LogicalOperator &projectChild = requireOnlyChild(project);
+					// Fuse scalar observers across one projection boundary. The eligibility
+					// check rejects every bare/path-dependent use, so the internal NULL
+					// slots cannot escape or participate in entity/path comparisons.
+					const auto *pathProject = dynamic_cast<const logical::LogicalProject *>(&projectChild);
+					if (pathProject != nullptr && !pathProject->isDistinct()) {
+						std::unordered_map<std::string, const expressions::Expression *> pathExpressions;
+						std::unordered_set<std::string> childAliases;
+						bool valid = !pathProject->getItems().empty();
+						for (const auto &item: pathProject->getItems()) {
+							valid = valid && !item.alias.empty() && item.expression &&
+									childAliases.insert(item.alias).second;
+							if (item.expression &&
+								item.expression->getExpressionType() == expressions::ExpressionType::SHORTEST_PATH) {
+								pathExpressions.emplace(item.alias, item.expression.get());
 							}
 						}
-						if (!projectionExpressions.empty()) {
-							if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
-								projectChild, projectionExpressions, state, emitProjectedRow);
-								batched.has_value()) {
-								return *batched;
+						std::unordered_map<std::string, unsigned> demands;
+						std::function<bool(const expressions::Expression *)> inspectDemand;
+						inspectDemand = [&](const expressions::Expression *expression) -> bool {
+							if (expression == nullptr)
+								return false;
+							using expressions::ExpressionType;
+							switch (expression->getExpressionType()) {
+								case ExpressionType::LITERAL:
+								case ExpressionType::PARAMETER:
+									return true;
+								case ExpressionType::VARIABLE_REFERENCE:
+								case ExpressionType::PROPERTY_ACCESS: {
+									const auto &reference =
+											static_cast<const expressions::VariableReferenceExpression &>(*expression);
+									return !pathExpressions.contains(reference.getVariableName());
+								}
+								case ExpressionType::FUNCTION_CALL: {
+									const auto &function =
+											static_cast<const expressions::FunctionCallExpression &>(*expression);
+									const auto name = lowerCase(function.getFunctionName());
+									if ((name == "size" || name == "length") && function.getArgumentCount() == 1U) {
+										const auto *reference =
+												dynamic_cast<const expressions::VariableReferenceExpression *>(
+														function.getArguments().front().get());
+										if (reference != nullptr && !reference->hasProperty() &&
+											pathExpressions.contains(reference->getVariableName())) {
+											demands[reference->getVariableName()] |= name == "size" ? 1U : 2U;
+											return true;
+										}
+									}
+									return std::ranges::all_of(function.getArguments(), [&](const auto &argument) {
+										return inspectDemand(argument.get());
+									});
+								}
+								case ExpressionType::BINARY_OP: {
+									const auto &binary =
+											static_cast<const expressions::BinaryOpExpression &>(*expression);
+									if (binary.getOperator() == expressions::BinaryOperatorType::BOP_AND ||
+										binary.getOperator() == expressions::BinaryOperatorType::BOP_OR)
+										return false;
+									return inspectDemand(binary.getLeft()) && inspectDemand(binary.getRight());
+								}
+								case ExpressionType::UNARY_OP:
+									return inspectDemand(
+											static_cast<const expressions::UnaryOpExpression &>(*expression)
+													.getOperand());
+								case ExpressionType::IS_NULL:
+									return inspectDemand(static_cast<const expressions::IsNullExpression &>(*expression)
+																 .getExpression());
+								case ExpressionType::EXPR_LIST_LITERAL: {
+									const auto &list =
+											static_cast<const expressions::ListLiteralExpression &>(*expression);
+									return list.isStatic() ||
+										   std::ranges::all_of(list.getElements(), [&](const auto &element) {
+											   return inspectDemand(element.get());
+										   });
+								}
+								default:
+									return false;
 							}
+						};
+						for (const auto &item: items)
+							valid = valid && inspectDemand(item.expression.get());
+						// Dropped paths retain ordinary evaluation/error semantics.
+						for (const auto &[alias, expression]: pathExpressions) {
+							static_cast<void>(expression);
+							valid = valid && demands.contains(alias);
 						}
-						return visitOperator(projectChild, state, emitProjectedRow);
+						if (valid && !pathExpressions.empty()) {
+							const auto emitScalarPathRow = [&](LogicalPlanReadRow row) {
+								LogicalPlanReadRow intermediate;
+								for (const auto &item: pathProject->getItems()) {
+									checkGuard(state);
+									if (pathExpressions.contains(item.alias)) {
+										const unsigned demand = demands.at(item.alias);
+										if ((demand & 1U) != 0U)
+											intermediate.entity_metadata_cache[item.alias]["$shortest_path_size"] =
+													evaluateScalarExpression(*item.expression, row, state,
+																			 ShortestPathResultMode::SPR_SIZE);
+										if ((demand & 2U) != 0U)
+											intermediate.entity_metadata_cache[item.alias]["$shortest_path_length"] =
+													evaluateScalarExpression(*item.expression, row, state,
+																			 ShortestPathResultMode::SPR_LENGTH);
+										intermediate.values.emplace(item.alias, PropertyValue());
+									} else {
+										intermediate.values.emplace(item.alias,
+																	evaluateExpression(*item.expression, row, state));
+										propagateProjectedEntityCaches(*item.expression, row, intermediate, item.alias, state);
+									}
+								}
+								if (logicalReadRowBytes(intermediate, state.context) > state.bounds.maximum_materialized_bytes) {
+									throw std::runtime_error(
+											"logical-plan scalar path projection exceeded its materialized bound");
+								}
+								return emitProjectedRow(std::move(intermediate));
+							};
+							std::vector<const expressions::Expression *> candidates;
+							for (const auto &item: pathProject->getItems())
+								candidates.push_back(item.expression.get());
+							const auto selected = selectBatchableExpressions(candidates);
+							const auto complete = selectBatchableCompleteEntityVariables(candidates);
+							const auto &input = requireOnlyChild(*pathProject);
+							if (!selected.empty() || !complete.empty()) {
+								if (const auto batched = tryVisitBatchedPropertyExpressions(
+											input, selected, state, emitScalarPathRow, {}, complete);
+									batched)
+									return *batched;
+							}
+							return visitOperator(input, state, emitScalarPathRow);
+						}
+					}
+					std::vector<const expressions::Expression *> projectionCandidates;
+					projectionCandidates.reserve(items.size());
+					for (const logical::LogicalProjectItem &item: items) {
+						projectionCandidates.push_back(item.expression.get());
+					}
+					const std::vector<const expressions::Expression *> projectionExpressions =
+							selectBatchableExpressions(projectionCandidates);
+					const std::vector<std::string> completeEntityVariables =
+							selectBatchableCompleteEntityVariables(projectionCandidates);
+					if (!projectionExpressions.empty() || !completeEntityVariables.empty()) {
+						if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
+									projectChild, projectionExpressions, state, emitProjectedRow, {},
+									completeEntityVariables, chargedReceiver != nullptr ? &chargedProject : nullptr,
+									!items.empty() && !project.isDistinct() && std::ranges::all_of(items, [](const auto &item) {
+										return item.expression && item.expression->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS;
+									}));
+							batched.has_value()) {
+							return *batched;
+						}
+					}
+					return visitOperator(projectChild, state, emitProjectedRow,
+										 chargedReceiver != nullptr && supportsChargedRowHandoff(projectChild.getType())
+												 ? &chargedProject
+												 : nullptr);
 				}
 				case logical::LogicalOpType::LOP_AGGREGATE: {
 					const auto &aggregate = dynamic_cast<const logical::LogicalAggregate &>(op);
@@ -6938,15 +12163,17 @@ namespace graph::query::execution {
 						return *direct;
 					}
 					if (const std::optional<bool> variableLength =
-							tryVisitBatchedVariableLengthCount(aggregate, state, visitor);
+								tryVisitBatchedVariableLengthCount(aggregate, state, visitor);
 						variableLength.has_value()) {
 						return *variableLength;
 					}
-					if (const std::optional<bool> twoHop = tryVisitAnchoredTwoHopRelationshipCount(aggregate, state, visitor);
+					if (const std::optional<bool> twoHop =
+								tryVisitAnchoredTwoHopRelationshipCount(aggregate, state, visitor);
 						twoHop.has_value()) {
 						return *twoHop;
 					}
-					if (const std::optional<bool> anchored = tryVisitAnchoredRelationshipCount(aggregate, state, visitor);
+					if (const std::optional<bool> anchored =
+								tryVisitAnchoredRelationshipCount(aggregate, state, visitor);
 						anchored.has_value()) {
 						return *anchored;
 					}
@@ -6983,8 +12210,7 @@ namespace graph::query::execution {
 						const AggregateFunctionType function = aggregateFunctionType(item.functionName);
 						if (item.alias.empty() || std::ranges::find(outputAliases, item.alias) != outputAliases.end() ||
 							(function != AggregateFunctionType::AGG_COUNT && !item.argument) ||
-							(function == AggregateFunctionType::AGG_COUNT && !item.argument &&
-							 item.distinct)) {
+							(function == AggregateFunctionType::AGG_COUNT && !item.argument && item.distinct)) {
 							throw std::invalid_argument("logical-plan Aggregate has an invalid aggregate item");
 						}
 						outputAliases.push_back(item.alias);
@@ -6993,48 +12219,67 @@ namespace graph::query::execution {
 					}
 					bool countOnlyAggregate = groupExpressions.empty();
 					for (size_t index = 0U; countOnlyAggregate && index < aggregations.size(); ++index) {
-						countOnlyAggregate = functions[index] == AggregateFunctionType::AGG_COUNT && !aggregations[index].distinct;
+						countOnlyAggregate =
+								functions[index] == AggregateFunctionType::AGG_COUNT && !aggregations[index].distinct;
 					}
 
 					struct AggregateGroup {
 						std::vector<PropertyValue> values;
 						std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
-						std::vector<std::unordered_set<std::string>> distinct_values;
+						std::vector<std::pmr::unordered_set<std::pmr::string>> distinct_values;
 						size_t accounted_bytes = 0U;
 					};
+					MaterializedByteReservation aggregateStateBytes(&state.materialized_budget);
+					MaterializedByteReservation groupStorageBytes(&state.materialized_budget);
+					detail::BudgetMemoryResource aggregateIndexMemory(state.materialized_budget);
 					std::vector<AggregateGroup> groups;
-					std::unordered_map<std::string, size_t> groupIndexes;
+					std::pmr::unordered_map<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
 					size_t aggregateMemoryBytes = 0U;
 					const auto chargeAggregateBytes = [&](const size_t bytes) {
 						if (bytes > state.bounds.maximum_materialized_bytes -
-								std::min(aggregateMemoryBytes, state.bounds.maximum_materialized_bytes)) {
+											std::min(aggregateMemoryBytes, state.bounds.maximum_materialized_bytes)) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its materialization byte bound");
 						}
-						aggregateMemoryBytes = checkedSizeAdd(aggregateMemoryBytes, bytes,
-							"logical-plan Aggregate materialization size overflowed");
+						const size_t nextBytes = checkedSizeAdd(
+								aggregateMemoryBytes, bytes, "logical-plan Aggregate materialization size overflowed");
+						aggregateStateBytes.set(nextBytes);
+						aggregateMemoryBytes = nextBytes;
 					};
 					const auto createGroup = [&](std::vector<PropertyValue> values) {
 						if (groups.size() == state.bounds.maximum_distinct_rows ||
 							groups.size() == state.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its group bound");
 						}
-						size_t groupBytes = sizeof(AggregateGroup);
+						size_t groupBytes = 0U;
 						for (const PropertyValue &value: values) {
-							groupBytes = checkedSizeAdd(groupBytes, property_utils::getPropertyValueSize(value),
-									"logical-plan Aggregate group size overflowed");
+							groupBytes = checkedSizeAdd(groupBytes, detail::retainedPropertyValueBytes(value, [&] { checkGuardNow(state); }),
+														"logical-plan Aggregate group size overflowed");
 						}
 						AggregateGroup group;
 						group.values = std::move(values);
 						groupBytes = checkedSizeAdd(groupBytes, group.values.capacity() * sizeof(PropertyValue),
-								"logical-plan Aggregate group size overflowed");
+													"logical-plan Aggregate group size overflowed");
+						groupBytes =
+								checkedSizeAdd(groupBytes,
+											   aggregations.size() * (sizeof(std::unique_ptr<AggregateAccumulator>) +
+																	  sizeof(std::pmr::unordered_set<std::pmr::string>)),
+											   "logical-plan Aggregate group size overflowed");
+						chargeAggregateBytes(groupBytes);
 						group.accumulators.reserve(aggregations.size());
-						group.distinct_values.resize(aggregations.size());
-						groupBytes = checkedSizeAdd(groupBytes, aggregations.size() *
-								(sizeof(std::unique_ptr<AggregateAccumulator>) + sizeof(std::unordered_set<std::string>)),
-								"logical-plan Aggregate group size overflowed");
+						group.distinct_values.reserve(aggregations.size());
+						for (size_t index = 0U; index < aggregations.size(); ++index)
+							group.distinct_values.emplace_back(&aggregateIndexMemory);
 						for (size_t index = 0U; index < aggregations.size(); ++index) {
 							std::unique_ptr<AggregateAccumulator> accumulator =
-									createAccumulator(functions[index], false, percentiles[index]);
+									createAccumulator(functions[index], false, percentiles[index], &aggregateIndexMemory,
+										[&](size_t objectBytes) {
+											checkGuardNow(state);
+											if (objectBytes > state.materialized_budget.available())
+												throw std::runtime_error("logical-plan Aggregate accumulator object exceeded its materialized byte bound");
+											chargeAggregateBytes(objectBytes);
+											groupBytes = checkedSizeAdd(groupBytes, objectBytes,
+												"logical-plan Aggregate object size overflowed");
+										});
 							if (!accumulator) { // aggregateFunctionType accepts exactly the factory's supported enum
 												// values.
 								throw std::logic_error("logical-plan Aggregate could not create an accumulator");
@@ -7042,7 +12287,32 @@ namespace graph::query::execution {
 							group.accumulators.push_back(std::move(accumulator));
 						}
 						group.accounted_bytes = groupBytes;
-						chargeAggregateBytes(groupBytes);
+						if (groups.size() == groups.capacity()) {
+							const size_t minimumCapacity = checkedSizeAdd(
+									groups.size(), 1U, "logical-plan Aggregate group capacity overflowed");
+							const size_t requestedCapacity =
+									groups.capacity() == 0U
+											? minimumCapacity
+											: std::max(minimumCapacity,
+													   checkedSizeMul(
+															   groups.capacity(), 2U,
+															   "logical-plan Aggregate group capacity overflowed"));
+							const size_t requestedStorageBytes =
+									checkedSizeMul(requestedCapacity, sizeof(AggregateGroup),
+												   "logical-plan Aggregate group vector size overflowed");
+							if (requestedStorageBytes > state.materialized_budget.available()) {
+								throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
+														 "materialized byte bound");
+							}
+							MaterializedByteReservation groupStorageGrowthBytes(&state.materialized_budget);
+							groupStorageGrowthBytes.set(requestedStorageBytes);
+							groups.reserve(requestedCapacity);
+							const size_t actualCapacityBytes =
+									checkedSizeMul(groups.capacity(), sizeof(AggregateGroup),
+												   "logical-plan Aggregate group capacity overflowed");
+							groupStorageGrowthBytes.set(actualCapacityBytes);
+							groupStorageBytes = std::move(groupStorageGrowthBytes);
+						}
 						groups.push_back(std::move(group));
 						return groups.size() - 1U;
 					};
@@ -7051,172 +12321,216 @@ namespace graph::query::execution {
 					}
 
 					size_t inputRows = 0U;
-			const auto consumeAggregateRow = [&](LogicalPlanReadRow row) {
-				checkGuard(state);
-				if (inputRows == state.bounds.maximum_rows) {
-					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
-				}
-				++inputRows;
-				std::vector<PropertyValue> groupValues;
-				groupValues.reserve(groupExpressions.size());
-				std::string groupKey;
-				for (const std::shared_ptr<expressions::Expression> &expression: groupExpressions) {
-					const PropertyValue value = scalarValue(evaluateExpression(*expression, row, state));
-					appendDistinctPropertyValue(groupKey, value);
-					groupValues.push_back(value);
-				}
-				size_t groupIndex = 0U;
-				if (!groupExpressions.empty()) {
-					const auto found = groupIndexes.find(groupKey);
-					if (found == groupIndexes.end()) {
-						groupIndex = createGroup(std::move(groupValues));
-						const size_t keyBytes = groupKey.size();
-						chargeAggregateBytes(keyBytes);
-						groups[groupIndex].accounted_bytes = checkedSizeAdd(groups[groupIndex].accounted_bytes,
-								keyBytes, "logical-plan Aggregate group size overflowed");
-						groupIndexes.emplace(std::move(groupKey), groupIndex);
-					} else {
-						groupIndex = found->second;
-					}
-				}
-				AggregateGroup &group = groups[groupIndex];
-				for (size_t index = 0U; index < aggregations.size(); ++index) {
-					const logical::LogicalAggItem &item = aggregations[index];
-					const size_t beforeBytes = group.accumulators[index]->retainedBytes();
-					if (!item.argument) {
-						group.accumulators[index]->updateRow();
-					} else {
-						// A non-distinct COUNT over a direct Entity Property only needs
-						// presence.  Native snapshots can answer this from the compact
-						// token directory without decoding the value payload, which keeps
-						// large properties out of the transient row and session caches.
-						std::optional<bool> presence;
-						if (countOnlyAggregate && functions[index] == AggregateFunctionType::AGG_COUNT &&
-								!item.distinct && item.argument->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS) {
-							const auto *property = dynamic_cast<const expressions::VariableReferenceExpression *>(item.argument.get());
-							if (property != nullptr && property->hasProperty()) {
-								const auto binding = row.values.find(property->getVariableName());
-								if (binding != row.values.end()) {
-									if (const auto *node = std::get_if<storage::LogicalGraphNode>(&binding->second)) {
-										presence = state.snapshot.nodePropertyExists(node->node_id, property->getPropertyName());
-									} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&binding->second)) {
-										presence = state.snapshot.edgePropertyExists(edge->edge_id, property->getPropertyName());
-									} else if (const auto *reference = std::get_if<storage::EntityRef>(&binding->second)) {
-										validateEntityRef(*reference);
-										presence = reference->is_edge
-											? state.snapshot.edgePropertyExists(reference->entity_id, property->getPropertyName())
-											: state.snapshot.nodePropertyExists(reference->entity_id, property->getPropertyName());
+					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
+														 MaterializedByteReservation inputRowBytes) {
+						if (countOnlyAggregate) {
+							inputRowBytes.reset();
+						} else if (inputRowBytes.bytes() == 0U) {
+							admitReferenceResultBytes(
+									inputRowBytes, logicalReadRowBytes(row, state.context),
+									"logical-plan Aggregate input row exceeded its shared byte bound");
+						}
+						checkGuard(state);
+						if (inputRows == state.bounds.maximum_rows) {
+							throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+						}
+						++inputRows;
+						MaterializedByteReservation groupValueScratch(&state.materialized_budget);
+						size_t groupValueBytes = checkedSizeMul(groupExpressions.size(), sizeof(PropertyValue),
+							"logical-plan Aggregate group value array overflowed");
+						groupValueScratch.set(groupValueBytes);
+						std::vector<PropertyValue> groupValues;
+						groupValues.reserve(groupExpressions.size());
+						std::pmr::string groupKey{&aggregateIndexMemory};
+						for (const std::shared_ptr<expressions::Expression> &expression: groupExpressions) {
+							PropertyValue value = scalarValue(evaluateExpression(*expression, row, state));
+							groupValueBytes = checkedSizeAdd(groupValueBytes,
+								detail::retainedPropertyValueBytes(value, [&] { checkGuardNow(state); }),
+								"logical-plan Aggregate group value size overflowed");
+							groupValueScratch.set(groupValueBytes);
+							appendDistinctPropertyValue(groupKey, value);
+							groupValues.push_back(std::move(value));
+						}
+						size_t groupIndex = 0U;
+						if (!groupExpressions.empty()) {
+							const auto found = groupIndexes.find(groupKey);
+							if (found == groupIndexes.end()) {
+								// Transfer the already-owned payload to permanent group accounting.
+								groupValueScratch.reset();
+								groupIndex = createGroup(std::move(groupValues));
+								groupIndexes.emplace(std::move(groupKey), groupIndex);
+							} else {
+								groupIndex = found->second;
+								std::vector<PropertyValue>().swap(groupValues);
+								groupValueScratch.reset();
+							}
+						}
+						AggregateGroup &group = groups[groupIndex];
+						for (size_t index = 0U; index < aggregations.size(); ++index) {
+							const logical::LogicalAggItem &item = aggregations[index];
+							const size_t beforeBytes = group.accumulators[index]->retainedBytesForAdmission();
+							if (!item.argument) {
+								group.accumulators[index]->updateRow();
+							} else {
+								// A non-distinct COUNT over a direct Entity Property only needs
+								// non-NULL presence. Native snapshots answer from the compact
+								// token directory and value header without decoding payloads, keeping
+								// large properties out of the transient row and session caches.
+								std::optional<bool> presence;
+								if (functions[index] == AggregateFunctionType::AGG_COUNT && !item.distinct &&
+									item.argument->getExpressionType() ==
+											expressions::ExpressionType::PROPERTY_ACCESS) {
+									const auto *property =
+											dynamic_cast<const expressions::VariableReferenceExpression *>(
+													item.argument.get());
+									if (property != nullptr && property->hasProperty() &&
+										!row.values.contains(property->toString())) {
+										const auto binding = row.values.find(property->getVariableName());
+										if (binding != row.values.end()) {
+											if (const auto *node =
+														std::get_if<storage::LogicalGraphNode>(&binding->second)) {
+												presence = state.snapshot.nodePropertyIsNonNull(
+														node->node_id, property->getPropertyName());
+											} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(
+															   &binding->second)) {
+												presence = state.snapshot.edgePropertyIsNonNull(
+														edge->edge_id, property->getPropertyName());
+											} else if (const auto *reference =
+															   std::get_if<storage::EntityRef>(&binding->second)) {
+												validateEntityRef(*reference);
+												presence = reference->is_edge ? state.snapshot.edgePropertyIsNonNull(
+																						reference->entity_id,
+																						property->getPropertyName())
+																			  : state.snapshot.nodePropertyIsNonNull(
+																						reference->entity_id,
+																						property->getPropertyName());
+											}
+										}
 									}
 								}
+								if (presence.has_value()) {
+									if (*presence) {
+										group.accumulators[index]->updateRow();
+									}
+									continue;
+								}
+								const PropertyValue value = scalarValue(evaluateExpression(*item.argument, row, state));
+								if (item.distinct) {
+									std::pmr::string key{&aggregateIndexMemory};
+									appendDistinctPropertyValue(key, value);
+									if (!group.distinct_values[index].insert(std::move(key)).second) continue;
+								}
+								MaterializedByteReservation updateScratch(&state.materialized_budget);
+								group.accumulators[index]->updateAdmitted(value, [&](size_t bytes) {
+									checkGuardNow(state); updateScratch.set(bytes);
+								});
+								updateScratch.reset();
+							}
+							const size_t afterBytes = group.accumulators[index]->retainedBytesForAdmission();
+							if (afterBytes >= beforeBytes) {
+								chargeAggregateBytes(afterBytes - beforeBytes);
+								group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, afterBytes - beforeBytes,
+																	   "logical-plan Aggregate group size overflowed");
+							} else {
+								aggregateMemoryBytes -= beforeBytes - afterBytes;
+								aggregateStateBytes.set(aggregateMemoryBytes);
+								group.accounted_bytes -= beforeBytes - afterBytes;
 							}
 						}
-						if (presence.has_value()) {
-							if (*presence) {
-								group.accumulators[index]->updateRow();
-							}
+						return true;
+					};
+					// Aggregate already consumes every input row. Its own all-selected batch
+					// only delayed accumulation and duplicated the source's row storage.
+					const auto consumeUnchargedAggregateRow = [&](LogicalPlanReadRow row) {
+						return consumeAggregateRow(std::move(row),
+												   MaterializedByteReservation(&state.materialized_budget));
+					};
+					const ChargedRowVisitor chargedAggregateRow = consumeAggregateRow;
+					std::vector<const expressions::Expression *> aggregateCandidates;
+					aggregateCandidates.reserve(groupExpressions.size() + aggregations.size());
+					for (const auto &expression: groupExpressions) {
+						aggregateCandidates.push_back(expression.get());
+					}
+					const bool canProbeCountProperties = state.snapshot.supportsPropertyNonNullProbes();
+					for (size_t index = 0U; index < aggregations.size(); ++index) {
+						const auto &item = aggregations[index];
+						if (!item.argument)
+							continue;
+						// Grouping and sibling aggregates do not change COUNT's data needs.
+						// Keep actual values when DISTINCT or another expression needs them;
+						// unsupported snapshots retain their existing column-batch fallback.
+						if (canProbeCountProperties && functions[index] == AggregateFunctionType::AGG_COUNT &&
+							!item.distinct &&
+							item.argument->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS) {
 							continue;
 						}
-						const PropertyValue value = scalarValue(evaluateExpression(*item.argument, row, state));
-						if (item.distinct) {
-							std::string key;
-							appendDistinctPropertyValue(key, value);
-							const auto [inserted, isNew] = group.distinct_values[index].insert(key);
-							if (!isNew) {
-								continue;
-							}
-							chargeAggregateBytes(inserted->size());
-							group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, inserted->size(),
-									"logical-plan Aggregate group size overflowed");
-						}
-						group.accumulators[index]->update(value);
+						aggregateCandidates.push_back(item.argument.get());
 					}
-					const size_t afterBytes = group.accumulators[index]->retainedBytes();
-					if (afterBytes >= beforeBytes) {
-						chargeAggregateBytes(afterBytes - beforeBytes);
-						group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, afterBytes - beforeBytes,
-								"logical-plan Aggregate group size overflowed");
-					} else {
-						aggregateMemoryBytes -= beforeBytes - afterBytes;
-						group.accounted_bytes -= beforeBytes - afterBytes;
+					const std::vector<const expressions::Expression *> aggregatePropertyExpressions =
+							selectBatchableExpressions(aggregateCandidates);
+					const std::vector<std::string> completeEntityVariables =
+							selectBatchableCompleteEntityVariables(aggregateCandidates);
+					std::optional<bool> batchedProperties;
+					// COUNT is cardinality-only for selected scalar Properties: it must not
+					// force a potentially large payload into the bounded prefetch batch.
+					// Complete-Entity expressions are different: COUNT(properties(n)) still
+					// needs the complete map, so that requirement is batched even for a
+					// count-only aggregate.
+					if ((!aggregatePropertyExpressions.empty() && !countOnlyAggregate) ||
+						!completeEntityVariables.empty()) {
+						batchedProperties = tryVisitBatchedPropertyExpressions(
+								requireOnlyChild(aggregate), aggregatePropertyExpressions, state,
+								consumeUnchargedAggregateRow, {}, completeEntityVariables, &chargedAggregateRow,
+								!aggregateCandidates.empty() && std::ranges::all_of(aggregateCandidates, [](const auto *expression) {
+									return expression && expression->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS;
+								}) && std::ranges::none_of(aggregations, [](const auto &item) { return item.distinct; }));
 					}
-				}
-				return true;
-			};
-			const size_t aggregateBatchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
-			BoundedBatch<LogicalPlanReadRow> aggregateRows(
-					aggregateBatchCapacity, state.bounds.maximum_materialized_bytes,
-					[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
-			aggregateRows.reserve(aggregateBatchCapacity);
-			const auto flushAggregateRows = [&]() {
-				if (aggregateRows.empty()) {
-					return true;
-				}
-				SelectionVector selected(aggregateRows.size());
-				bool keepGoing = true;
-				static_cast<void>(selected.forEachSelectedUntil([&](const size_t index) {
-					if (!keepGoing) {
-						return false;
-					}
-					keepGoing = consumeAggregateRow(std::move(aggregateRows.values()[index]));
-					return keepGoing;
-				}));
-				aggregateRows.clear();
-				debug::PerfTrace::addValue("logical_plan.aggregate.batch_flushes", 1);
-				return keepGoing;
-			};
-			const auto consumeAggregateBatch = [&](LogicalPlanReadRow row) {
-				// Count-like aggregates do not retain the input payload. Preserve their
-				// streaming semantics when one transient row is larger than the batch
-				// budget instead of rejecting a value that the accumulator can discard.
-				const size_t rowBytes = logicalReadRowBytes(row);
-				if (rowBytes > state.bounds.maximum_materialized_bytes ||
-						(rowBytes > state.bounds.maximum_materialized_bytes -
-								std::min(aggregateRows.bytes(), state.bounds.maximum_materialized_bytes))) {
-					if (!flushAggregateRows()) {
-						return false;
-					}
-					return consumeAggregateRow(std::move(row));
-				}
-				aggregateRows.append(std::move(row));
-				return aggregateRows.size() != aggregateBatchCapacity || flushAggregateRows();
-			};
-			std::vector<const expressions::Expression *> aggregatePropertyExpressions;
-			aggregatePropertyExpressions.reserve(groupExpressions.size() + aggregations.size());
-			for (const auto &expression: groupExpressions) {
-				aggregatePropertyExpressions.push_back(expression.get());
-			}
-			for (const logical::LogicalAggItem &item: aggregations) {
-				if (item.argument) {
-					aggregatePropertyExpressions.push_back(item.argument.get());
-				}
-			}
-			std::optional<bool> batchedProperties;
-			// COUNT is cardinality-only: it must not force a potentially very large
-			// Property payload into the bounded prefetch batch.  Keeping this path
-			// streaming lets COUNT(n.large_value) succeed under a small materialized
-			// byte budget, while DISTINCT COUNT and grouped aggregates still use the
-			// selected-column batch because they retain values for identity/grouping.
-			if (!aggregatePropertyExpressions.empty() && !countOnlyAggregate) {
-				batchedProperties = tryVisitBatchedPropertyExpressions(requireOnlyChild(aggregate),
-						aggregatePropertyExpressions, state, consumeAggregateBatch);
-			}
-			const bool completed = batchedProperties.has_value()
-						? *batchedProperties
-						: visitOperator(requireOnlyChild(aggregate), state, consumeAggregateBatch);
+					const logical::LogicalOperator &aggregateChild = requireOnlyChild(aggregate);
+					const bool completed = batchedProperties.has_value()
+												   ? *batchedProperties
+												   : visitOperator(aggregateChild, state, consumeUnchargedAggregateRow,
+																   supportsChargedRowHandoff(aggregateChild.getType())
+																		   ? &chargedAggregateRow
+																		   : nullptr);
 					if (!completed) {
 						throw std::runtime_error(
 								"logical-plan Aggregate could not prove that its complete input was read");
 					}
-					if (!flushAggregateRows()) {
-						throw std::runtime_error("logical-plan Aggregate stopped before flushing its input batch");
-					}
-					for (AggregateGroup &group: groups) {
+					// Release lookup nodes and buckets before downstream output is
+					// admitted. Per-group DISTINCT keys live until their group is consumed.
+					decltype(groupIndexes){&aggregateIndexMemory}.swap(groupIndexes);
+					const size_t outputGroupCount = groups.size();
+					for (size_t groupIndex = 0U; groupIndex < outputGroupCount; ++groupIndex) {
+						AggregateGroup &group = groups[groupIndex];
+						checkGuard(state);
 						LogicalPlanReadRow row;
 						for (size_t index = 0U; index < group.values.size(); ++index) {
 							row.values.emplace(outputAliases[index], std::move(group.values[index]));
 						}
 						for (size_t index = 0U; index < aggregations.size(); ++index) {
-							row.values.emplace(aggregations[index].alias, group.accumulators[index]->getResult());
+							row.values.emplace(aggregations[index].alias, group.accumulators[index]->takeResult());
+						}
+						// Transfer payload ownership before downstream buffers acquire it.
+						// The vector's now-empty group slot remains live until this scope ends.
+						const size_t releasedBytes = group.accounted_bytes;
+						group = AggregateGroup{};
+						group.accounted_bytes = 0U;
+						aggregateMemoryBytes -= releasedBytes;
+						aggregateStateBytes.set(aggregateMemoryBytes);
+						if (groupIndex + 1U == outputGroupCount) {
+							// The last result no longer needs any group slots. Destroy
+							// their retained capacity before refunding it and admitting
+							// the output; even a scalar COUNT must have this headroom.
+							std::vector<AggregateGroup>{}.swap(groups);
+							groupStorageBytes.reset();
+						}
+						const size_t outputBytes = logicalReadRowBytes(row, state.context) -
+								(state.resident_output_batch_bytes == 0U ? 0U : sizeof(LogicalPlanReadRow));
+						// Buffered output already charges its row-slot capacity. Its
+						// collector admits only payload; do not charge that slot twice.
+						if (outputBytes > state.materialized_budget.available()) {
+							throw std::runtime_error(
+									"logical-plan Aggregate output exceeded the shared materialized byte bound");
 						}
 						if (!visitor(std::move(row))) {
 							return false;
@@ -7238,8 +12552,7 @@ namespace graph::query::execution {
 						declaredColumns.reserve(columns.size());
 						for (const std::string &column: columns) {
 							if (column.empty() || !declaredColumns.insert(column).second) {
-								throw std::invalid_argument(
-										"logical-plan Join has invalid output columns");
+								throw std::invalid_argument("logical-plan Join has invalid output columns");
 							}
 						}
 					};
@@ -7247,8 +12560,9 @@ namespace graph::query::execution {
 					validateColumns(rightColumns);
 
 					BoundedBatch<LogicalPlanReadRow> rightRows(
-						state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
-						[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
+							state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
+							&state.materialized_budget);
 					rightRows.reserve(state.bounds.maximum_rows);
 					std::vector<std::string> sharedColumns;
 					sharedColumns.reserve(std::min(leftColumns.size(), rightColumns.size()));
@@ -7265,35 +12579,21 @@ namespace graph::query::execution {
 					// Build a bounded hash index over shared bindings. A join with no
 					// shared columns intentionally retains Cartesian semantics by using
 					// the same candidate list for every left row.
-					std::unordered_map<std::string, std::vector<size_t>> rightRowsByKey;
-					size_t rightIndexBytes = 0U;
+					detail::BudgetMemoryResource rightIndexMemory(state.materialized_budget);
+					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> rightRowsByKey{&rightIndexMemory};
 					const bool rightCompleted = visitOperator(*right, state, [&](LogicalPlanReadRow row) {
 						if (rightRows.size() == state.bounds.maximum_rows) {
 							throw std::runtime_error(
 									"logical-plan Join exceeded its materialized right-side row bound");
 						}
-						LogicalPlanReadRow normalized = normalizeOutputRow(row, rightColumns);
-						const std::string key = bindingKey(normalized, sharedColumns);
-						const bool newKey = !rightRowsByKey.contains(key);
-						const size_t rowBytes = logicalReadRowBytes(normalized);
-						const size_t indexEntryBytes = newKey
-								? checkedSizeAdd(key.size(), sizeof(std::string) + sizeof(std::vector<size_t>),
-										"logical-plan Join index size overflowed")
-								: 0U;
-						const size_t additionalBytes = checkedSizeAdd(
-								checkedSizeAdd(rowBytes, indexEntryBytes, "logical-plan Join materialization size overflowed"),
-								sizeof(size_t),
-								"logical-plan Join materialization size overflowed");
-						const size_t accountedBytes = checkedSizeAdd(rightRows.bytes(), rightIndexBytes,
-								"logical-plan Join materialization size overflowed");
-						if (additionalBytes > state.bounds.maximum_materialized_bytes -
-								std::min(accountedBytes, state.bounds.maximum_materialized_bytes)) {
+						LogicalPlanReadRow normalized = normalizeOutputRow(std::move(row), rightColumns);
+						const auto key = bindingKey(normalized, sharedColumns, &rightIndexMemory);
+						const size_t rowBytes = logicalReadRowBytes(normalized, state.context);
+						if (rowBytes > state.bounds.maximum_materialized_bytes -
+							std::min(rightRows.bytes(), state.bounds.maximum_materialized_bytes))
 							throw std::runtime_error("logical-plan Join exceeded its materialized byte bound");
-						}
 						rightRows.append(std::move(normalized));
 						rightRowsByKey[key].push_back(rightRows.size() - 1U);
-						rightIndexBytes = checkedSizeAdd(rightIndexBytes, additionalBytes,
-								"logical-plan Join index size overflowed");
 						return true;
 					});
 					if (!rightCompleted) {
@@ -7306,8 +12606,10 @@ namespace graph::query::execution {
 
 					bool stoppedByVisitor = false;
 					const bool leftCompleted = visitOperator(*left, state, [&](LogicalPlanReadRow row) {
-						const LogicalPlanReadRow normalizedLeft = normalizeOutputRow(row, leftColumns);
-						const std::string key = bindingKey(normalizedLeft, sharedColumns);
+						MaterializedByteReservation leftReservation(&state.materialized_budget);
+						LogicalPlanReadRow normalizedLeft = normalizeOutputRow(std::move(row), leftColumns);
+						const auto key = bindingKey(normalizedLeft, sharedColumns, &rightIndexMemory);
+						leftReservation.set(logicalReadRowBytes(normalizedLeft, state.context));
 						const auto candidates = rightRowsByKey.find(key);
 						if (candidates == rightRowsByKey.end()) {
 							return true;
@@ -7315,36 +12617,47 @@ namespace graph::query::execution {
 						for (const size_t rightIndex: candidates->second) {
 							checkGuard(state);
 							const LogicalPlanReadRow &rightRow = rightRows.values()[rightIndex];
-							LogicalPlanReadRow combined = normalizedLeft;
+							const bool lastCandidate = rightIndex == candidates->second.back();
+							MaterializedByteReservation outputReservation(&state.materialized_budget);
+							if (lastCandidate) {
+								outputReservation.absorb(std::move(leftReservation));
+								leftReservation = MaterializedByteReservation(&state.materialized_budget);
+							} else {
+								outputReservation.set(logicalReadRowBytes(normalizedLeft, state.context));
+							}
+							// Admit the right-side copy while its reusable source is still retained.
+							outputReservation.set(checkedSizeAdd(outputReservation.bytes(),
+								logicalReadRowBytes(rightRow, state.context) - sizeof(LogicalPlanReadRow),
+								"logical-plan combined row size overflowed"));
+							LogicalPlanReadRow combined = lastCandidate ? std::move(normalizedLeft) : detail::copyLogicalReadRowGuarded(normalizedLeft, [&] { checkGuardNow(state); });
+							if (lastCandidate) {
+								normalizedLeft = {};
+							}
 							bool compatible = true;
 							for (const auto &[column, value]: rightRow.values) {
 								const auto existing = combined.values.find(column);
 								if (existing != combined.values.end()) {
-								if (!logicalValuesEqual(existing->second, value)) {
+									if (!logicalValuesEqual(existing->second, value)) {
 										compatible = false;
 										break;
 									}
 									continue;
 								}
-								combined.values.emplace(column, value);
+								combined.values.emplace(column, detail::copyLogicalReadValueGuarded(value, [&] { checkGuardNow(state); }));
 							}
 							if (!compatible) {
 								continue;
 							}
-							for (const auto &[column, properties]: rightRow.property_cache) {
-								const auto existing = combined.property_cache.find(column);
-								if (existing != combined.property_cache.end() && existing->second != properties) {
-									throw std::runtime_error(
-											"logical-plan Join received incompatible Property cache entries");
-								}
-								if (existing == combined.property_cache.end()) {
-									combined.property_cache.emplace(column, properties);
-									if (rightRow.complete_entity_property_cache.contains(column)) {
-										combined.complete_entity_property_cache.insert(column);
-									}
-								}
+							mergeCompatibleRowCaches(combined, rightRow, state);
+							outputReservation.set(logicalReadRowBytes(combined, state.context));
+							bool keepGoing = true;
+							if (chargedReceiver != nullptr) {
+								keepGoing = (*chargedReceiver)(std::move(combined), std::move(outputReservation));
+							} else {
+								outputReservation.reset();
+								keepGoing = visitor(std::move(combined));
 							}
-							if (!visitor(std::move(combined))) {
+							if (!keepGoing) {
 								stoppedByVisitor = true;
 								return false;
 							}
@@ -7393,45 +12706,26 @@ namespace graph::query::execution {
 						}
 					}
 
-					std::unordered_map<std::string, std::vector<size_t>> patternRowsByKey;
-					size_t patternIndexBytes = 0U;
+					detail::BudgetMemoryResource patternIndexMemory(state.materialized_budget);
+					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> patternRowsByKey{&patternIndexMemory};
 					BoundedBatch<LogicalPlanReadRow> patternRows(
 							state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
-							[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
+							&state.materialized_budget);
 					patternRows.reserve(state.bounds.maximum_rows);
 					const bool patternCompleted = visitOperator(*pattern, state, [&](LogicalPlanReadRow row) {
 						if (patternRows.size() == state.bounds.maximum_rows) {
 							throw std::runtime_error(
 									"logical-plan OptionalMatch exceeded its materialized pattern row bound");
 						}
-						LogicalPlanReadRow normalized = normalizeOutputRow(row, patternColumns);
-						const std::string key = bindingKey(normalized, sharedColumns);
-						const bool newPatternKey = !patternRowsByKey.contains(key);
-						const size_t rowBytes = logicalReadRowBytes(normalized);
-						const size_t accountedBytes = checkedSizeAdd(patternRows.bytes(), patternIndexBytes,
-								"logical-plan OptionalMatch materialization size overflowed");
-						// Account for the owning hash entry and each match-list position as
-						// well as the encoded binding key.  Without this metadata charge a
-						// large number of tiny pattern rows could exceed the byte budget while
-						// their row payloads alone still appeared small.
-						const size_t indexEntryBytes = newPatternKey
-								? checkedSizeAdd(key.size(), sizeof(std::string) + sizeof(std::vector<size_t>),
-										"logical-plan OptionalMatch index size overflowed")
-								: 0U;
-						const size_t additionalBytes = checkedSizeAdd(
-								checkedSizeAdd(rowBytes, indexEntryBytes,
-										"logical-plan OptionalMatch materialization size overflowed"),
-								sizeof(size_t), "logical-plan OptionalMatch materialization size overflowed");
-						if (additionalBytes > state.bounds.maximum_materialized_bytes -
-								std::min(accountedBytes, state.bounds.maximum_materialized_bytes)) {
+						LogicalPlanReadRow normalized = normalizeOutputRow(std::move(row), patternColumns);
+						const auto key = bindingKey(normalized, sharedColumns, &patternIndexMemory);
+						const size_t rowBytes = logicalReadRowBytes(normalized, state.context);
+						if (rowBytes > state.bounds.maximum_materialized_bytes -
+							std::min(patternRows.bytes(), state.bounds.maximum_materialized_bytes))
 							throw std::runtime_error("logical-plan OptionalMatch exceeded its materialized byte bound");
-						}
 						patternRows.append(std::move(normalized));
 						patternRowsByKey[key].push_back(patternRows.size() - 1U);
-						patternIndexBytes = checkedSizeAdd(patternIndexBytes, indexEntryBytes,
-								"logical-plan OptionalMatch index size overflowed");
-						patternIndexBytes = checkedSizeAdd(patternIndexBytes, sizeof(size_t),
-								"logical-plan OptionalMatch index size overflowed");
 						return true;
 					});
 					if (!patternCompleted) {
@@ -7441,16 +12735,29 @@ namespace graph::query::execution {
 
 					bool stoppedByVisitor = false;
 					const bool inputCompleted = visitOperator(*input, state, [&](LogicalPlanReadRow row) {
-						const LogicalPlanReadRow normalizedInput = normalizeOutputRow(row, inputColumns);
-						const auto matches = patternRowsByKey.find(bindingKey(normalizedInput, sharedColumns));
+						MaterializedByteReservation inputReservation(&state.materialized_budget);
+						LogicalPlanReadRow normalizedInput = normalizeOutputRow(std::move(row), inputColumns);
+						const auto key = bindingKey(normalizedInput, sharedColumns, &patternIndexMemory);
+						inputReservation.set(logicalReadRowBytes(normalizedInput, state.context));
+						const auto matches = patternRowsByKey.find(key);
 						if (matches == patternRowsByKey.end()) {
-							LogicalPlanReadRow nullExtended = normalizedInput;
+							LogicalPlanReadRow nullExtended = std::move(normalizedInput);
+							normalizedInput = {};
 							for (const std::string &column: patternColumns) {
 								if (!inputColumnSet.contains(column)) {
 									nullExtended.values.emplace(column, PropertyValue());
 								}
 							}
-							if (!visitor(std::move(nullExtended))) {
+							MaterializedByteReservation outputReservation(&state.materialized_budget);
+							outputReservation.set(logicalReadRowBytes(nullExtended, state.context));
+							bool keepGoing = true;
+							if (chargedReceiver != nullptr) {
+								keepGoing = (*chargedReceiver)(std::move(nullExtended), std::move(outputReservation));
+							} else {
+								outputReservation.reset();
+								keepGoing = visitor(std::move(nullExtended));
+							}
+							if (!keepGoing) {
 								stoppedByVisitor = true;
 								return false;
 							}
@@ -7459,21 +12766,37 @@ namespace graph::query::execution {
 						for (const size_t matchIndex: matches->second) {
 							checkGuard(state);
 							const LogicalPlanReadRow &match = patternRows.values()[matchIndex];
-							LogicalPlanReadRow combined = normalizedInput;
+							const bool lastMatch = matchIndex == matches->second.back();
+							MaterializedByteReservation outputReservation(&state.materialized_budget);
+							if (lastMatch) {
+								outputReservation.absorb(std::move(inputReservation));
+								inputReservation = MaterializedByteReservation(&state.materialized_budget);
+							} else {
+								outputReservation.set(logicalReadRowBytes(normalizedInput, state.context));
+							}
+							// Admit the right-side copy while its reusable source is still retained.
+							outputReservation.set(checkedSizeAdd(outputReservation.bytes(),
+								logicalReadRowBytesIncluding(match, [&](const std::string &alias) { return !inputColumnSet.contains(alias); }, state.context) - sizeof(LogicalPlanReadRow),
+								"logical-plan combined row size overflowed"));
+							LogicalPlanReadRow combined = lastMatch ? std::move(normalizedInput) : detail::copyLogicalReadRowGuarded(normalizedInput, [&] { checkGuardNow(state); });
+							if (lastMatch) {
+								normalizedInput = {};
+							}
 							for (const auto &[column, value]: match.values) {
 								if (!inputColumnSet.contains(column)) {
-									combined.values.emplace(column, value);
+									combined.values.emplace(column, detail::copyLogicalReadValueGuarded(value, [&] { checkGuardNow(state); }));
 								}
 							}
-							for (const auto &[column, properties]: match.property_cache) {
-								if (!inputColumnSet.contains(column)) {
-									combined.property_cache.emplace(column, properties);
-									if (match.complete_entity_property_cache.contains(column)) {
-										combined.complete_entity_property_cache.insert(column);
-									}
-								}
+							mergeCompatibleRowCaches(combined, match, state, &inputColumnSet);
+							outputReservation.set(logicalReadRowBytes(combined, state.context));
+							bool keepGoing = true;
+							if (chargedReceiver != nullptr) {
+								keepGoing = (*chargedReceiver)(std::move(combined), std::move(outputReservation));
+							} else {
+								outputReservation.reset();
+								keepGoing = visitor(std::move(combined));
 							}
-							if (!visitor(std::move(combined))) {
+							if (!keepGoing) {
 								stoppedByVisitor = true;
 								return false;
 							}
@@ -7502,25 +12825,49 @@ namespace graph::query::execution {
 						}
 					}
 					const auto executeForInput = [&](LogicalPlanReadRow inputRow) {
-						LogicalPlanReadRow injected;
-						injected.values.reserve(subquery.getImportedVars().size());
-						injected.property_cache.reserve(subquery.getImportedVars().size());
-						for (const std::string &variable: subquery.getImportedVars()) {
+						MaterializedByteReservation outerReservation(&state.materialized_budget);
+						MaterializedByteReservation importedReservation(&state.materialized_budget);
+						LogicalPlanReadRow retainedInput = std::move(inputRow);
+						outerReservation.set(logicalReadRowBytes(retainedInput, state.context));
+						const std::vector<std::string> &importedVars = subquery.getImportedVars();
+						for (size_t index = 0U; index < importedVars.size(); ++index) {
+							const std::string &variable = importedVars[index];
 							if (variable.empty()) {
 								throw std::invalid_argument("logical-plan CallSubquery has an empty imported variable");
 							}
-							const auto value = inputRow.values.find(variable);
-							if (value == inputRow.values.end() ||
-								!injected.values.emplace(variable, value->second).second) {
+							if (!retainedInput.values.contains(variable) ||
+								std::ranges::find(importedVars.begin(), importedVars.begin() + index, variable) !=
+										importedVars.begin() + index) {
 								throw std::runtime_error(
 										"logical-plan CallSubquery could not resolve a unique imported variable");
 							}
-							if (const auto properties = inputRow.property_cache.find(variable);
-								properties != inputRow.property_cache.end()) {
-								injected.property_cache.emplace(variable, properties->second);
-								if (inputRow.complete_entity_property_cache.contains(variable)) {
+						}
+						const size_t importedBytes =
+								logicalReadRowBytesIncluding(retainedInput, [&](const std::string &name) {
+									return std::ranges::find(importedVars, name) != importedVars.end();
+								}, state.context);
+						admitReferenceResultBytes(importedReservation, importedBytes,
+												  "logical-plan CallSubquery imports exceeded its shared byte bound");
+						LogicalPlanReadRow injected;
+						injected.values.reserve(importedVars.size());
+						injected.property_cache.reserve(importedVars.size());
+						for (const std::string &variable: importedVars) {
+							const auto value = retainedInput.values.find(variable);
+							injected.values.emplace(variable, detail::copyLogicalReadValueGuarded(value->second, [&] { checkGuardNow(state); }));
+							if (const auto properties = retainedInput.property_cache.find(variable);
+								properties != retainedInput.property_cache.end()) {
+								injected.property_cache.emplace(variable, detail::copyPropertyMapGuarded(properties->second, [&] { checkGuardNow(state); }));
+								if (retainedInput.complete_entity_property_cache.contains(variable)) {
 									injected.complete_entity_property_cache.insert(variable);
 								}
+							}
+							if (const auto metadata = retainedInput.entity_metadata_cache.find(variable);
+								metadata != retainedInput.entity_metadata_cache.end()) {
+								injected.entity_metadata_cache.emplace(variable, detail::copyPropertyMapGuarded(metadata->second, [&] { checkGuardNow(state); }));
+							}
+							if (const auto path = retainedInput.path_cache.find(variable);
+								path != retainedInput.path_cache.end()) {
+								injected.path_cache.emplace(variable, detail::copyLogicalReadPathGuarded(path->second, [&] { checkGuardNow(state); }));
 							}
 						}
 						struct InjectionScope final {
@@ -7534,40 +12881,94 @@ namespace graph::query::execution {
 
 							~InjectionScope() { state.injected_row = previous; }
 						};
-						InjectionScope injection(state, injected);
+						admitReferenceResultBytes(importedReservation, logicalReadRowBytes(injected, state.context),
+								"logical-plan CallSubquery imports exceeded its shared byte bound");
 						bool emitted = false;
-						const bool completed = visitOperator(*body, state, [&](LogicalPlanReadRow subqueryRow) {
-							LogicalPlanReadRow normalized = normalizeOutputRow(subqueryRow, returnedVariables);
-							LogicalPlanReadRow combined = inputRow;
-							for (const auto &[variable, value]: normalized.values) {
-								if (combined.values.contains(variable)) {
-									throw std::runtime_error(
-											"logical-plan CallSubquery attempted to rebind an outer variable");
+						bool completed = false;
+						{
+							InjectionScope injection(state, injected);
+							const auto acceptBodyRow = [&](LogicalPlanReadRow subqueryRow,
+														   MaterializedByteReservation bodyReservation) {
+								if (bodyReservation.bytes() == 0U) {
+									admitReferenceResultBytes(
+											bodyReservation, logicalReadRowBytes(subqueryRow, state.context),
+											"logical-plan CallSubquery body row exceeded its shared byte bound");
 								}
-								combined.values.emplace(variable, value);
-							}
-							for (const auto &[variable, properties]: normalized.property_cache) {
-								if (!combined.property_cache.emplace(variable, properties).second) {
-									throw std::runtime_error("logical-plan CallSubquery attempted to rebind an outer "
-															 "Property cache entry");
+								LogicalPlanReadRow normalized =
+										normalizeOutputRow(std::move(subqueryRow), returnedVariables);
+								admitReferenceResultBytes(
+										bodyReservation, logicalReadRowBytes(normalized, state.context),
+										"logical-plan CallSubquery body row exceeded its shared byte bound");
+								MaterializedByteReservation outputReservation(&state.materialized_budget);
+								admitReferenceResultBytes(
+										outputReservation, logicalReadRowBytes(retainedInput, state.context),
+										"logical-plan CallSubquery output exceeded its shared byte bound");
+								LogicalPlanReadRow combined = detail::copyLogicalReadRowGuarded(retainedInput, [&] { checkGuardNow(state); });
+								for (const auto &[variable, value]: normalized.values) {
+									if (combined.values.contains(variable)) {
+										throw std::runtime_error(
+												"logical-plan CallSubquery attempted to rebind an outer variable");
+									}
 								}
-								if (normalized.complete_entity_property_cache.contains(variable)) {
-									combined.complete_entity_property_cache.insert(variable);
+								combined.values.merge(normalized.values);
+								mergeOwnedRowCaches(combined, std::move(normalized));
+								outputReservation.absorb(std::move(bodyReservation));
+								admitReferenceResultBytes(
+										outputReservation, logicalReadRowBytes(combined, state.context),
+										"logical-plan CallSubquery output exceeded its shared byte bound");
+								emitted = true;
+								if (chargedReceiver != nullptr) {
+									return (*chargedReceiver)(std::move(combined), std::move(outputReservation));
 								}
-							}
-							emitted = true;
-							return visitor(std::move(combined));
-						});
+								outputReservation.reset();
+								return visitor(std::move(combined));
+							};
+							const ChargedRowVisitor chargedBodyRow = acceptBodyRow;
+							completed = visitOperator(
+									*body, state,
+									[&](LogicalPlanReadRow row) {
+										return acceptBodyRow(std::move(row),
+															 MaterializedByteReservation(&state.materialized_budget));
+									},
+									supportsChargedRowHandoff(body->getType()) ? &chargedBodyRow : nullptr);
+						}
+						injected = {};
+						importedReservation.reset();
 						if (!completed) {
 							return false;
 						}
 						if (!emitted && returnedVariables.empty()) {
-							return visitor(std::move(inputRow));
+							LogicalPlanReadRow output = std::move(retainedInput);
+							retainedInput = {};
+							if (chargedReceiver != nullptr) {
+								return (*chargedReceiver)(std::move(output), std::move(outerReservation));
+							}
+							outerReservation.reset();
+							return visitor(std::move(output));
 						}
 						return true;
 					};
 					if (input == nullptr) {
 						return executeForInput({});
+					}
+					// Read-only correlated subqueries commonly consist of a unary
+					// expression pipeline over the imported row. Prefetch both selected
+					// Properties and complete-Entity requirements across outer rows before
+					// invoking that pipeline; the body still evaluates each row normally,
+					// so filtering, cardinality, and cancellation semantics do not change.
+					const std::vector<const expressions::Expression *> subqueryExpressions =
+							collectCorrelatedSubqueryExpressions(*body);
+					const std::vector<const expressions::Expression *> batchableSubqueryExpressions =
+							selectBatchableExpressions(subqueryExpressions);
+					const std::vector<std::string> completeEntityVariables =
+							selectBatchableCompleteEntityVariables(subqueryExpressions);
+					if (!batchableSubqueryExpressions.empty() || !completeEntityVariables.empty()) {
+						if (const std::optional<bool> batched =
+									tryVisitBatchedPropertyExpressions(*input, batchableSubqueryExpressions, state,
+																	   executeForInput, {}, completeEntityVariables);
+							batched.has_value()) {
+							return *batched;
+						}
 					}
 					return visitOperator(*input, state, executeForInput);
 				}
@@ -7591,73 +12992,117 @@ namespace graph::query::execution {
 									"logical-plan NamedPath has an anonymous relationship component");
 						}
 					}
-					return visitOperator(requireOnlyChild(namedPath), state, [&](LogicalPlanReadRow row) {
+					const auto processNamedPathRow = [&](LogicalPlanReadRow row,
+														 MaterializedByteReservation inputRowBytes) {
+						if (inputRowBytes.bytes() == 0U) {
+							admitReferenceResultBytes(
+									inputRowBytes, logicalReadRowBytes(row, state.context),
+									"logical-plan NamedPath input row exceeded its shared byte bound");
+						}
+						MaterializedByteReservation boundNodeSlots(&state.materialized_budget);
+						MaterializedByteReservation boundNodePointerSlots(&state.materialized_budget);
+						MaterializedByteReservation deferredBoundNodeSlots(&state.materialized_budget);
+						MaterializedByteReservation nodePointerSlots(&state.materialized_budget);
+						MaterializedByteReservation edgePointerSlots(&state.materialized_budget);
+						MaterializedByteReservation boundEdgeSlots(&state.materialized_budget);
+						MaterializedByteReservation boundNodeResultBytes(&state.materialized_budget);
+						MaterializedByteReservation capturedNodeResultBytes(&state.materialized_budget);
+						MaterializedByteReservation edgeResultBytes(&state.materialized_budget);
+						MaterializedByteReservation inlineNodePayloadBytes(&state.materialized_budget);
+						MaterializedByteReservation inlineEdgePayloadBytes(&state.materialized_budget);
 						std::vector<storage::LogicalGraphNode> boundNodeRecords;
 						size_t boundNodeCapacity = nodeVariables.size();
 						if (capturedVariableLengthPath) {
 							const auto captured = row.path_cache.find(nodeVariables.back());
 							if (captured != row.path_cache.end()) {
-								boundNodeCapacity = checkedSizeAdd(boundNodeCapacity, captured->second.nodes.size(),
-										"logical-plan NamedPath Node capacity overflowed");
+								const size_t deferredCount = static_cast<size_t>(std::ranges::count_if(
+										captured->second.node_refs,
+										[](const storage::EntityRef &reference) { return reference.entity_id != 0U; }));
+								boundNodeCapacity = checkedSizeAdd(boundNodeCapacity, deferredCount,
+																   "logical-plan NamedPath Node capacity overflowed");
 							}
 						}
-					boundNodeRecords.reserve(boundNodeCapacity);
-					std::vector<const storage::LogicalGraphNode *> boundNodes;
-					boundNodes.reserve(nodeVariables.size());
-					std::vector<storage::EntityRef> deferredBoundNodes;
-					deferredBoundNodes.reserve(nodeVariables.size());
-					for (const std::string &variable: nodeVariables) {
-						const LogicalPlanReadValue &value = requireBinding(row, variable);
-						if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-							validateNodeRef(*reference,
-									"logical-plan NamedPath received an invalid or Edge reference where a Node was required");
-							deferredBoundNodes.push_back(*reference);
-						} else {
-							boundNodeRecords.push_back(materializeNodeValue(state, value));
+						reserveNamedPathSlots(boundNodeRecords, boundNodeCapacity, boundNodeSlots);
+						std::vector<const storage::LogicalGraphNode *> boundNodes;
+						reserveNamedPathSlots(boundNodes, nodeVariables.size(), boundNodePointerSlots);
+						std::vector<storage::EntityRef> deferredBoundNodes;
+						for (const std::string &variable: nodeVariables) {
+							const LogicalPlanReadValue &value = requireBinding(row, variable);
+							if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
+								validateNodeRef(*reference, "logical-plan NamedPath received an invalid or Edge "
+															"reference where a Node was required");
+								appendNamedPathReference(deferredBoundNodes, *reference, nodeVariables.size(),
+														 deferredBoundNodeSlots);
+							} else {
+								const auto *node = std::get_if<storage::LogicalGraphNode>(&value);
+								if (node == nullptr)
+									throw std::runtime_error("logical-plan expected a Node variable");
+								validateNode(*node, state);
+								const size_t previousBytes = inlineNodePayloadBytes.bytes();
+								admitReferenceResultBytes(
+										inlineNodePayloadBytes,
+										checkedSizeAdd(previousBytes, logicalNodeCacheBytes(*node, state.context) - sizeof(*node),
+													   "logical-plan NamedPath inline Node payload overflowed"),
+										"logical-plan NamedPath inline Node payload exceeded its shared byte bound");
+								try {
+									boundNodeRecords.push_back(*node);
+								} catch (...) {
+									inlineNodePayloadBytes.set(previousBytes);
+									throw;
+								}
+							}
 						}
-					}
-					const std::vector<storage::LogicalGraphNode> materializedBoundNodes =
-							materializeNodeReferences(deferredBoundNodes, state);
-					for (const storage::LogicalGraphNode &node: materializedBoundNodes) {
-						boundNodeRecords.push_back(node);
-					}
-					for (const std::string &variable: nodeVariables) {
-						const LogicalPlanReadValue &value = requireBinding(row, variable);
-						const uint64_t id = nodeBindingId(value);
-						const auto position = std::ranges::find(boundNodeRecords, id, &storage::LogicalGraphNode::node_id);
-						if (position == boundNodeRecords.end()) {
-							throw std::runtime_error("logical-plan NamedPath lost a Node binding");
+						std::vector<storage::LogicalGraphNode> materializedBoundNodes =
+								materializeNodeReferences(deferredBoundNodes, state, true, &boundNodeResultBytes);
+						for (storage::LogicalGraphNode &node: materializedBoundNodes) {
+							boundNodeRecords.push_back(std::move(node));
 						}
-						boundNodes.push_back(&*position);
-					}
-						std::vector<const storage::LogicalGraphNode *> nodes = boundNodes;
+						for (const std::string &variable: nodeVariables) {
+							const LogicalPlanReadValue &value = requireBinding(row, variable);
+							const uint64_t id = nodeBindingId(value, state);
+							const auto position =
+									std::ranges::find(boundNodeRecords, id, &storage::LogicalGraphNode::node_id);
+							if (position == boundNodeRecords.end()) {
+								throw std::runtime_error("logical-plan NamedPath lost a Node binding");
+							}
+							boundNodes.push_back(&*position);
+						}
+						std::vector<const storage::LogicalGraphNode *> nodes;
+						if (!capturedVariableLengthPath) {
+							nodes = std::move(boundNodes);
+							nodePointerSlots = std::move(boundNodePointerSlots);
+						}
 						std::vector<const storage::LogicalGraphEdge *> edges;
 						std::vector<storage::LogicalGraphEdge> boundEdgeRecords;
 						if (capturedVariableLengthPath) {
-									const auto captured = row.path_cache.find(nodeVariables.back());
+							const auto captured = row.path_cache.find(nodeVariables.back());
 							if (captured == row.path_cache.end() || captured->second.nodes.size() < 2U ||
-										captured->second.nodes.size() != captured->second.edges.size() +
-																	captured->second.edge_refs.size() + 1U ||
-										(!captured->second.node_refs.empty() &&
-										 captured->second.node_refs.size() != captured->second.nodes.size()) ||
-										(captured->second.edges.size() != 0U && !captured->second.edge_refs.empty()) ||
-										captured->second.nodes.front().node_id != boundNodes.front()->node_id ||
-																captured->second.nodes.back().node_id != boundNodes.back()->node_id) {
-								throw std::runtime_error("logical-plan NamedPath lost its variable-length traversal route");
+								captured->second.nodes.size() !=
+										captured->second.edges.size() + captured->second.edge_refs.size() + 1U ||
+								(!captured->second.node_refs.empty() &&
+								 captured->second.node_refs.size() != captured->second.nodes.size()) ||
+								(captured->second.edges.size() != 0U && !captured->second.edge_refs.empty()) ||
+								captured->second.nodes.front().node_id != boundNodes.front()->node_id ||
+								captured->second.nodes.back().node_id != boundNodes.back()->node_id) {
+								throw std::runtime_error(
+										"logical-plan NamedPath lost its variable-length traversal route");
 							}
 							nodes.clear();
-							nodes.reserve(captured->second.nodes.size());
+							reserveNamedPathSlots(nodes, captured->second.nodes.size(), nodePointerSlots);
+							MaterializedByteReservation deferredCapturedNodeSlots(&state.materialized_budget);
 							std::vector<storage::EntityRef> deferredCapturedNodes;
-							deferredCapturedNodes.reserve(captured->second.node_refs.size());
 							if (!captured->second.node_refs.empty()) {
 								for (const storage::EntityRef &reference: captured->second.node_refs) {
 									if (reference.entity_id != 0U) {
-										deferredCapturedNodes.push_back(reference);
+										appendNamedPathReference(deferredCapturedNodes, reference,
+																 captured->second.node_refs.size(),
+																 deferredCapturedNodeSlots);
 									}
 								}
 							}
-							const std::vector<storage::LogicalGraphNode> materializedCapturedNodes =
-									materializeNodeReferences(deferredCapturedNodes, state);
+							std::vector<storage::LogicalGraphNode> materializedCapturedNodes =
+									materializeNodeReferences(deferredCapturedNodes, state, true,
+															  &capturedNodeResultBytes);
 							size_t materializedCapturedOrdinal = 0U;
 							for (size_t nodeIndex = 0U; nodeIndex < captured->second.nodes.size(); ++nodeIndex) {
 								const storage::LogicalGraphNode *node = &captured->second.nodes[nodeIndex];
@@ -7665,69 +13110,93 @@ namespace graph::query::execution {
 									captured->second.node_refs[nodeIndex].entity_id != 0U) {
 									const storage::EntityRef &reference = captured->second.node_refs[nodeIndex];
 									validateNodeRef(reference,
-											"logical-plan NamedPath has an invalid deferred Node reference");
+													"logical-plan NamedPath has an invalid deferred Node reference");
 									if (reference.entity_id != node->node_id) {
-										throw std::runtime_error("logical-plan NamedPath has an invalid deferred Node reference");
+										throw std::runtime_error(
+												"logical-plan NamedPath has an invalid deferred Node reference");
 									}
 									if (materializedCapturedOrdinal >= materializedCapturedNodes.size()) {
-										throw std::runtime_error(
-												"logical-plan NamedPath lost a deferred Node during batch materialization");
+										throw std::runtime_error("logical-plan NamedPath lost a deferred Node during "
+																 "batch materialization");
 									}
-									if (materializedCapturedNodes[materializedCapturedOrdinal].node_id != reference.entity_id) {
-										throw std::runtime_error(
-												"logical-plan NamedPath changed deferred Node identity during batch materialization");
+									if (materializedCapturedNodes[materializedCapturedOrdinal].node_id !=
+										reference.entity_id) {
+										throw std::runtime_error("logical-plan NamedPath changed deferred Node "
+																 "identity during batch materialization");
 									}
-									boundNodeRecords.push_back(materializedCapturedNodes[materializedCapturedOrdinal++]);
+									boundNodeRecords.push_back(
+											std::move(materializedCapturedNodes[materializedCapturedOrdinal++]));
 									node = &boundNodeRecords.back();
 								} else {
-									validateNode(*node);
+									validateNode(*node, state);
 								}
 								nodes.push_back(node);
 							}
-							boundEdgeRecords.reserve(captured->second.edges.size() + captured->second.edge_refs.size());
-							edges.reserve(captured->second.edges.size() + captured->second.edge_refs.size());
-									for (const storage::LogicalGraphEdge &edge: captured->second.edges) {
-										validateEdge(edge);
-										edges.push_back(&edge);
-									}
-									const std::vector<storage::LogicalGraphEdge> materializedReferences =
-										materializeEdgeReferences(captured->second.edge_refs, state);
-									for (const storage::LogicalGraphEdge &edge: materializedReferences) {
-										boundEdgeRecords.push_back(edge);
-										edges.push_back(&boundEdgeRecords.back());
-									}
+							const size_t edgeCapacity =
+									checkedSizeAdd(captured->second.edges.size(), captured->second.edge_refs.size(),
+												   "logical-plan NamedPath Edge capacity overflowed");
+							reserveNamedPathSlots(boundEdgeRecords, captured->second.edge_refs.size(), boundEdgeSlots);
+							reserveNamedPathSlots(edges, edgeCapacity, edgePointerSlots);
+							for (const storage::LogicalGraphEdge &edge: captured->second.edges) {
+								validateEdge(edge);
+								edges.push_back(&edge);
+							}
+							std::vector<storage::LogicalGraphEdge> materializedReferences = materializeEdgeReferences(
+									captured->second.edge_refs, state, true, &edgeResultBytes);
+							for (storage::LogicalGraphEdge &edge: materializedReferences) {
+								boundEdgeRecords.push_back(std::move(edge));
+								edges.push_back(&boundEdgeRecords.back());
+							}
 						} else {
-							boundEdgeRecords.reserve(edgeVariables.size());
-							edges.reserve(edgeVariables.size());
+							reserveNamedPathSlots(boundEdgeRecords, edgeVariables.size(), boundEdgeSlots);
+							reserveNamedPathSlots(edges, edgeVariables.size(), edgePointerSlots);
 							struct PendingNamedEdge {
 								std::optional<storage::EntityRef> reference;
 								std::optional<storage::LogicalGraphEdge> complete;
 							};
+							MaterializedByteReservation pendingEdgeSlots(&state.materialized_budget);
 							std::vector<PendingNamedEdge> pendingEdges;
-							pendingEdges.reserve(edgeVariables.size());
+							reserveNamedPathSlots(pendingEdges, edgeVariables.size(), pendingEdgeSlots);
+							MaterializedByteReservation deferredEdgeSlots(&state.materialized_budget);
 							std::vector<storage::EntityRef> deferredReferences;
-							deferredReferences.reserve(edgeVariables.size());
 							for (const std::string &variable: edgeVariables) {
 								const LogicalPlanReadValue &value = requireBinding(row, variable);
 								if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
-									validateEdgeRef(*reference,
-											"logical-plan NamedPath received an invalid or Node reference where an Edge was required");
+									validateEdgeRef(*reference, "logical-plan NamedPath received an invalid or Node "
+																"reference where an Edge was required");
 									pendingEdges.push_back({*reference, std::nullopt});
-									deferredReferences.push_back(*reference);
+									appendNamedPathReference(deferredReferences, *reference, edgeVariables.size(),
+															 deferredEdgeSlots);
 								} else {
-									pendingEdges.push_back({std::nullopt, materializeEdgeValue(state, value)});
+									const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value);
+									if (edge == nullptr)
+										throw std::runtime_error("logical-plan expected a relationship variable");
+									validateEdge(*edge);
+									const size_t previousBytes = inlineEdgePayloadBytes.bytes();
+									admitReferenceResultBytes(
+											inlineEdgePayloadBytes,
+											checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(*edge, state.context) - sizeof(*edge),
+														   "logical-plan NamedPath inline Edge payload overflowed"),
+											"logical-plan NamedPath inline Edge payload exceeded its shared byte "
+											"bound");
+									try {
+										pendingEdges.push_back({std::nullopt, *edge});
+									} catch (...) {
+										inlineEdgePayloadBytes.set(previousBytes);
+										throw;
+									}
 								}
 							}
-							const std::vector<storage::LogicalGraphEdge> materializedReferences =
-								materializeEdgeReferences(deferredReferences, state);
+							std::vector<storage::LogicalGraphEdge> materializedReferences =
+									materializeEdgeReferences(deferredReferences, state, true, &edgeResultBytes);
 							size_t deferredOrdinal = 0U;
 							for (PendingNamedEdge &pending: pendingEdges) {
 								if (pending.reference.has_value()) {
 									if (deferredOrdinal >= materializedReferences.size()) {
-										throw std::runtime_error(
-												"logical-plan NamedPath lost a deferred Edge during batch materialization");
+										throw std::runtime_error("logical-plan NamedPath lost a deferred Edge during "
+																 "batch materialization");
 									}
-									pending.complete = materializedReferences[deferredOrdinal++];
+									pending.complete = std::move(materializedReferences[deferredOrdinal++]);
 								}
 								if (!pending.complete.has_value()) {
 									throw std::runtime_error("logical-plan NamedPath has an empty Edge binding");
@@ -7741,14 +13210,16 @@ namespace graph::query::execution {
 							const uint64_t second = nodes[index + 1U]->node_id;
 							const storage::LogicalGraphEdge &edge = *edges[index];
 							const bool connects = (edge.source_node_id == first && edge.target_node_id == second) ||
-													  (edge.source_node_id == second && edge.target_node_id == first);
+												  (edge.source_node_id == second && edge.target_node_id == first);
 							if (!connects) {
 								throw std::runtime_error(
 										"logical-plan NamedPath relationship does not connect its adjacent Nodes");
 							}
 						}
 
-						MaterializedPropertyCache materialized;
+						MaterializedByteReservation sourcePropertyBytes(&state.materialized_budget);
+						detail::BudgetMemoryResource propertyCacheMemory(state.materialized_budget);
+						MaterializedPropertyCache materialized(&propertyCacheMemory);
 						const auto pathIdValue = [](uint64_t id) {
 							if (id > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
 								throw std::overflow_error(
@@ -7756,30 +13227,76 @@ namespace graph::query::execution {
 							}
 							return PropertyValue(static_cast<int64_t>(id));
 						};
+						MaterializedByteReservation pathBytes(&state.materialized_budget);
+						const auto admitPathBytes = [&](size_t nextBytes) {
+							if (pathBytes.wouldExceed(nextBytes)) {
+								throw std::runtime_error(
+										"logical-plan NamedPath result exceeded its shared byte bound");
+							}
+							pathBytes.set(nextBytes);
+						};
 						std::vector<PropertyValue> path;
-						path.reserve(nodes.size() + edges.size());
+						const size_t pathCapacity = checkedSizeAdd(nodes.size(), edges.size(),
+																   "logical-plan NamedPath result capacity overflowed");
+						admitPathBytes(checkedSizeMul(pathCapacity, sizeof(PropertyValue),
+													  "logical-plan NamedPath result capacity overflowed"));
+						path.reserve(pathCapacity);
+						admitPathBytes(checkedSizeMul(path.capacity(), sizeof(PropertyValue),
+													  "logical-plan NamedPath result capacity overflowed"));
+						const auto appendEntity = [&](std::string_view type, uint64_t id,
+													  const PropertyMap &properties) {
+							const PropertyValue typeValue{std::string(type)};
+							const PropertyValue idValue = pathIdValue(id);
+							const bool hasType = properties.contains("_type");
+							const bool hasId = properties.contains("_id");
+							const size_t propertyCount = checkedSizeAdd(
+									properties.size(), static_cast<size_t>(!hasType) + static_cast<size_t>(!hasId),
+									"logical-plan NamedPath Property count overflowed");
+							if (propertyCount > state.bounds.maximum_property_entries) {
+								throw std::runtime_error(
+										"logical-plan NamedPath exceeded the configured Property bound");
+							}
+							constexpr const char *message = "logical-plan NamedPath result size overflowed";
+							size_t mapBytes = checkedSizeAdd(
+									sizeof(uint32_t),
+									checkedSizeMul(propertyCount,
+												   sizeof(PropertyValue::MapType::value_type) + sizeof(void *),
+												   message),
+									message);
+							const auto addProperty = [&](std::string_view key, const PropertyValue &value) {
+								mapBytes = checkedSizeAdd(
+										mapBytes,
+										checkedSizeAdd(checkedSizeAdd(key.size(), sizeof(size_t), message),
+													   property_utils::getPropertyValueSize(value), message),
+										message);
+							};
+							if (!hasType)
+								addProperty("_type", typeValue);
+							if (!hasId)
+								addProperty("_id", idValue);
+							for (const auto &[key, value]: properties)
+								addProperty(key, value);
+							admitPathBytes(checkedSizeAdd(pathBytes.bytes(), mapBytes, message));
+							PropertyValue::MapType entityMap;
+							entityMap.reserve(propertyCount);
+							entityMap.emplace("_type", typeValue);
+							entityMap.emplace("_id", idValue);
+							for (const auto &[key, value]: properties)
+								entityMap.insert_or_assign(key, value);
+							path.emplace_back(std::move(entityMap));
+						};
 						for (size_t index = 0U; index < nodes.size(); ++index) {
 							const storage::LogicalGraphNode &node = *nodes[index];
-							PropertyValue::MapType nodeMap;
-							nodeMap.emplace("_type", PropertyValue("node"));
-							nodeMap.emplace("_id", pathIdValue(node.node_id));
-							for (const auto &[key, value]:
-								 materializeEntityProperties(row, node, state, materialized)) {
-								nodeMap.insert_or_assign(key, value);
-							}
-							path.emplace_back(std::move(nodeMap));
+							appendEntity(
+									"node", node.node_id,
+									materializeEntityProperties(row, node, state, materialized, &sourcePropertyBytes));
 							if (index == edges.size()) {
 								continue;
 							}
 							const storage::LogicalGraphEdge &edge = *edges[index];
-							PropertyValue::MapType edgeMap;
-							edgeMap.emplace("_type", PropertyValue("relationship"));
-							edgeMap.emplace("_id", pathIdValue(edge.edge_id));
-							for (const auto &[key, value]:
-								 materializeEntityProperties(row, edge, state, materialized)) {
-								edgeMap.insert_or_assign(key, value);
-							}
-							path.emplace_back(std::move(edgeMap));
+							appendEntity(
+									"relationship", edge.edge_id,
+									materializeEntityProperties(row, edge, state, materialized, &sourcePropertyBytes));
 						}
 						if (!bindValue(row, namedPath.getPathVariable(), PropertyValue(std::move(path)))) {
 							throw std::runtime_error("logical-plan NamedPath attempted to rebind its path variable");
@@ -7787,7 +13304,47 @@ namespace graph::query::execution {
 						row.property_cache.erase(namedPath.getPathVariable());
 						row.complete_entity_property_cache.erase(namedPath.getPathVariable());
 						return visitor(std::move(row));
-					});
+					};
+					if (!state.allow_cross_row_entity_batches) {
+						return visitOperator(requireOnlyChild(namedPath), state, [&](LogicalPlanReadRow row) {
+							return processNamedPathRow(std::move(row),
+													   MaterializedByteReservation(&state.materialized_budget));
+						});
+					}
+					const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
+					if (batchCapacity == 0U) {
+						throw std::runtime_error("logical-plan NamedPath has no positive batch capacity");
+					}
+					BoundedBatch<LogicalPlanReadRow> rows(
+							batchCapacity, state.bounds.maximum_materialized_bytes,
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
+							&state.materialized_budget);
+					rows.reserve(batchCapacity);
+					const auto flushNamedPathRows = [&]() {
+						if (rows.empty()) {
+							return true;
+						}
+						prefetchEntityRefsInRows(rows.values(), state, true);
+						std::reverse(rows.values().begin(), rows.values().end());
+						while (!rows.empty()) {
+							auto charged = rows.popBackCharged();
+							if (!processNamedPathRow(std::move(charged.value), std::move(charged.reservation))) {
+								rows.clear();
+								return false;
+							}
+						}
+						rows.clear();
+						return true;
+					};
+					const bool childCompleted =
+							visitOperator(requireOnlyChild(namedPath), state, [&](LogicalPlanReadRow row) {
+								rows.append(std::move(row));
+								return rows.size() != batchCapacity || flushNamedPathRows();
+							});
+					if (!flushNamedPathRows()) {
+						return false;
+					}
+					return childCompleted;
 				}
 				case logical::LogicalOpType::LOP_VAR_LENGTH_TRAVERSAL: {
 					const auto &traversal = dynamic_cast<const logical::LogicalVarLengthTraversal &>(op);
@@ -7817,6 +13374,147 @@ namespace graph::query::execution {
 								std::numeric_limits<size_t>::max() / static_cast<size_t>(maximumHops)) {
 						throw std::overflow_error("logical-plan variable-length Traversal edge budget overflowed");
 					}
+					storage::EntityReadShape targetReadShape;
+					targetReadShape.include_labels = !traversal.getTargetLabels().empty();
+					for (const auto &[key, expected]: traversal.getTargetProperties()) {
+						static_cast<void>(expected);
+						if (key.empty())
+							throw std::invalid_argument("logical-plan Property predicate has an empty key");
+						const auto token = state.snapshot.findPropertyToken(key);
+						if (!token) {
+							targetReadShape.all_properties = true;
+						} else {
+							targetReadShape.property_tokens.push_back(*token);
+						}
+					}
+					if (targetReadShape.all_properties)
+						targetReadShape.property_tokens.clear();
+					std::ranges::sort(targetReadShape.property_tokens);
+					targetReadShape.property_tokens.erase(
+							std::unique(targetReadShape.property_tokens.begin(), targetReadShape.property_tokens.end()),
+							targetReadShape.property_tokens.end());
+					validateEntityReadShape(targetReadShape);
+					// Name columns are also valid for staged/absent keys without a catalog
+					// token. Missing and stored NULL both fail non-null equality predicates.
+					// Nullable values additionally require a cheap presence probe.
+					const bool useNamedPredicateColumns = targetReadShape.all_properties &&
+						state.snapshot.supportsPropertyReadAdmission() &&
+						(state.snapshot.supportsPropertyPresenceProbes() ||
+						 !std::ranges::any_of(traversal.getTargetProperties(),
+							[](const auto &predicate) { return isNull(predicate.second); }));
+					const auto readNamedPredicateNodes = [&](const std::vector<uint64_t> &ids,
+						MaterializedByteReservation &retainedTargets) {
+						std::vector<std::string_view> keys;
+						MaterializedByteReservation columnsBytes(&state.materialized_budget);
+						columnsBytes.set(checkedSizeMul(traversal.getTargetProperties().size(), sizeof(std::string_view),
+							"traversal named key slots overflowed"));
+						keys.reserve(traversal.getTargetProperties().size());
+						for (const auto &[key, expected]: traversal.getTargetProperties()) {
+							static_cast<void>(expected);
+							if (std::ranges::find(keys, key) == keys.end()) keys.push_back(key);
+						}
+						if (keys.size() > state.bounds.maximum_property_entries)
+							throw std::runtime_error("traversal named columns exceeded their Property bound");
+						auto nodes = readNodesShapedSortedBudgeted(state, ids,
+							{.include_labels = targetReadShape.include_labels}, &retainedTargets);
+						if (nodes.size() != ids.size()) throw std::runtime_error("traversal named targets changed cardinality");
+						retainShapedBatchBytes(nodes, retainedTargets, state.context);
+						const size_t frames = checkedSizeAdd(checkedSizeMul(keys.capacity(), sizeof(std::string_view),
+							"traversal named key capacity overflowed"), checkedSizeMul(keys.size(),
+								checkedSizeAdd(sizeof(std::vector<PropertyValue>), checkedSizeMul(ids.size(), sizeof(PropertyValue),
+									"traversal named column slots overflowed"), "traversal named column frames overflowed"),
+								"traversal named column frames overflowed"), "traversal named frames overflowed");
+						columnsBytes.set(frames);
+						auto columns = state.snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keys, [&](size_t bytes) {
+							checkGuard(state);
+							columnsBytes.set(checkedSizeAdd(columnsBytes.bytes(), bytes, "traversal named source overflowed"));
+						});
+						if (columns.size() != keys.size()) throw std::runtime_error("traversal named columns changed cardinality");
+						for (const auto &column: columns)
+							if (column.size() != ids.size()) throw std::runtime_error("traversal named column changed row count");
+						columnsBytes.set(checkedSizeAdd(keys.capacity() * sizeof(std::string_view),
+							propertyColumnBytes(columns, keys, "traversal named columns overflowed", state.context),
+							"traversal named columns overflowed"));
+						for (size_t column = 0U; column < keys.size(); ++column) for (size_t row = 0U; row < ids.size(); ++row) {
+							checkGuard(state);
+							validateNode(nodes[row], state);
+							if (nodes[row].node_id != ids[row]) throw std::runtime_error("traversal named target changed identity");
+							if (isNull(columns[column][row])) {
+								const bool nullable = std::ranges::any_of(traversal.getTargetProperties(),
+									[&](const auto &predicate) { return predicate.first == keys[column] && isNull(predicate.second); });
+								if (!nullable) continue;
+								const auto present = state.snapshot.nodePropertyExists(ids[row], keys[column]);
+								if (!present) throw std::runtime_error("traversal Property presence probe is unavailable");
+								if (!*present) continue;
+							}
+							const size_t payload = detail::retainedPropertyValueBytes(columns[column][row], [&] { checkGuard(state); });
+							columnsBytes.set(columnsBytes.bytes() - payload);
+							retainedTargets.set(checkedSizeAdd(retainedTargets.bytes(),
+								checkedSizeAdd(payload, sizeof(storage::LogicalGraphPropertyEntry) + keys[column].size(),
+									"traversal named entry overflowed"), "traversal named handoff overflowed"));
+							nodes[row].properties.push_back({std::string(keys[column]), std::move(columns[column][row])});
+							retainShapedBatchBytes(nodes, retainedTargets, state.context);
+						}
+						return nodes;
+					};
+					const auto readPredicateNode = [&](uint64_t id, MaterializedByteReservation &retainedTarget) {
+						checkGuard(state);
+						if (useNamedPredicateColumns) {
+							auto nodes = readNamedPredicateNodes(std::vector<uint64_t>{id}, retainedTarget);
+							return std::move(nodes.front());
+						}
+						auto node = state.snapshot.readNodeShaped(id, targetReadShape);
+						validateNode(node, state);
+						if (node.node_id != id)
+							throw std::runtime_error("logical graph traversal changed target identity");
+						if (node.properties.size() > state.bounds.maximum_property_entries ||
+							logicalNodeCacheBytes(node, state.context) > state.bounds.maximum_materialized_bytes) {
+							throw std::runtime_error(
+									"logical-plan traversal predicate exceeded its materialized bound");
+						}
+						const size_t targetBytes = logicalNodeCacheBytes(node, state.context);
+						if (retainedTarget.wouldExceed(targetBytes)) {
+							throw std::runtime_error(
+									"logical-plan traversal predicate target exceeded its shared byte bound");
+						}
+						retainedTarget.set(targetBytes);
+						return node;
+					};
+					const auto readPredicateNodes = [&](const std::vector<uint64_t> &ids,
+														MaterializedByteReservation &retainedTargets) {
+						checkGuard(state);
+						if (ids.size() > state.bounds.maximum_node_records) {
+							throw std::runtime_error("logical-plan traversal predicate batch exceeded its Node bound");
+						}
+						if (useNamedPredicateColumns && !ids.empty()) return readNamedPredicateNodes(ids, retainedTargets);
+						auto nodes = ids.empty() ? std::vector<storage::LogicalGraphNode>{}
+												 : readNodesShapedSortedBudgeted(state, ids, targetReadShape,
+																				 &retainedTargets);
+						if (nodes.size() != ids.size()) {
+							throw std::runtime_error("logical graph traversal changed target batch cardinality");
+						}
+						size_t bytes = checkedSizeMul(ids.capacity(), sizeof(uint64_t),
+													  "logical-plan traversal predicate batch size overflowed");
+						for (size_t index = 0U; index < nodes.size(); ++index) {
+							checkGuard(state);
+							validateNode(nodes[index], state);
+							if (nodes[index].node_id != ids[index]) {
+								throw std::runtime_error("logical graph traversal changed target batch identity");
+							}
+							bytes = checkedSizeAdd(bytes, logicalNodeCacheBytes(nodes[index], state.context),
+												   "logical-plan traversal predicate batch size overflowed");
+							if (nodes[index].properties.size() > state.bounds.maximum_property_entries ||
+								bytes > state.bounds.maximum_materialized_bytes) {
+								throw std::runtime_error(
+										"logical-plan traversal predicate batch exceeded its materialized bound");
+							}
+						}
+						retainShapedBatchBytes(nodes, retainedTargets, state.context);
+						return nodes;
+					};
+					const bool batchPredicateTargets =
+							state.allow_cross_row_entity_batches &&
+							(!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty());
 					const size_t maximumEdgeVisits =
 							maximumHops == 0 ? 0U
 											 : state.bounds.maximum_edges_per_node * static_cast<size_t>(maximumHops);
@@ -7825,21 +13523,103 @@ namespace graph::query::execution {
 					// index-driven envelope only removes branches that cannot reach a target.
 					bool reversePruningEnabled = false;
 					std::unordered_map<uint64_t, int> reverseDistance;
+					MaterializedByteReservation reverseEnvelopeBytes(&state.materialized_budget);
 					if (state.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
 						!traversal.getTargetProperties().empty()) {
-						const auto targetNodes = state.snapshot.findNodesByExactProperties(
-								traversal.getTargetLabels(), traversal.getTargetProperties(),
-								state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+						// Reverse pruning needs only seed IDs. Native candidates already validate
+						// the target predicates; avoid hydrating unrelated target Properties.
+						const auto readCandidateTargets = [&]() -> std::optional<std::vector<storage::LogicalGraphNode>> {
+							if (!state.snapshot.supportsNativeExactNodeCandidates()) return std::nullopt;
+							std::vector<storage::LogicalGraphNode> targets;
+							MaterializedByteReservation targetSlots(&state.materialized_budget);
+							bool verified = true;
+							const size_t sourceBytes = std::min(state.bounds.maximum_candidate_bytes,
+									std::max<size_t>(1U, state.materialized_budget.available() / 2U));
+							const auto streamed = state.snapshot.visitNodeCandidatesByExactProperties(
+									traversal.getTargetLabels(), traversal.getTargetProperties(),
+									state.bounds.maximum_node_records, state.bounds.maximum_property_entries, sourceBytes,
+									[&](const storage::IndexCandidateBatch &batch) {
+										checkGuard(state);
+										if (batch.snapshot_generation == 0U || state.snapshot.nativeSnapshotGeneration() != batch.snapshot_generation)
+											throw std::runtime_error("reverse target candidates do not belong to the pinned snapshot");
+										if (!batch.exact_match_verified || !batch.predicates_verified || !batch.label_scope_verified) { verified = false; return false; }
+										const size_t bytes = logicalIndexCandidateBatchBytes(batch, state.context);
+										if (bytes > sourceBytes) throw std::runtime_error("reverse target candidate batch exceeded its byte bound");
+										MaterializedByteReservation candidateSlots(&state.materialized_budget);
+										candidateSlots.set(bytes);
+										if (batch.candidates.size() > state.bounds.maximum_node_records - targets.size())
+											throw std::runtime_error("reverse target candidates exceeded the Node bound");
+										const size_t required = targets.size() + batch.candidates.size();
+										if (required > targets.capacity()) {
+											const size_t grown = targets.capacity() > state.bounds.maximum_node_records / 2U
+													? state.bounds.maximum_node_records : targets.capacity() * 2U;
+											const size_t capacity = std::max(required, grown);
+											targetSlots.set(checkedSizeMul(checkedSizeAdd(targets.capacity(), capacity,
+													"reverse target capacity overflowed"), sizeof(storage::LogicalGraphNode), "reverse target slots overflowed"));
+											targets.reserve(capacity);
+											targetSlots.set(checkedSizeMul(targets.capacity(), sizeof(storage::LogicalGraphNode), "reverse target slots overflowed"));
+										}
+										for (const auto &reference: batch.candidates) {
+											validateNodeRef(reference, "reverse target candidates contain an invalid Node reference");
+											storage::LogicalGraphNode target; target.node_id = reference.entity_id;
+											targets.push_back(std::move(target));
+										}
+										debug::PerfTrace::addValue("logical_plan.reverse_target_candidate_rows", static_cast<int64_t>(batch.candidates.size()));
+										return true;
+									});
+							if (!streamed.has_value() || !verified) return std::nullopt;
+							if (!*streamed) throw std::runtime_error("reverse target candidate stream stopped before completion");
+							return targets;
+						};
+						auto targetNodes = readCandidateTargets();
+						if (!targetNodes.has_value()) {
+							targetNodes = state.snapshot.findNodesByExactProperties(
+									traversal.getTargetLabels(), traversal.getTargetProperties(),
+									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+						}
 						if (targetNodes.has_value()) {
 							reversePruningEnabled = true;
 							if (targetNodes->size() > state.bounds.maximum_node_records) {
 								throw std::runtime_error(
 										"logical graph exact target lookup exceeded the variable-length Node bound");
 							}
-							std::vector<uint64_t> frontier;
-							frontier.reserve(targetNodes->size());
+							size_t targetBytes =
+									checkedSizeMul(targetNodes->capacity(), sizeof(storage::LogicalGraphNode),
+												   "logical-plan reverse reachability target storage overflowed");
 							for (const storage::LogicalGraphNode &target: *targetNodes) {
-								validateNode(target);
+								targetBytes =
+										checkedSizeAdd(targetBytes, logicalNodeCacheBytes(target, state.context),
+													   "logical-plan reverse reachability target storage overflowed");
+							}
+							const auto reverseMapBytes = [](size_t entries) {
+								// Account each hash node plus conservative link and bucket-pointer
+								// overhead so the shared byte limit covers the retained envelope.
+								return checkedSizeMul(entries,
+													  sizeof(std::pair<const uint64_t, int>) + 3U * sizeof(void *),
+													  "logical-plan reverse reachability map size overflowed");
+							};
+							std::vector<uint64_t> frontier;
+							const size_t initialFrontierBytes =
+									checkedSizeMul(targetNodes->size(), sizeof(uint64_t),
+												   "logical-plan reverse reachability frontier size overflowed");
+							reverseEnvelopeBytes.set(checkedSizeAdd(
+									targetBytes,
+									checkedSizeAdd(reverseMapBytes(targetNodes->size()), initialFrontierBytes,
+												   "logical-plan reverse reachability storage overflowed"),
+									"logical-plan reverse reachability storage overflowed"));
+							frontier.reserve(targetNodes->size());
+							reverseDistance.reserve(targetNodes->size());
+							reverseEnvelopeBytes.set(checkedSizeAdd(
+									targetBytes,
+									checkedSizeAdd(
+											reverseMapBytes(targetNodes->size()),
+											checkedSizeMul(
+													frontier.capacity(), sizeof(uint64_t),
+													"logical-plan reverse reachability frontier size overflowed"),
+											"logical-plan reverse reachability storage overflowed"),
+									"logical-plan reverse reachability storage overflowed"));
+							for (const storage::LogicalGraphNode &target: *targetNodes) {
+								validateNode(target, state);
 								if (!reverseDistance.emplace(target.node_id, 0).second) {
 									throw std::runtime_error(
 											"logical graph exact target lookup returned a duplicate Node");
@@ -7847,17 +13627,19 @@ namespace graph::query::execution {
 								frontier.push_back(target.node_id);
 							}
 							std::ranges::sort(frontier);
-							const std::optional<uint64_t> reverseTypeToken = traversal.getEdgeType().empty()
-									? std::nullopt
-									: state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+							const std::optional<uint64_t> reverseTypeToken =
+									traversal.getEdgeType().empty()
+											? std::nullopt
+											: state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 							size_t reverseEdgeVisits = 0U;
 							const auto reverseDirection = [&](const std::span<const uint64_t> currentFrontier,
-									const storage::LogicalGraphReadDirection adjacencyDirection) {
+															  const storage::LogicalGraphReadDirection
+																	  adjacencyDirection,
+															  std::vector<uint64_t> &nextFrontier) {
 								if (reverseEdgeVisits == state.bounds.maximum_edge_records) {
 									throw std::runtime_error(
 											"logical-plan reverse reachability exceeded its Edge bound");
 								}
-								std::vector<uint64_t> nextFrontier;
 								const size_t remaining = state.bounds.maximum_edge_records - reverseEdgeVisits;
 								const size_t edgeVisitBound = checkedSizeAdd(
 										remaining, 1U, "logical-plan reverse reachability Edge bound overflowed");
@@ -7865,59 +13647,113 @@ namespace graph::query::execution {
 										currentFrontier, adjacencyDirection, edgeVisitBound,
 										[&](const storage::EntityRef &reference) {
 											checkGuard(state);
-											validateEdgeRef(reference,
-													"logical graph reverse reachability returned an invalid or non-Edge reference");
+											validateEdgeRef(reference, "logical graph reverse reachability returned an "
+																	   "invalid or non-Edge reference");
 											if (reverseEdgeVisits == state.bounds.maximum_edge_records) {
 												throw std::runtime_error(
 														"logical-plan reverse reachability exceeded its Edge bound");
 											}
 											++reverseEdgeVisits;
-											incrementBounded(state.stats.edges_scanned,
+											incrementBounded(
+													state.stats.edges_scanned,
 													"logical-plan reverse reachability Edge counter overflowed");
 											if (reverseTypeToken.has_value() &&
 												reference.type_token != *reverseTypeToken) {
 												return true;
 											}
 											const uint64_t currentId =
-													adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_INCOMING
 															? reference.target_node_id
 															: reference.source_node_id;
 											const uint64_t predecessor =
-													adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_INCOMING
 															? reference.source_node_id
 															: reference.target_node_id;
-											if (!std::ranges::binary_search(currentFrontier, currentId) || predecessor == 0U) {
-												throw std::runtime_error(
-														"logical graph reverse reachability returned an inconsistent endpoint");
+											if (!std::ranges::binary_search(currentFrontier, currentId) ||
+												predecessor == 0U) {
+												throw std::runtime_error("logical graph reverse reachability returned "
+																		 "an inconsistent endpoint");
 											}
 											const auto current = reverseDistance.find(currentId);
 											if (current == reverseDistance.end() || current->second >= maximumHops) {
 												return true;
 											}
-											if (reverseDistance.emplace(predecessor, current->second + 1).second) {
+											if (!reverseDistance.contains(predecessor)) {
+												const size_t nextSize = checkedSizeAdd(
+														nextFrontier.size(), 1U,
+														"logical-plan reverse reachability frontier size overflowed");
+												const size_t nextCapacity =
+														nextSize > nextFrontier.capacity()
+																? std::max(nextSize,
+																		   nextFrontier.capacity() == 0U
+																				   ? 1U
+																				   : checkedSizeMul(
+																							 nextFrontier.capacity(),
+																							 2U,
+																							 "logical-plan reverse "
+																							 "reachability frontier "
+																							 "size overflowed"))
+																: nextFrontier.capacity();
+												const size_t nextBytes = checkedSizeAdd(
+														targetBytes,
+														checkedSizeAdd(
+																reverseMapBytes(checkedSizeAdd(
+																		reverseDistance.size(), 1U,
+																		"logical-plan reverse reachability map size "
+																		"overflowed")),
+																checkedSizeMul(
+																		checkedSizeAdd(
+																				frontier.capacity(), nextCapacity,
+																				"logical-plan reverse reachability "
+																				"frontier size overflowed"),
+																		sizeof(uint64_t),
+																		"logical-plan reverse reachability frontier "
+																		"size overflowed"),
+																"logical-plan reverse reachability storage overflowed"),
+														"logical-plan reverse reachability storage overflowed");
+												reverseEnvelopeBytes.set(nextBytes);
+												if (nextCapacity > nextFrontier.capacity())
+													nextFrontier.reserve(nextCapacity);
+												reverseDistance.emplace(predecessor, current->second + 1);
 												nextFrontier.push_back(predecessor);
 											}
 											return true;
 										});
-								return nextFrontier;
 							};
-							const bool canExpandReverse = traversal.getEdgeType().empty() || reverseTypeToken.has_value();
+							const bool canExpandReverse =
+									traversal.getEdgeType().empty() || reverseTypeToken.has_value();
 							for (int depth = 0; canExpandReverse && depth < maximumHops && !frontier.empty(); ++depth) {
 								std::vector<uint64_t> nextFrontier;
 								if (direction == "out" || direction == "both") {
-									nextFrontier = reverseDirection(
-											frontier, storage::LogicalGraphReadDirection::LGRD_INCOMING);
+									reverseDirection(frontier, storage::LogicalGraphReadDirection::LGRD_INCOMING,
+													 nextFrontier);
 								}
 								if (direction == "in" || direction == "both") {
-									std::vector<uint64_t> incoming = reverseDirection(
-											frontier, storage::LogicalGraphReadDirection::LGRD_OUTGOING);
-									nextFrontier.insert(nextFrontier.end(), incoming.begin(), incoming.end());
+									reverseDirection(frontier, storage::LogicalGraphReadDirection::LGRD_OUTGOING,
+													 nextFrontier);
 								}
 								std::ranges::sort(nextFrontier);
 								nextFrontier.erase(std::unique(nextFrontier.begin(), nextFrontier.end()),
-										nextFrontier.end());
+												   nextFrontier.end());
 								frontier = std::move(nextFrontier);
+								reverseEnvelopeBytes.set(checkedSizeAdd(
+										targetBytes,
+										checkedSizeAdd(
+												reverseMapBytes(reverseDistance.size()),
+												checkedSizeMul(
+														frontier.capacity(), sizeof(uint64_t),
+														"logical-plan reverse reachability frontier size overflowed"),
+												"logical-plan reverse reachability storage overflowed"),
+										"logical-plan reverse reachability storage overflowed"));
 							}
+							std::vector<storage::LogicalGraphNode>().swap(*targetNodes);
+							reverseEnvelopeBytes.set(checkedSizeAdd(
+									reverseMapBytes(reverseDistance.size()),
+									checkedSizeMul(frontier.capacity(), sizeof(uint64_t),
+												   "logical-plan reverse reachability frontier size overflowed"),
+									"logical-plan reverse reachability storage overflowed"));
 						}
 					}
 					if (reversePruningEnabled && reverseDistance.empty()) {
@@ -7926,14 +13762,20 @@ namespace graph::query::execution {
 
 					return visitOperator(requireOnlyChild(traversal), state, [&](LogicalPlanReadRow row) {
 						const LogicalPlanReadValue &sourceBinding = requireBinding(row, traversal.getSourceVar());
-						const uint64_t sourceId = nodeBindingId(sourceBinding);
+						const uint64_t sourceId = nodeBindingId(sourceBinding, state);
 						if (reversePruningEnabled) {
 							const auto reachable = reverseDistance.find(sourceId);
 							if (reachable == reverseDistance.end() || reachable->second > maximumHops) {
 								return true;
 							}
 						}
-						const storage::LogicalGraphNode source = materializeNodeValue(state, sourceBinding);
+						const bool sourceNeedsPredicate =
+								traversal.getMinHops() == 0 &&
+								(!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty());
+						MaterializedByteReservation sourcePredicateBytes(&state.materialized_budget);
+						const storage::LogicalGraphNode source =
+								sourceNeedsPredicate ? readPredicateNode(sourceId, sourcePredicateBytes)
+													 : patternSourceIdentity(state, sourceBinding);
 						std::unordered_set<uint64_t> pathNodes;
 						pathNodes.insert(source.node_id);
 						std::vector<storage::LogicalGraphNode> pathNodeRecords{source};
@@ -7942,7 +13784,7 @@ namespace graph::query::execution {
 						// an aligned reference marker so output and NamedPath can materialize
 						// the endpoint only at their respective boundaries.
 						std::vector<storage::EntityRef> pathNodeRefs;
-						pathNodeRefs.push_back({});
+						pathNodeRefs.push_back({sourceId, false, 0U, 0U, 0U});
 						std::vector<storage::LogicalGraphEdge> pathEdgeRecords;
 						std::vector<storage::EntityRef> pathEdgeRefs;
 						size_t edgeVisits = 0U;
@@ -7952,15 +13794,17 @@ namespace graph::query::execution {
 						};
 
 						const auto visitAdjacent = [&](uint64_t nodeId,
-																 const std::function<bool(const AdjacentEdge &,
-																																	 const storage::LogicalGraphNode &)>
-																											 &onEdge) {
+													   const std::function<bool(const AdjacentEdge &,
+																				const storage::LogicalGraphNode &)>
+															   &onEdge) {
 							std::optional<uint64_t> relationshipTypeToken;
 							const bool useNativeAdjacencyReferences =
 									state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
-									(traversal.getEdgeType().empty() || state.snapshot.supportsNativeRelationshipTypeTokens());
+									(traversal.getEdgeType().empty() ||
+									 state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType()));
 							if (useNativeAdjacencyReferences && !traversal.getEdgeType().empty()) {
-								relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+								relationshipTypeToken =
+										state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 								if (!relationshipTypeToken.has_value()) {
 									return true;
 								}
@@ -7971,102 +13815,162 @@ namespace graph::query::execution {
 								if (useNativeAdjacencyReferences) {
 									for (;;) {
 										if (edgeVisits == maximumEdgeVisits) {
-											throw std::runtime_error("logical-plan variable-length Traversal exceeded its edge exploration bound");
+											throw std::runtime_error("logical-plan variable-length Traversal exceeded "
+																	 "its edge exploration bound");
 										}
-										const size_t pageRecords = std::min(maximumEdgeVisits - edgeVisits,
-																				 state.bounds.maximum_adjacency_page_records);
-										const storage::LogicalGraphAdjacencyReferencePage page = state.snapshot.scanAdjacentEdgeRefs(
-													 nodeId, adjacencyDirection, continuation, pageRecords);
-										if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
+										const size_t pageRecords =
+												std::min(maximumEdgeVisits - edgeVisits,
+														 state.bounds.maximum_adjacency_page_records);
+										MaterializedByteReservation referenceBytes(&state.materialized_budget);
+										const auto page = readReferencePageBudgeted(state, nodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
+										if (page.edges.size() > pageRecords ||
+											(page.edges.empty() && page.continuation.has_value()) ||
 											(continuation.has_value() &&
-											 (page.edges.empty() || page.edges.front().entity_id != continuation->next_edge_id))) {
-											throw std::runtime_error("logical graph backend returned an invalid variable-length adjacency reference page");
+											 (page.edges.empty() ||
+											  page.edges.front().entity_id != continuation->next_edge_id))) {
+											throw std::runtime_error("logical graph backend returned an invalid "
+																	 "variable-length adjacency reference page");
 										}
 										const bool deferPageTargets = traversal.getTargetLabels().empty() &&
-												traversal.getTargetProperties().empty() && state.snapshot.supportsNodeExistenceProbes();
+																	  traversal.getTargetProperties().empty() &&
+																	  state.snapshot.supportsNodeExistenceProbes();
+										MaterializedByteReservation pageEndpointBytes(&state.materialized_budget);
 										std::vector<uint64_t> pageEndpointIds;
-										if (deferPageTargets) {
+										if (deferPageTargets || batchPredicateTargets) {
+											pageEndpointBytes.set(checkedSizeMul(
+													page.edges.size(), sizeof(uint64_t),
+													"logical-plan traversal predicate endpoint slots overflowed"));
 											pageEndpointIds.reserve(page.edges.size());
+											pageEndpointBytes.set(checkedSizeMul(
+													pageEndpointIds.capacity(), sizeof(uint64_t),
+													"logical-plan traversal predicate endpoint capacity overflowed"));
 											for (const storage::EntityRef &candidate: page.edges) {
-								validateEdgeRef(candidate,
-										"logical graph backend returned an invalid variable-length adjacency reference");
+												validateEdgeRef(candidate, "logical graph backend returned an invalid "
+																		   "variable-length adjacency reference");
 												if (direction == "both" &&
-														adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-														candidate.source_node_id == nodeId) {
-														continue;
-													}
-												if (relationshipTypeToken.has_value() && candidate.type_token != *relationshipTypeToken) {
-														continue;
-													}
-												pageEndpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-														? candidate.target_node_id : candidate.source_node_id);
+													adjacencyDirection ==
+															storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+													candidate.source_node_id == nodeId) {
+													continue;
+												}
+												if (relationshipTypeToken.has_value() &&
+													candidate.type_token != *relationshipTypeToken) {
+													continue;
+												}
+												pageEndpointIds.push_back(
+														adjacencyDirection == storage::LogicalGraphReadDirection::
+																					  LGRD_OUTGOING
+																? candidate.target_node_id
+																: candidate.source_node_id);
 											}
 											std::ranges::sort(pageEndpointIds);
-											pageEndpointIds.erase(std::unique(pageEndpointIds.begin(), pageEndpointIds.end()), pageEndpointIds.end());
+											pageEndpointIds.erase(
+													std::unique(pageEndpointIds.begin(), pageEndpointIds.end()),
+													pageEndpointIds.end());
 										}
-										const std::vector<bool> pageEndpointsPresent = deferPageTargets
-											? state.snapshot.containsNodesSorted(pageEndpointIds) : std::vector<bool>{};
+										const std::vector<bool> pageEndpointsPresent =
+												deferPageTargets ? state.snapshot.containsNodesSorted(pageEndpointIds)
+																 : std::vector<bool>{};
+										MaterializedByteReservation predicateTargetBytes(&state.materialized_budget);
+										const auto predicateTargets =
+												batchPredicateTargets
+														? readPredicateNodes(pageEndpointIds, predicateTargetBytes)
+														: std::vector<storage::LogicalGraphNode>{};
+										const auto predicateTarget =
+												[&](uint64_t id) -> const storage::LogicalGraphNode & {
+											const auto found = std::ranges::lower_bound(
+													predicateTargets, id, {}, &storage::LogicalGraphNode::node_id);
+											if (found == predicateTargets.end() || found->node_id != id) {
+												throw std::runtime_error(
+														"logical graph traversal lost a batched target");
+											}
+											return *found;
+										};
+										if (deferPageTargets && pageEndpointsPresent.size() != pageEndpointIds.size()) {
+											throw std::runtime_error("logical graph backend changed variable-length "
+																	 "endpoint cardinality");
+										}
 										for (const storage::EntityRef &reference: page.edges) {
 											checkGuard(state);
-							validateEdgeRef(reference,
-									"logical graph backend returned an invalid variable-length adjacency reference");
-							if (reference.entity_id <= previousEdgeId) {
-												throw std::runtime_error("logical graph backend returned an invalid variable-length adjacency reference");
+											validateEdgeRef(reference, "logical graph backend returned an invalid "
+																	   "variable-length adjacency reference");
+											if (reference.entity_id <= previousEdgeId) {
+												throw std::runtime_error("logical graph backend returned an invalid "
+																		 "variable-length adjacency reference");
 											}
 											previousEdgeId = reference.entity_id;
 											const bool endpointMatches =
-													adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
 															? reference.source_node_id == nodeId
 															: reference.target_node_id == nodeId;
 											if (!endpointMatches) {
-												throw std::runtime_error("logical graph backend returned an invalid variable-length Edge reference");
+												throw std::runtime_error("logical graph backend returned an invalid "
+																		 "variable-length Edge reference");
 											}
 											++edgeVisits;
 											incrementBounded(state.stats.edges_scanned,
-																		 "logical-plan variable-length Edge counter overflowed");
+															 "logical-plan variable-length Edge counter overflowed");
 											if (direction == "both" &&
-													adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-													reference.source_node_id == nodeId) {
+												adjacencyDirection ==
+														storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+												reference.source_node_id == nodeId) {
 												continue;
 											}
-											if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
+											if (relationshipTypeToken.has_value() &&
+												reference.type_token != *relationshipTypeToken) {
 												continue;
 											}
-											const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																			 ? reference.target_node_id
-																			 : reference.source_node_id;
-																											 const bool deferTargetNode = traversal.getTargetLabels().empty() &&
-																											 traversal.getTargetProperties().empty();
-																											 if (deferTargetNode) {
-																											 if (state.snapshot.supportsNodeExistenceProbes()) {
-																		 const auto endpoint = std::ranges::lower_bound(pageEndpointIds, targetId);
-																		 if (endpoint == pageEndpointIds.end() || *endpoint != targetId ||
-																			 !pageEndpointsPresent[static_cast<size_t>(endpoint - pageEndpointIds.begin())]) {
-																													 throw std::runtime_error(
-																														 "logical graph backend returned a variable-length Edge with a missing endpoint");
-																												 }
-																											 } else {
-																												 // A reader without an existence probe must retain the
-																												 // complete-read fallback to authenticate the endpoint.
-																												 static_cast<void>(readNodeCached(state, targetId));
-																												 }
-																							 }
-																	 const storage::LogicalGraphNode target = deferTargetNode
-																							 ? storage::LogicalGraphNode{targetId, {}}
-																									 : readNodeCached(state, targetId);
-																			const storage::LogicalGraphEdgeTopology topology{
-																				reference.entity_id, reference.source_node_id, reference.target_node_id, {}};
-																			if (!onEdge({topology, reference}, target)) {
-																				return false;
-																			}
+											const uint64_t targetId =
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? reference.target_node_id
+															: reference.source_node_id;
+											const bool deferTargetNode = traversal.getTargetLabels().empty() &&
+																		 traversal.getTargetProperties().empty();
+											if (deferTargetNode) {
+												if (state.snapshot.supportsNodeExistenceProbes()) {
+													const auto endpoint =
+															std::ranges::lower_bound(pageEndpointIds, targetId);
+													if (endpoint == pageEndpointIds.end() || *endpoint != targetId ||
+														!pageEndpointsPresent[static_cast<size_t>(
+																endpoint - pageEndpointIds.begin())]) {
+														throw std::runtime_error(
+																"logical graph backend returned a variable-length Edge "
+																"with a missing endpoint");
+													}
+												} else {
+													// Authenticate the endpoint with an identity read when no
+													// existence probe is available; its Properties are not needed.
+													validateNodeIdentity(state, targetId);
+												}
+											}
+											MaterializedByteReservation localTargetBytes(&state.materialized_budget);
+											std::optional<storage::LogicalGraphNode> localTarget;
+											const storage::LogicalGraphNode &target =
+													deferTargetNode			? localTarget.emplace(
+																					  storage::LogicalGraphNode{targetId, {}})
+													: batchPredicateTargets ? predicateTarget(targetId)
+																			: localTarget.emplace(readPredicateNode(
+																					  targetId, localTargetBytes));
+											const storage::LogicalGraphEdgeTopology topology{reference.entity_id,
+																							 reference.source_node_id,
+																							 reference.target_node_id,
+																							 {}};
+											if (!onEdge({topology, reference}, target)) {
+												return false;
+											}
 										}
 										if (!page.continuation.has_value()) {
 											return true;
 										}
-										if (page.edges.empty() || page.continuation->previous_edge_id != page.edges.back().entity_id ||
+										if (page.edges.empty() ||
+											page.continuation->previous_edge_id != page.edges.back().entity_id ||
 											page.continuation->next_edge_id == 0U ||
 											page.continuation->previous_edge_id == page.continuation->next_edge_id) {
-											throw std::runtime_error("logical graph backend returned an invalid variable-length adjacency reference continuation");
+											throw std::runtime_error(
+													"logical graph backend returned an invalid variable-length "
+													"adjacency reference continuation");
 										}
 										continuation = page.continuation;
 									}
@@ -8079,41 +13983,72 @@ namespace graph::query::execution {
 									const size_t remaining = maximumEdgeVisits - edgeVisits;
 									const size_t pageRecords =
 											std::min(remaining, state.bounds.maximum_adjacency_page_records);
-					// Variable-length traversal never binds an Edge value or reads Edge
-					// Properties. Use the topology cursor even when reference pages are
-					// unavailable; target Nodes remain materialized only when predicates
-					// require them.
-					const storage::LogicalGraphAdjacencyTopologyPage page = state.snapshot.scanAdjacentEdgeTopologies(
-							nodeId, adjacencyDirection, continuation, pageRecords);
-						if (page.edges.size() > pageRecords ||
-							(page.edges.empty() && page.continuation.has_value())) {
-							throw std::runtime_error("logical graph backend returned an invalid "
-															 "variable-length adjacency page");
-						}
-						const bool deferPageTargets = traversal.getTargetLabels().empty() &&
-								traversal.getTargetProperties().empty() && state.snapshot.supportsNodeExistenceProbes();
-						std::vector<uint64_t> pageEndpointIds;
-						if (deferPageTargets) {
-							pageEndpointIds.reserve(page.edges.size());
-							for (const storage::LogicalGraphEdgeTopology &candidate: page.edges) {
-								const bool selfLoopDuplicate = direction == "both" &&
-										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-										candidate.source_node_id == nodeId;
-								if (!selfLoopDuplicate &&
-									(traversal.getEdgeType().empty() || candidate.type == traversal.getEdgeType())) {
-									pageEndpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-											? candidate.target_node_id : candidate.source_node_id);
-								}
-							}
-							std::ranges::sort(pageEndpointIds);
-							pageEndpointIds.erase(std::unique(pageEndpointIds.begin(), pageEndpointIds.end()), pageEndpointIds.end());
-						}
-						const std::vector<bool> pageEndpointsPresent = deferPageTargets
-								? state.snapshot.containsNodesSorted(pageEndpointIds) : std::vector<bool>{};
-						if (pageEndpointsPresent.size() != pageEndpointIds.size()) {
-							throw std::runtime_error("logical graph backend changed variable-length endpoint cardinality");
-						}
-						for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
+									// Variable-length traversal never binds an Edge value or reads Edge
+									// Properties. Use the topology cursor even when reference pages are
+									// unavailable; target Nodes remain materialized only when predicates
+									// require them.
+									MaterializedByteReservation topologyBytes(&state.materialized_budget);
+									const auto page = readTopologyPageBudgeted(state, nodeId, adjacencyDirection,
+										continuation, pageRecords, topologyBytes);
+									if (page.edges.size() > pageRecords ||
+										(page.edges.empty() && page.continuation.has_value())) {
+										throw std::runtime_error("logical graph backend returned an invalid "
+																 "variable-length adjacency page");
+									}
+									const bool deferPageTargets = traversal.getTargetLabels().empty() &&
+																  traversal.getTargetProperties().empty() &&
+																  state.snapshot.supportsNodeExistenceProbes();
+									MaterializedByteReservation pageEndpointBytes(&state.materialized_budget);
+									std::vector<uint64_t> pageEndpointIds;
+									if (deferPageTargets || batchPredicateTargets) {
+										pageEndpointBytes.set(checkedSizeMul(
+												page.edges.size(), sizeof(uint64_t),
+												"logical-plan traversal predicate endpoint slots overflowed"));
+										pageEndpointIds.reserve(page.edges.size());
+										pageEndpointBytes.set(checkedSizeMul(
+												pageEndpointIds.capacity(), sizeof(uint64_t),
+												"logical-plan traversal predicate endpoint capacity overflowed"));
+										for (const storage::LogicalGraphEdgeTopology &candidate: page.edges) {
+											const bool selfLoopDuplicate =
+													direction == "both" &&
+													adjacencyDirection ==
+															storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+													candidate.source_node_id == nodeId;
+											if (!selfLoopDuplicate && (traversal.getEdgeType().empty() ||
+																	   candidate.type == traversal.getEdgeType())) {
+												pageEndpointIds.push_back(
+														adjacencyDirection == storage::LogicalGraphReadDirection::
+																					  LGRD_OUTGOING
+																? candidate.target_node_id
+																: candidate.source_node_id);
+											}
+										}
+										std::ranges::sort(pageEndpointIds);
+										pageEndpointIds.erase(
+												std::unique(pageEndpointIds.begin(), pageEndpointIds.end()),
+												pageEndpointIds.end());
+									}
+									const std::vector<bool> pageEndpointsPresent =
+											deferPageTargets ? state.snapshot.containsNodesSorted(pageEndpointIds)
+															 : std::vector<bool>{};
+									MaterializedByteReservation predicateTargetBytes(&state.materialized_budget);
+									const auto predicateTargets =
+											batchPredicateTargets
+													? readPredicateNodes(pageEndpointIds, predicateTargetBytes)
+													: std::vector<storage::LogicalGraphNode>{};
+									const auto predicateTarget = [&](uint64_t id) -> const storage::LogicalGraphNode & {
+										const auto found = std::ranges::lower_bound(
+												predicateTargets, id, {}, &storage::LogicalGraphNode::node_id);
+										if (found == predicateTargets.end() || found->node_id != id) {
+											throw std::runtime_error("logical graph traversal lost a batched target");
+										}
+										return *found;
+									};
+									if (deferPageTargets && pageEndpointsPresent.size() != pageEndpointIds.size()) {
+										throw std::runtime_error(
+												"logical graph backend changed variable-length endpoint cardinality");
+									}
+									for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 										checkGuard(state);
 										validateEdge(edge);
 										validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "variable-length");
@@ -8140,24 +14075,35 @@ namespace graph::query::execution {
 												adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 														? edge.target_node_id
 														: edge.source_node_id;
-											const bool deferTargetNode = traversal.getTargetLabels().empty() &&
-												traversal.getTargetProperties().empty();
+										const bool deferTargetNode = traversal.getTargetLabels().empty() &&
+																	 traversal.getTargetProperties().empty();
 										if (deferTargetNode) {
 											if (state.snapshot.supportsNodeExistenceProbes()) {
-												const auto endpoint = std::ranges::lower_bound(pageEndpointIds, targetId);
+												const auto endpoint =
+														std::ranges::lower_bound(pageEndpointIds, targetId);
 												if (endpoint == pageEndpointIds.end() || *endpoint != targetId ||
-													!pageEndpointsPresent[static_cast<size_t>(endpoint - pageEndpointIds.begin())]) {
+													!pageEndpointsPresent[static_cast<size_t>(
+															endpoint - pageEndpointIds.begin())]) {
 													throw std::runtime_error(
-															"logical graph backend returned a variable-length Edge with a missing endpoint");
+															"logical graph backend returned a variable-length Edge "
+															"with a missing endpoint");
 												}
 											} else {
-												static_cast<void>(readNodeCached(state, targetId));
+												validateNodeIdentity(state, targetId);
 											}
 										}
-										const storage::LogicalGraphNode target = deferTargetNode
-												? storage::LogicalGraphNode{targetId, {}}
-												: readNodeCached(state, targetId);
-																		if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type}, std::nullopt}, target)) {
+										MaterializedByteReservation localTargetBytes(&state.materialized_budget);
+										std::optional<storage::LogicalGraphNode> localTarget;
+										const storage::LogicalGraphNode &target =
+												deferTargetNode
+														? localTarget.emplace(storage::LogicalGraphNode{targetId, {}})
+												: batchPredicateTargets ? predicateTarget(targetId)
+																		: localTarget.emplace(readPredicateNode(
+																				  targetId, localTargetBytes));
+										if (!onEdge({{edge.edge_id, edge.source_node_id, edge.target_node_id,
+													  edge.type},
+													 std::nullopt},
+													target)) {
 											return false;
 										}
 									}
@@ -8187,30 +14133,53 @@ namespace graph::query::execution {
 							checkGuard(state);
 							if (depth >= traversal.getMinHops() && depth <= maximumHops &&
 								nodeMatches(state.snapshot, node, traversal.getTargetLabels(),
-										traversal.getTargetProperties(), state)) {
-								LogicalPlanReadRow expanded = row;
-								const bool deferredNode = depth > 0 && !pathNodeRefs.empty() &&
-									pathNodeRefs.back().entity_id != 0U;
-								const LogicalPlanReadValue targetValue = deferredNode
-										? LogicalPlanReadValue(pathNodeRefs.back())
-										: LogicalPlanReadValue(node);
-								if (bindValue(expanded, traversal.getTargetVar(), targetValue)) {
+											traversal.getTargetProperties(), state)) {
+								const bool deferredNode = !pathNodeRefs.empty() && pathNodeRefs.back().entity_id != 0U;
+								constexpr const char *outputMessage = "logical-plan path output size overflowed";
+								size_t predictedBytes = logicalReadRowBytes(row, state.context);
+								predictedBytes = checkedSizeAdd(predictedBytes,
+									checkedSizeMul(traversal.getTargetVar().size(), 2U, outputMessage), outputMessage);
+								predictedBytes = checkedSizeAdd(predictedBytes, sizeof(LogicalPlanReadValue), outputMessage);
+								predictedBytes = checkedSizeAdd(predictedBytes,
+									deferredNode ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(node, state.context), outputMessage);
+								for (const auto &record : pathNodeRecords)
+									predictedBytes = checkedSizeAdd(predictedBytes, logicalNodeCacheBytes(record, state.context), outputMessage);
+								for (const auto &record : pathEdgeRecords)
+									predictedBytes = checkedSizeAdd(predictedBytes, logicalEdgeCacheBytes(record, state.context), outputMessage);
+								predictedBytes = checkedSizeAdd(predictedBytes,
+									checkedSizeMul(checkedSizeAdd(pathNodeRefs.size(), pathEdgeRefs.size(), outputMessage),
+										sizeof(storage::EntityRef), outputMessage), outputMessage);
+								MaterializedByteReservation outputReservation(&state.materialized_budget);
+								outputReservation.set(predictedBytes);
+								LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
+								LogicalPlanReadValue targetValue =
+										deferredNode ? LogicalPlanReadValue(pathNodeRefs.back())
+													 : LogicalPlanReadValue(detail::copyLogicalEntityGuarded(node, [&] { checkGuardNow(state); }));
+								if (bindValue(expanded, traversal.getTargetVar(), std::move(targetValue))) {
 									expanded.path_cache.insert_or_assign(
 											traversal.getTargetVar(),
-											LogicalPlanReadPath{pathNodeRecords, pathEdgeRecords, pathEdgeRefs, pathNodeRefs});
-									if (!visitor(std::move(expanded))) {
-										return false;
+											detail::copyLogicalReadPathGuarded(pathNodeRecords, pathEdgeRecords, pathNodeRefs,
+												pathEdgeRefs, [&] { checkGuardNow(state); }));
+									outputReservation.set(logicalReadRowBytes(expanded, state.context));
+									bool keepGoing = true;
+									if (chargedReceiver != nullptr) {
+										keepGoing = (*chargedReceiver)(std::move(expanded), std::move(outputReservation));
+									} else {
+										outputReservation.reset();
+										keepGoing = visitor(std::move(expanded));
 									}
+									if (!keepGoing) return false;
 								}
 							}
 							if (depth == maximumHops) {
 								return true;
 							}
 							return visitAdjacent(node.node_id, [&](const AdjacentEdge &edge,
-																										 const storage::LogicalGraphNode &target) {
+																   const storage::LogicalGraphNode &target) {
 								if (reversePruningEnabled) {
 									const auto reachable = reverseDistance.find(target.node_id);
-									if (reachable == reverseDistance.end() || reachable->second > maximumHops - (depth + 1)) {
+									if (reachable == reverseDistance.end() ||
+										reachable->second > maximumHops - (depth + 1)) {
 										return true;
 									}
 								}
@@ -8222,13 +14191,10 @@ namespace graph::query::execution {
 									pathEdgeRefs.push_back(*edge.reference);
 								} else {
 									pathEdgeRecords.push_back({edge.topology.edge_id, edge.topology.source_node_id,
-																	 edge.topology.target_node_id, edge.topology.type});
+															   edge.topology.target_node_id, edge.topology.type});
 								}
 								pathNodeRecords.push_back(target);
-								pathNodeRefs.push_back((edge.reference.has_value() || state.snapshot.supportsNodeExistenceProbes()) &&
-										traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()
-										? storage::EntityRef{target.node_id, false, 0U, 0U, 0U}
-										: storage::EntityRef{});
+								pathNodeRefs.push_back({target.node_id, false, 0U, 0U, 0U});
 								const bool completed = visitPath(target, depth + 1);
 								pathNodeRecords.pop_back();
 								pathNodeRefs.pop_back();
@@ -8241,7 +14207,7 @@ namespace graph::query::execution {
 								return completed;
 							});
 						};
-							return visitPath(source, 0);
+						return visitPath(source, 0);
 					});
 				}
 				case logical::LogicalOpType::LOP_UNWIND: {
@@ -8249,22 +14215,69 @@ namespace graph::query::execution {
 					if (unwind.getAlias().empty()) {
 						throw std::invalid_argument("logical-plan UNWIND has an empty alias");
 					}
-					return visitOperator(requireOnlyChild(unwind), state, [&](LogicalPlanReadRow input) {
-						std::vector<PropertyValue> values;
+					const auto expandRows = [&](LogicalPlanReadRow input, MaterializedByteReservation inputCharge) {
+						// One input may produce many output rows. Keep its existing charge
+						// until expansion ends; the receiving buffer admits each new row.
+						if (inputCharge.bytes() == 0U) {
+							const size_t inputBytes = logicalReadRowBytes(input, state.context);
+							if (inputBytes > sizeof(LogicalPlanReadRow)) {
+								// The empty row frame is stack-owned. Charge retained bindings
+								// when an upstream operator cannot transfer a row reservation.
+								inputCharge.set(inputBytes - sizeof(LogicalPlanReadRow));
+							}
+						}
+						// Literal lists live with the plan; expression results live through
+						// this invocation. Iterate either directly instead of copying the list.
+						MaterializedByteReservation evaluatedBytes(&state.materialized_budget);
+						LogicalPlanReadValue evaluated;
+						std::span<const PropertyValue> values;
 						if (unwind.hasLiteralList()) {
 							values = unwind.getListValues();
 						} else {
 							if (!unwind.getListExpr()) {
 								throw std::invalid_argument("logical-plan UNWIND has no list expression");
 							}
-							const PropertyValue evaluated =
-									scalarValue(evaluateExpression(*unwind.getListExpr(), input, state));
-							if (evaluated.getType() == PropertyType::LIST) {
-								values = evaluated.getList();
-							} else if (unwind.scalarAsSingleRow()) {
+							const PropertyValue *scalar = nullptr;
+							bool ownsEvaluated = false;
+							if (const auto *parameter = dynamic_cast<const expressions::ParameterExpression *>(
+										unwind.getListExpr().get());
+								parameter != nullptr) {
+								if (state.context == nullptr) {
+									throw std::runtime_error(
+											"logical-plan parameter evaluation requires a QueryContext");
+								}
+								const auto found = state.context->parameters.find(parameter->getParameterName());
+								if (found == state.context->parameters.end()) {
+									throw std::runtime_error(
+											"logical-plan read runtime could not resolve a query parameter");
+								}
+								scalar = &found->second;
+							} else if (const auto *list = dynamic_cast<const expressions::ListLiteralExpression *>(
+											   unwind.getListExpr().get());
+									   list != nullptr && list->isStatic()) {
+								scalar = &list->getValue();
+							} else {
+								ownsEvaluated = true;
+								evaluated = evaluateExpression(*unwind.getListExpr(), input, state);
+								scalar = std::get_if<PropertyValue>(&evaluated);
+								if (scalar == nullptr) {
+									// Entity expressions retain their existing scalar-ID conversion.
+									evaluated = scalarValue(evaluated);
+									scalar = std::get_if<PropertyValue>(&evaluated);
+								}
+							}
+							if (ownsEvaluated) {
+								evaluatedBytes.set(scalar->getType() == PropertyType::LIST
+														   ? materializedListStorageBytes(*scalar, state)
+														   : property_utils::getPropertyValueSize(*scalar));
+							}
+							if (scalar->getType() == PropertyType::LIST) {
+								values = scalar->getList();
+							}
+							if (scalar->getType() != PropertyType::LIST && unwind.scalarAsSingleRow()) {
 								// Match the established pipeline UNWIND contract: a scalar
 								// expression contributes one row for each input row.
-								values.push_back(evaluated);
+								values = std::span<const PropertyValue>(scalar, 1U);
 							}
 						}
 						if (values.size() > state.bounds.maximum_rows) {
@@ -8272,92 +14285,351 @@ namespace graph::query::execution {
 						}
 						for (const PropertyValue &value: values) {
 							checkGuard(state);
-							LogicalPlanReadRow expanded = input;
-							expanded.values.insert_or_assign(unwind.getAlias(), value);
+							MaterializedByteReservation outputBytes(&state.materialized_budget);
+							outputBytes.set(checkedSizeAdd(logicalReadRowBytes(input, state.context),
+								checkedSizeAdd(unwind.getAlias().size(), sizeof(LogicalPlanReadValue),
+									"logical-plan UNWIND output size overflowed"), "logical-plan UNWIND output size overflowed"));
+							LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(input, [&] { checkGuardNow(state); });
+							expanded.values.insert_or_assign(unwind.getAlias(), copyReservedPropertyValue(value, state, outputBytes));
 							expanded.property_cache.erase(unwind.getAlias());
 							expanded.complete_entity_property_cache.erase(unwind.getAlias());
 							expanded.entity_metadata_cache.erase(unwind.getAlias());
 							expanded.path_cache.erase(unwind.getAlias());
-							const size_t rowBytes = logicalReadRowBytes(expanded);
+							const size_t rowBytes = logicalReadRowBytes(expanded, state.context);
 							if (rowBytes > state.bounds.maximum_materialized_bytes) {
 								throw std::runtime_error("logical-plan UNWIND exceeded its materialized byte bound");
 							}
-							if (!visitor(std::move(expanded))) {
+							bool keepGoing = true;
+							if (chargedReceiver != nullptr) {
+								outputBytes.set(rowBytes);
+								keepGoing = (*chargedReceiver)(std::move(expanded), std::move(outputBytes));
+							} else {
+								outputBytes.reset();
+								keepGoing = visitor(std::move(expanded));
+							}
+							if (!keepGoing) {
 								return false;
 							}
 						}
 						return true;
-					});
+					};
+					const auto emitUnwindRows = [&](LogicalPlanReadRow input) {
+						return expandRows(std::move(input), MaterializedByteReservation(&state.materialized_budget));
+					};
+					const ChargedRowVisitor chargedInput = expandRows;
+					const logical::LogicalOperator &unwindChild = requireOnlyChild(unwind);
+					if (state.allow_cross_row_entity_batches && !unwind.hasLiteralList() &&
+						unwind.getListExpr() != nullptr) {
+						const std::vector<const expressions::Expression *> listExpressions{unwind.getListExpr().get()};
+						if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
+									unwindChild, listExpressions, state, emitUnwindRows, {}, {},
+									chargedReceiver != nullptr ? &chargedInput : nullptr);
+							batched.has_value()) {
+							return *batched;
+						}
+					}
+					return visitOperator(unwindChild, state, emitUnwindRows,
+										 chargedReceiver != nullptr && supportsChargedRowHandoff(unwindChild.getType())
+												 ? &chargedInput
+												 : nullptr);
 				}
 				case logical::LogicalOpType::LOP_LOAD_CSV: {
 					const auto &loadCsv = dynamic_cast<const logical::LogicalLoadCsv &>(op);
 					if (state.context == nullptr) {
-						throw std::runtime_error("logical LOAD CSV requires an execution context with an import policy");
+						throw std::runtime_error(
+								"logical LOAD CSV requires an execution context with an import policy");
 					}
 					if (loadCsv.getRowVariable().empty() || !loadCsv.getUrlExpr()) {
 						throw std::invalid_argument("logical LOAD CSV requires a URI expression and row variable");
 					}
 					const std::string &delimiter = loadCsv.getFieldTerminator();
-					if (delimiter.empty() || delimiter.size() > 8U || delimiter.find_first_of("\r\n\"") != std::string::npos) {
+					if (delimiter.empty() || delimiter.size() > 8U ||
+						delimiter.find_first_of("\r\n\"") != std::string::npos) {
 						throw std::invalid_argument("logical LOAD CSV has an invalid field terminator");
 					}
-					const auto streamRows = [&](LogicalPlanReadRow input) {
+					const auto streamRows = [&](LogicalPlanReadRow input, MaterializedByteReservation inputCharge) {
 						checkGuard(state);
+						if (input.values.contains(loadCsv.getRowVariable())) {
+							throw std::runtime_error("logical LOAD CSV attempted to rebind its row variable");
+						}
+						const size_t inputBytes = logicalReadRowBytes(input, state.context);
+						MaterializedByteReservation retainedSource(&state.materialized_budget);
+						if (inputCharge.bytes() == 0U && inputBytes >= state.materialized_budget.available()) {
+							throw std::runtime_error("logical LOAD CSV input exhausted its materialized byte bound");
+						}
+						if (inputCharge.bytes() != 0U) {
+							retainedSource = std::move(inputCharge);
+						} else {
+							retainedSource.set(inputBytes);
+						}
 						const PropertyValue uri = scalarValue(evaluateExpression(*loadCsv.getUrlExpr(), input, state));
+						const size_t uriBytes = property_utils::getPropertyValueSize(uri);
+						const size_t inputAndUriBytes = checkedSizeAdd(retainedSource.bytes(), uriBytes,
+																	   "logical LOAD CSV retained size overflowed");
+						retainedSource.set(inputAndUriBytes);
+						size_t pathBytesEstimate = 0U;
+						if (uri.getType() == PropertyType::STRING) {
+							const size_t uriCharacters = checkedSizeAdd(std::get<std::string>(uri.getVariant()).size(),
+																		1U, "logical LOAD CSV path size overflowed");
+							pathBytesEstimate = checkedSizeMul(uriCharacters, sizeof(std::filesystem::path::value_type),
+															   "logical LOAD CSV path size overflowed");
+							retainedSource.set(checkedSizeAdd(inputAndUriBytes, pathBytesEstimate,
+															  "logical LOAD CSV retained size overflowed"));
+						}
 						const std::filesystem::path csvPath = resolveCsvImportFile(uri, *state.context);
-						CsvReader reader(csvPath.string(), delimiter,
-												 CsvReaderLimits{state.context->csv_import_policy.maximum_record_bytes,
-																 state.context->csv_import_policy.maximum_columns,
-																 state.context->csv_import_policy.maximum_field_bytes});
+						const auto &nativePath = csvPath.native();
+						const size_t pathBytes =
+								checkedSizeMul(nativePath.capacity(), sizeof(std::filesystem::path::value_type),
+											   "logical LOAD CSV path storage size overflowed");
+						retainedSource.set(checkedSizeAdd(checkedSizeAdd(inputAndUriBytes, pathBytes,
+																		 "logical LOAD CSV retained size overflowed"),
+														  pathBytesEstimate,
+														  "logical LOAD CSV retained size overflowed"));
+						const std::string sourcePath = csvPath.string();
+						const size_t sourcePathBytes = csvStringCapacityBytes(sourcePath);
+						const size_t retainedInputSourcePathBytes = checkedSizeAdd(
+								inputAndUriBytes,
+								checkedSizeAdd(pathBytes, sourcePathBytes, "logical LOAD CSV retained size overflowed"),
+								"logical LOAD CSV retained size overflowed");
+						retainedSource.set(retainedInputSourcePathBytes);
+						CsvReader reader(sourcePath, delimiter,
+										 CsvReaderLimits{state.context->csv_import_policy.maximum_record_bytes,
+														 state.context->csv_import_policy.maximum_columns,
+														 state.context->csv_import_policy.maximum_field_bytes,
+														 state.materialized_budget.available()},
+										 [&state] { state.context->checkGuardNow(); });
 
 						std::vector<std::string> headers;
+						size_t headerBytes = 0U;
 						if (loadCsv.isWithHeaders() && reader.hasNext()) {
 							headers = reader.nextRow();
-							std::unordered_set<std::string> uniqueHeaders;
-							uniqueHeaders.reserve(headers.size());
-							for (const std::string &header: headers) {
-								if (header.empty() || !uniqueHeaders.insert(header).second) {
+							headerBytes = checkedSizeMul(headers.capacity(), sizeof(std::string),
+														 "logical LOAD CSV header capacity overflowed");
+							for (const auto &header: headers) {
+								headerBytes = checkedSizeAdd(headerBytes, csvStringCapacityBytes(header),
+															 "logical LOAD CSV header capacity overflowed");
+								if (header.empty()) {
 									throw std::runtime_error("logical LOAD CSV has empty or duplicate header names");
 								}
 							}
+							// Borrow names for duplicate detection rather than allocating a
+							// second set of strings and unaccounted hash buckets/nodes.
+							const size_t validationBytes =
+									checkedSizeAdd(headerBytes,
+												   checkedSizeMul(headers.size(), sizeof(std::string_view),
+																  "logical LOAD CSV header validation size overflowed"),
+												   "logical LOAD CSV header validation size overflowed");
+							if (validationBytes > state.materialized_budget.available()) {
+								throw std::runtime_error(
+										"logical LOAD CSV header validation exceeded its materialized byte bound");
+							}
+							state.context->checkGuardNow();
+							std::vector<std::string_view> sortedHeaders;
+							sortedHeaders.reserve(headers.size());
+							const size_t actualValidationBytes = checkedSizeAdd(
+									headerBytes,
+									checkedSizeMul(sortedHeaders.capacity(), sizeof(std::string_view),
+												   "logical LOAD CSV header validation capacity overflowed"),
+									"logical LOAD CSV header validation capacity overflowed");
+							if (actualValidationBytes > state.materialized_budget.available()) {
+								throw std::runtime_error(
+										"logical LOAD CSV header validation exceeded its materialized byte bound");
+							}
+							for (const auto &header: headers)
+								sortedHeaders.emplace_back(header);
+							std::sort(sortedHeaders.begin(), sortedHeaders.end());
+							state.context->checkGuardNow();
+							if (std::adjacent_find(sortedHeaders.begin(), sortedHeaders.end()) != sortedHeaders.end()) {
+								throw std::runtime_error("logical LOAD CSV has empty or duplicate header names");
+							}
 						}
 
+						const size_t retainedBytes = checkedSizeAdd(retainedSource.bytes(), headerBytes,
+																	"logical LOAD CSV retained size overflowed");
+						if (headerBytes >= state.materialized_budget.available()) {
+							throw std::runtime_error("logical LOAD CSV headers exhausted its materialized byte bound");
+						}
+						retainedSource.set(retainedBytes);
 						size_t loadedRows = 0U;
-						while (reader.hasNext()) {
-							checkGuard(state);
+						while (true) {
+							if (reader.atEnd())
+								break;
+							// The row limit only needs an EOF probe to determine whether
+							// another row exists. Do not parse or allocate that forbidden row.
 							if (loadedRows == state.context->csv_import_policy.maximum_rows) {
 								throw std::runtime_error("logical LOAD CSV exceeded its row bound");
 							}
+							reader.setMaximumBufferedBytes(state.materialized_budget.available());
+							if (!reader.hasNext())
+								break;
+							checkGuard(state);
 							std::vector<std::string> fields = reader.nextRow();
+							// Predict conversion storage before reserve/emplace. Field strings are
+							// moved, but their vector slots coexist with the output container.
+							size_t fieldBytes = checkedSizeMul(fields.capacity(), sizeof(std::string),
+															   "logical LOAD CSV field capacity overflowed");
+							for (const auto &field: fields) {
+								fieldBytes = checkedSizeAdd(fieldBytes, csvStringCapacityBytes(field),
+															"logical LOAD CSV field capacity overflowed");
+							}
+							MaterializedByteReservation rowReservation(&state.materialized_budget);
+							admitReferenceResultBytes(rowReservation, fieldBytes,
+													  "logical LOAD CSV fields exceeded their materialized byte bound");
+							size_t constructionBytes = checkedSizeAdd(sizeof(PropertyValue), fieldBytes,
+																	  "logical LOAD CSV conversion size overflowed");
+							const size_t valueCount =
+									loadCsv.isWithHeaders() ? std::min(headers.size(), fields.size()) : fields.size();
+							size_t mapNodeStorageBytes = 0U;
+							if (loadCsv.isWithHeaders()) {
+								// Include the link, a possible cached hash, and alignment slack in
+								// addition to the key/value object. The bucket array is charged after
+								// reserve using the implementation's reported bucket count.
+								constexpr size_t mapNodeEstimate = sizeof(PropertyValue::MapType::value_type) +
+																   2U * sizeof(void *) +
+																   alignof(PropertyValue::MapType::value_type) - 1U;
+								mapNodeStorageBytes = checkedSizeMul(valueCount, mapNodeEstimate,
+																	 "logical LOAD CSV map node storage overflowed");
+								constructionBytes = checkedSizeAdd(constructionBytes, mapNodeStorageBytes,
+																   "logical LOAD CSV conversion size overflowed");
+							} else {
+								constructionBytes =
+										checkedSizeAdd(constructionBytes,
+													   checkedSizeMul(valueCount, sizeof(PropertyValue),
+																	  "logical LOAD CSV list slot size overflowed"),
+													   "logical LOAD CSV conversion size overflowed");
+							}
+							size_t valueBytes = sizeof(uint32_t);
+							for (size_t index = 0U; index < valueCount; ++index) {
+									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+								valueBytes = checkedSizeAdd(valueBytes, sizeof(size_t),
+															"logical LOAD CSV value size overflowed");
+								valueBytes = checkedSizeAdd(valueBytes, fields[index].size(),
+															"logical LOAD CSV value size overflowed");
+								if (loadCsv.isWithHeaders()) {
+									constructionBytes =
+											checkedSizeAdd(constructionBytes, csvStringCapacityBytes(headers[index]),
+														   "logical LOAD CSV header-key capacity overflowed");
+									valueBytes = checkedSizeAdd(valueBytes, sizeof(size_t),
+																"logical LOAD CSV value size overflowed");
+									valueBytes = checkedSizeAdd(valueBytes, headers[index].size(),
+																"logical LOAD CSV value size overflowed");
+								}
+							}
+							size_t outputContainerBytes = 0U;
+							size_t outputBytes = checkedSizeAdd(inputBytes, loadCsv.getRowVariable().size(),
+																"logical LOAD CSV output size overflowed");
+							outputBytes = checkedSizeAdd(outputBytes, sizeof(LogicalPlanReadValue),
+														 "logical LOAD CSV output size overflowed");
+							outputBytes =
+									checkedSizeAdd(outputBytes, valueBytes, "logical LOAD CSV output size overflowed");
+							outputBytes = checkedSizeAdd(outputBytes, sizeof(PropertyValue),
+														 "logical LOAD CSV handoff size overflowed");
+							admitReferenceResultBytes(
+									rowReservation, constructionBytes,
+									"logical LOAD CSV conversion exceeded its materialized byte bound");
 							PropertyValue rowValue;
 							if (loadCsv.isWithHeaders()) {
 								PropertyValue::MapType values;
-								values.reserve(std::min(headers.size(), fields.size()));
+								values.reserve(valueCount);
+								const size_t requestedBucketBytes = checkedSizeMul(
+										valueCount, sizeof(void *), "logical LOAD CSV map bucket estimate overflowed");
+								const size_t actualBucketBytes =
+										checkedSizeMul(values.bucket_count(), sizeof(void *),
+													   "logical LOAD CSV map bucket capacity overflowed");
+								if (actualBucketBytes > requestedBucketBytes) {
+									constructionBytes =
+											checkedSizeAdd(constructionBytes, actualBucketBytes - requestedBucketBytes,
+														   "logical LOAD CSV map bucket capacity overflowed");
+									admitReferenceResultBytes(
+											rowReservation, constructionBytes,
+											"logical LOAD CSV conversion exceeded its materialized byte bound");
+								}
+								outputContainerBytes = checkedSizeAdd(mapNodeStorageBytes, actualBucketBytes,
+																	  "logical LOAD CSV map storage overflowed");
+								for (size_t index = 0U; index < valueCount; ++index) {
+									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									const size_t headerCapacity = csvStringCapacityBytes(headers[index]);
+									if (headerCapacity > headers[index].size()) {
+										outputContainerBytes = checkedSizeAdd(
+												outputContainerBytes, headerCapacity - headers[index].size(),
+												"logical LOAD CSV output key capacity overflowed");
+									}
+									const size_t fieldCapacity = csvStringCapacityBytes(fields[index]);
+									if (fieldCapacity > fields[index].size()) {
+										outputContainerBytes = checkedSizeAdd(
+												outputContainerBytes, fieldCapacity - fields[index].size(),
+												"logical LOAD CSV output value capacity overflowed");
+									}
+								}
 								for (size_t index = 0U; index < headers.size() && index < fields.size(); ++index) {
+									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
 									values.emplace(headers[index], PropertyValue(std::move(fields[index])));
 								}
 								rowValue = PropertyValue(std::move(values));
 							} else {
 								std::vector<PropertyValue> values;
 								values.reserve(fields.size());
+								const size_t requestedValueSlots =
+										checkedSizeMul(valueCount, sizeof(PropertyValue),
+													   "logical LOAD CSV value slot estimate overflowed");
+								const size_t actualValueSlots =
+										checkedSizeMul(values.capacity(), sizeof(PropertyValue),
+													   "logical LOAD CSV value slot capacity overflowed");
+								if (actualValueSlots > requestedValueSlots) {
+									constructionBytes =
+											checkedSizeAdd(constructionBytes, actualValueSlots - requestedValueSlots,
+														   "logical LOAD CSV value slot capacity overflowed");
+									admitReferenceResultBytes(
+											rowReservation, constructionBytes,
+											"logical LOAD CSV conversion exceeded its materialized byte bound");
+								}
+								outputContainerBytes = actualValueSlots;
+								for (size_t index = 0U; index < valueCount; ++index) {
+									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									const size_t fieldCapacity = csvStringCapacityBytes(fields[index]);
+									if (fieldCapacity > fields[index].size()) {
+										outputContainerBytes = checkedSizeAdd(
+												outputContainerBytes, fieldCapacity - fields[index].size(),
+												"logical LOAD CSV output value capacity overflowed");
+									}
+								}
+								size_t convertedFields = 0U;
 								for (std::string &field: fields) {
+									if ((convertedFields++ & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
 									values.emplace_back(std::move(field));
 								}
 								rowValue = PropertyValue(std::move(values));
 							}
+							outputBytes = checkedSizeAdd(outputBytes, outputContainerBytes,
+														 "logical LOAD CSV output container capacity overflowed");
+							// Drop moved-from slots and any extra columns before copying the input.
+							std::vector<std::string>().swap(fields);
+							admitReferenceResultBytes(
+									rowReservation, outputBytes,
+									"logical LOAD CSV conversion exceeded its materialized byte bound");
 							++loadedRows;
-							LogicalPlanReadRow expanded = input;
+							LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(input, [&] { checkGuardNow(state); });
 							if (!bindValue(expanded, loadCsv.getRowVariable(), std::move(rowValue))) {
 								throw std::runtime_error("logical LOAD CSV attempted to rebind its row variable");
 							}
 							expanded.property_cache.erase(loadCsv.getRowVariable());
 							expanded.complete_entity_property_cache.erase(loadCsv.getRowVariable());
 							expanded.entity_metadata_cache.erase(loadCsv.getRowVariable());
-							const size_t rowBytes = logicalReadRowBytes(expanded);
-							if (rowBytes > state.bounds.maximum_materialized_bytes) {
-								throw std::runtime_error("logical LOAD CSV exceeded its materialized byte bound");
+							const size_t rowBytes = logicalReadRowBytes(expanded, state.context);
+							admitReferenceResultBytes(rowReservation, std::max(rowBytes, outputBytes),
+													  "logical LOAD CSV exceeded its materialized byte bound");
+							// BoundedBatch requires its exact logical row charge. Preserve CSV's
+							// additional capacity separately until the receiver returns.
+							auto csvCapacityReservation = rowReservation.splitOff(
+								outputBytes > rowBytes ? outputBytes - rowBytes : 0U);
+							bool keepGoing = true;
+							if (chargedReceiver != nullptr) {
+								keepGoing = (*chargedReceiver)(std::move(expanded), std::move(rowReservation));
+							} else {
+								rowReservation.reset();
+								keepGoing = visitor(std::move(expanded));
 							}
-							if (!visitor(std::move(expanded))) {
+							if (!keepGoing) {
 								return false;
 							}
 						}
@@ -8366,12 +14638,18 @@ namespace graph::query::execution {
 
 					const std::vector<logical::LogicalOperator *> children = loadCsv.getChildren();
 					if (children.empty()) {
-						return streamRows({});
+						return streamRows({}, MaterializedByteReservation(&state.materialized_budget));
 					}
 					if (children.size() != 1U || children.front() == nullptr) {
 						throw std::invalid_argument("logical LOAD CSV has an invalid input pipeline");
 					}
-					return visitOperator(*children.front(), state, streamRows);
+					const auto streamUnchargedRow = [&](LogicalPlanReadRow input) {
+						return streamRows(std::move(input), MaterializedByteReservation(&state.materialized_budget));
+					};
+					const ChargedRowVisitor chargedStreamRows = streamRows;
+					return visitOperator(*children.front(), state, streamUnchargedRow,
+										 supportsChargedRowHandoff(children.front()->getType()) ? &chargedStreamRows
+																								: nullptr);
 				}
 				case logical::LogicalOpType::LOP_UNION: {
 					const auto &unionOperator = dynamic_cast<const logical::LogicalUnion &>(op);
@@ -8393,31 +14671,38 @@ namespace graph::query::execution {
 						}
 					}
 
-					std::unordered_set<std::string> distinctRows;
-					size_t distinctBytes = 0U;
+					detail::BudgetMemoryResource distinctMemory(state.materialized_budget);
+					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
 					const auto visitChild = [&](const logical::LogicalOperator &child) {
-						return visitOperator(child, state, [&](LogicalPlanReadRow row) {
-							LogicalPlanReadRow output = normalizeOutputRow(row, columns);
+						const auto acceptRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+							LogicalPlanReadRow output = normalizeOutputRow(std::move(row), columns);
 							if (!unionOperator.isAll()) {
-								const std::string key = distinctUnionRowKey(output, columns);
+								auto key = distinctUnionRowKey<std::pmr::string>(output, columns, &distinctMemory);
 								if (distinctRows.contains(key)) {
 									return true;
 								}
 								if (distinctRows.size() == state.bounds.maximum_distinct_rows) {
 									throw std::runtime_error("logical-plan UNION DISTINCT exceeded its row bound");
 								}
-								const size_t keyBytes = distinctKeyStorageBytes(
-										key, "logical-plan UNION DISTINCT materialization size overflowed");
-								if (keyBytes > state.bounds.maximum_materialized_bytes -
-										std::min(distinctBytes, state.bounds.maximum_materialized_bytes)) {
-									throw std::runtime_error("logical-plan UNION DISTINCT exceeded its materialized byte bound");
-								}
-								static_cast<void>(distinctRows.insert(key));
-								distinctBytes = checkedSizeAdd(distinctBytes, keyBytes,
-										"logical-plan UNION DISTINCT materialization size overflowed");
+								distinctRows.insert(std::move(key));
 							}
+							if (chargedReceiver != nullptr) {
+								if (charge.bytes() != 0U)
+									charge.set(logicalReadRowBytes(output, state.context));
+								return (*chargedReceiver)(std::move(output), std::move(charge));
+							}
+							charge.reset();
 							return visitor(std::move(output));
-						});
+						};
+						const ChargedRowVisitor chargedInput = acceptRow;
+						return visitOperator(
+								child, state,
+								[&](LogicalPlanReadRow row) {
+									return acceptRow(std::move(row),
+													 MaterializedByteReservation(&state.materialized_budget));
+								},
+								chargedReceiver != nullptr && supportsChargedRowHandoff(child.getType()) ? &chargedInput
+																										 : nullptr);
 					};
 					return visitChild(*left) && visitChild(*right);
 				}
@@ -8436,77 +14721,168 @@ namespace graph::query::execution {
 						LogicalPlanReadRow row;
 						std::vector<PropertyValue> keys;
 					};
-					const auto decoratedRowBytes = [](const DecoratedRow &decorated) {
-						size_t bytes = logicalReadRowBytes(decorated.row);
+					const auto decoratedRowBytes = [&state](const DecoratedRow &decorated) {
+						size_t bytes = logicalReadRowBytes(decorated.row, state.context);
 						for (const PropertyValue &key: decorated.keys) {
-							bytes = checkedSizeAdd(bytes, property_utils::getPropertyValueSize(key),
-									"logical-plan Sort materialization size overflowed");
+							bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(key, state),
+												   "logical-plan Sort materialization size overflowed");
 						}
 						return bytes;
 					};
-					BoundedBatch<DecoratedRow> rows(
-							state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes, decoratedRowBytes);
-					rows.reserve(std::min(state.bounds.maximum_rows, state.bounds.maximum_node_records));
-					const auto collectRow = [&](LogicalPlanReadRow row) {
+					// Destroy buffered key vectors before their slot reservation on
+					// cancellation or exception as well as on the normal output path.
+					MaterializedByteReservation keySlots(&state.materialized_budget);
+					MaterializedByteReservation enrichmentPayload(&state.materialized_budget);
+					BoundedBatch<DecoratedRow> rows(state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
+													decoratedRowBytes, &state.materialized_budget);
+					// Start with one bounded batch, not the complete cardinality/byte
+					// allowance. Small grouped results must not allocate millions of
+					// unused sort slots; the vector grows for actual input rows.
+					rows.reserve(std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows,
+										   state.bounds.maximum_node_records}));
+					const auto collectChargedRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
 						if (rows.size() == state.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Sort exceeded its materialization row bound");
 						}
 						// Delay expression evaluation until we know ordering can affect the
 						// result. This also preserves valid single-row aggregate results when
 						// an otherwise unavailable input-only ORDER BY expression is present.
-						rows.append({std::move(row), {}});
+						if (charge.bytes() == 0U)
+							rows.append({std::move(row), {}});
+						else
+							rows.appendCharged({std::move(row), {}}, std::move(charge));
 						return true;
 					};
-					std::vector<const expressions::Expression *> sortExpressions;
-					sortExpressions.reserve(items.size());
+					const auto collectRow = [&](LogicalPlanReadRow row) {
+						return collectChargedRow(std::move(row),
+												 MaterializedByteReservation(&state.materialized_budget));
+					};
+					std::vector<const expressions::Expression *> sortCandidates;
+					sortCandidates.reserve(items.size());
 					for (const logical::LogicalSortItem &item: items) {
-						sortExpressions.push_back(item.expression.get());
+						sortCandidates.push_back(item.expression.get());
 					}
+					const std::vector<const expressions::Expression *> sortExpressions =
+							selectBatchableExpressions(sortCandidates);
+					const std::vector<std::string> completeEntityVariables =
+							selectBatchableCompleteEntityVariables(sortCandidates);
+					const logical::LogicalOperator &child = requireOnlyChild(sort);
+					const ChargedRowVisitor chargedCollect = collectChargedRow;
 					const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
-							requireOnlyChild(sort), sortExpressions, state, collectRow);
-					const bool completed = batched.has_value() ? *batched : visitOperator(
-							requireOnlyChild(sort), state, collectRow);
+							child, sortExpressions, state, collectRow, {}, completeEntityVariables, &chargedCollect);
+					const bool completed =
+							batched.has_value()
+									? *batched
+									: visitOperator(child, state, collectRow,
+													supportsChargedRowHandoff(child.getType()) ? &chargedCollect
+																							   : nullptr);
 					if (!completed) {
 						throw std::runtime_error(
 								"logical-plan Sort could not prove that its materialized input was exhausted");
 					}
+					size_t slotsPerRow = 0U;
 					if (rows.size() > 1U) {
-						size_t additionalKeyBytes = 0U;
+						slotsPerRow = checkedSizeMul(items.size(), sizeof(PropertyValue),
+													 "logical-plan Sort key-slot size overflowed");
+						size_t keySlotBytes =
+								checkedSizeMul(rows.size(), slotsPerRow, "logical-plan Sort key-slot size overflowed");
+						if (keySlotBytes > state.bounds.maximum_materialized_bytes -
+												   std::min(rows.bytes(), state.bounds.maximum_materialized_bytes) ||
+							keySlotBytes > state.materialized_budget.available()) {
+							throw std::runtime_error(
+									"logical-plan Sort key slots exceeded its materialized byte bound");
+						}
+						keySlots.set(keySlotBytes);
+						size_t additionalEnrichmentBytes = 0U;
 						for (DecoratedRow &row: rows.values()) {
 							row.keys.reserve(items.size());
+							const size_t actualSlots = checkedSizeMul(row.keys.capacity(), sizeof(PropertyValue),
+									"logical-plan Sort key-slot size overflowed");
+							const size_t extraSlots = actualSlots - slotsPerRow;
+							const size_t retainedBytes = checkedSizeAdd(
+								checkedSizeAdd(rows.bytes(), keySlotBytes,
+									"logical-plan Sort materialization size overflowed"),
+								additionalEnrichmentBytes, "logical-plan Sort materialization size overflowed");
+							if (extraSlots > state.bounds.maximum_materialized_bytes -
+									std::min(retainedBytes, state.bounds.maximum_materialized_bytes) ||
+								extraSlots > state.materialized_budget.available()) {
+								throw std::runtime_error("logical-plan Sort key slots exceeded its materialized byte bound");
+							}
+							keySlotBytes = checkedSizeAdd(keySlotBytes, extraSlots,
+								"logical-plan Sort key-slot size overflowed");
+							keySlots.set(keySlotBytes);
+							size_t accountedRowBytes = logicalReadRowBytes(row.row, state.context);
 							for (const logical::LogicalSortItem &item: items) {
 								checkGuard(state);
 								PropertyValue key = scalarValue(evaluateExpression(*item.expression, row.row, state));
-								const size_t keyBytes = property_utils::getPropertyValueSize(key);
-								if (keyBytes > state.bounds.maximum_materialized_bytes -
-										std::min(checkedSizeAdd(rows.bytes(), additionalKeyBytes,
-												"logical-plan Sort materialization size overflowed"),
-											state.bounds.maximum_materialized_bytes)) {
-									throw std::runtime_error("logical-plan Sort exceeded its materialization byte bound");
+								const size_t keyBytes = retainedExpressionValueBytes(key, state);
+								const size_t currentRowBytes = logicalReadRowBytes(row.row, state.context);
+								const size_t rowGrowth = currentRowBytes > accountedRowBytes ?
+									currentRowBytes - accountedRowBytes : 0U;
+								const size_t enrichmentBytes = checkedSizeAdd(keyBytes, rowGrowth,
+									"logical-plan Sort cache enrichment size overflowed");
+								if (enrichmentBytes >
+									state.bounds.maximum_materialized_bytes -
+											std::min(
+													checkedSizeAdd(checkedSizeAdd(rows.bytes(), keySlotBytes,
+																				  "logical-plan Sort materialization "
+																				  "size overflowed"),
+																   additionalEnrichmentBytes,
+																   "logical-plan Sort materialization size overflowed"),
+													state.bounds.maximum_materialized_bytes)) {
+									throw std::runtime_error(
+											"logical-plan Sort exceeded its materialization byte bound");
 								}
-								additionalKeyBytes = checkedSizeAdd(additionalKeyBytes, keyBytes,
-										"logical-plan Sort materialization size overflowed");
+								if (enrichmentBytes >
+									state.materialized_budget.available()) {
+									throw std::runtime_error(
+											"logical-plan Sort keys exceeded the shared materialized byte bound");
+								}
+								additionalEnrichmentBytes =
+										checkedSizeAdd(additionalEnrichmentBytes, enrichmentBytes,
+													   "logical-plan Sort materialization size overflowed");
+								enrichmentPayload.set(additionalEnrichmentBytes);
+								accountedRowBytes = std::max(accountedRowBytes, currentRowBytes);
 								row.keys.push_back(std::move(key));
 							}
 						}
-						rows.recalculateBytes();
+						rows.recalculateBytes(std::move(enrichmentPayload));
 						std::stable_sort(rows.values().begin(), rows.values().end(),
-									 [&](const DecoratedRow &left, const DecoratedRow &right) {
-										 checkGuard(state);
-										 for (size_t index = 0U; index < items.size(); ++index) {
-											 if (left.keys[index] == right.keys[index]) {
-												 continue;
+										 [&](const DecoratedRow &left, const DecoratedRow &right) {
+											 checkGuard(state);
+											 for (size_t index = 0U; index < items.size(); ++index) {
+												 if (left.keys[index] == right.keys[index]) {
+													 continue;
+												 }
+												 return detail::orderByPrecedes(left.keys[index], right.keys[index], items[index].ascending);
 											 }
-											 return items[index].ascending ? left.keys[index] < right.keys[index]
-																		   : left.keys[index] > right.keys[index];
-										 }
-										 return false;
-									 });
+											 return false;
+										 });
 					}
-					for (DecoratedRow &row: rows.values()) {
+					// Pop in sorted order so ownership leaves this batch before a
+					// downstream buffer charges the same row. Free obsolete sort keys.
+					std::reverse(rows.values().begin(), rows.values().end());
+					while (!rows.empty()) {
 						checkGuard(state);
-						if (!visitor(std::move(row.row))) {
-							return false;
+						if (chargedReceiver != nullptr) {
+							auto charged = rows.popBackCharged();
+							const size_t releasedSlots = checkedSizeMul(charged.value.keys.capacity(), sizeof(PropertyValue),
+								"logical-plan Sort key-slot size overflowed");
+							std::vector<PropertyValue>().swap(charged.value.keys);
+							keySlots.set(keySlots.bytes() - releasedSlots);
+							charged.reservation.set(logicalReadRowBytes(charged.value.row, state.context));
+							if (!(*chargedReceiver)(std::move(charged.value.row), std::move(charged.reservation))) {
+								return false;
+							}
+						} else {
+							DecoratedRow row = rows.popBack();
+							const size_t releasedSlots = checkedSizeMul(row.keys.capacity(), sizeof(PropertyValue),
+								"logical-plan Sort key-slot size overflowed");
+							std::vector<PropertyValue>().swap(row.keys);
+							keySlots.set(keySlots.bytes() - releasedSlots);
+							if (!visitor(std::move(row.row))) {
+								return false;
+							}
 						}
 					}
 					return true;
@@ -8517,59 +14893,33 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan SKIP cannot be negative");
 					}
 					const uint64_t offset = static_cast<uint64_t>(skip.getOffset());
-					const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
-					if (batchCapacity == 0U) {
+					if (state.bounds.maximum_rows == 0U) {
 						throw std::runtime_error("logical-plan SKIP has no positive batch capacity");
 					}
-					BoundedBatch<LogicalPlanReadRow> rows(
-							batchCapacity, state.bounds.maximum_materialized_bytes,
-							[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
-					rows.reserve(batchCapacity);
 					size_t skipped = 0U;
-					bool stopped = false;
-					const auto flush = [&]() {
-						if (rows.empty()) {
-							return true;
-						}
-						SelectionVector selection(rows.size());
-						for (size_t index = 0U; index < rows.size() && static_cast<uint64_t>(skipped) < offset; ++index) {
+					const auto acceptRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+						checkGuard(state);
+						if (static_cast<uint64_t>(skipped) < offset) {
 							incrementBounded(skipped, "logical-plan SKIP counter overflowed");
 							debug::PerfTrace::addValue("logical_plan.skip.discarded_rows", 1);
-							selection.reject(index);
+							return true;
 						}
-						bool keepGoing = true;
-						static_cast<void>(selection.forEachSelectedUntil([&](const size_t index) {
-							if (!keepGoing) {
-								return false;
-							}
-							keepGoing = visitor(std::move(rows.values()[index]));
-							return keepGoing;
-						}));
-						rows.clear();
-						return keepGoing;
+						enforceMaterializedRowBound(row, state);
+						if (chargedReceiver != nullptr) {
+							return (*chargedReceiver)(std::move(row), std::move(charge));
+						}
+						charge.reset();
+						return visitor(std::move(row));
 					};
-					const bool childCompleted = visitOperator(requireOnlyChild(skip), state, [&](LogicalPlanReadRow row) {
-						rows.append(std::move(row));
-						// Keep the first post-offset row in the same bounded batch, but do
-						// not read an entire large batch when a downstream LIMIT can stop
-						// immediately.  This preserves the existing no-scan-past-limit
-						// contract while retaining batching for large offsets.
-						const uint64_t rowsNeeded = static_cast<uint64_t>(skipped) < offset
-								? offset - static_cast<uint64_t>(skipped) + 1U : 1U;
-						const size_t flushThreshold = rowsNeeded >= static_cast<uint64_t>(batchCapacity)
-								? batchCapacity : static_cast<size_t>(rowsNeeded);
-						if (rows.size() >= flushThreshold) {
-							if (!flush()) {
-								stopped = true;
-							}
-							return !stopped;
-						}
-						return true;
-					});
-					if (stopped || !flush()) {
-						return false;
-					}
-					return childCompleted;
+					const logical::LogicalOperator &child = requireOnlyChild(skip);
+					const ChargedRowVisitor chargedRow = acceptRow;
+					return visitOperator(
+							child, state,
+							[&](LogicalPlanReadRow row) {
+								return acceptRow(std::move(row),
+												 MaterializedByteReservation(&state.materialized_budget));
+							},
+							supportsChargedRowHandoff(child.getType()) ? &chargedRow : nullptr);
 				}
 				case logical::LogicalOpType::LOP_LIMIT: {
 					const auto &limit = dynamic_cast<const logical::LogicalLimit &>(op);
@@ -8577,67 +14927,50 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan LIMIT cannot be negative");
 					}
 					if (limit.getLimit() == 0) {
-						return false;
+						return true;
 					}
 					const uint64_t maximum = static_cast<uint64_t>(limit.getLimit());
-					const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
-					if (batchCapacity == 0U) {
+					if (state.bounds.maximum_rows == 0U) {
 						throw std::runtime_error("logical-plan LIMIT has no positive batch capacity");
 					}
-					BoundedBatch<LogicalPlanReadRow> rows(
-							batchCapacity, state.bounds.maximum_materialized_bytes,
-							[](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row); });
-					rows.reserve(batchCapacity);
 					size_t delivered = 0U;
-					bool stopped = false;
-					const auto flush = [&]() {
-						if (rows.empty()) {
-							return true;
-						}
-						SelectionVector selection(rows.size());
-						const uint64_t remaining = maximum > static_cast<uint64_t>(delivered)
-								? maximum - static_cast<uint64_t>(delivered) : 0U;
-						for (size_t index = 0U; index < rows.size(); ++index) {
-							if (static_cast<uint64_t>(index) >= remaining) {
-								selection.reject(index);
-							}
-						}
+					bool reachedLimit = false;
+					bool cancelledByVisitor = false;
+					const auto acceptRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+						checkGuard(state);
+						enforceMaterializedRowBound(row, state);
+						incrementBounded(delivered, "logical-plan LIMIT counter overflowed");
+						debug::PerfTrace::addValue("logical_plan.limit.delivered_rows", 1);
 						bool keepGoing = true;
-						static_cast<void>(selection.forEachSelectedUntil([&](const size_t index) {
-							if (!keepGoing) {
-								return false;
-							}
-							incrementBounded(delivered, "logical-plan LIMIT counter overflowed");
-							debug::PerfTrace::addValue("logical_plan.limit.delivered_rows", 1);
-							keepGoing = visitor(std::move(rows.values()[index]));
-							return keepGoing;
-						}));
-						const bool reachedLimit = static_cast<uint64_t>(delivered) >= maximum;
-						rows.clear();
+						if (chargedReceiver != nullptr) {
+							keepGoing = (*chargedReceiver)(std::move(row), std::move(charge));
+						} else {
+							charge.reset();
+							keepGoing = visitor(std::move(row));
+						}
+						if (!keepGoing)
+							cancelledByVisitor = true;
+						reachedLimit = static_cast<uint64_t>(delivered) >= maximum;
 						if (!keepGoing || reachedLimit) {
 							debug::PerfTrace::addValue("logical_plan.limit.early_stop", 1);
 							return false;
 						}
 						return true;
 					};
-					const bool childCompleted = visitOperator(requireOnlyChild(limit), state, [&](LogicalPlanReadRow row) {
-						rows.append(std::move(row));
-						const uint64_t remaining = maximum > static_cast<uint64_t>(delivered)
-								? maximum - static_cast<uint64_t>(delivered) : 0U;
-						const size_t flushThreshold = remaining == 0U || remaining >= static_cast<uint64_t>(batchCapacity)
-								? batchCapacity : static_cast<size_t>(remaining);
-						if (rows.size() >= flushThreshold) {
-							if (!flush()) {
-								stopped = true;
-							}
-							return !stopped;
-						}
-						return true;
-					});
-					if (stopped || !flush()) {
+					const logical::LogicalOperator &child = requireOnlyChild(limit);
+					const ChargedRowVisitor chargedRow = acceptRow;
+					const bool childCompleted = visitOperator(
+							child, state,
+							[&](LogicalPlanReadRow row) {
+								return acceptRow(std::move(row),
+												 MaterializedByteReservation(&state.materialized_budget));
+							},
+							supportsChargedRowHandoff(child.getType()) ? &chargedRow : nullptr);
+					// Reaching the window exhausts its logical output even when the
+					// physical child stopped; cancellation still propagates as incomplete.
+					if (cancelledByVisitor)
 						return false;
-					}
-					return childCompleted;
+					return reachedLimit || childCompleted;
 				}
 				case logical::LogicalOpType::LOP_TRAVERSAL: {
 					const auto &traversal = dynamic_cast<const logical::LogicalTraversal &>(op);
@@ -8653,11 +14986,12 @@ namespace graph::query::execution {
 						const LogicalPlanReadValue &sourceBinding = requireBinding(row, traversal.getSourceVar());
 						// The child scan has already validated source predicates. Traversal only
 						// needs the stable identity, so retain deferred native references.
-						const uint64_t sourceNodeId = nodeBindingId(sourceBinding);
+						const uint64_t sourceNodeId = nodeBindingId(sourceBinding, state);
 						size_t sourceEdges = 0U;
 						const bool topologyOnly = traversal.getEdgeProperties().empty();
 						std::optional<uint64_t> relationshipTypeToken;
-						if (!traversal.getEdgeType().empty() && state.snapshot.supportsNativeRelationshipTypeTokens()) {
+						if (!traversal.getEdgeType().empty() &&
+							state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 							relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 							if (!relationshipTypeToken.has_value()) {
 								return true;
@@ -8688,22 +15022,88 @@ namespace graph::query::execution {
 							std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
 							uint64_t previousEdgeId = 0U;
 							if (useReferencePages) {
-								std::vector<storage::EntityRef> pendingReferences;
-								const size_t batchCapacity =
-										edgePredicates.empty()
+								struct TargetCandidate {
+										size_t reference_index = 0U;
+										uint64_t target_id = 0U;
+										size_t property_ordinal = 0U;
+									};
+								MaterializedByteReservation pendingReferenceBytes(&state.materialized_budget);
+								const size_t requestedBatchCapacity =
+										edgePredicates.empty() && traversal.getTargetProperties().empty()
 												? size_t{1U}
 												: std::max<size_t>(
 														  1U, std::min({DEFAULT_PROPERTY_BATCH_ROWS,
 																		state.bounds.maximum_adjacency_page_records,
 																		state.bounds.maximum_edges_per_node}));
+								// Include the live source page, retained references and target scratch.
+								size_t bytesPerReference = 2U * sizeof(storage::EntityRef) + sizeof(TargetCandidate) +
+										sizeof(uint64_t) + 2U * sizeof(size_t);
+								if (!edgePredicates.empty()) {
+									bytesPerReference = checkedSizeAdd(
+											bytesPerReference,
+											checkedSizeAdd(sizeof(uint64_t) + sizeof(size_t),
+														   checkedSizeMul(edgePredicates.size(),
+																		  2U * (sizeof(PropertyValue) +
+																				sizeof(std::vector<PropertyValue>)),
+																		  "logical-plan adjacent reference batch "
+																		  "estimate overflowed"),
+														   "logical-plan adjacent reference batch estimate overflowed"),
+											"logical-plan adjacent reference batch estimate overflowed");
+								}
+								if (!traversal.getTargetProperties().empty()) {
+									bytesPerReference = checkedSizeAdd(
+											bytesPerReference,
+											checkedSizeAdd(
+													sizeof(uint64_t),
+													checkedSizeMul(
+															traversal.getTargetProperties().size(),
+															sizeof(PropertyValue) + sizeof(std::vector<PropertyValue>),
+															"logical-plan adjacent target batch estimate overflowed"),
+													"logical-plan adjacent target batch estimate overflowed"),
+											"logical-plan adjacent target batch estimate overflowed");
+								}
+								const size_t budgetRows = state.materialized_budget.available() / bytesPerReference;
+								const size_t batchCapacity =
+										std::min(requestedBatchCapacity, std::max<size_t>(1U, budgetRows));
+								pendingReferenceBytes.set(
+										checkedSizeMul(batchCapacity, sizeof(storage::EntityRef),
+													   "logical-plan adjacent reference buffer size overflowed"));
+								std::vector<storage::EntityRef> pendingReferences;
 								pendingReferences.reserve(batchCapacity);
+								pendingReferenceBytes.set(checkedSizeMul(pendingReferences.capacity(), sizeof(storage::EntityRef),
+									"logical-plan adjacent reference buffer capacity overflowed"));
 								const auto flushReferences = [&]() {
 									if (pendingReferences.empty()) {
 										return true;
 									}
+									if (!edgePredicates.empty() && state.snapshot.supportsNodeExistenceProbes() &&
+											!std::ranges::any_of(edgePredicates, [](const auto &predicate) { return isNull(predicate.second); })) {
+										detail::BudgetMemoryResource endpointMemory(state.materialized_budget);
+										std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
+										endpointIds.reserve(pendingReferences.size());
+										for (const auto &reference: pendingReferences) {
+											endpointIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+												? reference.target_node_id : reference.source_node_id);
+										}
+										detail::sortUniqueIdsGuarded(endpointIds, [&] { checkGuardNow(state); });
+										MaterializedByteReservation presenceBytes(&state.materialized_budget);
+										presenceBytes.set(packedBooleanBytes(endpointIds.size()));
+										const auto present = state.snapshot.containsNodesSorted(endpointIds);
+										presenceBytes.set(packedBooleanBytes(present.capacity()));
+										if (present.size() != endpointIds.size())
+											throw std::runtime_error("logical graph backend changed adjacent endpoint cardinality");
+										if (std::ranges::any_of(present, [](bool value) { return !value; }))
+											throw std::runtime_error("logical graph backend returned an adjacent Edge with a missing endpoint");
+									}
+									MaterializedByteReservation selectionBytes(&state.materialized_budget);
+									selectionBytes.set(SelectionVector::requiredStorageBytes(pendingReferences.size()));
 									SelectionVector selection(pendingReferences.size());
+									MaterializedByteReservation selectedPropertyBytes(&state.materialized_budget);
 									std::vector<std::vector<PropertyValue>> selectedProperties;
 									if (!edgePredicates.empty()) {
+										MaterializedByteReservation orderingBytes(&state.materialized_budget);
+										orderingBytes.set(checkedSizeMul(pendingReferences.size(), sizeof(size_t) + sizeof(uint64_t),
+											"logical-plan adjacent Edge ordering size overflowed"));
 										std::vector<size_t> sortedOrdinals(pendingReferences.size());
 										std::iota(sortedOrdinals.begin(), sortedOrdinals.end(), size_t{0U});
 										std::ranges::sort(sortedOrdinals, [&](const size_t left, const size_t right) {
@@ -8712,6 +15112,10 @@ namespace graph::query::execution {
 										});
 										std::vector<uint64_t> edgeIds;
 										edgeIds.reserve(pendingReferences.size());
+										orderingBytes.set(checkedSizeAdd(
+											checkedSizeMul(sortedOrdinals.capacity(), sizeof(size_t), "logical-plan adjacent Edge ordinal capacity overflowed"),
+											checkedSizeMul(edgeIds.capacity(), sizeof(uint64_t), "logical-plan adjacent Edge ID capacity overflowed"),
+											"logical-plan adjacent Edge ordering capacity overflowed"));
 										for (const size_t ordinal: sortedOrdinals) {
 											const uint64_t edgeId = pendingReferences[ordinal].entity_id;
 											if (!edgeIds.empty() && edgeIds.back() == edgeId) {
@@ -8727,19 +15131,78 @@ namespace graph::query::execution {
 										if (impossiblePredicate) {
 											selection.rejectAll();
 										} else {
-											const std::vector<std::vector<PropertyValue>> sortedColumns =
-													state.snapshot.readEdgePropertyColumnsSorted(edgeIds,
-																		 edgePropertyKeys);
+											size_t keyBytes = 0U;
+											for (const std::string_view key: edgePropertyKeys) {
+												keyBytes = checkedSizeAdd(
+														keyBytes, key.size(),
+														"logical-plan adjacent Edge Property key size overflowed");
+											}
+											const size_t columnFrames = checkedSizeAdd(
+													checkedSizeMul(edgePropertyKeys.size(),
+																   sizeof(std::vector<PropertyValue>),
+																   "logical-plan adjacent Edge Property frame size "
+																   "overflowed"),
+													checkedSizeMul(checkedSizeMul(edgePropertyKeys.size(),
+																				  edgeIds.size(),
+																				  "logical-plan adjacent Edge Property "
+																				  "frame size overflowed"),
+																   sizeof(PropertyValue),
+																   "logical-plan adjacent Edge Property frame size "
+																   "overflowed"),
+													"logical-plan adjacent Edge Property frame size overflowed");
+											const size_t reorderFrames = checkedSizeAdd(
+													checkedSizeMul(
+															edgePropertyKeys.size(), sizeof(std::vector<PropertyValue>),
+															"logical-plan adjacent Edge reorder frame size overflowed"),
+													checkedSizeMul(
+															checkedSizeMul(edgePropertyKeys.size(),
+																		   pendingReferences.size(),
+																		   "logical-plan adjacent Edge reorder frame "
+																		   "size overflowed"),
+															sizeof(PropertyValue),
+															"logical-plan adjacent Edge reorder frame size overflowed"),
+													"logical-plan adjacent Edge reorder frame size overflowed");
+											const size_t fixedBytes = checkedSizeAdd(columnFrames, reorderFrames,
+												"logical-plan adjacent Edge Property batch size overflowed");
+											const size_t requestedBytes = checkedSizeAdd(
+													fixedBytes, keyBytes,
+													"logical-plan adjacent Edge Property batch size overflowed");
+											if (selectedPropertyBytes.wouldExceed(requestedBytes)) {
+												throw std::runtime_error("logical-plan adjacent Edge Property batch "
+																		 "exceeded its byte bound");
+											}
+											selectedPropertyBytes.set(requestedBytes);
+											const std::function<void(size_t)> admission = [&](size_t bytes) {
+												checkGuard(state);
+												const size_t next = checkedSizeAdd(
+														selectedPropertyBytes.bytes(), bytes,
+														"logical-plan adjacent Edge Property batch size overflowed");
+												if (selectedPropertyBytes.wouldExceed(next)) {
+													throw std::runtime_error("logical-plan adjacent Edge Property "
+																			 "batch exceeded its byte bound");
+												}
+												selectedPropertyBytes.set(next);
+											};
+											auto sortedColumns =
+													state.snapshot.supportsPropertyReadAdmission()
+															? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+																	  edgeIds, edgePropertyKeys, admission)
+															: state.snapshot.readEdgePropertyColumnsSorted(
+																	  edgeIds, edgePropertyKeys);
 											const size_t selectedEdgeBytes = propertyColumnBytes(
 													sortedColumns, edgePropertyKeys,
-														"logical-plan adjacent Edge Property batch size overflowed");
-											if (selectedEdgeBytes > state.bounds.maximum_materialized_bytes) {
-												throw std::runtime_error(
-														"logical-plan adjacent Edge Property batch exceeded its byte bound");
+													"logical-plan adjacent Edge Property batch size overflowed", state.context);
+											const size_t retainedEdgeBytes = checkedSizeAdd(
+													fixedBytes - columnFrames, selectedEdgeBytes,
+													"logical-plan adjacent Edge Property batch size overflowed");
+											if (selectedPropertyBytes.wouldExceed(retainedEdgeBytes)) {
+												throw std::runtime_error("logical-plan adjacent Edge Property batch "
+																		 "exceeded its byte bound");
 											}
+											selectedPropertyBytes.set(retainedEdgeBytes);
 											if (sortedColumns.size() != edgePredicates.size()) {
 												throw std::runtime_error("logical graph backend changed adjacent Edge "
-																	 "Property column cardinality");
+																		 "Property column cardinality");
 											}
 											selectedProperties.assign(edgePredicates.size(), {});
 											for (size_t propertyIndex = 0U; propertyIndex < sortedColumns.size();
@@ -8751,8 +15214,9 @@ namespace graph::query::execution {
 												std::vector<PropertyValue> values(pendingReferences.size());
 												for (size_t sortedIndex = 0U; sortedIndex < sortedOrdinals.size();
 													 ++sortedIndex) {
+													checkGuard(state);
 													values[sortedOrdinals[sortedIndex]] =
-															sortedColumns[propertyIndex][sortedIndex];
+															std::move(sortedColumns[propertyIndex][sortedIndex]);
 												}
 												selection.forEachSelected([&](const size_t index) {
 													if (isNull(values[index]) ||
@@ -8764,15 +15228,14 @@ namespace graph::query::execution {
 											}
 										}
 									}
+									// Source columns and reorder scratch have left scope; retain only the moved columns.
+									selectedPropertyBytes.set(propertyColumnBytes(selectedProperties, {},
+										"logical-plan retained adjacent Property size overflowed", state.context));
 									// Resolve target predicates in one bounded column batch.  The
 									// previous per-reference complete read made a high-degree
 									// anchored traversal pay one Entity/Property lookup per Edge.
-									struct TargetCandidate {
-										size_t reference_index = 0U;
-										uint64_t target_id = 0U;
-										size_t property_ordinal = 0U;
-									};
-									std::vector<TargetCandidate> targets;
+									detail::BudgetMemoryResource targetScratchMemory(state.materialized_budget);
+									std::pmr::vector<TargetCandidate> targets{&targetScratchMemory};
 									targets.reserve(pendingReferences.size());
 									for (size_t index = 0U; index < pendingReferences.size(); ++index) {
 										if (!selection.includes(index)) {
@@ -8789,7 +15252,7 @@ namespace graph::query::execution {
 										pendingReferences.clear();
 										return true;
 									}
-									std::vector<uint64_t> targetIds;
+									std::pmr::vector<uint64_t> targetIds{&targetScratchMemory};
 									targetIds.reserve(targets.size());
 									for (const TargetCandidate &target: targets) {
 										// Deduplicate after sorting.  A linear search here turns a
@@ -8798,39 +15261,33 @@ namespace graph::query::execution {
 										// sorting gives deterministic I/O order.
 										targetIds.push_back(target.target_id);
 									}
-									std::ranges::sort(targetIds);
-									targetIds.erase(std::unique(targetIds.begin(), targetIds.end()), targetIds.end());
-									std::vector<bool> targetLabelsMatch(targetIds.size(), true);
+									detail::sortUniqueIdsGuarded(targetIds, [&] {
+										if (state.context != nullptr) state.context->checkGuardNow();
+									});
+									MaterializedByteReservation targetLabelsBytes(&state.materialized_budget);
+									std::vector<bool> targetLabelsMatch;
 									if (!traversal.getTargetLabels().empty()) {
+										targetLabelsBytes.set(packedBooleanBytes(targetIds.size()));
 										targetLabelsMatch = state.snapshot.readNodeLabelMatchesSorted(
 												targetIds, traversal.getTargetLabels());
+										targetLabelsBytes.set(packedBooleanBytes(targetLabelsMatch.capacity()));
 										if (targetLabelsMatch.size() != targetIds.size()) {
 											throw std::runtime_error(
 													"logical graph backend changed target label-match cardinality");
 										}
 									}
-									std::vector<std::pair<std::string, PropertyValue>> targetPredicates;
-									targetPredicates.reserve(traversal.getTargetProperties().size());
-									for (const auto &[key, expected]: traversal.getTargetProperties()) {
-										if (key.empty() ||
-											std::ranges::any_of(targetPredicates, [&key](const auto &predicate) {
-												return predicate.first == key;
-											})) {
-											throw std::invalid_argument("logical-plan target Property predicate has an "
-																		"empty or duplicate key");
-										}
-										targetPredicates.emplace_back(key, expected);
-									}
-									std::vector<std::string> targetKeys;
-									targetKeys.reserve(targetPredicates.size());
-									for (const auto &[key, expected]: targetPredicates) {
-										static_cast<void>(expected);
-										targetKeys.push_back(key);
-									}
+									// The immutable plan owns literal predicates throughout execution.
+									// Retain validation without copying their potentially large payloads
+									// or property names on every adjacency batch.
+									const auto &targetPredicates = traversal.getTargetProperties();
+									validateTraversalTargetProperties(traversal);
 									if (traversal.getTargetLabels().empty() && targetPredicates.empty()) {
-										if (state.snapshot.supportsNodeExistenceProbes()) {
+										if (state.snapshot.supportsNodeExistenceProbes() && edgePredicates.empty()) {
+											MaterializedByteReservation targetPresenceBytes(&state.materialized_budget);
+											targetPresenceBytes.set(packedBooleanBytes(targetIds.size()));
 											const std::vector<bool> present =
 													state.snapshot.containsNodesSorted(targetIds);
+											targetPresenceBytes.set(packedBooleanBytes(present.capacity()));
 											if (present.size() != targetIds.size()) {
 												throw std::runtime_error(
 														"logical graph backend changed adjacent endpoint cardinality");
@@ -8839,22 +15296,67 @@ namespace graph::query::execution {
 												throw std::runtime_error("logical graph backend returned an adjacent "
 																		 "Edge with a missing endpoint");
 											}
-										} else {
+										} else if (!state.snapshot.supportsNodeExistenceProbes()) {
 											for (const uint64_t targetId: targetIds) {
-												validateNode(readNodeCached(state, targetId));
+												validateNodeIdentity(state, targetId);
 											}
 										}
 									}
-									std::vector<std::string_view> targetKeyViews;
-									targetKeyViews.reserve(targetKeys.size());
-									for (const std::string &key: targetKeys) {
-										targetKeyViews.push_back(key);
+									std::pmr::vector<std::string_view> targetKeyViews{&targetScratchMemory};
+									targetKeyViews.reserve(targetPredicates.size());
+									for (const auto &[key, expected]: targetPredicates) targetKeyViews.push_back(key);
+									MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+									size_t targetKeyBytes = 0U;
+									for (const std::string_view key: targetKeyViews) {
+										targetKeyBytes = checkedSizeAdd(
+												targetKeyBytes, key.size(),
+												"logical-plan adjacent target Property key size overflowed");
 									}
-									const auto targetColumns = targetKeys.empty()
-																	   ? std::vector<std::vector<PropertyValue>>{}
-																	   : state.snapshot.readNodePropertyColumnsSorted(
-																				 targetIds, targetKeyViews);
-									if (targetColumns.size() != targetKeys.size()) {
+									const size_t targetFrames = checkedSizeAdd(
+											checkedSizeMul(
+													targetKeyViews.size(), sizeof(std::vector<PropertyValue>),
+													"logical-plan adjacent target Property frame size overflowed"),
+											checkedSizeMul(
+													checkedSizeMul(targetKeyViews.size(), targetIds.size(),
+																   "logical-plan adjacent target Property frame size "
+																   "overflowed"),
+													sizeof(PropertyValue),
+													"logical-plan adjacent target Property frame size overflowed"),
+											"logical-plan adjacent target Property frame size overflowed");
+									const size_t targetFixedBytes = targetFrames; // IDs are charged by targetScratchMemory.
+									targetPropertyBytes.set(checkedSizeAdd(
+											targetFixedBytes, targetKeyBytes,
+											"logical-plan adjacent target Property batch size overflowed"));
+									const std::function<void(size_t)> targetAdmission = [&](size_t bytes) {
+										checkGuard(state);
+										const size_t next = checkedSizeAdd(
+												targetPropertyBytes.bytes(), bytes,
+												"logical-plan adjacent target Property batch size overflowed");
+										if (targetPropertyBytes.wouldExceed(next)) {
+											throw std::runtime_error("logical-plan adjacent target Property batch "
+																	 "exceeded its byte bound");
+										}
+										targetPropertyBytes.set(next);
+									};
+									auto targetColumns =
+											targetPredicates.empty() ? std::vector<std::vector<PropertyValue>>{}
+											: state.snapshot.supportsPropertyReadAdmission()
+													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+															  targetIds, targetKeyViews, targetAdmission)
+													: state.snapshot.readNodePropertyColumnsSorted(targetIds,
+																								   targetKeyViews);
+									const size_t targetPayloadBytes = propertyColumnBytes(
+											targetColumns, targetKeyViews,
+											"logical-plan adjacent target Property batch size overflowed", state.context);
+									const size_t retainedTargetBytes = checkedSizeAdd(
+											targetFixedBytes - targetFrames, targetPayloadBytes,
+											"logical-plan adjacent target Property batch size overflowed");
+									if (targetPropertyBytes.wouldExceed(retainedTargetBytes)) {
+										throw std::runtime_error(
+												"logical-plan adjacent target Property batch exceeded its byte bound");
+									}
+									targetPropertyBytes.set(retainedTargetBytes);
+									if (targetColumns.size() != targetPredicates.size()) {
 										throw std::runtime_error("logical graph backend changed target Node Property "
 																 "column cardinality");
 									}
@@ -8872,11 +15374,11 @@ namespace graph::query::execution {
 									for (const TargetCandidate &candidate: targets) {
 										checkGuard(state);
 										const size_t targetOrdinal = candidate.property_ordinal;
-										if (!targetLabelsMatch[targetOrdinal]) {
+										if (!targetLabelsMatch.empty() && !targetLabelsMatch[targetOrdinal]) {
 											continue;
 										}
 										bool targetMatches = true;
-										for (size_t propertyIndex = 0U; propertyIndex < targetKeys.size();
+										for (size_t propertyIndex = 0U; propertyIndex < targetPredicates.size();
 											 ++propertyIndex) {
 											if (isNull(targetColumns[propertyIndex][targetOrdinal]) ||
 												targetColumns[propertyIndex][targetOrdinal] !=
@@ -8890,7 +15392,10 @@ namespace graph::query::execution {
 										}
 										const storage::EntityRef &reference =
 												pendingReferences[candidate.reference_index];
-										LogicalPlanReadRow expanded = row;
+										MaterializedByteReservation expandedPropertyBytes(&state.materialized_budget);
+										expandedPropertyBytes.set(logicalReadRowBytes(row, state.context));
+										LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
+										expandedPropertyBytes.set(logicalReadRowBytes(expanded, state.context));
 										if (!traversal.getEdgeVar().empty() &&
 											!bindValue(expanded, traversal.getEdgeVar(), reference)) {
 											continue;
@@ -8900,7 +15405,8 @@ namespace graph::query::execution {
 												 ++propertyIndex) {
 												expanded.property_cache[traversal.getEdgeVar()].insert_or_assign(
 														edgePredicates[propertyIndex].first,
-														selectedProperties[propertyIndex][candidate.reference_index]);
+														copyReservedPropertyValue(selectedProperties[propertyIndex][candidate.reference_index],
+															state, expandedPropertyBytes));
 											}
 										}
 										if (!traversal.getTargetVar().empty()) {
@@ -8909,11 +15415,12 @@ namespace graph::query::execution {
 											if (!bindValue(expanded, traversal.getTargetVar(), targetBinding)) {
 												continue;
 											}
-											for (size_t propertyIndex = 0U; propertyIndex < targetKeys.size();
+											for (size_t propertyIndex = 0U; propertyIndex < targetPredicates.size();
 												 ++propertyIndex) {
 												expanded.property_cache[traversal.getTargetVar()].insert_or_assign(
-														targetKeys[propertyIndex],
-														targetColumns[propertyIndex][targetOrdinal]);
+														targetPredicates[propertyIndex].first,
+														copyReservedPropertyValue(targetColumns[propertyIndex][targetOrdinal],
+															state, expandedPropertyBytes));
 											}
 										}
 										if (!visitor(std::move(expanded))) {
@@ -8931,9 +15438,8 @@ namespace graph::query::execution {
 									}
 									const size_t pageRecords =
 											std::min(remaining, state.bounds.maximum_adjacency_page_records);
-									const storage::LogicalGraphAdjacencyReferencePage page =
-											state.snapshot.scanAdjacentEdgeRefs(sourceNodeId, adjacencyDirection,
-																				continuation, pageRecords);
+									MaterializedByteReservation referenceBytes(&state.materialized_budget);
+									const auto page = readReferencePageBudgeted(state, sourceNodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 									if (page.edges.size() > pageRecords ||
 										(page.edges.empty() && page.continuation.has_value()) ||
 										(continuation.has_value() &&
@@ -9002,30 +15508,58 @@ namespace graph::query::execution {
 								}
 								const size_t pageRecords =
 										std::min(remaining, state.bounds.maximum_adjacency_page_records);
+								MaterializedByteReservation topologyBytes(&state.materialized_budget);
+								MaterializedByteReservation fullPageBytes(&state.materialized_budget);
 								std::optional<storage::LogicalGraphAdjacencyPage> fullPage;
 								std::optional<storage::LogicalGraphAdjacencyTopologyPage> topologyPage;
-								// A relationship-type predicate is topology data. When a
+								// Relationship types and endpoints are topology data. When a
 								// backend exposes native topology pages, authenticate that
-								// predicate before decoding the complete Edge payload. This
+								// topology before decoding the complete Edge payload. This
 								// keeps the fallback traversal on the same read-shape contract
 								// as the reference-page and direct traversal paths.
-								const bool typePrefilterWithTopology = !topologyOnly &&
-										!traversal.getEdgeType().empty() &&
+								const bool prefilterWithTopology =
+										!topologyOnly &&
 										state.snapshot.supportsNativeAdjacentEdgeTopologyPages();
-								if (topologyOnly || typePrefilterWithTopology) {
-									topologyPage = state.snapshot.scanAdjacentEdgeTopologies(
-											sourceNodeId, adjacencyDirection, continuation, pageRecords);
+								if (topologyOnly || prefilterWithTopology) {
+									topologyPage = readTopologyPageBudgeted(state, sourceNodeId, adjacencyDirection,
+										continuation, pageRecords, topologyBytes);
 								} else {
-									fullPage = state.snapshot.scanAdjacentEdges(sourceNodeId, adjacencyDirection,
-																				continuation, pageRecords);
+									if (state.snapshot.supportsAdjacencyReadAdmission()) {
+										size_t propertyBytes = 0U, bufferBytes = 0U;
+										const auto updateBudget = [&] {
+											checkGuardNow(state);
+											fullPageBytes.set(checkedSizeAdd(propertyBytes, bufferBytes, "logical-plan adjacency source size overflowed"));
+										};
+										fullPage = state.snapshot.scanAdjacentEdgesWithAdmission(sourceNodeId, adjacencyDirection,
+											continuation, pageRecords,
+											[&](size_t bytes) { propertyBytes = checkedSizeAdd(propertyBytes, bytes, "adjacency Property size overflowed"); updateBudget(); },
+											[&](size_t bytes) { bufferBytes = bytes; updateBudget(); });
+									} else if (state.snapshot.supportsAdjacencyPropertyReadAdmission()) {
+										fullPage = state.snapshot.scanAdjacentEdgesWithPropertyAdmission(sourceNodeId, adjacencyDirection,
+											continuation, pageRecords, [&](size_t bytes) {
+												checkGuardNow(state);
+												fullPageBytes.set(checkedSizeAdd(fullPageBytes.bytes(), bytes, "logical-plan adjacency source size overflowed"));
+											});
+									} else {
+										fullPage = state.snapshot.scanAdjacentEdges(sourceNodeId, adjacencyDirection, continuation, pageRecords);
+									}
+									for (const auto &edge : fullPage->edges) {
+										validateEdge(edge);
+										static_cast<void>(inlineResultPropertyBytes(edge.properties, state));
+									}
+									retainShapedBatchBytes(fullPage->edges, fullPageBytes, state.context);
 								}
-								const bool topologyPageSelected = topologyOnly || typePrefilterWithTopology;
-								const size_t pageSize = topologyPageSelected ? topologyPage->edges.size() : fullPage->edges.size();
+								const bool topologyPageSelected = topologyOnly || prefilterWithTopology;
+								const size_t pageSize =
+										topologyPageSelected ? topologyPage->edges.size() : fullPage->edges.size();
 								if (pageSize > pageRecords) {
-									throw std::runtime_error("logical graph backend exceeded the adjacency page bound (returned " +
-											std::to_string(pageSize) + ", requested " + std::to_string(pageRecords) + ")");
+									throw std::runtime_error(
+											"logical graph backend exceeded the adjacency page bound (returned " +
+											std::to_string(pageSize) + ", requested " + std::to_string(pageRecords) +
+											")");
 								}
-								const auto &pageContinuation = topologyPageSelected ? topologyPage->continuation : fullPage->continuation;
+								const auto &pageContinuation =
+										topologyPageSelected ? topologyPage->continuation : fullPage->continuation;
 								if (pageSize == 0U) {
 									if (pageContinuation.has_value()) {
 										throw std::runtime_error(
@@ -9033,12 +15567,29 @@ namespace graph::query::execution {
 									}
 									return true;
 								}
+								const bool targetNeedsRecord = !traversal.getTargetLabels().empty() ||
+															   !traversal.getTargetProperties().empty();
+								// A selected column cannot distinguish a missing Property from an
+								// explicitly stored NULL. Keep the complete-read path for nullable
+								// target predicates, whose existing semantics distinguish those cases.
+								const bool targetPropertiesCanBeSelected =
+										!traversal.getTargetProperties().empty() &&
+										!std::ranges::any_of(
+												traversal.getTargetProperties(),
+												[](const auto &predicate) { return isNull(predicate.second); });
+								const bool canBatchTargetShape =
+										state.snapshot.supportsNativeNodeRefScans() && targetNeedsRecord &&
+										(traversal.getTargetLabels().empty() ||
+										 state.snapshot.supportsNodeExistenceProbes()) &&
+										(traversal.getTargetProperties().empty() || targetPropertiesCanBeSelected);
+								detail::BudgetMemoryResource pageTargetMemory(state.materialized_budget);
+								std::pmr::unordered_map<uint64_t, bool> pageTargetMatches{&pageTargetMemory};
 								// Both topology and complete adjacency pages already carry endpoint
 								// IDs. Validate their liveness once per bounded page instead of
 								// performing a Directory lookup for every Edge. The map is page-local
 								// so memory remains bounded by the adjacency page limit and
 								// early-stop semantics stay unchanged at the visitor boundary.
-								std::unordered_map<uint64_t, bool> pageTargetPresence;
+								std::pmr::unordered_map<uint64_t, bool> pageTargetPresence{&pageTargetMemory};
 								if (state.snapshot.supportsNodeExistenceProbes() &&
 									traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()) {
 									// Validate the topology record before building a batch request.  The
@@ -9054,27 +15605,152 @@ namespace graph::query::execution {
 											validateEdge(edge);
 										}
 									}
-									std::vector<uint64_t> pageTargetIds;
+									std::pmr::vector<uint64_t> pageTargetIds{&pageTargetMemory};
 									pageTargetIds.reserve(pageSize);
 									if (topologyPage.has_value()) {
 										for (const auto &topology: topologyPage->edges) {
-											pageTargetIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-											? topology.target_node_id : topology.source_node_id);
+											pageTargetIds.push_back(
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? topology.target_node_id
+															: topology.source_node_id);
 										}
 									} else if (fullPage.has_value()) {
 										for (const storage::LogicalGraphEdge &edge: fullPage->edges) {
-											pageTargetIds.push_back(adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-													? edge.target_node_id : edge.source_node_id);
+											pageTargetIds.push_back(
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? edge.target_node_id
+															: edge.source_node_id);
 										}
 									}
-									std::ranges::sort(pageTargetIds);
-									pageTargetIds.erase(std::unique(pageTargetIds.begin(), pageTargetIds.end()), pageTargetIds.end());
+									detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
+										if (state.context != nullptr) state.context->checkGuardNow();
+									});
+									MaterializedByteReservation presentBytes(&state.materialized_budget);
+									presentBytes.set(packedBooleanBytes(pageTargetIds.size()));
 									const std::vector<bool> present = state.snapshot.containsNodesSorted(pageTargetIds);
+									presentBytes.set(packedBooleanBytes(present.capacity()));
 									if (present.size() != pageTargetIds.size()) {
-										throw std::runtime_error("logical graph backend changed adjacent endpoint cardinality");
+										throw std::runtime_error(
+												"logical graph backend changed adjacent endpoint cardinality");
 									}
 									for (size_t index = 0U; index < pageTargetIds.size(); ++index) {
 										pageTargetPresence.emplace(pageTargetIds[index], present[index]);
+									}
+								}
+								if (canBatchTargetShape) {
+									std::pmr::vector<uint64_t> targetIds{&pageTargetMemory};
+									targetIds.reserve(pageSize);
+									if (topologyPage.has_value()) {
+										for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
+											validateEdge(topology);
+											targetIds.push_back(
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? topology.target_node_id
+															: topology.source_node_id);
+										}
+									} else {
+										for (const storage::LogicalGraphEdge &edge: fullPage->edges) {
+											validateEdge(edge);
+											targetIds.push_back(
+													adjacencyDirection ==
+																	storage::LogicalGraphReadDirection::LGRD_OUTGOING
+															? edge.target_node_id
+															: edge.source_node_id);
+										}
+									}
+									detail::sortUniqueIdsGuarded(targetIds, [&] {
+										if (state.context != nullptr) state.context->checkGuardNow();
+									});
+									MaterializedByteReservation labelsBytes(&state.materialized_budget);
+									std::vector<bool> labelsMatch;
+									if (!traversal.getTargetLabels().empty()) {
+										labelsBytes.set(packedBooleanBytes(targetIds.size()));
+										labelsMatch = state.snapshot.readNodeLabelMatchesSorted(
+												targetIds, traversal.getTargetLabels());
+										labelsBytes.set(packedBooleanBytes(labelsMatch.capacity()));
+										if (labelsMatch.size() != targetIds.size()) {
+											throw std::runtime_error(
+													"logical graph backend changed target label-match cardinality");
+										}
+									}
+									std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> orderedTargetPredicates{&pageTargetMemory};
+									orderedTargetPredicates.reserve(traversal.getTargetProperties().size());
+									for (const auto &[key, expected]: traversal.getTargetProperties()) {
+										checkGuardNow(state);
+										if (key.empty()) throw std::invalid_argument("logical-plan target Property predicate has an empty key");
+										orderedTargetPredicates.emplace_back(key, &expected);
+									}
+									std::ranges::sort(orderedTargetPredicates, {}, [](const auto &predicate) { return predicate.first; });
+									std::pmr::vector<std::string_view> targetKeyViews{&pageTargetMemory};
+									targetKeyViews.reserve(orderedTargetPredicates.size());
+									for (const auto &[key, expected] : orderedTargetPredicates) targetKeyViews.push_back(key);
+									MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+									size_t targetKeyBytes = 0U;
+									for (const std::string_view key: targetKeyViews) {
+										targetKeyBytes = checkedSizeAdd(
+												targetKeyBytes, key.size(),
+												"logical-plan paged target Property key size overflowed");
+									}
+									const size_t targetFrames = checkedSizeAdd(
+											checkedSizeMul(targetKeyViews.size(), sizeof(std::vector<PropertyValue>),
+														   "logical-plan paged target Property frame size overflowed"),
+											checkedSizeMul(
+													checkedSizeMul(
+															targetKeyViews.size(), targetIds.size(),
+															"logical-plan paged target Property frame size overflowed"),
+													sizeof(PropertyValue),
+													"logical-plan paged target Property frame size overflowed"),
+											"logical-plan paged target Property frame size overflowed");
+									const size_t targetFixedBytes = targetFrames;
+									targetPropertyBytes.set(
+											checkedSizeAdd(targetFixedBytes, targetKeyBytes,
+														   "logical-plan paged target Property batch size overflowed"));
+									const std::function<void(size_t)> targetAdmission = [&](size_t bytes) {
+										checkGuard(state);
+										const size_t next = checkedSizeAdd(
+												targetPropertyBytes.bytes(), bytes,
+												"logical-plan paged target Property batch size overflowed");
+										if (targetPropertyBytes.wouldExceed(next)) {
+											throw std::runtime_error(
+													"logical-plan paged target Property batch exceeded its byte bound");
+										}
+										targetPropertyBytes.set(next);
+									};
+									const auto targetColumns =
+											targetKeyViews.empty() ? std::vector<std::vector<PropertyValue>>{}
+											: state.snapshot.supportsPropertyReadAdmission()
+													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+															  targetIds, targetKeyViews, targetAdmission)
+													: state.snapshot.readNodePropertyColumnsSorted(targetIds,
+																								   targetKeyViews);
+									const size_t targetPayloadBytes = propertyColumnBytes(
+											targetColumns, targetKeyViews,
+											"logical-plan paged target Property batch size overflowed", state.context);
+									const size_t retainedTargetBytes =
+											checkedSizeAdd(targetFixedBytes - targetFrames, targetPayloadBytes,
+														   "logical-plan paged target Property batch size overflowed");
+									if (targetPropertyBytes.wouldExceed(retainedTargetBytes)) {
+										throw std::runtime_error(
+												"logical-plan paged target Property batch exceeded its byte bound");
+									}
+									targetPropertyBytes.set(retainedTargetBytes);
+									if (targetColumns.size() != targetKeyViews.size() ||
+										std::ranges::any_of(targetColumns, [&](const auto &column) {
+											return column.size() != targetIds.size();
+										})) {
+										throw std::runtime_error(
+												"logical graph backend changed target Property column cardinality");
+									}
+									for (size_t index = 0U; index < targetIds.size(); ++index) {
+										bool matches = traversal.getTargetLabels().empty() || labelsMatch[index];
+										for (size_t column = 0U; matches && column < targetKeyViews.size(); ++column) {
+											checkGuardNow(state);
+											matches = targetColumns[column][index] == *orderedTargetPredicates[column].second;
+										}
+										pageTargetMatches.emplace(targetIds[index], matches);
 									}
 								}
 								const auto processEdge = [&](const storage::LogicalGraphEdge &edge) {
@@ -9083,8 +15759,8 @@ namespace graph::query::execution {
 									validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "Traversal");
 									const bool endpointMatches =
 											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-											? edge.source_node_id == sourceNodeId
-											: edge.target_node_id == sourceNodeId;
+													? edge.source_node_id == sourceNodeId
+													: edge.target_node_id == sourceNodeId;
 									if (!endpointMatches) {
 										throw std::runtime_error(
 												"logical graph backend returned an invalid adjacent Edge");
@@ -9095,115 +15771,183 @@ namespace graph::query::execution {
 													 "logical-plan read runtime Edge counter overflowed");
 									if (direction == "both" &&
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-											edge.source_node_id == sourceNodeId) {
+										edge.source_node_id == sourceNodeId) {
 										return true;
 									}
+									const uint64_t prefilterTargetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										? edge.target_node_id : edge.source_node_id;
+									const auto targetMatch = pageTargetMatches.find(prefilterTargetId);
+									if (targetMatch != pageTargetMatches.end() && !targetMatch->second) return true;
 									if (!edgeMatches(state.snapshot, edge, traversal.getEdgeType(),
 													 traversal.getEdgeProperties(), state)) {
 										return true;
 									}
 									const uint64_t targetId =
 											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-															? edge.target_node_id
+													? edge.target_node_id
 													: edge.source_node_id;
-					const bool targetNeedsRecord = !traversal.getTargetLabels().empty() ||
-							!traversal.getTargetProperties().empty();
-					const auto existingTarget = row.values.find(traversal.getTargetVar());
-					// If no target variable is requested, endpoint existence is sufficient;
-					// avoid reading and decoding a Node that can never reach the result.
-					const bool canDeferTarget = !targetNeedsRecord && state.allow_deferred_entity_refs &&
-							state.snapshot.supportsNodeExistenceProbes() &&
-							(traversal.getTargetVar().empty() ||
-								 (state.snapshot.supportsNativeNodeRefScans() && existingTarget == row.values.end()));
-					std::optional<storage::LogicalGraphNode> target;
-					if (targetNeedsRecord || !canDeferTarget) {
-						target = readNodeCached(state, targetId);
-						if (!nodeMatches(state.snapshot, *target, traversal.getTargetLabels(),
-											 traversal.getTargetProperties(), state)) {
-							return true;
-						}
+									const auto existingTarget = row.values.find(traversal.getTargetVar());
+									// If no target variable is requested, endpoint existence is sufficient;
+									// avoid reading and decoding a Node that can never reach the result.
+									const bool canDeferTarget = !targetNeedsRecord &&
+																state.allow_deferred_entity_refs &&
+																state.snapshot.supportsNodeExistenceProbes() &&
+																(traversal.getTargetVar().empty() ||
+																 (state.snapshot.supportsNativeNodeRefScans() &&
+																  existingTarget == row.values.end()));
+									MaterializedByteReservation uncachedTargetBytes(&state.materialized_budget);
+									std::optional<storage::LogicalGraphNode> uncachedTarget;
+									const storage::LogicalGraphNode *target = nullptr;
+									if (canBatchTargetShape) {
+										const auto targetMatch = pageTargetMatches.find(targetId);
+										if (targetMatch == pageTargetMatches.end()) {
+											throw std::runtime_error(
+													"logical graph backend lost a batched target predicate result");
+										}
+										if (!targetMatch->second) {
+											return true;
+										}
+										// If the target is not part of the output, selected columns are
+										// sufficient; do not materialize a Node that cannot be observed.
+										if (!traversal.getTargetVar().empty()) {
+											target = &readNodeCachedBorrowed(state, targetId, uncachedTarget, uncachedTargetBytes);
+											if (!nodeMatches(state.snapshot, *target, traversal.getTargetLabels(),
+															 traversal.getTargetProperties(), state)) {
+												return true;
+											}
+										}
+									} else if (targetNeedsRecord || !canDeferTarget) {
+										target = &readNodeCachedBorrowed(state, targetId, uncachedTarget, uncachedTargetBytes);
+										if (!nodeMatches(state.snapshot, *target, traversal.getTargetLabels(),
+														 traversal.getTargetProperties(), state)) {
+											return true;
+										}
 									} else if (state.snapshot.supportsNodeExistenceProbes()) {
 										const auto pagePresence = pageTargetPresence.find(targetId);
 										const bool present = pagePresence != pageTargetPresence.end()
-												? pagePresence->second : state.snapshot.containsNode(targetId);
+																	 ? pagePresence->second
+																	 : state.snapshot.containsNode(targetId);
 										if (!present) {
-							throw std::runtime_error("logical graph backend returned an adjacent Edge with a missing endpoint");
-						}
-					}
-					LogicalPlanReadRow expanded = row;
-					const LogicalPlanReadValue edgeBinding =
-											topologyOnly
-														? LogicalPlanReadValue(storage::EntityRef{edge.edge_id, true, edge.source_node_id,
-																				 edge.target_node_id, 0U})
-														: LogicalPlanReadValue(edge);
-					if (!bindValue(expanded, traversal.getEdgeVar(), edgeBinding)) {
-						return true;
-					}
-					if (!traversal.getTargetVar().empty()) {
-						const LogicalPlanReadValue targetBinding = canDeferTarget
-								? LogicalPlanReadValue(storage::EntityRef{targetId, false, 0U, 0U, 0U})
-								: LogicalPlanReadValue(*target);
-						if (!bindValue(expanded, traversal.getTargetVar(), targetBinding)) {
-							return true;
-						}
-					}
+											throw std::runtime_error("logical graph backend returned an adjacent Edge "
+																	 "with a missing endpoint");
+										}
+									}
+									MaterializedByteReservation outputReservation(&state.materialized_budget);
+									constexpr const char *outputMessage = "logical-plan traversal output size overflowed";
+									size_t outputBytes = logicalReadRowBytes(row, state.context);
+									const auto addBindingBytes = [&](const std::string &alias, size_t payloadBytes) {
+										outputBytes = checkedSizeAdd(outputBytes, alias.size(), outputMessage);
+										outputBytes = checkedSizeAdd(outputBytes, sizeof(LogicalPlanReadValue), outputMessage);
+										outputBytes = checkedSizeAdd(outputBytes, payloadBytes, outputMessage);
+									};
+									if (!traversal.getEdgeVar().empty()) {
+										addBindingBytes(traversal.getEdgeVar(), topologyOnly ? sizeof(storage::EntityRef) : logicalEdgeCacheBytes(edge, state.context));
+									}
+									if (!traversal.getTargetVar().empty()) {
+										addBindingBytes(traversal.getTargetVar(), canDeferTarget ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(*target, state.context));
+									}
+									outputReservation.set(outputBytes);
+									LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
+									if (!traversal.getEdgeVar().empty()) {
+										LogicalPlanReadValue edgeBinding =
+												topologyOnly
+														? LogicalPlanReadValue(storage::EntityRef{edge.edge_id, true,
+																								  edge.source_node_id,
+																								  edge.target_node_id, 0U})
+														: LogicalPlanReadValue(detail::copyLogicalEntityGuarded(edge, [&] { checkGuardNow(state); }));
+										if (!bindValue(expanded, traversal.getEdgeVar(), std::move(edgeBinding))) {
+											return true;
+									}
+									}
+									if (!traversal.getTargetVar().empty()) {
+										LogicalPlanReadValue targetBinding =
+												canDeferTarget ? LogicalPlanReadValue(storage::EntityRef{
+																		 targetId, false, 0U, 0U, 0U})
+															   : LogicalPlanReadValue(detail::copyLogicalEntityGuarded(*target, [&] { checkGuardNow(state); }));
+										if (!bindValue(expanded, traversal.getTargetVar(), std::move(targetBinding))) {
+											return true;
+										}
+									}
+									outputReservation.set(logicalReadRowBytes(expanded, state.context));
+									if (chargedReceiver != nullptr) {
+										return (*chargedReceiver)(std::move(expanded), std::move(outputReservation));
+									}
+									outputReservation.reset();
 									if (!visitor(std::move(expanded))) {
 										return false;
-								}
-								return true;
-							};
+									}
+									return true;
+								};
 								if (topologyOnly) {
 									for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
 										const storage::LogicalGraphEdge edge{topology.edge_id, topology.source_node_id,
-												topology.target_node_id, topology.type};
+																			 topology.target_node_id, topology.type};
 										if (!processEdge(edge)) {
 											return false;
 										}
 									}
-								} else if (typePrefilterWithTopology) {
+								} else if (prefilterWithTopology) {
 									// Keep the original adjacency order while issuing one sorted,
 									// complete read only for type-matching Edge IDs. Rejected
 									// topology records still pass through processEdge so counters,
 									// endpoint validation, duplicate handling, and early-stop
 									// semantics remain identical to the complete-page path.
-									std::vector<uint64_t> matchingIds;
+									detail::BudgetMemoryResource matchingIdMemory(state.materialized_budget);
+									std::pmr::vector<uint64_t> matchingIds{&matchingIdMemory};
 									matchingIds.reserve(topologyPage->edges.size());
 									for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
+										checkGuardNow(state);
 										validateEdge(topology);
-										if (topology.type == traversal.getEdgeType()) {
+										const uint64_t targetId = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+											? topology.target_node_id : topology.source_node_id;
+										const auto presence = pageTargetPresence.find(targetId);
+										if ((traversal.getEdgeType().empty() || topology.type == traversal.getEdgeType()) && presence != pageTargetPresence.end() && !presence->second) {
+											throw std::runtime_error("logical graph backend returned an adjacent Edge with a missing endpoint");
+										}
+										const auto target = pageTargetMatches.find(targetId);
+										if ((traversal.getEdgeType().empty() || topology.type == traversal.getEdgeType()) &&
+												(target == pageTargetMatches.end() || target->second)) {
 											matchingIds.push_back(topology.edge_id);
 										}
 									}
-								std::ranges::sort(matchingIds);
-								matchingIds.erase(std::unique(matchingIds.begin(), matchingIds.end()), matchingIds.end());
-								const std::vector<storage::LogicalGraphEdge> matchingEdges =
-										matchingIds.empty()
-												? std::vector<storage::LogicalGraphEdge>{}
-												: state.snapshot.readEdgesShapedSorted(matchingIds, completeEdgeReadShape());
-								if (matchingEdges.size() != matchingIds.size()) {
-									throw std::runtime_error("logical graph backend changed typed Edge batch cardinality");
-								}
-								for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
-									const auto matching = std::ranges::lower_bound(
-											matchingIds, topology.edge_id);
-									if (matching == matchingIds.end() || *matching != topology.edge_id) {
-										const storage::LogicalGraphEdge rejected{topology.edge_id, topology.source_node_id,
-												topology.target_node_id, topology.type};
-										if (!processEdge(rejected)) {
+									std::ranges::sort(matchingIds);
+									matchingIds.erase(std::unique(matchingIds.begin(), matchingIds.end()),
+													  matchingIds.end());
+									MaterializedByteReservation matchingEdgeBytes(&state.materialized_budget);
+									const std::vector<storage::LogicalGraphEdge> matchingEdges =
+											matchingIds.empty() ? std::vector<storage::LogicalGraphEdge>{}
+																: readEdgesShapedSortedBudgeted(
+																		  state, matchingIds, completeEdgeReadShape(), &matchingEdgeBytes);
+									retainShapedBatchBytes(matchingEdges, matchingEdgeBytes, state.context);
+									if (matchingEdges.size() != matchingIds.size()) {
+										throw std::runtime_error(
+												"logical graph backend changed typed Edge batch cardinality");
+									}
+									for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
+										const auto matching = std::ranges::lower_bound(matchingIds, topology.edge_id);
+										if (matching == matchingIds.end() || *matching != topology.edge_id) {
+											const storage::LogicalGraphEdge rejected{
+													topology.edge_id, topology.source_node_id, topology.target_node_id,
+													topology.type};
+											if (!processEdge(rejected)) {
+												return false;
+											}
+											continue;
+										}
+										const size_t matchingIndex =
+												static_cast<size_t>(matching - matchingIds.begin());
+										const storage::LogicalGraphEdge &edge = matchingEdges[matchingIndex];
+										if (edge.edge_id != topology.edge_id ||
+											edge.source_node_id != topology.source_node_id ||
+											edge.target_node_id != topology.target_node_id ||
+											edge.type != topology.type) {
+											throw std::runtime_error("logical graph backend changed typed Edge "
+																	 "topology during materialization");
+										}
+										if (!processEdge(edge)) {
 											return false;
 										}
-										continue;
 									}
-									const size_t matchingIndex = static_cast<size_t>(matching - matchingIds.begin());
-									const storage::LogicalGraphEdge &edge = matchingEdges[matchingIndex];
-									if (edge.edge_id != topology.edge_id || edge.source_node_id != topology.source_node_id ||
-										edge.target_node_id != topology.target_node_id || edge.type != topology.type) {
-										throw std::runtime_error("logical graph backend changed typed Edge topology during materialization");
-									}
-									if (!processEdge(edge)) {
-										return false;
-									}
-								}
 								} else {
 									for (const storage::LogicalGraphEdge &edge: fullPage->edges) {
 										if (!processEdge(edge)) {
@@ -9239,41 +15983,100 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] LogicalPlanReadRuntimeStats executeOnSnapshot(storage::LogicalGraphReadSnapshot &snapshot,
-																	const logical::LogicalOperator &root,
-																	const LogicalPlanReadRuntimeBounds &bounds,
-																	const FinalRowVisitor &visitor,
-																						  const QueryContext *context,
-																						  const bool allowDeferredEntityRefs = false) {
+		[[nodiscard]] LogicalPlanReadRuntimeStats
+		executeOnSnapshot(storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
+						  const LogicalPlanReadRuntimeBounds &bounds, const FinalRowVisitor &visitor,
+						  const QueryContext *context, const bool allowDeferredEntityRefs = false,
+						  const ExecutionFinalizer *finalizer = nullptr, const bool allowCrossRowEntityBatches = false,
+						  const size_t residentOutputBatchBytes = 0U) {
 			validateBounds(bounds, static_cast<bool>(visitor));
-			ExecutionState state{snapshot, bounds, {}, context, nullptr, allowDeferredEntityRefs, {}};
-			static_cast<void>(visitOperator(root, state, [&](LogicalPlanReadRow row) {
-				if (state.stats.rows_emitted ==
-					bounds.maximum_rows) { // ZYX_COV_EXCL_LINE: this visitor returns false with the final row, so its
-										   // producer cannot invoke it again.
-					return false;
+			ExecutionState state{snapshot,
+								 bounds,
+								 {},
+								 context,
+								 nullptr,
+								 allowDeferredEntityRefs,
+								 allowCrossRowEntityBatches,
+								 residentOutputBatchBytes};
+			try {
+				static_cast<void>(visitOperator(root, state, [&](LogicalPlanReadRow row) {
+					if (state.stats.rows_emitted ==
+						bounds.maximum_rows) { // ZYX_COV_EXCL_LINE: this visitor returns false with the
+											   // final row, so its producer cannot invoke it again.
+						return false;
+					}
+					const bool continueVisitor = visitor(row, state);
+					incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
+					return continueVisitor && state.stats.rows_emitted < bounds.maximum_rows;
+				}));
+				if (finalizer != nullptr) {
+					(*finalizer)(state, false);
 				}
-				const bool continueVisitor = visitor(row, state);
-				incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
-				return continueVisitor && state.stats.rows_emitted < bounds.maximum_rows;
-			}));
+			} catch (...) {
+				if (finalizer != nullptr) (*finalizer)(state, true);
+				throw;
+			}
 			return state.stats;
 		}
 
-		[[nodiscard]] LogicalPlanReadRuntimeStats executeInternal(const storage::LogicalGraphReadBackend &backend,
-																  const logical::LogicalOperator &root,
-																  const LogicalPlanReadRuntimeBounds &bounds,
-																  const FinalRowVisitor &visitor,
-																						  const QueryContext *context,
-																						  const bool allowDeferredEntityRefs = false) {
+		[[nodiscard]] LogicalPlanReadRuntimeStats
+		executeInternal(const storage::LogicalGraphReadBackend &backend, const logical::LogicalOperator &root,
+						const LogicalPlanReadRuntimeBounds &bounds, const FinalRowVisitor &visitor,
+						const QueryContext *context, const bool allowDeferredEntityRefs = false,
+						const ExecutionFinalizer *finalizer = nullptr, const bool allowCrossRowEntityBatches = false,
+						const size_t residentOutputBatchBytes = 0U) {
 			std::unique_ptr<storage::LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
 			if (!snapshot) {
 				throw std::runtime_error("logical graph backend returned no read snapshot");
 			}
-			return executeOnSnapshot(*snapshot, root, bounds, visitor, context, allowDeferredEntityRefs);
+			return executeOnSnapshot(*snapshot, root, bounds, visitor, context, allowDeferredEntityRefs, finalizer,
+									 allowCrossRowEntityBatches, residentOutputBatchBytes);
 		}
 
 	} // namespace
+
+	std::vector<std::string> LogicalPlanReadRuntime::collectBatchedCompleteEntityVariables(
+			const std::vector<const expressions::Expression *> &expressions) {
+		return selectBatchableCompleteEntityVariables(expressions);
+	}
+
+	std::vector<LogicalPlanBatchedMetadataRequest> LogicalPlanReadRuntime::collectBatchedMetadataRequests(
+			const std::vector<const expressions::Expression *> &expressions) {
+		std::vector<LogicalPlanBatchedMetadataRequest> requests;
+		for (const auto *expression: expressions) {
+			std::vector<BatchableEntityPropertyPredicate> properties;
+			std::vector<BatchableEntityMetadataPredicate> metadata;
+			if (expression == nullptr ||
+				!collectBatchableEntityPropertyPredicates(*expression, properties, nullptr, &metadata))
+				continue;
+			for (const auto &entry: metadata) {
+				const LogicalPlanBatchedMetadataRequest request{entry.variable, entry.function};
+				if (std::ranges::find(requests, request) == requests.end())
+					requests.push_back(request);
+			}
+		}
+		return requests;
+	}
+
+	bool LogicalPlanReadRuntime::collectBatchedPropertyRequests(
+			const std::vector<const expressions::Expression *> &expressions,
+			std::vector<LogicalPlanBatchedPropertyRequest> &requests) {
+		for (const expressions::Expression *expression: expressions) {
+			std::vector<BatchableEntityPropertyPredicate> collected;
+			std::vector<BatchableEntityMetadataPredicate> metadata;
+			if (expression == nullptr ||
+				!collectBatchableEntityPropertyPredicates(*expression, collected, nullptr, &metadata)) {
+				continue;
+			}
+			for (const BatchableEntityPropertyPredicate &request: collected) {
+				const LogicalPlanBatchedPropertyRequest publicRequest{request.variable, request.key};
+				if (std::ranges::find(requests, publicRequest) == requests.end()) {
+					requests.push_back(publicRequest);
+				}
+			}
+		}
+		return !requests.empty();
+	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::execute(const logical::LogicalOperator &root,
 																const LogicalPlanReadRuntimeBounds &bounds,
@@ -9281,13 +16084,14 @@ namespace graph::query::execution {
 		// Keep the public callback contract fail-closed before wrapping it in
 		// the state-aware internal visitor used by result materialization.
 		validateBounds(bounds, static_cast<bool>(visitor));
-		return executeInternal(
-				backend_, root, bounds, [&visitor](LogicalPlanReadRow &row, ExecutionState &state) {
-					materializeRowEntityRefs(row, state);
-					enforceMaterializedRowBound(row, state);
-					return visitor(row);
+		return executeWithBatchedOutputMaterialization(
+				bounds,
+				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
+					const size_t residentOutputBatchBytes) {
+					return executeInternal(backend_, root, bounds, finalVisitor, nullptr, true, &finalizer, false,
+										   residentOutputBatchBytes);
 				},
-				nullptr, true);
+				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true);
 	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::execute(const logical::LogicalOperator &root,
@@ -9295,13 +16099,14 @@ namespace graph::query::execution {
 																const RowVisitor &visitor,
 																const QueryContext &context) const {
 		validateBounds(bounds, static_cast<bool>(visitor));
-		return executeInternal(
-				backend_, root, bounds, [&visitor](LogicalPlanReadRow &row, ExecutionState &state) {
-					materializeRowEntityRefs(row, state);
-					enforceMaterializedRowBound(row, state);
-					return visitor(row);
+		return executeWithBatchedOutputMaterialization(
+				bounds,
+				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
+					const size_t residentOutputBatchBytes) {
+					return executeInternal(backend_, root, bounds, finalVisitor, &context, true, &finalizer, false,
+										   residentOutputBatchBytes);
 				},
-				&context, true);
+				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true);
 	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::executeWithSnapshot(storage::LogicalGraphReadSnapshot &snapshot,
@@ -9309,33 +16114,284 @@ namespace graph::query::execution {
 																			const LogicalPlanReadRuntimeBounds &bounds,
 																			const RowVisitor &visitor,
 																			const QueryContext &context) const {
-		return executeOnSnapshot(
-				snapshot, root, bounds, [&visitor](LogicalPlanReadRow &row, ExecutionState &state) {
-					materializeRowEntityRefs(row, state);
-					enforceMaterializedRowBound(row, state);
-					return visitor(row);
+		return executeWithBatchedOutputMaterialization(
+				bounds,
+				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
+					const size_t residentOutputBatchBytes) {
+					return executeOnSnapshot(snapshot, root, bounds, finalVisitor, &context, true, &finalizer, false,
+											 residentOutputBatchBytes);
 				},
-				&context, true);
+				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true);
 	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::executeWithSnapshotAndInputRow(
 			storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
-			const LogicalPlanReadRuntimeBounds &bounds, const LogicalPlanReadRow &inputRow,
-			const RowVisitor &visitor, const QueryContext &context) const {
+			const LogicalPlanReadRuntimeBounds &bounds, const LogicalPlanReadRow &inputRow, const RowVisitor &visitor,
+			const QueryContext &context) const {
 		validateBounds(bounds, static_cast<bool>(visitor));
-		LogicalPlanReadRow refreshed = inputRow;
-		for (auto &[variable, value]: refreshed.values) {
-			if (auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				*node = snapshot.readNodeShaped(node->node_id, completeNodeReadShape());
-				refreshed.property_cache.erase(variable);
-				refreshed.complete_entity_property_cache.erase(variable);
-			} else if (auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
-				*edge = snapshot.readEdgeShaped(edge->edge_id, completeEdgeReadShape());
-				refreshed.property_cache.erase(variable);
-				refreshed.complete_entity_property_cache.erase(variable);
+		context.checkGuardNow();
+		ExecutionState state{snapshot, bounds, {}, &context, nullptr, false, false};
+		MaterializedByteReservation importedCacheBytes(&state.materialized_budget);
+		MaterializedByteReservation refreshedEntityBytes(&state.materialized_budget);
+		importedCacheBytes.set(logicalReadRowBytesIncluding(inputRow, [](const std::string &) { return true; }, &context, false, true));
+		LogicalPlanReadRow refreshed;
+		state.injected_row = &refreshed;
+		const auto checkpoint = [&] { context.checkGuardNow(); };
+		const auto invalidatedCache = [&](const std::string &alias) {
+			const auto binding = inputRow.values.find(alias);
+			return binding != inputRow.values.end() &&
+				(std::holds_alternative<storage::LogicalGraphNode>(binding->second) ||
+				 std::holds_alternative<storage::LogicalGraphEdge>(binding->second));
+		};
+		const auto copyCache = [&](const auto &source, auto &destination) {
+			size_t retainedAliases = 0U;
+			for (const auto &[alias, properties] : source) {
+				checkpoint();
+				if (!invalidatedCache(alias)) ++retainedAliases;
+			}
+			destination.reserve(retainedAliases);
+			for (const auto &[alias, properties] : source) {
+				checkpoint();
+				if (invalidatedCache(alias)) continue;
+				destination.emplace(detail::copyPropertyStringGuarded(alias, checkpoint),
+					detail::copyPropertyMapGuarded(properties, checkpoint));
+			}
+		};
+		copyCache(inputRow.property_cache, refreshed.property_cache);
+		copyCache(inputRow.entity_metadata_cache, refreshed.entity_metadata_cache);
+		for (const auto &alias : inputRow.complete_entity_property_cache)
+			if (!invalidatedCache(alias)) refreshed.complete_entity_property_cache.emplace(detail::copyPropertyStringGuarded(alias, checkpoint));
+		for (const auto &[alias, path] : inputRow.path_cache) {
+			checkpoint();
+			refreshed.path_cache.emplace(detail::copyPropertyStringGuarded(alias, checkpoint),
+				detail::copyLogicalReadPathGuarded(path, checkpoint));
+		}
+		importedCacheBytes.set(logicalReadRowBytesIncluding(refreshed, [](const std::string &) { return true; }, &context, false));
+		size_t nodeBindingCount = 0U;
+		size_t edgeBindingCount = 0U;
+		for (const auto &[_, value]: inputRow.values) {
+			context.checkGuard();
+			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+				validateNode(*node, state);
+				++nodeBindingCount;
+			} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
+				validateEdge(*edge);
+				++edgeBindingCount;
 			}
 		}
-		ExecutionState state{snapshot, bounds, {}, &context, &refreshed, false, {}};
+		MaterializedByteReservation routingBytes(&state.materialized_budget);
+		routingBytes.set(checkedSizeMul(checkedSizeAdd(nodeBindingCount, edgeBindingCount,
+													   "logical-plan imported Entity routing count overflowed"),
+										sizeof(uint64_t), "logical-plan imported Entity routing size overflowed"));
+		std::vector<uint64_t> nodeIds;
+		std::vector<uint64_t> edgeIds;
+		nodeIds.reserve(nodeBindingCount);
+		edgeIds.reserve(edgeBindingCount);
+		for (const auto &[variable, value]: inputRow.values) {
+			context.checkGuard();
+			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+				validateNode(*node, state);
+				nodeIds.push_back(node->node_id);
+				refreshed.values.emplace(variable, storage::EntityRef{node->node_id, false, 0U, 0U, 0U});
+			} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
+				validateEdge(*edge);
+				edgeIds.push_back(edge->edge_id);
+				refreshed.values.emplace(variable, storage::EntityRef{edge->edge_id, true, edge->source_node_id,
+																	  edge->target_node_id, 0U});
+			} else {
+				refreshed.values.emplace(variable, detail::copyLogicalReadValueGuarded(value, checkpoint));
+			}
+		}
+		std::ranges::sort(nodeIds);
+		nodeIds.erase(std::unique(nodeIds.begin(), nodeIds.end()), nodeIds.end());
+		std::ranges::sort(edgeIds);
+		edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
+		routingBytes.set(checkedSizeMul(nodeIds.capacity() + edgeIds.capacity(), sizeof(uint64_t),
+										"logical-plan imported Entity routing size overflowed"));
+		const auto refreshNodeBatch = [&](const size_t offset, const size_t count) {
+			checkGuard(state);
+			const auto ids = std::span<const uint64_t>(nodeIds).subspan(offset, count);
+			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			auto nodes = readNodesShapedSortedBudgeted(state, ids, completeNodeReadShape(), &sourceBytes);
+			context.checkGuardNow();
+			if (nodes.size() != count)
+				throw std::runtime_error("logical-plan imported Node batch changed cardinality");
+			MaterializedByteReservation consumerBytes(&state.materialized_budget);
+			consumerBytes.set(
+					checkedSizeMul(count, sizeof(size_t), "logical-plan imported Node consumer size overflowed"));
+			std::vector<size_t> remaining(count, 0U);
+			for (size_t index = 0U; index < count; ++index) {
+				checkGuard(state);
+				validateNode(nodes[index], state);
+				if (nodes[index].node_id != ids[index])
+					throw std::runtime_error("logical-plan imported Node batch changed ID order");
+				if (nodes[index].properties.size() > bounds.maximum_property_entries)
+					throw std::runtime_error("logical-plan imported Node exceeded the Property bound");
+			}
+			for (const auto &[_, value]: refreshed.values) {
+				checkGuard(state);
+				const auto *reference = std::get_if<storage::EntityRef>(&value);
+				if (reference == nullptr || reference->is_edge)
+					continue;
+				const auto position = std::ranges::lower_bound(ids, reference->entity_id);
+				if (position != ids.end() && *position == reference->entity_id)
+					++remaining[static_cast<size_t>(position - ids.begin())];
+			}
+			size_t actualSourceBytes = checkedSizeMul(nodes.capacity(), sizeof(storage::LogicalGraphNode),
+													  "logical-plan imported Node batch size overflowed");
+			for (const auto &node: nodes)
+				actualSourceBytes = checkedSizeAdd(actualSourceBytes,
+												   logicalNodeCacheBytes(node, state.context) - sizeof(storage::LogicalGraphNode),
+												   "logical-plan imported Node batch size overflowed");
+			sourceBytes.set(actualSourceBytes);
+			for (size_t index = 0U; index < count; ++index) {
+				checkGuard(state);
+				const size_t payloadBytes = logicalNodeCacheBytes(nodes[index], state.context) - sizeof(storage::LogicalGraphNode);
+				for (auto &[_, value]: refreshed.values) {
+					checkGuard(state);
+					auto *reference = std::get_if<storage::EntityRef>(&value);
+					if (reference == nullptr || reference->is_edge || reference->entity_id != ids[index])
+						continue;
+					const bool last = remaining[index] == 1U;
+					const size_t previousBytes = refreshedEntityBytes.bytes();
+					if (last) refreshedEntityBytes.absorb(sourceBytes.splitOff(payloadBytes));
+					try {
+						refreshedEntityBytes.set(checkedSizeAdd(previousBytes,
+							logicalNodeCacheBytes(nodes[index], state.context), "logical-plan refreshed entity size overflowed"));
+						if (last) {
+							value = LogicalPlanReadValue(std::move(nodes[index]));
+						} else {
+							auto copy = detail::copyLogicalEntityGuarded(nodes[index], checkpoint);
+							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalNodeCacheBytes(copy, state.context),
+								"logical-plan refreshed entity size overflowed"));
+							value = LogicalPlanReadValue(std::move(copy));
+						}
+						--remaining[index];
+					} catch (...) {
+						if (last) sourceBytes.absorb(refreshedEntityBytes.splitOff(payloadBytes));
+						refreshedEntityBytes.set(previousBytes);
+						throw;
+					}
+				}
+			}
+			sourceBytes.set(checkedSizeMul(nodes.capacity(), sizeof(storage::LogicalGraphNode),
+										   "logical-plan imported Node batch size overflowed"));
+		};
+		std::function<void(size_t, size_t)> refreshNodes;
+		refreshNodes = [&](const size_t offset, const size_t count) {
+			checkGuard(state);
+			try {
+				refreshNodeBatch(offset, count);
+			} catch (const std::runtime_error &error) {
+				if (count == 1U || std::string_view(error.what()) != "shared materialization exceeded its byte bound")
+					throw;
+				const size_t first = count / 2U;
+				refreshNodes(offset, first);
+				refreshNodes(offset + first, count - first);
+			}
+		};
+		const auto refreshEdgeBatch = [&](const size_t offset, const size_t count) {
+			checkGuard(state);
+			const auto ids = std::span<const uint64_t>(edgeIds).subspan(offset, count);
+			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			auto edges = readEdgesShapedSortedBudgeted(state, ids, completeEdgeReadShape(), &sourceBytes);
+			context.checkGuardNow();
+			if (edges.size() != count)
+				throw std::runtime_error("logical-plan imported Edge batch changed cardinality");
+			MaterializedByteReservation consumerBytes(&state.materialized_budget);
+			consumerBytes.set(
+					checkedSizeMul(count, sizeof(size_t), "logical-plan imported Edge consumer size overflowed"));
+			std::vector<size_t> remaining(count, 0U);
+			for (size_t index = 0U; index < count; ++index) {
+				checkGuard(state);
+				validateEdge(edges[index]);
+				if (edges[index].edge_id != ids[index])
+					throw std::runtime_error("logical-plan imported Edge batch changed ID order");
+				if (edges[index].properties.size() > bounds.maximum_property_entries)
+					throw std::runtime_error("logical-plan imported Edge exceeded the Property bound");
+			}
+			for (const auto &[_, value]: refreshed.values) {
+				checkGuard(state);
+				const auto *reference = std::get_if<storage::EntityRef>(&value);
+				if (reference == nullptr || !reference->is_edge)
+					continue;
+				const auto position = std::ranges::lower_bound(ids, reference->entity_id);
+				if (position != ids.end() && *position == reference->entity_id)
+					++remaining[static_cast<size_t>(position - ids.begin())];
+			}
+			size_t actualSourceBytes = checkedSizeMul(edges.capacity(), sizeof(storage::LogicalGraphEdge),
+													  "logical-plan imported Edge batch size overflowed");
+			for (const auto &edge: edges)
+				actualSourceBytes = checkedSizeAdd(actualSourceBytes,
+												   logicalEdgeCacheBytes(edge, state.context) - sizeof(storage::LogicalGraphEdge),
+												   "logical-plan imported Edge batch size overflowed");
+			sourceBytes.set(actualSourceBytes);
+			for (size_t index = 0U; index < count; ++index) {
+				checkGuard(state);
+				const size_t payloadBytes = logicalEdgeCacheBytes(edges[index], state.context) - sizeof(storage::LogicalGraphEdge);
+				for (auto &[_, value]: refreshed.values) {
+					checkGuard(state);
+					auto *reference = std::get_if<storage::EntityRef>(&value);
+					if (reference == nullptr || !reference->is_edge || reference->entity_id != ids[index])
+						continue;
+					const bool last = remaining[index] == 1U;
+					const size_t previousBytes = refreshedEntityBytes.bytes();
+					if (last) refreshedEntityBytes.absorb(sourceBytes.splitOff(payloadBytes));
+					try {
+						refreshedEntityBytes.set(checkedSizeAdd(previousBytes,
+							logicalEdgeCacheBytes(edges[index], state.context), "logical-plan refreshed entity size overflowed"));
+						if (last) {
+							value = LogicalPlanReadValue(std::move(edges[index]));
+						} else {
+							auto copy = detail::copyLogicalEntityGuarded(edges[index], checkpoint);
+							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(copy, state.context),
+								"logical-plan refreshed entity size overflowed"));
+							value = LogicalPlanReadValue(std::move(copy));
+						}
+						--remaining[index];
+					} catch (...) {
+						if (last) sourceBytes.absorb(refreshedEntityBytes.splitOff(payloadBytes));
+						refreshedEntityBytes.set(previousBytes);
+						throw;
+					}
+				}
+			}
+			sourceBytes.set(checkedSizeMul(edges.capacity(), sizeof(storage::LogicalGraphEdge),
+										   "logical-plan imported Edge batch size overflowed"));
+		};
+		std::function<void(size_t, size_t)> refreshEdges;
+		refreshEdges = [&](const size_t offset, const size_t count) {
+			checkGuard(state);
+			try {
+				refreshEdgeBatch(offset, count);
+			} catch (const std::runtime_error &error) {
+				if (count == 1U || std::string_view(error.what()) != "shared materialization exceeded its byte bound")
+					throw;
+				const size_t first = count / 2U;
+				refreshEdges(offset, first);
+				refreshEdges(offset + first, count - first);
+			}
+		};
+		const size_t nodeFrameCapacity =
+				std::max<size_t>(1U, state.materialized_budget.available() / sizeof(storage::LogicalGraphNode));
+		const size_t nodeBatchCapacity =
+				std::min({bounds.maximum_node_records, DEFAULT_PROPERTY_BATCH_ROWS, nodeFrameCapacity});
+		for (size_t offset = 0U; offset < nodeIds.size(); offset += nodeBatchCapacity) {
+			checkGuard(state);
+			refreshNodes(offset, std::min(nodeBatchCapacity, nodeIds.size() - offset));
+		}
+		const size_t edgeFrameCapacity =
+				std::max<size_t>(1U, state.materialized_budget.available() / sizeof(storage::LogicalGraphEdge));
+		const size_t edgeBatchCapacity =
+				std::min({bounds.maximum_edge_records, DEFAULT_PROPERTY_BATCH_ROWS, edgeFrameCapacity});
+		for (size_t offset = 0U; offset < edgeIds.size(); offset += edgeBatchCapacity) {
+			checkGuard(state);
+			refreshEdges(offset, std::min(edgeBatchCapacity, edgeIds.size() - offset));
+		}
+		routingBytes.set(0U);
+		std::vector<uint64_t>().swap(nodeIds);
+		std::vector<uint64_t>().swap(edgeIds);
+		context.checkGuardNow();
 		const bool completed = visitOperator(root, state, [&](LogicalPlanReadRow row) {
 			if (state.stats.rows_emitted == bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan read runtime exceeded its row bound");
@@ -9343,7 +16399,7 @@ namespace graph::query::execution {
 			incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
 			materializeRowEntityRefs(row, state);
 			enforceMaterializedRowBound(row, state);
-			return visitor(row);
+			return invokeOutputVisitorChecked(state, [&] { return visitor(row); });
 		});
 		if (!completed) {
 			throw std::runtime_error("logical-plan read runtime input-row execution was stopped by its visitor");
@@ -9357,13 +16413,13 @@ namespace graph::query::execution {
 		// Resolving an uncached Property collection touches durable storage, so
 		// expression-only evaluation enforces the same finite read limits as a plan.
 		validateBounds(bounds, true);
-		ExecutionState state{snapshot, bounds, {}, &context, nullptr, false, {}};
+		ExecutionState state{snapshot, bounds, {}, &context, nullptr, false, false};
 		checkGuard(state);
 		return evaluateExpression(expression, row, state);
 	}
 
 	std::string LogicalPlanReadRuntime::makeDistinctRowKey(const LogicalPlanReadRow &row,
-														  const std::vector<std::string> &columns) {
+														   const std::vector<std::string> &columns) {
 		if (columns.empty()) {
 			throw std::invalid_argument("logical-plan DISTINCT key requires at least one output column");
 		}
@@ -9373,27 +16429,26 @@ namespace graph::query::execution {
 	QueryResult LogicalPlanReadRuntime::executeToQueryResult(const logical::LogicalOperator &root,
 															 const LogicalPlanReadRuntimeBounds &bounds) const {
 		QueryResult result;
-		const std::vector<std::string> columns = visibleOutputColumns(root);
-		result.setColumns(columns);
-		static_cast<void>(executeInternal(
-				backend_, root, bounds,
+		result.setColumns(visibleOutputColumns(root));
+		const std::vector<std::string> &columns = result.getColumns();
+		const size_t columnBytes = queryResultColumnStorageBytes(columns);
+		if (columnBytes > bounds.maximum_materialized_bytes) {
+			throw std::runtime_error("logical-plan result columns exceeded their materialized byte bound");
+		}
+		LogicalPlanReadRuntimeBounds executionBounds = bounds;
+		executionBounds.maximum_materialized_bytes -= columnBytes;
+		static_cast<void>(executeWithBatchedOutputMaterialization(
+				executionBounds,
+				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
+					const size_t residentOutputBatchBytes) {
+					return executeInternal(backend_, root, executionBounds, finalVisitor, nullptr, true, &finalizer,
+										   true, residentOutputBatchBytes);
+				},
 				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					enforceMaterializedRowBound(row, state);
-					QueryResult::Row output;
-					output.reserve(columns.size());
-					MaterializedPropertyCache materialized;
-					for (const std::string &column: columns) {
-						const auto found = row.values.find(column);
-						if (found == row.values.end()) {
-							throw std::runtime_error("logical-plan runtime did not bind a declared output variable");
-						}
-						output.emplace(column, materializeResultValue(row, found->second, state, materialized));
-					}
-					enforceMaterializedResultRowBound(output, state);
-					result.addRow(std::move(output));
+					appendLogicalResultRow(result, row, columns, state);
 					return true;
 				},
-				nullptr, true));
+				false, false));
 		return result;
 	}
 
@@ -9401,27 +16456,26 @@ namespace graph::query::execution {
 															 const LogicalPlanReadRuntimeBounds &bounds,
 															 const QueryContext &context) const {
 		QueryResult result;
-		const std::vector<std::string> columns = visibleOutputColumns(root);
-		result.setColumns(columns);
-		static_cast<void>(executeInternal(
-				backend_, root, bounds,
+		result.setColumns(visibleOutputColumns(root));
+		const std::vector<std::string> &columns = result.getColumns();
+		const size_t columnBytes = queryResultColumnStorageBytes(columns);
+		if (columnBytes > bounds.maximum_materialized_bytes) {
+			throw std::runtime_error("logical-plan result columns exceeded their materialized byte bound");
+		}
+		LogicalPlanReadRuntimeBounds executionBounds = bounds;
+		executionBounds.maximum_materialized_bytes -= columnBytes;
+		static_cast<void>(executeWithBatchedOutputMaterialization(
+				executionBounds,
+				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
+					const size_t residentOutputBatchBytes) {
+					return executeInternal(backend_, root, executionBounds, finalVisitor, &context, true, &finalizer,
+										   true, residentOutputBatchBytes);
+				},
 				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
-					enforceMaterializedRowBound(row, state);
-					QueryResult::Row output;
-					output.reserve(columns.size());
-					MaterializedPropertyCache materialized;
-					for (const std::string &column: columns) {
-						const auto found = row.values.find(column);
-						if (found == row.values.end()) {
-							throw std::runtime_error("logical-plan runtime did not bind a declared output variable");
-						}
-						output.emplace(column, materializeResultValue(row, found->second, state, materialized));
-					}
-					enforceMaterializedResultRowBound(output, state);
-					result.addRow(std::move(output));
+					appendLogicalResultRow(result, row, columns, state);
 					return true;
 				},
-				&context, true));
+				false, false));
 		return result;
 	}
 

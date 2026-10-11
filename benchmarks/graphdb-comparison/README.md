@@ -299,3 +299,7 @@ The runner continues after adapter or workload failures when it can. Failures ar
 - Use `write` for statement-return latency and `write_durable` for durable-after-each-write latency; do not compare them as the same durability contract.
 - Neo4j and Memgraph run as services; Kuzu and ZYX run embedded in the runner container, so process topology differs.
 - Use `runner.thread_scaling` rather than each engine's implicit defaults when comparing single-operation CPU parallelism.
+
+### Release measurements without diagnostics
+
+Set `ZYX_COMPARE_EMIT_PROFILE=0` when running `runner.run` or `runner.matrix` to omit `--emit-profile` from ZYX subprocesses. The default is `1`, retaining diagnostic runs. Only `0` and `1` are accepted. Each run records `zyx_emit_profile` in `environment.json`; keep diagnostic and uninstrumented latency results separate. The optimization CI matrix uses `0`.

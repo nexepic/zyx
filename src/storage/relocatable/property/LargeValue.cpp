@@ -448,7 +448,8 @@ namespace graph::storage {
 		return bytes;
 	}
 
-	LargeValueManifest LargeValueManifestPageCodec::decode(std::span<const std::byte> bytes) {
+	LargeValueManifest LargeValueManifestPageCodec::decode(std::span<const std::byte> bytes,
+			const std::function<void(size_t)> &bufferAdmission) {
 		if (bytes.size() < RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
 			fail(FormatError::FERR_BUFFER_TOO_SMALL, "LargeValue manifest page is truncated");
 		}
@@ -516,7 +517,15 @@ namespace graph::storage {
 		manifest.first_uncompressed_offset = LittleEndianCodec::readU64(bytes, NODE_FIRST_OFFSET_OFFSET);
 		manifest.node_logical_bytes = LittleEndianCodec::readU64(bytes, NODE_LOGICAL_BYTES_OFFSET);
 		const char *media = reinterpret_cast<const char *>(bytes.data() + MEDIA_TYPE_OFFSET);
+		const size_t entryWidth = childEntries ? sizeof(LargeValueManifestChild) : sizeof(LargeValueChunk);
+		if (entryCount > (std::numeric_limits<size_t>::max() - mediaTypeBytes) / entryWidth) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue manifest decoded arrays overflow");
+		}
+		if (bufferAdmission) bufferAdmission(mediaTypeBytes + static_cast<size_t>(entryCount) * entryWidth);
 		manifest.media_type.assign(media, mediaTypeBytes);
+		if (manifest.media_type.capacity() > std::numeric_limits<size_t>::max() - static_cast<size_t>(entryCount) * entryWidth)
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue manifest media and arrays overflow");
+		if (bufferAdmission) bufferAdmission(manifest.media_type.capacity() + static_cast<size_t>(entryCount) * entryWidth);
 		if (childEntries) {
 			manifest.children.reserve(entryCount);
 			for (uint32_t index = 0U; index < entryCount; ++index) {
@@ -549,6 +558,11 @@ namespace graph::storage {
 				manifest.chunks.push_back(chunk);
 			}
 		}
+		const size_t retainedEntries = childEntries ? manifest.children.capacity() * sizeof(LargeValueManifestChild)
+			: manifest.chunks.capacity() * sizeof(LargeValueChunk);
+		if (manifest.media_type.capacity() > std::numeric_limits<size_t>::max() - retainedEntries)
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue manifest retained arrays overflow");
+		if (bufferAdmission) bufferAdmission(manifest.media_type.capacity() + retainedEntries);
 		validateManifest(manifest);
 		return manifest;
 	}
@@ -577,7 +591,8 @@ namespace graph::storage {
 		return bytes;
 	}
 
-	LargeValueDataPage LargeValueDataPageCodec::decode(std::span<const std::byte> bytes) {
+	LargeValueDataPage LargeValueDataPageCodec::decode(std::span<const std::byte> bytes,
+			const std::function<void(size_t)> &bufferAdmission) {
 		if (bytes.size() < RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
 			fail(FormatError::FERR_BUFFER_TOO_SMALL, "LargeValue data page is truncated");
 		}
@@ -624,7 +639,9 @@ namespace graph::storage {
 		page.page_count = LittleEndianCodec::readU16(bytes, DATA_PAGE_COUNT_OFFSET);
 		page.stored_chunk_bytes = LittleEndianCodec::readU32(bytes, DATA_STORED_CHUNK_BYTES_OFFSET);
 		page.stored_offset = LittleEndianCodec::readU32(bytes, DATA_STORED_OFFSET_OFFSET);
+		if (bufferAdmission) bufferAdmission(payload.size());
 		page.payload.assign(payload.begin(), payload.end());
+		if (bufferAdmission) bufferAdmission(page.payload.capacity());
 		validateDataPage(page);
 		return page;
 	}
@@ -639,10 +656,16 @@ namespace graph::storage {
 		return {LargeValueManifestPageCodec::encode(manifest), manifest};
 	}
 
+	LargeValueManifest LargeValueManifestPage::decodeManifest(const PageOwnerHeader &owner,
+			std::span<const std::byte> bytes, const std::function<void(size_t)> &bufferAdmission) {
+		LargeValueManifest manifest = LargeValueManifestPageCodec::decode(bytes, bufferAdmission);
+		validateManifestOwner(owner, manifest, true);
+		return manifest;
+	}
+
 	LargeValueManifestPage LargeValueManifestPage::open(const PageOwnerHeader &owner,
 														std::span<const std::byte> bytes) {
-		LargeValueManifest manifest = LargeValueManifestPageCodec::decode(bytes);
-		validateManifestOwner(owner, manifest, true);
+		LargeValueManifest manifest = decodeManifest(owner, bytes);
 		return {std::vector<std::byte>(bytes.begin(), bytes.end()), std::move(manifest)};
 	}
 
@@ -660,9 +683,15 @@ namespace graph::storage {
 		return {LargeValueDataPageCodec::encode(page), page};
 	}
 
-	LargeValueDataFrame LargeValueDataFrame::open(const PageOwnerHeader &owner, std::span<const std::byte> bytes) {
-		LargeValueDataPage page = LargeValueDataPageCodec::decode(bytes);
+	LargeValueDataPage LargeValueDataFrame::decodePage(const PageOwnerHeader &owner,
+			std::span<const std::byte> bytes, const std::function<void(size_t)> &bufferAdmission) {
+		LargeValueDataPage page = LargeValueDataPageCodec::decode(bytes, bufferAdmission);
 		validateDataOwner(owner, page, true);
+		return page;
+	}
+
+	LargeValueDataFrame LargeValueDataFrame::open(const PageOwnerHeader &owner, std::span<const std::byte> bytes) {
+		LargeValueDataPage page = decodePage(owner, bytes);
 		return {std::vector<std::byte>(bytes.begin(), bytes.end()), std::move(page)};
 	}
 

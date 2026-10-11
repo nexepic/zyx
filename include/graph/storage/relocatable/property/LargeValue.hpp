@@ -16,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <span>
 #include <string>
@@ -224,17 +225,22 @@ namespace graph::storage {
 	class LargeValueManifestPageCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const LargeValueManifest &manifest);
-		[[nodiscard]] static LargeValueManifest decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static LargeValueManifest decode(std::span<const std::byte> bytes,
+				const std::function<void(size_t)> &bufferAdmission = {});
 	};
 
 	class LargeValueDataPageCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const LargeValueDataPage &page);
-		[[nodiscard]] static LargeValueDataPage decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static LargeValueDataPage decode(std::span<const std::byte> bytes,
+				const std::function<void(size_t)> &bufferAdmission = {});
 	};
 
 	class LargeValueManifestPage final {
 	public:
+		[[nodiscard]] static LargeValueManifest decodeManifest(const PageOwnerHeader &owner,
+				std::span<const std::byte> bytes,
+				const std::function<void(size_t)> &bufferAdmission = {});
 		[[nodiscard]] static LargeValueManifestPage create(const PageOwnerHeader &owner,
 														   const LargeValueManifest &manifest);
 		[[nodiscard]] static LargeValueManifestPage open(const PageOwnerHeader &owner,
@@ -253,6 +259,9 @@ namespace graph::storage {
 
 	class LargeValueDataFrame final {
 	public:
+		[[nodiscard]] static LargeValueDataPage decodePage(const PageOwnerHeader &owner,
+				std::span<const std::byte> bytes,
+				const std::function<void(size_t)> &bufferAdmission = {});
 		[[nodiscard]] static LargeValueDataFrame create(const PageOwnerHeader &owner, const LargeValueDataPage &page);
 		[[nodiscard]] static LargeValueDataFrame open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
 
