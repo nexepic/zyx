@@ -1,11 +1,13 @@
 """Regression coverage for the portable test-process supervisor."""
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -39,9 +41,72 @@ def _pid_is_active(pid: int) -> bool:
 
 
 def test_runner_returns_success_for_a_completed_command():
-    runner = _load_runner()
+	runner = _load_runner()
 
-    assert runner.run([sys.executable, "-c", "pass"], 5.0) == 0
+	assert runner.run([sys.executable, "-c", "pass"], 5.0) == 0
+
+
+def test_runner_rejects_an_invalid_heartbeat_interval(monkeypatch):
+	runner = _load_runner()
+	monkeypatch.setenv("ZYX_TEST_HEARTBEAT_SECONDS", "not-a-number")
+
+	with pytest.raises(ValueError, match="ZYX_TEST_HEARTBEAT_SECONDS"):
+		assert runner.run([sys.executable, "-c", "pass"], 5.0) == 0
+
+
+def test_shard_result_records_the_specific_invocation(tmp_path):
+    shard_runner = _load_script("run_test_shards.py")
+    result_path = tmp_path / "result.json"
+    started_at = time.time() - 1.0
+
+    shard_runner.write_result(
+        result_path,
+        0,
+        2,
+        run_id="native-test-run",
+        started_at=started_at,
+        command=["/tmp/zyx_test_suite", "--gtest_filter=Native.*"],
+    )
+
+    record = json.loads(result_path.read_text())
+    assert record["command"] == ["/tmp/zyx_test_suite", "--gtest_filter=Native.*"]
+    assert record["completed_at_unix_seconds"] >= started_at
+    assert record["exit_code"] == 0
+    assert record["jobs"] == 2
+    assert record["launcher_pid"] == os.getpid()
+    assert record["run_id"] == "native-test-run"
+    assert record["started_at_unix_seconds"] == started_at
+    assert record["working_directory"] == str(Path.cwd().resolve())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="parallel shard isolation is POSIX-only")
+def test_shard_runner_does_not_raise_when_process_group_cannot_be_signalled(monkeypatch):
+    shard_runner = _load_script("run_test_shards.py")
+
+    def reject_process_group_signal(_process_group_id, _signal):
+        raise PermissionError("sandbox owns the process group")
+
+    monkeypatch.setattr(shard_runner.os, "killpg", reject_process_group_signal)
+    assert shard_runner.terminate_process_tree(SimpleNamespace(pid=12345), force=False) is None
+
+
+@pytest.mark.skipif(os.name == "nt", reason="parallel shard isolation is POSIX-only")
+def test_shard_runner_retains_failed_shard_logs(tmp_path, capsys):
+    shard_runner = _load_script("run_test_shards.py")
+    failure_log_directory = tmp_path / "failed-shards"
+
+    exit_code = shard_runner.run_shards(
+        [sys.executable, "-c", "import sys; print('intentional shard failure'); sys.exit(17)"],
+        2,
+        5.0,
+        failure_log_directory,
+    )
+
+    assert exit_code == 1
+    retained = sorted(failure_log_directory.glob("shard-*.log"))
+    assert len(retained) == 2
+    assert all("intentional shard failure" in path.read_text() for path in retained)
+    assert str(failure_log_directory.resolve()) in capsys.readouterr().err
 
 
 def test_runner_returns_timeout_after_terminating_the_test_process():

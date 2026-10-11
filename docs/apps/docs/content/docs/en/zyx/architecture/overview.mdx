@@ -11,7 +11,7 @@ projectOrder: 1
 ---
 # Architecture Overview
 
-> This page includes a historical overview of current code paths. The normative long-term design is [Native Single-File Storage Re-architecture Plan](native-single-file-storage-plan), which keeps one database file and explicitly removes legacy and migration compatibility paths.
+> This page describes the current native logical/relocatable production path. The [Native Single-File Storage Re-architecture Plan](native-single-file-storage-plan) is the normative format and lifecycle contract. Legacy `DataManager`, segment-chain, external-WAL, and physical-executor material are historical migration references, not current architecture.
 
 ZYX is an embeddable graph database engine. Its core is an in-process library — no separate server process is required.
 
@@ -34,20 +34,19 @@ graph TB
     subgraph "Query Layer"
         Parser["ANTLR4 Cypher Parser"]
         Planner["Logical Planner + Optimizer"]
-        Executor["Physical Executor"]
+        Runtime["Logical Read / Mutation Runtime"]
     end
 
     subgraph "Storage Layer"
-        DM[DataManager]
-        PM[PersistenceManager]
-        FS[FileStorage]
-        WAL[WALManager]
-        PB[PageBufferPool]
+        Adapter["LogicalGraph* adapters"]
+        Backend["RelocatableStorageBackend"]
+        Metadata["Metadata snapshots + System Catalog"]
+        Stores["Typed Entity / Property / B+Tree / Vector stores"]
+        IO["StorageIO + generation-aware Buffer Pool"]
     end
 
     subgraph "Core Layer"
         DB[Database]
-        TM[TransactionManager]
         TX[Transaction]
     end
 
@@ -58,37 +57,36 @@ graph TB
     WASM --> ABI
 
     CPP --> DB
-    DB --> TM
     DB --> TX
 
-    TX --> DM
-    TX --> WAL
+    TX --> Overlay["Transaction overlay"]
+    Overlay --> Backend
 
-    Parser --> Planner --> Executor
-    Executor --> DM
+    Parser --> Planner --> Runtime
+    Runtime --> Adapter --> Backend
 
-    DM --> PM
-    PM --> FS
-    DM --> PB
+    Backend --> Metadata
+    Backend --> Stores --> IO
 ```
 
 **Layer responsibilities:**
 
 - **Application Layer** — CLI tool, benchmark suite, and host applications that embed ZYX.
 - **API Layer** — C++ API (`zyx.hpp`), stable Driver ABI (`zyx_driver_abi.h`), language bindings, and WASM bindings for browser use.
-- **Query Layer** — Cypher text is parsed, planned, optimized, and executed as a pipeline of physical operators.
-- **Storage Layer** — `DataManager` orchestrates entity read/write, `PersistenceManager` tracks dirty entities, `FileStorage` manages the segment-based file, `WALManager` handles write-ahead logging, and `PageBufferPool` provides an LRU segment cache.
-- **Core Layer** — `Database` is the top-level entry point; `TransactionManager` enforces single-writer/multi-reader concurrency; `Transaction` provides the external handle.
+- **Query Layer** — Cypher text becomes a typed logical plan. The logical optimizer preserves semantics while applying bounded scan and row-window normalizations; logical read and mutation runtimes execute the plan through storage-neutral interfaces.
+- **Storage Layer** — `RelocatableStorageBackend` owns one database file, pinned metadata snapshots, the canonical System Catalog, typed page stores, and native maintenance. `StorageIO` and the generation-aware Buffer Pool provide the typed I/O boundary; external WAL/SHM sidecars are not part of the production protocol.
+- **Core Layer** — `Database` owns the backend and lazily initializes `QueryEngine` and the thread pool. `Transaction` owns a native logical transaction, its read-your-writes overlay, and its pinned lifetime.
 
 ## Key Objects
 
 | Object | Responsibility | Source |
 |--------|---------------|--------|
-| `graph::Database` | Lifecycle management, lazy initialization of QueryEngine / ThreadPool / WAL | `include/graph/core/Database.hpp` |
+| `graph::Database` | Backend lifecycle and lazy initialization of QueryEngine / ThreadPool | `include/graph/core/Database.hpp` |
 | `graph::query::QueryEngine` | Cypher parsing, plan building, and execution | `include/graph/query/api/QueryEngine.hpp` |
-| `graph::storage::FileStorage` | Segment-based file layout, flush/save coordination | `include/graph/storage/FileStorage.hpp` |
-| `graph::storage::DataManager` | Unified entry point for Node / Edge / Property / Blob / Index / State I/O | `include/graph/storage/data/DataManager.hpp` |
-| `TransactionManager` | Single-writer lock, snapshot management, commit / rollback coordination | `include/graph/core/TransactionManager.hpp` |
+| `graph::storage::RelocatableStorageBackend` | Single-file native graph, schema, Vector, snapshot, and maintenance boundary | `include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp` |
+| `graph::storage::RelocatableMetadataStore` | A/B Superblock publication, Catalog roots, allocator state, and snapshot pins | `include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp` |
+| `graph::storage::StorageIO` | Checked positioned I/O and ordered data/Superblock sync fences | `include/graph/storage/StorageIO.hpp` |
+| `graph::Transaction` | Transaction-owned logical overlay, commit/rollback, and backend lifetime | `include/graph/core/Transaction.hpp` |
 
 ## Main Execution Paths
 
@@ -99,16 +97,17 @@ sequenceDiagram
     participant App
     participant DB as Database
     participant QE as QueryEngine
-    participant DM as DataManager
+    participant RT as Logical Runtime
+    participant B as Relocatable Backend
 
     App->>DB: beginTransaction()
-    DB->>App: Transaction (write lock acquired)
+    DB->>App: Transaction (overlay and snapshot)
     App->>QE: execute("CREATE (n:User {name: 'Alice'})")
-    QE->>QE: Parse → Logical Plan → Optimize → Physical Plan
-    QE->>DM: Execute operators
-    DM->>DM: Allocate ID, write entity, mark dirty
+    QE->>QE: Parse → Logical Plan → Optimize
+    QE->>RT: Execute typed logical operators
+    RT->>B: Stage native graph mutation
     App->>App: tx.commit()
-    Note over App,DM: See Write Path below
+    Note over App,B: See Write Path below
 ```
 
 ### Write Path (commit)
@@ -116,20 +115,19 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant TX as Transaction
-    participant WAL as WALManager
-    participant PM as PersistenceManager
-    participant SW as StorageWriter
-    participant FS as FileStorage
+    participant Overlay as Logical transaction overlay
+    participant B as RelocatableStorageBackend
+    participant M as RelocatableMetadataStore
+    participant IO as StorageIO
 
-    TX->>WAL: Write WAL_TXN_COMMIT + sync
-    TX->>PM: createSnapshot() of all dirty registries
-    PM-->>TX: FlushSnapshot (nodes, edges, props, blobs, indexes, states)
-    TX->>SW: writeSnapshot(snapshot)
-    SW->>FS: Persist each entity type to its segment chain
-    SW->>FS: Update FileHeader (max IDs)
-    TX->>WAL: checkpoint() if threshold reached
-    TX->>PM: commitSnapshot() — swap double-buffer, clear flushing set
-    TX->>TX: Release write lock, publish new CommittedSnapshot
+    TX->>Overlay: validate final graph state
+    Overlay->>B: plan bounded typed COW pages
+    B->>IO: write candidate data and metadata pages
+    IO->>IO: data sync fence
+    B->>M: publish one complete metadata generation
+    M->>IO: A/B Superblock sync fence
+    M-->>TX: old-or-new visibility after reopen
+    TX->>TX: retire overlay and release transaction resources
 ```
 
 ### Read Path
@@ -138,34 +136,29 @@ sequenceDiagram
 sequenceDiagram
     participant App
     participant TX as Transaction (read-only)
-    participant DM as DataManager
-    participant PM as PersistenceManager
-    participant PB as PageBufferPool
+    participant B as Relocatable Backend
+    participant M as Metadata Snapshot
+    participant BP as BufferPool
     participant IO as StorageIO
 
     App->>TX: beginReadOnlyTransaction()
-    TX->>TX: Acquire shared lock, capture CommittedSnapshot
-    App->>DM: getNode(id)
-    DM->>PM: Check flushing dirty set
-    alt Dirty hit
-        PM-->>DM: Return from dirty registry
-    else Clean
-        DM->>PB: getPage(segmentOffset)
-        alt Cache hit
-            PB-->>DM: Cached page
-        else Cache miss
-            PB->>IO: pread(segment data)
-            IO-->>PB: Raw bytes
-            PB-->>DM: Page data
-        end
+    TX->>B: open logical read snapshot
+    B->>M: pin one metadata generation
+    App->>B: resolve logical Node / adjacency / property
+    B->>BP: read typed page by physical route and generation
+    alt Cache hit
+        BP-->>B: pinned page bytes
+    else Cache miss
+        BP->>IO: positioned typed-page read
+        IO-->>BP: validated page bytes
     end
-    DM-->>App: Node
+    B-->>App: logical result
 ```
 
 ## Design Principles
 
 1. **Embeddable first** — ZYX is a library, not a server. Link directly into your process.
-2. **Single-writer / multi-reader** — `std::shared_mutex` gives exclusive write access while allowing concurrent reads.
-3. **Segment-based storage** — Fixed-size (128 KB) segments with linked-list chains per entity type.
-4. **Lazy initialization** — `QueryEngine`, `ThreadPool`, and `WAL` are created only when first accessed, keeping startup fast.
-5. **Double-buffered dirty tracking** — `PersistenceManager` maintains active and flushing dirty maps so reads can proceed during I/O.
+2. **Pinned snapshots** — every native read resolves data through one immutable metadata generation, so page relocation and reuse cannot mix generations.
+3. **One-file COW publication** — candidate pages are durable before one A/B Superblock publication; reopen observes either a complete old or complete new generation.
+4. **Typed, bounded I/O** — entity, property, index, Catalog, and Vector stores retain owner/generation/checksum validation and use finite cursors and admission-aware cache reads.
+5. **Fail closed** — malformed routes, keys, checksums, ownership, generation, and resource bounds are rejected rather than falling back to a legacy representation.

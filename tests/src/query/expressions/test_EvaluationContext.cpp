@@ -582,6 +582,37 @@ TEST_F(ExpressionsTest, EvaluationContext_IsNull) {
 	EXPECT_FALSE(EvaluationContext::isNull(PropertyValue(list)));
 }
 
+TEST_F(ExpressionsTest, EvaluationContext_ResolvesParametersMapsAndEveryNonScalarConversionFamily) {
+	std::unordered_map<std::string, PropertyValue> parameters{{"limit", PropertyValue(int64_t{12})}};
+	EvaluationContext parameterized(record_, parameters);
+	EXPECT_EQ(parameterized.resolveParameter("limit"), PropertyValue(int64_t{12}));
+	EXPECT_FALSE(parameterized.resolveParameter("missing").has_value());
+	EXPECT_FALSE(context_->resolveParameter("limit").has_value());
+
+	PropertyValue::MapType map{{"name", PropertyValue("Ada")}};
+	record_.setValue("row", PropertyValue(map));
+	EXPECT_EQ(context_->resolveProperty("row", "name"), PropertyValue("Ada"));
+	EXPECT_FALSE(context_->resolveProperty("row", "missing").has_value());
+	EXPECT_FALSE(context_->resolveProperty("x", "missing").has_value());
+
+	const PropertyValue emptyMap(PropertyValue::MapType{});
+	const PropertyValue nonEmptyMap(map);
+	EXPECT_FALSE(EvaluationContext::toBoolean(emptyMap));
+	EXPECT_TRUE(EvaluationContext::toBoolean(nonEmptyMap));
+	EXPECT_THROW(static_cast<void>(EvaluationContext::toInteger(nonEmptyMap)), TypeMismatchException);
+	EXPECT_THROW(static_cast<void>(EvaluationContext::toDouble(nonEmptyMap)), TypeMismatchException);
+
+	const PropertyValue date(TemporalDate::fromYMD(2026, 1, 2));
+	const PropertyValue dateTime(TemporalDateTime::fromComponents(2026, 1, 2, 3, 4, 5));
+	const PropertyValue duration(TemporalDuration::fromComponents(0, 0, 0, 1, 0, 0, 0));
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0x01}});
+	for (const PropertyValue* value: {&date, &dateTime, &duration, &bytes}) {
+		EXPECT_TRUE(EvaluationContext::toBoolean(*value));
+		EXPECT_THROW(static_cast<void>(EvaluationContext::toInteger(*value)), TypeMismatchException);
+		EXPECT_THROW(static_cast<void>(EvaluationContext::toDouble(*value)), TypeMismatchException);
+	}
+}
+
 TEST_F(ExpressionsTest, UndefinedVariableException_GetVariableName) {
 	// Test UndefinedVariableException::getVariableName()
 	UndefinedVariableException ex("testVar");

@@ -65,10 +65,6 @@ protected:
 		std::error_code ec;
 		if (fs::exists(dbPath))
 			fs::remove_all(dbPath, ec);
-		for (const std::string &suffix: {".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
-			ec.clear();
-			fs::remove_all(dbPath + suffix, ec);
-		}
 		if (fs::exists(scriptPath))
 			fs::remove(scriptPath, ec);
 	}

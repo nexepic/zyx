@@ -7,8 +7,12 @@
  **/
 
 #include <array>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -105,6 +109,66 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsEveryUnboundedOrInvali
 	rejects(options);
 }
 
+TEST(NativeGraphWritePlannerOptionsTest, DefaultAdjacencyBudgetAccountsForBothDirections) {
+	const NativeGraphWritePlannerOptions options;
+	EXPECT_EQ(options.maximum_logical_id_reservation,
+			  NativeGraphWritePlannerOptions::DEFAULT_MAXIMUM_LOGICAL_ID_RESERVATION);
+	EXPECT_EQ(options.maximum_global_adjacency_write_entries,
+			  2U * options.maximum_logical_id_reservation);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsStoresFromAnotherMetadataDomain) {
+	const std::filesystem::path foreignPath = path_.string() + ".foreign";
+	auto foreignFile = std::make_shared<std::fstream>(foreignPath,
+											  std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+	ASSERT_TRUE(foreignFile->is_open());
+	auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto foreignMetadata = RelocatableMetadataStore::initializeNew(
+			foreignIo, graph::storage::test::nativeGraphInitialSuperblock());
+	auto foreignEntities = std::make_unique<EntityPageStore>(foreignIo, *foreignMetadata);
+	auto foreignSlottedPages = std::make_unique<SlottedPagePool>(foreignIo, *foreignMetadata);
+	auto foreignIndexes = std::make_unique<BTreePageStore>(*foreignSlottedPages, *foreignMetadata);
+	auto foreignLabels = std::make_unique<EntityLabelSetStore>(foreignIo, *foreignMetadata, *foreignSlottedPages);
+	auto foreignProperties = std::make_unique<PropertyCollectionRootStore>(*foreignSlottedPages, *foreignMetadata);
+
+	// The writer publishes one COW generation. Mixing typed stores from two files
+	// would make its root set unrepresentable and must fail at construction.
+	EXPECT_THROW(static_cast<void>(NativeGraphWritePlanner(*metadata_, *foreignEntities, *labels_, *properties_,
+																								  *btree_pages_, plannerOptions())),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(NativeGraphWritePlanner(*metadata_, *entities_, *foreignLabels, *properties_,
+																								  *btree_pages_, plannerOptions())),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(NativeGraphWritePlanner(*metadata_, *entities_, *labels_, *foreignProperties,
+																								  *btree_pages_, plannerOptions())),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(NativeGraphWritePlanner(*metadata_, *entities_, *labels_, *properties_,
+																								  *foreignIndexes, plannerOptions())),
+				 std::invalid_argument);
+
+	foreignProperties.reset();
+	foreignLabels.reset();
+	foreignIndexes.reset();
+	foreignSlottedPages.reset();
+	foreignEntities.reset();
+	foreignMetadata.reset();
+	foreignIo.reset();
+	foreignFile->close();
+	foreignFile.reset();
+	std::error_code error;
+	std::filesystem::remove(foreignPath, error);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsTransactionsFromAMovedFromPlanner) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWritePlanner destination(std::move(planner));
+
+	EXPECT_THROW(static_cast<void>(planner.beginTransaction()), FormatException);
+	NativeGraphWriteTransaction transaction = destination.beginTransaction();
+	EXPECT_TRUE(transaction.isActive());
+	transaction.rollback();
+}
+
 TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsOperationsOnDefaultAndCompletedTransactions) {
 	NativeGraphWriteTransaction detached;
 	EXPECT_FALSE(detached.isActive());
@@ -152,6 +216,54 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsInvalidLabelsBeforeLea
 	EXPECT_THROW(static_cast<void>(transaction.createNode(tooMany)), FormatException);
 	EXPECT_EQ(metadata_->openSnapshot().superblock().next_logical_node_id, initialHighWater);
 	transaction.rollback();
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+		RejectsGraphPublicationWhenARequiredLeaseExhaustsTheCheckpointLsn) {
+	// Node creation obtains a durable logical-ID lease first. Starting one LSN
+	// below exhaustion lets that lease succeed, then verifies that the later
+	// graph publication refuses to wrap its required checkpoint LSN.
+	Superblock nearExhaustion = graph::storage::test::nativeGraphInitialSuperblock();
+	nearExhaustion.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 1U);
+	properties_.reset();
+	labels_.reset();
+	btree_pages_.reset();
+	slotted_pages_.reset();
+	entities_.reset();
+	metadata_.reset();
+	io_.reset();
+	file_->close();
+	file_ = std::make_shared<std::fstream>(path_, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+	ASSERT_TRUE(file_->is_open());
+	io_ = std::make_shared<StorageIO>(file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	metadata_ = RelocatableMetadataStore::initializeNew(io_, nearExhaustion);
+	entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
+	slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
+	btree_pages_ = std::make_unique<BTreePageStore>(*slotted_pages_, *metadata_);
+	labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
+	properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
+
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 0U>{});
+	EXPECT_THROW(static_cast<void>(transaction.commit()), FormatException);
+	// The LSN guard runs before any materialization or publication, so this is a
+	// retryable planning failure rather than an uncertain-durability outcome.
+	EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_ACTIVE);
+
+	MetadataSnapshotPin unchanged = metadata_->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().checkpoint_lsn, LogSequenceNumber(std::numeric_limits<uint64_t>::max()));
+	EXPECT_EQ(unchanged.superblock().next_logical_node_id, nodeId + 1U);
+	EXPECT_THROW(static_cast<void>(entities_->readNode(unchanged, nodeId)), FormatException);
+	unchanged.release();
+
+	transaction.rollback();
+	reopenNativeStores();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(recovered.superblock().checkpoint_lsn, LogSequenceNumber(std::numeric_limits<uint64_t>::max()));
+	EXPECT_EQ(recovered.superblock().next_logical_node_id, nodeId + 1U);
+	EXPECT_THROW(static_cast<void>(entities_->readNode(recovered, nodeId)), FormatException);
+	recovered.release();
 }
 
 TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsInvalidActiveTransactionInputsBeforePublication) {
@@ -359,6 +471,35 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest,
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}),
 			  (PropertyCollectionRoot{nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}}));
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+	   RejectsAnAdjacencyRebaseWhenAConcurrentCommitDeletesItsPersistedEndpoint) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const uint64_t source = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t target = seed.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(seed.commit().committed());
+
+	NativeGraphWriteTransaction stale = planner.beginTransaction();
+	const uint64_t edgeId = stale.createEdge(source, target, 7U);
+
+	NativeGraphWriteTransaction erase = planner.beginTransaction();
+	erase.eraseNode(source);
+	ASSERT_TRUE(erase.commit().committed());
+
+	// A rebase may move a disjoint adjacency overlay to a newer global root, but
+	// it must never publish an Edge whose persisted endpoint was deleted after
+	// the transaction's pinned snapshot.
+	const NativeGraphWriteCommitResult rejected = stale.commit();
+	EXPECT_EQ(rejected.outcome, NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED);
+	EXPECT_EQ(stale.state(), NativeGraphWriteTransactionState::NGWTS_CONFLICTED);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(entities_->readNode(snapshot, source)), FormatException);
+	EXPECT_EQ(entities_->readNode(snapshot, target), NodeEntityRecord{});
+	EXPECT_THROW(static_cast<void>(entities_->readEdge(snapshot, edgeId)), FormatException);
 	snapshot.release();
 }
 

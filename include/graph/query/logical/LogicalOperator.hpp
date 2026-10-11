@@ -2,8 +2,9 @@
  * @file LogicalOperator.hpp
  * @brief Abstract base class and type enum for all logical plan operators.
  *
- * The logical plan layer sits between the Cypher AST and physical execution.
- * Logical operators are inspectable, cloneable, and rewritable by optimizer rules.
+ * The logical plan layer sits between the Cypher AST and the storage-neutral
+ * logical runtimes. Logical operators are inspectable, cloneable, and may be
+ * rewritten only by logical-plan transformations.
  *
  * Licensed under the Apache License, Version 2.0
  **/
@@ -23,7 +24,7 @@ namespace graph::query::logical {
  * Prefixed with LOP_ to avoid Windows macro conflicts.
  */
 enum class LogicalOpType {
-	// Read operators (optimizable)
+	// Read operators
 	LOP_NODE_SCAN,
 	LOP_FILTER,
 	LOP_PROJECT,
@@ -39,7 +40,7 @@ enum class LogicalOpType {
 	LOP_UNION,
 	LOP_SINGLE_ROW,
 
-	// Write operators (pass-through, not optimized)
+	// Write operators
 	LOP_CREATE_NODE,
 	LOP_CREATE_EDGE,
 	LOP_SET,
@@ -48,7 +49,7 @@ enum class LogicalOpType {
 	LOP_MERGE_NODE,
 	LOP_MERGE_EDGE,
 
-	// DDL / Admin (pass-through)
+	// DDL / Admin
 	LOP_CREATE_INDEX,
 	LOP_DROP_INDEX,
 	LOP_SHOW_INDEXES,
@@ -64,11 +65,11 @@ enum class LogicalOpType {
 	LOP_VECTOR_SEARCH,
 	LOP_TRAIN_VECTOR_INDEX,
 
-	// Observability (pass-through)
+	// Observability
 	LOP_EXPLAIN,
 	LOP_PROFILE,
 
-	// Subquery & Advanced (pass-through)
+	// Subquery & Advanced
 	LOP_FOREACH,
 	LOP_CALL_SUBQUERY,
 	LOP_LOAD_CSV,
@@ -79,8 +80,8 @@ enum class LogicalOpType {
  * @class LogicalOperator
  * @brief Abstract base class for all logical plan operators.
  *
- * Logical operators form a tree that can be inspected, cloned, and rewritten
- * by optimizer rules before being converted to physical operators.
+ * Logical operators form the storage-neutral plan tree interpreted directly
+ * by the logical runtimes. They must not depend on a physical storage layout.
  */
 class LogicalOperator {
 public:

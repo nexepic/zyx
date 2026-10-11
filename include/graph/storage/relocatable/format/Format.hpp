@@ -18,6 +18,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace graph::storage {
 
@@ -36,7 +37,7 @@ namespace graph::storage {
 	constexpr uint64_t RSS_FIRST_ALLOCATABLE_SEGMENT_ID = RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN + 1U;
 	constexpr uint32_t RSS_PAGE_POOL_FIRST_DATA_FRAME = 1;
 	constexpr uint32_t RSS_PAGE_POOL_DATA_FRAME_COUNT = RSS_SEGMENT_SIZE / RSS_PAGE_SIZE - 1U;
-	constexpr uint16_t RSS_FORMAT_VERSION = 3;
+	constexpr uint16_t RSS_FORMAT_VERSION = 4;
 	constexpr uint32_t RSS_SEGMENT_MAGIC = 0x4758595AU; // Little-endian bytes: ZYXG
 	constexpr uint32_t RSS_ENVELOPE_BYTES = 64;
 	// The 16-bit envelope field is constrained to the largest 8-byte-aligned value.
@@ -62,6 +63,10 @@ namespace graph::storage {
 	struct DatabaseIdTag {};
 	struct PhysicalSlotIdTag {};
 	struct PageIdTag {};
+	// Metadata COW pages have an identity space independent from data-page
+	// PageId. The wire representation remains a uint64_t, but callers must not
+	// accidentally resolve one namespace through the other's directory.
+	struct MetadataPageIdTag {};
 	struct LargeValueIdTag {};
 	struct ExtentIdTag {};
 	struct GenerationTag {};
@@ -71,10 +76,14 @@ namespace graph::storage {
 	using DatabaseId = StrongUInt64<DatabaseIdTag>;
 	using PhysicalSlotId = StrongUInt64<PhysicalSlotIdTag>;
 	using PageId = StrongUInt64<PageIdTag>;
+	using MetadataPageId = StrongUInt64<MetadataPageIdTag>;
 	using LargeValueId = StrongUInt64<LargeValueIdTag>;
 	using ExtentId = StrongUInt64<ExtentIdTag>;
 	using Generation = StrongUInt64<GenerationTag>;
 	using LogSequenceNumber = StrongUInt64<LogSequenceNumberTag>;
+
+	static_assert(!std::is_convertible_v<PageId, MetadataPageId>);
+	static_assert(!std::is_convertible_v<MetadataPageId, PageId>);
 
 	// Physical references are restricted to relocatable metadata. Business records
 	// persist stable logical IDs and resolve them through directories instead.
@@ -108,6 +117,10 @@ namespace graph::storage {
 		// Generic external values use typed 4 KiB data and manifest frames.
 		SGK_LARGE_VALUE_DATA_POOL = 12,
 		SGK_LARGE_VALUE_MANIFEST_POOL = 13,
+		// Transaction-private bounded-sort fragments. These segments never hold
+		// public graph state and writable open reclaims every leftover fragment
+		// before exposing the backend to readers.
+		SGK_BULK_SCRATCH = 14,
 	};
 
 	enum class SegmentState : uint16_t {

@@ -7,6 +7,7 @@
  **/
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
@@ -214,17 +215,76 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementCandidateWriteFai
 	EXPECT_EQ(retried.location.page_index, 2U);
 }
 
-TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementControlWriteFailureReactivatesSourceAndReusesCandidate) {
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementCandidateShortWriteKeepsOldRouteAndFrameReusable) {
+	const std::array oldPayload{std::byte{0x13}, std::byte{0x14}};
+	const std::array newPayload{std::byte{0x23}, std::byte{0x24}};
+	const SharedPagePoolAllocation pool = createPool(31U, 91U, 40U, oldPayload, 2U);
+	switchToNativeIo();
+	const uint64_t candidateOffset = poolOffset(pool.pool.physical_slot) + 2U * RSS_PAGE_SIZE;
+	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortCandidate(
+				[candidateOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+						const size_t partialBytes = RSS_PAGE_OWNER_HEADER_BYTES - 1U;
+						return portable_pwrite(fd, bytes, partialBytes, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator_->replacePage(replacement, LogSequenceNumber(3U))),
+					 std::system_error);
+	}
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents old = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(old.location.page_index, 1U);
+	EXPECT_EQ(old.payload, std::vector<std::byte>(oldPayload.begin(), oldPayload.end()));
+	EXPECT_EQ(old.pool_header.allocated_frames, 1U);
+	recovered.release();
+	const SharedPagePoolAllocation retried = allocator_->replacePage(replacement, LogSequenceNumber(3U));
+	EXPECT_EQ(retried.location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementDoesNotRewriteItsPublishedSourceOwner) {
+	const std::array oldPayload{std::byte{0x17}, std::byte{0x18}};
+	const std::array newPayload{std::byte{0x27}, std::byte{0x28}};
+	const SharedPagePoolAllocation pool = createPool(31U, 91U, 40U, oldPayload, 2U);
+	switchToNativeIo();
+	const uint64_t sourceOffset = poolOffset(pool.pool.physical_slot) + RSS_PAGE_SIZE;
+	bool sourceWriteObserved = false;
+	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeSource(
+				[sourceOffset, &sourceWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															  pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == sourceOffset && byteCount == RSS_PAGE_SIZE) {
+						sourceWriteObserved = true;
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_NO_THROW(static_cast<void>(allocator_->replacePage(replacement, LogSequenceNumber(3U))));
+	}
+
+	EXPECT_FALSE(sourceWriteObserved);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(allocator_->read(snapshot, PageId(91U)).payload,
+			  std::vector<std::byte>(newPayload.begin(), newPayload.end()));
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementControlWriteFailureRetainsSourceAndReusesCandidate) {
 	const std::array oldPayload{std::byte{0x31}, std::byte{0x32}};
 	const std::array newPayload{std::byte{0x41}, std::byte{0x42}};
 	const SharedPagePoolAllocation pool = createPool(31U, 91U, 40U, oldPayload, 2U);
 	switchToNativeIo();
-	const uint64_t controlOffset = poolOffset(pool.pool.physical_slot);
+	const uint64_t inactiveControlOffset =
+			poolOffset(pool.pool.physical_slot) + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES;
 	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
 	{
 		StorageIO::ScopedNativeWriteHookForTesting failControl(
-				[controlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
-					if (static_cast<uint64_t>(offset) == controlOffset && byteCount == RSS_PAGE_SIZE) {
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
 						return failNativeWrite();
 					}
 					return portable_pwrite(fd, bytes, byteCount, offset);
@@ -244,6 +304,106 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementControlWriteFailu
 	const SharedPagePoolAllocation retried =
 			allocator_->replacePage(replacement, LogSequenceNumber(3U));
 	EXPECT_EQ(retried.location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementControlShortWriteRetainsThePreviousCompleteRecord) {
+	const std::array oldPayload{std::byte{0x35}, std::byte{0x36}};
+	const std::array newPayload{std::byte{0x45}, std::byte{0x46}};
+	const SharedPagePoolAllocation pool = createPool(31U, 91U, 40U, oldPayload, 2U);
+	switchToNativeIo();
+	const uint64_t inactiveControlOffset =
+			poolOffset(pool.pool.physical_slot) + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES;
+	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortControl(
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
+						const size_t partialBytes = 16U;
+						return portable_pwrite(fd, bytes, partialBytes, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator_->replacePage(replacement, LogSequenceNumber(3U))),
+					 std::system_error);
+	}
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents old = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(old.location.page_index, 1U);
+	EXPECT_EQ(old.payload, std::vector<std::byte>(oldPayload.begin(), oldPayload.end()));
+	EXPECT_EQ(old.pool_header.allocated_frames, 1U);
+	recovered.release();
+	EXPECT_EQ(allocator_->replacePage(replacement, LogSequenceNumber(3U)).location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementPrePublicationSyncFailureRetainsTheOldRoute) {
+	const std::array oldPayload{std::byte{0x37}, std::byte{0x38}};
+	const std::array newPayload{std::byte{0x47}, std::byte{0x48}};
+	static_cast<void>(createPool(31U, 91U, 40U, oldPayload, 2U));
+	switchToNativeIo();
+	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFirstSync([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(allocator_->replacePage(replacement, LogSequenceNumber(3U))),
+					 std::runtime_error);
+	}
+
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents old = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(old.location.page_index, 1U);
+	EXPECT_EQ(old.payload, std::vector<std::byte>(oldPayload.begin(), oldPayload.end()));
+	recovered.release();
+	EXPECT_EQ(allocator_->replacePage(replacement, LogSequenceNumber(3U)).location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReplacementControlDiskFullRetainsTheOldRoute) {
+	const std::array oldPayload{std::byte{0x39}, std::byte{0x3A}};
+	const std::array newPayload{std::byte{0x49}, std::byte{0x4A}};
+	const SharedPagePoolAllocation pool = createPool(31U, 91U, 40U, oldPayload, 2U);
+	switchToNativeIo();
+	const uint64_t inactiveControlOffset =
+			poolOffset(pool.pool.physical_slot) + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES;
+	SharedPagePoolReplacementRequest replacement = replacementRequest(newPayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting diskFull(
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator_->replacePage(replacement, LogSequenceNumber(3U))),
+					 std::system_error);
+	}
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents old = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(old.location.page_index, 1U);
+	EXPECT_EQ(old.payload, std::vector<std::byte>(oldPayload.begin(), oldPayload.end()));
+	recovered.release();
+	EXPECT_EQ(allocator_->replacePage(replacement, LogSequenceNumber(3U)).location.page_index, 2U);
 }
 
 TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationCandidateWriteFailureKeepsSourceAndDestinationReusable) {
@@ -279,18 +439,48 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationCandidateWriteFail
 	EXPECT_EQ(retried.location.page_index, 2U);
 }
 
-TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationControlWriteFailureReactivatesSourceAndReusesDestination) {
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationDoesNotRewriteItsPublishedSourceOwner) {
+	const std::array sourcePayload{std::byte{0x53}, std::byte{0x54}};
+	const std::array destinationPayload{std::byte{0x63}};
+	const SharedPagePoolAllocation source = createPool(31U, 91U, 40U, sourcePayload, 2U);
+	static_cast<void>(createPool(32U, 92U, 41U, destinationPayload, 3U));
+	switchToNativeIo();
+	const uint64_t sourceOffset = poolOffset(source.pool.physical_slot) + RSS_PAGE_SIZE;
+	bool sourceWriteObserved = false;
+	SharedPagePoolEvacuationRequest evacuation = evacuationRequest(sourcePayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeSource(
+				[sourceOffset, &sourceWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															  pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == sourceOffset && byteCount == RSS_PAGE_SIZE) {
+						sourceWriteObserved = true;
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_NO_THROW(static_cast<void>(allocator_->evacuatePage(evacuation, LogSequenceNumber(4U))));
+	}
+
+	EXPECT_FALSE(sourceWriteObserved);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const SharedPagePoolContents moved = allocator_->read(snapshot, PageId(91U));
+	EXPECT_EQ(moved.pool.segment_id, SegmentId(32U));
+	EXPECT_EQ(moved.payload, std::vector<std::byte>(sourcePayload.begin(), sourcePayload.end()));
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationControlWriteFailureRetainsSourceAndReusesDestination) {
 	const std::array sourcePayload{std::byte{0x71}, std::byte{0x72}};
 	const std::array destinationPayload{std::byte{0x81}};
 	static_cast<void>(createPool(31U, 91U, 40U, sourcePayload, 2U));
 	const SharedPagePoolAllocation destination = createPool(32U, 92U, 41U, destinationPayload, 3U);
 	switchToNativeIo();
-	const uint64_t controlOffset = poolOffset(destination.pool.physical_slot);
+	const uint64_t inactiveControlOffset = poolOffset(destination.pool.physical_slot) + RSS_ENVELOPE_BYTES +
+										  RSS_SHARED_PAGE_POOL_HEADER_BYTES;
 	SharedPagePoolEvacuationRequest evacuation = evacuationRequest(sourcePayload);
 	{
 		StorageIO::ScopedNativeWriteHookForTesting failControl(
-				[controlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
-					if (static_cast<uint64_t>(offset) == controlOffset && byteCount == RSS_PAGE_SIZE) {
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
 						return failNativeWrite();
 					}
 					return portable_pwrite(fd, bytes, byteCount, offset);
@@ -310,6 +500,75 @@ TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationControlWriteFailur
 	const SharedPagePoolAllocation retried =
 			allocator_->evacuatePage(evacuation, LogSequenceNumber(4U));
 	EXPECT_EQ(retried.location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationControlShortWriteRetainsTheSourceRoute) {
+	const std::array sourcePayload{std::byte{0x75}, std::byte{0x76}};
+	const std::array destinationPayload{std::byte{0x85}};
+	static_cast<void>(createPool(31U, 91U, 40U, sourcePayload, 2U));
+	const SharedPagePoolAllocation destination = createPool(32U, 92U, 41U, destinationPayload, 3U);
+	switchToNativeIo();
+	const uint64_t inactiveControlOffset = poolOffset(destination.pool.physical_slot) + RSS_ENVELOPE_BYTES +
+										  RSS_SHARED_PAGE_POOL_HEADER_BYTES;
+	SharedPagePoolEvacuationRequest evacuation = evacuationRequest(sourcePayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortControl(
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
+						const size_t partialBytes = 16U;
+						return portable_pwrite(fd, bytes, partialBytes, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator_->evacuatePage(evacuation, LogSequenceNumber(4U))),
+					 std::system_error);
+	}
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents source = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(source.pool.segment_id, SegmentId(31U));
+	EXPECT_EQ(source.payload, std::vector<std::byte>(sourcePayload.begin(), sourcePayload.end()));
+	EXPECT_EQ(allocator_->read(recovered, PageId(92U)).pool_header.allocated_frames, 1U);
+	recovered.release();
+	EXPECT_EQ(allocator_->evacuatePage(evacuation, LogSequenceNumber(4U)).location.page_index, 2U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, EvacuationDestinationControlDiskFullRetainsTheSourceRoute) {
+	const std::array sourcePayload{std::byte{0x77}, std::byte{0x78}};
+	const std::array destinationPayload{std::byte{0x87}};
+	static_cast<void>(createPool(31U, 91U, 40U, sourcePayload, 2U));
+	const SharedPagePoolAllocation destination = createPool(32U, 92U, 41U, destinationPayload, 3U);
+	switchToNativeIo();
+	const uint64_t inactiveControlOffset = poolOffset(destination.pool.physical_slot) + RSS_ENVELOPE_BYTES +
+										  RSS_SHARED_PAGE_POOL_HEADER_BYTES;
+	SharedPagePoolEvacuationRequest evacuation = evacuationRequest(sourcePayload);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting diskFull(
+				[inactiveControlOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == inactiveControlOffset &&
+						byteCount == RSS_SHARED_PAGE_POOL_HEADER_BYTES) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator_->evacuatePage(evacuation, LogSequenceNumber(4U))),
+					 std::system_error);
+	}
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const SharedPagePoolContents source = allocator_->read(recovered, PageId(91U));
+	EXPECT_EQ(source.pool.segment_id, SegmentId(31U));
+	EXPECT_EQ(source.payload, std::vector<std::byte>(sourcePayload.begin(), sourcePayload.end()));
+	recovered.release();
+	EXPECT_EQ(allocator_->evacuatePage(evacuation, LogSequenceNumber(4U)).location.page_index, 2U);
 }
 
 TEST_F(RelocatableSharedPagePoolAllocatorFaultTest, ReachableOwnerChecksumCorruptionFailsClosedOnReopen) {

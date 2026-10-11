@@ -84,25 +84,44 @@ namespace graph::utils {
 
 	} // namespace
 
-	std::array<std::byte, SHA256_DIGEST_BYTES> Sha256::digest(std::span<const std::byte> bytes) {
-		if (bytes.size() > std::numeric_limits<uint64_t>::max() / 8U) {
+	Sha256::Sha256() : state_{0x6A09E667U, 0xBB67AE85U, 0x3C6EF372U, 0xA54FF53AU,
+								  0x510E527FU, 0x9B05688CU, 0x1F83D9ABU, 0x5BE0CD19U} {}
+
+	void Sha256::update(std::span<const std::byte> bytes) {
+		constexpr uint64_t MAXIMUM_INPUT_BYTES = std::numeric_limits<uint64_t>::max() / 8U;
+		if (bytes.size() > MAXIMUM_INPUT_BYTES || byte_count_ > MAXIMUM_INPUT_BYTES - bytes.size()) {
 			throw std::invalid_argument("SHA-256 input length exceeds the format's bit-length field");
 		}
-		std::array<uint32_t, 8U> state = {0x6A09E667U, 0xBB67AE85U, 0x3C6EF372U, 0xA54FF53AU,
-										  0x510E527FU, 0x9B05688CU, 0x1F83D9ABU, 0x5BE0CD19U};
+		byte_count_ += static_cast<uint64_t>(bytes.size());
 		size_t consumed = 0U;
-		while (bytes.size() - consumed >= 64U) {
+		if (tail_size_ != 0U) {
+			const size_t copied = std::min(tail_.size() - tail_size_, bytes.size());
+			std::copy_n(bytes.begin(), copied, tail_.begin() + static_cast<std::ptrdiff_t>(tail_size_));
+			tail_size_ += copied;
+			consumed = copied;
+			if (tail_size_ == tail_.size()) {
+				transform(state_, tail_);
+				tail_size_ = 0U;
+			}
+		}
+		while (bytes.size() - consumed >= tail_.size()) {
 			std::array<std::byte, 64U> block{};
 			std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(consumed), block.size(), block.begin());
-			transform(state, block);
+			transform(state_, block);
 			consumed += block.size();
 		}
-		std::array<std::byte, 128U> tail{};
 		const size_t remainder = bytes.size() - consumed;
-		std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(consumed), remainder, tail.begin());
-		tail[remainder] = std::byte{0x80};
-		const size_t finalBytes = remainder + 1U + sizeof(uint64_t) <= 64U ? 64U : 128U;
-		const uint64_t bitLength = static_cast<uint64_t>(bytes.size()) * 8U;
+		std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(consumed), remainder, tail_.begin());
+		tail_size_ = remainder;
+	}
+
+	std::array<std::byte, SHA256_DIGEST_BYTES> Sha256::finalize() const {
+		std::array<uint32_t, 8U> state = state_;
+		std::array<std::byte, 128U> tail{};
+		std::copy_n(tail_.begin(), tail_size_, tail.begin());
+		tail[tail_size_] = std::byte{0x80};
+		const size_t finalBytes = tail_size_ + 1U + sizeof(uint64_t) <= 64U ? 64U : 128U;
+		const uint64_t bitLength = byte_count_ * 8U;
 		for (size_t index = 0U; index < sizeof(bitLength); ++index) {
 			tail[finalBytes - 1U - index] = static_cast<std::byte>((bitLength >> (index * 8U)) & UINT64_C(0xFF));
 		}
@@ -122,6 +141,12 @@ namespace graph::utils {
 			}
 		}
 		return result;
+	}
+
+	std::array<std::byte, SHA256_DIGEST_BYTES> Sha256::digest(std::span<const std::byte> bytes) {
+		Sha256 hasher;
+		hasher.update(bytes);
+		return hasher.finalize();
 	}
 
 } // namespace graph::utils

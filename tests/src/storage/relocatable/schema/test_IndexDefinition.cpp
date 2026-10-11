@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -238,4 +239,25 @@ TEST(RelocatableIndexDefinitionTest, RejectsInvalidLogicalDefinitions) {
 	invalid = propertyDefinition();
 	invalid.vector_metric = "l2";
 	expectFormatError([&] { static_cast<void>(IndexDefinitionCodec::encode(invalid)); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableIndexDefinitionTest, RejectsOrExactlyRoundTripsEverySingleBitMutation) {
+	IndexDefinition expected = compositeDefinition();
+	expected.name = std::string("person\0index", 12);
+	expected.property_names = {std::string("family\0", 7), std::string("given\xFF", 6)};
+	const std::vector<std::byte> encoded = IndexDefinitionCodec::encode(expected);
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			try {
+				const IndexDefinition decoded = IndexDefinitionCodec::decode(mutation);
+				EXPECT_EQ(IndexDefinitionCodec::encode(decoded), mutation)
+						<< "Index definition mutation was normalized at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Any non-canonical mutation must fail at the typed format boundary.
+			}
+		}
+	}
 }

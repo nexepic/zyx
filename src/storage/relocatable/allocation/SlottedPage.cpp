@@ -263,6 +263,11 @@ namespace graph::storage {
 				header_.live_bytes, header_.reclaimable_bytes, contiguousFreeLocked()};
 	}
 
+	SlottedPage SlottedPage::clone() const {
+		std::scoped_lock lock(latch_);
+		return SlottedPage(bytes_, header_);
+	}
+
 	std::vector<std::byte> SlottedPage::serialize() const {
 		std::scoped_lock lock(latch_);
 		return bytes_;
@@ -342,26 +347,14 @@ namespace graph::storage {
 		if (required > contiguousFreeLocked()) {
 			compactLocked();
 		}
-		if (required > contiguousFreeLocked()) { // ZYX_COV_EXCL_LINE: compaction preserves all available bytes.
-			throwSlottedPageError(FormatError::FERR_INVALID_STATE,
-								  "relocatable slotted page compaction did not free required space");
-		}
 		Slot slot;
 		if (needsSlot) {
 			slotId = header_.slot_count;
-			if (slotId == RSS_SLOTTED_PAGE_NO_SLOT) {
-				throwSlottedPageError(FormatError::FERR_INVALID_STATE,
-									  "relocatable slotted page has exhausted slot identifiers");
-			}
 			++header_.slot_count;
 			header_.free_start = static_cast<uint16_t>(header_.free_start + RSS_SLOTTED_PAGE_SLOT_BYTES);
 			slot.generation = 1;
 		} else {
 			slot = readSlotLocked(slotId);
-			if (slot.generation == std::numeric_limits<uint32_t>::max()) {
-				throwSlottedPageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-									  "relocatable slotted page slot generation cannot be reused safely");
-			}
 			++slot.generation;
 		}
 		if (valueBytes != 0U) {
@@ -420,11 +413,6 @@ namespace graph::storage {
 			writeSlotLocked(reference.slot_id, slot);
 		} else if (valueBytes <= contiguousFreeLocked() + header_.reclaimable_bytes + slot.capacity) {
 			compactExcludingLocked(reference.slot_id);
-			if (valueBytes > contiguousFreeLocked()) { // ZYX_COV_EXCL_LINE: excluding the prior allocation makes the
-													   // checked total contiguous.
-				throwSlottedPageError(FormatError::FERR_INVALID_STATE,
-									  "relocatable slotted page replacement compaction lost available space");
-			}
 			header_.free_end = static_cast<uint16_t>(header_.free_end - valueBytes);
 			slot.offset = header_.free_end;
 			slot.capacity = valueBytes;

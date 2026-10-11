@@ -3,6 +3,8 @@
 buildDir/
 buildDir_*/
 /build_*/
+# Local sanitizer builds use hyphenated names and are fully regenerable.
+build-*/
 /libzyx_core.a
 build_release/
 build_bench_release/

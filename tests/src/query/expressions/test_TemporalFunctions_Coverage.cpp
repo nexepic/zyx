@@ -52,19 +52,16 @@ TEST_F(FunctionRegistryTest, DurationFunction_MapWithAllComponents) {
 }
 
 // ============================================================================
-// duration() map with non-integer values (uses default 0)
+// duration() map with non-integer values must fail rather than silently default.
 // ============================================================================
 
-TEST_F(FunctionRegistryTest, DurationFunction_MapNonIntegerValues) {
+TEST_F(FunctionRegistryTest, DurationFunction_RejectsNonIntegerMapValues) {
 	const ScalarFunction* func = registry->lookupScalarFunction("duration");
 	PropertyValue::MapType map;
 	map["years"] = PropertyValue(std::string("not_int"));
 	map["months"] = PropertyValue(true);
 	std::vector<PropertyValue> args{PropertyValue(map)};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::DURATION);
-	const auto& dur = std::get<TemporalDuration>(result.getVariant());
-	EXPECT_EQ(dur.months, 0);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 // ============================================================================
@@ -85,25 +82,24 @@ TEST_F(FunctionRegistryTest, DatetimeFunction_MapPartialTimeFields) {
 }
 
 // ============================================================================
-// date() map with non-integer month/day (uses defaults)
+// date() map with non-integer components must fail rather than silently default.
 // ============================================================================
 
-TEST_F(FunctionRegistryTest, DateFunction_MapNonIntegerDay) {
+TEST_F(FunctionRegistryTest, DateFunction_RejectsNonIntegerDay) {
 	const ScalarFunction* func = registry->lookupScalarFunction("date");
 	PropertyValue::MapType map;
 	map["year"] = PropertyValue(static_cast<int64_t>(2024));
 	map["month"] = PropertyValue(static_cast<int64_t>(3));
 	map["day"] = PropertyValue(std::string("fifteen")); // not integer
 	std::vector<PropertyValue> args{PropertyValue(map)};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::DATE);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 // ============================================================================
-// datetime() map with non-integer minute/second/millisecond
+// datetime() map with non-integer components must fail rather than silently default.
 // ============================================================================
 
-TEST_F(FunctionRegistryTest, DatetimeFunction_MapNonIntegerMinute) {
+TEST_F(FunctionRegistryTest, DatetimeFunction_RejectsNonIntegerComponents) {
 	const ScalarFunction* func = registry->lookupScalarFunction("datetime");
 	PropertyValue::MapType map;
 	map["year"] = PropertyValue(static_cast<int64_t>(2024));
@@ -114,6 +110,5 @@ TEST_F(FunctionRegistryTest, DatetimeFunction_MapNonIntegerMinute) {
 	map["second"] = PropertyValue(true); // not integer
 	map["millisecond"] = PropertyValue(3.14); // not integer
 	std::vector<PropertyValue> args{PropertyValue(map)};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }

@@ -17,6 +17,20 @@ from typing import Sequence
 PROCESS_REAP_TIMEOUT_SECONDS = 5.0
 
 
+def _heartbeat_interval_seconds() -> float | None:
+    """Return the optional bounded progress interval for long noninteractive runs."""
+    raw_value = os.environ.get("ZYX_TEST_HEARTBEAT_SECONDS")
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        interval = float(raw_value)
+    except ValueError as error:
+        raise ValueError("ZYX_TEST_HEARTBEAT_SECONDS must be a positive number") from error
+    if interval <= 0:
+        raise ValueError("ZYX_TEST_HEARTBEAT_SECONDS must be a positive number")
+    return interval
+
+
 class _WindowsProcessJob:
     """Keep all Windows test descendants in a job that dies with the runner."""
 
@@ -230,6 +244,8 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
     if not command:
         raise ValueError("a test command is required")
 
+    heartbeat_interval = _heartbeat_interval_seconds()
+
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -274,6 +290,7 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
 
     try:
         deadline = time.monotonic() + timeout_seconds
+        next_heartbeat = time.monotonic() + heartbeat_interval if heartbeat_interval is not None else None
         while process.poll() is None:
             if interrupted:
                 cleanup_attempted = True
@@ -290,6 +307,14 @@ def run(command: Sequence[str], timeout_seconds: float) -> int:
                 _terminate_and_reap(process, reason="the test timeout", windows_job=windows_job)
                 exit_code = 124
                 break
+            if next_heartbeat is not None and time.monotonic() >= next_heartbeat:
+                elapsed = timeout_seconds - remaining
+                print(
+                    f"Test process PID {process.pid} is still running ({elapsed:.0f}s elapsed; "
+                    f"timeout {timeout_seconds:.0f}s).",
+                    flush=True,
+                )
+                next_heartbeat = time.monotonic() + heartbeat_interval
             try:
                 process.wait(timeout=min(remaining, 1.0))
             except subprocess.TimeoutExpired:

@@ -211,6 +211,29 @@ TEST(RelocatableVectorManifestPageTest, RetainsChecksummedZeroPaddingAfterAFullE
 							[](std::byte value) { return value == std::byte{}; }));
 }
 
+TEST(RelocatableVectorManifestPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::vector<std::byte> encoded = VectorManifestPageCodec::encode(manifest());
+	ASSERT_EQ(encoded.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateChecksums(mutation);
+			try {
+				const VectorManifest decoded = VectorManifestPageCodec::decode(mutation);
+				if (VectorManifestPageCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "vector manifest mutation was normalized at byte " << byteOffset << ", bit "
+								  << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical manifest image must fail at the typed format boundary.
+			}
+		}
+	}
+}
+
 TEST(RelocatableVectorManifestPageTest, RejectsInvalidAdjacencyMappingAndMetricContracts) {
 	VectorManifest invalid = manifest();
 	invalid.metric = static_cast<VectorDistanceMetric>(99U);

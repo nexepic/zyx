@@ -4,19 +4,29 @@
  */
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <stdexcept>
+#include <system_error>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/vector/VectorAdjacencyPageStore.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -30,6 +40,11 @@ namespace {
 			EXPECT_EQ(error.error(), expected);
 		}
 	}
+
+	class ThrowOnCancellationCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override { throw std::runtime_error("test cancellation"); }
+	};
 
 	Superblock initialSuperblock() {
 		Superblock result;
@@ -156,6 +171,158 @@ TEST_F(RelocatableVectorAdjacencyPageStoreTest, StagesPackedPagesForManifestPubl
 			  (VectorAdjacencyRecord{source.back().vector_id, source.back().neighbors}));
 }
 
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativeDiskFullDuringMaterializationRetainsNoPublishedAdjacencyPageAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const std::vector<VectorAdjacencyMaterializationRecord> source = records(2U);
+		bool diskFullObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failFirstCandidate(
+					[&diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (!diskFullObserved && byteCount == RSS_PAGE_SIZE) {
+							diskFullObserved = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.materialize(17U, source, options(), LogSequenceNumber(2U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(diskFullObserved);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_TRUE(metadata->findCurrentVectorAdjacencyPagePools(current).empty());
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, PageId(1U)).has_value());
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		VectorAdjacencyPageStore recoveredStore(nativeIo, *recovered);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		EXPECT_TRUE(recovered->findCurrentVectorAdjacencyPagePools(recoveredSnapshot).empty());
+		EXPECT_FALSE(recovered->findPageLocationOptional(recoveredSnapshot, PageId(1U)).has_value());
+		recoveredSnapshot.release();
+
+		const VectorAdjacencyMaterializationResult retry =
+				recoveredStore.materialize(17U, source, options(), LogSequenceNumber(2U));
+		ASSERT_EQ(retry.pages.size(), 1U);
+		MetadataSnapshotPin published = recovered->openSnapshot();
+		EXPECT_EQ(recoveredStore.readRecord(published, retry.pages.front().page_id, source.front().vector_id),
+				  (VectorAdjacencyRecord{source.front().vector_id, source.front().neighbors}));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativePrePublicationSyncFailureRetainsNoPublishedAdjacencyPageAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const std::vector<VectorAdjacencyMaterializationRecord> source = records(2U);
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.materialize(17U, source, options(), LogSequenceNumber(2U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_TRUE(metadata->findCurrentVectorAdjacencyPagePools(current).empty());
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, PageId(1U)).has_value());
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		VectorAdjacencyPageStore recoveredStore(nativeIo, *recovered);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		EXPECT_TRUE(recovered->findCurrentVectorAdjacencyPagePools(recoveredSnapshot).empty());
+		EXPECT_FALSE(recovered->findPageLocationOptional(recoveredSnapshot, PageId(1U)).has_value());
+		recoveredSnapshot.release();
+
+		const VectorAdjacencyMaterializationResult retry =
+				recoveredStore.materialize(17U, source, options(), LogSequenceNumber(2U));
+		ASSERT_EQ(retry.pages.size(), 1U);
+		MetadataSnapshotPin published = recovered->openSnapshot();
+		EXPECT_EQ(recoveredStore.readRecord(published, retry.pages.front().page_id, source.back().vector_id),
+				  (VectorAdjacencyRecord{source.back().vector_id, source.back().neighbors}));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativeFinalPublicationSyncFailureReportsUncertainDurabilityAndReopensTheCompleteAdjacencyPage) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const std::vector<VectorAdjacencyMaterializationRecord> source = records(2U);
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.materialize(17U, source, options(), LogSequenceNumber(2U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+
+		// The inactive Superblock is complete before its final durability fence.
+		// The operation is uncertain to its caller, while every reader must select
+		// the complete new Page Directory route and its immutable page.
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		ASSERT_EQ(metadata->findCurrentVectorAdjacencyPagePools(current).size(), 1U);
+		ASSERT_TRUE(metadata->findPageLocationOptional(current, PageId(1U)).has_value());
+		EXPECT_EQ(store.readRecord(current, PageId(1U), source.front().vector_id),
+				  (VectorAdjacencyRecord{source.front().vector_id, source.front().neighbors}));
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		VectorAdjacencyPageStore recoveredStore(nativeIo, *recovered);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		ASSERT_EQ(recovered->findCurrentVectorAdjacencyPagePools(recoveredSnapshot).size(), 1U);
+		ASSERT_TRUE(recovered->findPageLocationOptional(recoveredSnapshot, PageId(1U)).has_value());
+		EXPECT_EQ(recoveredStore.readRecord(recoveredSnapshot, PageId(1U), source.back().vector_id),
+				  (VectorAdjacencyRecord{source.back().vector_id, source.back().neighbors}));
+		recoveredSnapshot.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
 TEST_F(RelocatableVectorAdjacencyPageStoreTest, RejectsUnboundedUnorderedAndInvalidRecordsBeforePublication) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	VectorAdjacencyPageStore store(io, *metadata);
@@ -280,6 +447,222 @@ TEST_F(RelocatableVectorAdjacencyPageStoreTest, RejectsMalformedPreparedPoolAndR
 	expectFormatError(
 			[&] { store.prepareDerivedRetirements(std::span(&duplicatePage, 1U), LogSequenceNumber(3U)); },
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest, CancellationPreventsPreparedMaterializationAndRetirement) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorAdjacencyPageStore store(io, *metadata);
+	const std::array<VectorAdjacencyMaterializationRecord, 1U> source{{{1U, {}}}};
+	std::array<VectorAdjacencyMaterializationPoolBatch, 0U> noPools{};
+	ThrowOnCancellationCheck cancellation;
+	EXPECT_THROW(static_cast<void>(
+				 store.prepareNewPoolPages(17U, source, options(), noPools, LogSequenceNumber(2U), &cancellation)),
+			 std::runtime_error);
+
+	const VectorAdjacencyMaterializationResult materialized =
+			store.materialize(17U, source, options(), LogSequenceNumber(2U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const PageLocation location = metadata->findPageLocation(snapshot, materialized.pages.front().page_id);
+	const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
+	EXPECT_EQ(store.readRecord(snapshot, materialized.pages.front().page_id, 1U).vector_id, 1U);
+	snapshot.release();
+	const ExistingPoolPageRetirementBatch retirementPool{
+			pool,
+			{{location, VectorAdjacencyPageStore::derivedOwnerId(17U), PageOwnerKind::POK_VECTOR_ADJACENCY,
+			  LogSequenceNumber(2U)}}};
+	EXPECT_THROW(store.prepareDerivedRetirements(std::span(&retirementPool, 1U), LogSequenceNumber(3U), &cancellation),
+			 std::runtime_error);
+
+	const MetadataSnapshotPin afterCancellation = metadata->openSnapshot();
+	EXPECT_EQ(store.readRecord(afterCancellation, materialized.pages.front().page_id, 1U).vector_id, 1U);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest, RetiresAnUnreferencedDerivedAdjacencyPageAtOneMetadataBoundary) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorAdjacencyPageStore store(io, *metadata);
+	const VectorAdjacencyMaterializationResult materialized =
+			store.materialize(17U, records(1U), options(), LogSequenceNumber(2U));
+
+	MetadataSnapshotPin plannedSnapshot = metadata->openSnapshot();
+	const std::optional<DerivedVectorAdjacencyPage> observed =
+			store.inspectDerivedPage(plannedSnapshot, materialized.pages.front().page_id);
+	ASSERT_TRUE(observed.has_value());
+	const Generation plannedGeneration = plannedSnapshot.superblock().generation;
+	plannedSnapshot.release();
+	const std::array<DerivedVectorAdjacencyPage, 1U> plan{*observed};
+
+	const Superblock published = store.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U));
+	EXPECT_EQ(published.generation, Generation(plannedGeneration.value() + 1U));
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findPageLocationOptional(current, materialized.pages.front().page_id).has_value());
+	current.release();
+
+	store.reclaimRetiredFrames(observed->location.segment_id);
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata).scan()));
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativeRetirementDiskFullRetainsThePublishedAdjacencyPageAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const VectorAdjacencyMaterializationResult materialized =
+				store.materialize(17U, records(1U), options(), LogSequenceNumber(2U));
+		MetadataSnapshotPin plannedSnapshot = metadata->openSnapshot();
+		const std::optional<DerivedVectorAdjacencyPage> observed =
+				store.inspectDerivedPage(plannedSnapshot, materialized.pages.front().page_id);
+		ASSERT_TRUE(observed.has_value());
+		const Generation plannedGeneration = plannedSnapshot.superblock().generation;
+		plannedSnapshot.release();
+		const std::array<DerivedVectorAdjacencyPage, 1U> plan{*observed};
+
+		bool diskFullObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failFirstCandidate(
+					[&diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (!diskFullObserved && byteCount == RSS_PAGE_SIZE) {
+							diskFullObserved = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(diskFullObserved);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		ASSERT_TRUE(metadata->findPageLocationOptional(current, materialized.pages.front().page_id).has_value());
+		EXPECT_EQ(store.readRecord(current, materialized.pages.front().page_id, 1U).vector_id, 1U);
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		VectorAdjacencyPageStore recoveredStore(nativeIo, *recovered);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		ASSERT_TRUE(recovered->findPageLocationOptional(recoveredSnapshot, materialized.pages.front().page_id).has_value());
+		EXPECT_EQ(recoveredStore.readRecord(recoveredSnapshot, materialized.pages.front().page_id, 1U).vector_id, 1U);
+		recoveredSnapshot.release();
+
+		const Superblock retried = recoveredStore.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U));
+		EXPECT_EQ(retried.generation, Generation(plannedGeneration.value() + 1U));
+		MetadataSnapshotPin retired = recovered->openSnapshot();
+		EXPECT_FALSE(recovered->findPageLocationOptional(retired, materialized.pages.front().page_id).has_value());
+		retired.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativeRetirementPrePublicationSyncFailureRetainsThePublishedAdjacencyPageAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const VectorAdjacencyMaterializationResult materialized =
+				store.materialize(17U, records(1U), options(), LogSequenceNumber(2U));
+		MetadataSnapshotPin plannedSnapshot = metadata->openSnapshot();
+		const std::optional<DerivedVectorAdjacencyPage> observed =
+				store.inspectDerivedPage(plannedSnapshot, materialized.pages.front().page_id);
+		ASSERT_TRUE(observed.has_value());
+		const Generation plannedGeneration = plannedSnapshot.superblock().generation;
+		plannedSnapshot.release();
+		const std::array<DerivedVectorAdjacencyPage, 1U> plan{*observed};
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		ASSERT_TRUE(metadata->findPageLocationOptional(current, materialized.pages.front().page_id).has_value());
+		EXPECT_EQ(store.readRecord(current, materialized.pages.front().page_id, 1U).vector_id, 1U);
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		VectorAdjacencyPageStore recoveredStore(nativeIo, *recovered);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		ASSERT_TRUE(recovered->findPageLocationOptional(recoveredSnapshot, materialized.pages.front().page_id).has_value());
+		EXPECT_EQ(recoveredStore.readRecord(recoveredSnapshot, materialized.pages.front().page_id, 1U).vector_id, 1U);
+		recoveredSnapshot.release();
+
+		const Superblock retried = recoveredStore.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U));
+		EXPECT_EQ(retried.generation, Generation(plannedGeneration.value() + 1U));
+		MetadataSnapshotPin retired = recovered->openSnapshot();
+		EXPECT_FALSE(recovered->findPageLocationOptional(retired, materialized.pages.front().page_id).has_value());
+		retired.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorAdjacencyPageStoreTest,
+       NativeRetirementFinalPublicationSyncFailureReportsUncertainDurabilityAndReopensTheCompleteRetirement) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorAdjacencyPageStore store(nativeIo, *metadata);
+		const VectorAdjacencyMaterializationResult materialized =
+				store.materialize(17U, records(1U), options(), LogSequenceNumber(2U));
+		MetadataSnapshotPin plannedSnapshot = metadata->openSnapshot();
+		const std::optional<DerivedVectorAdjacencyPage> observed =
+				store.inspectDerivedPage(plannedSnapshot, materialized.pages.front().page_id);
+		ASSERT_TRUE(observed.has_value());
+		const Generation plannedGeneration = plannedSnapshot.superblock().generation;
+		plannedSnapshot.release();
+		const std::array<DerivedVectorAdjacencyPage, 1U> plan{*observed};
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.retireDerivedPages(plannedGeneration, plan, LogSequenceNumber(3U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, materialized.pages.front().page_id).has_value());
+		current.release();
+		metadata.reset();
+
+		auto recovered = RelocatableMetadataStore::open(nativeIo);
+		MetadataSnapshotPin recoveredSnapshot = recovered->openSnapshot();
+		EXPECT_FALSE(recovered->findPageLocationOptional(recoveredSnapshot, materialized.pages.front().page_id).has_value());
+		recoveredSnapshot.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
 TEST_F(RelocatableVectorAdjacencyPageStoreTest, RejectsCrossNamespaceReadsAndRetainsUnfamiliarValidOwners) {

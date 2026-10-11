@@ -93,11 +93,11 @@ TEST_F(LogicalNodeScanTest, MutablePropertyPredicates) {
     EXPECT_EQ(scan.getPropertyPredicates().size(), 1u);
 }
 
-TEST_F(LogicalNodeScanTest, PreferredScanType) {
+TEST_F(LogicalNodeScanTest, PreferredScanHint) {
     LogicalNodeScan scan("n");
-    EXPECT_EQ(scan.getPreferredScanType(), graph::query::execution::ScanType::FULL_SCAN);
-    scan.setPreferredScanType(graph::query::execution::ScanType::LABEL_SCAN);
-    EXPECT_EQ(scan.getPreferredScanType(), graph::query::execution::ScanType::LABEL_SCAN);
+    EXPECT_EQ(scan.getPreferredScanHint(), graph::query::logical::LogicalScanHint::LSH_FULL);
+    scan.setPreferredScanHint(graph::query::logical::LogicalScanHint::LSH_LABEL);
+    EXPECT_EQ(scan.getPreferredScanHint(), graph::query::logical::LogicalScanHint::LSH_LABEL);
 }
 
 TEST_F(LogicalNodeScanTest, ClonePreservesState) {

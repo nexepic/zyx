@@ -21,6 +21,9 @@ namespace graph::storage {
 	constexpr uint32_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC = 0x4552595AU; // Little-endian bytes: ZYRE
 	constexpr uint16_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION = 1;
 	constexpr uint16_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES = 32;
+	constexpr uint32_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC = 0x5050595AU; // Little-endian bytes: ZYPP
+	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION = 1;
+	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES = 16;
 	constexpr uint32_t RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_MAGIC = 0x5650595AU; // Little-endian bytes: ZYPV
 	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_VERSION = 1;
 	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_HEADER_BYTES = 40;
@@ -49,6 +52,16 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const PropertyCollectionRoot &root);
 		[[nodiscard]] static PropertyCollectionRoot decode(std::span<const std::byte> bytes);
+	};
+
+	// LargeValue contents deliberately omit the owner: the compact reference in
+	// the Property page remains the authoritative owner binding, allowing equal
+	// immutable Property payloads to share one content-index entry.
+	class EntityPropertyLargeValuePayloadCodec final {
+	public:
+		[[nodiscard]] static std::vector<std::byte> encode(std::span<const PropertyCollectionRootEntry> entries);
+		[[nodiscard]] static std::vector<PropertyCollectionRootEntry> decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static bool hasMagic(std::span<const std::byte> bytes);
 	};
 
 	// An owner-keyed Property page may hold this compact reference instead of an

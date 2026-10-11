@@ -12,6 +12,55 @@ on:
         required: false
         default: "0"
         type: string
+      p0_bulk_edge_profile:
+        description: "Run a reviewed P0 bulk-Edge calibration candidate on every platform; disabled leaves the normal smoke gate unchanged."
+        required: false
+        default: "disabled"
+        type: choice
+        options:
+          - disabled
+          - 1m
+          - 10m
+      p0_bulk_edge_hardware_label:
+        description: "Reviewed hardware identity for a manual P0 calibration candidate (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_minimum_ingest_edges_per_second:
+        description: "Positive reviewed P0 throughput floor (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_maximum_bytes_per_edge:
+        description: "Positive reviewed P0 space ceiling (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_maximum_reopen_and_scan_ms:
+        description: "Positive reviewed P0 reopen-and-scan ceiling (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_maximum_peak_rss_bytes:
+        description: "Positive reviewed P0 peak-RSS ceiling in bytes (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_maximum_scratch_candidate_segments:
+        description: "Positive reviewed P0 scratch-candidate ceiling (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_minimum_scratch_source_runs:
+        description: "Positive reviewed P0 scratch source-run floor (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
+      p0_bulk_edge_minimum_scratch_merge_passes:
+        description: "Reviewed P0 scratch merge-pass floor, including zero (required when the profile is enabled)."
+        required: false
+        default: ""
+        type: string
 
 jobs:
   native-storage-tsan:
@@ -55,7 +104,51 @@ jobs:
         run: |
           TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' \
             ./build-tsan/zyx_test_suite \
-              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance'
+              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance:RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied'
+        shell: bash
+
+  native-storage-asan-ubsan:
+    name: Native storage ASan+UBSan (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Common Tools
+        run: pip install conan ninja
+
+      - name: Install Project Dependencies
+        run: |
+          conan profile detect --force
+          conan install . --output-folder=build-asan-ubsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+
+      # This group covers the native publication, recovery, and compaction
+      # paths under address and undefined-behavior instrumentation. macOS
+      # ASan does not support leak detection, so do not request it here.
+      - name: Configure and build native storage ASan+UBSan tests
+        run: |
+          cmake -S . -B build-asan-ubsan -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=build-asan-ubsan/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DZYX_BUILD_TESTS=ON \
+            -DZYX_BUILD_APPS=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+          cmake --build build-asan-ubsan --target zyx_test_suite
+        shell: bash
+
+      - name: Run native storage ASan+UBSan gates
+        run: |
+          ASAN_OPTIONS='halt_on_error=1' UBSAN_OPTIONS='halt_on_error=1:print_stacktrace=1' \
+            ./build-asan-ubsan/zyx_test_suite \
+              --gtest_filter='NativeTransactionTest.*:RelocatableStorageBackendTest.*:RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.*:RelocatableProcessCrashGraphWriteTest.*:RelocatableProcessCrashLargeValueTest.*:RelocatableProcessCrashVectorTest.*:RelocatableProcessCrashBTreeTest.*'
         shell: bash
 
   build:
@@ -199,21 +292,70 @@ jobs:
         shell: bash
 
       # This validates the single-file report schema, threshold-enforcement
-      # plumbing, and native build/reopen/search path. The intentionally
-      # permissive limits are a contract smoke test, never a production baseline.
+      # plumbing, and native build/reopen/search path. The tiny fixture fully
+      # refines its bounded candidate set, so it also requires exact Recall@1.
+      # Its permissive resource limits are not a production baseline.
       - name: Run native storage calibration smoke pipeline
         run: |
-          cmake --build buildDir --target zyx_vector_build_calibrate zyx_vector_calibrate zyx_large_value_calibrate
+          cmake --build buildDir --target zyx_vector_build_calibrate zyx_vector_calibrate zyx_large_value_calibrate zyx_bulk_edge_calibrate
           calibration_dir="$ZYX_STAGE10_EVIDENCE_DIR"
           vector_data_path="$calibration_dir/vector-calibration.zyx"
           large_value_data_path="$calibration_dir/large-value-calibration.zyx"
+          bulk_edge_data_path="$calibration_dir/bulk-edge-calibration.zyx"
           build_report="$calibration_dir/build-report.json"
           query_report="$calibration_dir/query-report.json"
           large_value_report="$calibration_dir/large-value-report.json"
+          bulk_edge_report="$calibration_dir/bulk-edge-report.json"
           ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 1 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 0.000001 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 1.0 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
           ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
-          python -c 'import json, sys; build = json.load(open(sys.argv[1], encoding="utf-8")); query = json.load(open(sys.argv[2], encoding="utf-8")); large_value = json.load(open(sys.argv[3], encoding="utf-8")); assert build["schema_version"] == 2 and build["gate"]["enforced"] and build["gate"]["passed"]; assert query["schema_version"] == 2 and query["gate"]["enforced"] and query["gate"]["passed"]; assert large_value["schema_version"] == 1 and large_value["storage"]["single_file"] and large_value["gate"]["enforced"] and large_value["gate"]["passed"]' "$build_report" "$query_report" "$large_value_report"
+          ./buildDir/zyx-bulk-edge-calibrate --data "$bulk_edge_data_path" --output "$bulk_edge_report" --edge-count 100 --dataset-label bulk-edge-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --include-trace-phases --enforce-gates --minimum-ingest-edges-per-second 0.000001 --maximum-bytes-per-edge 1000000000000 --maximum-reopen-and-scan-ms 1000000000000 --maximum-peak-rss-bytes 1099511627776 --maximum-scratch-candidate-segments 1000000000000 --minimum-scratch-source-runs 1 --minimum-scratch-merge-passes 0
+          python -c 'import json, sys; build = json.load(open(sys.argv[1], encoding="utf-8")); query = json.load(open(sys.argv[2], encoding="utf-8")); large_value = json.load(open(sys.argv[3], encoding="utf-8")); bulk_edge = json.load(open(sys.argv[4], encoding="utf-8")); assert build["schema_version"] == 2 and build["gate"]["enforced"] and build["gate"]["passed"]; assert query["schema_version"] == 2 and query["all_measured_searches_used_adjacency"] and query["all_measured_searches_used_pq"] and query["gate"]["enforced"] and query["gate"]["passed"]; assert large_value["schema_version"] == 1 and large_value["storage"]["single_file"] and large_value["gate"]["enforced"] and large_value["gate"]["passed"]; assert bulk_edge["schema_version"] == 3 and bulk_edge["storage"]["single_file"] and bulk_edge["scratch"]["candidate_segments"] > 0 and bulk_edge["scratch"]["source_run_count"] >= 1 and bulk_edge["gate"]["enforced"] and bulk_edge["gate"]["passed"]' "$build_report" "$query_report" "$large_value_report" "$bulk_edge_report"
+        shell: bash
+
+      # Production thresholds are deliberately manual inputs: a hosted-runner
+      # smoke result must never become a P0 baseline by accident. The tool
+      # itself rejects missing, malformed, or incomplete gate arguments.
+      - name: Run reviewed P0 bulk-Edge calibration candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.p0_bulk_edge_profile != 'disabled'
+        env:
+          P0_PROFILE: ${{ inputs.p0_bulk_edge_profile }}
+          P0_HARDWARE_LABEL: ${{ inputs.p0_bulk_edge_hardware_label }}
+          P0_MINIMUM_INGEST_EDGES_PER_SECOND: ${{ inputs.p0_bulk_edge_minimum_ingest_edges_per_second }}
+          P0_MAXIMUM_BYTES_PER_EDGE: ${{ inputs.p0_bulk_edge_maximum_bytes_per_edge }}
+          P0_MAXIMUM_REOPEN_AND_SCAN_MS: ${{ inputs.p0_bulk_edge_maximum_reopen_and_scan_ms }}
+          P0_MAXIMUM_PEAK_RSS_BYTES: ${{ inputs.p0_bulk_edge_maximum_peak_rss_bytes }}
+          P0_MAXIMUM_SCRATCH_CANDIDATE_SEGMENTS: ${{ inputs.p0_bulk_edge_maximum_scratch_candidate_segments }}
+          P0_MINIMUM_SCRATCH_SOURCE_RUNS: ${{ inputs.p0_bulk_edge_minimum_scratch_source_runs }}
+          P0_MINIMUM_SCRATCH_MERGE_PASSES: ${{ inputs.p0_bulk_edge_minimum_scratch_merge_passes }}
+        run: |
+          case "$P0_PROFILE" in
+            1m) p0_edge_count=1000000 ;;
+            10m) p0_edge_count=10000000 ;;
+            *) echo 'p0_bulk_edge_profile must be 1m or 10m when enabled' >&2; exit 2 ;;
+          esac
+          if [ -z "$P0_HARDWARE_LABEL" ]; then
+            echo 'p0_bulk_edge_hardware_label is required for a P0 calibration candidate' >&2
+            exit 2
+          fi
+          p0_dir="$ZYX_STAGE10_EVIDENCE_DIR/p0-bulk-edge-${P0_PROFILE}"
+          mkdir -p "$p0_dir"
+          cmake --build buildDir --target zyx_bulk_edge_calibrate
+          ./buildDir/zyx-bulk-edge-calibrate \
+            --data "$p0_dir/bulk-edge-calibration.zyx" \
+            --output "$p0_dir/report.json" \
+            --edge-count "$p0_edge_count" \
+            --dataset-label "bulk-edge-p0-${P0_PROFILE}-v1" \
+            --hardware-label "$P0_HARDWARE_LABEL" \
+            --enforce-gates \
+            --minimum-ingest-edges-per-second "$P0_MINIMUM_INGEST_EDGES_PER_SECOND" \
+            --maximum-bytes-per-edge "$P0_MAXIMUM_BYTES_PER_EDGE" \
+            --maximum-reopen-and-scan-ms "$P0_MAXIMUM_REOPEN_AND_SCAN_MS" \
+            --maximum-peak-rss-bytes "$P0_MAXIMUM_PEAK_RSS_BYTES" \
+            --maximum-scratch-candidate-segments "$P0_MAXIMUM_SCRATCH_CANDIDATE_SEGMENTS" \
+            --minimum-scratch-source-runs "$P0_MINIMUM_SCRATCH_SOURCE_RUNS" \
+            --minimum-scratch-merge-passes "$P0_MINIMUM_SCRATCH_MERGE_PASSES"
+          python -c 'import json, sys; report = json.load(open(sys.argv[1], encoding="utf-8")); assert report["schema_version"] == 3 and report["storage"]["single_file"] and report["gate"]["enforced"] and report["gate"]["passed"]' "$p0_dir/report.json"
         shell: bash
 
       # This manifest records report hashes, declared labels, and the actual
@@ -224,6 +366,7 @@ jobs:
             --build-report "$ZYX_STAGE10_EVIDENCE_DIR/build-report.json"
             --query-report "$ZYX_STAGE10_EVIDENCE_DIR/query-report.json"
             --large-value-report "$ZYX_STAGE10_EVIDENCE_DIR/large-value-report.json"
+            --bulk-edge-report "$ZYX_STAGE10_EVIDENCE_DIR/bulk-edge-report.json"
             --output "$ZYX_STAGE10_EVIDENCE_DIR/manifest.json"
             --recovery-repetitions 5
             --endurance-repetitions "$ZYX_STAGE10_ENDURANCE_REPETITIONS"
@@ -231,6 +374,7 @@ jobs:
             --recovery-maintenance-log "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
             --vector-smoke-data "$ZYX_STAGE10_EVIDENCE_DIR/vector-calibration.zyx"
             --large-value-smoke-data "$ZYX_STAGE10_EVIDENCE_DIR/large-value-calibration.zyx"
+            --bulk-edge-smoke-data "$ZYX_STAGE10_EVIDENCE_DIR/bulk-edge-calibration.zyx"
           )
           if [ "$ZYX_STAGE10_ENDURANCE_REPETITIONS" -gt 0 ]; then
             collector_args+=(--endurance-log "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log")

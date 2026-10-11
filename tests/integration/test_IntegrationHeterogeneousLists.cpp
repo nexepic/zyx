@@ -171,11 +171,9 @@ TEST_F(IntegrationHeterogeneousListsTest, ListInNodeProperties) {
 }
 
 /**
- * Test list slicing in WHERE clause
- * NOTE: List slicing in WHERE clause not yet fully supported
- * This test documents the expected future behavior
+ * Test list indexing in a WHERE clause.
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListSlicingInWhere) {
+TEST_F(IntegrationHeterogeneousListsTest, ListIndexInWhere) {
 	// Create nodes with list properties
 	(void) execute("CREATE (n:Test {values: [10, 20, 30, 40, 50]})");
 	(void) execute("CREATE (n:Test {values: [100, 200, 300, 400, 500]})");
@@ -326,11 +324,9 @@ TEST_F(IntegrationHeterogeneousListsTest, ComplexListComprehensions) {
 }
 
 /**
- * Test list comprehension with NULL values
- * NOTE: IS NOT NULL in WHERE clause of comprehension not yet supported by grammar
- * This test documents the expected future behavior
+ * Test list comprehension with NULL values.
  */
-TEST_F(IntegrationHeterogeneousListsTest, DISABLED_ListComprehensionWithNulls) {
+TEST_F(IntegrationHeterogeneousListsTest, ListComprehensionWithNulls) {
 	auto result = execute("RETURN [x IN [1, NULL, 3, NULL, 5] WHERE x IS NOT NULL] AS filtered");
 	EXPECT_EQ(result.rowCount(), 1UL);
 

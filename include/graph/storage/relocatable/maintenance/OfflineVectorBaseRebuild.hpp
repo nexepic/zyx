@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <span>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/maintenance/OfflineVectorAdjacencyRebuild.hpp"
 #include "graph/storage/relocatable/maintenance/OfflineVectorPqRebuild.hpp"
 
@@ -52,7 +53,7 @@ namespace graph::storage {
 		run(BTreePageStore &trees, VectorPageStore &vectors, VectorAdjacencyPageStore &adjacencies,
 			VectorCodebookStore &codebooks, VectorManifestStore &manifests, RelocatableMetadataStore &metadata,
 			uint64_t indexId, std::span<const DeterministicPqTrainingRecord> records,
-			const OfflineVectorBaseRebuildOptions &options);
+			const OfflineVectorBaseRebuildOptions &options, const CancellationCheckpoint *cancellation = nullptr);
 	};
 
 } // namespace graph::storage

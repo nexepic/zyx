@@ -14,7 +14,7 @@ namespace graph::storage {
 
 	// This deliberately describes only lifecycle and externally supportable
 	// operations. Query execution remains behind a separate logical-data adapter
-	// so a new physical format can never be mistaken for legacy DataManager data.
+	// so a new physical format can never be mistaken for retired fixed-record data.
 	struct StorageBackendCapabilities {
 		bool supports_logical_entity_reads = false;
 		bool supports_logical_property_reads = false;

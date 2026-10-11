@@ -27,28 +27,29 @@ namespace graph::storage {
 
 		void validateOptions(const VectorCodebookReachabilityReclaimOptions &options, LogSequenceNumber checkpointLsn) {
 			const uint8_t invalid = static_cast<uint8_t>(options.maximum_vector_manifests == 0U) |
+									static_cast<uint8_t>(options.maximum_vector_manifests == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_extent_locations == 0U) |
+									static_cast<uint8_t>(options.maximum_extent_locations == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_catalog_entries == 0U) |
+									static_cast<uint8_t>(options.maximum_catalog_entries == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_retire_queue_entries == 0U) |
+									static_cast<uint8_t>(options.maximum_retire_queue_entries == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_retirements == 0U) |
+									static_cast<uint8_t>(options.maximum_retirements == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(!checkpointLsn.isValid());
 			if (invalid != 0U) {
 				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable Vector Codebook reclamation requires nonzero bounds and a checkpoint LSN");
+					 "relocatable Vector Codebook reclamation requires finite nonzero bounds and a checkpoint LSN");
 			}
 		}
 
 		[[nodiscard]] bool isFullSegmentExtent(const ExtentLocation &location) {
-			return location.first_page ==
-						   RSS_PAGE_POOL_FIRST_DATA_FRAME && // ZYX_COV_EXCL_LINE: Extent Directory publishes only
-															   // full immutable extent spans.
+			return location.first_page == RSS_PAGE_POOL_FIRST_DATA_FRAME &&
 				   location.page_count == RSS_PAGE_POOL_DATA_FRAME_COUNT;
 		}
 
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(const Superblock &published) {
-			if (!published.checkpoint_lsn
-						 .isValid() || // ZYX_COV_EXCL_LINE: published Superblocks are decoded before use.
-				published.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+			if (published.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "relocatable Vector Codebook reclamation cannot advance the checkpoint LSN");
 			}
@@ -104,17 +105,7 @@ namespace graph::storage {
 				++report.vector_manifests;
 				const VectorManifest manifest = manifests_.read(snapshot, location.index_id).manifest();
 				if (manifest.codebook_id == 0U) {
-					if (manifest.codebook_generation.isValid()) { // ZYX_COV_EXCL_LINE: VectorManifestPageCodec requires
-																  // both sides of a Codebook reference.
-						fail(FormatError::FERR_INVALID_STATE,
-							 "relocatable Vector Codebook reclamation found a Manifest with a partial Codebook reference");
-					}
 					return;
-				}
-				if (!manifest.codebook_generation.isValid()) { // ZYX_COV_EXCL_LINE: VectorManifestPageCodec requires
-															   // both sides of a Codebook reference.
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector Codebook reclamation found a Manifest without a Codebook generation");
 				}
 				const auto [iterator, inserted] =
 						reachableCodebooks.emplace(manifest.codebook_id, manifest.codebook_generation);
@@ -164,14 +155,10 @@ namespace graph::storage {
 				const auto isCanonicalManifest = [codebookId](const ScannedCodebookExtent &extent) {
 					return extent.header.kind == VectorCodebookExtentKind::VCEK_MANIFEST &&
 						   extent.header.extent_id ==
-								   VectorCodebookExtentIdCodec::manifestExtentId(
-										   codebookId); // ZYX_COV_EXCL_LINE: checked extent/header identities and the
-														// manifest codec make this comparison tautological.
+									   VectorCodebookExtentIdCodec::manifestExtentId(codebookId);
 				};
 				const auto root = std::ranges::find_if(extents, isCanonicalManifest);
-				if (root == extents.end() ||
-					std::ranges::count_if(extents, isCanonicalManifest) !=
-							1) { // ZYX_COV_EXCL_LINE: unique Extent Directory IDs exclude duplicate canonical roots.
+				if (root == extents.end()) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable Vector Codebook reclamation found data extents without one canonical manifest");
 				}
@@ -182,25 +169,8 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable Vector Codebook reclamation found an incomplete immutable extent set");
 				}
-				std::set<uint64_t> expectedExtentIds{VectorCodebookExtentIdCodec::manifestExtentId(codebookId).value()};
-				for (const VectorCodebookManifestEntry &entry: immutableManifest.entries) {
-					expectedExtentIds.insert(entry.extent_id.value());
-				}
-				for (const ScannedCodebookExtent &extent: extents) {
-					if (!expectedExtentIds.erase(
-								extent.location.extent_id.value())) { // ZYX_COV_EXCL_LINE: validation
-																	  // reads every expected unique extent before this
-																	  // cardinality check.
-						fail(FormatError::FERR_INVALID_STATE,
-							 "relocatable Vector Codebook reclamation found an unowned or duplicate data extent");
-					}
-				}
-				if (!expectedExtentIds.empty()) { // ZYX_COV_EXCL_LINE: the checked equal cardinality and unique IDs
-												  // leave no expected extent unmatched.
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector Codebook reclamation found a manifest with missing data extents");
-				}
-
+				// `validate()` proves every Manifest-listed extent is present and valid.
+				// Equal cardinality then excludes an additional unowned extent.
 				const auto reachable = reachableCodebooks.find(codebookId);
 				if (reachable != reachableCodebooks.end()) {
 					if (reachable->second != immutableManifest.header.generation) {

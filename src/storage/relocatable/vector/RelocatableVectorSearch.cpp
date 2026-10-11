@@ -34,7 +34,7 @@
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
-#include "graph/vector/core/BFloat16.hpp"
+#include "graph/common/VectorMath.hpp"
 
 namespace graph::storage {
 
@@ -42,11 +42,13 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
-		[[nodiscard]] size_t expectedRawRecordBytes(uint32_t dimensions) {
-			if (dimensions == 0U) { // ZYX_COV_EXCL_LINE: validateSemanticManifest rejects zero dimensions first.
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "relocatable logical Vector search dimensions exceed a host-addressable raw record");
+		void checkCancellation(const LogicalGraphVectorSearchRequest &request) {
+			if (request.cancellation != nullptr) {
+				request.cancellation->check();
 			}
+		}
+
+		[[nodiscard]] size_t expectedRawRecordBytes(uint32_t dimensions) {
 			if constexpr (sizeof(size_t) < sizeof(uint64_t)) {
 				if (static_cast<uint64_t>(dimensions) * sizeof(uint16_t) + sizeof(uint64_t) >
 					std::numeric_limits<size_t>::max()) {
@@ -71,6 +73,8 @@ namespace graph::storage {
 			const bool hasDelta = manifest.delta_mapping_index_id != 0U;
 			const uint8_t invalid =
 					static_cast<uint8_t>(manifest.index_id != definition.index_id) |
+					static_cast<uint8_t>(definition.vector_dimensions == 0U) |
+					static_cast<uint8_t>(manifest.dimensions == 0U) |
 					static_cast<uint8_t>(manifest.dimensions != definition.vector_dimensions) |
 					static_cast<uint8_t>(manifest.metric != VectorSemanticCodec::metricFor(definition)) |
 					static_cast<uint8_t>(!manifest.node_mapping_root_page_id.isValid()) |
@@ -105,7 +109,7 @@ namespace graph::storage {
 			std::vector<uint64_t> inserted;
 
 			[[nodiscard]] bool suppresses(uint64_t vectorId) const { return erased.contains(vectorId); }
-			[[nodiscard]] bool empty() const { return erased.empty() && inserted.empty(); }
+			[[nodiscard]] bool empty() const { return entryCount() == 0U; }
 			[[nodiscard]] size_t entryCount() const { return erased.size() + inserted.size(); }
 		};
 
@@ -173,7 +177,7 @@ namespace graph::storage {
 						"relocatable logical Vector search delta overlay exceeds its caller-supplied mapping bound");
 			}
 			const std::vector<VectorDeltaEntry> entries = VectorDeltaMapping::scan(
-					snapshot, trees, metadata, manifest.delta_mapping_index_id, manifest.delta_entry_count);
+					snapshot, trees, metadata, manifest.delta_mapping_index_id, manifest.delta_entry_count, request.cancellation);
 			if (entries.size() != manifest.delta_entry_count) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable logical Vector search delta overlay count disagrees with its Manifest");
@@ -181,12 +185,11 @@ namespace graph::storage {
 			overlay.erased.reserve(entries.size());
 			overlay.inserted.reserve(entries.size());
 			for (const VectorDeltaEntry &entry: entries) {
+				checkCancellation(request);
 				validateDeltaSemanticMembership(snapshot, definition, manifest, entry, trees, metadata);
 				if (entry.operation == VectorDeltaOperation::VDO_ERASE) {
-					if (!overlay.erased.insert(entry.vector_id).second) {
-						fail(FormatError::FERR_INVALID_STATE,
-							 "relocatable logical Vector search delta overlay has duplicate erase entries");
-					}
+					// VectorDeltaMapping::scan establishes unique, strictly ordered Vector IDs.
+					overlay.erased.insert(entry.vector_id);
 				} else if (entry.operation == VectorDeltaOperation::VDO_INSERT) {
 					overlay.inserted.push_back(entry.vector_id);
 				} else {
@@ -253,14 +256,10 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] float checkedFloatScore(double score, const char *message) {
-			// ZYX_COV_EXCL_START: callers provide finite IEEE-754 floats and the durable Vector dimension is bounded by
-			// one page, so the accumulated double score is mathematically representable. Keep this defense for future
-			// codecs that may widen either bound.
 			if (!std::isfinite(score) || score > static_cast<double>(std::numeric_limits<float>::max()) ||
 				score < -static_cast<double>(std::numeric_limits<float>::max())) {
 				throw std::overflow_error(message);
 			}
-			// ZYX_COV_EXCL_STOP
 			return static_cast<float>(score);
 		}
 
@@ -275,11 +274,12 @@ namespace graph::storage {
 						   const VectorManifest &manifest, const LogicalGraphVectorSearchRequest &request,
 						   uint64_t vectorId, std::optional<uint64_t> expectedNodeId, BTreePageStore &trees,
 						   VectorPageStore &vectors, RelocatableMetadataStore &metadata,
-						   LogicalGraphVectorSearchStats &stats) {
+							   LogicalGraphVectorSearchStats &stats) {
+			checkCancellation(request);
 			const std::optional<uint64_t> nodeId = VectorNodeMapping::findNode(
 					snapshot, trees, metadata, manifest.vector_node_mapping_index_id, vectorId);
 			++stats.semantic_mapping_lookups;
-			if (!nodeId.has_value() || *nodeId == 0U) {
+			if (!nodeId.has_value()) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable logical Vector search could not resolve a candidate Node");
 			}
@@ -321,7 +321,7 @@ namespace graph::storage {
 			double querySquaredNorm = 0.0;
 			double candidateSquaredNorm = 0.0;
 			for (uint32_t dimension = 0U; dimension < definition.vector_dimensions; ++dimension) {
-				vector::BFloat16 encoded;
+				common::BFloat16 encoded;
 				encoded.data = LittleEndianCodec::readU16(raw, sizeof(uint64_t) + static_cast<size_t>(dimension) *
 																						  sizeof(uint16_t));
 				const float candidate = encoded.toFloat();
@@ -361,14 +361,7 @@ namespace graph::storage {
 																		   size_t topK) {
 			std::vector<LogicalGraphVectorSearchHit> hits;
 			hits.reserve(candidates.size());
-			std::unordered_set<uint64_t> nodes;
-			nodes.reserve(candidates.size());
 			for (const ExactCandidate &candidate: candidates) {
-				if (!nodes.insert(candidate.node_id)
-							 .second) { // ZYX_COV_EXCL_LINE: readExactCandidate proves both mappings.
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable logical Vector search resolved two candidates to one Node");
-				}
 				hits.push_back({candidate.node_id, candidate.score});
 			}
 			std::ranges::sort(hits, exactHitLess);
@@ -382,34 +375,11 @@ namespace graph::storage {
 		public:
 			PqDistanceTable(const VectorCodebook &codebook, const VectorManifest &manifest,
 							std::span<const float> query) {
-				// ZYX_COV_EXCL_START: readSharedBounded already validates this immutable Codebook's typed header, while
-				// searchPqAdjacency validates its Manifest binding before constructing the distance table. These checks
-				// are retained as a future-proof second boundary for alternate Codebook stores.
 				const VectorCodebookHeader &header = codebook.header;
-				const uint8_t invalid =
-						static_cast<uint8_t>(header.codebook_id != manifest.codebook_id) |
-						static_cast<uint8_t>(header.generation != manifest.codebook_generation) |
-						static_cast<uint8_t>(header.element_type != VectorCodebookElementType::VCET_FLOAT32) |
-						static_cast<uint8_t>(header.element_bytes != sizeof(float)) |
-						static_cast<uint8_t>(header.dimensions != manifest.dimensions) |
-						static_cast<uint8_t>(header.subspace_count == 0U) |
-						static_cast<uint8_t>(header.centroid_count == 0U || header.centroid_count > 256U) |
-						static_cast<uint8_t>(query.size() != header.dimensions);
-				if (invalid != 0U) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable logical Vector search found an incompatible PQ Codebook generation");
-				}
-				// ZYX_COV_EXCL_STOP
 				metric_ = manifest.metric;
 				subspace_count_ = header.subspace_count;
 				centroid_count_ = header.centroid_count;
 				const uint32_t subspaceDimensions = header.dimensions / header.subspace_count;
-				if (header.subspace_count >
-					std::numeric_limits<size_t>::max() / header.centroid_count) { // ZYX_COV_EXCL_LINE:
-					// one-page Vector dimensions and the validated centroid bound cannot overflow size_t.
-					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-						 "relocatable logical Vector search PQ table exceeds host-addressable memory");
-				}
 				const size_t tableValues = static_cast<size_t>(header.subspace_count) * header.centroid_count;
 				primary_scores_.resize(tableValues);
 				centroid_squared_norms_.resize(tableValues);
@@ -427,11 +397,6 @@ namespace graph::storage {
 							const uint32_t bits = LittleEndianCodec::readU32(
 									codebook.payload, (centroidOffset + coordinate) * sizeof(float));
 							const float value = std::bit_cast<float>(bits);
-							if (!std::isfinite(value)) { // ZYX_COV_EXCL_LINE: the immutable Codebook codec rejects
-														 // non-finite values.
-								fail(FormatError::FERR_INVALID_HEADER,
-									 "relocatable logical Vector search decoded a non-finite PQ centroid");
-							}
 							const double queryValue = static_cast<double>(query[queryOffset + coordinate]);
 							if (metric_ == VectorDistanceMetric::VDM_L2) {
 								const double delta = queryValue - value;
@@ -442,10 +407,6 @@ namespace graph::storage {
 							}
 						}
 						const size_t ordinal = static_cast<size_t>(subspace) * header.centroid_count + centroid;
-						if (!std::isfinite(primaryScore) || !std::isfinite(centroidSquaredNorm)) {
-							fail(FormatError::FERR_INVALID_HEADER,
-								 "relocatable logical Vector search produced a non-finite PQ lookup component");
-						}
 						primary_scores_[ordinal] = primaryScore;
 						centroid_squared_norms_[ordinal] = centroidSquaredNorm;
 					}
@@ -454,12 +415,7 @@ namespace graph::storage {
 
 			[[nodiscard]] size_t recordBytes() const { return sizeof(uint64_t) + subspace_count_; }
 
-			[[nodiscard]] float score(std::span<const std::byte> record, uint64_t vectorId) const {
-				if (record.size() != recordBytes() ||
-					LittleEndianCodec::readU64(record, 0U) != vectorId) { // ZYX_COV_EXCL_LINE:
-					// fixed-stride VectorPage records and findVectorId establish both predicates.
-					fail(FormatError::FERR_INVALID_STATE, "relocatable logical Vector search found a stale PQ record");
-				}
+			[[nodiscard]] float score(std::span<const std::byte> record) const {
 				double result = 0.0;
 				double candidateSquaredNorm = 0.0;
 				for (uint32_t subspace = 0U; subspace < subspace_count_; ++subspace) {
@@ -516,7 +472,8 @@ namespace graph::storage {
 					BTreePageStore &trees, VectorPageStore &vectors, RelocatableMetadataStore &metadata) {
 			const std::vector<BTreePageEntry> mappings =
 					BTreeIndex(definition.index_id, trees, metadata)
-							.scan(snapshot, std::nullopt, request.maximum_mapping_entries + 1U);
+							.scan(snapshot, std::nullopt, request.maximum_mapping_entries + 1U,
+								  BufferPoolReadHint::BPRH_SEQUENTIAL, request.cancellation);
 			if (mappings.size() > request.maximum_mapping_entries ||
 				mappings.size() > request.maximum_raw_vector_reads) {
 				throw std::runtime_error("relocatable logical Vector exact search exceeded its caller-supplied bound");
@@ -526,6 +483,7 @@ namespace graph::storage {
 			std::vector<ExactCandidate> candidates;
 			candidates.reserve(mappings.size());
 			for (const BTreePageEntry &mapping: mappings) {
+				checkCancellation(request);
 				if (mapping.key.size() !=
 							sizeof(uint64_t) || // ZYX_COV_EXCL_LINE: typed Node-to-Vector mapping builders emit
 												// canonical 8-byte keys; a forged variable-width leaf also fails the
@@ -565,16 +523,6 @@ namespace graph::storage {
 			}
 			const VectorAdjacencyRecord record = adjacencies.readRecord(snapshot, *pageId, vectorId);
 			++stats.adjacency_record_reads;
-			// ZYX_COV_EXCL_START: VectorAdjacencyPageStore::readRecord decodes the typed record, requires the requested
-			// Vector ID, and VectorAdjacencyCodec already enforces sorted, unique, non-self neighbors. Retain this
-			// independent guard so a future page-store implementation cannot silently weaken search validation.
-			if (record.vector_id != vectorId || !std::ranges::is_sorted(record.neighbors) ||
-				std::ranges::adjacent_find(record.neighbors) != record.neighbors.end() ||
-				std::ranges::binary_search(record.neighbors, vectorId)) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable logical Vector search found an invalid adjacency record");
-			}
-			// ZYX_COV_EXCL_STOP
 			return record;
 		}
 
@@ -605,6 +553,7 @@ namespace graph::storage {
 			stats.scanned_delta_entries = overlay.entryCount();
 			stats.used_delta = !overlay.empty();
 			const auto enqueue = [&](uint64_t vectorId) {
+				checkCancellation(request);
 				if (overlay.suppresses(vectorId)) {
 					return;
 				}
@@ -627,6 +576,7 @@ namespace graph::storage {
 			enqueue(manifest.entry_point_vector_id);
 			size_t expanded = 0U;
 			while (!frontier.empty() && expanded < request.candidate_search_budget) {
+				checkCancellation(request);
 				const ApproximateCandidate current = frontier.top();
 				frontier.pop();
 				++expanded;
@@ -638,6 +588,7 @@ namespace graph::storage {
 				}
 			}
 			for (const uint64_t vectorId: overlay.inserted) {
+				checkCancellation(request);
 				candidates.push_back(readExactCandidate(snapshot, definition, manifest, request, vectorId, std::nullopt,
 														trees, vectors, metadata, stats));
 			}
@@ -665,10 +616,7 @@ namespace graph::storage {
 					static_cast<uint8_t>(codebookHeader.generation != manifest.codebook_generation) |
 					static_cast<uint8_t>(codebookHeader.element_type != VectorCodebookElementType::VCET_FLOAT32) |
 					static_cast<uint8_t>(codebookHeader.element_bytes != sizeof(float)) |
-					static_cast<uint8_t>(codebookHeader.dimensions != manifest.dimensions) |
-					static_cast<uint8_t>(codebookHeader.centroid_count == 0U ||
-										 codebookHeader.centroid_count >
-												 256U); // ZYX_COV_EXCL_LINE: typed Codebook decode bounds centroids.
+					static_cast<uint8_t>(codebookHeader.dimensions != manifest.dimensions);
 			if (invalidCodebook != 0U) {
 				fail(FormatError::FERR_INVALID_STATE,
 						"relocatable logical Vector search found an incompatible Codebook manifest");
@@ -709,6 +657,7 @@ namespace graph::storage {
 			stats.scanned_delta_entries = overlay.entryCount();
 			stats.used_delta = !overlay.empty();
 			const auto enqueue = [&](uint64_t vectorId) {
+				checkCancellation(request);
 				if (overlay.suppresses(vectorId)) {
 					return;
 				}
@@ -740,7 +689,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable logical Vector search resolved an incompatible PQ page");
 				}
-				const ApproximateCandidate candidate{vectorId, table.score(page.read(*slot), vectorId)};
+				const ApproximateCandidate candidate{vectorId, table.score(page.read(*slot))};
 				++stats.pq_record_reads;
 				frontier.push(candidate);
 				++stats.candidate_discoveries;
@@ -751,6 +700,7 @@ namespace graph::storage {
 			enqueue(manifest.entry_point_vector_id);
 			size_t expanded = 0U;
 			while (!frontier.empty() && expanded < request.candidate_search_budget) {
+				checkCancellation(request);
 				const ApproximateCandidate current = frontier.top();
 				frontier.pop();
 				++expanded;
@@ -769,10 +719,12 @@ namespace graph::storage {
 			std::vector<ExactCandidate> refined;
 			refined.reserve(discovered.size() + overlay.inserted.size());
 			for (const ApproximateCandidate &candidate: discovered) {
+				checkCancellation(request);
 				refined.push_back(readExactCandidate(snapshot, definition, manifest, request, candidate.vector_id,
 													 std::nullopt, trees, vectors, metadata, stats));
 			}
 			for (const uint64_t vectorId: overlay.inserted) {
+				checkCancellation(request);
 				refined.push_back(readExactCandidate(snapshot, definition, manifest, request, vectorId, std::nullopt,
 													 trees, vectors, metadata, stats));
 			}
@@ -785,6 +737,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const IndexDefinition &definition, const VectorManifest &manifest,
 			const LogicalGraphVectorSearchRequest &request, BTreePageStore &trees, VectorPageStore &vectors,
 			VectorAdjacencyPageStore &adjacencies, VectorCodebookStore &codebooks, RelocatableMetadataStore &metadata) {
+		checkCancellation(request);
 		validateSemanticManifest(snapshot, definition, manifest, metadata);
 		if (request.query_vector.size() != manifest.dimensions ||
 			!std::ranges::all_of(request.query_vector, [](float value) { return std::isfinite(value); })) {

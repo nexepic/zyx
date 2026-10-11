@@ -78,6 +78,65 @@ TEST_F(CypherAlgoTest, AlgoShortestPathRejectsNonPositiveMaxDepth) {
 	             std::invalid_argument);
 }
 
+TEST_F(CypherAlgoTest, AlgoShortestPathAcceptsCanonicalStringIdsAndRejectsMalformedStrings) {
+	(void) execute("CREATE (a:StringPath {name: 'A'})-[r:ROAD]->(b:StringPath {name: 'B'})");
+	const int64_t idA = logicalNodeId(execute("MATCH (n:StringPath {name: 'A'}) RETURN n"), "n");
+	const int64_t idB = logicalNodeId(execute("MATCH (n:StringPath {name: 'B'}) RETURN n"), "n");
+	const std::string textA = std::to_string(idA);
+	const std::string textB = std::to_string(idB);
+
+	const auto result = execute("CALL algo.shortestPath('" + textA + "', '" + textB + "', '1')");
+	EXPECT_EQ(result.rowCount(), 2U);
+	EXPECT_THROW(static_cast<void>(execute("CALL algo.shortestPath('0', '" + textB + "', '1')")),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL algo.shortestPath('not-an-id', '" + textB + "', '1')")),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("CALL algo.shortestPath('" + textA + "', '" + textB + "', 'not-a-depth')")),
+			 std::invalid_argument);
+}
+
+TEST_F(CypherAlgoTest, AlgoShortestPathRejectsPartialOverflowAndNonNumericIdentifierForms) {
+	(void) execute("CREATE (a:StrictStringPath {name: 'A'})-[r:ROAD]->(b:StrictStringPath {name: 'B'})");
+	const int64_t idA = logicalNodeId(execute("MATCH (n:StrictStringPath {name: 'A'}) RETURN n"), "n");
+	const int64_t idB = logicalNodeId(execute("MATCH (n:StrictStringPath {name: 'B'}) RETURN n"), "n");
+	const std::string textA = std::to_string(idA);
+	const std::string textB = std::to_string(idB);
+	const auto expectInvalid = [this](const std::string &query) {
+		EXPECT_THROW(static_cast<void>(execute(query)), std::invalid_argument);
+	};
+
+	// IDs and maxDepth are parsed as complete decimal values. Accepting a prefix
+	// would silently run a traversal against a different graph entity or bound.
+	expectInvalid("CALL algo.shortestPath('" + textA + "suffix', '" + textB + "', '1')");
+	expectInvalid("CALL algo.shortestPath('', '" + textB + "', '1')");
+	expectInvalid("CALL algo.shortestPath('-1', '" + textB + "', '1')");
+	expectInvalid("CALL algo.shortestPath('18446744073709551616', '" + textB + "', '1')");
+	expectInvalid("CALL algo.shortestPath(" + textA + ", " + textB + ", '1suffix')");
+	expectInvalid("CALL algo.shortestPath(" + textA + ", " + textB + ", '')");
+	expectInvalid("CALL algo.shortestPath(" + textA + ", " + textB + ", '-1')");
+	expectInvalid("CALL algo.shortestPath(" + textA + ", " + textB + ", 1.5)");
+	expectInvalid("CALL algo.shortestPath(true, " + textB + ", 1)");
+	expectInvalid("CALL algo.shortestPath(" + textA + ")");
+	expectInvalid("CALL algo.shortestPath(" + textA + ", " + textB + ", 1, 2)");
+}
+
+TEST_F(CypherAlgoTest, AlgoShortestPathUsesTheStandardProcedureResultPipeline) {
+	(void) execute("CREATE (a:PipelinePath {name: 'A'})-[r1:ROAD]->(b:PipelinePath {name: 'B'})");
+	(void) execute("MATCH (b:PipelinePath {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:PipelinePath {name: 'C'})");
+	const int64_t idA = logicalNodeId(execute("MATCH (n:PipelinePath {name: 'A'}) RETURN n"), "n");
+	const int64_t idC = logicalNodeId(execute("MATCH (n:PipelinePath {name: 'C'}) RETURN n"), "n");
+
+	const auto result = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) +
+								", 2) YIELD step, node, path_length "
+								"WHERE step > 0 RETURN id(node) AS node_id, path_length "
+								"ORDER BY node_id DESC SKIP 0 LIMIT 1");
+
+	ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"node_id", "path_length"}));
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("node_id").asPrimitive(), graph::PropertyValue(idC));
+	EXPECT_EQ(result.getRows().front().at("path_length").asPrimitive(), graph::PropertyValue(int64_t{3}));
+}
+
 // --- Additional Shortest Path Tests ---
 
 TEST_F(CypherAlgoTest, AlgoShortestPathDirectConnection) {

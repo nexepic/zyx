@@ -21,7 +21,40 @@
 #include "BuiltinFunctions.hpp"
 #include "graph/core/TemporalTypes.hpp"
 
+#include <limits>
+#include <stdexcept>
+
 namespace graph::query::expressions {
+
+namespace {
+
+[[nodiscard]] int mapIntComponent(const PropertyValue::MapType &map, const char *key, int defaultValue) {
+	const auto found = map.find(key);
+	if (found == map.end()) {
+		return defaultValue;
+	}
+	if (found->second.getType() != PropertyType::INTEGER) {
+		throw std::invalid_argument(std::string("temporal map component '") + key + "' must be an integer");
+	}
+	const int64_t value = std::get<int64_t>(found->second.getVariant());
+	if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max()) {
+		throw std::out_of_range(std::string("temporal map component '") + key + "' is outside the supported range");
+	}
+	return static_cast<int>(value);
+}
+
+[[nodiscard]] int64_t mapInt64Component(const PropertyValue::MapType &map, const char *key, int64_t defaultValue) {
+	const auto found = map.find(key);
+	if (found == map.end()) {
+		return defaultValue;
+	}
+	if (found->second.getType() != PropertyType::INTEGER) {
+		throw std::invalid_argument(std::string("temporal map component '") + key + "' must be an integer");
+	}
+	return std::get<int64_t>(found->second.getVariant());
+}
+
+} // namespace
 
 static PropertyValue dateImpl(
 	const std::vector<PropertyValue>& args,
@@ -31,24 +64,20 @@ static PropertyValue dateImpl(
 		return PropertyValue(TemporalDate::today());
 	}
 	const auto& arg = args[0];
+	if (EvaluationContext::isNull(arg)) {
+		return PropertyValue();
+	}
 	if (arg.getType() == PropertyType::STRING) {
 		return PropertyValue(TemporalDate::fromISO(std::get<std::string>(arg.getVariant())));
 	}
 	if (arg.getType() == PropertyType::MAP) {
 		const auto& map = arg.getMap();
-		int year = 1970, month = 1, day = 1;
-		auto it = map.find("year");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			year = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("month");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			month = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("day");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			day = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		const int year = mapIntComponent(map, "year", 1970);
+		const int month = mapIntComponent(map, "month", 1);
+		const int day = mapIntComponent(map, "day", 1);
 		return PropertyValue(TemporalDate::fromYMD(year, month, day));
 	}
-	return PropertyValue();
+	throw std::invalid_argument("date() requires a string, map, or NULL argument");
 }
 
 static PropertyValue datetimeImpl(
@@ -59,36 +88,24 @@ static PropertyValue datetimeImpl(
 		return PropertyValue(TemporalDateTime::now());
 	}
 	const auto& arg = args[0];
+	if (EvaluationContext::isNull(arg)) {
+		return PropertyValue();
+	}
 	if (arg.getType() == PropertyType::STRING) {
 		return PropertyValue(TemporalDateTime::fromISO(std::get<std::string>(arg.getVariant())));
 	}
 	if (arg.getType() == PropertyType::MAP) {
 		const auto& map = arg.getMap();
-		int y = 1970, mo = 1, d = 1, h = 0, mi = 0, s = 0, ms = 0;
-		auto it = map.find("year");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			y = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("month");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			mo = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("day");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			d = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("hour");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			h = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("minute");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			mi = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("second");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			s = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
-		it = map.find("millisecond");
-		if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-			ms = static_cast<int>(std::get<int64_t>(it->second.getVariant()));
+		const int y = mapIntComponent(map, "year", 1970);
+		const int mo = mapIntComponent(map, "month", 1);
+		const int d = mapIntComponent(map, "day", 1);
+		const int h = mapIntComponent(map, "hour", 0);
+		const int mi = mapIntComponent(map, "minute", 0);
+		const int s = mapIntComponent(map, "second", 0);
+		const int ms = mapIntComponent(map, "millisecond", 0);
 		return PropertyValue(TemporalDateTime::fromComponents(y, mo, d, h, mi, s, ms));
 	}
-	return PropertyValue();
+	throw std::invalid_argument("datetime() requires a string, map, or NULL argument");
 }
 
 static PropertyValue durationImpl(
@@ -102,18 +119,13 @@ static PropertyValue durationImpl(
 	}
 	if (arg.getType() == PropertyType::MAP) {
 		const auto& map = arg.getMap();
-		auto getInt = [&](const char* key) -> int64_t {
-			auto it = map.find(key);
-			if (it != map.end() && it->second.getType() == PropertyType::INTEGER)
-				return std::get<int64_t>(it->second.getVariant());
-			return 0;
-		};
 		return PropertyValue(TemporalDuration::fromComponents(
-			getInt("years"), getInt("months"), getInt("weeks"),
-			getInt("days"), getInt("hours"), getInt("minutes"),
-			getInt("seconds"), getInt("nanoseconds")));
+			mapInt64Component(map, "years", 0), mapInt64Component(map, "months", 0),
+			mapInt64Component(map, "weeks", 0), mapInt64Component(map, "days", 0),
+			mapInt64Component(map, "hours", 0), mapInt64Component(map, "minutes", 0),
+			mapInt64Component(map, "seconds", 0), mapInt64Component(map, "nanoseconds", 0)));
 	}
-	return PropertyValue();
+	throw std::invalid_argument("duration() requires a string, map, or NULL argument");
 }
 
 void registerTemporalFunctions(FunctionRegistry& registry) {

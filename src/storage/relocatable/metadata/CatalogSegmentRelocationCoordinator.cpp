@@ -140,6 +140,8 @@ namespace graph::storage {
 				static_cast<uint8_t>(currentEntry.generation != expectedGeneration) |
 				static_cast<uint8_t>(currentEntry.kind == SegmentKind::SGK_METADATA_PAGE_POOL) |
 				static_cast<uint8_t>(!queued.has_value()) |
+				static_cast<uint8_t>(queued.has_value() && queued->retired_generation > current.generation) |
+				static_cast<uint8_t>(queued.has_value() && queued->retired_generation < currentEntry.generation) |
 				static_cast<uint8_t>(queued.has_value() && currentEntry.physical_slot == queued->physical_slot);
 		if (invalidIdentity != 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -168,6 +170,8 @@ namespace graph::storage {
 				static_cast<uint8_t>(queued.has_value() && *queued != retirement) |
 				static_cast<uint8_t>(currentEntry.state != SegmentState::SGS_SEALED) |
 				static_cast<uint8_t>(currentEntry.kind == SegmentKind::SGK_METADATA_PAGE_POOL) |
+				static_cast<uint8_t>(retirement.retired_generation > current.generation) |
+				static_cast<uint8_t>(retirement.retired_generation < currentEntry.generation) |
 				static_cast<uint8_t>(currentEntry.physical_slot == retirement.physical_slot) |
 				static_cast<uint8_t>(!allocator_.isAllocated(current, currentEntry.physical_slot)) |
 				static_cast<uint8_t>(!allocator_.isAllocated(current, retirement.physical_slot));

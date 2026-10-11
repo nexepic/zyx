@@ -8,6 +8,8 @@
 
 #include "storage/relocatable/entity/EntityPageStoreTestFixture.hpp"
 
+#include <limits>
+
 TEST_F(RelocatableEntityPageStoreTest, AtomicallyAllocatesReadsAndReopensNodeAndEdgePages) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore store(io, *metadata);
@@ -136,6 +138,213 @@ TEST_F(RelocatableEntityPageStoreTest, MovesCowImageToFreshPoolWhenEveryCurrentE
 	EntityPageStore reopenedStore(io, *reopened);
 	const MetadataSnapshotPin recovered = reopened->openSnapshot();
 	EXPECT_EQ(reopenedStore.readNode(recovered, 1001U), mutation.node_updates.front().record);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeBatchPacksMatchingFreshCowAndNewPagePoolPlansAtomically) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	const NodeEntityRecord original = node(11U, 12U);
+	ASSERT_TRUE(entities.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, original, LogSequenceNumber(2U))
+					.has_value());
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(42U), PhysicalSlotId(42U), 902U};
+	const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+
+	const EntityPageFreshPoolDestination destination{
+			SegmentId(32U), 901U, Generation(1U), PhysicalSlotId(41U), PhysicalSlotId(41U)};
+	const std::array mutations = {
+			EntityPageBatchMutation{.page_id = PageId(101U),
+								.record_kind = EntityPageRecordKind::EPRK_NODE,
+								.node_updates = {{1001U, node(71U, 72U, 37U)}},
+								.replacement_new_pool = destination},
+	};
+	const EntityPageBatchNewPool newPage{
+			.request = newPool(32U, 901U, 102U, 41U),
+			.record_kind = EntityPageRecordKind::EPRK_NODE,
+			.node_insertions = {{1002U, node(81U, 82U, 47U)}},
+	};
+
+	EntityPageBatchNewPool conflictingPage = newPage;
+	conflictingPage.request.pool_owner_id = 902U;
+	expectFormatError(
+			[&] {
+				static_cast<void>(entities.applyNativeGraphBatchTransaction(
+						before, mutations, {}, std::span(&conflictingPage, 1), noPropertyPlans, properties,
+						propertyOptions, LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	const MetadataSnapshotPin unchanged = metadata->openSnapshot();
+	EXPECT_EQ(unchanged.superblock(), before.superblock());
+	EXPECT_EQ(entities.readNode(unchanged, 1001U), original);
+	EXPECT_FALSE(metadata->findPageLocationOptional(unchanged, PageId(102U)).has_value());
+
+	const EntityPageBatchResult published = entities.applyNativeGraphBatchTransaction(
+			before, mutations, {}, std::span(&newPage, 1), noPropertyPlans, properties, propertyOptions,
+			LogSequenceNumber(3U));
+	ASSERT_EQ(published.pages.size(), 1U);
+	ASSERT_EQ(published.new_pool_pages.size(), 1U);
+	EXPECT_EQ(published.pages.front().pool.segment_id, destination.segment_id);
+	EXPECT_EQ(published.new_pool_pages.front().pool.segment_id, destination.segment_id);
+	EXPECT_EQ(published.pages.front().pool.physical_slot, destination.first_slot);
+	EXPECT_EQ(published.new_pool_pages.front().pool.physical_slot, destination.first_slot);
+	EXPECT_NE(published.pages.front().page.page_index, published.new_pool_pages.front().page.page_index);
+
+	const MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findPageLocation(current, PageId(101U)).segment_id, destination.segment_id);
+	EXPECT_EQ(metadata->findPageLocation(current, PageId(102U)).segment_id, destination.segment_id);
+	EXPECT_EQ(entities.readNode(before, 1001U), original);
+	EXPECT_EQ(entities.readNode(current, 1001U), mutations.front().node_updates.front().record);
+	EXPECT_EQ(entities.readNode(current, 1002U), newPage.node_insertions.front().record);
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeBatchExposesPrivateCandidatesOnlyInsideItsOnePublicationScope) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(42U), PhysicalSlotId(42U), 902U};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchMutation, 0U> noMutations{};
+	const std::array<EntityPageBatchAppend, 0U> noAppends{};
+	const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
+	const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
+	const std::array<EntityPageBatchNewPool, 1U> newNode{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	NativeGraphDerivedStateMutation derived;
+	derived.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 991U, PhysicalSlotId(1U),
+			PhysicalSlotId(std::numeric_limits<uint64_t>::max()), RSS_ENVELOPE_BYTES, {}, 1U};
+	bool privateScopeCalled = false;
+	NativeGraphPrivateSegmentMaterialization privateIdentity;
+
+	const EntityPageBatchResult published = entities.applyNativeGraphBatchTransaction(
+			before, noMutations, noAppends, newNode, noPropertyPlans, properties, propertyOptions, noAuxiliaryPages,
+			derived,
+			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) { EXPECT_TRUE(batches.empty()); },
+			LogSequenceNumber(2U), {}, {}, {}, {},
+			[](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
+				EXPECT_EQ(identities.size(), 1U);
+				EXPECT_EQ(ordinal, 0U);
+				return std::vector<std::byte>{std::byte{0x5A}};
+			},
+			[&privateScopeCalled, &privateIdentity](const NativeGraphPrivateSegmentSet &identities,
+															 const NativeGraphPrivateSegmentReader &reader) {
+				ASSERT_EQ(identities.size(), 1U);
+				privateIdentity = identities.front();
+				EXPECT_EQ(reader(privateIdentity), std::vector<std::byte>({std::byte{0x5A}}));
+				privateScopeCalled = true;
+			});
+
+	EXPECT_TRUE(privateScopeCalled);
+	EXPECT_EQ(published.superblock.generation, Generation(2U));
+	EXPECT_THROW(static_cast<void>(entities.readNode(before, 1001U)), FormatException);
+	MetadataSnapshotPin after = metadata->openSnapshot();
+	EXPECT_EQ(entities.readNode(after, 1001U), newNode.front().node_insertions.front().record);
+	EXPECT_THROW(static_cast<void>(metadata->findCatalog(after, privateIdentity.segment_id)), FormatException);
+	after.release();
+	before.release();
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   PrivateCandidateConsumerFailureLeavesTheEntireEntityBatchUnpublished) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(42U), PhysicalSlotId(42U), 902U};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchMutation, 0U> noMutations{};
+	const std::array<EntityPageBatchAppend, 0U> noAppends{};
+	const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
+	const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
+	const std::array<EntityPageBatchNewPool, 1U> newNode{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	NativeGraphDerivedStateMutation derived;
+	derived.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 992U, PhysicalSlotId(1U),
+			PhysicalSlotId(std::numeric_limits<uint64_t>::max()), RSS_ENVELOPE_BYTES, {}, 1U};
+	NativeGraphPrivateSegmentMaterialization privateIdentity;
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(entities.applyNativeGraphBatchTransaction(
+						before, noMutations, noAppends, newNode, noPropertyPlans, properties, propertyOptions,
+						noAuxiliaryPages, derived,
+						[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+							EXPECT_TRUE(batches.empty());
+						},
+						LogSequenceNumber(2U), {}, {}, {}, {},
+						[](const NativeGraphPrivateSegmentSet &, size_t) {
+							return std::vector<std::byte>{std::byte{0x6A}};
+						},
+						[&privateIdentity](const NativeGraphPrivateSegmentSet &identities,
+											 const NativeGraphPrivateSegmentReader &) {
+							privateIdentity = identities.front();
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+												  "private candidate consumer rejected its source");
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin after = metadata->openSnapshot();
+	EXPECT_EQ(after.superblock(), before.superblock());
+	EXPECT_THROW(static_cast<void>(entities.readNode(after, 1001U)), FormatException);
+	ASSERT_TRUE(privateIdentity.isValid());
+	EXPECT_THROW(static_cast<void>(metadata->findCatalog(after, privateIdentity.segment_id)), FormatException);
+	after.release();
+	before.release();
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeGraphBatchRejectsAStaleSnapshotBeforeItCanOverwriteANewerEntityGeneration) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(41U), 902U};
+	const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
+
+	const NodeEntityRecord original = node(11U, 12U);
+	ASSERT_TRUE(entities.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, original, LogSequenceNumber(2U))
+				.has_value());
+	MetadataSnapshotPin stale = metadata->openSnapshot();
+	const NodeEntityRecord winner = node(21U, 22U);
+	static_cast<void>(entities.updateNode(stale, 1001U, winner, LogSequenceNumber(3U)));
+
+	const std::array<EntityPageBatchMutation, 1U> staleMutation{{
+			{.page_id = PageId(101U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_updates = {{1001U, node(31U, 32U)}}},
+	}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(entities.applyNativeGraphBatchTransaction(
+						stale, staleMutation, {}, {}, noPropertyPlans, properties, propertyOptions,
+						LogSequenceNumber(4U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(current.superblock().generation, Generation(3U));
+	EXPECT_EQ(entities.readNode(stale, 1001U), original);
+	EXPECT_EQ(entities.readNode(current, 1001U), winner);
+	stale.release();
+	current.release();
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	EntityPageStore reopenedEntities(io, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(recovered.superblock().generation, Generation(3U));
+	EXPECT_EQ(reopenedEntities.readNode(recovered, 1001U), winner);
+	recovered.release();
 }
 
 TEST_F(RelocatableEntityPageStoreTest, UpdatesAndRetiresFinalEntityPageWithoutBreakingPinnedSnapshots) {

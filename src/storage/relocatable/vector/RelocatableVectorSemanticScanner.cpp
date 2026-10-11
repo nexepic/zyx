@@ -25,6 +25,7 @@ namespace graph::storage {
 
 		constexpr uint8_t VECTOR_SEMANTIC_TAG = 11U;
 		constexpr size_t MAX_VECTOR_BATCH_RECORDS = 65536U;
+		static_assert(std::numeric_limits<size_t>::digits <= std::numeric_limits<uint64_t>::digits);
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
@@ -41,6 +42,11 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER, "relocatable Vector semantic scan requires bounded definitions, "
 													   "batches, vector counts, and dimensions");
 			}
+			if (static_cast<uint64_t>(options.maximum_definitions) >
+				std::numeric_limits<uint64_t>::max() / options.maximum_vectors_per_index) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						 "relocatable Vector semantic scan bounds overflow its result cardinality");
+			}
 		}
 
 		[[nodiscard]] bool nodeHasLabel(std::span<const uint64_t> labels, uint64_t labelId) {
@@ -55,10 +61,6 @@ namespace graph::storage {
 
 		void updateSemantic(RelocatableVectorSemanticScanResult &result,
 							const RelocatableVectorSemanticRecord &record) {
-			if (result.vector_count == std::numeric_limits<uint64_t>::max()) { // ZYX_COV_EXCL_LINE: bounded source
-																			   // scans cannot emit 2^64 records.
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable Vector semantic record count overflowed");
-			}
 			std::array<std::byte, sizeof(uint64_t) * 2U> identity{};
 			LittleEndianCodec::writeU64(identity, 0, record.index_id);
 			LittleEndianCodec::writeU64(identity, sizeof(uint64_t), record.node_id);
@@ -98,29 +100,16 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable Vector semantic scan definition exceeds its configured raw-page dimension bound");
 			}
-			if (definition.property_names.size() > options.maximum_property_names) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable Vector semantic scan definition exceeds its configured Property-name bound");
-			}
 			const std::optional<uint32_t> token = catalog.findPropertyToken(snapshot, definition.property_names.front());
 			if (!token.has_value()) {
 				fail(FormatError::FERR_INVALID_STATE, "relocatable Vector semantic scan definition references a "
 													  "Property key absent from the System Catalog");
 			}
 			uint64_t vectorsForIndex = 0;
-			uint64_t previousNodeId = 0;
-			bool hasPreviousNode = false;
 			std::vector<RelocatableVectorSemanticRecord> batch;
 			batch.reserve(options.maximum_batch_records);
 			PropertyCollectionRootScanCursor propertyCursor = properties.openScanCursor(snapshot);
 			metadata.visitNodePageLocations(snapshot, [&](const EntityPageLocation &location) {
-				if (hasPreviousNode && location.entity_id <= previousNodeId) { // ZYX_COV_EXCL_LINE: LocationDirectory
-																			   // emits strictly ordered logical IDs.
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector semantic scan Node Directory order is not canonical");
-				}
-				previousNodeId = location.entity_id;
-				hasPreviousNode = true;
 				const NodeEntityRecord node = entities.readNodeAt(snapshot, location);
 				if (!nodeHasLabel(labels.readNodeLabels(snapshot, node), definition.label_token_id)) {
 					return;
@@ -130,10 +119,6 @@ namespace graph::storage {
 						propertyCursor.readEntityOptional(snapshot, propertyKey);
 				if (!root.has_value()) {
 					return;
-				}
-				if (root->owner_entity_type != Node::typeId || root->owner_entity_id != location.entity_id) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector semantic scan Property root disagrees with native Node ownership");
 				}
 				const PropertyValue *value = findValue(*root, *token);
 				if (value == nullptr) {

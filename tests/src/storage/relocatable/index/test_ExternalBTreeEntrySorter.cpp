@@ -75,6 +75,11 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidBoundsAndConcurrentOrPostFin
 	expectFormatError([&] { static_cast<void>(ExternalBTreeEntrySorter({})); }, FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(ExternalBTreeEntrySorter({1U, 64U, 1U})); },
 					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(ExternalBTreeEntrySorter({1U, RSS_BTREE_ENTRY_HEADER_BYTES - 1U, 2U})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(ExternalBTreeEntrySorter({1U, 64U, 65U})); },
+			FormatError::FERR_INVALID_HEADER);
 
 	ExternalBTreeEntrySorter sorter({2U, 128U, 2U});
 	sorter.add({smallKey(1U), 1U});
@@ -116,4 +121,19 @@ TEST_F(RelocatableBTreePageStoreTest, SupportsEmptyRepeatedAndMovedSorterSources
 	duplicates.add({smallKey(1U), 2U});
 	EXPECT_EQ(readAll(duplicates.finish()()),
 			  (std::vector<BTreePageEntry>{{smallKey(1U), 1U}, {smallKey(1U), 2U}}));
+}
+
+TEST_F(RelocatableBTreePageStoreTest, PreservesBoundarySizedRunsAndMaximumAllowedMergeFanIn) {
+	// `smallKey` has a 32-byte key and one B+Tree entry adds its fixed 32-byte
+	// framing. A 64-byte run is therefore a useful exact-fit boundary: each
+	// entry must form one complete private run, never an oversized buffer.
+	ExternalBTreeEntrySorter sorter({64U, 64U, 64U});
+	const std::vector<BTreePageEntry> expected = entries(64U);
+	for (auto entry = expected.rbegin(); entry != expected.rend(); ++entry) {
+		sorter.add(*entry);
+	}
+
+	const OrderedBTreeEntrySource source = sorter.finish();
+	EXPECT_EQ(readAll(source()), expected);
+	EXPECT_EQ(readAll(source()), expected);
 }

@@ -166,6 +166,13 @@ namespace graph::storage {
 								   appendLocations, checkpointLsn, retirements);
 	}
 
+	void SlottedPagePool::prepareCrossPoolReplacementPages(
+			const CatalogEntry &destinationPool,
+			std::span<const SharedPagePoolPreparedCrossPoolReplacement> replacements,
+			std::span<PageLocation> replacementLocations, LogSequenceNumber checkpointLsn) const {
+		pool_.prepareCrossPoolReplacementPages(destinationPool, replacements, replacementLocations, checkpointLsn);
+	}
+
 	SlottedPage SlottedPagePool::read(const MetadataSnapshotPin &snapshot, PageId pageId,
 									  BufferPoolReadHint hint) const {
 		const SharedPagePoolContents contents = pool_.read(snapshot, pageId, hint);
@@ -349,19 +356,19 @@ namespace graph::storage {
 	}
 
 	std::optional<SlottedPagePlacement> SlottedPagePool::findBestFitPageForRecord(std::span<const SegmentId> segmentIds,
-															  PageOwnerKind ownerKind,
-															  uint32_t recordBytes) const {
+																				  PageOwnerKind ownerKind,
+																				  uint32_t recordBytes) const {
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		return findBestFitPageForRecord(snapshot, segmentIds, ownerKind, recordBytes);
 	}
 
-	std::optional<SlottedPagePlacement>
-	SlottedPagePool::findBestFitPageForRecord(const MetadataSnapshotPin &snapshot,
-													  std::span<const SegmentId> segmentIds, PageOwnerKind ownerKind,
-													  uint32_t recordBytes) const {
+	std::optional<SlottedPagePlacement> SlottedPagePool::findBestFitPageForRecord(const MetadataSnapshotPin &snapshot,
+																				  std::span<const SegmentId> segmentIds,
+																				  PageOwnerKind ownerKind,
+																				  uint32_t recordBytes) const {
 		if (segmentIds.empty()) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "relocatable typed record placement requires candidate pools");
+								  "relocatable typed record placement requires candidate pools");
 		}
 		validateRecordSelectionRequest(recordBytes, ownerKind);
 		std::optional<RecordPlacement> best;
@@ -402,9 +409,9 @@ namespace graph::storage {
 	}
 
 	std::optional<PageLocation> SlottedPagePool::findBestFitLocation(const MetadataSnapshotPin &snapshot,
-													 SegmentId segmentId,
-													 uint32_t minimumContiguousFreeBytes,
-													 std::optional<PageOwnerKind> ownerKind) const {
+															 SegmentId segmentId,
+															 uint32_t minimumContiguousFreeBytes,
+															 std::optional<PageOwnerKind> ownerKind) const {
 		{
 			std::lock_guard lock(free_space_mutex_);
 			const auto existing = free_space_indexes_.find(segmentId);
@@ -416,16 +423,7 @@ namespace graph::storage {
 		PoolFreeSpaceIndex rebuilt = buildFreeSpaceIndex(snapshot, segmentId);
 		const std::optional<PageLocation> selection =
 				selectBestFitLocation(rebuilt, minimumContiguousFreeBytes, ownerKind);
-		{
-			std::lock_guard lock(free_space_mutex_);
-			const auto existing = free_space_indexes_.find(segmentId);
-			// A reader pinned to an older root must not displace a cache built for a
-			// newer publication. It can safely use its local immutable index.
-			if (existing == free_space_indexes_.end() ||
-				existing->second.metadata_generation.value() <= rebuilt.metadata_generation.value()) {
-				free_space_indexes_[segmentId] = std::move(rebuilt);
-			}
-		}
+		cacheFreeSpaceIndexIfNotOlder(segmentId, std::move(rebuilt));
 		return selection;
 	}
 
@@ -441,22 +439,27 @@ namespace graph::storage {
 			}
 		}
 		PoolFreeSpaceIndex rebuilt = buildFreeSpaceIndex(snapshot, segmentId);
-		const std::optional<RecordPlacement> selection =
-				selectBestFitRecordLocation(rebuilt, ownerKind, recordBytes);
+		const std::optional<RecordPlacement> selection = selectBestFitRecordLocation(rebuilt, ownerKind, recordBytes);
+		cacheFreeSpaceIndexIfNotOlder(segmentId, std::move(rebuilt));
+		return selection;
+	}
+
+	void SlottedPagePool::cacheFreeSpaceIndexIfNotOlder(SegmentId segmentId, PoolFreeSpaceIndex rebuilt) const {
 		{
 			std::lock_guard lock(free_space_mutex_);
 			const auto existing = free_space_indexes_.find(segmentId);
+			// An old snapshot may use its local index but must not replace a newer
+			// cache entry that represents the current publication.
 			if (existing == free_space_indexes_.end() ||
 				existing->second.metadata_generation.value() <= rebuilt.metadata_generation.value()) {
 				free_space_indexes_[segmentId] = std::move(rebuilt);
 			}
 		}
-		return selection;
 	}
 
 	std::optional<PageLocation> SlottedPagePool::selectBestFitLocation(const PoolFreeSpaceIndex &index,
-															   uint32_t minimumContiguousFreeBytes,
-															   std::optional<PageOwnerKind> ownerKind) {
+																	   uint32_t minimumContiguousFreeBytes,
+																	   std::optional<PageOwnerKind> ownerKind) {
 		if (!index.owner_kind.has_value() || (ownerKind.has_value() && *index.owner_kind != *ownerKind)) {
 			return std::nullopt;
 		}
@@ -466,14 +469,14 @@ namespace graph::storage {
 		}
 		if (bucket->second.empty()) { // ZYX_COV_EXCL_LINE: cache maintenance never stores empty buckets.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "relocatable slotted page free-space cache has an empty selection bucket");
+								  "relocatable slotted page free-space cache has an empty selection bucket");
 		}
 		return index.pages.pages.at(*bucket->second.begin()).location;
 	}
 
 	std::optional<SlottedPagePool::RecordPlacement>
 	SlottedPagePool::selectBestFitRecordLocation(const PoolFreeSpaceIndex &index, PageOwnerKind ownerKind,
-															 uint32_t recordBytes) {
+												 uint32_t recordBytes) {
 		if (!index.owner_kind.has_value() || *index.owner_kind != ownerKind) {
 			return std::nullopt;
 		}
@@ -542,7 +545,7 @@ namespace graph::storage {
 	}
 
 	SlottedPagePool::PoolFreeSpaceIndex SlottedPagePool::buildFreeSpaceIndex(const MetadataSnapshotPin &snapshot,
-																				 SegmentId segmentId) const {
+																			 SegmentId segmentId) const {
 		PoolFreeSpaceIndex rebuilt;
 		rebuilt.metadata_generation = snapshot.superblock().generation;
 		for (const PageLocation &location: metadata_.findPageLocationsForSegment(snapshot, segmentId)) {
@@ -564,7 +567,7 @@ namespace graph::storage {
 			if (rebuilt.owner_kind.has_value() && *rebuilt.owner_kind != ownerKind) { // ZYX_COV_EXCL_LINE:
 				// SharedPagePool validates the compatible owner-kind namespace before this cache is built.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable slotted page pool contains incompatible owner kinds");
+									  "relocatable slotted page pool contains incompatible owner kinds");
 			}
 			rebuilt.owner_kind = ownerKind;
 			if (!rebuilt.pages.pages
@@ -572,7 +575,7 @@ namespace graph::storage {
 								  OwnerFreeSpaceIndex::PageInfo{location, stats.reusable_free_slot_count})
 						 .second) { // ZYX_COV_EXCL_LINE: Page Directory keys are unique.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable slotted page free-space index contains a duplicate Page ID");
+									  "relocatable slotted page free-space index contains a duplicate Page ID");
 			}
 			rebuilt.pages.pages_by_free_bytes[location.free_bytes].insert(location.page_id);
 		}
@@ -606,10 +609,11 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable slotted page publication has an unsupported owner kind");
 		}
-		if (iterator->second.owner_kind.has_value() && *iterator->second.owner_kind != allocation.owner.kind) { // ZYX_COV_EXCL_LINE
+		if (iterator->second.owner_kind.has_value() &&
+			*iterator->second.owner_kind != allocation.owner.kind) { // ZYX_COV_EXCL_LINE
 			// One SharedPagePool accepts only its compatible slotted owner namespace.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "relocatable slotted page publication changes a pool's slotted owner kind");
+								  "relocatable slotted page publication changes a pool's slotted owner kind");
 		}
 		iterator->second.owner_kind = allocation.owner.kind;
 		OwnerFreeSpaceIndex &ownerIndex = iterator->second.pages;
@@ -617,7 +621,8 @@ namespace graph::storage {
 		if (previous !=
 			ownerIndex.pages.end()) { // ZYX_COV_EXCL_LINE: a current cache tracks only this adapter's pages.
 			auto bucket = ownerIndex.pages_by_free_bytes.find(previous->second.location.free_bytes);
-			if (bucket == ownerIndex.pages_by_free_bytes.end() || bucket->second.erase(location.page_id) != 1U) { // ZYX_COV_EXCL_LINE
+			if (bucket == ownerIndex.pages_by_free_bytes.end() ||
+				bucket->second.erase(location.page_id) != 1U) { // ZYX_COV_EXCL_LINE
 				// Both maps are updated together while holding free_space_mutex_.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable slotted page free-space cache lost its previous Page ID");

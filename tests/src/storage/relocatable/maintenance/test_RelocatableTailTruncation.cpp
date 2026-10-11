@@ -7,6 +7,8 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -16,6 +18,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
@@ -142,6 +145,123 @@ TEST_F(RelocatableTailTruncationTest, RefusesFallbackOnlyStorageWithoutRiskingTh
 	const RelocatableTailTruncationResult result = metadata->truncateReleasedTail();
 	EXPECT_EQ(result.status, RelocatableTailTruncationStatus::VTTS_NATIVE_IO_REQUIRED);
 	EXPECT_EQ(io->fileSize(), originalBytes);
+}
+
+TEST_F(RelocatableTailTruncationTest, NativeTruncateFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen) {
+	nativeFd = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeFd, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeFd, nativeFd);
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	PhysicalSegmentAllocator segments(io, *metadata);
+	ASSERT_TRUE(segments.allocate(segmentRequest(), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+						.has_value());
+	static_cast<void>(segments.retire(SegmentId(71U), Generation(1U), LogSequenceNumber(3U)));
+	static_cast<void>(segments.releaseRetired(SegmentId(71U), Generation(1U), LogSequenceNumber(4U)));
+	const uint64_t originalBytes = io->fileSize();
+	{
+		StorageIO::ScopedNativeTruncateHookForTesting failTruncate([](file_handle_t, uint64_t) {
+#ifdef _WIN32
+			SetLastError(ERROR_DISK_FULL);
+#else
+			errno = ENOSPC;
+#endif
+			return -1;
+		});
+		const RelocatableTailTruncationResult failed = metadata->truncateReleasedTail();
+		EXPECT_EQ(failed.status, RelocatableTailTruncationStatus::VTTS_IO_ERROR);
+		EXPECT_EQ(failed.old_file_bytes, originalBytes);
+		EXPECT_EQ(failed.new_file_bytes, originalBytes);
+		EXPECT_EQ(io->fileSize(), originalBytes);
+	}
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin beforeRetry = reopened->openSnapshot();
+	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(beforeRetry, PhysicalSlotId(40U)));
+	beforeRetry.release();
+	const RelocatableTailTruncationResult retried = reopened->truncateReleasedTail();
+	EXPECT_EQ(retried.status, RelocatableTailTruncationStatus::VTTS_TRUNCATED);
+	EXPECT_LT(retried.new_file_bytes, originalBytes);
+	EXPECT_EQ(io->fileSize(), retried.new_file_bytes);
+}
+
+TEST_F(RelocatableTailTruncationTest, NativePreTruncateSyncFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen) {
+	nativeFd = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeFd, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeFd, nativeFd);
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	PhysicalSegmentAllocator segments(io, *metadata);
+	ASSERT_TRUE(segments.allocate(segmentRequest(), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+	static_cast<void>(segments.retire(SegmentId(71U), Generation(1U), LogSequenceNumber(3U)));
+	static_cast<void>(segments.releaseRetired(SegmentId(71U), Generation(1U), LogSequenceNumber(4U)));
+	const uint64_t originalBytes = io->fileSize();
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failPreTruncateFence([](file_handle_t) {
+#ifdef _WIN32
+			SetLastError(ERROR_DISK_FULL);
+#else
+			errno = ENOSPC;
+#endif
+			return -1;
+		});
+		const RelocatableTailTruncationResult failed = metadata->truncateReleasedTail();
+		EXPECT_EQ(failed.status, RelocatableTailTruncationStatus::VTTS_IO_ERROR);
+		EXPECT_EQ(failed.old_file_bytes, originalBytes);
+		EXPECT_EQ(failed.new_file_bytes, originalBytes);
+		EXPECT_EQ(io->fileSize(), originalBytes);
+	}
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin beforeRetry = reopened->openSnapshot();
+	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(beforeRetry, PhysicalSlotId(40U)));
+	beforeRetry.release();
+	const RelocatableTailTruncationResult retried = reopened->truncateReleasedTail();
+	EXPECT_EQ(retried.status, RelocatableTailTruncationStatus::VTTS_TRUNCATED);
+	EXPECT_LT(retried.new_file_bytes, originalBytes);
+	EXPECT_EQ(io->fileSize(), retried.new_file_bytes);
+}
+
+TEST_F(RelocatableTailTruncationTest, NativePostTruncateSyncFailureReportsUncertainDurabilityAndReopensSafely) {
+	nativeFd = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeFd, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeFd, nativeFd);
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	PhysicalSegmentAllocator segments(io, *metadata);
+	ASSERT_TRUE(segments.allocate(segmentRequest(), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+	static_cast<void>(segments.retire(SegmentId(71U), Generation(1U), LogSequenceNumber(3U)));
+	static_cast<void>(segments.releaseRetired(SegmentId(71U), Generation(1U), LogSequenceNumber(4U)));
+	const uint64_t originalBytes = io->fileSize();
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failPostTruncateFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		const RelocatableTailTruncationResult failed = metadata->truncateReleasedTail();
+		EXPECT_EQ(failed.status, RelocatableTailTruncationStatus::VTTS_IO_ERROR);
+		EXPECT_EQ(failed.old_file_bytes, originalBytes);
+		EXPECT_LT(failed.new_file_bytes, originalBytes);
+		EXPECT_EQ(io->fileSize(), failed.new_file_bytes);
+	}
+	EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(snapshot, SegmentId(71U)).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
+	snapshot.release();
+	EXPECT_EQ(reopened->truncateReleasedTail().status, RelocatableTailTruncationStatus::VTTS_NOTHING_TO_TRUNCATE);
 }
 
 TEST_F(RelocatableTailTruncationTest, TruncatesAReleasedExtentTailAfterMixedPageAndExtentRelocationThenReopens) {

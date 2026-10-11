@@ -62,7 +62,7 @@ namespace {
 
 	CatalogLeafPage validPage() {
 		CatalogLeafPage page;
-		page.page_id = PageId(0x0102030405060708ULL);
+		page.page_id = MetadataPageId(0x0102030405060708ULL);
 		page.minimum_segment_id = SegmentId(100);
 		page.maximum_segment_id = SegmentId(101);
 		page.generation = Generation(5);
@@ -115,7 +115,7 @@ TEST(RelocatableCatalogPageTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 			  static_cast<uint16_t>(SegmentState::SGS_SEALED));
 
 	const CatalogLeafPage decoded = CatalogLeafPageCodec::decode(encoded);
-	EXPECT_EQ(decoded.page_id, PageId(0x0102030405060708ULL));
+	EXPECT_EQ(decoded.page_id, MetadataPageId(0x0102030405060708ULL));
 	EXPECT_EQ(decoded.minimum_segment_id, SegmentId(100));
 	EXPECT_EQ(decoded.maximum_segment_id, SegmentId(101));
 	EXPECT_EQ(decoded.generation, Generation(5));
@@ -129,7 +129,7 @@ TEST(RelocatableCatalogPageTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 TEST(RelocatableCatalogPageTest, CodecSupportsEmptyAndFullLeafPages) {
 	EXPECT_EQ(RSS_CATALOG_PAGE_MAX_ENTRIES, 84U);
 	CatalogLeafPage empty;
-	empty.page_id = PageId(1);
+	empty.page_id = MetadataPageId(1);
 	empty.generation = Generation(1);
 	empty.committed_lsn = LogSequenceNumber(1);
 	const CatalogLeafPage decodedEmpty = CatalogLeafPageCodec::decode(CatalogLeafPageCodec::encode(empty));
@@ -138,7 +138,7 @@ TEST(RelocatableCatalogPageTest, CodecSupportsEmptyAndFullLeafPages) {
 	EXPECT_FALSE(decodedEmpty.maximum_segment_id.isValid());
 
 	CatalogLeafPage full;
-	full.page_id = PageId(2);
+	full.page_id = MetadataPageId(2);
 	full.minimum_segment_id = SegmentId(1000);
 	full.maximum_segment_id = SegmentId(1000 + RSS_CATALOG_PAGE_MAX_ENTRIES - 1U);
 	full.generation = Generation(1);
@@ -155,7 +155,7 @@ TEST(RelocatableCatalogPageTest, CodecSupportsEmptyAndFullLeafPages) {
 
 TEST(RelocatableCatalogPageTest, CodecRejectsInvalidInMemoryPages) {
 	CatalogLeafPage page = validPage();
-	page.page_id = PageId{};
+	page.page_id = MetadataPageId{};
 	expectFormatError([&] { static_cast<void>(CatalogLeafPageCodec::encode(page)); }, FormatError::FERR_INVALID_HEADER);
 
 	page = validPage();
@@ -171,7 +171,7 @@ TEST(RelocatableCatalogPageTest, CodecRejectsInvalidInMemoryPages) {
 	expectFormatError([&] { static_cast<void>(CatalogLeafPageCodec::encode(page)); }, FormatError::FERR_INVALID_HEADER);
 
 	CatalogLeafPage empty;
-	empty.page_id = PageId(1);
+	empty.page_id = MetadataPageId(1);
 	empty.generation = Generation(1);
 	empty.committed_lsn = LogSequenceNumber(1);
 	empty.minimum_segment_id = SegmentId(1);
@@ -334,4 +334,25 @@ TEST(RelocatableCatalogPageTest, CodecValidatesEveryPersistedEntryInvariant) {
 	recalculateCrc(corrupt);
 	expectFormatError([&] { static_cast<void>(CatalogLeafPageCodec::decode(corrupt)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableCatalogPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const auto encoded = CatalogLeafPageCodec::encode(validPage());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateCrc(mutation);
+			try {
+				const CatalogLeafPage decoded = CatalogLeafPageCodec::decode(mutation);
+				if (CatalogLeafPageCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "Catalog mutation was silently normalized at byte " << byteOffset << ", bit "
+									 << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical mutation must fail at the typed format boundary.
+			}
+		}
+	}
 }

@@ -39,7 +39,6 @@ protected:
 		path = uniqueDbPath();
 		std::error_code ec;
 		fs::remove(path, ec);
-		fs::remove(path + ".wal", ec);
 		ASSERT_EQ(zyx_driver_db_open(path.c_str(), &db, &error), ZYX_DRIVER_OK);
 		ASSERT_EQ(error, nullptr);
 	}
@@ -53,7 +52,6 @@ protected:
 		error = nullptr;
 		std::error_code ec;
 		fs::remove(path, ec);
-		fs::remove(path + ".wal", ec);
 	}
 };
 
@@ -197,6 +195,177 @@ TEST_F(DriverAbiBytesTest, RoundTripsBytesInsideListAndMapValueReferences) {
 	zyx_driver_value_free(map, &error);
 	zyx_driver_value_free(list, &error);
 	zyx_driver_params_free(params, &error);
+}
+
+TEST_F(DriverAbiBytesTest, StreamsPersistedLargeValueRangesAfterReopenAndResultRelease) {
+	// This deliberately exceeds one slotted Property-page record, so the native
+	// Property store must materialize and later resolve a LargeValue reference.
+	std::vector<uint8_t> expected(16U * 1024U + 137U);
+	for (size_t index = 0U; index < expected.size(); ++index) {
+		expected[index] = static_cast<uint8_t>((index * 37U) % 251U);
+	}
+
+	zyx_driver_params_t *params = nullptr;
+	zyx_driver_result_t *result = nullptr;
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", expected.data(),
+									 static_cast<uint32_t>(expected.size()), &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_db_execute(db, "CREATE (:PersistedBinary {payload: $payload})", params, &result, &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	zyx_driver_params_free(params, &error);
+	params = nullptr;
+
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	EXPECT_FALSE(fs::exists(path + ".wal"));
+	ASSERT_EQ(zyx_driver_db_open(path.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_db_execute(db, "MATCH (n:PersistedBinary) RETURN n.payload", nullptr, &result, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+
+	constexpr uint32_t offset = 31U;
+	const uint32_t length = static_cast<uint32_t>(expected.size() - 73U);
+	zyx_driver_bytes_stream_t *stream = nullptr;
+	ASSERT_EQ(zyx_driver_result_open_bytes_stream(result, 0U, offset, length, &stream, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(stream, nullptr);
+
+	// A pull stream owns an immutable range snapshot, rather than borrowing the
+	// result cursor that created it. This is essential for a persisted LargeValue.
+	zyx_driver_result_free(result);
+	result = nullptr;
+
+	std::array<uint8_t, 997U> buffer{};
+	std::vector<uint8_t> actual;
+	actual.reserve(length);
+	for (;;) {
+		uint32_t read = 0U;
+		const zyx_driver_status_t status =
+				zyx_driver_bytes_stream_read(stream, buffer.data(), static_cast<uint32_t>(buffer.size()), &read, &error);
+		if (status == ZYX_DRIVER_DONE) {
+			EXPECT_EQ(read, 0U);
+			break;
+		}
+		ASSERT_EQ(status, ZYX_DRIVER_ROW);
+		ASSERT_GT(read, 0U);
+		actual.insert(actual.end(), buffer.begin(), buffer.begin() + read);
+	}
+	EXPECT_EQ(actual, (std::vector<uint8_t>(expected.begin() + offset, expected.begin() + offset + length)));
+	zyx_driver_bytes_stream_close(stream, &error);
+	EXPECT_EQ(error, nullptr);
+}
+
+TEST_F(DriverAbiBytesTest, ExplicitTransactionPersistsLargeValueReplacementAndRemovalAcrossReopen) {
+	std::vector<uint8_t> committed(16U * 1024U + 137U);
+	std::vector<uint8_t> replacement(committed.size());
+	std::vector<uint8_t> discarded(committed.size());
+	for (size_t index = 0U; index < committed.size(); ++index) {
+		committed[index] = static_cast<uint8_t>((index * 17U) % 251U);
+		replacement[index] = static_cast<uint8_t>((index * 31U + 7U) % 251U);
+		discarded[index] = static_cast<uint8_t>((index * 43U + 1U) % 251U);
+	}
+
+	zyx_driver_txn_t *transaction = nullptr;
+	zyx_driver_params_t *params = nullptr;
+	zyx_driver_result_t *result = nullptr;
+	ASSERT_EQ(zyx_driver_txn_begin(db, &transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(transaction, nullptr);
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", committed.data(), static_cast<uint32_t>(committed.size()),
+										 &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_execute(transaction, "CREATE (:TransactionBinary {payload: $payload})", params, &result,
+										 &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	zyx_driver_params_free(params, &error);
+	params = nullptr;
+	ASSERT_EQ(zyx_driver_txn_commit(transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_close(transaction, &error), ZYX_DRIVER_OK);
+	transaction = nullptr;
+
+	// A committed replacement must survive independently from a later removal.
+	ASSERT_EQ(zyx_driver_txn_begin(db, &transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", replacement.data(),
+									 static_cast<uint32_t>(replacement.size()), &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_execute(transaction, "MATCH (n:TransactionBinary) SET n.payload = $payload", params,
+									 &result, &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	zyx_driver_params_free(params, &error);
+	params = nullptr;
+	ASSERT_EQ(zyx_driver_txn_commit(transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_close(transaction, &error), ZYX_DRIVER_OK);
+	transaction = nullptr;
+
+	ASSERT_EQ(zyx_driver_txn_begin(db, &transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", committed.data(), static_cast<uint32_t>(committed.size()),
+									 &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_execute(transaction, "CREATE (:TransactionBinaryRemoved {payload: $payload})", params,
+									 &result, &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	zyx_driver_params_free(params, &error);
+	params = nullptr;
+	ASSERT_EQ(zyx_driver_txn_commit(transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_close(transaction, &error), ZYX_DRIVER_OK);
+	transaction = nullptr;
+
+	ASSERT_EQ(zyx_driver_txn_begin(db, &transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", discarded.data(), static_cast<uint32_t>(discarded.size()),
+										 &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_execute(transaction, "MATCH (n:TransactionBinary) SET n.payload = $payload", params,
+										 &result, &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	zyx_driver_params_free(params, &error);
+	params = nullptr;
+	ASSERT_EQ(zyx_driver_txn_rollback(transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_close(transaction, &error), ZYX_DRIVER_OK);
+	transaction = nullptr;
+
+	ASSERT_EQ(zyx_driver_txn_begin(db, &transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_execute(transaction, "MATCH (n:TransactionBinaryRemoved) REMOVE n.payload", nullptr,
+									 &result, &error),
+			  ZYX_DRIVER_OK);
+	zyx_driver_result_free(result);
+	result = nullptr;
+	ASSERT_EQ(zyx_driver_txn_commit(transaction, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_txn_close(transaction, &error), ZYX_DRIVER_OK);
+	transaction = nullptr;
+
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open(path.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_db_execute(db, "MATCH (n:TransactionBinary) RETURN n.payload", nullptr, &result, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+	const uint8_t *actual = nullptr;
+	uint32_t actualSize = 0U;
+	ASSERT_EQ(zyx_driver_result_get_bytes(result, 0U, &actual, &actualSize, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(actual, nullptr);
+	EXPECT_EQ(actualSize, replacement.size());
+	EXPECT_EQ(std::vector<uint8_t>(actual, actual + actualSize), replacement);
+	zyx_driver_result_free(result);
+	result = nullptr;
+
+	ASSERT_EQ(zyx_driver_db_execute(db, "MATCH (n:TransactionBinaryRemoved) RETURN n.payload", nullptr, &result, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+	EXPECT_EQ(zyx_driver_result_value_type(result, 0U), ZYX_DRIVER_VALUE_NULL);
+	zyx_driver_result_free(result);
 }
 
 TEST_F(DriverAbiBytesTest, RejectsNullNonEmptyInputAndInvalidByteOutputs) {

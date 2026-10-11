@@ -21,7 +21,6 @@
 #include "graph/core/Edge.hpp"
 #include <cstring>
 #include <stdexcept>
-#include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph {

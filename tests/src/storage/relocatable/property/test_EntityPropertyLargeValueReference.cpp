@@ -23,7 +23,12 @@ using namespace graph::storage;
 namespace {
 
 	constexpr size_t LARGE_VALUE_FLAGS_OFFSET = 8U;
+	constexpr size_t LARGE_VALUE_PAYLOAD_CRC_OFFSET = 28U;
 	constexpr size_t LARGE_VALUE_HEADER_CRC_OFFSET = 32U;
+	constexpr size_t LARGE_VALUE_REFERENCE_HEADER_BYTES = 40U;
+	constexpr size_t NESTED_REF_PAYLOAD_CRC_OFFSET = 80U;
+	constexpr size_t NESTED_REF_HEADER_CRC_OFFSET = 84U;
+	constexpr size_t NESTED_REF_HEADER_BYTES = 96U;
 
 	void expectFormatError(const std::function<void()> &operation, FormatError expected) {
 		try {
@@ -48,6 +53,22 @@ namespace {
 		result.value.codec = LargeValueCodec::LVC_RAW;
 		result.value.media_type = "application/x-zyx-property-root";
 		return result;
+	}
+
+	void recalculateChecksums(std::vector<std::byte> &bytes) {
+		const size_t nestedOffset = LARGE_VALUE_REFERENCE_HEADER_BYTES;
+		std::span<std::byte> nested = std::span(bytes).subspan(nestedOffset);
+		LittleEndianCodec::writeU32(nested, NESTED_REF_PAYLOAD_CRC_OFFSET,
+								 graph::utils::calculateCrc(nested.data() + NESTED_REF_HEADER_BYTES,
+													  nested.size() - NESTED_REF_HEADER_BYTES));
+		LittleEndianCodec::writeU32(nested, NESTED_REF_HEADER_CRC_OFFSET, 0U);
+		LittleEndianCodec::writeU32(nested, NESTED_REF_HEADER_CRC_OFFSET,
+								 graph::utils::calculateCrc(nested.data(), NESTED_REF_HEADER_BYTES));
+		LittleEndianCodec::writeU32(bytes, LARGE_VALUE_PAYLOAD_CRC_OFFSET,
+								 graph::utils::calculateCrc(nested.data(), nested.size()));
+		LittleEndianCodec::writeU32(bytes, LARGE_VALUE_HEADER_CRC_OFFSET, 0U);
+		LittleEndianCodec::writeU32(bytes, LARGE_VALUE_HEADER_CRC_OFFSET,
+								 graph::utils::calculateCrc(bytes.data(), LARGE_VALUE_REFERENCE_HEADER_BYTES));
 	}
 
 } // namespace
@@ -96,4 +117,24 @@ TEST(EntityPropertyLargeValueReferenceTest, RejectsInvalidOwnersAndTruncatedRefe
 				  FormatError::FERR_BUFFER_TOO_SMALL);
 	const std::array<std::byte, sizeof(uint32_t)> nonReferenceMagic{};
 	EXPECT_FALSE(EntityPropertyLargeValueReferenceCodec::hasMagic(nonReferenceMagic));
+}
+
+TEST(EntityPropertyLargeValueReferenceTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::vector<std::byte> encoded = EntityPropertyLargeValueReferenceCodec::encode(reference());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateChecksums(mutation);
+			try {
+				const EntityPropertyLargeValueReference decoded =
+						EntityPropertyLargeValueReferenceCodec::decode(mutation);
+				EXPECT_EQ(EntityPropertyLargeValueReferenceCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Invalid images must stop at the typed Property-root boundary.
+			}
+		}
+	}
 }

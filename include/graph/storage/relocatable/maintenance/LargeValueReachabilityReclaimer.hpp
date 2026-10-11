@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+#include "graph/storage/relocatable/maintenance/LargeValueMaintenanceJournal.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 
 namespace graph::storage {
@@ -41,11 +42,19 @@ namespace graph::storage {
 	public:
 		virtual ~LargeValueOwnershipScanner() = default;
 		[[nodiscard]] virtual std::string_view mediaType() const noexcept = 0;
-		// Implementations must stop before visiting more than `maximumLocations`
-		// durable owner records, mark only references with this scanner's media
-		// type, and return the exact number visited.
-		[[nodiscard]] virtual size_t scanReachable(const MetadataSnapshotPin &snapshot, size_t maximumLocations,
-												   LargeValueOwnershipScanSink &sink) const = 0;
+		// The cursor is a scanner-defined stable logical owner identity. It must
+		// never be a physical page/slot because a later relocation can replace it.
+		// An exhausted result proves that this owner namespace was fully examined
+		// for the pinned generation; callers must not reclaim from a partial scan.
+		struct Progress {
+			uint64_t last_scanned_location_id = 0U;
+			size_t locations_scanned = 0U;
+			size_t metadata_pages_scanned = 0U;
+			bool exhausted = false;
+		};
+		[[nodiscard]] virtual Progress scanReachableAfter(const MetadataSnapshotPin &snapshot, uint64_t afterLocationId,
+														  size_t maximumLocations, size_t maximumMetadataPages,
+														  LargeValueOwnershipScanSink &sink) const = 0;
 	};
 
 	using LargeValueOwnershipScannerPtr = std::shared_ptr<const LargeValueOwnershipScanner>;
@@ -58,8 +67,9 @@ namespace graph::storage {
 		EntityPropertyLargeValueOwnershipScanner(SlottedPagePool &propertyPages, RelocatableMetadataStore &metadata);
 
 		[[nodiscard]] std::string_view mediaType() const noexcept override;
-		[[nodiscard]] size_t scanReachable(const MetadataSnapshotPin &snapshot, size_t maximumLocations,
-										   LargeValueOwnershipScanSink &sink) const override;
+		[[nodiscard]] Progress scanReachableAfter(const MetadataSnapshotPin &snapshot, uint64_t afterLocationId,
+												  size_t maximumLocations, size_t maximumMetadataPages,
+												  LargeValueOwnershipScanSink &sink) const override;
 
 	private:
 		SlottedPagePool &property_pages_;
@@ -75,8 +85,9 @@ namespace graph::storage {
 										RelocatableMetadataStore &metadata);
 
 		[[nodiscard]] std::string_view mediaType() const noexcept override;
-		[[nodiscard]] size_t scanReachable(const MetadataSnapshotPin &snapshot, size_t maximumLocations,
-										   LargeValueOwnershipScanSink &sink) const override;
+		[[nodiscard]] Progress scanReachableAfter(const MetadataSnapshotPin &snapshot, uint64_t afterLocationId,
+												  size_t maximumLocations, size_t maximumMetadataPages,
+												  LargeValueOwnershipScanSink &sink) const override;
 
 	private:
 		SlottedPagePool &pages_;
@@ -91,10 +102,18 @@ namespace graph::storage {
 		// separate bounds prevents one valid large value from exhausting a bound
 		// intended only for the number of logical values.
 		size_t maximum_manifest_locations = 0U;
+		// The Manifest Directory is a separate routed metadata tree. A small
+		// candidate batch must still be allowed to cross the metadata pages needed
+		// to determine its next stable logical cursor.
+		size_t maximum_manifest_metadata_pages = 0U;
 		size_t maximum_manifest_nodes = 0U;
 		// All registered typed media scanners share this explicit owner-record
 		// budget. Unknown media is retained without opening an owner namespace.
 		size_t maximum_owner_locations = 0U;
+		// Owner directories are independent metadata trees. This explicit I/O cap
+		// prevents a sparse owner namespace from making a bounded maintenance pass
+		// scan an unbounded number of routed metadata pages.
+		size_t maximum_owner_metadata_pages = 0U;
 		size_t maximum_data_pages = 0U;
 		size_t maximum_retirements = 0U;
 		// Shared data pools require one Page Directory pass to prove that a
@@ -108,6 +127,13 @@ namespace graph::storage {
 		// instead of silently choosing a global physical range.
 		PhysicalSlotId first_index_slot{};
 		PhysicalSlotId last_index_slot{};
+		// The durable journal is a State record, not an unmanaged sidecar. Its
+		// dedicated owner, State ID, and physical range are explicit so normal
+		// graph State records cannot accidentally share this control-plane pool.
+		PhysicalSlotId first_journal_state_slot{};
+		PhysicalSlotId last_journal_state_slot{};
+		uint64_t journal_state_page_owner_id = 0U;
+		uint64_t journal_state_id = 0U;
 	};
 
 	struct LargeValueReachabilityReclaimReport {
@@ -130,6 +156,18 @@ namespace graph::storage {
 		constexpr bool operator==(const LargeValueReachabilityReclaimReport &) const = default;
 	};
 
+	// One journal advancement only reads one pinned generation. It never retires
+	// a value; the caller persists the returned evidence before a later reclaim
+	// phase can use it. If a configured bound cannot advance a stable logical
+	// cursor, the method fails closed instead of resuming from a physical page.
+	struct LargeValueMaintenanceJournalAdvance {
+		LargeValueMaintenanceJournal journal;
+		uint64_t manifest_locations_scanned = 0U;
+		uint64_t owner_locations_scanned = 0U;
+		uint64_t owner_metadata_pages_scanned = 0U;
+		bool completed_without_candidates = false;
+	};
+
 	class LargeValueReachabilityReclaimer final {
 	public:
 		LargeValueReachabilityReclaimer(LargeValueStore &values, SlottedPagePool &propertyPages,
@@ -139,6 +177,17 @@ namespace graph::storage {
 		[[nodiscard]] LargeValueReachabilityReclaimReport reclaim(const LargeValueReachabilityReclaimOptions &options,
 																  LogSequenceNumber checkpointLsn,
 																  const MetadataPublishOptions &publishOptions = {});
+		[[nodiscard]] LargeValueMaintenanceJournalAdvance advanceJournal(
+				const MetadataSnapshotPin &snapshot, const LargeValueMaintenanceJournal &journal,
+				const LargeValueReachabilityReclaimOptions &options) const;
+		// Publishes only the durable candidate set whose two built-in owner scans
+		// completed in the journal's pinned generation. This intentionally never
+		// falls back to a new full owner scan: stale evidence must be restarted by
+		// the caller instead of being silently mixed with another generation.
+		[[nodiscard]] LargeValueReachabilityReclaimReport reclaimJournal(
+				MetadataSnapshotPin &snapshot, const LargeValueMaintenanceJournal &journal,
+				const LargeValueReachabilityReclaimOptions &options, LogSequenceNumber checkpointLsn,
+				const MetadataPublishOptions &publishOptions = {});
 
 	private:
 		LargeValueStore &values_;

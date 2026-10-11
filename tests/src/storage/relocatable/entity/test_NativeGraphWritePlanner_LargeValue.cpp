@@ -10,6 +10,7 @@
 #include <optional>
 #include <set>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,10 +19,13 @@
 
 #include "graph/core/Node.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
+#include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
+#include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
@@ -33,6 +37,8 @@ namespace {
 
 	constexpr uint64_t PERSON_LABEL_TOKEN = 7U;
 	constexpr uint32_t BODY_PROPERTY_TOKEN = 17U;
+	constexpr uint32_t EMBEDDING_PROPERTY_TOKEN = 18U;
+	constexpr uint32_t SCORE_PROPERTY_TOKEN = 19U;
 
 	NativeGraphMutationTokenResolvers largeValueTokens() {
 		NativeGraphMutationTokenResolvers tokens;
@@ -43,12 +49,101 @@ namespace {
 					   : std::nullopt;
 		};
 		tokens.property_key_token = [](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
-			return name == "body" ? std::optional<uint32_t>(BODY_PROPERTY_TOKEN) : std::nullopt;
+			if (name == "body") {
+				return BODY_PROPERTY_TOKEN;
+			}
+			if (name == "embedding") {
+				return EMBEDDING_PROPERTY_TOKEN;
+			}
+			return name == "score" ? std::optional<uint32_t>(SCORE_PROPERTY_TOKEN) : std::nullopt;
 		};
 		tokens.property_key_name = [](const MetadataSnapshotPin &, uint32_t token) -> std::optional<std::string> {
-			return token == BODY_PROPERTY_TOKEN ? std::optional<std::string>("body") : std::nullopt;
+			if (token == BODY_PROPERTY_TOKEN) {
+				return "body";
+			}
+			if (token == EMBEDDING_PROPERTY_TOKEN) {
+				return "embedding";
+			}
+			return token == SCORE_PROPERTY_TOKEN ? std::optional<std::string>("score") : std::nullopt;
 		};
 		return tokens;
+	}
+
+	IndexDefinition scalarDefinition() {
+		return {901U, "person-score", IndexDefinitionEntityKind::IDEK_NODE, IndexDefinitionKind::IDK_PROPERTY,
+				PERSON_LABEL_TOKEN, {"score"}, 0U, ""};
+	}
+
+	IndexDefinition vectorDefinition() {
+		return {902U, "person-embedding", IndexDefinitionEntityKind::IDEK_NODE, IndexDefinitionKind::IDK_VECTOR,
+				PERSON_LABEL_TOKEN, {"embedding"}, 2U, "l2"};
+	}
+
+	NativeGraphVectorBootstrapOptions vectorBootstrapOptions() {
+		NativeGraphVectorBootstrapOptions options;
+		options.first_slot = PhysicalSlotId(40U);
+		options.last_slot = PhysicalSlotId(80U);
+		options.maximum_vectors = 8U;
+		options.maximum_pages = 8U;
+		return options;
+	}
+
+	void allocateEmptyScalarIndexRoot(BTreePageStore &indexes, uint64_t indexId, PageId pageId = PageId(101U),
+														 LogSequenceNumber checkpointLsn = LogSequenceNumber(2U)) {
+		SlottedPagePoolAllocationRequest allocation;
+		allocation.segment_id = SegmentId(71U);
+		allocation.pool_kind = SegmentKind::SGK_INDEX_PAGE_POOL;
+		allocation.pool_owner_id = indexId;
+		allocation.generation = Generation(1U);
+		allocation.page_id = pageId;
+		allocation.page_owner_id = indexId;
+		allocation.page_owner_kind = PageOwnerKind::POK_INDEX;
+		PageOwnerHeader owner;
+		owner.page_id = allocation.page_id;
+		owner.owner_id = allocation.page_owner_id;
+		owner.kind = allocation.page_owner_kind;
+		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		owner.generation = allocation.generation;
+		owner.committed_lsn = checkpointLsn;
+		BTreePageHeader header;
+		header.index_id = indexId;
+		header.page_id = allocation.page_id;
+		header.generation = allocation.generation;
+		if (!indexes.allocate(allocation, BTreePage::create(owner, header), PhysicalSlotId(40U), PhysicalSlotId(40U),
+							  checkpointLsn)
+				 .has_value()) {
+			throw std::runtime_error("test scalar Index root allocation unexpectedly ran out of space");
+		}
+		const IndexRootLocation root{indexId, allocation.page_id, allocation.generation};
+		static_cast<void>(indexes.publishRoots(
+				std::span(&root, 1U), {}, LogSequenceNumber(checkpointLsn.value() + 1U)));
+	}
+
+	void appendEmptyIndexRoot(BTreePageStore &indexes, uint64_t indexId, PageId pageId,
+							  LogSequenceNumber checkpointLsn,
+							  BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64) {
+		SlottedPagePoolAppendRequest request;
+		request.segment_id = SegmentId(71U);
+		request.generation = Generation(1U);
+		request.page_id = pageId;
+		request.page_owner_id = indexId;
+		request.page_owner_kind = PageOwnerKind::POK_INDEX;
+		PageOwnerHeader owner;
+		owner.page_id = pageId;
+		owner.owner_id = indexId;
+		owner.kind = PageOwnerKind::POK_INDEX;
+		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		owner.generation = Generation(1U);
+		owner.committed_lsn = checkpointLsn;
+		BTreePageHeader header;
+		header.index_id = indexId;
+		header.page_id = pageId;
+		header.generation = Generation(1U);
+		header.leaf_value_layout = leafValueLayout;
+		static_cast<void>(indexes.append(request, BTreePage::create(owner, header), checkpointLsn));
+		const IndexRootLocation root{indexId, pageId, Generation(1U)};
+		static_cast<void>(indexes.publishRoots(
+				std::span(&root, 1U), {}, LogSequenceNumber(checkpointLsn.value() + 1U)));
 	}
 
 	NativeGraphMutationExecutorOptions executorOptions() {
@@ -84,14 +179,13 @@ namespace {
 		return EntityPropertyLargeValueReferenceCodec::decode(bytes);
 	}
 
-	std::vector<std::byte> encodedEntityPropertyRoot(uint64_t nodeId, std::string_view body) {
-		return EntityPropertyCollectionRootCodec::encode(
-				{nodeId, graph::Node::typeId, {{BODY_PROPERTY_TOKEN, PropertyValue(std::string(body))}}});
-	}
-
 	PropertyCollectionRoot entityPropertyRoot(uint64_t nodeId, std::string_view body) {
 		return {nodeId, graph::Node::typeId,
 				{{BODY_PROPERTY_TOKEN, PropertyValue(std::string(body))}}};
+	}
+
+	std::vector<std::byte> encodedEntityPropertyLargeValuePayload(std::string_view body) {
+		return EntityPropertyLargeValuePayloadCodec::encode(entityPropertyRoot(1U, body).entries);
 	}
 
 	struct LargeValuePoolIds {
@@ -227,6 +321,201 @@ TEST_F(NativeGraphLargeValueMutationTest, ExternalizesOversizedLogicalProperties
 	afterErase.release();
 }
 
+TEST_F(NativeGraphLargeValueMutationTest,
+	   PublishesLargeValueScalarIndexAndVectorStateInOneNativeGraphGeneration) {
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'x');
+	const IndexDefinition scalar = scalarDefinition();
+	const IndexDefinition vector = vectorDefinition();
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	// Scalar DDL publishes an empty root before graph mutations maintain it.
+	allocateEmptyScalarIndexRoot(indexes, scalar.index_id);
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphMutationExecutor executor(
+			writer, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, largeValueTokens(),
+			[scalar, vector](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{scalar, vector}; },
+			[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"},
+						{{"body", PropertyValue(body)},
+						 {"embedding", PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1)),
+																	   PropertyValue(int64_t(2))})},
+						 {"score", PropertyValue(int64_t(42))}}}};
+	const NativeGraphMutationExecutionResult result = executor.execute(create);
+	ASSERT_TRUE(result.committed());
+	ASSERT_EQ(result.result.created_node_ids.size(), 1U);
+	const uint64_t nodeId = result.result.created_node_ids.front();
+
+	EXPECT_FALSE(metadata_->findLargeValueManifestOptional(before, LargeValueId(1U)).has_value());
+	EXPECT_TRUE(metadata_->findIndexRootOptional(before, scalar.index_id).has_value());
+	EXPECT_FALSE(metadata_->findIndexRootOptional(before, vector.index_id).has_value());
+	EXPECT_FALSE(metadata_->findVectorManifestOptional(before, vector.index_id).has_value());
+	EXPECT_FALSE(BTreeIndex(scalar.index_id, indexes, *metadata_)
+				 .find(before, IndexKeyCodec::encodeEntryKey(PropertyValue(int64_t(42)), nodeId))
+				 .has_value());
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	EXPECT_TRUE(metadata_->findLargeValueManifestOptional(after, LargeValueId(1U)).has_value());
+	EXPECT_TRUE(metadata_->findIndexRootOptional(after, scalar.index_id).has_value());
+	EXPECT_TRUE(metadata_->findIndexRootOptional(after, vector.index_id).has_value());
+	EXPECT_TRUE(metadata_->findVectorManifestOptional(after, vector.index_id).has_value());
+	EXPECT_EQ(BTreeIndex(scalar.index_id, indexes, *metadata_)
+				  .find(after, IndexKeyCodec::encodeEntryKey(PropertyValue(int64_t(42)), nodeId)),
+			  std::optional<uint64_t>(nodeId));
+	EXPECT_TRUE(metadata_->findVectorLocationOptional(after, 1U).has_value());
+	EXPECT_EQ(graph.readNode(after, nodeId).properties,
+			  (std::vector<PropertyCollectionRootEntry>{{BODY_PROPERTY_TOKEN, PropertyValue(body)},
+																 {EMBEDDING_PROPERTY_TOKEN,
+																  PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t(1)),
+																										   PropertyValue(int64_t(2))})},
+																 {SCORE_PROPERTY_TOKEN, PropertyValue(int64_t(42))}}));
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
+	after.release();
+	before.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
+	   PublishesScalarAdjacencyAndContentIndexesIntoDistinctFramesOfOneSharedPool) {
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'i');
+	const IndexDefinition scalar = scalarDefinition();
+	const std::array<std::byte, 1U> scalarKey = {std::byte{'s'}};
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+
+	// Seed three independent roots in one physical Index pool. The following
+	// graph publication must COW all of them without assigning the same frame to
+	// scalar, adjacency, and LargeValue content-index materializers.
+	allocateEmptyScalarIndexRoot(indexes, scalar.index_id, PageId(101U), LogSequenceNumber(2U));
+	appendEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(102U), LogSequenceNumber(4U),
+						 BTreeLeafValueLayout::BLVL_EMPTY);
+	appendEmptyIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(103U), LogSequenceNumber(6U));
+
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	const uint64_t source = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	const uint64_t target = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	const uint64_t edgeId = transaction.createEdge(source, target, 17U);
+	transaction.replaceNodeProperty(entityPropertyRoot(source, body));
+	transaction.stageScalarIndexUpsert(indexes, scalar.index_id, scalarKey, source);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	const IndexRootLocation scalarRoot = metadata_->findIndexRoot(current, scalar.index_id);
+	const IndexRootLocation adjacencyRoot =
+			metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	const IndexRootLocation contentRoot =
+			metadata_->findIndexRoot(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+	const PageLocation scalarLocation = metadata_->findPageLocation(current, scalarRoot.root_page_id);
+	const PageLocation adjacencyLocation = metadata_->findPageLocation(current, adjacencyRoot.root_page_id);
+	const PageLocation contentLocation = metadata_->findPageLocation(current, contentRoot.root_page_id);
+	EXPECT_EQ(scalarLocation.segment_id, SegmentId(71U));
+	EXPECT_EQ(adjacencyLocation.segment_id, SegmentId(71U));
+	EXPECT_EQ(contentLocation.segment_id, SegmentId(71U));
+	EXPECT_NE(scalarLocation.page_index, adjacencyLocation.page_index);
+	EXPECT_NE(scalarLocation.page_index, contentLocation.page_index);
+	EXPECT_NE(adjacencyLocation.page_index, contentLocation.page_index);
+	EXPECT_EQ(BTreeIndex(scalar.index_id, indexes, *metadata_).find(current, scalarKey),
+			  std::optional<uint64_t>(source));
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+			  (std::vector<uint64_t>{edgeId}));
+	const LargeValueRef reference = storedLargeValueReference(current, *metadata_, *slotted_pages_, source).value;
+	EXPECT_EQ(large_values_->read(current, reference), encodedEntityPropertyLargeValuePayload(body));
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
+	current.release();
+
+	reopenWithLargeValues();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_EQ(BTreeIndex(scalar.index_id, reopenedIndexes, *metadata_).find(reopened, scalarKey),
+			  std::optional<uint64_t>(source));
+	GlobalAdjacencyIndex reopenedAdjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(reopenedAdjacency.scan(reopened, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+			  (std::vector<uint64_t>{edgeId}));
+	const LargeValueRef reopenedReference =
+			storedLargeValueReference(reopened, *metadata_, *slotted_pages_, source).value;
+	EXPECT_EQ(large_values_->read(reopened, reopenedReference), encodedEntityPropertyLargeValuePayload(body));
+	reopened.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
+	   RebuildsContentIndexFreshWhenSharedPoolDemandExceedsItsRemainingFrames) {
+	constexpr size_t CONTENT_ENTRY_COUNT = 80U;
+	constexpr size_t RESERVED_CURRENT_FRAMES = 3U;
+	const std::array<std::byte, 1U> scalarKey = {std::byte{'r'}};
+	const IndexDefinition scalar = scalarDefinition();
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	allocateEmptyScalarIndexRoot(indexes, scalar.index_id, PageId(101U), LogSequenceNumber(2U));
+	appendEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(102U), LogSequenceNumber(4U),
+						 BTreeLeafValueLayout::BLVL_EMPTY);
+	appendEmptyIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(103U), LogSequenceNumber(6U));
+
+	// Retain three current-pool frames: scalar and adjacency each need one,
+	// while the content-index split fits by itself but not with both other
+	// callbacks. The unified planner must therefore select the larger content
+	// mutation for a fresh immutable rebuild before materialization begins.
+	const size_t dummyRootCount = static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT) - 3U - RESERVED_CURRENT_FRAMES;
+	for (size_t ordinal = 0U; ordinal < dummyRootCount; ++ordinal) {
+		const uint64_t indexId = 10'000U + ordinal;
+		const uint64_t pageId = 1'000U + ordinal;
+		const uint64_t lsn = 8U + ordinal * 2U;
+		appendEmptyIndexRoot(indexes, indexId, PageId(pageId), LogSequenceNumber(lsn));
+	}
+
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	std::vector<uint64_t> nodeIds;
+	std::vector<std::string> bodies;
+	nodeIds.reserve(CONTENT_ENTRY_COUNT);
+	bodies.reserve(CONTENT_ENTRY_COUNT);
+	for (size_t ordinal = 0U; ordinal < CONTENT_ENTRY_COUNT; ++ordinal) {
+		const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+		bodies.emplace_back(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'r');
+		bodies.back().append("-" + std::to_string(ordinal));
+		transaction.replaceNodeProperty(entityPropertyRoot(nodeId, bodies.back()));
+		nodeIds.push_back(nodeId);
+	}
+	const uint64_t edgeId = transaction.createEdge(nodeIds.front(), nodeIds.back(), 17U);
+	transaction.stageScalarIndexUpsert(indexes, scalar.index_id, scalarKey, nodeIds.front());
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	const PageLocation scalarLocation = metadata_->findPageLocation(
+			current, metadata_->findIndexRoot(current, scalar.index_id).root_page_id);
+	const PageLocation adjacencyLocation = metadata_->findPageLocation(
+			current, metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID).root_page_id);
+	const PageLocation contentLocation = metadata_->findPageLocation(
+			current, metadata_->findIndexRoot(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID).root_page_id);
+	EXPECT_EQ(scalarLocation.segment_id, SegmentId(71U));
+	EXPECT_EQ(adjacencyLocation.segment_id, SegmentId(71U));
+	EXPECT_NE(contentLocation.segment_id, SegmentId(71U));
+	EXPECT_EQ(BTreeIndex(scalar.index_id, indexes, *metadata_).find(current, scalarKey),
+			  std::optional<uint64_t>(nodeIds.front()));
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, nodeIds.front(), 4U).edge_ids,
+			  (std::vector<uint64_t>{edgeId}));
+	const LargeValueRef firstReference =
+			storedLargeValueReference(current, *metadata_, *slotted_pages_, nodeIds.front()).value;
+	const LargeValueRef lastReference =
+			storedLargeValueReference(current, *metadata_, *slotted_pages_, nodeIds.back()).value;
+	EXPECT_EQ(large_values_->read(current, firstReference), encodedEntityPropertyLargeValuePayload(bodies.front()));
+	EXPECT_EQ(large_values_->read(current, lastReference), encodedEntityPropertyLargeValuePayload(bodies.back()));
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
+	current.release();
+
+	reopenWithLargeValues();
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_NE(metadata_->findPageLocation(
+				  reopened, metadata_->findIndexRoot(reopened, RSS_LARGE_VALUE_CONTENT_INDEX_ID).root_page_id)
+				  .segment_id,
+			  SegmentId(71U));
+	const LargeValueRef reopenedLast =
+			storedLargeValueReference(reopened, *metadata_, *slotted_pages_, nodeIds.back()).value;
+	EXPECT_EQ(large_values_->read(reopened, reopenedLast), encodedEntityPropertyLargeValuePayload(bodies.back()));
+	reopened.release();
+}
+
 TEST_F(NativeGraphLargeValueMutationTest, PublishesCompressedLargeValueReferencesWithTheirOwningProperty) {
 	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 211U, 'z');
 	NativeGraphWritePlannerOptions plannerOptions;
@@ -280,7 +569,7 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesSharedLargeValueDataPoolAcrossGr
 		MetadataSnapshotPin beforeSecond = metadata_->openSnapshot();
 		firstReference = storedLargeValueReference(beforeSecond, *metadata_, *slotted_pages_, firstNodeId).value;
 		EXPECT_EQ(large_values_->read(beforeSecond, firstReference),
-				  encodedEntityPropertyRoot(firstNodeId, firstBody));
+				  encodedEntityPropertyLargeValuePayload(firstBody));
 
 		LogicalGraphMutationBatch createSecond;
 		createSecond.node_creates = {{{"Person"}, {{"body", PropertyValue(secondBody)}}}};
@@ -313,12 +602,12 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesSharedLargeValueDataPoolAcrossGr
 		};
 		expectedDataPageCount = dataPageCount(firstManifest) + dataPageCount(secondManifest);
 		EXPECT_EQ(large_values_->read(current, firstReference),
-				  encodedEntityPropertyRoot(firstNodeId, firstBody));
+				  encodedEntityPropertyLargeValuePayload(firstBody));
 		EXPECT_EQ(large_values_->read(current, secondReference),
-				  encodedEntityPropertyRoot(secondNodeId, secondBody));
+				  encodedEntityPropertyLargeValuePayload(secondBody));
 		EXPECT_EQ(RelocatableIntegrityScanner(io_, *metadata_).scan().large_value_data_pages, expectedDataPageCount);
 		EXPECT_EQ(large_values_->read(beforeSecond, firstReference),
-				  encodedEntityPropertyRoot(firstNodeId, firstBody));
+				  encodedEntityPropertyLargeValuePayload(firstBody));
 		current.release();
 		beforeSecond.release();
 	}
@@ -326,9 +615,9 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesSharedLargeValueDataPoolAcrossGr
 	reopenWithLargeValues();
 	MetadataSnapshotPin reopened = metadata_->openSnapshot();
 	EXPECT_EQ(large_values_->read(reopened, firstReference),
-			  encodedEntityPropertyRoot(firstNodeId, firstBody));
+			  encodedEntityPropertyLargeValuePayload(firstBody));
 	EXPECT_EQ(large_values_->read(reopened, secondReference),
-			  encodedEntityPropertyRoot(secondNodeId, secondBody));
+			  encodedEntityPropertyLargeValuePayload(secondBody));
 	EXPECT_EQ(RelocatableIntegrityScanner(io_, *metadata_).scan().large_value_data_pages, expectedDataPageCount);
 }
 
@@ -369,15 +658,15 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesPublishedSharedPoolsForSeveralVa
 	const LargeValuePoolIds pools = collectLargeValuePoolIds(current, *metadata_, *large_values_, references);
 	EXPECT_EQ(pools.data, firstPools.data);
 	EXPECT_EQ(pools.manifest, firstPools.manifest);
-	EXPECT_EQ(large_values_->read(current, firstReference), encodedEntityPropertyRoot(firstNodeId, bodies[0]));
-	EXPECT_EQ(large_values_->read(current, secondReference), encodedEntityPropertyRoot(secondNodeId, bodies[1]));
-	EXPECT_EQ(large_values_->read(current, thirdReference), encodedEntityPropertyRoot(thirdNodeId, bodies[2]));
+	EXPECT_EQ(large_values_->read(current, firstReference), encodedEntityPropertyLargeValuePayload(bodies[0]));
+	EXPECT_EQ(large_values_->read(current, secondReference), encodedEntityPropertyLargeValuePayload(bodies[1]));
+	EXPECT_EQ(large_values_->read(current, thirdReference), encodedEntityPropertyLargeValuePayload(bodies[2]));
 	current.release();
 
 	reopenWithLargeValues();
 	MetadataSnapshotPin reopened = metadata_->openSnapshot();
-	EXPECT_EQ(large_values_->read(reopened, secondReference), encodedEntityPropertyRoot(secondNodeId, bodies[1]));
-	EXPECT_EQ(large_values_->read(reopened, thirdReference), encodedEntityPropertyRoot(thirdNodeId, bodies[2]));
+	EXPECT_EQ(large_values_->read(reopened, secondReference), encodedEntityPropertyLargeValuePayload(bodies[1]));
+	EXPECT_EQ(large_values_->read(reopened, thirdReference), encodedEntityPropertyLargeValuePayload(bodies[2]));
 }
 
 TEST_F(NativeGraphLargeValueMutationTest, PacksMultipleFreshLargeValuesIntoSharedPoolsInOnePublication) {
@@ -422,17 +711,17 @@ TEST_F(NativeGraphLargeValueMutationTest, PacksMultipleFreshLargeValuesIntoShare
 	EXPECT_EQ(dataPoolEntries, 1U);
 	EXPECT_EQ(manifestPoolEntries, 1U);
 	EXPECT_EQ(large_values_->read(snapshot, firstReference),
-			  encodedEntityPropertyRoot(result.result.created_node_ids[0], firstBody));
+			  encodedEntityPropertyLargeValuePayload(firstBody));
 	EXPECT_EQ(large_values_->read(snapshot, secondReference),
-			  encodedEntityPropertyRoot(result.result.created_node_ids[1], secondBody));
+			  encodedEntityPropertyLargeValuePayload(secondBody));
 	snapshot.release();
 
 	reopenWithLargeValues();
 	MetadataSnapshotPin reopened = metadata_->openSnapshot();
 	EXPECT_EQ(large_values_->read(reopened, firstReference),
-			  encodedEntityPropertyRoot(result.result.created_node_ids[0], firstBody));
+			  encodedEntityPropertyLargeValuePayload(firstBody));
 	EXPECT_EQ(large_values_->read(reopened, secondReference),
-			  encodedEntityPropertyRoot(result.result.created_node_ids[1], secondBody));
+			  encodedEntityPropertyLargeValuePayload(secondBody));
 }
 
 TEST_F(NativeGraphLargeValueMutationTest, RecoversOldGenerationWhenSharedFreshPoolPublicationStopsBeforeSuperblock) {
@@ -504,8 +793,8 @@ TEST_F(NativeGraphLargeValueMutationTest, RecoversSharedFreshPoolsWhenPublicatio
 			storedLargeValueReference(recovered, *metadata_, *slotted_pages_, firstNodeId).value;
 	const LargeValueRef secondReference =
 			storedLargeValueReference(recovered, *metadata_, *slotted_pages_, secondNodeId).value;
-	EXPECT_EQ(large_values_->read(recovered, firstReference), encodedEntityPropertyRoot(firstNodeId, firstBody));
-	EXPECT_EQ(large_values_->read(recovered, secondReference), encodedEntityPropertyRoot(secondNodeId, secondBody));
+	EXPECT_EQ(large_values_->read(recovered, firstReference), encodedEntityPropertyLargeValuePayload(firstBody));
+	EXPECT_EQ(large_values_->read(recovered, secondReference), encodedEntityPropertyLargeValuePayload(secondBody));
 	const std::array references{firstReference, secondReference};
 	const LargeValuePoolIds pools =
 			collectLargeValuePoolIds(recovered, *metadata_, *large_values_, references);
@@ -549,6 +838,91 @@ TEST_F(NativeGraphLargeValueMutationTest,
 }
 
 TEST_F(NativeGraphLargeValueMutationTest,
+	   RecoversNoPartialEntityLargeValueScalarIndexOrVectorStateBeforeSuperblockPublication) {
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 63U, 'w');
+	const std::array<uint64_t, 0U> noLabels{};
+	const std::array<std::byte, 1U> scalarKey = {std::byte{'w'}};
+	const IndexDefinition vector = vectorDefinition();
+	const std::array<NativeGraphVectorBootstrapRecord, 1U> vectorRecords = {{
+			{0U, {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}},
+	}};
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	const uint64_t nodeId = transaction.createNode(noLabels);
+	MetadataSnapshotPin leased = metadata_->openSnapshot();
+	const Superblock leasePublication = leased.superblock();
+	const LargeValueId firstLargeValueId(leasePublication.next_large_value_id);
+	leased.release();
+	transaction.replaceNodeProperty(entityPropertyRoot(nodeId, body));
+	const std::array<BTreePageEntry, 1U> entries{{{std::vector<std::byte>(scalarKey.begin(), scalarKey.end()), nodeId}}};
+	transaction.stageScalarIndexCreate(indexes, 43U, entries);
+	auto records = vectorRecords;
+	records.front().node_id = nodeId;
+	transaction.stageVectorIndexBootstrap(indexes, *vector_pages_, *vector_manifests_, vector, records,
+									 vectorBootstrapOptions());
+
+	EXPECT_THROW(static_cast<void>(transaction.commit(
+				 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
+			 BootstrapPublishInterrupted);
+	EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+
+	reopenWithLargeValues();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(recovered.superblock(), leasePublication);
+	EXPECT_FALSE(metadata_->findNodePageLocationOptional(recovered, nodeId).has_value());
+	EXPECT_FALSE(metadata_->findLargeValueManifestOptional(recovered, firstLargeValueId).has_value());
+	EXPECT_FALSE(metadata_->findIndexRootOptional(recovered, 43U).has_value());
+	EXPECT_FALSE(metadata_->findIndexRootOptional(recovered, vector.index_id).has_value());
+	EXPECT_FALSE(metadata_->findVectorManifestOptional(recovered, vector.index_id).has_value());
+	EXPECT_FALSE(metadata_->findVectorLocationOptional(recovered, 1U).has_value());
+	recovered.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
+	   PostSuperblockInterruptionReopensTheCompleteLargeValueScalarIndexAndVectorGeneration) {
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 67U, 'y');
+	const std::array<uint64_t, 0U> noLabels{};
+	const std::array<std::byte, 1U> scalarKey = {std::byte{'y'}};
+	const IndexDefinition vector = vectorDefinition();
+	uint64_t nodeId = 0U;
+	{
+		BTreePageStore indexes(*slotted_pages_, *metadata_);
+		NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+		NativeGraphWriteTransaction transaction = writer.beginTransaction();
+		nodeId = transaction.createNode(noLabels);
+		transaction.replaceNodeProperty(entityPropertyRoot(nodeId, body));
+		const std::array<BTreePageEntry, 1U> entries{{{std::vector<std::byte>(scalarKey.begin(), scalarKey.end()), nodeId}}};
+		transaction.stageScalarIndexCreate(indexes, 43U, entries);
+		const std::array<NativeGraphVectorBootstrapRecord, 1U> records = {{
+				{nodeId, {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}},
+		}};
+		transaction.stageVectorIndexBootstrap(indexes, *vector_pages_, *vector_manifests_, vector, records,
+										 vectorBootstrapOptions());
+
+		EXPECT_THROW(static_cast<void>(transaction.commit(
+					 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
+			 BootstrapPublishInterrupted);
+		EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+	}
+
+	reopenWithLargeValues();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const EntityPropertyLargeValueReference reference =
+			storedLargeValueReference(recovered, *metadata_, *slotted_pages_, nodeId);
+	EXPECT_EQ(large_values_->read(recovered, reference.value), encodedEntityPropertyLargeValuePayload(body));
+	EXPECT_EQ(BTreeIndex(43U, reopenedIndexes, *metadata_).find(recovered, scalarKey), std::optional<uint64_t>(nodeId));
+	EXPECT_TRUE(metadata_->findIndexRootOptional(recovered, vector.index_id).has_value());
+	EXPECT_TRUE(metadata_->findVectorManifestOptional(recovered, vector.index_id).has_value());
+	EXPECT_TRUE(metadata_->findVectorLocationOptional(recovered, 1U).has_value());
+	EXPECT_EQ(graph.readNode(recovered, nodeId).properties,
+			  (std::vector<PropertyCollectionRootEntry>{{BODY_PROPERTY_TOKEN, PropertyValue(body)}}));
+	recovered.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
 	   RecoversOneCompleteEntityLargeValueAndScalarIndexStateAfterSuperblockPublication) {
 	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 61U, 'v');
 	const std::array<uint64_t, 0U> noLabels{};
@@ -584,7 +958,7 @@ TEST_F(NativeGraphLargeValueMutationTest,
 	MetadataSnapshotPin recovered = metadata_->openSnapshot();
 	const EntityPropertyLargeValueReference reference =
 			storedLargeValueReference(recovered, *metadata_, *slotted_pages_, nodeId);
-	EXPECT_EQ(large_values_->read(recovered, reference.value), encodedEntityPropertyRoot(nodeId, body));
+	EXPECT_EQ(large_values_->read(recovered, reference.value), encodedEntityPropertyLargeValuePayload(body));
 	EXPECT_EQ(reopenedIndex.find(recovered, key), std::optional<uint64_t>(nodeId));
 	EXPECT_TRUE(metadata_->findIndexRoot(recovered, 43U).root_page_id.isValid());
 	recovered.release();
@@ -602,7 +976,7 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesSnapshotVerifiedContentWithoutAl
 	root.owner_entity_id = nodeId;
 	root.owner_entity_type = graph::Node::typeId;
 	root.entries = {{BODY_PROPERTY_TOKEN, PropertyValue(body)}};
-	const std::vector<std::byte> canonicalBytes = EntityPropertyCollectionRootCodec::encode(root);
+	const std::vector<std::byte> canonicalBytes = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
 	LargeValueWriteOptions options;
 	options.first_data_slot = PhysicalSlotId(1U);
 	options.last_data_slot = PhysicalSlotId(64U);

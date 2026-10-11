@@ -63,9 +63,9 @@ TEST_F(RelocatableMetadataStoreTest, RequiresInitializedDataAndNonNullStorage) {
 	EXPECT_THROW(static_cast<void>(RelocatableMetadataStore::open(nullptr)), std::invalid_argument);
 }
 
-TEST_F(RelocatableMetadataStoreTest, RefusesLegacyIncompleteAndAlreadyInitializedDataFiles) {
-	const FileHeader legacy;
-	io->writeAt(0, &legacy, sizeof(legacy));
+TEST_F(RelocatableMetadataStoreTest, RefusesNonEmptyIncompleteAndAlreadyInitializedDataFiles) {
+	const std::array<std::byte, 64U> nonNativeBytes{};
+	io->writeAt(0, nonNativeBytes.data(), nonNativeBytes.size());
 	io->sync();
 	expectFormatError([&] { static_cast<void>(RelocatableMetadataStore::initializeNew(io, superblock(1, 1))); },
 					  FormatError::FERR_INVALID_STATE);
@@ -219,6 +219,126 @@ TEST_F(RelocatableMetadataStoreTest, PublishesEveryTypedPageDirectoryReferenceTh
 	EXPECT_EQ(store->findVectorManifest(snapshot, manifest.index_id), manifest);
 }
 
+TEST_F(RelocatableMetadataStoreTest, ResumesVectorManifestTraversalThroughTheMetadataStoreBoundary) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const std::array requests = {
+			CatalogSlotReservationRequest{
+					.segment_id = SegmentId(31),
+					.kind = SegmentKind::SGK_VECTOR_MANIFEST_POOL,
+					.owner_id = 9U,
+					.segment_generation = Generation(1),
+					.state = SegmentState::SGS_SEALED,
+					.require_absent = true,
+			},
+			CatalogSlotReservationRequest{
+					.segment_id = SegmentId(32),
+					.kind = SegmentKind::SGK_VECTOR_MANIFEST_POOL,
+					.owner_id = 17U,
+					.segment_generation = Generation(1),
+					.state = SegmentState::SGS_SEALED,
+					.require_absent = true,
+			},
+	};
+	const std::array pages = {
+			PageLocation{PageId(91), requests[0].segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME,
+						 requests[0].segment_generation},
+			PageLocation{PageId(92), requests[1].segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME,
+						 requests[1].segment_generation},
+	};
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalogAndLocations(requests, pages, {}, PhysicalSlotId(40),
+																	PhysicalSlotId(41), LogSequenceNumber(2),
+																	[](std::span<const CatalogEntry>) {})
+						.has_value());
+	const std::array manifests = {
+			VectorManifestLocation{9U, pages[0].page_id, Generation(1U)},
+			VectorManifestLocation{17U, pages[1].page_id, Generation(1U)},
+	};
+	static_cast<void>(store->upsertVectorManifests(manifests, {}, LogSequenceNumber(3)));
+
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	std::vector<VectorManifestLocation> resumed;
+	size_t metadataPages = 0U;
+	EXPECT_FALSE(store->visitVectorManifestLocationsAfter(
+			snapshot, manifests.front().index_id, 2U,
+			[&resumed](const VectorManifestLocation &location) {
+				resumed.push_back(location);
+				return false;
+			},
+			&metadataPages));
+	EXPECT_EQ(resumed, (std::vector<VectorManifestLocation>{manifests.back()}));
+	EXPECT_EQ(metadataPages, 2U);
+
+	resumed.clear();
+	EXPECT_TRUE(store->visitVectorManifestLocationsAfter(snapshot, manifests.back().index_id, 2U,
+														 [&resumed](const VectorManifestLocation &location) {
+															 resumed.push_back(location);
+															 return true;
+														 }));
+	EXPECT_TRUE(resumed.empty());
+
+	MetadataSnapshotPin invalidSnapshot;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitVectorManifestLocationsAfter(
+						invalidSnapshot, 0U, 1U, [](const VectorManifestLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitVectorManifestLocationsAfter(
+						snapshot, 0U, 0U, [](const VectorManifestLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->visitVectorManifestLocationsAfter(snapshot, 0U, 1U, {})); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreTest, RejectsInvalidLargeValueManifestResumeTraversalArguments) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	MetadataSnapshotPin invalidSnapshot;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitLargeValueManifestLocationsAfter(
+						invalidSnapshot, 0U, 1U, [](const LargeValueManifestLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitLargeValueManifestLocationsAfter(
+						snapshot, 0U, 0U, [](const LargeValueManifestLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->visitLargeValueManifestLocationsAfter(snapshot, 0U, 1U, {})); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreTest, RejectsInvalidLargeValueOwnerResumeTraversalArguments) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	MetadataSnapshotPin invalidSnapshot;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitEntityPropertyLocationsAfter(
+						invalidSnapshot, 0U, 1U, [](const EntityPropertyLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->visitEntityPropertyLocationsAfter(
+						snapshot, 0U, 0U, [](const EntityPropertyLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						store->visitStateLocationsAfter(snapshot, 0U, 0U, [](const StateLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataStoreTest, PublishesTypedDirectoryErasuresWithoutRequiringReplacementEntries) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const std::array requests = {
@@ -310,5 +430,4 @@ TEST_F(RelocatableMetadataStoreTest, RejectsTypedReservationMappingsWithoutTheir
 						[](std::span<const CatalogEntry>) {}));
 			},
 			FormatError::FERR_INVALID_STATE);
-
 }

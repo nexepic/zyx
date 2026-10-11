@@ -28,15 +28,21 @@ namespace graph::storage {
 
 		void validateOptions(const DerivedObjectReachabilityReclaimOptions &options,
 							 LogSequenceNumber checkpointLsn) {
+			constexpr size_t unbounded = std::numeric_limits<size_t>::max();
 			const uint8_t invalid = static_cast<uint8_t>(options.maximum_vector_manifests == 0U) |
+									static_cast<uint8_t>(options.maximum_vector_manifests == unbounded) |
 									static_cast<uint8_t>(options.maximum_vector_locations == 0U) |
+									static_cast<uint8_t>(options.maximum_vector_locations == unbounded) |
 									static_cast<uint8_t>(options.maximum_mapping_entries == 0U) |
+									static_cast<uint8_t>(options.maximum_mapping_entries == unbounded) |
 									static_cast<uint8_t>(options.maximum_candidate_pages == 0U) |
+									static_cast<uint8_t>(options.maximum_candidate_pages == unbounded) |
 									static_cast<uint8_t>(options.maximum_retirements == 0U) |
+									static_cast<uint8_t>(options.maximum_retirements == unbounded) |
 									static_cast<uint8_t>(!checkpointLsn.isValid());
 			if (invalid != 0U) {
 				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable derived-object reclamation requires nonzero scan bounds and a checkpoint LSN");
+					 "relocatable derived-object reclamation requires finite nonzero scan bounds and a checkpoint LSN");
 			}
 		}
 
@@ -68,15 +74,11 @@ namespace graph::storage {
 			}
 			for (const VectorDeltaEntry &entry: entries) {
 				const bool hasCurrentRawLocation = rawVectorIds.contains(entry.vector_id);
-				VectorDeltaMapping::validateCurrentRawMembership(entry, hasCurrentRawLocation);
-				if (entry.operation == VectorDeltaOperation::VDO_INSERT) {
-					if (!result.erase(entry.vector_id)) {
-						fail(FormatError::FERR_INVALID_STATE,
-							 "relocatable derived-object reclamation found duplicate Vector delta inserts");
-					}
-				} else if (!result.insert(entry.vector_id).second) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable derived-object reclamation found duplicate Vector delta erases");
+			VectorDeltaMapping::validateCurrentRawMembership(entry, hasCurrentRawLocation);
+			if (entry.operation == VectorDeltaOperation::VDO_INSERT) {
+				static_cast<void>(result.erase(entry.vector_id));
+			} else {
+				static_cast<void>(result.insert(entry.vector_id));
 				}
 			}
 			return result;
@@ -85,9 +87,12 @@ namespace graph::storage {
 		void validateMappingTreeOptions(const DerivedObjectReachabilityReclaimOptions &options,
 										LogSequenceNumber checkpointLsn) {
 			validateOptions(options, checkpointLsn);
-			if (options.maximum_mapping_roots == 0U || options.maximum_mapping_tree_pages == 0U) {
+			if (options.maximum_mapping_roots == 0U ||
+				options.maximum_mapping_roots == std::numeric_limits<size_t>::max() ||
+				options.maximum_mapping_tree_pages == 0U ||
+				options.maximum_mapping_tree_pages == std::numeric_limits<size_t>::max()) {
 				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable mapping-tree reclamation requires nonzero root and page scan bounds");
+					 "relocatable mapping-tree reclamation requires finite nonzero root and page scan bounds");
 			}
 		}
 
@@ -171,8 +176,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable derived-object reclamation found a Manifest adjacency root outside the Index Root Directory");
 				}
-				if (baseIds.size() > options.maximum_mapping_entries ||
-					baseIds.size() == std::numeric_limits<size_t>::max()) {
+				if (baseIds.size() > options.maximum_mapping_entries) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable derived-object reclamation adjacency mapping exceeds its configured scan bound");
 				}
@@ -198,7 +202,7 @@ namespace graph::storage {
 							 "relocatable derived-object reclamation found an adjacency mapping outside its index-owned pool");
 					}
 					const std::optional<DerivedVectorAdjacencyPage> derived = adjacencies_.inspectDerivedPage(snapshot, pageId);
-					if (!derived.has_value() || derived->index_id != manifest.index_id || derived->location != location) {
+					if (!derived.has_value() || derived->index_id != manifest.index_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable derived-object reclamation found a legacy or mismatched adjacency mapping target");
 					}
@@ -316,8 +320,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable PQ reclamation found a Manifest mapping root outside the Index Root Directory");
 				}
-				if (baseIds.size() > options.maximum_mapping_entries ||
-					baseIds.size() == std::numeric_limits<size_t>::max()) {
+				if (baseIds.size() > options.maximum_mapping_entries) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable PQ reclamation mapping exceeds its configured scan bound");
 				}

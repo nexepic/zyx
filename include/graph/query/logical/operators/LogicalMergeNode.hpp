@@ -42,10 +42,13 @@ public:
 		std::unordered_map<std::string, graph::PropertyValue> matchProps,
 		std::vector<MergeSetAction> onCreateItems,
 		std::vector<MergeSetAction> onMatchItems,
-		std::unique_ptr<LogicalOperator> child = nullptr)
+		std::unique_ptr<LogicalOperator> child = nullptr,
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>
+			matchPropertyExpressions = {})
 		: variable_(std::move(variable))
 		, labels_(std::move(labels))
 		, matchProps_(std::move(matchProps))
+		, matchPropertyExpressions_(std::move(matchPropertyExpressions))
 		, onCreateItems_(std::move(onCreateItems))
 		, onMatchItems_(std::move(onMatchItems))
 		, child_(std::move(child)) {}
@@ -80,7 +83,15 @@ public:
 			matchProps_,
 			cloneActions(onCreateItems_),
 			cloneActions(onMatchItems_),
-			child_ ? child_->clone() : nullptr);
+			child_ ? child_->clone() : nullptr,
+			[&]() {
+				std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> expressions;
+				expressions.reserve(matchPropertyExpressions_.size());
+				for (const auto &[key, expression] : matchPropertyExpressions_) {
+					expressions.emplace(key, expression ? expression->clone() : nullptr);
+				}
+				return expressions;
+			}());
 	}
 
 	[[nodiscard]] std::string toString() const override { return "MergeNode(" + variable_ + ")"; }
@@ -98,6 +109,10 @@ public:
 	[[nodiscard]] const std::string &getVariable() const { return variable_; }
 	[[nodiscard]] const std::vector<std::string> &getLabels() const { return labels_; }
 	[[nodiscard]] const std::unordered_map<std::string, graph::PropertyValue> &getMatchProps() const { return matchProps_; }
+	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> &
+	getMatchPropertyExpressions() const {
+		return matchPropertyExpressions_;
+	}
 	[[nodiscard]] const std::vector<MergeSetAction> &getOnCreateItems() const { return onCreateItems_; }
 	[[nodiscard]] const std::vector<MergeSetAction> &getOnMatchItems() const { return onMatchItems_; }
 
@@ -105,6 +120,7 @@ private:
 	std::string variable_;
 	std::vector<std::string> labels_;
 	std::unordered_map<std::string, graph::PropertyValue> matchProps_;
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> matchPropertyExpressions_;
 	std::vector<MergeSetAction> onCreateItems_;
 	std::vector<MergeSetAction> onMatchItems_;
 	std::unique_ptr<LogicalOperator> child_;

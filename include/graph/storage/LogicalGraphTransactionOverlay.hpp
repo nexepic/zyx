@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 
+#include "graph/storage/LogicalGraphVectorSearch.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 
 namespace graph::storage {
@@ -19,7 +20,9 @@ namespace graph::storage {
 	// This adapter owns no physical state. It applies declarative batches to an
 	// in-memory final-state overlay while LogicalGraphTransaction retains the
 	// one pinned base snapshot and performs the sole durable publication.
-	class LogicalGraphTransactionOverlay final : public LogicalGraphReadBackend, public LogicalGraphWriteBackend {
+	class LogicalGraphTransactionOverlay final : public LogicalGraphReadBackend,
+														public LogicalGraphWriteBackend,
+														public LogicalGraphVectorSearchBackend {
 	public:
 		explicit LogicalGraphTransactionOverlay(LogicalGraphTransaction &transaction);
 		~LogicalGraphTransactionOverlay() override;
@@ -27,6 +30,8 @@ namespace graph::storage {
 		LogicalGraphTransactionOverlay &operator=(const LogicalGraphTransactionOverlay &) = delete;
 
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
+		[[nodiscard]] std::unique_ptr<LogicalGraphVectorSearchSnapshot>
+		openLogicalGraphVectorSearchSnapshot() const override;
 		[[nodiscard]] std::vector<uint64_t>
 		createLogicalNodes(const std::vector<LogicalGraphNodeCreateRequest> &requests) override;
 		[[nodiscard]] std::vector<uint64_t>
@@ -53,9 +58,11 @@ namespace graph::storage {
 		};
 
 		class Snapshot;
+		class VectorSnapshot;
 
 		[[nodiscard]] LogicalGraphReadSnapshot &baseSnapshot() const;
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> baseFence() const;
+		[[nodiscard]] std::optional<LogicalGraphMutationFence> overlayFence() const;
 		[[nodiscard]] NodeState &ensureNode(uint64_t nodeId);
 		[[nodiscard]] EdgeState &ensureEdge(uint64_t edgeId);
 		void applyBatch(const LogicalGraphMutationBatch &batch, const LogicalGraphMutationBatchResult &result);
@@ -69,6 +76,10 @@ namespace graph::storage {
 		// Base-snapshot presence is immutable for this transaction. Cache it so a
 		// bulk edge batch does not repeat directory probes for shared endpoints.
 		mutable std::map<uint64_t, bool> persisted_node_visibility_;
+		// This changes only after a successfully staged nonempty batch. It is
+		// carried by overlay snapshots so transaction-local derived views can
+		// report staleness without affecting the durable write fence.
+		uint64_t logical_revision_ = 0U;
 	};
 
 } // namespace graph::storage

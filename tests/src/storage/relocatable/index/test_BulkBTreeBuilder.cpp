@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
 #include "tests/src/storage/relocatable/index/RelocatableBTreePageStoreTestUtils.hpp"
@@ -49,6 +50,23 @@ namespace {
 		};
 	}
 
+	[[nodiscard]] OrderedBTreeEntrySource sourceWithChangedSecondPass(
+			std::vector<BTreePageEntry> firstPass, std::vector<BTreePageEntry> secondPass) {
+		const auto first = std::make_shared<const std::vector<BTreePageEntry>>(std::move(firstPass));
+		const auto second = std::make_shared<const std::vector<BTreePageEntry>>(std::move(secondPass));
+		const auto pass = std::make_shared<size_t>(0U);
+		return [first, second, pass] {
+			const std::shared_ptr<const std::vector<BTreePageEntry>> &values = (*pass)++ == 0U ? first : second;
+			auto position = std::make_shared<size_t>(0U);
+			return [values, position]() -> std::optional<BTreePageEntry> {
+				if (*position == values->size()) {
+					return std::nullopt;
+				}
+				return (*values)[(*position)++];
+			};
+		};
+	}
+
 	[[nodiscard]] std::vector<BTreePageEntry> wideEntries(size_t count) {
 		std::vector<BTreePageEntry> result;
 		result.reserve(count);
@@ -69,6 +87,17 @@ namespace {
 			key[0] = static_cast<std::byte>(index >> 8U);
 			key[1] = static_cast<std::byte>(index);
 			result.push_back({std::move(key), index});
+		}
+		return result;
+	}
+
+	[[nodiscard]] std::vector<BTreePageEntry> adjacencyEntries(size_t edgeCount) {
+		std::vector<BTreePageEntry> result;
+		result.reserve(edgeCount);
+		for (size_t edge = 1U; edge <= edgeCount; ++edge) {
+			result.push_back({AdjacencyKeyCodec::encode(
+							  {GlobalAdjacencyDirection::GAD_OUT, 1U, static_cast<uint64_t>(edge)}),
+						  0U});
 		}
 		return result;
 	}
@@ -168,6 +197,34 @@ TEST_F(RelocatableBTreePageStoreTest, BulkBuildsAndReopensKeyOnlyLeaves) {
 	BTreeIndex reopenedIndex(INDEX_ID, reopenedStore, *reopenedMetadata, BTreeLeafValueLayout::BLVL_EMPTY);
 	EXPECT_EQ(reopenedIndex.scan(reopened, expected[197U].key, 3U),
 			  (std::vector<BTreePageEntry>{expected[197U], expected[198U], expected[199U]}));
+	reopened.release();
+}
+
+TEST_F(RelocatableBTreePageStoreTest, BulkBuildsDenseKeyOnlyAdjacencyLeavesAtThePackedPageBoundary) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	const std::vector<BTreePageEntry> expected = adjacencyEntries(2'000U);
+	BulkBTreeBuildOptions keyOnlyOptions = options(expected.size(), 64U);
+	keyOnlyOptions.leaf_value_layout = BTreeLeafValueLayout::BLVL_EMPTY;
+
+	const BulkBTreeBuildResult result =
+			BulkBTreeBuilder::build(store, *metadata, INDEX_ID, sourceFor(expected), keyOnlyOptions, LogSequenceNumber(2U));
+	EXPECT_GT(result.page_count, 1U);
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	BTreeIndex index(INDEX_ID, store, *metadata, BTreeLeafValueLayout::BLVL_EMPTY);
+	EXPECT_EQ(index.scan(snapshot, std::nullopt, expected.size()), expected);
+	snapshot.release();
+
+	metadata.reset();
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPages(io, *reopenedMetadata);
+	BTreePageStore reopenedStore(reopenedPages, *reopenedMetadata);
+	MetadataSnapshotPin reopened = reopenedMetadata->openSnapshot();
+	BTreeIndex reopenedIndex(INDEX_ID, reopenedStore, *reopenedMetadata, BTreeLeafValueLayout::BLVL_EMPTY);
+	EXPECT_EQ(reopenedIndex.scan(reopened, expected[1997U].key, 3U),
+			  (std::vector<BTreePageEntry>{expected[1997U], expected[1998U], expected[1999U]}));
 	reopened.release();
 }
 
@@ -401,6 +458,21 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidNativePlansAndTamperedPrepar
 			FormatError::FERR_INVALID_STATE);
 
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	auto foreignMetadata = RelocatableMetadataStore::initializeNew(walIo, superblock());
+	SlottedPagePool foreignPages(walIo, *foreignMetadata);
+	BTreePageStore foreignStore(foreignPages, *foreignMetadata);
+	expectFormatError(
+			[&] {
+				static_cast<void>(BulkBTreeBuilder::planNativeTree(
+						foreignStore, *metadata, snapshot, INDEX_ID, sourceFor(entries(1U)), options()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(BulkBTreeBuilder::build(
+						foreignStore, *metadata, INDEX_ID, sourceFor(entries(1U)), options(), LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
 	BulkBTreeBuildOptions invalidLayout = options();
 	invalidLayout.leaf_value_layout = static_cast<BTreeLeafValueLayout>(0xffU);
 	expectFormatError(
@@ -436,4 +508,148 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidNativePlansAndTamperedPrepar
 			},
 			FormatError::FERR_INVALID_STATE);
 	published.release();
+}
+
+TEST_F(RelocatableBTreePageStoreTest,
+	   NativeBulkPlanPublishesDenseMultiPoolTreeThroughTheGraphTransactionAndReopens) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	EntityPageStore entities(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, pages);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	NativeGraphWritePlannerOptions plannerOptions = nativeBTreeWriteOptions();
+	plannerOptions.first_slot = PhysicalSlotId(40U);
+	plannerOptions.last_slot = PhysicalSlotId(80U);
+	plannerOptions.entity_pool_owner_id = 901U;
+	plannerOptions.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(80U), 902U};
+	NativeGraphWritePlanner planner(*metadata, entities, labels, properties, store, plannerOptions);
+
+	constexpr uint64_t nativeIndexId = 83U;
+	const std::vector<BTreePageEntry> expected = poolSizedEntries(1800U);
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const Generation baseGeneration = transaction.baseSuperblock().generation;
+	const BTreeInitialTreeMutationPlan plan = BulkBTreeBuilder::planNativeTree(
+			store, *metadata, transaction.baseSnapshot(), nativeIndexId, sourceFor(expected),
+			{PhysicalSlotId(40U), PhysicalSlotId(80U), nativeIndexId, expected.size() + 1U, 2048U});
+	ASSERT_GT(plan.new_pool_mutations.size(), 1U);
+	transaction.stageScalarIndexCreate(store, plan);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(current.superblock().generation, Generation(baseGeneration.value() + 1U));
+	const IndexRootLocation root = metadata->findIndexRoot(current, nativeIndexId);
+	EXPECT_TRUE(root.root_page_id.isValid());
+	BTreeIndex index(nativeIndexId, store, *metadata);
+	EXPECT_EQ(index.find(current, expected.front().key), std::optional<uint64_t>(1U));
+	EXPECT_EQ(index.find(current, expected[899U].key), std::optional<uint64_t>(900U));
+	EXPECT_EQ(index.find(current, expected.back().key), std::optional<uint64_t>(1800U));
+	EXPECT_EQ(index.scan(current, expected[1797U].key, 3U),
+			  (std::vector<BTreePageEntry>{expected[1797U], expected[1798U], expected[1799U]}));
+	current.release();
+
+	metadata.reset();
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPages(io, *reopenedMetadata);
+	BTreePageStore reopenedStore(reopenedPages, *reopenedMetadata);
+	BTreeIndex reopenedIndex(nativeIndexId, reopenedStore, *reopenedMetadata);
+	MetadataSnapshotPin reopened = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(reopenedIndex.find(reopened, expected.back().key), std::optional<uint64_t>(1800U));
+	EXPECT_EQ(reopenedIndex.scan(reopened, std::nullopt, expected.size()), expected);
+	reopened.release();
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeBulkPlanFailsBeforePublishingWhenItsSecondPassChanges) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	EntityPageStore entities(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, pages);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	NativeGraphWritePlannerOptions plannerOptions = nativeBTreeWriteOptions();
+	plannerOptions.first_slot = PhysicalSlotId(40U);
+	plannerOptions.last_slot = PhysicalSlotId(80U);
+	plannerOptions.entity_pool_owner_id = 901U;
+	plannerOptions.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(80U), 902U};
+	NativeGraphWritePlanner planner(*metadata, entities, labels, properties, store, plannerOptions);
+
+	constexpr uint64_t nativeIndexId = 84U;
+	const auto passes = std::make_shared<size_t>(0U);
+	const OrderedBTreeEntrySource unstableSource = [passes] {
+		auto values = std::make_shared<std::vector<BTreePageEntry>>(entries(8U));
+		if ((*passes)++ != 0U) {
+			values->back().value_or_child = 999U;
+		}
+		auto position = std::make_shared<size_t>(0U);
+		return [values, position]() -> std::optional<BTreePageEntry> {
+			if (*position == values->size()) {
+				return std::nullopt;
+			}
+			return (*values)[(*position)++];
+		};
+	};
+
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const BTreeInitialTreeMutationPlan plan = BulkBTreeBuilder::planNativeTree(
+			store, *metadata, transaction.baseSnapshot(), nativeIndexId, unstableSource,
+			{PhysicalSlotId(40U), PhysicalSlotId(80U), nativeIndexId, 16U, 16U});
+	transaction.stageScalarIndexCreate(store, plan);
+	EXPECT_THROW(static_cast<void>(transaction.commit()), FormatException);
+	EXPECT_FALSE(transaction.isActive());
+	// Commit failures are conservatively indeterminate; the subsequent metadata
+	// generation is the authoritative proof that this source error published no root.
+	EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+
+	MetadataSnapshotPin afterFailure = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findIndexRootOptional(afterFailure, nativeIndexId).has_value());
+	afterFailure.release();
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeBulkPlansRejectEverySecondPassDivergenceBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	EntityPageStore entities(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, pages);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	NativeGraphWritePlannerOptions plannerOptions = nativeBTreeWriteOptions();
+	plannerOptions.first_slot = PhysicalSlotId(40U);
+	plannerOptions.last_slot = PhysicalSlotId(80U);
+	plannerOptions.entity_pool_owner_id = 901U;
+	plannerOptions.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(80U), 902U};
+	NativeGraphWritePlanner planner(*metadata, entities, labels, properties, store, plannerOptions);
+
+	const auto rejectsChangedSecondPass = [&](uint64_t indexId, OrderedBTreeEntrySource source) {
+		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+		const BTreeInitialTreeMutationPlan plan = BulkBTreeBuilder::planNativeTree(
+				store, *metadata, transaction.baseSnapshot(), indexId, source,
+				{PhysicalSlotId(40U), PhysicalSlotId(80U), indexId, 16U, 16U});
+		transaction.stageScalarIndexCreate(store, plan);
+		EXPECT_THROW(static_cast<void>(transaction.commit()), FormatException);
+		EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+		MetadataSnapshotPin afterFailure = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(afterFailure, indexId).has_value());
+		afterFailure.release();
+	};
+
+	const std::vector<BTreePageEntry> firstPass = entries(8U);
+	std::vector<BTreePageEntry> shortSecondPass = firstPass;
+	shortSecondPass.pop_back();
+	rejectsChangedSecondPass(85U, sourceWithChangedSecondPass(firstPass, std::move(shortSecondPass)));
+
+	std::vector<BTreePageEntry> invalidValueSecondPass = firstPass;
+	invalidValueSecondPass.back().value_or_child = 0U;
+	rejectsChangedSecondPass(86U, sourceWithChangedSecondPass(firstPass, std::move(invalidValueSecondPass)));
+
+	std::vector<BTreePageEntry> changedBoundarySecondPass = firstPass;
+	changedBoundarySecondPass.front().key = smallKey(0U);
+	rejectsChangedSecondPass(87U, sourceWithChangedSecondPass(firstPass, std::move(changedBoundarySecondPass)));
+
+	std::vector<BTreePageEntry> unorderedSecondPass = firstPass;
+	std::swap(unorderedSecondPass[1U], unorderedSecondPass[2U]);
+	rejectsChangedSecondPass(88U, sourceWithChangedSecondPass(firstPass, std::move(unorderedSecondPass)));
+
+	std::vector<BTreePageEntry> extraSecondPass = firstPass;
+	extraSecondPass.push_back({smallKey(9U), 9U});
+	rejectsChangedSecondPass(89U, sourceWithChangedSecondPass(firstPass, std::move(extraSecondPass)));
 }

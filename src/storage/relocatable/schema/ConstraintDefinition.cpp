@@ -169,6 +169,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_UNSUPPORTED_VERSION, "relocatable constraint definition version is unsupported");
 		}
 		if (LittleEndianCodec::readU16(bytes, 6U) != RSS_CONSTRAINT_DEFINITION_HEADER_BYTES ||
+			bytes[27U] != std::byte{0} || bytes[30U] != std::byte{0} || bytes[31U] != std::byte{0} ||
 			LittleEndianCodec::readU64(bytes, RESERVED_OFFSET) != 0U) {
 			fail(FormatError::FERR_RESERVED_BITS,
 				 "relocatable constraint definition fixed or reserved fields are invalid");

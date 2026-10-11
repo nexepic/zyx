@@ -895,20 +895,26 @@ TEST_F(RelocatableMaintenanceServiceTest, DefersEntityPageTasksForAdmissionAndDe
 	RelocatableMaintenanceOptions snapshotOptions;
 	snapshotOptions.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
 	snapshotOptions.page.maximum_active_snapshots = 0U;
+	snapshotOptions.segment.maximum_active_snapshots = 0U;
 	RelocatableMaintenanceService snapshotService(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
-												  largeValues, physical, *metadata, publicationMutex, snapshotOptions);
+											  largeValues, physical, *metadata, publicationMutex, snapshotOptions);
 	MetadataSnapshotPin pinned = metadata->openSnapshot();
 	snapshotService.start();
 	EXPECT_EQ(snapshotService.enqueueEntityPageCompaction(SegmentId(71U), SegmentId(76U), 1U),
 				  1U);
-	ASSERT_TRUE(waitUntil([&] { return snapshotService.metrics().loop.deferred_attempts != 0U; }));
+	EXPECT_EQ(snapshotService.enqueueCodebookExtentRelocation(
+				  17U, VectorCodebookExtentIdCodec::manifestExtentId(17U), PhysicalSlotId(51U), PhysicalSlotId(51U)),
+				  2U);
+	ASSERT_TRUE(waitUntil([&] { return snapshotService.metrics().loop.deferred_attempts >= 2U; }));
 	EXPECT_NE(snapshotService.metrics().entity_pages.snapshot_pressure_rejections, 0U);
+	EXPECT_NE(snapshotService.metrics().segments.snapshot_pressure_rejections, 0U);
 	snapshotService.stop();
 	pinned.release();
 
 	RelocatableMaintenanceOptions retainedOptions;
 	retainedOptions.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
 	retainedOptions.page.maximum_retained_generations = 0U;
+	retainedOptions.segment.maximum_retained_generations = 0U;
 	RelocatableMaintenanceService retainedService(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
 												  largeValues, physical, *metadata, publicationMutex, retainedOptions);
 	retainedService.start();
@@ -919,6 +925,7 @@ TEST_F(RelocatableMaintenanceServiceTest, DefersEntityPageTasksForAdmissionAndDe
 			  2U);
 	ASSERT_TRUE(waitUntil([&] { return retainedService.metrics().loop.deferred_attempts >= 2U; }));
 	EXPECT_NE(retainedService.metrics().entity_pages.retained_generation_rejections, 0U);
+	EXPECT_NE(retainedService.metrics().segments.retained_generation_rejections, 0U);
 	retainedService.stop();
 
 	RelocatableMaintenanceOptions capacityOptions;
@@ -928,8 +935,12 @@ TEST_F(RelocatableMaintenanceServiceTest, DefersEntityPageTasksForAdmissionAndDe
 	capacityService.start();
 	EXPECT_EQ(capacityService.enqueueEntityPageCompaction(SegmentId(71U), SegmentId(76U), 1U),
 				  1U);
-	ASSERT_TRUE(waitUntil([&] { return capacityService.metrics().loop.deferred_attempts != 0U; }));
+	EXPECT_EQ(capacityService.enqueueCodebookExtentRelocation(
+				  17U, VectorCodebookExtentIdCodec::manifestExtentId(17U), PhysicalSlotId(41U), PhysicalSlotId(41U)),
+				  2U);
+	ASSERT_TRUE(waitUntil([&] { return capacityService.metrics().loop.deferred_attempts >= 2U; }));
 	EXPECT_NE(capacityService.metrics().entity_pages.destination_capacity_rejections, 0U);
+	EXPECT_NE(capacityService.metrics().segments.destination_capacity_rejections, 0U);
 	capacityService.stop();
 	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	EXPECT_EQ(metadata->findPageLocation(snapshot, PageId(101U)).segment_id, SegmentId(71U));
@@ -1020,6 +1031,7 @@ TEST_F(RelocatableMaintenanceServiceTest, RejectsInvalidRequestsAndFaultsClosedW
 	options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
 	RelocatableMaintenanceService service(pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues,
 									physical, *metadata, publicationMutex, options, {}, [] { return false; });
+	EXPECT_THROW(static_cast<void>(service.enqueueGlobalAdjacencyPoolReclamation()), std::logic_error);
 	EXPECT_THROW(static_cast<void>(service.enqueuePropertyPageCompaction(SegmentId{}, SegmentId(2U), 1U)),
 			 std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(service.enqueueBTreePageCompaction(SegmentId(1U), SegmentId(1U), 1U)),
@@ -1194,4 +1206,216 @@ TEST_F(RelocatableMaintenanceServiceTest, RecoversVectorDebtWhileTheOnlyQueueSlo
 	EXPECT_GE(metrics.vector_rebuild_recovery_scanned_metadata_pages, 1U);
 	EXPECT_GE(metrics.loop.deferred_attempts, 1U);
 	service.stop();
+}
+
+TEST_F(RelocatableMaintenanceServiceTest, ResumesVectorRebuildDebtScanningAcrossEmptyMetadataBatches) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	SlottedPagePool pages(io_, *metadata);
+	BTreePageStore btreePages(pages, *metadata);
+	VectorPageStore vectorPages(io_, *metadata);
+	VectorManifestStore vectorManifests(io_, *metadata);
+	EntityPageStore entities(io_, *metadata);
+	std::mutex publicationMutex;
+	VectorCodebookStore codebooks(physical, *metadata);
+	LargeValueStore largeValues(io_, *metadata);
+	RelocatableMaintenanceOptions options;
+	options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.vector_rebuild_recovery_metadata_pages_per_cycle = 2U;
+	std::atomic_uint32_t scans{0U};
+	std::atomic_uint64_t rebuiltIndex{0U};
+	RelocatableMaintenanceService service(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {},
+			[&rebuiltIndex](uint64_t indexId) {
+				rebuiltIndex.store(indexId, std::memory_order_release);
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+			},
+			[&scans](uint64_t afterIndexId, size_t maximumMetadataPages) {
+				EXPECT_EQ(maximumMetadataPages, 2U);
+				switch (scans.fetch_add(1U, std::memory_order_relaxed)) {
+					case 0U:
+						EXPECT_EQ(afterIndexId, 0U);
+						return RelocatableVectorRebuildDebtScan{std::nullopt, 41U, 1U, false};
+					case 1U:
+						EXPECT_EQ(afterIndexId, 41U);
+						return RelocatableVectorRebuildDebtScan{77U, 77U, 1U, false};
+					case 2U:
+						EXPECT_EQ(afterIndexId, 77U);
+						return RelocatableVectorRebuildDebtScan{std::nullopt, 0U, 1U, true};
+					default:
+						EXPECT_EQ(afterIndexId, 0U);
+						return RelocatableVectorRebuildDebtScan{std::nullopt, 0U, 0U, true};
+				}
+			});
+	service.start();
+	EXPECT_EQ(service.enqueueVectorRebuildRecovery(), 1U);
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceMetrics metrics = service.metrics();
+		return metrics.vector_rebuild_recovery_completed_rebuild_attempts == 1U &&
+			   metrics.vector_rebuild_recovery_scanned_metadata_pages >= 3U;
+	}));
+	EXPECT_GE(scans.load(std::memory_order_relaxed), 3U);
+	EXPECT_EQ(rebuiltIndex.load(std::memory_order_acquire), 77U);
+	EXPECT_GE(service.metrics().vector_rebuild_recovery_scanned_metadata_pages, 3U);
+	service.stop();
+}
+
+TEST_F(RelocatableMaintenanceServiceTest, RejectsInvalidVectorRebuildContractsAndDefersBlockedRecovery) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	SlottedPagePool pages(io_, *metadata);
+	BTreePageStore btreePages(pages, *metadata);
+	VectorPageStore vectorPages(io_, *metadata);
+	VectorManifestStore vectorManifests(io_, *metadata);
+	EntityPageStore entities(io_, *metadata);
+	std::mutex publicationMutex;
+	VectorCodebookStore codebooks(physical, *metadata);
+	LargeValueStore largeValues(io_, *metadata);
+	RelocatableMaintenanceOptions options;
+	options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+
+	RelocatableMaintenanceOptions zeroRecoveryBudget = options;
+	zeroRecoveryBudget.vector_rebuild_recovery_metadata_pages_per_cycle = 0U;
+	EXPECT_THROW(RelocatableMaintenanceService(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
+											  largeValues, physical, *metadata, publicationMutex, zeroRecoveryBudget),
+			 std::invalid_argument);
+	RelocatableMaintenanceOptions unboundedRecoveryBudget = options;
+	unboundedRecoveryBudget.vector_rebuild_recovery_metadata_pages_per_cycle = std::numeric_limits<size_t>::max();
+	EXPECT_THROW(RelocatableMaintenanceService(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
+											  largeValues, physical, *metadata, publicationMutex, unboundedRecoveryBudget),
+			 std::invalid_argument);
+
+	RelocatableMaintenanceService noVectorExecutor(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options);
+	EXPECT_THROW(static_cast<void>(noVectorExecutor.enqueueVectorBaseRebuild(0U)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(noVectorExecutor.enqueueVectorBaseRebuild(1U)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(noVectorExecutor.enqueueVectorRebuildRecovery()), std::invalid_argument);
+	RelocatableMaintenanceService noVectorDebtScanner(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+			});
+	EXPECT_THROW(static_cast<void>(noVectorDebtScanner.enqueueVectorRebuildRecovery()), std::invalid_argument);
+
+	RelocatableMaintenanceService malformedScanner(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+			},
+			[](uint64_t, size_t maximumMetadataPages) {
+				return RelocatableVectorRebuildDebtScan{std::nullopt, 0U, maximumMetadataPages + 1U, false};
+			});
+	malformedScanner.start();
+	EXPECT_EQ(malformedScanner.enqueueVectorRebuildRecovery(), 1U);
+	ASSERT_TRUE(waitUntil([&] { return malformedScanner.metrics().loop.failed_tasks == 1U; }));
+	EXPECT_THROW(std::rethrow_exception(malformedScanner.lastFailure()), std::logic_error);
+	malformedScanner.stop();
+
+	RelocatableMaintenanceService stalledScanner(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+			},
+			[](uint64_t, size_t) { return RelocatableVectorRebuildDebtScan{std::nullopt, 0U, 1U, false}; });
+	stalledScanner.start();
+	EXPECT_EQ(stalledScanner.enqueueVectorRebuildRecovery(), 1U);
+	ASSERT_TRUE(waitUntil([&] { return stalledScanner.metrics().loop.failed_tasks == 1U; }));
+	EXPECT_THROW(std::rethrow_exception(stalledScanner.lastFailure()), std::logic_error);
+	stalledScanner.stop();
+
+	RelocatableMaintenanceService deferredRecovery(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
+			},
+			[](uint64_t, size_t) { return RelocatableVectorRebuildDebtScan{73U, 73U, 1U, false}; });
+	deferredRecovery.start();
+	EXPECT_EQ(deferredRecovery.enqueueVectorRebuildRecovery(), 1U);
+	ASSERT_TRUE(waitUntil([&] { return deferredRecovery.metrics().loop.deferred_attempts != 0U; }));
+	EXPECT_EQ(deferredRecovery.metrics().vector_rebuild_recovery_completed_rebuild_attempts, 0U);
+	deferredRecovery.stop();
+
+	RelocatableMaintenanceService unknownRebuildStatus(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{static_cast<RelocatableMaintenanceTaskStatus>(0xffU), 0U, 0U};
+			});
+	unknownRebuildStatus.start();
+	EXPECT_EQ(unknownRebuildStatus.enqueueVectorBaseRebuild(79U), 1U);
+	ASSERT_TRUE(waitUntil([&] { return unknownRebuildStatus.metrics().loop.failed_tasks == 1U; }));
+	EXPECT_THROW(std::rethrow_exception(unknownRebuildStatus.lastFailure()), std::logic_error);
+	unknownRebuildStatus.stop();
+
+	RelocatableMaintenanceService unknownRecoveryStatus(
+			pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+			publicationMutex, options, {}, {}, [](uint64_t) {
+				return RelocatableMaintenanceTaskResult{static_cast<RelocatableMaintenanceTaskStatus>(0xffU), 0U, 0U};
+			},
+			[](uint64_t, size_t) { return RelocatableVectorRebuildDebtScan{83U, 83U, 1U, false}; });
+	unknownRecoveryStatus.start();
+	EXPECT_EQ(unknownRecoveryStatus.enqueueVectorRebuildRecovery(), 1U);
+	ASSERT_TRUE(waitUntil([&] { return unknownRecoveryStatus.metrics().loop.failed_tasks == 1U; }));
+	EXPECT_THROW(std::rethrow_exception(unknownRecoveryStatus.lastFailure()), std::logic_error);
+	unknownRecoveryStatus.stop();
+}
+
+TEST_F(RelocatableMaintenanceServiceTest, RejectsEveryNonmonotonicVectorDebtCursorContract) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	SlottedPagePool pages(io_, *metadata);
+	BTreePageStore btreePages(pages, *metadata);
+	VectorPageStore vectorPages(io_, *metadata);
+	VectorManifestStore vectorManifests(io_, *metadata);
+	EntityPageStore entities(io_, *metadata);
+	std::mutex publicationMutex;
+	VectorCodebookStore codebooks(physical, *metadata);
+	LargeValueStore largeValues(io_, *metadata);
+	RelocatableMaintenanceOptions options;
+	options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+
+	auto expectScannerFailure = [&](RelocatableVectorRebuildDebtScanner scanner) {
+		RelocatableMaintenanceService service(
+				pages, btreePages, vectorPages, vectorManifests, entities, codebooks, largeValues, physical, *metadata,
+				publicationMutex, options, {}, {}, [](uint64_t) {
+					return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+				},
+				std::move(scanner));
+		service.start();
+		EXPECT_EQ(service.enqueueVectorRebuildRecovery(), 1U);
+		ASSERT_TRUE(waitUntil([&] { return service.metrics().loop.failed_tasks == 1U; }));
+		EXPECT_THROW(std::rethrow_exception(service.lastFailure()), std::logic_error);
+		service.stop();
+	};
+
+	std::atomic_uint32_t repeatedEmptyCursorCalls{0U};
+	expectScannerFailure([&repeatedEmptyCursorCalls](uint64_t afterIndexId, size_t) {
+		if (repeatedEmptyCursorCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+			EXPECT_EQ(afterIndexId, 0U);
+			return RelocatableVectorRebuildDebtScan{std::nullopt, 41U, 1U, false};
+		}
+		EXPECT_EQ(afterIndexId, 41U);
+		return RelocatableVectorRebuildDebtScan{std::nullopt, 41U, 1U, false};
+	});
+
+	std::atomic_uint32_t repeatedIndexCursorCalls{0U};
+	expectScannerFailure([&repeatedIndexCursorCalls](uint64_t afterIndexId, size_t) {
+		if (repeatedIndexCursorCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+			EXPECT_EQ(afterIndexId, 0U);
+			return RelocatableVectorRebuildDebtScan{73U, 73U, 1U, false};
+		}
+		EXPECT_EQ(afterIndexId, 73U);
+		return RelocatableVectorRebuildDebtScan{73U, 73U, 1U, false};
+	});
+
+	expectScannerFailure([](uint64_t afterIndexId, size_t) {
+		EXPECT_EQ(afterIndexId, 0U);
+		return RelocatableVectorRebuildDebtScan{89U, 90U, 1U, false};
+	});
+
+	expectScannerFailure([](uint64_t afterIndexId, size_t) {
+		EXPECT_EQ(afterIndexId, 0U);
+		return RelocatableVectorRebuildDebtScan{0U, 0U, 1U, false};
+	});
 }

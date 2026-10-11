@@ -146,7 +146,7 @@ public:
 
 /**
  * @class LiteralExpression
- * @brief Represents a literal value (number, string, boolean, or null).
+ * @brief Represents a scalar or composite PropertyValue literal.
  */
 class LiteralExpression : public Expression {
 public:
@@ -154,6 +154,7 @@ public:
 	explicit LiteralExpression(int64_t value);
 	explicit LiteralExpression(double value);
 	explicit LiteralExpression(bool value);
+	explicit LiteralExpression(PropertyValue value);
 	explicit LiteralExpression(); // NULL
 
 	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::LITERAL; }
@@ -168,18 +169,21 @@ public:
 	[[nodiscard]] bool isInteger() const;
 	[[nodiscard]] bool isDouble() const;
 	[[nodiscard]] bool isString() const;
+	[[nodiscard]] bool isPropertyValue() const;
 
 	[[nodiscard]] bool getBooleanValue() const;
 	[[nodiscard]] int64_t getIntegerValue() const;
 	[[nodiscard]] double getDoubleValue() const;
 	[[nodiscard]] const std::string &getStringValue() const;
+	[[nodiscard]] const PropertyValue &getPropertyValue() const;
 
 private:
 	std::string stringValue_;
 	int64_t integerValue_;
 	double doubleValue_;
 	bool booleanValue_;
-	enum class LiteralType { NULL_VAL, BOOLEAN, INTEGER, DOUBLE, STRING } literalType_;
+	PropertyValue propertyValue_;
+	enum class LiteralType { NULL_VAL, BOOLEAN, INTEGER, DOUBLE, STRING, PROPERTY_VALUE } literalType_;
 };
 
 // ============================================================================

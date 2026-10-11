@@ -104,10 +104,10 @@ TEST(RelocatableFormatTest, LittleEndianPrimitivesRejectTruncatedBuffers) {
 TEST(RelocatableFormatTest, EnvelopeCodecMatchesGoldenLittleEndianBytes) {
 	const auto encoded = SegmentEnvelopeCodec::encode(allocatedEnvelope());
 	const std::array<uint8_t, RSS_ENVELOPE_BYTES> expected = {
-			0x5A, 0x59, 0x58, 0x47, 0x03, 0x00, 0x80, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x5A, 0x59, 0x58, 0x47, 0x04, 0x00, 0x80, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11,
 			0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			0x20, 0x00, 0x00, 0x00, 0x42, 0x6E, 0xD8, 0x87, 0xDD, 0xCC, 0xBB, 0xAA, 0x00, 0x00, 0x00, 0x00};
+			0x20, 0x00, 0x00, 0x00, 0x2C, 0xCD, 0x71, 0x9E, 0xDD, 0xCC, 0xBB, 0xAA, 0x00, 0x00, 0x00, 0x00};
 	for (size_t index = 0; index < expected.size(); ++index) {
 		EXPECT_EQ(std::to_integer<uint8_t>(encoded[index]), expected[index]);
 	}
@@ -144,6 +144,25 @@ TEST(RelocatableFormatTest, EnvelopeCodecRejectsTruncatedAndCorruptInput) {
 	corrupt[0] ^= std::byte{0x01};
 	expectFormatError([&] { static_cast<void>(SegmentEnvelopeCodec::decode(corrupt)); },
 					  FormatError::FERR_CHECKSUM_MISMATCH);
+}
+
+TEST(RelocatableFormatTest, EnvelopeCodecRejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const auto encoded = SegmentEnvelopeCodec::encode(allocatedEnvelope());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateHeaderCrc(mutation);
+			try {
+				const SegmentEnvelope decoded = SegmentEnvelopeCodec::decode(mutation);
+				EXPECT_EQ(SegmentEnvelopeCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// All rejected mutations must stop at the typed format boundary.
+			}
+		}
+	}
 }
 
 TEST(RelocatableFormatTest, EnvelopeCodecRejectsMalformedFieldsWithDeterministicErrors) {

@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <array>
+#include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -114,6 +116,28 @@ namespace {
 		MetadataPageFile(io, image.superblock).writeLocationLeaf(image.leaf_reference, image.leaf);
 	}
 
+	void mutateIntegrityScannerBTreePackedPayload(const std::shared_ptr<StorageIO> &io,
+			RelocatableMetadataStore &metadata, PageId pageId,
+			const std::function<void(std::vector<std::byte> &)> &mutator) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		SharedPagePoolAllocator pages(io, metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+		const SharedPagePoolContents contents = pages.read(snapshot, pageId);
+		const PageOwnerHeader owner = contents.owner;
+		BTreePage source = BTreePage::open(owner, contents.payload);
+		SlottedPage page = SlottedPage::open(source.slottedPage().serialize());
+		const std::vector<SlottedSlotReference> slots = page.liveSlots();
+		const auto packedSlot = std::ranges::find_if(slots, [](const SlottedSlotReference &slot) {
+			return slot.slot_id == 1U;
+		});
+		if (packedSlot == slots.end()) {
+			throw std::runtime_error("test B+Tree page is missing its packed payload slot");
+		}
+		std::vector<std::byte> packed = page.read(*packedSlot);
+		mutator(packed);
+		page.overwrite(*packedSlot, packed);
+		overwriteIntegrityScannerPagePayload(io, metadata, pageId, page.serialize());
+	}
+
 	struct NativeEntityIntegrityGraph {
 		std::unique_ptr<RelocatableMetadataStore> metadata;
 		EntityPropertyKey property_key{EntityPropertyOwnerKind::EPOK_NODE, 1001U};
@@ -170,7 +194,10 @@ namespace {
 	};
 
 	[[nodiscard]] NativeGlobalAdjacencyIntegrityGraph
-	createNativeGlobalAdjacencyIntegrityGraph(const std::shared_ptr<StorageIO> &io) {
+	createNativeGlobalAdjacencyIntegrityGraph(const std::shared_ptr<StorageIO> &io, size_t edgeCount = 1U) {
+		if (edgeCount == 0U) {
+			throw std::invalid_argument("test global adjacency graph requires at least one Edge");
+		}
 		NativeGlobalAdjacencyIntegrityGraph result;
 		result.metadata = RelocatableMetadataStore::initializeNew(io, integrityScannerInitialSuperblock());
 		EntityPageStore entities(io, *result.metadata);
@@ -190,7 +217,12 @@ namespace {
 		const std::array<uint64_t, 0U> no_labels{};
 		result.source_node_id = transaction.createNode(no_labels);
 		result.target_node_id = transaction.createNode(no_labels);
-		result.edge_id = transaction.createEdge(result.source_node_id, result.target_node_id, 77U);
+		for (size_t ordinal = 0U; ordinal < edgeCount; ++ordinal) {
+			const uint64_t edgeId = transaction.createEdge(result.source_node_id, result.target_node_id, 77U);
+			if (ordinal == 0U) {
+				result.edge_id = edgeId;
+			}
+		}
 		if (!transaction.commit().committed()) {
 			throw std::runtime_error("test failed to publish native global adjacency state");
 		}
@@ -203,28 +235,37 @@ namespace {
 		std::vector<BTreePageEntry> entries;
 	};
 
-	[[nodiscard]] IntegrityBTreePageImage readIntegrityGlobalAdjacencyRoot(const std::shared_ptr<StorageIO> &io,
-																		   RelocatableMetadataStore &metadata) {
+	[[nodiscard]] IntegrityBTreePageImage readIntegrityBTreePage(const std::shared_ptr<StorageIO> &io,
+																			 RelocatableMetadataStore &metadata, PageId pageId) {
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
-		const std::optional<IndexRootLocation> root =
-				metadata.findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
-		if (!root.has_value()) {
-			throw std::runtime_error("test global adjacency root is absent");
-		}
 		SharedPagePoolAllocator pages(io, metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
-		const SharedPagePoolContents contents = pages.read(snapshot, root->root_page_id);
+		const SharedPagePoolContents contents = pages.read(snapshot, pageId);
 		const BTreePage page = BTreePage::open(contents.owner, contents.payload);
 		IntegrityBTreePageImage result{contents.owner, page.header(), page.entries()};
 		snapshot.release();
 		return result;
 	}
 
+	[[nodiscard]] IntegrityBTreePageImage readIntegrityGlobalAdjacencyRoot(const std::shared_ptr<StorageIO> &io,
+																			 RelocatableMetadataStore &metadata) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const std::optional<IndexRootLocation> root =
+				metadata.findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		if (!root.has_value()) {
+			throw std::runtime_error("test global adjacency root is absent");
+		}
+		snapshot.release();
+		return readIntegrityBTreePage(io, metadata, root->root_page_id);
+	}
+
 	[[nodiscard]] BTreePage rebuildIntegrityBTreePage(const IntegrityBTreePageImage &image,
 													  std::span<const BTreePageEntry> entries,
 													  BTreeLeafValueLayout leafValueLayout) {
-		BTreePageHeader header = image.header;
-		header.entry_count = 0U;
+	BTreePageHeader header = image.header;
+	header.entry_count = 0U;
+	if (header.kind == BTreeNodeKind::BPN_LEAF) {
 		header.leaf_value_layout = leafValueLayout;
+	}
 		BTreePage result = BTreePage::create(image.owner, header);
 		for (const BTreePageEntry &entry: entries) {
 			result.insert(entry);
@@ -381,6 +422,21 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsMissingOrMismatchedGlobalA
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
 }
 
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsMalformedGlobalAdjacencyKey) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_LEAF);
+	ASSERT_FALSE(original.entries.empty());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	std::vector<BTreePageEntry> malformedEntries = original.entries;
+	malformedEntries.front().key = {std::byte{0xff}};
+	BTreePage malformed = rebuildIntegrityBTreePage(original, malformedEntries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, malformed);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
 TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyLeafWithAValueLayout) {
 	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io);
 	RelocatableIntegrityScanner scanner(io, *graph.metadata);
@@ -395,6 +451,244 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyLeafWithAVa
 	BTreePage valued = rebuildIntegrityBTreePage(original, valuedEntries, BTreeLeafValueLayout::BLVL_U64);
 	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, valued);
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRootDirectoryGenerationMismatch) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	MetadataSnapshotPin snapshot = graph.metadata->openSnapshot();
+	const PhysicalPageRef indexRootDirectory = snapshot.superblock().index_root_directory_root;
+	snapshot.release();
+	IntegrityLocationLeafImage image = readIntegrityLocationLeaf(
+			io, *graph.metadata, indexRootDirectory, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	const IntegrityLocationLeafImage original = image;
+	image.leaf.entries[image.entry_index].generation =
+			Generation(image.leaf.entries[image.entry_index].generation.value() + 1U);
+	overwriteIntegrityLocationLeaf(io, image);
+
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+	overwriteIntegrityLocationLeaf(io, original);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRootMappedToANonRootPage) {
+	// A valid child has the same index owner and generation as the root, so this
+	// exercises the root mapping contract rather than only generic page ownership.
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	ASSERT_TRUE(root.header.leftmost_child.isValid());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	MetadataSnapshotPin snapshot = graph.metadata->openSnapshot();
+	const PhysicalPageRef indexRootDirectory = snapshot.superblock().index_root_directory_root;
+	snapshot.release();
+	IntegrityLocationLeafImage mapping = readIntegrityLocationLeaf(
+			io, *graph.metadata, indexRootDirectory, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	mapping.leaf.entries[mapping.entry_index].segment_id = SegmentId(root.header.leftmost_child.value());
+	overwriteIntegrityLocationLeaf(io, mapping);
+
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyTreeCycle) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage cycle = original;
+	cycle.header.leftmost_child = cycle.header.page_id;
+	BTreePage corrupted = rebuildIntegrityBTreePage(cycle, cycle.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyTreeWithMismatchedChildLevel) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage wrongLevel = original;
+	ASSERT_LT(wrongLevel.header.level, std::numeric_limits<uint16_t>::max());
+	++wrongLevel.header.level;
+	BTreePage corrupted = rebuildIntegrityBTreePage(wrongLevel, wrongLevel.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyTreeChildOutsideTheIndex) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage outside = readIntegrityBTreePage(io, *graph.metadata, original.header.leftmost_child);
+	ASSERT_EQ(outside.header.kind, BTreeNodeKind::BPN_LEAF);
+	std::vector<BTreePageEntry> rootEntries = original.entries;
+	rootEntries.front().value_or_child = std::numeric_limits<uint64_t>::max();
+	BTreePage corrupted = rebuildIntegrityBTreePage(original, rootEntries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyChildWithForeignOwner) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	const IntegrityBTreePageImage child = readIntegrityBTreePage(io, *graph.metadata, root.header.leftmost_child);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	PageOwnerHeader foreignOwner = child.owner;
+	++foreignOwner.owner_id;
+	overwriteIntegrityScannerPageOwner(io, *graph.metadata, foreignOwner);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyNonRootSiblingCorruption) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	const IntegrityBTreePageImage child = readIntegrityBTreePage(io, *graph.metadata, root.header.leftmost_child);
+	ASSERT_EQ(child.header.kind, BTreeNodeKind::BPN_LEAF);
+	ASSERT_TRUE(child.header.right_sibling.isValid());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage corruptedImage = child;
+	corruptedImage.header.right_sibling = PageId{};
+	BTreePage corrupted = rebuildIntegrityBTreePage(
+			corruptedImage, corruptedImage.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, child.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyNonRootLeftSiblingCorruption) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	ASSERT_FALSE(root.entries.empty());
+	const IntegrityBTreePageImage child =
+			readIntegrityBTreePage(io, *graph.metadata, PageId(root.entries.front().value_or_child));
+	ASSERT_EQ(child.header.kind, BTreeNodeKind::BPN_LEAF);
+	ASSERT_TRUE(child.header.left_sibling.isValid());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage corruptedImage = child;
+	corruptedImage.header.left_sibling = PageId{};
+	BTreePage corrupted = rebuildIntegrityBTreePage(
+			corruptedImage, corruptedImage.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, child.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRestartCountMismatch) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 5U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_LEAF);
+	ASSERT_GT(root.header.entry_count, RSS_BTREE_PACKED_RESTART_INTERVAL);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	mutateIntegrityScannerBTreePackedPayload(io, *graph.metadata, root.header.page_id,
+			[](std::vector<std::byte> &packed) {
+				// The packed header stores restart_count at byte offset 16.
+				LittleEndianCodec::writeU32(packed, 16U, 1U);
+			});
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRestartOffsetCorruption) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 9U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(root.header.kind, BTreeNodeKind::BPN_LEAF);
+	ASSERT_GT(root.header.entry_count, RSS_BTREE_PACKED_RESTART_INTERVAL);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	mutateIntegrityScannerBTreePackedPayload(io, *graph.metadata, root.header.page_id,
+			[](std::vector<std::byte> &packed) {
+				// The first restart offset must point at the first stream byte.
+				LittleEndianCodec::writeU32(packed, RSS_BTREE_PACKED_HEADER_BYTES, 1U);
+			});
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRootWithForeignOwner) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage root = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	PageOwnerHeader foreignOwner = root.owner;
+	++foreignOwner.owner_id;
+	overwriteIntegrityScannerPageOwner(io, *graph.metadata, foreignOwner);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsGlobalAdjacencyRootWithSiblingLinks) {
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_LEAF);
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage siblingLinked = original;
+	siblingLinked.header.right_sibling = PageId(900U);
+	BTreePage corrupted = rebuildIntegrityBTreePage(
+			siblingLinked, siblingLinked.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, siblingLinked.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsInternalGlobalAdjacencyRootWithSiblingLinks) {
+	// Native builders only link leaves. An internal root must never participate in
+	// the leaf sibling chain, even when its link happens to name a valid child.
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	ASSERT_TRUE(original.header.leftmost_child.isValid());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	IntegrityBTreePageImage siblingLinked = original;
+	siblingLinked.header.right_sibling = siblingLinked.header.leftmost_child;
+	BTreePage corrupted = rebuildIntegrityBTreePage(
+			siblingLinked, siblingLinked.entries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, siblingLinked.header.page_id, corrupted);
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsDeepGlobalAdjacencySeparatorRangeCorruption) {
+	// Enough ordered Edge pairs force an internal root, exercising the scanner's
+	// inherited separator bounds rather than the single-leaf adjacency path.
+	NativeGlobalAdjacencyIntegrityGraph graph = createNativeGlobalAdjacencyIntegrityGraph(io, 512U);
+	RelocatableIntegrityScanner scanner(io, *graph.metadata);
+	const IntegrityBTreePageImage original = readIntegrityGlobalAdjacencyRoot(io, *graph.metadata);
+	ASSERT_EQ(original.header.kind, BTreeNodeKind::BPN_INTERNAL);
+	ASSERT_FALSE(original.entries.empty());
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
+
+	std::vector<BTreePageEntry> corruptedEntries = original.entries;
+	GlobalAdjacencyKey separator = AdjacencyKeyCodec::decode(corruptedEntries.front().key);
+	ASSERT_LT(separator.edge_id, std::numeric_limits<uint64_t>::max());
+	++separator.edge_id;
+	corruptedEntries.front().key = AdjacencyKeyCodec::encode(separator);
+	BTreePage corrupted = rebuildIntegrityBTreePage(
+			original, corruptedEntries, BTreeLeafValueLayout::BLVL_EMPTY);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id, corrupted);
+
+	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+	replaceIntegrityScannerBTreePage(io, *graph.metadata, original.header.page_id,
+								rebuildIntegrityBTreePage(original, original.entries, BTreeLeafValueLayout::BLVL_EMPTY));
+	EXPECT_NO_THROW(static_cast<void>(scanner.scan()));
 }
 
 TEST_F(RelocatableIntegrityScannerTestFixture, ScansRelocatedAndRetiredCatalogQueueEntries) {
@@ -426,6 +720,18 @@ TEST_F(RelocatableIntegrityScannerTestFixture, ScansRelocatedAndRetiredCatalogQu
 	const RelocatableIntegrityReport report = RelocatableIntegrityScanner(io, *metadata).scan();
 	EXPECT_EQ(report.queued_retired_slots, 2U);
 	EXPECT_EQ(report.catalog_entries, requests.size() + 1U);
+
+	// A relocation queue generation older than the current Catalog mapping is
+	// not a valid publication fence and must fail closed during maintenance.
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	const IntegrityLocationLeafImage queue = readIntegrityLocationLeaf(io, *metadata, current.retire_queue_root, 40U);
+	snapshot.release();
+	ASSERT_EQ(queue.leaf.entries[queue.entry_index].logical_id, 40U);
+	IntegrityLocationLeafImage staleQueue = queue;
+	staleQueue.leaf.entries[staleQueue.entry_index].generation = Generation(1U);
+	overwriteIntegrityLocationLeaf(io, staleQueue);
+	EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata).scan()), FormatException);
 }
 
 TEST_F(RelocatableIntegrityScannerTestFixture, RejectsStaleNativeEntityPageFreeSpaceMetadata) {
@@ -787,7 +1093,7 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsStateReferenceToTextLargeV
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
 	static_cast<void>(
-			states.ensure({17U, "system.text", StateRecordStorageKind::SRS_LARGE_VALUE, written.reference.value_id, {}},
+			states.upsert({17U, "system.text", StateRecordStorageKind::SRS_LARGE_VALUE, written.reference.value_id, {}},
 						  {PhysicalSlotId(101U), PhysicalSlotId(101U), 808U}));
 
 	EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata).scan()), FormatException);

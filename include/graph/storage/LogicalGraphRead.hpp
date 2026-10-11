@@ -49,6 +49,28 @@ namespace graph::storage {
 		bool operator==(const LogicalGraphNode &) const = default;
 	};
 
+	// A storage-neutral scalar Property interval. A NULL bound denotes an open
+	// side; backends that cannot prove a complete bounded answer return nullopt.
+	struct LogicalGraphPropertyRange {
+		std::string key;
+		PropertyValue min_value;
+		PropertyValue max_value;
+		bool min_inclusive = true;
+		bool max_inclusive = true;
+
+		bool operator==(const LogicalGraphPropertyRange &) const = default;
+	};
+
+	// A composite ordered-index request consists of an equality prefix followed
+	// by one scalar interval. Backends return nullopt unless they can prove the
+	// complete result from one pinned composite index under the supplied bounds.
+	struct LogicalGraphCompositePropertyRange {
+		std::vector<std::pair<std::string, PropertyValue>> equality_prefix;
+		LogicalGraphPropertyRange range;
+
+		bool operator==(const LogicalGraphCompositePropertyRange &) const = default;
+	};
+
 	struct LogicalGraphEdge {
 		uint64_t edge_id = 0;
 		uint64_t source_node_id = 0;
@@ -65,6 +87,22 @@ namespace graph::storage {
 			properties(std::move(ownerProperties)) {}
 
 		bool operator==(const LogicalGraphEdge &) const = default;
+	};
+
+	// A topology-only Edge view deliberately excludes Properties. Read paths such
+	// as an unfiltered relationship count need identity, endpoints, and type for
+	// semantic validation, but must not force Property-page reads for every Edge.
+	struct LogicalGraphEdgeTopology {
+		uint64_t edge_id = 0;
+		uint64_t source_node_id = 0;
+		uint64_t target_node_id = 0;
+		std::string type;
+
+		LogicalGraphEdgeTopology() = default;
+		LogicalGraphEdgeTopology(uint64_t edgeId, uint64_t sourceNodeId, uint64_t targetNodeId, std::string edgeType) :
+			edge_id(edgeId), source_node_id(sourceNodeId), target_node_id(targetNodeId), type(std::move(edgeType)) {}
+
+		bool operator==(const LogicalGraphEdgeTopology &) const = default;
 	};
 
 	// A bounded, resumable Node scan page. To continue, pass the last returned
@@ -93,10 +131,11 @@ namespace graph::storage {
 		constexpr bool operator==(const LogicalGraphAdjacencyContinuation &) const = default;
 	};
 
-	// A bounded adjacency page. A present continuation names the last returned
-	// Edge and the exact next Edge to read. A backend may reuse a snapshot-local
-	// cursor for this pair; an externally supplied or cache-missed pair is always
-	// revalidated against the pinned logical Edge-ID order.
+	// A bounded adjacency page. Edges must be in strictly increasing logical Edge
+	// ID order. A present continuation names the last returned Edge and the exact
+	// next Edge to read. A backend may reuse a snapshot-local cursor for this
+	// pair; an externally supplied or cache-missed pair is always revalidated
+	// against the pinned logical Edge-ID order.
 	struct LogicalGraphAdjacencyPage {
 		std::vector<LogicalGraphEdge> edges;
 		std::optional<LogicalGraphAdjacencyContinuation> continuation;
@@ -120,6 +159,11 @@ namespace graph::storage {
 		uint64_t backend_token = 0U;
 		uint64_t format_token = 0U;
 		std::array<uint64_t, GRAPH_STATE_TOKEN_COUNT> graph_state_tokens{};
+		// A transaction overlay has no new physical root until commit, but may
+		// still create multiple logical snapshots. This opaque local revision lets
+		// derived in-memory views detect those staged graph changes without
+		// exposing or fabricating physical page locations.
+		uint64_t logical_revision = 0U;
 
 		[[nodiscard]] constexpr bool isValid() const { return backend_token != 0U && format_token != 0U; }
 		constexpr bool operator==(const LogicalGraphMutationFence &) const = default;
@@ -140,6 +184,11 @@ namespace graph::storage {
 		[[nodiscard]] virtual bool containsNode(uint64_t /*nodeId*/) const {
 			throw std::logic_error("logical graph snapshot does not support Node existence probes");
 		}
+		// `containsNode()` is optional because the original logical-read contract
+		// required only complete Node reads. Callers that can benefit from a
+		// cheaper existence probe must opt in explicitly and otherwise preserve
+		// the complete-read fallback.
+		[[nodiscard]] virtual bool supportsNodeExistenceProbes() const { return false; }
 		[[nodiscard]] virtual LogicalGraphEdge readEdge(uint64_t edgeId) const = 0;
 		// Returns a complete, Node-ID-sorted result only when the backend can
 		// prove an exact label/property lookup without a graph scan (for example,
@@ -150,6 +199,24 @@ namespace graph::storage {
 		findNodesByExactProperties(const std::vector<std::string> & /*labels*/,
 								   const std::vector<std::pair<std::string, PropertyValue>> & /*properties*/,
 								   size_t /*maximumNodes*/, size_t /*maximumPropertyEntries*/) const {
+			return std::nullopt;
+		}
+		// Returns Node-ID-sorted results only when a backend can prove this complete
+		// interval from a snapshot-pinned ordered index. nullopt is a fallback
+		// signal, never authorization for an unbounded backend graph scan.
+		[[nodiscard]] virtual std::optional<std::vector<LogicalGraphNode>>
+		findNodesByPropertyRange(const std::vector<std::string> & /*labels*/,
+								 const LogicalGraphPropertyRange & /*range*/, size_t /*maximumNodes*/,
+								 size_t /*maximumPropertyEntries*/) const {
+			return std::nullopt;
+		}
+		// A complete equality prefix plus range result must be Node-ID-sorted. The
+		// default deliberately declines rather than asking a backend to scan its
+		// graph while compiling or executing an index hint.
+		[[nodiscard]] virtual std::optional<std::vector<LogicalGraphNode>>
+		findNodesByCompositePropertyRange(const std::vector<std::string> & /*labels*/,
+									  const LogicalGraphCompositePropertyRange & /*request*/, size_t /*maximumNodes*/,
+									  size_t /*maximumPropertyEntries*/) const {
 			return std::nullopt;
 		}
 		virtual void visitNodes(size_t maximumRecords,
@@ -167,6 +234,31 @@ namespace graph::storage {
 						  size_t maximumRecords) const = 0;
 		virtual void visitEdges(size_t maximumRecords,
 								const std::function<bool(const LogicalGraphEdge &)> &visitor) const = 0;
+		// Implementations with a cheaper physical topology projection should
+		// override this. The default preserves the contract for logical backends
+		// that currently expose only complete Edge records.
+		virtual void visitEdgeTopologies(
+				size_t maximumRecords, const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const {
+			if (!visitor) {
+				throw std::invalid_argument("logical graph Edge topology scan requires a visitor");
+			}
+			visitEdges(maximumRecords, [&visitor](const LogicalGraphEdge &edge) {
+				return visitor({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
+			});
+		}
+		// Adjacency topology scans are an optional optimization for queries that do
+		// not inspect Edge properties. The default preserves compatibility by
+		// projecting the complete adjacency records supplied by older backends.
+		virtual void
+		visitAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
+									const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const {
+			if (!visitor) {
+				throw std::invalid_argument("logical graph adjacency topology scan requires a visitor");
+			}
+			visitAdjacentEdges(nodeId, direction, maximumEdges, [&visitor](const LogicalGraphEdge &edge) {
+				return visitor({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
+			});
+		}
 		virtual void visitAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
 										const std::function<bool(const LogicalGraphEdge &)> &visitor) const = 0;
 		// Backends that also provide logical writes return an opaque generation
@@ -183,6 +275,25 @@ namespace graph::storage {
 		virtual ~LogicalGraphReadBackend() = default;
 
 		[[nodiscard]] virtual std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const = 0;
+	};
+
+	// The planning boundary receives only small snapshot-safe cardinalities. It
+	// deliberately cannot request a graph scan, physical page location, or
+	// mutable Catalog state while compiling a logical plan.
+	struct LogicalGraphCardinalityStatistics {
+		uint64_t node_count = 0U;
+		uint64_t edge_count = 0U;
+
+		bool operator==(const LogicalGraphCardinalityStatistics &) const = default;
+	};
+
+	class LogicalGraphStatisticsBackend {
+	public:
+		virtual ~LogicalGraphStatisticsBackend() = default;
+		// `nullopt` is an explicit unavailable/legacy state, never permission for
+		// a planning-time whole-graph fallback scan.
+		[[nodiscard]] virtual std::optional<LogicalGraphCardinalityStatistics>
+		readLogicalGraphCardinalityStatistics() const = 0;
 	};
 
 } // namespace graph::storage

@@ -13,6 +13,7 @@
 #include "antlr4-runtime.h"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
 
 using namespace graph::parser::cypher::helpers;
@@ -889,11 +890,15 @@ TEST_F(ExpressionBuilderUnitTest, RegexMatchOperator) {
 // ============== Map literal ==============
 
 TEST_F(ExpressionBuilderUnitTest, MapLiteralExpression) {
-	// Map literals hit the MAP branch in buildAtomExpression (line 466)
-	// Currently throws because ListLiteralExpression rejects non-LIST PropertyValues
 	auto* expr = parseReturnExpr("RETURN {name: 'Alice', age: 30}");
 	ASSERT_NE(expr, nullptr);
-	EXPECT_THROW(ExpressionBuilder::buildExpression(expr), std::runtime_error);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto *literal = dynamic_cast<LiteralExpression *>(result.get());
+	ASSERT_NE(literal, nullptr);
+	ASSERT_TRUE(literal->isPropertyValue());
+	EXPECT_EQ(literal->getPropertyValue(),
+			  graph::PropertyValue(graph::PropertyValue::MapType{{"name", graph::PropertyValue("Alice")},
+																		 {"age", graph::PropertyValue(30)}}));
 }
 
 TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpression_MapLiteral) {
@@ -910,10 +915,13 @@ TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpression_MapLiteral) {
 }
 
 TEST_F(ExpressionBuilderUnitTest, MapLiteralEmpty) {
-	// Empty map literal {} - also exercises the MAP branch
 	auto* expr = parseReturnExpr("RETURN {}");
 	ASSERT_NE(expr, nullptr);
-	EXPECT_THROW(ExpressionBuilder::buildExpression(expr), std::runtime_error);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto *literal = dynamic_cast<LiteralExpression *>(result.get());
+	ASSERT_NE(literal, nullptr);
+	ASSERT_TRUE(literal->isPropertyValue());
+	EXPECT_EQ(literal->getPropertyValue(), graph::PropertyValue(graph::PropertyValue::MapType{}));
 }
 
 // ============== EXISTS expression (grammar-level existsExpression rule) ==============
@@ -1434,7 +1442,11 @@ TEST_F(ExpressionBuilderUnitTest, ShortestPathIncoming) {
 	auto* expr = parseReturnExpr("RETURN shortestPath((a)<-[*]-(b))");
 	ASSERT_NE(expr, nullptr);
 	auto result = ExpressionBuilder::buildExpression(expr);
-	ASSERT_NE(result, nullptr);
+	auto *shortest = dynamic_cast<ShortestPathExpression *>(result.get());
+	ASSERT_NE(shortest, nullptr);
+	EXPECT_EQ(shortest->getStartVar(), "a");
+	EXPECT_EQ(shortest->getEndVar(), "b");
+	EXPECT_EQ(shortest->getDirection(), PatternDirection::PAT_INCOMING);
 }
 
 TEST_F(ExpressionBuilderUnitTest, AllShortestPathsIncoming) {
@@ -1471,15 +1483,22 @@ TEST_F(ExpressionBuilderUnitTest, ListSliceOpenStartRange) {
 	}
 }
 
-// ============== IN list with non-literal items ==============
+// ============== IN list with runtime-evaluated items ==============
 
-TEST_F(ExpressionBuilderUnitTest, InOperatorWithListContainingNonLiteralItems) {
-	// Covers: IN operator line 261 False branch (itemAtom->literal() is null)
-	// [n.id, 1, 2] — n.id is a non-literal (property access) in a static list literal
-	// This triggers the "IN list only supports literal values" error path
+TEST_F(ExpressionBuilderUnitTest, InOperatorBuildsDynamicListForPropertyItems) {
+	// A list with a property access is evaluated in the current row, not rejected
+	// as an unsupported static literal.
 	auto* expr = parseWhereExpr("MATCH (n) WHERE n.x IN [n.id, 1, 2] RETURN n");
 	ASSERT_NE(expr, nullptr);
-	EXPECT_THROW(ExpressionBuilder::buildExpression(expr), std::runtime_error);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
+	auto* inExpression = dynamic_cast<InExpression*>(result.get());
+	ASSERT_NE(inExpression, nullptr);
+	ASSERT_TRUE(inExpression->hasDynamicList());
+	auto* list = dynamic_cast<ListLiteralExpression*>(inExpression->getListExpression());
+	ASSERT_NE(list, nullptr);
+	EXPECT_FALSE(list->isStatic());
+	EXPECT_EQ(list->getElements().size(), 3U);
 }
 
 // ============== CASE expression error: missing THEN ==============
@@ -1564,15 +1583,21 @@ TEST_F(ExpressionBuilderUnitTest, PatternComprehensionNoTargetVar) {
 	}
 }
 
-// ============== IN list with non-literal but complex expression (itemAtom null) ==============
+// ============== IN list with runtime-evaluated arithmetic items ==============
 
-TEST_F(ExpressionBuilderUnitTest, InOperatorWithListContainingComplexItem) {
-	// Covers: IN list where item's atom has no literal() but the atom itself is null
-	// because the item expression is too complex for getAtomFromExpression
-	// [n.x + 1, 2] — n.x + 1 is arithmetic, getAtomFromExpression returns atom but no literal
+TEST_F(ExpressionBuilderUnitTest, InOperatorBuildsDynamicListForArithmeticItems) {
+	// Arithmetic members preserve their expression subtree for current-row evaluation.
 	auto* expr = parseWhereExpr("MATCH (n) WHERE n.x IN [n.x + 1, 2] RETURN n");
 	ASSERT_NE(expr, nullptr);
-	EXPECT_THROW(ExpressionBuilder::buildExpression(expr), std::runtime_error);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
+	auto* inExpression = dynamic_cast<InExpression*>(result.get());
+	ASSERT_NE(inExpression, nullptr);
+	ASSERT_TRUE(inExpression->hasDynamicList());
+	auto* list = dynamic_cast<ListLiteralExpression*>(inExpression->getListExpression());
+	ASSERT_NE(list, nullptr);
+	EXPECT_FALSE(list->isStatic());
+	EXPECT_EQ(list->getElements().size(), 2U);
 }
 
 // ============== buildArithmeticExpression: arithmetic with no children ==============

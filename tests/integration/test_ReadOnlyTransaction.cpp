@@ -5,7 +5,7 @@
  * Tests the 3-layer defense:
  * 1. Plan layer: QueryEngine rejects write plans under EM_READ_ONLY
  * 2. API layer: zyx::Transaction::isReadOnly() / graph::Transaction read-only
- * 3. Storage layer: DataManager::guardReadOnly() prevents writes
+ * 3. Storage layer: the native transaction guard prevents writes
  *
  * Licensed under the Apache License, Version 2.0
  **/
@@ -40,9 +40,10 @@ protected:
 		// Seed some data
 		auto qe = db->getQueryEngine();
 		auto txn = db->beginTransaction();
-		txn.execute(*qe, "CREATE (a:Person {name: 'Alice', age: 30})");
-		txn.execute(*qe, "CREATE (b:Person {name: 'Bob', age: 25})");
-		txn.execute(*qe, "MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
+		static_cast<void>(txn.execute(*qe, "CREATE (a:Person {name: 'Alice', age: 30})"));
+		static_cast<void>(txn.execute(*qe, "CREATE (b:Person {name: 'Bob', age: 25})"));
+		static_cast<void>(
+				txn.execute(*qe, "MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)"));
 		txn.commit();
 	}
 
@@ -53,7 +54,6 @@ protected:
 		std::error_code ec;
 		if (fs::exists(testDbPath))
 			fs::remove_all(testDbPath, ec);
-		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	graph::query::QueryResult execute(const std::string &query) const {
@@ -147,7 +147,6 @@ protected:
 		db.reset();
 		std::error_code ec;
 		fs::remove_all(testDbPath, ec);
-		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;

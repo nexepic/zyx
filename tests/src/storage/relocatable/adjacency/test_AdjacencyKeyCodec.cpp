@@ -78,3 +78,21 @@ TEST(RelocatableAdjacencyKeyCodecTest, RejectsMalformedOrNonCanonicalKeys) {
 	malformed[0] = std::byte{99U};
 	expectFormatError([&] { static_cast<void>(AdjacencyKeyCodec::decode(malformed)); }, FormatError::FERR_INVALID_ENUM);
 }
+
+TEST(RelocatableAdjacencyKeyCodecTest, RejectsOrExactlyRoundTripsEverySingleBitMutation) {
+	const std::vector<std::byte> encoded =
+			AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 0x0102030405060708ULL, 0x1112131415161718ULL});
+	for (size_t byteIndex = 0U; byteIndex < encoded.size(); ++byteIndex) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = encoded;
+			mutation[byteIndex] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			try {
+				const GlobalAdjacencyKey decoded = AdjacencyKeyCodec::decode(mutation);
+				EXPECT_EQ(AdjacencyKeyCodec::encode(decoded), mutation)
+						<< "mutation at byte " << byteIndex << ", bit " << static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Invalid direction or zero identity is correctly rejected at the typed boundary.
+			}
+		}
+	}
+}

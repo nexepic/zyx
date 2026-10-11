@@ -14,7 +14,7 @@ projectOrder: 1
 
 The native logical storage format reclaims space without changing a Node ID, Edge ID, `SegmentId`, `PageId`, or external property reference. Compaction changes only a directory binding from a stable logical identity to a new physical location. This is fundamentally different from the retired physical segment-chain implementation, which moved records and then rewrote references.
 
-The old `FileStorage` / `DataManager` compactor is not the compaction mechanism for a native logical database. In particular, no native logical query may enable compaction through `dbms.setConfigValue`, `dbms.setConfig`, or a System State key. Runtime configuration procedures intentionally fail closed until configuration changes can participate in the same metadata WAL publication as graph writes.
+The old `FileStorage` / `DataManager` compactor is not the compaction mechanism for a native logical database. Native code must never use `dbms.setConfigValue` or a System State key to control it. An embedding that opts into native maintenance may use autocommit `dbms.setConfig('storage.compaction.enabled', <Boolean>)`; the service pauses/resumes the bounded maintenance worker around the same single-file COW metadata publication boundary and rejects the key when no native maintenance owner exists.
 
 ## Storage Identities
 
@@ -62,7 +62,7 @@ Each operation is intentionally bounded by destination capacity and an explicit 
 1. Open a metadata snapshot and validate that source and destination are sealed, compatible, current, and backed by allocated physical slots.
 2. Collect and order source pages, then verify that the destination has enough frames for the requested bounded move. If it does not, return `VCS_NO_DESTINATION_CAPACITY` without changing the source.
 3. Revalidate each planned page against a fresh snapshot immediately before its typed evacuation. A stale directory binding fails closed instead of moving an unexpected page.
-4. Prepare the new bytes, make data durable, then publish the Catalog and relevant directory COW roots through the metadata WAL and Superblock publication boundary.
+4. Prepare the new bytes, make data durable, then publish the Catalog and relevant directory COW roots through the native metadata COW and Superblock publication boundary.
 5. When the source becomes empty, retire it. Reclaim its physical slot only after the snapshot-retention check succeeds.
 
 ```mermaid
@@ -94,7 +94,7 @@ Durability follows the same ordering as normal native writes:
 
 1. validate the type-specific source and destination;
 2. write and synchronize complete destination bytes;
-3. persist the WAL metadata publication;
+3. persist the metadata COW publication;
 4. publish the Superblock root;
 5. make the old source reclaimable only after snapshot retention permits it.
 

@@ -22,6 +22,7 @@
 #include <string>
 #include <system_error>
 #include <variant>
+#include <vector>
 
 #include "ApiTestFixture.hpp"
 
@@ -149,6 +150,52 @@ TEST_F(CppApiTest, ColumnarBulkInsertCreatesNodesAndEdges) {
 	EXPECT_EQ(std::get<int64_t>(score), 20);
 }
 
+TEST_F(CppApiTest, ColumnarBulkEdgesMatchOnlineEdgeTopologyPropertiesAndReopen) {
+	const std::vector<int64_t> nodes = db->createNodesColumnar(
+			"BulkOnlineEquivalenceNode", 3U,
+			{{"name", {std::string("source"), std::string("target"), std::string("other")}}});
+	ASSERT_EQ(nodes.size(), 3U);
+
+	const std::vector<int64_t> sources = {nodes[0], nodes[0], nodes[1], nodes[2]};
+	const std::vector<int64_t> targets = {nodes[1], nodes[1], nodes[1], nodes[2]};
+	const std::vector<zyx::PropertyColumn> columns = {{"rank", {int64_t{1}, int64_t{2}, int64_t{3}, int64_t{4}}}};
+	const std::vector<int64_t> onlineIds = db->createEdges(
+			"ONLINE_EQUIVALENCE",
+			{{sources[0], targets[0], {{"rank", int64_t{1}}}}, {sources[1], targets[1], {{"rank", int64_t{2}}}},
+			 {sources[2], targets[2], {{"rank", int64_t{3}}}}, {sources[3], targets[3], {{"rank", int64_t{4}}}}});
+	ASSERT_EQ(onlineIds.size(), sources.size());
+
+	auto bulk = db->beginBulkTransaction();
+	const std::vector<int64_t> bulkIds = bulk.createEdgesColumnar("BULK_EQUIVALENCE", sources, targets, columns);
+	ASSERT_EQ(bulkIds.size(), sources.size());
+	bulk.commit();
+
+	const auto readRows = [this](const std::string &edgeType) {
+		const zyx::Result result = db->execute("MATCH (source)-[edge:" + edgeType + "]->(target) "
+												"RETURN source.name, target.name, edge.rank ORDER BY edge.rank");
+		EXPECT_TRUE(result.isSuccess()) << result.getError();
+		std::vector<std::tuple<std::string, std::string, int64_t>> rows;
+		while (result.hasNext()) {
+			result.next();
+			rows.emplace_back(std::get<std::string>(result.get("source.name")),
+							  std::get<std::string>(result.get("target.name")),
+							  std::get<int64_t>(result.get("edge.rank")));
+		}
+		return rows;
+	};
+
+	const auto expected = std::vector<std::tuple<std::string, std::string, int64_t>>{
+			{"source", "target", 1}, {"source", "target", 2}, {"target", "target", 3}, {"other", "other", 4}};
+	EXPECT_EQ(readRows("ONLINE_EQUIVALENCE"), expected);
+	EXPECT_EQ(readRows("BULK_EQUIVALENCE"), expected);
+
+	db->save();
+	db->close();
+	db->open();
+	EXPECT_EQ(readRows("ONLINE_EQUIVALENCE"), expected);
+	EXPECT_EQ(readRows("BULK_EQUIVALENCE"), expected);
+}
+
 TEST_F(CppApiTest, ColumnarBulkInsertMaintainsPreexistingPropertyIndexes) {
 	ASSERT_TRUE(db->createNodePropertyIndexes("ColumnarIndexedUser", {"id", "score"}));
 
@@ -193,6 +240,30 @@ TEST_F(CppApiTest, ColumnarBulkInsertValidatesShape) {
 	EXPECT_EQ(emptyIds.size(), 2U);
 	auto emptyEdges = db->createEdgesColumnar("EMPTY_PROPS", {emptyIds[0]}, {emptyIds[1]}, {});
 	EXPECT_EQ(emptyEdges.size(), 1U);
+}
+
+TEST_F(CppApiTest, TransactionColumnarEdgesReportStructuredEndpointErrorsWithoutStagingRows) {
+	auto txn = db->beginTransaction();
+	const std::vector<int64_t> ids = txn.createNodes("TransactionColumnarEndpoint", {
+			{{"name", std::string("source")}},
+			{{"name", std::string("target")}},
+	});
+	ASSERT_EQ(ids.size(), 2U);
+
+	try {
+		static_cast<void>(txn.createEdgesColumnar(
+				"TRANSACTION_COLUMNAR_ENDPOINT", {ids[0], 999'999}, {ids[1], ids[0]},
+				{{"weight", {int64_t{1}, int64_t{2}}}}));
+		FAIL() << "expected the unknown endpoint to reject the complete transaction-local batch";
+	} catch (const zyx::BulkInputError &error) {
+		EXPECT_EQ(error.rowIndex(), 1U);
+		EXPECT_EQ(error.fieldPath(), "source_id");
+	}
+
+	const zyx::Result staged = txn.execute("MATCH ()-[edge:TRANSACTION_COLUMNAR_ENDPOINT]->() RETURN edge");
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	EXPECT_FALSE(staged.hasNext());
+	txn.rollback();
 }
 
 TEST_F(CppApiTest, BulkTransactionCanBeFollowedByPropertyIndexBuild) {
@@ -289,13 +360,9 @@ TEST_F(CppApiTest, BeginTransactionOnClosedDb) {
 					.string();
 	const auto removeArtifacts = [&newPath] {
 		std::error_code error;
-		for (const std::string &suffix: {"", ".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
-			fs::remove_all(newPath + suffix, error);
-			error.clear();
-		}
+		fs::remove_all(newPath, error);
 	};
-	// Native relocatable storage owns its WAL sidecar independently of the data file.
-	// Remove both before and after the test so a repeated run cannot collide with
+	// Remove the single database file before and after the test so a repeated run cannot collide with
 	// a prior invocation that used the same process-global rand() sequence.
 	removeArtifacts();
 	auto newDb = std::make_unique<zyx::Database>(newPath);

@@ -90,6 +90,37 @@ TEST(RelocatablePropertyValueCodecBytesTest, RoundTripsNestedBinaryValuesWithCan
 	EXPECT_EQ(offset, encoded.size());
 }
 
+TEST(RelocatablePropertyValueCodecBytesTest, NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip) {
+	PropertyValue::MapType map;
+	map.emplace("a", PropertyValue(PropertyValue::Bytes{std::byte{0x01U}, std::byte{0x80U}}));
+	map.emplace("z", PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{-7}), PropertyValue("nested")}));
+	const PropertyValue expected(std::vector<PropertyValue>{
+			PropertyValue(bytes()), PropertyValue(std::move(map)), PropertyValue(TemporalDuration{-2, 3, -4})});
+
+	std::vector<std::byte> encoded;
+	CanonicalPropertyValueCodec::append(encoded, expected);
+	ASSERT_GT(encoded.size(), 6U);
+	for (size_t byteOffset = 6U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			try {
+				size_t offset = 0U;
+				const PropertyValue decoded = CanonicalPropertyValueCodec::decodeNext(mutation, offset);
+				ASSERT_EQ(offset, mutation.size())
+						<< "accepted mutation left trailing bytes at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+				std::vector<std::byte> roundTripped;
+				CanonicalPropertyValueCodec::append(roundTripped, decoded);
+				EXPECT_EQ(roundTripped, mutation) << "accepted mutation at byte " << byteOffset << ", bit "
+														<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// All rejected mutations must stop at the typed Property boundary.
+			}
+		}
+	}
+}
+
 TEST(RelocatablePropertyValueCodecBytesTest, RejectsTruncationFlagsAndTrailingPayload) {
 	std::vector<std::byte> encoded;
 	CanonicalPropertyValueCodec::append(encoded, PropertyValue(bytes()));
@@ -135,7 +166,9 @@ TEST(RelocatablePropertyValueCodecBytesTest, RoundTripsEveryCanonicalScalarAndCo
 
 	std::vector<std::byte> encoded;
 	for (const PropertyValue &value: expected) {
+		const size_t begin = encoded.size();
 		CanonicalPropertyValueCodec::append(encoded, value);
+		EXPECT_EQ(CanonicalPropertyValueCodec::encodedSize(value), encoded.size() - begin);
 	}
 
 	size_t offset = 0U;

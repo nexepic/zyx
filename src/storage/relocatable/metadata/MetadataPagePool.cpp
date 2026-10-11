@@ -8,11 +8,17 @@
 
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 
+#include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
+#include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <functional>
+#include <iterator>
 #include <limits>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -44,6 +50,65 @@ namespace graph::storage {
 			throw FormatException(error, message);
 		}
 
+		[[nodiscard]] MetadataDirectoryRootOrdinal rootOrdinal(MetadataDirectoryType directoryType) {
+			switch (directoryType) {
+				case MetadataDirectoryType::MDT_CATALOG:
+					return MetadataDirectoryRootOrdinal::MDRO_CATALOG;
+				case MetadataDirectoryType::MDT_ALLOCATOR:
+					return MetadataDirectoryRootOrdinal::MDRO_ALLOCATOR;
+				case MetadataDirectoryType::MDT_EXTENT:
+					return MetadataDirectoryRootOrdinal::MDRO_EXTENT;
+				case MetadataDirectoryType::MDT_NODE_ENTITY:
+					return MetadataDirectoryRootOrdinal::MDRO_NODE_ENTITY;
+				case MetadataDirectoryType::MDT_EDGE_ENTITY:
+					return MetadataDirectoryRootOrdinal::MDRO_EDGE_ENTITY;
+				case MetadataDirectoryType::MDT_ENTITY_PROPERTY:
+					return MetadataDirectoryRootOrdinal::MDRO_ENTITY_PROPERTY;
+				case MetadataDirectoryType::MDT_INDEX_ROOT:
+					return MetadataDirectoryRootOrdinal::MDRO_INDEX_ROOT;
+				case MetadataDirectoryType::MDT_VECTOR_LOCATION:
+					return MetadataDirectoryRootOrdinal::MDRO_VECTOR_LOCATION;
+				case MetadataDirectoryType::MDT_VECTOR_MANIFEST:
+					return MetadataDirectoryRootOrdinal::MDRO_VECTOR_MANIFEST;
+				case MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST:
+					return MetadataDirectoryRootOrdinal::MDRO_LARGE_VALUE_MANIFEST;
+				case MetadataDirectoryType::MDT_STATE:
+					return MetadataDirectoryRootOrdinal::MDRO_STATE;
+				case MetadataDirectoryType::MDT_RETIRE_QUEUE:
+					return MetadataDirectoryRootOrdinal::MDRO_RETIRE_QUEUE;
+				default:
+					throwCatalogPoolError(FormatError::FERR_INVALID_ENUM,
+										  "relocatable metadata pool has no typed root ordinal");
+			}
+		}
+
+		[[nodiscard]] PhysicalPageRef metadataRootReference(MetadataPageFile &pages, const Superblock &superblock,
+															MetadataDirectoryType directoryType,
+															PhysicalPageRef physicalRoot) {
+			if (!superblock.usesPageDirectoryBootstrap()) {
+				return physicalRoot;
+			}
+			if (!superblock.page_directory_root.isValid()) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+									  "Page Directory bootstrap has no physical header reference");
+			}
+			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			if (bootstrap.generation > superblock.generation || bootstrap.committed_lsn > superblock.checkpoint_lsn ||
+				!bootstrap.metadata_page_directory_root.isValid()) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+									  "Page Directory bootstrap has invalid visibility or route branch");
+			}
+			if (directoryType == MetadataDirectoryType::MDT_PAGE) {
+				return bootstrap.data_page_directory_root;
+			}
+			const MetadataPageId rootId =
+					bootstrap.metadata_directory_roots[static_cast<size_t>(rootOrdinal(directoryType))];
+			if (!rootId.isValid()) {
+				return {};
+			}
+			return MetadataPageRouteDirectory(pages).find(superblock, bootstrap.metadata_page_directory_root, rootId);
+		}
+
 		[[nodiscard]] uint32_t calculateCrc(std::span<const std::byte> bytes) {
 			return utils::calculateCrc(bytes.data(), bytes.size());
 		}
@@ -56,6 +121,7 @@ namespace graph::storage {
 					static_cast<uint8_t>(!header.committed_lsn.isValid()) |
 					static_cast<uint8_t>(header.generation.value() > RSS_MAX_PHYSICAL_PAGE_GENERATION) |
 					static_cast<uint8_t>((header.allocated_frames & ~RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK) != 0U) |
+					static_cast<uint8_t>((header.flags & ~MPPF_KNOWN_FLAGS) != 0U) |
 					static_cast<uint8_t>(static_cast<uint32_t>(std::popcount(header.allocated_frames)) >
 										 RSS_PAGE_POOL_DATA_FRAME_COUNT);
 			if (invalid != 0U) {
@@ -74,9 +140,9 @@ namespace graph::storage {
 			LittleEndianCodec::writeU64(bytes, GENERATION_OFFSET, header.generation.value());
 			LittleEndianCodec::writeU64(bytes, COMMITTED_LSN_OFFSET, header.committed_lsn.value());
 			LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET, headerCrc);
-			LittleEndianCodec::writeU32(bytes, RESERVED0_OFFSET, 0);
+			LittleEndianCodec::writeU32(bytes, RESERVED0_OFFSET, header.flags);
 			LittleEndianCodec::writeU64(bytes, SEGMENT_ID_OFFSET, header.segment_id.value());
-			LittleEndianCodec::writeU64(bytes, RESERVED2_OFFSET, 0);
+			LittleEndianCodec::writeU64(bytes, RESERVED2_OFFSET, header.control_sequence);
 		}
 
 		[[nodiscard]] uint64_t checkedSlotOffset(uint64_t dataRegionOffset, PhysicalSlotId slot) {
@@ -115,10 +181,67 @@ namespace graph::storage {
 																		   const MetadataPagePoolHeader &header) {
 			std::array<std::byte, RSS_PAGE_SIZE> page{};
 			const auto envelopeBytes = SegmentEnvelopeCodec::encode(envelope);
-			const auto headerBytes = MetadataPagePoolHeaderCodec::encode(header);
+			MetadataPagePoolHeader active = header;
+			active.control_sequence = 1U;
+			MetadataPagePoolHeader inactive = header;
+			inactive.control_sequence = 0U;
+			const auto activeBytes = MetadataPagePoolHeaderCodec::encode(active);
+			const auto inactiveBytes = MetadataPagePoolHeaderCodec::encode(inactive);
 			std::copy(envelopeBytes.begin(), envelopeBytes.end(), page.begin());
-			std::copy(headerBytes.begin(), headerBytes.end(), page.begin() + RSS_ENVELOPE_BYTES);
+			std::copy(activeBytes.begin(), activeBytes.end(), page.begin() + RSS_ENVELOPE_BYTES);
+			std::copy(inactiveBytes.begin(), inactiveBytes.end(),
+					  page.begin() + RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES);
 			return page;
+		}
+
+		struct ControlHeaderSelection {
+			MetadataPagePoolHeader header;
+			size_t offset = 0U;
+		};
+
+		[[nodiscard]] ControlHeaderSelection selectControlHeader(std::span<const std::byte, RSS_PAGE_SIZE> page) {
+			std::optional<ControlHeaderSelection> selected;
+			for (size_t record = 0U; record < RSS_METADATA_PAGE_POOL_CONTROL_RECORD_COUNT; ++record) {
+				const size_t offset = RSS_ENVELOPE_BYTES + record * RSS_METADATA_PAGE_POOL_HEADER_BYTES;
+				try {
+					const MetadataPagePoolHeader header = MetadataPagePoolHeaderCodec::decode(
+							page.subspan(offset, RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+					if (!selected.has_value() || header.control_sequence > selected->header.control_sequence) {
+						selected = {header, offset};
+					}
+				} catch (const FormatException &) {
+					// The complete peer remains authoritative after a torn inactive record.
+				}
+			}
+			if (!selected.has_value()) {
+				throwCatalogPoolError(FormatError::FERR_CHECKSUM_MISMATCH,
+									  "relocatable metadata pool has no valid control record");
+			}
+			return *selected;
+		}
+
+		void rewriteInactiveControlRecord(StorageIO &io, uint64_t pageOffset, Generation generation,
+										  const MetadataPagePoolHeader &replacement, const char *truncatedMessage) {
+			const std::array<std::byte, RSS_PAGE_SIZE> page =
+					readTypedControlPage(io, pageOffset, generation, truncatedMessage);
+			const ControlHeaderSelection current = selectControlHeader(page);
+			const uint8_t invalidIdentity =
+					static_cast<uint8_t>(replacement.physical_slot != current.header.physical_slot) |
+					static_cast<uint8_t>(replacement.segment_id != current.header.segment_id) |
+					static_cast<uint8_t>(replacement.generation != current.header.generation) |
+					static_cast<uint8_t>(replacement.committed_lsn != current.header.committed_lsn) |
+					static_cast<uint8_t>(current.header.control_sequence == std::numeric_limits<uint64_t>::max());
+			if (invalidIdentity != 0U) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "relocatable metadata pool control record has invalid replacement identity");
+			}
+			MetadataPagePoolHeader next = replacement;
+			next.control_sequence = current.header.control_sequence + 1U;
+			const auto bytes = MetadataPagePoolHeaderCodec::encode(next);
+			const size_t targetOffset = current.offset == RSS_ENVELOPE_BYTES
+												? RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES
+												: RSS_ENVELOPE_BYTES;
+			io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
 		}
 
 		[[nodiscard]] uint64_t radixFactor(uint16_t level) {
@@ -176,10 +299,10 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_UNSUPPORTED_VERSION,
 								  "unsupported relocatable metadata page-pool version");
 		}
+		const uint32_t flags = LittleEndianCodec::readU32(bytes, RESERVED0_OFFSET);
 		const uint8_t invalidReserved = static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET) !=
 															 RSS_METADATA_PAGE_POOL_HEADER_BYTES) |
-										static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, RESERVED0_OFFSET) != 0) |
-										static_cast<uint8_t>(LittleEndianCodec::readU64(bytes, RESERVED2_OFFSET) != 0);
+										static_cast<uint8_t>((flags & ~MPPF_KNOWN_FLAGS) != 0U);
 		if (invalidReserved != 0U) {
 			throwCatalogPoolError(FormatError::FERR_RESERVED_BITS,
 								  "relocatable metadata page-pool header uses invalid dimensions or reserved bytes");
@@ -191,6 +314,8 @@ namespace graph::storage {
 		const uint32_t allocatedCount = LittleEndianCodec::readU32(bytes, ALLOCATED_COUNT_OFFSET);
 		header.generation = Generation(LittleEndianCodec::readU64(bytes, GENERATION_OFFSET));
 		header.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, COMMITTED_LSN_OFFSET));
+		header.control_sequence = LittleEndianCodec::readU64(bytes, RESERVED2_OFFSET);
+		header.flags = flags;
 		validateHeader(header);
 		if (allocatedCount != static_cast<uint32_t>(std::popcount(header.allocated_frames))) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
@@ -227,18 +352,18 @@ namespace graph::storage {
 		}
 	}
 
-	PageId MetadataPagePoolAllocator::allocatePageId() {
+	MetadataPageId MetadataPagePoolAllocator::allocateMetadataPageId() {
 		std::lock_guard lock(mutex_);
 		requireHealthyLocked();
 		if (page_id_exhausted_) {
 			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								  "relocatable Catalog Page ID space is exhausted");
 		}
-		const PageId pageId = next_page_id_;
+		const MetadataPageId pageId = next_page_id_;
 		if (pageId.value() == std::numeric_limits<uint64_t>::max()) {
 			page_id_exhausted_ = true;
 		} else {
-			next_page_id_ = PageId(pageId.value() + 1U);
+			next_page_id_ = MetadataPageId(pageId.value() + 1U);
 		}
 		return pageId;
 	}
@@ -246,6 +371,21 @@ namespace graph::storage {
 	MetadataPageAllocation MetadataPagePoolAllocator::allocatePage(Generation generation,
 																   LogSequenceNumber checkpointLsn,
 																   std::span<const PhysicalSlotId> excludedPoolSlots) {
+		return allocatePage(generation, checkpointLsn, excludedPoolSlots, {});
+	}
+
+	MetadataPageAllocation
+	MetadataPagePoolAllocator::allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+											std::span<const PhysicalSlotId> excludedPoolSlots,
+											std::span<const PhysicalSlotRange> excludedDataSlotRanges) {
+		return allocatePage(generation, checkpointLsn, excludedPoolSlots, excludedDataSlotRanges, nullptr);
+	}
+
+	MetadataPageAllocation
+	MetadataPagePoolAllocator::allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+											std::span<const PhysicalSlotId> excludedPoolSlots,
+											std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+											const MetadataSlotReservationLookup *reservationLookup) {
 		std::lock_guard lock(mutex_);
 		requireHealthyLocked();
 		const uint8_t invalidGeneration = static_cast<uint8_t>(!generation.isValid()) |
@@ -255,27 +395,69 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Catalog page allocation context is invalid");
 		}
-		const auto excluded = [&excludedPoolSlots](PhysicalSlotId slot) {
-			return std::ranges::any_of(excludedPoolSlots,
-									   [slot](PhysicalSlotId candidate) { return candidate == slot; });
+		const bool metadataReservationActive = reserved_metadata_frames_.has_value();
+		if (metadataReservationActive && *reserved_metadata_frames_ == 0U) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+							  "relocatable metadata frame reservation was exhausted");
+		}
+		const auto excluded = [this, &excludedPoolSlots, &excludedDataSlotRanges,
+							   reservationLookup](PhysicalSlotId slot) {
+			if (snapshot_protected_pool_slots_.contains(slot.value())) {
+				return true;
+			}
+			return reservationLookup != nullptr
+						   ? reservationLookup->isDataSlotReserved(slot)
+						   : std::ranges::any_of(excludedPoolSlots, [slot](PhysicalSlotId candidate) {
+								 return candidate == slot;
+							 }) || std::ranges::any_of(excludedDataSlotRanges, [slot](PhysicalSlotRange range) {
+								 return range.contains(slot);
+							 });
 		};
-		auto pool = pools_.begin();
+		const auto dataSlotExcluded = [&excludedDataSlotRanges, reservationLookup](PhysicalSlotId slot) {
+			return reservationLookup != nullptr
+						   ? reservationLookup->isDataSlotReserved(slot)
+						   : std::ranges::any_of(excludedDataSlotRanges,
+												 [slot](PhysicalSlotRange range) { return range.contains(slot); });
+		};
+		auto pool = allocation_cursor_slot_.has_value() ? pools_.lower_bound(*allocation_cursor_slot_) : pools_.begin();
+		if (pool == pools_.end() && allocation_cursor_slot_.has_value()) {
+			pool = pools_.begin();
+		}
 		std::optional<PhysicalSlotId> createdPoolSlot;
-		while (pool != pools_.end() &&
-			   (excluded(pool->second.header.physical_slot) ||
-				(emergency_reserve_.isValid() &&
-				 pool->second.header.physical_slot == emergency_reserve_.physical_slot) ||
-				pool->second.header.allocated_frames == RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK)) {
+		const auto usable = [&](const auto &candidate) {
+			return !excluded(candidate->second.header.physical_slot) &&
+				   !dataSlotExcluded(candidate->second.header.physical_slot) &&
+				   (!emergency_reserve_.isValid() ||
+					candidate->second.header.physical_slot != emergency_reserve_.physical_slot) &&
+				   candidate->second.header.allocated_frames != RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK;
+		};
+		bool foundPool = false;
+		for (size_t visited = 0U; pool != pools_.end() && visited < pools_.size(); ++visited) {
+			if (usable(pool)) {
+				foundPool = true;
+				break;
+			}
 			++pool;
+			if (pool == pools_.end() && allocation_cursor_slot_.has_value()) {
+				pool = pools_.begin();
+			}
+		}
+		if (!foundPool) {
+			pool = pools_.end();
 		}
 		if (pool == pools_.end()) {
+			if (metadataReservationActive) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata frame reservation cannot allocate a new pool");
+			}
 			try {
-				PoolState &created = createPoolLocked(generation, checkpointLsn, excludedPoolSlots);
+				PoolState &created = createPoolLocked(generation, checkpointLsn, excludedPoolSlots,
+													  excludedDataSlotRanges, reservationLookup);
 				createdPoolSlot = created.header.physical_slot;
 				pool = pools_.find(created.header.physical_slot.value());
 			} catch (const std::system_error &error) {
 				if (!isNoSpaceError(error) || !emergency_reserve_.isValid() ||
-					excluded(emergency_reserve_.physical_slot)) {
+					excluded(emergency_reserve_.physical_slot) || dataSlotExcluded(emergency_reserve_.physical_slot)) {
 					throw;
 				}
 				pool = pools_.find(emergency_reserve_.physical_slot.value());
@@ -293,8 +475,159 @@ namespace graph::storage {
 		PoolState updatedPool{updated};
 		writePoolLocked(updatedPool);
 		pool->second = std::move(updatedPool);
+		if (metadataReservationActive) {
+			--*reserved_metadata_frames_;
+		}
+		if (pool->second.header.allocated_frames == RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK) {
+			auto next = std::next(pool);
+			allocation_cursor_slot_ =
+					next == pools_.end() ? std::optional<uint64_t>{} : std::optional<uint64_t>{next->first};
+		} else {
+			allocation_cursor_slot_ = pool->first;
+		}
 		return MetadataPageAllocation{PhysicalPageRef{pool->second.header.physical_slot, frame, generation},
 									  createdPoolSlot};
+	}
+
+	void MetadataPagePoolAllocator::beginUnpublishedBatch(const Superblock &current) {
+		static_cast<void>(SuperblockCodec::encode(current));
+		std::lock_guard lock(mutex_);
+		requireHealthyLocked();
+		if (current.generation.value() == std::numeric_limits<uint64_t>::max()) {
+			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								  "relocatable metadata allocator cannot advance the maximum batch generation");
+		}
+		const uint64_t candidateGeneration = current.generation.value() + 1U;
+		auto &contexts = active_batches_[candidateGeneration];
+		auto context = std::ranges::find(contexts, current, &ActiveBatchContext::superblock);
+		if (context == contexts.end()) {
+			contexts.push_back(ActiveBatchContext{current});
+			context = std::prev(contexts.end());
+		}
+		if (context->depth == std::numeric_limits<uint32_t>::max()) {
+			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								  "relocatable metadata allocator unpublished batch nesting overflows");
+		}
+		++context->depth;
+	}
+
+	void MetadataPagePoolAllocator::endUnpublishedBatch(const Superblock &current) noexcept {
+		try {
+			std::lock_guard lock(mutex_);
+			if (current.generation.value() == std::numeric_limits<uint64_t>::max()) {
+				return;
+			}
+			auto contexts = active_batches_.find(current.generation.value() + 1U);
+			if (contexts == active_batches_.end()) {
+				return;
+			}
+			auto context = std::ranges::find(contexts->second, current, &ActiveBatchContext::superblock);
+			if (context == contexts->second.end() || context->depth == 0U) {
+				return;
+			}
+			--context->depth;
+			if (context->depth == 0U) {
+				contexts->second.erase(context);
+			}
+			if (contexts->second.empty()) {
+				active_batches_.erase(contexts);
+			}
+		} catch (...) {
+			// The context is only an in-memory allocation hint. A failed lock must
+			// not change durable reachability or make a slot reusable.
+		}
+	}
+
+	void MetadataPagePoolAllocator::reserveMetadataFrames(
+			size_t count, std::span<const PhysicalSlotId> excludedPoolSlots,
+			std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+			const MetadataSlotReservationLookup *reservationLookup) {
+		std::lock_guard lock(mutex_);
+		requireHealthyLocked();
+		if (count == 0U || reserved_metadata_frames_.has_value()) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+							  "relocatable metadata frame reservation is empty or already active");
+		}
+		const auto isExcluded = [&](PhysicalSlotId slot) {
+			if (snapshot_protected_pool_slots_.contains(slot.value()) ||
+				(emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot)) {
+				return true;
+			}
+			if (reservationLookup != nullptr) {
+				return reservationLookup->isDataSlotReserved(slot);
+			}
+			return std::ranges::any_of(excludedPoolSlots, [slot](PhysicalSlotId candidate) {
+					return candidate == slot;
+				}) ||
+				   std::ranges::any_of(excludedDataSlotRanges, [slot](PhysicalSlotRange range) {
+					   return range.contains(slot);
+				   });
+		};
+		uint64_t available = 0U;
+		for (const auto &[slot, pool]: pools_) {
+			const PhysicalSlotId physicalSlot(slot);
+			if (!isExcluded(physicalSlot)) {
+				available += RSS_PAGE_POOL_DATA_FRAME_COUNT - std::popcount(pool.header.allocated_frames);
+				if (available >= count) {
+					break;
+				}
+			}
+		}
+		if (available < count) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+							  "relocatable metadata frame reservation lacks existing free frames");
+		}
+		reserved_metadata_frames_ = count;
+	}
+
+	void MetadataPagePoolAllocator::releaseMetadataFrames() noexcept {
+		try {
+			std::lock_guard lock(mutex_);
+			reserved_metadata_frames_.reset();
+		} catch (...) {
+			// Reservation cleanup is best effort; durable page ownership remains
+			// protected by the batch rollback path if locking fails.
+		}
+	}
+
+	std::vector<PhysicalSlotId> MetadataPagePoolAllocator::ensureMetadataFrameCapacity(
+			Generation generation, LogSequenceNumber checkpointLsn, size_t count,
+			std::span<const PhysicalSlotId> excludedPoolSlots,
+			std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+			const MetadataSlotReservationLookup *reservationLookup) {
+		std::lock_guard lock(mutex_);
+		requireHealthyLocked();
+		if (!generation.isValid() || !checkpointLsn.isValid() || count == 0U || reserved_metadata_frames_.has_value()) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+							  "relocatable metadata route capacity requires an active unreserved write batch");
+		}
+		const auto excluded = [&](PhysicalSlotId slot) {
+			if (snapshot_protected_pool_slots_.contains(slot.value()) ||
+				(emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot)) {
+				return true;
+			}
+			return reservationLookup != nullptr
+					   ? reservationLookup->isDataSlotReserved(slot)
+					   : std::ranges::any_of(excludedPoolSlots, [slot](PhysicalSlotId candidate) {
+							 return candidate == slot;
+						 }) || std::ranges::any_of(excludedDataSlotRanges, [slot](PhysicalSlotRange range) {
+							 return range.contains(slot);
+						 });
+		};
+		size_t available = 0U;
+		for (const auto &[slot, pool]: pools_) {
+			if (!excluded(PhysicalSlotId(slot))) {
+				available += RSS_PAGE_POOL_DATA_FRAME_COUNT - std::popcount(pool.header.allocated_frames);
+			}
+		}
+		std::vector<PhysicalSlotId> created;
+		while (available < count) {
+			PoolState &pool = createPoolLocked(generation, checkpointLsn, excludedPoolSlots,
+											excludedDataSlotRanges, reservationLookup);
+			created.push_back(pool.header.physical_slot);
+			available += RSS_PAGE_POOL_DATA_FRAME_COUNT;
+		}
+		return created;
 	}
 
 	PhysicalPageRef MetadataPagePoolAllocator::allocatePage(Generation generation) {
@@ -320,6 +653,7 @@ namespace graph::storage {
 			PoolState updatedPool{updated};
 			writePoolLocked(updatedPool);
 			pool->second = std::move(updatedPool);
+			allocation_cursor_slot_.reset();
 		} catch (...) {
 			// The frame remains allocated on any failure, so poison rather than risking reuse.
 			std::lock_guard lock(mutex_);
@@ -348,10 +682,17 @@ namespace graph::storage {
 	void MetadataPagePoolAllocator::abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
 															std::span<const PhysicalSlotId> dataSlots,
 															uint64_t initialFileSize) noexcept {
+		abandonUnpublishedBatch(poolSlots, dataSlots, {}, initialFileSize);
+	}
+
+	void MetadataPagePoolAllocator::abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
+															std::span<const PhysicalSlotId> dataSlots,
+															std::span<const PhysicalSlotRange> dataSlotRanges,
+															uint64_t initialFileSize) noexcept {
 		try {
 			std::lock_guard lock(mutex_);
 			requireHealthyLocked();
-			abandonUnpublishedBatchLocked(poolSlots, dataSlots, initialFileSize);
+			abandonUnpublishedBatchLocked(poolSlots, dataSlots, dataSlotRanges, initialFileSize);
 		} catch (...) {
 			// The batch owns only unpublished state.  If its cleanup cannot prove a
 			// safe tail boundary, fail closed rather than reuse any of those slots.
@@ -372,6 +713,18 @@ namespace graph::storage {
 			poisoned_ = true;
 			throw;
 		}
+	}
+
+	void MetadataPagePoolAllocator::rebaseToPublishedSuperblock(const Superblock &superblock) {
+		static_cast<void>(SuperblockCodec::encode(superblock));
+		std::lock_guard lock(mutex_);
+		if (superblock.data_region_offset != data_region_offset_) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata pool cannot rebase a different data-region layout");
+		}
+		emergency_reserve_ = superblock.metadata_emergency_reserve;
+		discoverReachablePoolsLocked(superblock);
+		poisoned_ = false;
 	}
 
 	void MetadataPagePoolAllocator::validateReachability(const Superblock &superblock) {
@@ -415,9 +768,14 @@ namespace graph::storage {
 									  "relocatable metadata-pool identity binding is invalid");
 			}
 			auto pool = pools_.find(slot.value());
+			// Route-capacity preflight can create an empty private pool before the
+			// Catalog COW allocates its first frame; its slot-valued ID is unbound.
+			const bool isUnboundEmptyPool = pool != pools_.end() && pool->second.header.allocated_frames == 0U &&
+														pool->second.header.segment_id == SegmentId(slot.value());
 			if (pool == pools_.end() || pool->second.header.generation != generation ||
 				pool->second.header.committed_lsn != committedLsn ||
-				(pool->second.header.segment_id != segmentId && pool->second.header.allocated_frames == 0U)) {
+				(pool->second.header.segment_id != segmentId && !isUnboundEmptyPool &&
+					 pool->second.header.allocated_frames == 0U)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata-pool identity binding does not target a private pool");
 			}
@@ -430,11 +788,7 @@ namespace graph::storage {
 			std::copy_n(controlPage.begin(), envelopeBytes.size(), envelopeBytes.begin());
 			SegmentEnvelope envelope = SegmentEnvelopeCodec::decode(envelopeBytes);
 			envelope.segment_id = segmentId;
-			const auto encodedEnvelope = SegmentEnvelopeCodec::encode(envelope);
-			const auto encodedHeader = MetadataPagePoolHeaderCodec::encode(updated.header);
-			std::copy(encodedEnvelope.begin(), encodedEnvelope.end(), controlPage.begin());
-			std::copy(encodedHeader.begin(), encodedHeader.end(), controlPage.begin() + RSS_ENVELOPE_BYTES);
-			writeTypedControlPage(*io_, slotOffset(slot), generation, controlPage);
+			writeTypedControlPage(*io_, slotOffset(slot), generation, makeControlPage(envelope, updated.header));
 			pool->second = std::move(updated);
 		} catch (...) {
 			poisoned_ = true;
@@ -450,13 +804,14 @@ namespace graph::storage {
 								  "relocatable metadata emergency reserve is already present or invalid");
 		}
 		static_cast<void>(createPoolAtLocked(reserve.physical_slot, reserve.pool_token, reserve.generation,
-											 reserve.committed_lsn));
+											 reserve.committed_lsn, MPPF_EMERGENCY_RESERVE_ORIGIN));
 		emergency_reserve_ = reserve;
 	}
 
-	MetadataEmergencyReserveDescriptor
-	MetadataPagePoolAllocator::rotateEmergencyReserve(SegmentId nextPoolToken, Generation generation,
-													  LogSequenceNumber committedLsn) {
+	MetadataEmergencyReserveDescriptor MetadataPagePoolAllocator::rotateEmergencyReserve(SegmentId nextPoolToken,
+																						 Generation generation,
+																						 LogSequenceNumber committedLsn,
+																						 PhysicalSlotId successorSlot) {
 		std::lock_guard lock(mutex_);
 		requireHealthyLocked();
 		const auto previous = emergency_reserve_;
@@ -481,17 +836,30 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								  "relocatable metadata emergency reserve cannot allocate a successor tail slot");
 		}
-		const PhysicalSlotId successor((fileSize - data_region_offset_) / RSS_SEGMENT_SIZE + 1U);
+		const uint64_t slotCount = (fileSize - data_region_offset_) / RSS_SEGMENT_SIZE;
+		const PhysicalSlotId appendSlot(slotCount + 1U);
+		if (!successorSlot.isValid()) {
+			successorSlot = appendSlot;
+		}
+		const bool reuseExistingTailSlot = successorSlot != appendSlot;
+		const uint8_t invalidSuccessor = static_cast<uint8_t>(successorSlot != appendSlot &&
+															  (slotCount == 0U || successorSlot.value() != slotCount));
+		if (invalidSuccessor != 0U) {
+			throwCatalogPoolError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable metadata emergency reserve successor is not an append or reusable tail slot");
+		}
 		MetadataEmergencyReserveDescriptor next;
-		next.physical_slot = successor;
+		next.physical_slot = successorSlot;
 		next.pool_token = nextPoolToken;
 		next.generation = generation;
 		next.committed_lsn = committedLsn;
-		if (!next.isValid() || pools_.contains(successor.value())) {
+		if (!next.isValid() || pools_.contains(successorSlot.value())) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata emergency reserve successor identity is invalid or occupied");
 		}
-		static_cast<void>(createPoolAtLocked(successor, next.pool_token, generation, committedLsn));
+		static_cast<void>(createPoolAtLocked(successorSlot, next.pool_token, generation, committedLsn,
+											 MPPF_EMERGENCY_RESERVE_ORIGIN, reuseExistingTailSlot));
 		emergency_reserve_ = next;
 		return next;
 	}
@@ -571,6 +939,15 @@ namespace graph::storage {
 		std::set<std::pair<uint64_t, uint8_t>> reachable;
 		uint64_t maximumPageId = 0;
 		MetadataPageFile pages(io_, protectedSuperblocks.front());
+		std::set<uint64_t> *activeLogicalPageIds = nullptr;
+
+		auto markLogicalPageId = [&](MetadataPageId pageId) {
+			if (activeLogicalPageIds == nullptr || !pageId.isValid() ||
+				!activeLogicalPageIds->emplace(pageId.value()).second) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "relocatable metadata tree contains an invalid or duplicate logical Page ID");
+			}
+		};
 
 		auto markReference = [&](PhysicalPageRef reference, std::set<std::pair<uint64_t, uint8_t>> &treeReferences) {
 			if (!reference.isValid()) {
@@ -620,6 +997,7 @@ namespace graph::storage {
 						FormatError::FERR_INVALID_HEADER,
 						"relocatable metadata directory has an invalid radix page during pool reconciliation");
 			}
+			markLogicalPageId(page.page_id);
 			maximumPageId = std::max(maximumPageId, page.page_id.value());
 			bool subtreeHasFreeSlot = false;
 			const uint64_t factor = radixFactor(page.level);
@@ -663,6 +1041,7 @@ namespace graph::storage {
 								FormatError::FERR_INVALID_HEADER,
 								"relocatable Catalog tree has an invalid leaf during pool reconciliation");
 					}
+					markLogicalPageId(leaf.page_id);
 					maximumPageId = std::max(maximumPageId, leaf.page_id.value());
 					for (const CatalogEntry &entry: leaf.entries) {
 						if ((entry.segment_id.value() - 1U) / RSS_CATALOG_PAGE_MAX_ENTRIES != childBase) {
@@ -683,6 +1062,7 @@ namespace graph::storage {
 						throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 											  "relocatable free-space leaf is inconsistent with its radix route");
 					}
+					markLogicalPageId(leaf.page_id);
 					const bool childHasFreeSlot = allocatorLeafHasFreeSlot(leaf);
 					if (allocatorSummaryBit(page, index) != childHasFreeSlot) {
 						throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
@@ -700,6 +1080,7 @@ namespace graph::storage {
 								FormatError::FERR_INVALID_HEADER,
 								"relocatable location directory has an invalid leaf during pool reconciliation");
 					}
+					markLogicalPageId(leaf.page_id);
 					for (const LocationLeafEntry &entry: leaf.entries) {
 						if ((entry.logical_id - 1U) / RSS_LOCATION_LEAF_MAX_ENTRIES != childBase) {
 							throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
@@ -712,76 +1093,119 @@ namespace graph::storage {
 			return subtreeHasFreeSlot;
 		};
 
+		std::function<void(PhysicalPageRef, bool, uint16_t, uint64_t, const Superblock &,
+						   std::set<std::pair<uint64_t, uint8_t>> &, std::set<std::pair<uint64_t, uint8_t>> &)>
+				visitRouteBranch;
+		visitRouteBranch = [&](PhysicalPageRef reference, bool isRoot, uint16_t expectedLevel, uint64_t ordinalBase,
+							   const Superblock &superblock,
+							   std::set<std::pair<uint64_t, uint8_t>> &bootstrapReferences,
+							   std::set<std::pair<uint64_t, uint8_t>> &targetReferences) {
+			markReference(reference, bootstrapReferences);
+			const MetadataRadixPage page = pages.readMetadataRadix(reference);
+			if ((isRoot && page.kind != CatalogRadixPageKind::CRPK_ROOT) ||
+				(!isRoot && (page.kind != CatalogRadixPageKind::CRPK_INTERNAL || page.level != expectedLevel)) ||
+				page.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
+				page.generation > superblock.generation || page.committed_lsn > superblock.checkpoint_lsn) {
+				throwCatalogPoolError(
+						FormatError::FERR_INVALID_HEADER,
+						"metadata PageId route branch has an invalid radix page during pool reconciliation");
+			}
+			const uint64_t factor = radixFactor(page.level);
+			for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
+				const PhysicalPageRef child = page.children[index];
+				if (!child.isValid()) {
+					continue;
+				}
+				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) {
+					throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+										  "metadata PageId route branch ordinal overflows during pool reconciliation");
+				}
+				const uint64_t ordinal = ordinalBase + static_cast<uint64_t>(index) * factor;
+				if (page.level != 0U) {
+					visitRouteBranch(child, false, static_cast<uint16_t>(page.level - 1U), ordinal, superblock,
+									 bootstrapReferences, targetReferences);
+					continue;
+				}
+				markReference(child, bootstrapReferences);
+				const MetadataPageRouteLeafPage leaf = pages.readMetadataPageRouteLeaf(child);
+				if (leaf.generation > superblock.generation || leaf.committed_lsn > superblock.checkpoint_lsn) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+										  "metadata PageId route branch has a future leaf during pool reconciliation");
+				}
+				for (const MetadataPageRoute &route: leaf.routes) {
+					if (!route.page_id.isValid() || !route.physical_reference.isValid() ||
+						route.physical_reference.generation > superblock.generation ||
+						(route.page_id.value() - 1U) / RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES != ordinal) {
+						throwCatalogPoolError(
+								FormatError::FERR_INVALID_HEADER,
+								"metadata PageId route branch has a misrouted target during pool reconciliation");
+					}
+					markReference(route.physical_reference, targetReferences);
+				}
+			}
+		};
+
 		for (const Superblock &superblock: protectedSuperblocks) {
-			if (superblock.catalog_root.isValid()) {
+			pages.rebindSuperblock(superblock);
+			std::set<uint64_t> logicalPageIds;
+			activeLogicalPageIds = &logicalPageIds;
+			const auto reconcileRoot = [&](MetadataDirectoryType directoryType, PhysicalPageRef physicalRoot) {
+				const PhysicalPageRef root = metadataRootReference(pages, superblock, directoryType, physicalRoot);
+				if (!root.isValid()) {
+					return;
+				}
 				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.catalog_root, true, 0, 0, MetadataDirectoryType::MDT_CATALOG, superblock,
-						   treeReferences);
-			}
-			if (superblock.allocator_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.allocator_root, true, 0, 0, MetadataDirectoryType::MDT_ALLOCATOR, superblock,
-						   treeReferences);
-			}
-			if (superblock.page_directory_root.isValid()) {
+				visitRadix(root, true, 0, 0, directoryType, superblock, treeReferences);
+			};
+			reconcileRoot(MetadataDirectoryType::MDT_CATALOG, superblock.catalog_root);
+			reconcileRoot(MetadataDirectoryType::MDT_ALLOCATOR, superblock.allocator_root);
+			if (superblock.page_directory_root.isValid() && !superblock.usesPageDirectoryBootstrap()) {
 				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
 				visitRadix(superblock.page_directory_root, true, 0, 0, MetadataDirectoryType::MDT_PAGE, superblock,
 						   treeReferences);
 			}
-			if (superblock.extent_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.extent_directory_root, true, 0, 0, MetadataDirectoryType::MDT_EXTENT, superblock,
-						   treeReferences);
+			if (superblock.usesPageDirectoryBootstrap()) {
+				if (!superblock.page_directory_root.isValid()) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+										  "Page Directory bootstrap flag has no physical header reference");
+				}
+				std::set<std::pair<uint64_t, uint8_t>> bootstrapReferences;
+				std::set<std::pair<uint64_t, uint8_t>> targetReferences;
+				markReference(superblock.page_directory_root, bootstrapReferences);
+				const PageDirectoryBootstrap bootstrap =
+						pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+				if (bootstrap.generation > superblock.generation ||
+					bootstrap.committed_lsn > superblock.checkpoint_lsn ||
+					!bootstrap.metadata_page_directory_root.isValid()) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+										  "Page Directory bootstrap has invalid visibility or route branch");
+				}
+				if (bootstrap.data_page_directory_root.isValid()) {
+					std::set<std::pair<uint64_t, uint8_t>> dataReferences;
+					visitRadix(bootstrap.data_page_directory_root, true, 0U, 0U, MetadataDirectoryType::MDT_PAGE,
+							   superblock, dataReferences);
+				}
+				visitRouteBranch(bootstrap.metadata_page_directory_root, true, 0U, 0U, superblock, bootstrapReferences,
+								 targetReferences);
 			}
-			if (superblock.node_entity_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.node_entity_directory_root, true, 0, 0, MetadataDirectoryType::MDT_NODE_ENTITY,
-						   superblock, treeReferences);
-			}
-			if (superblock.edge_entity_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.edge_entity_directory_root, true, 0, 0, MetadataDirectoryType::MDT_EDGE_ENTITY,
-						   superblock, treeReferences);
-			}
-			if (superblock.entity_property_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.entity_property_directory_root, true, 0, 0,
-						   MetadataDirectoryType::MDT_ENTITY_PROPERTY, superblock, treeReferences);
-			}
-			if (superblock.index_root_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.index_root_directory_root, true, 0, 0, MetadataDirectoryType::MDT_INDEX_ROOT,
-						   superblock, treeReferences);
-			}
-			if (superblock.vector_location_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.vector_location_directory_root, true, 0, 0,
-						   MetadataDirectoryType::MDT_VECTOR_LOCATION, superblock, treeReferences);
-			}
-			if (superblock.vector_manifest_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.vector_manifest_directory_root, true, 0, 0,
-						   MetadataDirectoryType::MDT_VECTOR_MANIFEST, superblock, treeReferences);
-			}
-			if (superblock.large_value_manifest_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.large_value_manifest_directory_root, true, 0, 0,
-						   MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST, superblock, treeReferences);
-			}
-			if (superblock.state_directory_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.state_directory_root, true, 0, 0, MetadataDirectoryType::MDT_STATE, superblock,
-						   treeReferences);
-			}
-			if (superblock.retire_queue_root.isValid()) {
-				std::set<std::pair<uint64_t, uint8_t>> treeReferences;
-				visitRadix(superblock.retire_queue_root, true, 0, 0, MetadataDirectoryType::MDT_RETIRE_QUEUE,
-						   superblock, treeReferences);
-			}
+			reconcileRoot(MetadataDirectoryType::MDT_EXTENT, superblock.extent_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_NODE_ENTITY, superblock.node_entity_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_EDGE_ENTITY, superblock.edge_entity_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_ENTITY_PROPERTY, superblock.entity_property_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_INDEX_ROOT, superblock.index_root_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_VECTOR_LOCATION, superblock.vector_location_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_VECTOR_MANIFEST, superblock.vector_manifest_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST,
+						  superblock.large_value_manifest_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_STATE, superblock.state_directory_root);
+			reconcileRoot(MetadataDirectoryType::MDT_RETIRE_QUEUE, superblock.retire_queue_root);
 		}
 
 		bool changed = false;
 		if (reclaimUnreachable) {
+			if (protectedSuperblocks.size() == 1U) {
+				snapshot_protected_pool_slots_.clear();
+			}
 			for (auto &[slot, pool]: pools_) {
 				uint32_t liveFrames = 0;
 				for (uint8_t frame = RSS_PAGE_POOL_FIRST_DATA_FRAME; frame <= RSS_PAGE_POOL_DATA_FRAME_COUNT; ++frame) {
@@ -802,13 +1226,27 @@ namespace graph::storage {
 			if (maximumPageId == std::numeric_limits<uint64_t>::max()) {
 				page_id_exhausted_ = true;
 			} else {
-				next_page_id_ = PageId(maximumPageId + 1U);
+				next_page_id_ = MetadataPageId(maximumPageId + 1U);
 				page_id_exhausted_ = false;
 			}
 		}
 		if (changed && persistReclaimedFrames) {
 			io_->sync();
 		}
+		if (changed) {
+			allocation_cursor_slot_.reset();
+		}
+	}
+
+	void MetadataPagePoolAllocator::protectPoolUntilSnapshotsDrain(PhysicalSlotId slot) {
+		std::lock_guard lock(mutex_);
+		requireHealthyLocked();
+		if (!slot.isValid() || !pools_.contains(slot.value())) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata snapshot protection targets an unknown pool");
+		}
+		snapshot_protected_pool_slots_.emplace(slot.value());
+		allocation_cursor_slot_.reset();
 	}
 
 	MetadataPagePoolStats MetadataPagePoolAllocator::stats() const {
@@ -823,6 +1261,21 @@ namespace graph::storage {
 		}
 		result.free_pages = result.pools * RSS_PAGE_POOL_DATA_FRAME_COUNT - result.allocated_pages;
 		return result;
+	}
+
+	uint64_t MetadataPagePoolAllocator::allocatableFreePages() const {
+		std::lock_guard lock(mutex_);
+		uint64_t freePages = 0U;
+		for (const auto &[slot, pool]: pools_) {
+			if (emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot.value()) {
+				continue;
+			}
+			if (snapshot_protected_pool_slots_.contains(slot)) {
+				continue;
+			}
+			freePages += RSS_PAGE_POOL_DATA_FRAME_COUNT - std::popcount(pool.header.allocated_frames);
+		}
+		return freePages;
 	}
 
 	bool MetadataPagePoolAllocator::isMetadataPoolSlot(PhysicalSlotId slot) const {
@@ -863,6 +1316,7 @@ namespace graph::storage {
 		for (const PhysicalSlotId slot: slots) {
 			pools_.erase(slot.value());
 		}
+		allocation_cursor_slot_.reset();
 	}
 
 	std::vector<PhysicalSlotId> MetadataPagePoolAllocator::poolSlots() const {
@@ -880,6 +1334,7 @@ namespace graph::storage {
 	void MetadataPagePoolAllocator::eraseRegisteredPoolForTesting(PhysicalSlotId slot) {
 		std::lock_guard lock(mutex_);
 		pools_.erase(slot.value());
+		allocation_cursor_slot_.reset();
 	}
 
 	void MetadataPagePoolAllocator::replaceRegisteredPoolHeaderForTesting(PhysicalSlotId slot,
@@ -922,9 +1377,7 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 								  "relocatable metadata pool envelope does not match its durable ownership record");
 		}
-		std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES> headerBytes{};
-		std::copy_n(page.begin() + RSS_ENVELOPE_BYTES, headerBytes.size(), headerBytes.begin());
-		const MetadataPagePoolHeader header = MetadataPagePoolHeaderCodec::decode(headerBytes);
+		const MetadataPagePoolHeader header = selectControlHeader(page).header;
 		const uint8_t invalidHeader = static_cast<uint8_t>(header.physical_slot != slot) |
 									  static_cast<uint8_t>(header.segment_id != envelope.segment_id) |
 									  static_cast<uint8_t>(header.segment_id != expectedSegmentId) |
@@ -950,6 +1403,7 @@ namespace graph::storage {
 		}
 		const uint64_t poolCount = (fileSize - data_region_offset_) / RSS_SEGMENT_SIZE;
 		pools_.clear();
+		allocation_cursor_slot_.reset();
 		for (uint64_t slot = 1; slot <= poolCount; ++slot) {
 			const PhysicalSlotId physicalSlot(slot);
 			const std::array<std::byte, RSS_PAGE_SIZE> controlPage = readRawControlPage(
@@ -978,9 +1432,7 @@ namespace graph::storage {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable metadata pool envelope does not describe a metadata page pool");
 			}
-			std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES> headerBytes{};
-			std::copy_n(controlPage.begin() + RSS_ENVELOPE_BYTES, headerBytes.size(), headerBytes.begin());
-			MetadataPagePoolHeader header = MetadataPagePoolHeaderCodec::decode(headerBytes);
+			const MetadataPagePoolHeader header = selectControlHeader(controlPage).header;
 			if (header.physical_slot != physicalSlot || header.segment_id != envelope.segment_id) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable metadata pool header has a mismatched physical slot");
@@ -991,6 +1443,7 @@ namespace graph::storage {
 
 	void MetadataPagePoolAllocator::discoverReachablePoolsLocked(const Superblock &superblock) {
 		pools_.clear();
+		allocation_cursor_slot_.reset();
 		MetadataPageFile pages(io_, superblock);
 		std::set<std::pair<uint64_t, uint8_t>> visitedPages;
 		std::set<uint64_t> reachableSlots;
@@ -1027,13 +1480,69 @@ namespace graph::storage {
 			}
 		};
 
+		const auto visitRouteBranch = [&](auto &&self, PhysicalPageRef reference, bool root, uint16_t expectedLevel,
+										  uint64_t ordinalBase) -> void {
+			if (!reference.isValid() || reference.generation > superblock.generation) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+									  "metadata PageId route branch has an invalid physical reference");
+			}
+			if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "metadata PageId route branch aliases or cycles through bootstrap pages");
+			}
+			reachableSlots.insert(reference.physical_slot.value());
+			const MetadataRadixPage page = pages.readMetadataRadix(reference);
+			if (page.kind != (root ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL) ||
+				page.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
+				(!root && page.level != expectedLevel) || page.generation > superblock.generation ||
+				page.committed_lsn > superblock.checkpoint_lsn) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+									  "metadata PageId route branch has an invalid radix page");
+			}
+			const uint64_t factor = radixFactor(page.level);
+			for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
+				const PhysicalPageRef child = page.children[index];
+				if (!child.isValid()) {
+					continue;
+				}
+				if (child.generation > superblock.generation ||
+					(index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index)) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+										  "metadata PageId route branch has an invalid child reference");
+				}
+				const uint64_t ordinal = ordinalBase + static_cast<uint64_t>(index) * factor;
+				if (page.level != 0U) {
+					self(self, child, false, static_cast<uint16_t>(page.level - 1U), ordinal);
+					continue;
+				}
+				if (!visitedPages.emplace(child.physical_slot.value(), child.frame_index).second) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+										  "metadata PageId route branch duplicates a bootstrap leaf");
+				}
+				reachableSlots.insert(child.physical_slot.value());
+				const MetadataPageRouteLeafPage leaf = pages.readMetadataPageRouteLeaf(child);
+				if (leaf.generation > superblock.generation || leaf.committed_lsn > superblock.checkpoint_lsn) {
+					throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+										  "metadata PageId route branch has a future leaf");
+				}
+				for (const MetadataPageRoute &route: leaf.routes) {
+					if (!route.page_id.isValid() || !route.physical_reference.isValid() ||
+						route.physical_reference.generation > superblock.generation ||
+						(route.page_id.value() - 1U) / RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES != ordinal) {
+						throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+											  "metadata PageId route branch has a misrouted target");
+					}
+					reachableSlots.insert(route.physical_reference.physical_slot.value());
+				}
+			}
+		};
+
 		struct RootDescriptor {
 			PhysicalPageRef reference;
 			MetadataDirectoryType directory_type;
 		};
 		const std::array roots{
 				RootDescriptor{superblock.catalog_root, MetadataDirectoryType::MDT_CATALOG},
-				RootDescriptor{superblock.page_directory_root, MetadataDirectoryType::MDT_PAGE},
 				RootDescriptor{superblock.extent_directory_root, MetadataDirectoryType::MDT_EXTENT},
 				RootDescriptor{superblock.allocator_root, MetadataDirectoryType::MDT_ALLOCATOR},
 				RootDescriptor{superblock.node_entity_directory_root, MetadataDirectoryType::MDT_NODE_ENTITY},
@@ -1047,10 +1556,37 @@ namespace graph::storage {
 				RootDescriptor{superblock.state_directory_root, MetadataDirectoryType::MDT_STATE},
 				RootDescriptor{superblock.retire_queue_root, MetadataDirectoryType::MDT_RETIRE_QUEUE},
 		};
-		for (const RootDescriptor root: roots) {
-			if (root.reference.isValid()) {
-				visitDirectory(visitDirectory, root.reference, root.directory_type, true);
+		if (!superblock.usesPageDirectoryBootstrap() && superblock.page_directory_root.isValid()) {
+			visitDirectory(visitDirectory, superblock.page_directory_root, MetadataDirectoryType::MDT_PAGE, true);
+		}
+		if (!superblock.usesPageDirectoryBootstrap()) {
+			for (const RootDescriptor root: roots) {
+				if (root.reference.isValid()) {
+					visitDirectory(visitDirectory, root.reference, root.directory_type, true);
+				}
 			}
+		}
+		if (superblock.usesPageDirectoryBootstrap()) {
+			if (!superblock.page_directory_root.isValid() ||
+				!visitedPages
+						 .emplace(superblock.page_directory_root.physical_slot.value(),
+								  superblock.page_directory_root.frame_index)
+						 .second) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "Page Directory bootstrap has an invalid or aliased header frame");
+			}
+			reachableSlots.insert(superblock.page_directory_root.physical_slot.value());
+			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			if (bootstrap.generation > superblock.generation || bootstrap.committed_lsn > superblock.checkpoint_lsn ||
+				!bootstrap.metadata_page_directory_root.isValid()) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+									  "Page Directory bootstrap has invalid visibility or route branch");
+			}
+			if (bootstrap.data_page_directory_root.isValid()) {
+				visitDirectory(visitDirectory, bootstrap.data_page_directory_root, MetadataDirectoryType::MDT_PAGE,
+							   true);
+			}
+			visitRouteBranch(visitRouteBranch, bootstrap.metadata_page_directory_root, true, 0U, 0U);
 		}
 
 		for (const uint64_t slotValue: reachableSlots) {
@@ -1070,9 +1606,7 @@ namespace graph::storage {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable reachable metadata slot does not describe a metadata page pool");
 			}
-			std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES> headerBytes{};
-			std::copy_n(controlPage.begin() + RSS_ENVELOPE_BYTES, headerBytes.size(), headerBytes.begin());
-			const MetadataPagePoolHeader header = MetadataPagePoolHeaderCodec::decode(headerBytes);
+			const MetadataPagePoolHeader header = selectControlHeader(controlPage).header;
 			if (header.physical_slot != physicalSlot || header.segment_id != envelope.segment_id) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "relocatable reachable metadata-pool header has a mismatched physical slot");
@@ -1083,20 +1617,22 @@ namespace graph::storage {
 			const PoolState reserve = readPoolLocked(emergency_reserve_.physical_slot, emergency_reserve_.pool_token,
 													 emergency_reserve_.generation, emergency_reserve_.committed_lsn);
 			const auto [iterator, inserted] = pools_.emplace(emergency_reserve_.physical_slot.value(), reserve);
-			if (!inserted) {
-				// The reserve is bootstrap-only capacity for ENOSPC handling. It must
-				// never overlap a visible metadata tree, even if a corrupted file makes
-				// both ownership records look identical.
-				static_cast<void>(iterator);
+			if (!inserted && (reserve.header.allocated_frames == 0U ||
+							  (reserve.header.flags & MPPF_EMERGENCY_RESERVE_ORIGIN) == 0U)) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata emergency reserve aliases a root-reachable pool");
 			}
+			// A reserve may contain published COW metadata after ENOSPC. Its immutable
+			// origin bit distinguishes that state from a forged ordinary pool alias.
+			static_cast<void>(iterator);
 		}
 	}
 
 	MetadataPagePoolAllocator::PoolState &
 	MetadataPagePoolAllocator::createPoolLocked(Generation generation, LogSequenceNumber checkpointLsn,
-												std::span<const PhysicalSlotId> excludedPoolSlots) {
+												std::span<const PhysicalSlotId> excludedPoolSlots,
+												std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+												const MetadataSlotReservationLookup *reservationLookup) {
 		requireHealthyLocked();
 		const uint64_t fileSize = io_->fileSize();
 		const uint8_t invalidTail = static_cast<uint8_t>(fileSize < data_region_offset_) |
@@ -1106,9 +1642,31 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								  "relocatable metadata pool file cannot append another physical slot");
 		}
+		if (const std::optional<PhysicalSlotId> reusableSlot = findReusableFreeSlotLocked(
+					generation, excludedPoolSlots, excludedDataSlotRanges, reservationLookup);
+			reusableSlot.has_value()) {
+			return createPoolAtLocked(*reusableSlot, SegmentId(reusableSlot->value()), generation, checkpointLsn, 0U,
+									  true);
+		}
 		uint64_t nextSlot = (fileSize - data_region_offset_) / RSS_SEGMENT_SIZE + 1U;
-		while (std::ranges::any_of(excludedPoolSlots,
-								   [nextSlot](PhysicalSlotId slot) { return slot.value() == nextSlot; })) {
+		const auto excludedPool = [&excludedPoolSlots, reservationLookup](uint64_t slot) {
+			return reservationLookup != nullptr
+						   ? reservationLookup->isDataSlotReserved(PhysicalSlotId(slot))
+						   : std::ranges::any_of(excludedPoolSlots, [slot](PhysicalSlotId candidate) {
+								 return candidate.value() == slot;
+							 });
+		};
+		const auto excludedRangeAt = [&excludedDataSlotRanges,
+									  reservationLookup](uint64_t slot) -> std::optional<PhysicalSlotRange> {
+			if (reservationLookup != nullptr) {
+				return reservationLookup->dataSlotRangeContaining(PhysicalSlotId(slot));
+			}
+			const auto range = std::ranges::find_if(excludedDataSlotRanges, [slot](PhysicalSlotRange candidate) {
+				return candidate.contains(PhysicalSlotId(slot));
+			});
+			return range == excludedDataSlotRanges.end() ? std::nullopt : std::optional<PhysicalSlotRange>(*range);
+		};
+		while (excludedPool(nextSlot) || excludedRangeAt(nextSlot).has_value()) {
 			if (nextSlot == std::numeric_limits<uint64_t>::max()) {
 				throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 									  "relocatable metadata pool cannot skip a reserved maximum physical slot");
@@ -1117,12 +1675,20 @@ namespace graph::storage {
 			// slot as part of this unpublished batch so the next metadata pool still
 			// starts at the physical file tail.  MetadataWriteBatch reclaims this
 			// complete provisional suffix if its Superblock switch does not publish.
+			const std::optional<PhysicalSlotRange> range = excludedRangeAt(nextSlot);
+			const uint64_t skippedSlots = range.has_value() ? range->last.value() - nextSlot + 1U : 1U;
+			if (skippedSlots > std::numeric_limits<uint64_t>::max() / RSS_SEGMENT_SIZE ||
+				skippedSlots * RSS_SEGMENT_SIZE > std::numeric_limits<size_t>::max()) {
+				throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+									  "relocatable metadata pool reserved data range exceeds addressable space");
+			}
 			const uint64_t reservedOffset = slotOffset(PhysicalSlotId(nextSlot));
-			if (io_->reserveAppendSpace(RSS_SEGMENT_SIZE) != reservedOffset) {
+			const size_t reservedBytes = static_cast<size_t>(skippedSlots * RSS_SEGMENT_SIZE);
+			if (io_->reserveAppendSpace(reservedBytes) != reservedOffset) {
 				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 									  "relocatable metadata pool reserved an unexpected physical tail offset");
 			}
-			++nextSlot;
+			nextSlot += skippedSlots;
 		}
 		if (nextSlot == 0U || pools_.contains(nextSlot)) {
 			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -1131,9 +1697,64 @@ namespace graph::storage {
 		return createPoolAtLocked(PhysicalSlotId(nextSlot), SegmentId(nextSlot), generation, checkpointLsn);
 	}
 
+	std::optional<PhysicalSlotId>
+	MetadataPagePoolAllocator::findReusableFreeSlotLocked(Generation generation,
+														  std::span<const PhysicalSlotId> excludedPoolSlots,
+														  std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+														  const MetadataSlotReservationLookup *reservationLookup) {
+		const auto contexts = active_batches_.find(generation.value());
+		if (contexts == active_batches_.end()) {
+			return std::nullopt;
+		}
+		// A test or stale caller can keep a predicted candidate alive after another
+		// batch has changed the durable root. Only the recovered A/B generation may
+		// authorize reuse of a slot already present in the physical file.
+		const Superblock durable = SuperblockFile(io_).recover();
+		const auto context = std::ranges::find(contexts->second, durable, &ActiveBatchContext::superblock);
+		if (context == contexts->second.end()) {
+			return std::nullopt;
+		}
+		const uint64_t fileSize = io_->fileSize();
+		if (fileSize < data_region_offset_ || (fileSize - data_region_offset_) % RSS_SEGMENT_SIZE != 0U) {
+			return std::nullopt;
+		}
+		const uint64_t tailSlotValue = (fileSize - data_region_offset_) / RSS_SEGMENT_SIZE;
+		if (tailSlotValue == 0U) {
+			return std::nullopt;
+		}
+		MetadataPageFile pages(io_, context->superblock);
+		AllocatorDirectory allocator(pages, *this);
+		PhysicalSlotId firstSlot(1U);
+		const PhysicalSlotId lastSlot(tailSlotValue);
+		while (firstSlot <= lastSlot) {
+			const std::optional<PhysicalSlotId> freeSlot =
+					allocator.findFirstFree(context->superblock, firstSlot, lastSlot);
+			if (!freeSlot.has_value()) {
+				return std::nullopt;
+			}
+			const bool excluded =
+					reservationLookup != nullptr
+							? reservationLookup->isDataSlotReserved(*freeSlot)
+							: std::ranges::any_of(excludedPoolSlots, [freeSlot](PhysicalSlotId slot) {
+								  return slot == *freeSlot;
+							  }) || std::ranges::any_of(excludedDataSlotRanges, [freeSlot](PhysicalSlotRange range) {
+								  return range.contains(*freeSlot);
+							  });
+			if (!excluded && !pools_.contains(freeSlot->value())) {
+				return freeSlot;
+			}
+			if (freeSlot->value() == lastSlot.value()) {
+				return std::nullopt;
+			}
+			firstSlot = PhysicalSlotId(freeSlot->value() + 1U);
+		}
+		return std::nullopt;
+	}
+
 	MetadataPagePoolAllocator::PoolState &
 	MetadataPagePoolAllocator::createPoolAtLocked(PhysicalSlotId physicalSlot, SegmentId segmentId,
-												  Generation generation, LogSequenceNumber checkpointLsn) {
+												  Generation generation, LogSequenceNumber checkpointLsn,
+												  uint32_t flags, bool reuseExistingSlot) {
 		requireHealthyLocked();
 		if (!physicalSlot.isValid() || !segmentId.isValid() || !generation.isValid() || !checkpointLsn.isValid() ||
 			pools_.contains(physicalSlot.value())) {
@@ -1141,9 +1762,15 @@ namespace graph::storage {
 								  "relocatable metadata pool creation has an invalid or occupied physical slot");
 		}
 		const uint64_t offset = slotOffset(physicalSlot);
-		if (io_->fileSize() != offset) {
-			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
-								  "relocatable metadata pool creation requires the next unused physical slot");
+		const uint64_t fileSize = io_->fileSize();
+		const bool appendAtTail = fileSize == offset;
+		const bool overwriteReusableSlot = reuseExistingSlot &&
+										   offset <= std::numeric_limits<uint64_t>::max() - RSS_SEGMENT_SIZE &&
+										   fileSize >= offset + RSS_SEGMENT_SIZE;
+		if (!appendAtTail && !overwriteReusableSlot) {
+			throwCatalogPoolError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable metadata pool creation requires an append or durable free physical slot");
 		}
 		SegmentEnvelope envelope;
 		envelope.header_bytes = RSS_PAGE_SIZE;
@@ -1159,7 +1786,8 @@ namespace graph::storage {
 		header.segment_id = envelope.segment_id;
 		header.generation = generation;
 		header.committed_lsn = checkpointLsn;
-		if (io_->reserveAppendSpace(RSS_SEGMENT_SIZE) != offset) {
+		header.flags = flags;
+		if (appendAtTail && io_->reserveAppendSpace(RSS_SEGMENT_SIZE) != offset) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata pool reserved an unexpected physical tail offset");
 		}
@@ -1199,10 +1827,12 @@ namespace graph::storage {
 			io_->sync();
 		}
 		pools_.erase(pool);
+		allocation_cursor_slot_.reset();
 	}
 
 	void MetadataPagePoolAllocator::abandonUnpublishedBatchLocked(std::span<const PhysicalSlotId> poolSlots,
 																  std::span<const PhysicalSlotId> dataSlots,
+																  std::span<const PhysicalSlotRange> dataSlotRanges,
 																  uint64_t initialFileSize) {
 		const uint64_t currentFileSize = io_->fileSize();
 		const uint8_t invalidSizes =
@@ -1228,6 +1858,12 @@ namespace graph::storage {
 		for (const PhysicalSlotId slot: dataSlots) {
 			validateProvisionalSlot(slot);
 		}
+		for (const PhysicalSlotRange range: dataSlotRanges) {
+			if (!range.isValid() || range.first.value() <= initialSlotCount) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "relocatable metadata batch has an invalid provisional data-slot range");
+			}
+		}
 
 		// Metadata writers are serialized.  Therefore every physical byte beyond
 		// the size captured at batch construction belongs to this unpublished
@@ -1236,6 +1872,10 @@ namespace graph::storage {
 		// never leaves a stranded tail gap after a failed root switch.
 		const uint64_t retainedSlotCount = initialSlotCount;
 		const bool canTruncateTail = retainedSlotCount < currentSlotCount && io_->hasPwriteSupport();
+		if (!dataSlotRanges.empty() && currentSlotCount > retainedSlotCount && !canTruncateTail) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata batch cannot safely abandon a ranged provisional tail");
+		}
 
 		std::array<std::byte, RSS_PAGE_SIZE> zeros{};
 		const auto zeroSlot = [&](PhysicalSlotId slot) {
@@ -1271,15 +1911,12 @@ namespace graph::storage {
 			io_->truncate(truncateOffset);
 			io_->sync();
 		}
+		allocation_cursor_slot_.reset();
 	}
 
 	void MetadataPagePoolAllocator::writePoolLocked(const PoolState &pool) {
-		std::array<std::byte, RSS_PAGE_SIZE> controlPage{};
-		static_cast<void>(readPoolLocked(pool.header.physical_slot, pool.header.segment_id, pool.header.generation,
-										 pool.header.committed_lsn, &controlPage));
-		const auto bytes = MetadataPagePoolHeaderCodec::encode(pool.header);
-		std::copy(bytes.begin(), bytes.end(), controlPage.begin() + RSS_ENVELOPE_BYTES);
-		writeTypedControlPage(*io_, slotOffset(pool.header.physical_slot), pool.header.generation, controlPage);
+		rewriteInactiveControlRecord(*io_, slotOffset(pool.header.physical_slot), pool.header.generation, pool.header,
+									 "relocatable metadata-pool control page is truncated");
 	}
 
 	void MetadataPagePoolAllocator::validateRegisteredPoolsLocked() const {

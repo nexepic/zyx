@@ -24,6 +24,29 @@ namespace {
 			return ok;
 		}
 	};
+
+	struct IndexedBoolWorker {
+		size_t failingPartition = std::numeric_limits<size_t>::max();
+		std::atomic<size_t> *calls = nullptr;
+
+		bool operator()(size_t partition, SumState &state) const {
+			if (calls) {
+				calls->fetch_add(1, std::memory_order_relaxed);
+			}
+			state.sum = static_cast<int64_t>(partition + 1);
+			return partition != failingPartition;
+		}
+	};
+
+	struct SummingMerger {
+		int64_t *sum = nullptr;
+		size_t *calls = nullptr;
+
+		void operator()(size_t, SumState &state) const {
+			++*calls;
+			*sum += state.sum;
+		}
+	};
 } // namespace
 
 TEST(ParallelOperatorExecutorTest, RangePartitionsPreserveOrderedMerge) {
@@ -172,6 +195,19 @@ TEST(ParallelOperatorExecutorTest, RangePartitionBuilderHandlesEmptyAndClampedCo
 		EXPECT_FALSE(partition.empty());
 		EXPECT_EQ(partition.size(), 1UL);
 	}
+}
+
+TEST(ParallelOperatorExecutorTest, RangePartitionHelpersHandleReversedBoundsAndGranularity) {
+	const graph::concurrent::ParallelRangePartition reversed{.begin = 9, .end = 3};
+	EXPECT_TRUE(reversed.empty());
+	EXPECT_EQ(reversed.size(), 0U);
+
+	graph::concurrent::ThreadPool pool(4);
+	EXPECT_EQ(graph::concurrent::detail::chooseRangePartitionCount(0, &pool, {}), 0U);
+	EXPECT_EQ(graph::concurrent::detail::chooseRangePartitionCount(
+				 17, &pool, {.minItemsPerWorker = 9, .maxWorkers = 2}),
+			 2U);
+	EXPECT_EQ(graph::concurrent::detail::chooseRangePartitionCount(17, nullptr, {.minItemsPerWorker = 5}), 4U);
 }
 
 TEST(ParallelOperatorExecutorTest, EmptyPartitionRunsReturnSuccessWithoutWorkerOrMerge) {
@@ -328,4 +364,85 @@ TEST(ParallelOperatorExecutorTest, AutomaticRangeNoPoolHonorsMaxWorkersAndProfil
 	ASSERT_TRUE(snapshot.contains("test.operator_no_pool.estimated_items"));
 	EXPECT_EQ(snapshot.at("test.operator_no_pool.estimated_items").totalValue,
 			  std::numeric_limits<int64_t>::max());
+}
+
+TEST(ParallelOperatorExecutorTest, ExplicitDecisionPreservesSerialAndParallelFailureContracts) {
+	graph::concurrent::ThreadPool pool(4);
+	const graph::concurrent::ParallelOperatorOptions options{
+			.phase = "test.operator_explicit_decision", .estimatedItems = 4, .minPartitions = 2, .minItems = 1};
+	const graph::concurrent::ParallelWorkEstimate estimate{
+			.partitions = 4, .estimatedItems = 4, .minPartitions = 2, .minItems = 1};
+	int64_t total = 0;
+	size_t mergeCalls = 0;
+	std::atomic<size_t> workerCalls{0};
+	SummingMerger merger{.sum = &total, .calls = &mergeCalls};
+
+	const graph::concurrent::ParallelExecutionDecision serialDecision{
+		.useParallel = false,
+		.workerCount = 0,
+		.baselineWorkerCount = 1,
+		.hardWorkerLimit = 1,
+		.reason = graph::concurrent::ParallelDecisionReason::PDR_INSUFFICIENT_GRANULARITY};
+	const bool serialOk = graph::concurrent::runOperatorIndexedPartitionsWithDecision<SumState>(
+			4, &pool, options, estimate, serialDecision, IndexedBoolWorker{.calls = &workerCalls}, merger);
+
+	EXPECT_TRUE(serialOk);
+	EXPECT_EQ(workerCalls.load(std::memory_order_relaxed), 4U);
+	EXPECT_EQ(mergeCalls, 4U);
+	EXPECT_EQ(total, 10);
+
+	total = 0;
+	mergeCalls = 0;
+	workerCalls.store(0, std::memory_order_relaxed);
+	const bool serialFailed = graph::concurrent::runOperatorIndexedPartitionsWithDecision<SumState>(
+			4, &pool, options, estimate, serialDecision,
+			IndexedBoolWorker{.failingPartition = 1, .calls = &workerCalls}, merger);
+
+	EXPECT_FALSE(serialFailed);
+	EXPECT_EQ(workerCalls.load(std::memory_order_relaxed), 2U);
+	EXPECT_EQ(mergeCalls, 0U);
+
+	workerCalls.store(0, std::memory_order_relaxed);
+	const graph::concurrent::ParallelExecutionDecision parallelDecision{
+		.useParallel = true,
+		.workerCount = 2,
+		.baselineWorkerCount = 2,
+		.hardWorkerLimit = 2,
+		.reason = graph::concurrent::ParallelDecisionReason::PDR_PARALLEL};
+	const bool parallelFailed = graph::concurrent::runOperatorIndexedPartitionsWithDecision<SumState>(
+			8, &pool, options, {.partitions = 8, .estimatedItems = 8, .minPartitions = 2, .minItems = 1}, parallelDecision,
+			IndexedBoolWorker{.failingPartition = 0, .calls = &workerCalls}, merger);
+
+	EXPECT_FALSE(parallelFailed);
+	EXPECT_GT(workerCalls.load(std::memory_order_relaxed), 0U);
+	EXPECT_EQ(mergeCalls, 0U);
+}
+
+TEST(ParallelOperatorExecutorTest, ExplicitRangeBoolFailureAndAutomaticEmptyRangeDoNotMerge) {
+	graph::concurrent::ThreadPool pool(4);
+	int64_t total = 0;
+	size_t mergeCalls = 0;
+	SummingMerger merger{.sum = &total, .calls = &mergeCalls};
+	const graph::concurrent::ParallelOperatorOptions options{
+			.phase = "test.operator_range_bool",
+			.estimatedItems = 8,
+			.minPartitions = 2,
+			.minItems = 1,
+			.minItemsPerWorker = 2};
+
+	const bool explicitFailed = graph::concurrent::ParallelOperatorExecutor::runRangePartitions<SumState>(
+			10, 18, 2, &pool, options, RangeBoolWorker{false}, merger);
+	const bool explicitSucceeded = graph::concurrent::ParallelOperatorExecutor::runRangePartitions<SumState>(
+			10, 18, 2, &pool, options, RangeBoolWorker{true}, merger);
+	const bool automaticSucceeded = graph::concurrent::ParallelOperatorExecutor::runRangePartitions<SumState>(
+			10, 18, &pool, options, RangeBoolWorker{true}, merger);
+	const bool automaticEmpty = graph::concurrent::ParallelOperatorExecutor::runRangePartitions<SumState>(
+			18, 10, &pool, options, RangeBoolWorker{true}, merger);
+
+	EXPECT_FALSE(explicitFailed);
+	EXPECT_TRUE(explicitSucceeded);
+	EXPECT_TRUE(automaticSucceeded);
+	EXPECT_TRUE(automaticEmpty);
+	EXPECT_EQ(mergeCalls, 6U);
+	EXPECT_EQ(total, 16);
 }

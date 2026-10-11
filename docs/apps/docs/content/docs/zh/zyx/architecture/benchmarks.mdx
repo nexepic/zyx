@@ -79,7 +79,7 @@ ninja -C buildDir zyx-bench
 
 每个测试还会报告**阶段耗时分解**（`[Stage avg ms/op]`），按开销降序展示查询引擎各阶段（解析、规划、执行等）的平均耗时。
 
-存储测试使用不同的输出格式：`Nodes | Edges | Props | DB(MB) | WAL(MB) | Total(MB) | Bytes/Node`，并将结果导出到 `/tmp/zyx_storage_profile.csv`。
+存储测试只报告原生数据库文件：`Nodes | Edges | Props | DB(MB) | Bytes/Node`，并将结果导出到 `/tmp/zyx_storage_profile.csv`。
 
 ## 测试清单
 
@@ -145,9 +145,9 @@ ninja -C buildDir zyx-bench
 |--------|----------|
 | `concurrency.query.*` | NodeScan + Filter 算子并行化 |
 | `concurrency.sort.*` | 10000 节点上的 SortOperator 并行化 |
-| `concurrency.batch_insert.*` | `FileStorage::save()` 并行准备 |
-| `concurrency.pq_train.*` | ProductQuantizer 并行子空间训练（1000 × 128d） |
-| `concurrency.vector_search.*` | DiskANN 重排序 + PQ 距离表并行化（1000 × 768d） |
+| `concurrency.batch_insert.*` | 原生逻辑写入规划和单文件 COW generation publication |
+| `concurrency.pq_train.*` | 原生有界 PQ 训练（1000 × 128d） |
+| `concurrency.vector_search.*` | 原生邻接遍历、PQ 评分与有界精排（1000 × 768d） |
 | `concurrency.read.*` | 通过 `std::thread` 测试快照隔离下的并发读取 |
 
 ### 存储测试
@@ -170,6 +170,17 @@ ninja -C buildDir zyx-bench
 3. **使用 `PROFILE` 和 `EXPLAIN`** — 将 benchmark 数值与查询计划分析结合，理解查询快或慢的原因。
 4. **检查索引命中率** — 查询可能不是因为引擎慢，而是缺少预期索引。
 5. **跨版本对比时保持完全相同的配置** — 同一编译器、同一数据分布、同一硬件。
+
+## 回归基线契约
+
+graph comparison runner 的 `--baseline-summary` 用于 p50 回归门禁时，必须传入由该 runner 先前输出的 `summary.csv`。它会
+读取同目录的 `environment.json`，并对 dataset manifest、database set、scale/seed、profile、execution mode、
+warmup/iterations、thread contract 与 platform 进行字段级比对。缺失、非 JSON object 或任一字段不匹配都会使
+`baseline_environment_provenance` 失败；Git commit 不比较，因为目的正是在冻结配置下比较不同版本。
+
+这只保证历史与当前 run 可比较，不代表已经获得 production 性能批准。发布门禁仍必须记录目标硬件、冻结的 production-scale
+输入、评审过的阈值、Vector exactness/Recall/QPS/build/update/recovery 结果，以及 macOS、Linux、Windows 的 acceptance
+evidence。
 
 ## 代码位置
 

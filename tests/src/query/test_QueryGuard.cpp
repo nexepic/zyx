@@ -3,6 +3,9 @@
  * @brief Unit tests for QueryGuard timeout and memory limit enforcement.
  **/
 
+#include <algorithm>
+#include <array>
+
 #include <gtest/gtest.h>
 #include <thread>
 #include "graph/query/QueryGuard.hpp"
@@ -18,12 +21,21 @@ TEST(QueryGuardTest, NoTimeout_CheckDoesNotThrow) {
 
 TEST(QueryGuardTest, Timeout_ThrowsAfterDeadline) {
 	QueryGuard guard(1, 0); // 1ms timeout
-	// Spin until the guard detects timeout
+	// Let the deadline expire, then cross one periodic sampling boundary.
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	EXPECT_THROW({
-		for (int i = 0; i < 10000000; ++i) {
+		for (int i = 0; i < 1024; ++i) {
 			guard.check();
 		}
 	}, QueryTimeoutException);
+}
+
+TEST(QueryGuardTest, CheckNowObservesAnExpiredDeadlineWithoutWaitingForThePeriodicSample) {
+	QueryGuard guard(1, 0);
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	// The normal hot path intentionally samples only once per fixed interval.
+	EXPECT_NO_THROW(guard.check());
+	EXPECT_THROW(guard.checkNow(), QueryTimeoutException);
 }
 
 TEST(QueryGuardTest, NoMemoryLimit_CheckDoesNotThrow) {
@@ -34,13 +46,21 @@ TEST(QueryGuardTest, NoMemoryLimit_CheckDoesNotThrow) {
 }
 
 TEST(QueryGuardTest, MemoryLimit_ThrowsWhenExceeded) {
-	// Set an extremely low memory limit (1 MB) — any real process exceeds this
-	QueryGuard guard(0, 1);
-	EXPECT_THROW({
-		for (int i = 0; i < 10000; ++i) {
-			guard.check();
-		}
-	}, QueryMemoryExceededException);
+	// The policy measures only memory growth caused after this query begins. A
+	// deterministic sampler avoids depending on the test process's baseline RSS.
+	std::array<size_t, 2U> samples{64U * 1024U * 1024U, 66U * 1024U * 1024U};
+	size_t next = 0U;
+	QueryGuard guard(0, 1, [&]() { return samples[std::min(next++, samples.size() - 1U)]; });
+	EXPECT_THROW(guard.checkNow(), QueryMemoryExceededException);
+}
+
+TEST(QueryGuardTest, MemoryLimit_AllowsPreexistingProcessMemoryAndCanBeDisabledByLaterQuery) {
+	std::array<size_t, 3U> samples{256U * 1024U * 1024U, 256U * 1024U * 1024U, 256U * 1024U * 1024U};
+	size_t next = 0U;
+	QueryGuard limited(0, 1, [&]() { return samples[std::min(next++, samples.size() - 1U)]; });
+	EXPECT_NO_THROW(limited.checkNow());
+	QueryGuard disabled(0, 0, [&]() { return samples.back(); });
+	EXPECT_NO_THROW(disabled.checkNow());
 }
 
 TEST(QueryGuardTest, CheckIntervalSkipsMostChecks) {
@@ -58,21 +78,19 @@ TEST(QueryGuardTest, CheckIntervalSkipsMostChecks) {
 TEST(QueryGuardTest, BothLimits_TimeoutFirst) {
 	// Both enabled, timeout triggers first (1ms timeout, generous memory)
 	QueryGuard guard(1, 10000);
+	std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	EXPECT_THROW({
-		for (int i = 0; i < 10000000; ++i) {
+		for (int i = 0; i < 1024; ++i) {
 			guard.check();
 		}
 	}, QueryTimeoutException);
 }
 
 TEST(QueryGuardTest, BothLimits_MemoryFirst) {
-	// Both enabled, memory triggers first (1MB limit, long timeout)
-	QueryGuard guard(60000, 1);
-	EXPECT_THROW({
-		for (int i = 0; i < 10000; ++i) {
-			guard.check();
-		}
-	}, QueryMemoryExceededException);
+	std::array<size_t, 2U> samples{64U * 1024U * 1024U, 66U * 1024U * 1024U};
+	size_t next = 0U;
+	QueryGuard guard(60000, 1, [&]() { return samples[std::min(next++, samples.size() - 1U)]; });
+	EXPECT_THROW(guard.checkNow(), QueryMemoryExceededException);
 }
 
 TEST(QueryGuardTest, GetCurrentRSSBytes_ReturnsNonZero) {
@@ -83,7 +101,8 @@ TEST(QueryGuardTest, GetCurrentRSSBytes_ReturnsNonZero) {
 TEST(QueryGuardTest, ExceptionMessages_ContainUsefulInfo) {
 	try {
 		QueryGuard guard(1, 0);
-		for (int i = 0; i < 10000000; ++i) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		for (int i = 0; i < 1024; ++i) {
 			guard.check();
 		}
 		FAIL() << "Should have thrown";
@@ -93,10 +112,10 @@ TEST(QueryGuardTest, ExceptionMessages_ContainUsefulInfo) {
 	}
 
 	try {
-		QueryGuard guard(0, 1);
-		for (int i = 0; i < 10000; ++i) {
-			guard.check();
-		}
+		std::array<size_t, 2U> samples{64U * 1024U * 1024U, 66U * 1024U * 1024U};
+		size_t next = 0U;
+		QueryGuard guard(0, 1, [&]() { return samples[std::min(next++, samples.size() - 1U)]; });
+		guard.checkNow();
 		FAIL() << "Should have thrown";
 	} catch (const QueryMemoryExceededException &e) {
 		std::string msg = e.what();

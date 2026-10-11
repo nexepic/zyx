@@ -49,7 +49,7 @@ flowchart LR
 - **CLI 为核心工作流**：REPL 交互模式、脚本批量执行、数据导入命令
 - **Cypher 查询语言**：覆盖常见读写子句、子查询、`LOAD CSV` 与管理 DDL
 - **多模态查询**：图查询 + 向量检索 + GDS 图算法过程
-- **ACID 事务**：单写多读并发模型，持久化基于 WAL（预写日志）
+- **ACID 事务**：单写多读并发模型，持久化基于单文件 generation
 
 ```mermaid
 flowchart LR

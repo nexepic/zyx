@@ -26,6 +26,7 @@
 #include <string>
 
 namespace graph::storage {
+	class StorageBackend;
 	class LogicalGraphTransaction;
 	class LogicalGraphTransactionOverlay;
 }
@@ -33,6 +34,9 @@ namespace graph::storage {
 namespace graph::query {
 	class QueryEngine;
 	class QueryResult;
+	namespace gds {
+		class LogicalProjectionCatalog;
+	}
 }
 
 namespace graph {
@@ -64,7 +68,8 @@ namespace graph {
 	private:
 		friend class Database;
 		Transaction(uint64_t txnId, std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction,
-					std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount);
+					std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount,
+					std::shared_ptr<storage::StorageBackend> backendLifetime);
 
 		void finishLogicalTransaction() noexcept;
 		void rollbackActiveLogicalTransactionNoexcept() noexcept;
@@ -73,11 +78,19 @@ namespace graph {
 		TxnState state_ = TxnState::TXN_ACTIVE;
 		bool readOnly_ = false;
 
+		// Declare this before the transaction implementation so reverse member
+		// destruction keeps the backend alive through its final rollback/release.
+		std::shared_ptr<storage::StorageBackend> backendLifetime_;
 		// Native logical transactions own their snapshot and a read-your-writes
 		// overlay. API transaction calls route to the overlay explicitly, so an
 		// ordinary Database query cannot inherit another transaction's state.
 		std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction_;
 		std::unique_ptr<storage::LogicalGraphTransactionOverlay> logicalOverlay_;
+		// GDS projections are derived, transaction-local state. They must never
+		// enter the Database-owned catalog until an explicit durable ownership
+		// model exists, so commit and rollback both retire this catalog with the
+		// transaction object.
+		std::unique_ptr<query::gds::LogicalProjectionCatalog> logicalProjectionCatalog_;
 		std::shared_ptr<std::atomic<size_t>> activeLogicalWriteTransactionCount_;
 		bool logicalWriteTransactionCounted_ = false;
 	};

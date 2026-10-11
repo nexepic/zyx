@@ -44,8 +44,8 @@ tx.commit();
 ### 批量写事务
 
 大型直接 API 导入场景可以使用 `beginBulkTransaction()`，例如批量调用 `createNodes()` / `createEdges()`。
-它与普通写事务使用相同的写锁和回滚语义；区别在于 checkpoint 策略：`commit()` 仍然保证 WAL 持久化，
-但主数据库文件的 checkpoint 可以延迟到 `save()` 或正常 `close()`。
+它与普通写事务使用相同的写锁和回滚语义。`commit()` 通过 A/B Superblock pair 原子发布一个持久化的
+native 单文件 generation；不会创建 WAL sidecar。
 
 ```cpp
 auto tx = db.beginBulkTransaction();
@@ -65,7 +65,7 @@ auto ids = db.createNodesColumnar(
 tx.commit();
 ```
 
-如果下一步要构建 schema index，index builder 会扫描逻辑存储视图，包括已经提交但尚未 checkpoint 的 bulk overlay。
+如果下一步要构建 schema index，index builder 会扫描最新已发布的逻辑存储视图。
 
 ### 只读事务
 
@@ -114,7 +114,7 @@ db.execute("COMMIT");
 
 没有显式事务时，`Database::execute()` 自动处理：
 
-- **读查询** — 走只读快速路径（无写锁、无 WAL 开销）。
+- **读查询** — 走只读快速路径（无写锁，也不会发布 mutation）。
 - **写查询** — 自动包裹单语句事务，立即提交。
 
 ```cpp
@@ -162,7 +162,7 @@ try {
 | 方法 | 抛异常场景 |
 |------|-----------|
 | `beginTransaction()` | 存储 I/O 失败、另一个写事务活跃 |
-| `commit()` | WAL sync 失败、存储刷新失败 |
+| `commit()` | native 数据写入、Superblock 发布或存储同步失败 |
 | `execute()` | 解析错误（返回失败的 `Result`，不抛异常） |
 
 查询执行错误被捕获在 `Result` 中 — 检查 `result.isSuccess()` 和 `result.getError()`，而非依赖异常。

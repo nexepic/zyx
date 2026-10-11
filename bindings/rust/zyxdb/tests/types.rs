@@ -99,6 +99,37 @@ fn unicode_string_round_trip() {
     assert_eq!(first_cell_str(&db, "MATCH (n:T) RETURN n.v AS v"), "你好🌍");
 }
 
+#[test]
+fn large_bytes_survive_reopen_with_owned_result_bytes() {
+    // This deliberately exceeds one Property-page record, forcing the native
+    // LargeValue path rather than only testing inline binary properties.
+    let expected: Vec<u8> = (0..(16 * 1024 + 137))
+        .map(|index| ((index * 37) % 251) as u8)
+        .collect();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("large-bytes.zyx");
+
+    {
+        let db = Database::open(&path).unwrap();
+        let params = params!("payload" => expected.as_slice()).unwrap();
+        db.execute("CREATE (:PersistedBinary {payload: $payload})", Some(&params))
+            .unwrap();
+    }
+
+    let payload = {
+        let db = Database::open(&path).unwrap();
+        let mut result = db
+            .execute("MATCH (n:PersistedBinary) RETURN n.payload AS payload", None)
+            .unwrap();
+        let row = result.next().unwrap().expect("expected a row");
+        row.get_bytes(0).unwrap()
+    };
+
+    // `get_bytes` copies from the ABI cursor, so the returned Vec remains
+    // valid after both the cursor and database handles have been dropped.
+    assert_eq!(payload, expected);
+}
+
 // --- Parameterized queries ---
 
 #[test]

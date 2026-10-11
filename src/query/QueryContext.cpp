@@ -12,4 +12,8 @@ void QueryContext::checkGuard() const {
 	if (guard) guard->check();
 }
 
+void QueryContext::checkGuardNow() const {
+	if (guard) guard->checkNow();
+}
+
 } // namespace graph::query

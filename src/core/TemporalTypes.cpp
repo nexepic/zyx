@@ -69,6 +69,12 @@ int daysInMonth(int y, int m) {
 	return dims[m];
 }
 
+void validateDateComponents(int year, int month, int day, const char *context) {
+	if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+		throw std::runtime_error(std::string("Invalid ") + context + " values");
+	}
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -84,16 +90,20 @@ TemporalDate TemporalDate::today() {
 
 TemporalDate TemporalDate::fromISO(const std::string& s) {
 	int y = 0, m = 0, d = 0;
-	if (std::sscanf(s.c_str(), "%d-%d-%d", &y, &m, &d) != 3) {
+	char trailing = '\0';
+	if (std::sscanf(s.c_str(), "%d-%d-%d%c", &y, &m, &d, &trailing) != 3) {
 		throw std::runtime_error("Invalid date format: " + s + " (expected YYYY-MM-DD)");
 	}
-	if (m < 1 || m > 12 || d < 1 || d > daysInMonth(y, m)) {
+	try {
+		validateDateComponents(y, m, d, "date");
+	} catch (const std::runtime_error &) {
 		throw std::runtime_error("Invalid date values: " + s);
 	}
 	return fromYMD(y, m, d);
 }
 
 TemporalDate TemporalDate::fromYMD(int year, int month, int day) {
+	validateDateComponents(year, month, day, "date");
 	return TemporalDate{ymdToEpochDays(year, month, day)};
 }
 
@@ -136,15 +146,24 @@ TemporalDateTime TemporalDateTime::now() {
 
 TemporalDateTime TemporalDateTime::fromISO(const std::string& s) {
 	int y = 0, mo = 0, d = 0, h = 0, mi = 0, sec = 0;
-	// Try full datetime first
-	int matched = std::sscanf(s.c_str(), "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &sec);
-	if (matched < 3) {
-		throw std::runtime_error("Invalid datetime format: " + s);
+	char trailing = '\0';
+	const int matched = std::sscanf(s.c_str(), "%d-%d-%dT%d:%d:%d%c", &y, &mo, &d, &h, &mi, &sec,
+									 &trailing);
+	if (matched == 6) {
+		return fromComponents(y, mo, d, h, mi, sec, 0);
 	}
-	return fromComponents(y, mo, d, h, mi, sec, 0);
+	if (matched == 3) {
+		const TemporalDate date = TemporalDate::fromISO(s);
+		return fromComponents(date.year(), date.month(), date.day(), 0, 0, 0, 0);
+	}
+	throw std::runtime_error("Invalid datetime format: " + s);
 }
 
 TemporalDateTime TemporalDateTime::fromComponents(int y, int mo, int d, int h, int mi, int s, int ms) {
+	validateDateComponents(y, mo, d, "datetime date");
+	if (h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59 || ms < 0 || ms > 999) {
+		throw std::runtime_error("Invalid datetime time values");
+	}
 	int32_t epochDays = ymdToEpochDays(y, mo, d);
 	int64_t totalMs = static_cast<int64_t>(epochDays) * 86400LL * 1000LL +
 	                  static_cast<int64_t>(h) * 3600000LL +
@@ -219,12 +238,16 @@ TemporalDuration TemporalDuration::fromISO(const std::string& s) {
 	int64_t years = 0, mos = 0, weeks = 0, ds = 0;
 	int64_t hours = 0, mins = 0, secs = 0;
 	bool inTime = false;
+	bool sawComponent = false;
 	size_t i = 1;
 	std::string numBuf;
 
 	while (i < s.size()) {
 		char c = s[i];
 		if (c == 'T') {
+			if (inTime) {
+				throw std::runtime_error("Invalid duration format: " + s);
+			}
 			inTime = true;
 			i++;
 			continue;
@@ -258,7 +281,11 @@ TemporalDuration TemporalDuration::fromISO(const std::string& s) {
 					throw std::runtime_error("Invalid duration time component: " + std::string(1, c));
 			}
 		}
+		sawComponent = true;
 		i++;
+	}
+	if (!numBuf.empty() || !sawComponent) {
+		throw std::runtime_error("Invalid duration format: " + s);
 	}
 
 	return fromComponents(years, mos, weeks, ds, hours, mins, secs, 0);

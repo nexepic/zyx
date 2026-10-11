@@ -247,7 +247,7 @@ namespace graph::concurrent {
 												   size_t baselineWorkerCount,
 												   size_t hardWorkerLimit) const {
 			const size_t clampedBaseline = detail::clampWorkerCandidate(baselineWorkerCount, hardWorkerLimit);
-			if (clampedBaseline <= 1 || hardWorkerLimit <= 1) {
+			if (clampedBaseline <= 1) {
 				return clampedBaseline;
 			}
 
@@ -265,7 +265,7 @@ namespace graph::concurrent {
 
 			auto workerForSlot = [&](size_t slot) -> size_t {
 				const size_t candidate = detail::clampWorkerCandidate(detail::workerCountForSlot(slot), hardWorkerLimit);
-				if (candidate > hardWorkerLimit || detail::workerSlot(candidate) != slot ||
+				if (detail::workerSlot(candidate) != slot ||
 					!detail::hasEnoughGranularity(estimate, candidate)) {
 					return 0;
 				}
@@ -285,8 +285,7 @@ namespace graph::concurrent {
 					!detail::hasRecommendationMergeCost(stats, config_)) {
 					continue;
 				}
-				if (!foundReliableWorker || stats.throughputEwma > bestThroughput ||
-					(stats.throughputEwma == bestThroughput && candidate < bestWorker)) {
+				if (!foundReliableWorker || stats.throughputEwma > bestThroughput) {
 					bestThroughput = stats.throughputEwma;
 					bestWorker = candidate;
 					foundReliableWorker = true;
@@ -359,10 +358,7 @@ namespace graph::concurrent {
 				}
 			}
 
-			if (foundReliableWorker) {
-				return bestWorker;
-			}
-			return clampedBaseline;
+			return bestWorker;
 		}
 
 		void record(const ParallelExecutionTelemetry &telemetry) {
@@ -370,7 +366,7 @@ namespace graph::concurrent {
 				return;
 			}
 			const double throughput = detail::telemetryThroughput(telemetry);
-			if (throughput <= 0.0 || !std::isfinite(throughput)) { // ZYX_COV_EXCL_LINE: invalid telemetry is defensive and should not affect learned policy state.
+			if (throughput <= 0.0) {
 				return;
 			}
 

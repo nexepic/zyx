@@ -7,6 +7,8 @@
  **/
 
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
 #include <source_location>
@@ -49,15 +51,23 @@ namespace {
 				.committed_lsn = LogSequenceNumber(13)};
 	}
 
+	template <size_t Size>
+	void recalculateCrc(std::array<std::byte, Size> &bytes, size_t checksumOffset) {
+		LittleEndianCodec::writeU32(bytes, checksumOffset, 0U);
+		LittleEndianCodec::writeU32(bytes, checksumOffset, graph::utils::calculateCrc(bytes.data(), bytes.size()));
+	}
+
 } // namespace
 
 TEST(RelocatableSharedPagePoolTest, PoolHeaderRoundTripsAndUsesEveryFixedField) {
-	const SharedPagePoolHeader source = poolHeader((1U << 0U) | (1U << 12U) | (1U << 30U));
+	SharedPagePoolHeader source = poolHeader((1U << 0U) | (1U << 12U) | (1U << 30U));
+	source.control_sequence = 42U;
 	const auto bytes = SharedPagePoolHeaderCodec::encode(source);
 	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(bytes).segment_id, source.segment_id);
 	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(bytes).allocated_frames, source.allocated_frames);
 	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(bytes).generation, source.generation);
 	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(bytes).committed_lsn, source.committed_lsn);
+	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(bytes).control_sequence, source.control_sequence);
 
 	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES - 1U> shortBytes{};
 	expectFormatError([&] { static_cast<void>(SharedPagePoolHeaderCodec::decode(shortBytes)); },
@@ -95,6 +105,48 @@ TEST(RelocatableSharedPagePoolTest, PoolHeaderRejectsMalformedDiskBytesAndInvali
 	SharedPagePoolHeader invalidFrame = poolHeader(1U << RSS_PAGE_POOL_DATA_FRAME_COUNT);
 	expectFormatError([&] { static_cast<void>(SharedPagePoolHeaderCodec::encode(invalidFrame)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableSharedPagePoolTest, FixedHeadersRejectOrExactlyRoundTripEveryChecksumValidSingleBitMutation) {
+	SharedPagePoolHeader pool = poolHeader((1U << 0U) | (1U << 7U) | (1U << 30U));
+	pool.control_sequence = 42U;
+	const auto encodedPool = SharedPagePoolHeaderCodec::encode(pool);
+	for (size_t byteOffset = 0U; byteOffset < encodedPool.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encodedPool;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateCrc(mutation, 40U);
+			try {
+				const SharedPagePoolHeader decoded = SharedPagePoolHeaderCodec::decode(mutation);
+				if (SharedPagePoolHeaderCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "shared pool-header mutation was normalized at byte " << byteOffset << ", bit "
+							  << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// A checksum-valid mutation is safe only when the typed boundary rejects it.
+			}
+		}
+	}
+
+	const auto encodedOwner = PageOwnerHeaderCodec::encode(ownerHeader(PageOwnerKind::POK_ENTITY, 777U));
+	for (size_t byteOffset = 0U; byteOffset < encodedOwner.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encodedOwner;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateCrc(mutation, 48U);
+			try {
+				const PageOwnerHeader decoded = PageOwnerHeaderCodec::decode(mutation);
+				if (PageOwnerHeaderCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "page owner-header mutation was normalized at byte " << byteOffset << ", bit "
+							  << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// A checksum-valid mutation is safe only when the typed boundary rejects it.
+			}
+		}
+	}
 }
 
 TEST(RelocatableSharedPagePoolTest, OwnerHeaderRoundTripsAndRejectsCorruption) {

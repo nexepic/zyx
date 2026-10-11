@@ -131,6 +131,28 @@ TEST(RelocatableEntityLabelSetTest, RejectsBoundsReservedAndNoncanonicalDecodedL
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableEntityLabelSetTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::array<uint64_t, 4U> labels{7U, 19U, 41U, 89U};
+	const std::vector<std::byte> encoded = EntityLabelSetCodec::encode(labels);
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			reseal(mutation);
+			try {
+				const std::vector<uint64_t> decoded = EntityLabelSetCodec::decode(mutation);
+				if (EntityLabelSetCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "Entity LabelSet mutation was silently normalized at byte " << byteOffset
+								  << ", bit " << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical mutation must fail at the typed LabelSet boundary.
+			}
+		}
+	}
+}
+
 TEST(RelocatableEntityLabelSetTest, EnforcesDerivedSinglePageCapacityBeforeEncoding) {
 	std::vector<uint64_t> maximum(RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS);
 	std::iota(maximum.begin(), maximum.end(), uint64_t{1U});

@@ -8,23 +8,33 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <span>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/maintenance/OfflineVectorBaseRebuild.hpp"
 #include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -58,6 +68,17 @@ namespace {
 				{3U, bfloat16({9.0F, 10.0F, 0.0F, 0.0F})},
 				{4U, bfloat16({10.0F, 9.0F, 1.0F, 0.0F})},
 				{5U, bfloat16({5.0F, 5.0F, 5.0F, 5.0F})}};
+	}
+
+	std::vector<DeterministicPqTrainingRecord> trainingRecords(size_t count) {
+		std::vector<DeterministicPqTrainingRecord> result;
+		result.reserve(count);
+		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {
+			const float value = static_cast<float>(ordinal + 1U);
+			result.push_back({static_cast<uint64_t>(ordinal + 1U),
+						  bfloat16({value, value * 0.5F, value * 0.25F, value * 0.125F})});
+		}
+		return result;
 	}
 
 	RawVectorMaterializationRecord rawRecord(const DeterministicPqTrainingRecord &record) {
@@ -99,7 +120,7 @@ namespace {
 	}
 
 	void overwriteManifest(const std::shared_ptr<StorageIO> &io, RelocatableMetadataStore &metadata,
-							   const VectorManifest &manifest) {
+								   const VectorManifest &manifest) {
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
 		const PageLocation location = metadata.findPageLocation(snapshot, manifest.page_id);
 		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
@@ -119,6 +140,45 @@ namespace {
 		io->writeAt(offset, ownerBytes.data(), ownerBytes.size());
 		io->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, page.serialize().data(), page.serialize().size());
 	}
+
+	void replaceManifest(VectorManifestStore &manifests, RelocatableMetadataStore &metadata,
+						 VectorManifest manifest) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const PageLocation location = metadata.findPageLocation(snapshot, manifest.page_id);
+		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
+		ASSERT_LT(snapshot.superblock().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+		const LogSequenceNumber checkpointLsn(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		const LogSequenceNumber expectedOwnerLsn = manifest.committed_lsn;
+		snapshot.release();
+		manifest.committed_lsn = checkpointLsn;
+		const PageOwnerHeader owner{manifest.page_id,
+								manifest.index_id,
+								PageOwnerKind::POK_VECTOR_MANIFEST,
+								0U,
+								RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+								manifest.generation,
+								checkpointLsn};
+		const VectorManifestPage page = VectorManifestPage::create(owner, manifest);
+		static_cast<void>(manifests.replace(page, pool.segment_id, expectedOwnerLsn, checkpointLsn));
+	}
+
+	class ThrowAfterCancellationChecks final : public CancellationCheckpoint {
+	public:
+		explicit ThrowAfterCancellationChecks(size_t throwOnCheck) : throw_on_check_(throwOnCheck) {}
+
+		void check() const override {
+			++check_count_;
+			if (check_count_ >= throw_on_check_) {
+				throw std::runtime_error("test cancellation");
+			}
+		}
+
+		[[nodiscard]] size_t checkCount() const { return check_count_; }
+
+	private:
+		size_t throw_on_check_ = 0U;
+		mutable size_t check_count_ = 0U;
+	};
 
 } // namespace
 
@@ -148,12 +208,23 @@ protected:
 	void materializeRawAndManifest(RelocatableMetadataStore &metadata, VectorPageStore &vectors,
 											 VectorManifestStore &manifests,
 											 VectorDistanceMetric metric = VectorDistanceMetric::VDM_L2) {
+		const std::vector<DeterministicPqTrainingRecord> records = trainingRecords();
+		materializeRawAndManifest(metadata, vectors, manifests, records, metric);
+	}
+
+	void materializeRawAndManifest(RelocatableMetadataStore &metadata, VectorPageStore &vectors,
+											 VectorManifestStore &manifests,
+											 std::span<const DeterministicPqTrainingRecord> records,
+											 VectorDistanceMetric metric = VectorDistanceMetric::VDM_L2) {
 		std::vector<RawVectorMaterializationRecord> raw;
-		for (const DeterministicPqTrainingRecord &record: trainingRecords()) {
+		raw.reserve(records.size());
+		for (const DeterministicPqTrainingRecord &record: records) {
 			raw.push_back(rawRecord(record));
 		}
 		static_cast<void>(vectors.materializeRaw(
-				17U, raw, {PhysicalSlotId(40U), PhysicalSlotId(40U), 16U, 4U}, LogSequenceNumber(2U)));
+				17U, raw,
+				{PhysicalSlotId(40U), PhysicalSlotId(40U), raw.size(), RSS_PAGE_POOL_DATA_FRAME_COUNT},
+				LogSequenceNumber(2U)));
 		VectorManifest manifest;
 		manifest.index_id = 17U;
 		manifest.dimensions = 4U;
@@ -193,6 +264,284 @@ protected:
 		const std::vector<std::byte> bytes = replacement.serialize();
 		io->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, bytes.data(), bytes.size());
 		io->sync();
+	}
+
+	void overwriteBTreeLeafEntry(RelocatableMetadataStore &metadata, BTreePageStore &trees, uint64_t indexId,
+								 std::span<const std::byte> targetKey, BTreePageEntry replacementEntry) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const IndexRootLocation root = metadata.findIndexRoot(snapshot, indexId);
+		const BTreePage original = trees.read(snapshot, root.root_page_id);
+		ASSERT_EQ(original.header().kind, BTreeNodeKind::BPN_LEAF);
+		BTreePageHeader header = original.header();
+		header.entry_count = 0U;
+		const PageOwnerHeader owner{header.page_id, header.index_id, PageOwnerKind::POK_INDEX, 0U,
+								 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, header.generation,
+								 original.slottedPage().ownerCommittedLsn()};
+		BTreePage replacement = BTreePage::create(owner, header);
+		bool replaced = false;
+		for (const BTreePageEntry &entry: original.entries()) {
+			if (std::ranges::equal(entry.key, targetKey)) {
+				replacement.insert(std::move(replacementEntry));
+				replaced = true;
+			} else {
+				replacement.insert(entry);
+			}
+		}
+		ASSERT_TRUE(replaced);
+		ASSERT_LT(snapshot.superblock().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+		const LogSequenceNumber checkpointLsn(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		snapshot.release();
+		static_cast<void>(trees.replace(replacement, checkpointLsn));
+	}
+
+	void eraseBTreeLeafEntry(RelocatableMetadataStore &metadata, BTreePageStore &trees, uint64_t indexId,
+								std::span<const std::byte> targetKey) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const IndexRootLocation root = metadata.findIndexRoot(snapshot, indexId);
+		const BTreePage original = trees.read(snapshot, root.root_page_id);
+		ASSERT_EQ(original.header().kind, BTreeNodeKind::BPN_LEAF);
+		BTreePageHeader header = original.header();
+		header.entry_count = 0U;
+		const PageOwnerHeader owner{header.page_id, header.index_id, PageOwnerKind::POK_INDEX, 0U,
+								 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, header.generation,
+								 original.slottedPage().ownerCommittedLsn()};
+		BTreePage replacement = BTreePage::create(owner, header);
+		bool erased = false;
+		for (const BTreePageEntry &entry: original.entries()) {
+			if (std::ranges::equal(entry.key, targetKey)) {
+				erased = true;
+			} else {
+				replacement.insert(entry);
+			}
+		}
+		ASSERT_TRUE(erased);
+		ASSERT_LT(snapshot.superblock().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+		const LogSequenceNumber checkpointLsn(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		snapshot.release();
+		static_cast<void>(trees.replace(replacement, checkpointLsn));
+	}
+
+	void expectPqMappingKeyRejectedBeforeReplacement(std::vector<std::byte> replacementKey,
+											 FormatError expectedError) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		VectorPageStore vectors(io, *metadata);
+		VectorAdjacencyPageStore adjacencies(io, *metadata);
+		VectorManifestStore manifests(io, *metadata);
+		SlottedPagePool slotted(io, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(io, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+		MetadataSnapshotPin mappingSnapshot = metadata->openSnapshot();
+		const std::vector<BTreePageEntry> mappings =
+				BTreeIndex(PQ_MAPPING_ID, trees, *metadata).scan(mappingSnapshot, std::nullopt, 16U);
+		mappingSnapshot.release();
+		ASSERT_FALSE(mappings.empty());
+		overwriteBTreeLeafEntry(*metadata, trees, PQ_MAPPING_ID, mappings.front().key,
+								{std::move(replacementKey), mappings.front().value_or_child});
+
+		try {
+			static_cast<void>(OfflineVectorBaseRebuild::run(
+					trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(),
+					rebuildOptions(71U, Generation(2U))));
+			FAIL() << "a corrupted PQ mapping key must reject the replacement before publication";
+		} catch (const FormatException &error) {
+			EXPECT_EQ(error.error(), expectedError) << error.what();
+		}
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_EQ(manifests.read(snapshot, 17U).manifest(), first.manifest);
+		EXPECT_EQ(metadata->findIndexRoot(snapshot, PQ_MAPPING_ID).root_page_id,
+				  first.manifest.pq_mapping_root_page_id);
+		snapshot.release();
+	}
+
+	void expectAlreadyPublishedMappingRejected(uint64_t mappingIndexId, bool eraseLastEntry) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		VectorPageStore vectors(io, *metadata);
+		VectorAdjacencyPageStore adjacencies(io, *metadata);
+		VectorManifestStore manifests(io, *metadata);
+		SlottedPagePool slotted(io, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(io, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+		MetadataSnapshotPin mappingSnapshot = metadata->openSnapshot();
+		const std::vector<BTreePageEntry> mappings =
+				BTreeIndex(mappingIndexId, trees, *metadata).scan(mappingSnapshot, std::nullopt, 16U);
+		mappingSnapshot.release();
+		ASSERT_FALSE(mappings.empty());
+		const BTreePageEntry &last = mappings.back();
+		if (eraseLastEntry) {
+			eraseBTreeLeafEntry(*metadata, trees, mappingIndexId, last.key);
+		} else {
+			const uint64_t unexpectedVectorId = 6U;
+			const std::vector<std::byte> unexpectedKey = mappingIndexId == PQ_MAPPING_ID
+															 ? VectorPqMapping::key(unexpectedVectorId)
+															 : VectorAdjacencyMapping::key(unexpectedVectorId);
+			overwriteBTreeLeafEntry(*metadata, trees, mappingIndexId, last.key,
+											{unexpectedKey, last.value_or_child});
+		}
+
+		EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+					 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions())),
+				 FormatException);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_EQ(manifests.read(snapshot, 17U).manifest(), first.manifest);
+		snapshot.release();
+	}
+
+	void expectForeignDerivedPageRejected(uint64_t mappingIndexId) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		VectorPageStore vectors(io, *metadata);
+		VectorAdjacencyPageStore adjacencies(io, *metadata);
+		VectorManifestStore manifests(io, *metadata);
+		SlottedPagePool slotted(io, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(io, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		ASSERT_LT(snapshot.superblock().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+		const LogSequenceNumber checkpointLsn(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		const std::vector<BTreePageEntry> mappings =
+				BTreeIndex(mappingIndexId, trees, *metadata).scan(snapshot, std::nullopt, 16U);
+		snapshot.release();
+		ASSERT_FALSE(mappings.empty());
+
+		PageId foreignPage;
+		if (mappingIndexId == PQ_MAPPING_ID) {
+			const std::array<PqVectorMaterializationRecord, 1U> foreignRecords{{{1U, {0U, 1U}}}};
+			const VectorPqMaterializationResult foreign = vectors.materializePq(
+					18U, foreignRecords,
+					{PhysicalSlotId(71U), PhysicalSlotId(71U), Generation(1U), 1U, 1U}, checkpointLsn);
+			ASSERT_EQ(foreign.pages.size(), 1U);
+			foreignPage = foreign.pages.front().page_id;
+		} else {
+			const std::array<VectorAdjacencyMaterializationRecord, 1U> foreignRecords{{{1U, {2U}}}};
+			const VectorAdjacencyMaterializationResult foreign = adjacencies.materialize(
+					18U, foreignRecords, {PhysicalSlotId(71U), PhysicalSlotId(71U), 1U, 1U}, checkpointLsn);
+			ASSERT_EQ(foreign.pages.size(), 1U);
+			foreignPage = foreign.pages.front().page_id;
+		}
+		overwriteBTreeLeafValue(*metadata, trees, mappingIndexId, mappings.front().key, foreignPage.value());
+
+		EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+					 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(),
+					 rebuildOptions(71U, Generation(2U)))),
+				 FormatException);
+		snapshot = metadata->openSnapshot();
+		EXPECT_EQ(manifests.read(snapshot, 17U).manifest(), first.manifest);
+		snapshot.release();
+	}
+
+	void expectDanglingMappingRootRejected(uint64_t mappingIndexId) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		VectorPageStore vectors(io, *metadata);
+		VectorAdjacencyPageStore adjacencies(io, *metadata);
+		VectorManifestStore manifests(io, *metadata);
+		SlottedPagePool slotted(io, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(io, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		ASSERT_TRUE(metadata->findIndexRootOptional(snapshot, mappingIndexId).has_value());
+		ASSERT_LT(snapshot.superblock().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+		const LogSequenceNumber checkpointLsn(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		snapshot.release();
+		const std::array<IndexRootLocation, 0U> noRoots{};
+		const std::array<uint64_t, 1U> erasedRootIds{mappingIndexId};
+		static_cast<void>(trees.publishRoots(noRoots, erasedRootIds, checkpointLsn));
+
+		EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+					 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(),
+					 rebuildOptions(71U, Generation(2U)))),
+				 FormatException);
+		snapshot = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, mappingIndexId).has_value());
+		EXPECT_EQ(manifests.read(snapshot, 17U).manifest(), first.manifest);
+		snapshot.release();
+	}
+
+	void overwritePagePayload(RelocatableMetadataStore &metadata, PageId pageId, std::span<const std::byte> bytes) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const PageLocation location = metadata.findPageLocation(snapshot, pageId);
+		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+																			pool.physical_slot) +
+										static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE + RSS_PAGE_OWNER_HEADER_BYTES;
+		snapshot.release();
+		io->writeAt(offset, bytes.data(), bytes.size());
+		io->sync();
+	}
+
+	void expectAlreadyPublishedPayloadRejected(bool pq) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		VectorPageStore vectors(io, *metadata);
+		VectorAdjacencyPageStore adjacencies(io, *metadata);
+		VectorManifestStore manifests(io, *metadata);
+		SlottedPagePool slotted(io, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(io, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<PageId> pageId = pq ? VectorPqMapping::findPage(snapshot, trees, *metadata, PQ_MAPPING_ID, 1U)
+															 : VectorAdjacencyMapping::findPage(snapshot, trees, *metadata,
+																						 ADJACENCY_MAPPING_ID, 1U);
+		ASSERT_TRUE(pageId.has_value());
+		if (pq) {
+			VectorPage page = vectors.read(snapshot, *pageId);
+			const std::optional<uint16_t> slot = page.findVectorId(1U);
+			ASSERT_TRUE(slot.has_value());
+			std::vector<std::byte> record = page.read(*slot);
+			record.back() ^= std::byte{0x01};
+			page.overwrite(*slot, record);
+			snapshot.release();
+			overwritePagePayload(*metadata, *pageId, page.serialize());
+		} else {
+			SlottedPage page = adjacencies.readPage(snapshot, *pageId);
+			std::optional<SlottedSlotReference> record;
+			for (const SlottedSlotReference &slot: page.liveSlots()) {
+				if (VectorAdjacencyCodec::decode(page.read(slot)).vector_id == 1U) {
+					record = slot;
+					break;
+				}
+			}
+			ASSERT_TRUE(record.has_value());
+			page.overwrite(*record, VectorAdjacencyCodec::encode({1U, {3U}}));
+			snapshot.release();
+			overwritePagePayload(*metadata, *pageId, page.serialize());
+		}
+		auto reopenedMetadata = RelocatableMetadataStore::open(io);
+		VectorPageStore reopenedVectors(io, *reopenedMetadata);
+		VectorAdjacencyPageStore reopenedAdjacencies(io, *reopenedMetadata);
+		VectorManifestStore reopenedManifests(io, *reopenedMetadata);
+		SlottedPagePool reopenedSlotted(io, *reopenedMetadata);
+		BTreePageStore reopenedTrees(reopenedSlotted, *reopenedMetadata);
+		PhysicalSegmentAllocator reopenedSegments(io, *reopenedMetadata);
+		VectorCodebookStore reopenedCodebooks(reopenedSegments, *reopenedMetadata);
+		EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+					 reopenedTrees, reopenedVectors, reopenedAdjacencies, reopenedCodebooks, reopenedManifests, *reopenedMetadata,
+					 17U, trainingRecords(), rebuildOptions())),
+				 FormatException);
+		snapshot = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedManifests.read(snapshot, 17U).manifest(), first.manifest);
+		snapshot.release();
 	}
 
 };
@@ -241,6 +590,494 @@ TEST_F(RelocatableOfflineVectorBaseRebuildTest, PublishesOneCompletePqAndAdjacen
 	EXPECT_TRUE(retry.already_published);
 	EXPECT_TRUE(retry.reused_codebook);
 	EXPECT_EQ(retry.manifest, result.manifest);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, PublishesBaseGenerationWithCosineMetric) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests, VectorDistanceMetric::VDM_COSINE);
+
+	const OfflineVectorBaseRebuildResult result = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+	EXPECT_EQ(result.manifest.metric, VectorDistanceMetric::VDM_COSINE);
+	EXPECT_TRUE(result.manifest.pq_mapping_root_page_id.isValid());
+	EXPECT_TRUE(result.manifest.adjacency_mapping_root_page_id.isValid());
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, PublishesBaseGenerationWithInnerProductMetric) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests, VectorDistanceMetric::VDM_INNER_PRODUCT);
+
+	const OfflineVectorBaseRebuildResult result = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+	EXPECT_EQ(result.manifest.metric, VectorDistanceMetric::VDM_INNER_PRODUCT);
+	EXPECT_TRUE(result.manifest.pq_mapping_root_page_id.isValid());
+	EXPECT_TRUE(result.manifest.adjacency_mapping_root_page_id.isValid());
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsPqPageBudgetBeforePublishingAnyDerivedGeneration) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	const std::vector<DeterministicPqTrainingRecord> records = trainingRecords(300U);
+	materializeRawAndManifest(*metadata, vectors, manifests, records);
+
+	OfflineVectorBaseRebuildOptions options = rebuildOptions();
+	options.pq.training.maximum_records = records.size();
+	options.pq.training.maximum_samples = 16U;
+	options.pq.pages.maximum_records = records.size();
+	options.pq.pages.maximum_pages = 1U;
+	options.pq.mapping.maximum_entries = records.size();
+	options.pq.mapping.tree.maximum_entries = records.size();
+	options.adjacency.build_mode = VectorAdjacencyBuildMode::VABM_CANDIDATE_PRUNED;
+	options.adjacency.maximum_candidate_records = records.size();
+	options.adjacency.candidate_search_budget = 16U;
+	options.adjacency.pages.maximum_records = records.size();
+	options.adjacency.pages.maximum_pages = 32U;
+	options.adjacency.mapping.maximum_entries = records.size();
+	options.adjacency.mapping.tree.maximum_entries = records.size();
+
+	try {
+		static_cast<void>(OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, records, options));
+		FAIL() << "the derived PQ page plan must honor its page budget";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
+		EXPECT_NE(std::string(error.what()).find("PQ page bound"), std::string::npos);
+	}
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, PQ_MAPPING_ID).has_value());
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, ADJACENCY_MAPPING_ID).has_value());
+	EXPECT_FALSE(metadata->findExtentLocationOptional(
+				 snapshot, VectorCodebookExtentIdCodec::manifestExtentId(options.pq.codebook.codebook_id))
+				 .has_value());
+	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsPqMappingTreeBudgetBeforePublishingAnyDerivedGeneration) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	const std::vector<DeterministicPqTrainingRecord> records = trainingRecords(2000U);
+	materializeRawAndManifest(*metadata, vectors, manifests, records);
+
+	OfflineVectorBaseRebuildOptions options = rebuildOptions();
+	options.pq.training.maximum_records = records.size();
+	options.pq.training.maximum_samples = 16U;
+	options.pq.pages.maximum_records = records.size();
+	options.pq.mapping.maximum_entries = records.size();
+	options.pq.mapping.tree.maximum_entries = records.size();
+	options.pq.mapping.tree.maximum_pages = 1U;
+	options.adjacency.build_mode = VectorAdjacencyBuildMode::VABM_CANDIDATE_PRUNED;
+	options.adjacency.maximum_candidate_records = records.size();
+	options.adjacency.candidate_search_budget = 16U;
+	options.adjacency.pages.maximum_records = records.size();
+	options.adjacency.pages.maximum_pages = 32U;
+	options.adjacency.mapping.maximum_entries = records.size();
+	options.adjacency.mapping.tree.maximum_entries = records.size();
+
+	try {
+		static_cast<void>(OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, records, options));
+		FAIL() << "the immutable PQ mapping tree must honor its page budget";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
+		EXPECT_NE(std::string(error.what()).find("mapping-tree plan"), std::string::npos) << error.what();
+	}
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, PQ_MAPPING_ID).has_value());
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, ADJACENCY_MAPPING_ID).has_value());
+	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, PreservesCanonicalNonPqManifestInventoryAcrossBasePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+
+	MetadataSnapshotPin source = metadata->openSnapshot();
+	VectorManifest base = manifests.read(source, 17U).manifest();
+	const VectorLocation rawLocation = metadata->findVectorLocation(source, 1U);
+	const VectorPage rawPage = vectors.read(source, rawLocation.page_id);
+	source.release();
+	base.entries.push_back({rawLocation.page_id, VectorStorageKind::VSK_RAW, rawPage.header().live_count});
+	replaceManifest(manifests, *metadata, base);
+
+	const OfflineVectorBaseRebuildResult result = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+	EXPECT_TRUE(std::ranges::any_of(result.manifest.entries, [rawLocation](const VectorManifestEntry &entry) {
+		return entry.storage_kind == VectorStorageKind::VSK_RAW && entry.page_id == rawLocation.page_id;
+	}));
+	const OfflineVectorBaseRebuildResult retry = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+	EXPECT_TRUE(retry.already_published);
+	EXPECT_EQ(retry.manifest, result.manifest);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+		RejectsAdjacencyMappingThatTargetsARawPageBeforePublishingAReplacement) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+
+	MetadataSnapshotPin mappingSnapshot = metadata->openSnapshot();
+	const std::vector<BTreePageEntry> mappings =
+			BTreeIndex(ADJACENCY_MAPPING_ID, trees, *metadata).scan(mappingSnapshot, std::nullopt, 16U);
+	const VectorLocation rawLocation = metadata->findVectorLocation(mappingSnapshot, 1U);
+	mappingSnapshot.release();
+	ASSERT_FALSE(mappings.empty());
+	overwriteBTreeLeafEntry(*metadata, trees, ADJACENCY_MAPPING_ID, mappings.front().key,
+						{mappings.front().key, rawLocation.page_id.value()});
+
+	try {
+		static_cast<void>(OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(),
+				rebuildOptions(71U, Generation(2U))));
+		FAIL() << "a raw Vector page must not be decoded as derived adjacency";
+	} catch (const FormatException &error) {
+		EXPECT_NE(std::string(error.what()).find("invalid current pool or owner identity"), std::string::npos)
+				<< error.what();
+	}
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_EQ(manifests.read(snapshot, 17U).manifest(), first.manifest);
+	EXPECT_EQ(metadata->findIndexRoot(snapshot, ADJACENCY_MAPPING_ID).root_page_id,
+			  first.manifest.adjacency_mapping_root_page_id);
+	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedPqMappingWithAMissingEntry) {
+	expectAlreadyPublishedMappingRejected(PQ_MAPPING_ID, true);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedAdjacencyMappingWithAMissingEntry) {
+	expectAlreadyPublishedMappingRejected(ADJACENCY_MAPPING_ID, true);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedPqMappingWithAnUnexpectedVectorId) {
+	expectAlreadyPublishedMappingRejected(PQ_MAPPING_ID, false);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedAdjacencyMappingWithAnUnexpectedVectorId) {
+	expectAlreadyPublishedMappingRejected(ADJACENCY_MAPPING_ID, false);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsPqMappingThatTargetsAnotherVectorIndex) {
+	expectForeignDerivedPageRejected(PQ_MAPPING_ID);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAdjacencyMappingThatTargetsAnotherVectorIndex) {
+	expectForeignDerivedPageRejected(ADJACENCY_MAPPING_ID);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsDanglingPqMappingRoot) {
+	expectDanglingMappingRootRejected(PQ_MAPPING_ID);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsDanglingAdjacencyMappingRoot) {
+	expectDanglingMappingRootRejected(ADJACENCY_MAPPING_ID);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedPqMappingWithDifferentCodes) {
+	expectAlreadyPublishedPayloadRejected(true);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAlreadyPublishedAdjacencyMappingWithDifferentNeighbors) {
+	expectAlreadyPublishedPayloadRejected(false);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, CancellationDuringDerivedBuildLeavesThePreviousGenerationVisible) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+
+	MetadataSnapshotPin beforeSnapshot = metadata->openSnapshot();
+	const VectorManifest before = manifests.read(beforeSnapshot, 17U).manifest();
+	beforeSnapshot.release();
+	ThrowAfterCancellationChecks cancellation(8U);
+	EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions(),
+				&cancellation)),
+			 std::runtime_error);
+	EXPECT_GE(cancellation.checkCount(), 8U);
+
+	MetadataSnapshotPin cancelledSnapshot = metadata->openSnapshot();
+	const VectorManifest afterCancellation = manifests.read(cancelledSnapshot, 17U).manifest();
+	EXPECT_EQ(afterCancellation, before);
+	EXPECT_FALSE(metadata->findIndexRootOptional(cancelledSnapshot, PQ_MAPPING_ID).has_value());
+	EXPECT_FALSE(metadata->findIndexRootOptional(cancelledSnapshot, ADJACENCY_MAPPING_ID).has_value());
+	cancelledSnapshot.release();
+
+	const OfflineVectorBaseRebuildResult retry = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+	EXPECT_FALSE(retry.already_published);
+	EXPECT_TRUE(retry.manifest.pq_mapping_root_page_id.isValid());
+	EXPECT_TRUE(retry.manifest.adjacency_mapping_root_page_id.isValid());
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest, NativePrePublicationSyncFailureRetainsOldGenerationAndCanRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorPageStore vectors(nativeIo, *metadata);
+		VectorAdjacencyPageStore adjacencies(nativeIo, *metadata);
+		VectorManifestStore manifests(nativeIo, *metadata);
+		SlottedPagePool slotted(nativeIo, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(nativeIo, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+						 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions())),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		const VectorManifest oldManifest = manifests.read(current, 17U).manifest();
+		EXPECT_EQ(oldManifest.codebook_id, 0U);
+		EXPECT_FALSE(oldManifest.pq_mapping_root_page_id.isValid());
+		EXPECT_FALSE(oldManifest.adjacency_mapping_root_page_id.isValid());
+		EXPECT_FALSE(metadata->findIndexRootOptional(current, PQ_MAPPING_ID).has_value());
+		EXPECT_FALSE(metadata->findIndexRootOptional(current, ADJACENCY_MAPPING_ID).has_value());
+		EXPECT_FALSE(metadata->findExtentLocationOptional(
+					 current, VectorCodebookExtentIdCodec::manifestExtentId(71U)).has_value());
+		current.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	VectorPageStore vectors(io, *reopened);
+	VectorAdjacencyPageStore adjacencies(io, *reopened);
+	VectorManifestStore manifests(io, *reopened);
+	SlottedPagePool slotted(io, *reopened);
+	BTreePageStore trees(slotted, *reopened);
+	PhysicalSegmentAllocator segments(io, *reopened);
+	VectorCodebookStore codebooks(segments, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(manifests.read(recovered, 17U).manifest().codebook_id, 0U);
+	EXPECT_FALSE(reopened->findIndexRootOptional(recovered, PQ_MAPPING_ID).has_value());
+	EXPECT_FALSE(reopened->findIndexRootOptional(recovered, ADJACENCY_MAPPING_ID).has_value());
+	EXPECT_FALSE(reopened->findExtentLocationOptional(
+				 recovered, VectorCodebookExtentIdCodec::manifestExtentId(71U)).has_value());
+	recovered.release();
+	const OfflineVectorBaseRebuildResult retry = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *reopened, 17U, trainingRecords(), rebuildOptions());
+	EXPECT_FALSE(retry.already_published);
+	MetadataSnapshotPin published = reopened->openSnapshot();
+	EXPECT_EQ(manifests.read(published, 17U).manifest(), retry.manifest);
+	EXPECT_EQ(reopened->findIndexRoot(published, PQ_MAPPING_ID).root_page_id, retry.manifest.pq_mapping_root_page_id);
+	EXPECT_EQ(reopened->findIndexRoot(published, ADJACENCY_MAPPING_ID).root_page_id,
+			  retry.manifest.adjacency_mapping_root_page_id);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+	   NativePostPublicationSyncFailureReportsUncertainDurabilityAndReopensCompleteGeneration) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorPageStore vectors(nativeIo, *metadata);
+		VectorAdjacencyPageStore adjacencies(nativeIo, *metadata);
+		VectorManifestStore manifests(nativeIo, *metadata);
+		SlottedPagePool slotted(nativeIo, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(nativeIo, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+						 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions())),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		const VectorManifest published = manifests.read(current, 17U).manifest();
+		EXPECT_EQ(published.codebook_id, 71U);
+		EXPECT_TRUE(published.pq_mapping_root_page_id.isValid());
+		EXPECT_TRUE(published.adjacency_mapping_root_page_id.isValid());
+		EXPECT_EQ(metadata->findIndexRoot(current, PQ_MAPPING_ID).root_page_id, published.pq_mapping_root_page_id);
+		EXPECT_EQ(metadata->findIndexRoot(current, ADJACENCY_MAPPING_ID).root_page_id,
+				  published.adjacency_mapping_root_page_id);
+		current.release();
+		const OfflineVectorBaseRebuildResult retry = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+		EXPECT_TRUE(retry.already_published);
+		EXPECT_EQ(retry.manifest, published);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	VectorManifestStore manifests(io, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	const VectorManifest published = manifests.read(recovered, 17U).manifest();
+	EXPECT_EQ(published.codebook_id, 71U);
+	EXPECT_TRUE(published.pq_mapping_root_page_id.isValid());
+	EXPECT_TRUE(published.adjacency_mapping_root_page_id.isValid());
+	EXPECT_EQ(reopened->findIndexRoot(recovered, PQ_MAPPING_ID).root_page_id, published.pq_mapping_root_page_id);
+	EXPECT_EQ(reopened->findIndexRoot(recovered, ADJACENCY_MAPPING_ID).root_page_id,
+			  published.adjacency_mapping_root_page_id);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+	   NativePrePublicationSyncFailureRetainsCommittedDeltaOverlayAndCanRetryRetirement) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	const uint64_t deltaMappingId = RSS_DELTA_MAPPING_INTERNAL_INDEX_PREFIX | UINT64_C(0x1A4);
+	VectorManifest deltaManifest;
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+		VectorPageStore vectors(nativeIo, *metadata);
+		VectorAdjacencyPageStore adjacencies(nativeIo, *metadata);
+		VectorManifestStore manifests(nativeIo, *metadata);
+		SlottedPagePool slotted(nativeIo, *metadata);
+		BTreePageStore trees(slotted, *metadata);
+		PhysicalSegmentAllocator segments(nativeIo, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		materializeRawAndManifest(*metadata, vectors, manifests);
+		const OfflineVectorBaseRebuildResult first = OfflineVectorBaseRebuild::run(
+				trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(), rebuildOptions());
+		const VectorDeltaMappingBuildOptions deltaOptions{
+				{PhysicalSlotId(71U), PhysicalSlotId(75U), deltaMappingId, 16U, 4U}, 16U};
+		const std::array<VectorDeltaEntry, 1U> deltaEntries{{{1U, 1U, VectorDeltaOperation::VDO_INSERT}}};
+		static_cast<void>(VectorDeltaMapping::build(trees, *metadata, deltaMappingId, deltaEntries, deltaOptions,
+				LogSequenceNumber(first.superblock.checkpoint_lsn.value() + 1U)));
+		MetadataSnapshotPin deltaSnapshot = metadata->openSnapshot();
+		const IndexRootLocation deltaRoot = metadata->findIndexRoot(deltaSnapshot, deltaMappingId);
+		deltaSnapshot.release();
+		deltaManifest = first.manifest;
+		deltaManifest.delta_mapping_index_id = deltaMappingId;
+		deltaManifest.delta_mapping_root_page_id = deltaRoot.root_page_id;
+		deltaManifest.delta_mapping_root_generation = deltaRoot.root_generation;
+		deltaManifest.delta_entry_count = 1U;
+		deltaManifest.committed_lsn = LogSequenceNumber(first.superblock.checkpoint_lsn.value() + 1U);
+		overwriteManifest(nativeIo, *metadata, deltaManifest);
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(OfflineVectorBaseRebuild::run(
+						 trees, vectors, adjacencies, codebooks, manifests, *metadata, 17U, trainingRecords(),
+						 rebuildOptions(71U, Generation(2U)))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_EQ(manifests.read(current, 17U).manifest(), deltaManifest);
+		EXPECT_EQ(metadata->findIndexRoot(current, deltaMappingId).root_page_id, deltaManifest.delta_mapping_root_page_id);
+		EXPECT_EQ(VectorDeltaMapping::findOperation(current, trees, *metadata, deltaMappingId, 1U),
+				  VectorDeltaOperation::VDO_INSERT);
+		current.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	VectorPageStore vectors(io, *reopened);
+	VectorAdjacencyPageStore adjacencies(io, *reopened);
+	VectorManifestStore manifests(io, *reopened);
+	SlottedPagePool slotted(io, *reopened);
+	BTreePageStore trees(slotted, *reopened);
+	PhysicalSegmentAllocator segments(io, *reopened);
+	VectorCodebookStore codebooks(segments, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(manifests.read(recovered, 17U).manifest(), deltaManifest);
+	EXPECT_EQ(reopened->findIndexRoot(recovered, deltaMappingId).root_page_id,
+			  deltaManifest.delta_mapping_root_page_id);
+	EXPECT_EQ(VectorDeltaMapping::findOperation(recovered, trees, *reopened, deltaMappingId, 1U),
+			  VectorDeltaOperation::VDO_INSERT);
+	recovered.release();
+	const OfflineVectorBaseRebuildResult retry = OfflineVectorBaseRebuild::run(
+			trees, vectors, adjacencies, codebooks, manifests, *reopened, 17U, trainingRecords(),
+			rebuildOptions(71U, Generation(2U)));
+	EXPECT_FALSE(retry.already_published);
+	EXPECT_EQ(retry.manifest.delta_mapping_index_id, 0U);
+	MetadataSnapshotPin published = reopened->openSnapshot();
+	EXPECT_EQ(manifests.read(published, 17U).manifest(), retry.manifest);
+	EXPECT_FALSE(reopened->findIndexRootOptional(published, deltaMappingId).has_value());
 }
 
 TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsAnExistingCodebookWithDifferentCanonicalPayload) {
@@ -514,6 +1351,46 @@ TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsEveryUnboundedOrInconsist
 	reject(17U, records, invalid);
 }
 
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+		RejectsCheckpointLsnExhaustionBeforePublishingACompoundBaseGeneration) {
+	Superblock nearExhaustion = initialSuperblock();
+	nearExhaustion.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 2U);
+	auto metadata = RelocatableMetadataStore::initializeNew(io, nearExhaustion);
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+
+	std::vector<RawVectorMaterializationRecord> raw;
+	for (const DeterministicPqTrainingRecord &record: trainingRecords()) {
+		raw.push_back(rawRecord(record));
+	}
+	static_cast<void>(vectors.materializeRaw(17U, raw, {PhysicalSlotId(40U), PhysicalSlotId(40U), 16U, 4U},
+																			 LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 1U)));
+	VectorManifest manifest;
+	manifest.index_id = 17U;
+	manifest.dimensions = 4U;
+	static_cast<void>(manifests.materialize(manifest, PhysicalSlotId(45U), PhysicalSlotId(45U),
+																				 LogSequenceNumber(std::numeric_limits<uint64_t>::max())));
+
+	MetadataSnapshotPin beforeRejected = metadata->openSnapshot();
+	const Generation generation = beforeRejected.superblock().generation;
+	beforeRejected.release();
+	try {
+		static_cast<void>(OfflineVectorBaseRebuild::run(trees, vectors, adjacencies, codebooks, manifests, *metadata,
+																						 17U, trainingRecords(), rebuildOptions()));
+		FAIL() << "Expected checkpoint-LSN exhaustion";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), FormatError::FERR_ARITHMETIC_OVERFLOW);
+	}
+	MetadataSnapshotPin afterRejected = metadata->openSnapshot();
+	EXPECT_EQ(afterRejected.superblock().generation, generation);
+	afterRejected.release();
+}
+
 TEST_F(RelocatableOfflineVectorBaseRebuildTest, RejectsMixedMetadataDomainsBeforeAnyDerivedPublication) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	VectorPageStore vectors(io, *metadata);
@@ -744,6 +1621,17 @@ TEST_F(RelocatableOfflineVectorBaseRebuildTest,
 	EXPECT_EQ(metadata->findIndexRoot(snapshot, ADJACENCY_MAPPING_ID).root_page_id,
 			  first.manifest.adjacency_mapping_root_page_id);
 	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+		RejectsPqMappingWithANoncanonicalKeyLengthBeforePublishingAReplacement) {
+	expectPqMappingKeyRejectedBeforeReplacement({std::byte{0U}}, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableOfflineVectorBaseRebuildTest,
+		RejectsPqMappingWithTheReservedZeroVectorIdBeforePublishingAReplacement) {
+	expectPqMappingKeyRejectedBeforeReplacement(std::vector<std::byte>(sizeof(uint64_t), std::byte{0U}),
+										 FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableOfflineVectorBaseRebuildTest,

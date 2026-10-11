@@ -1,6 +1,6 @@
 ---
 title: 向量度量
-description: 向量相似度度量是向量搜索和机器学习操作的基础。ZYX 实现了优化的距离计算，支持混合精度（Float32/BFloat16）、SIMD 优化，并与 DiskANN 和乘积量化高效集成。
+description: 向量相似度度量是向量搜索和机器学习操作的基础。ZYX 实现了优化的距离计算，支持混合精度（Float32/BFloat16）、SIMD 优化、原生邻接检索和乘积量化。
 category: 向量
 categoryOrder: 6
 order: 14
@@ -11,7 +11,7 @@ projectOrder: 1
 ---
 # 向量度量
 
-向量相似度度量是向量搜索和机器学习操作的基础。ZYX 实现了优化的距离计算，支持混合精度（Float32/BFloat16）、SIMD 优化，并与 DiskANN 和乘积量化高效集成。
+向量相似度度量是向量搜索和机器学习操作的基础。ZYX 实现了优化的距离计算，支持混合精度（Float32/BFloat16）、SIMD 优化、原生邻接检索和乘积量化。
 
 ## 概述
 
@@ -30,7 +30,7 @@ projectOrder: 1
 - **零分配**：无动态内存分配的高效计算
 - **SIMD 友好**：针对 CPU 向量指令优化的数据布局
 
-`VectorMetric` 类（源码：`include/graph/vector/core/VectorMetric.hpp`）以静态函数形式提供所有距离计算。每个度量函数针对三种精度组合进行了重载：Float32 vs Float32、Float32 vs BFloat16（搜索时的混合精度）以及 BFloat16 vs BFloat16（内部图维护）。所有函数仅使用栈上累加器——无动态内存、无虚函数分派、无异常抛出。
+`VectorMetric` 类（源码：`include/graph/common/VectorMath.hpp`）以静态函数形式提供所有距离计算。每个度量函数针对三种精度组合进行了重载：Float32 vs Float32、Float32 vs BFloat16（搜索时的混合精度）以及 BFloat16 vs BFloat16（原生维护）。所有函数仅使用栈上累加器——无动态内存、无虚函数分派、无异常抛出。
 
 ## 距离度量
 
@@ -121,7 +121,7 @@ Cosine(a,b) = IP(a,b) / (||a|| * ||b||)
 
 ## BFloat16 格式
 
-BFloat16（Brain Floating Point）是一种低精度浮点格式，提供与 Float32 相同的动态范围，但精度有所降低。实现在 `include/graph/vector/core/BFloat16.hpp` 中。
+BFloat16（Brain Floating Point）是一种低精度浮点格式，提供与 Float32 相同的动态范围，但精度有所降低。实现在 `include/graph/common/VectorMath.hpp` 中。
 
 ### 位布局
 
@@ -312,11 +312,11 @@ flowchart TD
 - 原因：捕获偏好对齐
 - 建议：确保归一化
 
-## 与 DiskANN 的集成
+## 原生邻接检索
 
 ### 搜索管线
 
-在 DiskANN 搜索过程中，向量度量在管线的多个阶段被使用。搜索从一个 Float32 查询向量开始，逐步通过精度更高的距离计算：
+在原生邻接检索过程中，向量度量在管线的多个阶段被使用。搜索从一个 Float32 查询向量开始，逐步通过精度更高的距离计算：
 
 ```mermaid
 flowchart TD
@@ -335,7 +335,7 @@ flowchart TD
 
 ### 混合距离策略
 
-DiskANN 根据上下文动态选择基于 PQ 的近似距离和精确 BFloat16 距离：
+原生 Vector generation 根据上下文选择基于 PQ 的近似距离和精确 BFloat16 距离：
 
 - **导航期间（图遍历）**：使用 PQ 近似距离以提高速度——每个邻居评估仅需少量表查找
 - **最终排序**：精确 L2 平方距离（Float32 查询 vs BFloat16 存储向量）确保返回结果的准确性
@@ -411,6 +411,4 @@ PQ 训练中的 K-means 聚类使用 L2 平方距离将样本分配到最近的�
 
 ## 另见
 
-- [DiskANN 算法](/zh/docs/zyx/algorithms/diskann) - 基于图的向量搜索
 - [乘积量化](/zh/docs/zyx/algorithms/product-quantization) - 向量压缩
-- [K-Means 聚类](/zh/docs/zyx/algorithms/kmeans) - 聚类算法

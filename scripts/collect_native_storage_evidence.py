@@ -17,6 +17,7 @@ from typing import Any, Dict, Optional
 MANIFEST_SCHEMA_VERSION = 1
 VECTOR_CALIBRATION_SCHEMA_VERSION = 2
 LARGE_VALUE_CALIBRATION_SCHEMA_VERSION = 1
+BULK_EDGE_CALIBRATION_SCHEMA_VERSION = 3
 MAXIMUM_REPETITIONS = 9999
 CI_ENVIRONMENT_KEYS = (
     "GITHUB_WORKFLOW",
@@ -153,6 +154,125 @@ def _read_large_value_report(path: Path) -> Dict[str, Any]:
     return decoded
 
 
+def _read_bulk_edge_report(path: Path) -> Dict[str, Any]:
+    kind = "bulk-edge"
+    decoded = _read_json_report(path, kind)
+    if decoded.get("schema_version") != BULK_EDGE_CALIBRATION_SCHEMA_VERSION:
+        _fail("bulk-edge calibration report has an unsupported schema version")
+    dataset = decoded.get("dataset")
+    if not isinstance(dataset, dict):
+        _fail("bulk-edge calibration report has no dataset descriptor")
+    _require_string(dataset.get("label"), "bulk-edge dataset label")
+    if dataset.get("generated") is not True:
+        _fail("bulk-edge dataset must be declared generated")
+    edge_count = _require_nonnegative_integer(dataset.get("edge_count"), "bulk-edge count")
+    if edge_count == 0:
+        _fail("bulk-edge count must be nonzero")
+    _require_string(decoded.get("hardware_label"), "bulk-edge hardware label")
+
+    storage = decoded.get("storage")
+    if not isinstance(storage, dict) or storage.get("single_file") is not True:
+        _fail("bulk-edge calibration report must attest to one database file")
+    for field in ("database_bytes", "bytes_per_edge"):
+        _require_nonnegative_number(storage.get(field), f"bulk-edge storage {field}")
+    sidecar_files = storage.get("sidecar_files")
+    if not isinstance(sidecar_files, list) or any(not isinstance(name, str) or not name for name in sidecar_files):
+        _fail("bulk-edge storage sidecar list is invalid")
+    if sidecar_files:
+        _fail("bulk-edge calibration report must not name WAL/SHM sidecars")
+    if storage["database_bytes"] == 0:
+        _fail("bulk-edge database byte count must be nonzero")
+    expected_bytes_per_edge = float(storage["database_bytes"]) / edge_count
+    if not math.isclose(float(storage["bytes_per_edge"]), expected_bytes_per_edge, rel_tol=1e-9, abs_tol=1e-9):
+        _fail("bulk-edge storage bytes per Edge is internally inconsistent")
+
+    ingest = decoded.get("ingest")
+    if not isinstance(ingest, dict):
+        _fail("bulk-edge calibration report has no ingest metrics")
+    for field in ("staging_ms", "commit_ms", "edges_per_second"):
+        _require_nonnegative_number(ingest.get(field), f"bulk-edge ingest {field}")
+    ingest_seconds = (float(ingest["staging_ms"]) + float(ingest["commit_ms"])) / 1000.0
+    expected_edges_per_second = float(edge_count) / ingest_seconds if ingest_seconds > 0.0 else 0.0
+    if not math.isclose(float(ingest["edges_per_second"]), expected_edges_per_second, rel_tol=1e-9, abs_tol=1e-9):
+        _fail("bulk-edge ingest throughput is internally inconsistent")
+
+    reopen_scan = decoded.get("reopen_scan")
+    if not isinstance(reopen_scan, dict):
+        _fail("bulk-edge calibration report has no reopen/scan metrics")
+    for field in ("reopen_ms", "scan_ms", "close_ms", "total_ms"):
+        _require_nonnegative_number(reopen_scan.get(field), f"bulk-edge reopen/scan {field}")
+    component_total_ms = sum(float(reopen_scan[field]) for field in ("reopen_ms", "scan_ms", "close_ms"))
+    if float(reopen_scan["total_ms"]) + 1e-9 < component_total_ms:
+        _fail("bulk-edge reopen/scan total is smaller than its component timings")
+    _require_nonnegative_number(decoded.get("endpoint_setup_ms"), "bulk-edge endpoint setup")
+    _require_nonnegative_integer(decoded.get("peak_rss_bytes"), "bulk-edge peak RSS")
+
+    scratch = decoded.get("scratch")
+    if not isinstance(scratch, dict):
+        _fail("bulk-edge calibration report has no scratch candidate metrics")
+    scratch_candidates = _require_nonnegative_integer(
+        scratch.get("candidate_segments"), "bulk-edge scratch candidate segment count"
+    )
+    scratch_capacity = _require_nonnegative_integer(
+        scratch.get("candidate_capacity_segments"), "bulk-edge scratch candidate capacity"
+    )
+    scratch_limit = _require_nonnegative_integer(scratch.get("candidate_limit"), "bulk-edge scratch candidate limit")
+    candidate_breakdown = [
+        _require_nonnegative_integer(scratch.get(field), f"bulk-edge scratch {field}")
+        for field in (
+            "token_candidates",
+            "token_resolver_candidates",
+            "outgoing_adjacency_candidates",
+            "incoming_adjacency_candidates",
+            "large_value_content_candidates",
+        )
+    ]
+    source_run_count = _require_nonnegative_integer(scratch.get("source_run_count"), "bulk-edge scratch source run count")
+    scratch_merge_passes = _require_nonnegative_integer(scratch.get("merge_passes"), "bulk-edge scratch merge pass count")
+    if scratch_candidates == 0 or source_run_count == 0 or scratch_capacity > scratch_limit:
+        _fail("bulk-edge scratch candidate metrics are internally inconsistent")
+    if scratch_candidates > scratch_capacity or sum(candidate_breakdown) != scratch_capacity:
+        _fail("bulk-edge scratch candidate breakdown is internally inconsistent")
+
+    trace = decoded.get("trace")
+    if not isinstance(trace, dict) or type(trace.get("enabled")) is not bool:
+        _fail("bulk-edge calibration report has an incomplete trace descriptor")
+    _require_nonnegative_integer(trace.get("maximum_phases"), "bulk-edge trace maximum phases")
+    for name in ("commit", "scan"):
+        phases = trace.get(name)
+        if not isinstance(phases, list):
+            _fail(f"bulk-edge trace {name} phases must be a list")
+        if len(phases) > trace["maximum_phases"]:
+            _fail(f"bulk-edge trace {name} phases exceed their declared maximum")
+        for phase in phases:
+            if not isinstance(phase, dict):
+                _fail(f"bulk-edge trace {name} phase must be an object")
+            _require_string(phase.get("name"), f"bulk-edge trace {name} phase name")
+            _require_nonnegative_number(phase.get("milliseconds"), f"bulk-edge trace {name} phase duration")
+        if trace["enabled"] is False and phases:
+            _fail(f"bulk-edge disabled trace {name} must not contain phases")
+    gate = _require_passed_gate(decoded, kind)
+    thresholds = gate.get("thresholds")
+    if not isinstance(thresholds, dict):
+        _fail("bulk-edge calibration report has an incomplete gate result")
+    candidate_threshold = _require_nonnegative_integer(
+        thresholds.get("maximum_scratch_candidate_segments"), "bulk-edge scratch candidate threshold"
+    )
+    if candidate_threshold == 0 or scratch_candidates > candidate_threshold:
+        _fail("bulk-edge scratch candidate gate is internally inconsistent")
+    source_run_threshold = _require_nonnegative_integer(
+        thresholds.get("minimum_scratch_source_runs"), "bulk-edge scratch source-run threshold"
+    )
+    merge_pass_threshold = _require_nonnegative_integer(
+        thresholds.get("minimum_scratch_merge_passes"), "bulk-edge scratch merge-pass threshold"
+    )
+    if source_run_threshold == 0 or source_run_count < source_run_threshold:
+        _fail("bulk-edge scratch source-run gate is internally inconsistent")
+    if scratch_merge_passes < merge_pass_threshold:
+        _fail("bulk-edge scratch merge-pass gate is internally inconsistent")
+    return decoded
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     try:
@@ -220,15 +340,37 @@ def _large_value_report_summary(path: Path, report: Dict[str, Any]) -> Dict[str,
     }
 
 
+def _bulk_edge_report_summary(path: Path, report: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "file_name": path.name,
+        "sha256": _sha256(path),
+        "schema_version": report["schema_version"],
+        "dataset": report["dataset"],
+        "hardware_label": report["hardware_label"],
+        "storage": report["storage"],
+        "ingest": report["ingest"],
+        "reopen_scan": report["reopen_scan"],
+        "scratch": report["scratch"],
+        "peak_rss_bytes": report["peak_rss_bytes"],
+        "gate": {
+            "enforced": report["gate"]["enforced"],
+            "passed": report["gate"]["passed"],
+            "thresholds": report["gate"]["thresholds"],
+        },
+    }
+
+
 def _validate_repetitions(value: int, description: str, minimum: int) -> int:
     if value < minimum or value > MAXIMUM_REPETITIONS:
         _fail(f"{description} must be between {minimum} and {MAXIMUM_REPETITIONS}")
     return value
 
 
-def collect(build_report_path: Path, query_report_path: Path, large_value_report_path: Path, output_path: Path,
+def collect(build_report_path: Path, query_report_path: Path, large_value_report_path: Path, bulk_edge_report_path: Path,
+            output_path: Path,
             recovery_repetitions: int, endurance_repetitions: int, *, native_lifecycle_log_path: Path,
             recovery_maintenance_log_path: Path, vector_smoke_data_path: Path, large_value_smoke_data_path: Path,
+            bulk_edge_smoke_data_path: Path,
             endurance_log_path: Optional[Path] = None) -> Dict[str, Any]:
     """Validate passed native-storage reports and publish an immutable audit manifest."""
     recovery_repetitions = _validate_repetitions(recovery_repetitions, "recovery repetitions", 1)
@@ -236,6 +378,7 @@ def collect(build_report_path: Path, query_report_path: Path, large_value_report
     build_report = _read_vector_report(build_report_path, "build")
     query_report = _read_vector_report(query_report_path, "query")
     large_value_report = _read_large_value_report(large_value_report_path)
+    bulk_edge_report = _read_bulk_edge_report(bulk_edge_report_path)
     if build_report["dataset"]["label"] != query_report["dataset"]["label"]:
         _fail("build and query calibration reports must name the same frozen dataset label")
     if build_report["hardware_label"] != query_report["hardware_label"]:
@@ -253,6 +396,9 @@ def collect(build_report_path: Path, query_report_path: Path, large_value_report
         ),
         "large_value_smoke_data_file": _evidence_file_summary(
             large_value_smoke_data_path, "LargeValue smoke database data file"
+        ),
+        "bulk_edge_smoke_data_file": _evidence_file_summary(
+            bulk_edge_smoke_data_path, "bulk-edge smoke database data file"
         ),
     }
     if endurance_repetitions == 0:
@@ -279,6 +425,7 @@ def collect(build_report_path: Path, query_report_path: Path, large_value_report
                 "query": _vector_report_summary(query_report_path, query_report),
             },
             "large_value": _large_value_report_summary(large_value_report_path, large_value_report),
+            "bulk_edge": _bulk_edge_report_summary(bulk_edge_report_path, bulk_edge_report),
         },
         "executed_repetitions": {
             "recovery_maintenance": recovery_repetitions,
@@ -306,6 +453,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-report", type=Path, required=True, help="passed vector-build calibration JSON")
     parser.add_argument("--query-report", type=Path, required=True, help="passed vector-query calibration JSON")
     parser.add_argument("--large-value-report", type=Path, required=True, help="passed LargeValue calibration JSON")
+    parser.add_argument("--bulk-edge-report", type=Path, required=True, help="passed bulk-edge calibration JSON")
     parser.add_argument("--output", type=Path, required=True, help="new evidence-manifest JSON path")
     parser.add_argument("--recovery-repetitions", type=int, required=True, help="completed recovery/maintenance repeats")
     parser.add_argument("--endurance-repetitions", type=int, default=0, help="optional completed manual endurance repeats")
@@ -315,6 +463,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vector-smoke-data", type=Path, required=True, help="generated vector smoke database data file")
     parser.add_argument("--large-value-smoke-data", type=Path, required=True,
                         help="generated LargeValue smoke database data file")
+    parser.add_argument("--bulk-edge-smoke-data", type=Path, required=True,
+                        help="generated bulk-edge smoke database data file")
     parser.add_argument("--endurance-log", type=Path, help="completed optional manual endurance transcript")
     return parser.parse_args()
 
@@ -323,10 +473,12 @@ def main() -> int:
     args = parse_args()
     try:
         manifest = collect(
-            args.build_report, args.query_report, args.large_value_report, args.output, args.recovery_repetitions,
+            args.build_report, args.query_report, args.large_value_report, args.bulk_edge_report, args.output,
+            args.recovery_repetitions,
             args.endurance_repetitions, native_lifecycle_log_path=args.native_lifecycle_log,
             recovery_maintenance_log_path=args.recovery_maintenance_log,
             vector_smoke_data_path=args.vector_smoke_data, large_value_smoke_data_path=args.large_value_smoke_data,
+            bulk_edge_smoke_data_path=args.bulk_edge_smoke_data,
             endurance_log_path=args.endurance_log,
         )
     except ValueError as error:

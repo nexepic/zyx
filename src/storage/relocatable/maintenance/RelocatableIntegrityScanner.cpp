@@ -212,10 +212,9 @@ namespace graph::storage {
 			const ScannedPage &rootPage = pages.at(root.root_page_id.value());
 			const BTreePage rootNode = BTreePage::open(rootPage.owner, rootPage.payload);
 			const BTreePageHeader rootHeader = rootNode.header();
-			if (rootHeader.kind == BTreeNodeKind::BPN_LEAF &&
-				(rootHeader.left_sibling.isValid() || rootHeader.right_sibling.isValid())) {
+			if (rootHeader.left_sibling.isValid() || rootHeader.right_sibling.isValid()) {
 				throwIntegrityError(
-						"relocatable integrity scan found an adjacency mapping root leaf with sibling links");
+						"relocatable integrity scan found an adjacency mapping root with sibling links");
 			}
 
 			std::vector<BTreeScanWorkItem> work;
@@ -312,6 +311,13 @@ namespace graph::storage {
 			requireIntegrity(catalog.emplace(entry.segment_id.value(), entry).second,
 							 "relocatable integrity scan found duplicate Catalog Segment IDs");
 			++report.catalog_entries;
+			// Scratch is transaction-private and deliberately has no public root.
+			// A read-only integrity scan cannot know whether its owner is still alive,
+			// so a sealed scratch entry is recovery-required rather than silently
+			// counted as healthy graph storage.
+			if (entry.kind == SegmentKind::SGK_BULK_SCRATCH && entry.state == SegmentState::SGS_SEALED) {
+				throwIntegrityError("relocatable integrity scan found unpublished bulk scratch requiring writable recovery");
+			}
 			if ((entry.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
 				 entry.owner_id != RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID) ||
 				(entry.kind == SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL &&
@@ -340,6 +346,8 @@ namespace graph::storage {
 			const uint8_t invalid =
 					static_cast<uint8_t>(entry.retired_generation > superblock.generation) |
 					static_cast<uint8_t>(current == catalog.end()) |
+					static_cast<uint8_t>(current != catalog.end() &&
+										 entry.retired_generation < current->second.generation) |
 					static_cast<uint8_t>(!metadata_.allocator_.isAllocated(superblock, entry.physical_slot));
 			if (invalid != 0U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -466,12 +474,18 @@ namespace graph::storage {
 								throwIntegrityError("relocatable integrity scan found an Entity Property LargeValue reference "
 													"with an invalid content type");
 							}
-							root = EntityPropertyCollectionRootCodec::decode(
-									largeValues.read(snapshot, largeValueReference.value));
-							const EntityPropertyKey resolvedKey = entityPropertyKeyForRoot(root);
-							if (resolvedKey != referenceKey) {
-								throwIntegrityError("relocatable integrity scan found an Entity Property LargeValue root "
-															"with mismatched ownership");
+							const std::vector<std::byte> payload = largeValues.read(snapshot, largeValueReference.value);
+							if (EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+								root.owner_entity_id = largeValueReference.owner_entity_id;
+								root.owner_entity_type = largeValueReference.owner_entity_type;
+								root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload);
+							} else {
+								root = EntityPropertyCollectionRootCodec::decode(payload);
+								const EntityPropertyKey resolvedKey = entityPropertyKeyForRoot(root);
+								if (resolvedKey != referenceKey) {
+									throwIntegrityError("relocatable integrity scan found an Entity Property LargeValue root "
+															 "with mismatched ownership");
+								}
 							}
 						} else {
 							throwIntegrityError(

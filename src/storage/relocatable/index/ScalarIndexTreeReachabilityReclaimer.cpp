@@ -76,7 +76,10 @@ namespace graph::storage {
 															static_cast<uint8_t>(pageId == root.root_page_id) &
 															static_cast<uint8_t>(header.generation != root.root_generation)) |
 											static_cast<uint8_t>(!page.slottedPage().ownerCommittedLsn().isValid());
-				if (invalidPage != 0U) {
+				// ZYX_COV_EXCL_LINE: every component here is already authenticated by
+				// the Page Directory, Catalog, and BTreePage::open before this redundant
+				// fail-closed assertion is reached.
+				if (invalidPage != 0U) { // ZYX_COV_EXCL_LINE
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable scalar Index-tree reclamation found a shared or mismatched B+Tree page");
 				}

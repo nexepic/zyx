@@ -20,26 +20,33 @@
 
 #include "graph/core/Transaction.hpp"
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/gds/LogicalProjectionCatalog.hpp"
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
+#include "graph/storage/StorageBackend.hpp"
 
 #include <stdexcept>
 
 namespace graph {
 
 	Transaction::Transaction(uint64_t txnId, std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction,
-							 std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount) :
+							 std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount,
+							 std::shared_ptr<storage::StorageBackend> backendLifetime) :
 		txnId_(txnId), readOnly_(logicalTransaction && logicalTransaction->isReadOnly()),
-		logicalTransaction_(std::move(logicalTransaction)),
+		backendLifetime_(std::move(backendLifetime)), logicalTransaction_(std::move(logicalTransaction)),
 		activeLogicalWriteTransactionCount_(std::move(activeWriteTransactionCount)) {
 		if (!logicalTransaction_) {
 			throw std::invalid_argument("logical core transaction requires a transaction");
+		}
+		if (!backendLifetime_) {
+			throw std::invalid_argument("logical core transaction requires a backend lifetime anchor");
 		}
 		if (!readOnly_ && !activeLogicalWriteTransactionCount_) {
 			throw std::invalid_argument("logical write transaction requires an active-transaction counter");
 		}
 
 		logicalOverlay_ = std::make_unique<storage::LogicalGraphTransactionOverlay>(*logicalTransaction_);
+		logicalProjectionCatalog_ = std::make_unique<query::gds::LogicalProjectionCatalog>();
 		if (!readOnly_) {
 			activeLogicalWriteTransactionCount_->fetch_add(1U, std::memory_order_acq_rel);
 			logicalWriteTransactionCounted_ = true;
@@ -51,6 +58,9 @@ namespace graph {
 			activeLogicalWriteTransactionCount_->fetch_sub(1U, std::memory_order_acq_rel);
 			logicalWriteTransactionCounted_ = false;
 		}
+		// Commit/rollback releases the transaction snapshot first. The backend may
+		// then close normally even if the public Transaction object remains alive.
+		backendLifetime_.reset();
 	}
 
 	void Transaction::rollbackActiveLogicalTransactionNoexcept() noexcept {
@@ -64,6 +74,7 @@ namespace graph {
 			// The transaction object owns the failed overlay and is being retired.
 		}
 		state_ = TxnState::TXN_ROLLED_BACK;
+		logicalProjectionCatalog_.reset();
 		finishLogicalTransaction();
 	}
 
@@ -72,9 +83,10 @@ namespace graph {
 	}
 
 	Transaction::Transaction(Transaction &&other) noexcept :
-		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_),
+		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_), backendLifetime_(std::move(other.backendLifetime_)),
 		logicalTransaction_(std::move(other.logicalTransaction_)),
 		logicalOverlay_(std::move(other.logicalOverlay_)),
+		logicalProjectionCatalog_(std::move(other.logicalProjectionCatalog_)),
 		activeLogicalWriteTransactionCount_(std::move(other.activeLogicalWriteTransactionCount_)),
 		logicalWriteTransactionCounted_(other.logicalWriteTransactionCounted_) {
 		other.state_ = TxnState::TXN_ROLLED_BACK; // Prevent other's destructor from rolling back
@@ -88,8 +100,10 @@ namespace graph {
 			txnId_ = other.txnId_;
 			state_ = other.state_;
 			readOnly_ = other.readOnly_;
+			backendLifetime_ = std::move(other.backendLifetime_);
 			logicalTransaction_ = std::move(other.logicalTransaction_);
 			logicalOverlay_ = std::move(other.logicalOverlay_);
+			logicalProjectionCatalog_ = std::move(other.logicalProjectionCatalog_);
 			activeLogicalWriteTransactionCount_ = std::move(other.activeLogicalWriteTransactionCount_);
 			logicalWriteTransactionCounted_ = other.logicalWriteTransactionCounted_;
 
@@ -106,10 +120,12 @@ namespace graph {
 		try {
 			static_cast<void>(logicalTransaction_->commit());
 			state_ = TxnState::TXN_COMMITTED;
+			logicalProjectionCatalog_.reset();
 			finishLogicalTransaction();
 		} catch (...) {
 			if (logicalTransaction_->state() != storage::LogicalGraphTransactionState::LGTTS_ACTIVE) {
 				state_ = TxnState::TXN_ROLLED_BACK;
+				logicalProjectionCatalog_.reset();
 				finishLogicalTransaction();
 			}
 			throw;
@@ -123,10 +139,12 @@ namespace graph {
 		try {
 			logicalTransaction_->rollback();
 			state_ = TxnState::TXN_ROLLED_BACK;
+			logicalProjectionCatalog_.reset();
 			finishLogicalTransaction();
 		} catch (...) {
 			if (logicalTransaction_->state() != storage::LogicalGraphTransactionState::LGTTS_ACTIVE) {
 				state_ = TxnState::TXN_ROLLED_BACK;
+				logicalProjectionCatalog_.reset();
 				finishLogicalTransaction();
 			}
 			throw;
@@ -137,6 +155,10 @@ namespace graph {
 		if (state_ != TxnState::TXN_ACTIVE) {
 			throw std::runtime_error("Cannot execute: transaction is not active");
 		}
+		const auto transactionBackend = std::dynamic_pointer_cast<storage::LogicalGraphReadBackend>(backendLifetime_);
+		if (!transactionBackend || !engine.usesLogicalReadBackend(*transactionBackend)) {
+			throw std::invalid_argument("transaction and query engine belong to different logical backends");
+		}
 		query::QueryContext context;
 		if (readOnly_) {
 			context.execMode = query::ExecMode::EM_READ_ONLY;
@@ -145,7 +167,7 @@ namespace graph {
 			throw std::logic_error("logical transaction has no execution overlay");
 		}
 		return engine.executePlanWithLogicalTransactionOverlay(
-				engine.buildPlan(query), context, *logicalOverlay_, *logicalOverlay_);
+				engine.buildPlan(query), context, *logicalOverlay_, *logicalOverlay_, logicalProjectionCatalog_.get());
 	}
 
 } // namespace graph

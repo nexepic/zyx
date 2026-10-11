@@ -33,6 +33,10 @@ NC='\033[0m'
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT_DIR}/buildDir"
 TOOLCHAIN="${BUILD_DIR}/conan_toolchain.cmake"
+# Keep the Rust release shared library separate from the Debug+coverage test
+# build. Reconfiguring BUILD_DIR here would make the next quick test rebuild
+# every target just to restore its instrumentation settings.
+RUST_BUILD_DIR="${ZYX_BINDINGS_RUST_BUILD_DIR:-${BUILD_DIR}/rust-driver-abi}"
 BUILD_TYPE="Release"
 
 DO_NODE=0
@@ -186,18 +190,18 @@ test_python() {
 test_rust() {
 	local dir="${ROOT_DIR}/bindings/rust"
 	linux_clang_env
-	# Use `system` feature against a prebuilt libzyx, exactly like CI: build the
-	# shared library once, point ZYX_LIB_DIR at it, then cargo test.
+	# Use `system` feature against a dedicated release libzyx. This preserves the
+	# main Debug+coverage test build while still using the same Conan toolchain.
 	log "Building native Driver ABI library (target zyx)"
-	cmake -S "${ROOT_DIR}" -B "${BUILD_DIR}" -G Ninja \
+	cmake -S "${ROOT_DIR}" -B "${RUST_BUILD_DIR}" -G Ninja \
 		-DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN}" \
 		-DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
 		-DZYX_BUILD_TESTS=OFF \
 		-DZYX_BUILD_APPS=OFF \
 		-DZYX_BUILD_PYTHON=OFF
-	cmake --build "${BUILD_DIR}" --target zyx
+	cmake --build "${RUST_BUILD_DIR}" --target zyx
 	log "Running cargo test (system feature)"
-	ZYX_LIB_DIR="${BUILD_DIR}" \
+	ZYX_LIB_DIR="${RUST_BUILD_DIR}" \
 		cargo test --manifest-path "${dir}/Cargo.toml" --workspace --no-default-features --features system
 	ok "Rust binding tests passed"
 }

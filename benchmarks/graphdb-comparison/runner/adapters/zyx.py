@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,6 @@ from runner.adapters.base import (
     EXECUTION_MODES,
     PROFILE_WORKLOADS,
     WorkloadResult,
-    remove_artifact_family,
 )
 from runner.models import ProfileEvent, Sample
 
@@ -109,7 +109,25 @@ class ZyxAdapter(BenchmarkAdapter):
         return [results[workload] for workload in workloads]
 
     def cleanup_artifacts(self) -> list[Path]:
-        return remove_artifact_family(self.db_path)
+        removed: list[Path] = []
+        if not self.db_path.parent.exists():
+            return removed
+
+        # Native ZYX owns one database file. Only remove files created by this
+        # adapter, not retired WAL-style sidecars sharing the same prefix.
+        paths = [(self.db_path, False)] + [
+            (path, True)
+            for path in sorted(self.db_path.parent.glob(f"{self.db_path.name}.load-iteration-*"))
+        ]
+        for path, allow_directory in paths:
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif allow_directory and path.is_dir():
+                shutil.rmtree(path)
+            else:
+                continue
+            removed.append(path)
+        return removed
 
     def _incomplete_workloads(
         self, results: dict[str, WorkloadResult], workloads: list[str], iterations: int

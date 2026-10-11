@@ -21,6 +21,7 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "storage/relocatable/metadata/MetadataPagePoolTestFixture.hpp"
 
@@ -40,6 +41,12 @@ namespace {
 		} catch (const FormatException &error) {
 			EXPECT_EQ(error.error(), expected);
 		}
+	}
+
+	void writeControlHeaderCopies(StorageIO &io, uint64_t poolOffset, const MetadataPagePoolHeader &header) {
+		const auto bytes = MetadataPagePoolHeaderCodec::encode(header);
+		io.writeAt(poolOffset + RSS_ENVELOPE_BYTES, bytes.data(), bytes.size());
+		io.writeAt(poolOffset + RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES, bytes.data(), bytes.size());
 	}
 
 	Superblock superblock(uint64_t generation, uint64_t checkpointLsn) {
@@ -62,7 +69,7 @@ namespace {
 		return result;
 	}
 
-	MetadataRadixPage radixPage(PageId pageId, CatalogRadixPageKind kind, uint16_t level, Generation generation,
+	MetadataRadixPage radixPage(MetadataPageId pageId, CatalogRadixPageKind kind, uint16_t level, Generation generation,
 									   LogSequenceNumber lsn) {
 		MetadataRadixPage page;
 		page.kind = kind;
@@ -111,6 +118,7 @@ namespace {
 				return;
 			case MetadataDirectoryType::MDT_CATALOG:
 			case MetadataDirectoryType::MDT_ALLOCATOR:
+			case MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE:
 				break;
 		}
 		throw std::invalid_argument("test helper requires a Location Directory type");
@@ -121,7 +129,7 @@ namespace {
 		const PhysicalPageRef leafReference = allocator.allocatePage(Generation(1U));
 		LocationLeafPage leaf;
 		leaf.directory_type = directoryType;
-		leaf.page_id = allocator.allocatePageId();
+		leaf.page_id = allocator.allocateMetadataPageId();
 		leaf.generation = Generation(1U);
 		leaf.committed_lsn = LogSequenceNumber(1U);
 		leaf.entries = {{1U, SegmentId(1U), Generation(1U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 0U}};
@@ -132,7 +140,7 @@ namespace {
 		root.kind = CatalogRadixPageKind::CRPK_ROOT;
 		root.directory_type = directoryType;
 		root.level = 0U;
-		root.page_id = allocator.allocatePageId();
+		root.page_id = allocator.allocateMetadataPageId();
 		root.generation = Generation(1U);
 		root.committed_lsn = LogSequenceNumber(1U);
 		root.children[0] = leafReference;
@@ -152,7 +160,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 
 	const PhysicalPageRef leafReference = allocator.allocatePage(Generation(1U));
 	AllocatorLeafPage leaf;
-	leaf.page_id = allocator.allocatePageId();
+	leaf.page_id = allocator.allocateMetadataPageId();
 	leaf.first_slot = PhysicalSlotId(1U);
 	leaf.slot_count = 8U;
 	leaf.generation = Generation(1U);
@@ -160,7 +168,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 	pages.writeAllocatorLeaf(leafReference, leaf);
 
 	const PhysicalPageRef internalReference = allocator.allocatePage(Generation(1U));
-	MetadataRadixPage internal = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_INTERNAL, 0U,
+	MetadataRadixPage internal = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_INTERNAL, 0U,
 														 Generation(1U), LogSequenceNumber(1U));
 	internal.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	internal.children[0] = leafReference;
@@ -168,7 +176,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 	pages.writeMetadataRadix(internalReference, internal);
 
 	const PhysicalPageRef rootReference = allocator.allocatePage(Generation(1U));
-	MetadataRadixPage root = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_ROOT, 1U, Generation(1U),
+	MetadataRadixPage root = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_ROOT, 1U, Generation(1U),
 											  LogSequenceNumber(1U));
 	root.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	root.children[0] = internalReference;
@@ -186,7 +194,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 
 	const PhysicalPageRef fullLeafReference = allocator.allocatePage(Generation(1U));
 	AllocatorLeafPage fullLeaf;
-	fullLeaf.page_id = allocator.allocatePageId();
+	fullLeaf.page_id = allocator.allocateMetadataPageId();
 	fullLeaf.first_slot = PhysicalSlotId(1U);
 	fullLeaf.slot_count = 8U;
 	fullLeaf.generation = Generation(1U);
@@ -194,7 +202,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 	fullLeaf.allocated_slots[0] = std::byte{0xFF};
 	pages.writeAllocatorLeaf(fullLeafReference, fullLeaf);
 	const PhysicalPageRef fullRootReference = allocator.allocatePage(Generation(1U));
-	MetadataRadixPage fullRoot = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_ROOT, 0U,
+	MetadataRadixPage fullRoot = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_ROOT, 0U,
 														 Generation(1U), LogSequenceNumber(1U));
 	fullRoot.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	fullRoot.children[0] = fullLeafReference;
@@ -204,7 +212,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 
 	const PhysicalPageRef partialLeafReference = allocator.allocatePage(Generation(1U));
 	AllocatorLeafPage partialLeaf;
-	partialLeaf.page_id = allocator.allocatePageId();
+	partialLeaf.page_id = allocator.allocateMetadataPageId();
 	partialLeaf.first_slot = PhysicalSlotId(1U);
 	partialLeaf.slot_count = 7U;
 	partialLeaf.generation = Generation(1U);
@@ -212,7 +220,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryValidatesNestedAllocatorSummaryA
 	partialLeaf.allocated_slots[0] = std::byte{0x7F};
 	pages.writeAllocatorLeaf(partialLeafReference, partialLeaf);
 	const PhysicalPageRef partialRootReference = allocator.allocatePage(Generation(1U));
-	MetadataRadixPage partialRoot = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_ROOT, 0U,
+	MetadataRadixPage partialRoot = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_ROOT, 0U,
 														 Generation(1U), LogSequenceNumber(1U));
 	partialRoot.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	partialRoot.children[0] = partialLeafReference;
@@ -228,13 +236,13 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryAcceptsACompletelyAllocatedAlloc
 	MetadataPageFile pages(io, initial);
 	MetadataPagePoolAllocator allocator(io, initial);
 
-	MetadataRadixPage internal = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_INTERNAL, 0U,
+	MetadataRadixPage internal = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_INTERNAL, 0U,
 														 Generation(1U), LogSequenceNumber(1U));
 	internal.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
 		const PhysicalPageRef leafReference = allocator.allocatePage(Generation(1U));
 		AllocatorLeafPage leaf;
-		leaf.page_id = allocator.allocatePageId();
+		leaf.page_id = allocator.allocateMetadataPageId();
 		leaf.first_slot = PhysicalSlotId(static_cast<uint64_t>(index) * RSS_ALLOCATOR_PAGE_SLOT_CAPACITY + 1U);
 		leaf.slot_count = 1U;
 		leaf.generation = Generation(1U);
@@ -247,7 +255,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryAcceptsACompletelyAllocatedAlloc
 	pages.writeMetadataRadix(internalReference, internal);
 
 	const PhysicalPageRef rootReference = allocator.allocatePage(Generation(1U));
-	MetadataRadixPage root = radixPage(allocator.allocatePageId(), CatalogRadixPageKind::CRPK_ROOT, 1U, Generation(1U),
+	MetadataRadixPage root = radixPage(allocator.allocateMetadataPageId(), CatalogRadixPageKind::CRPK_ROOT, 1U, Generation(1U),
 											  LogSequenceNumber(1U));
 	root.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	root.children[0] = internalReference;
@@ -346,6 +354,27 @@ TEST_F(RelocatableMetadataPagePoolTest, RootDiscoveryTraversesAnIndirectCatalogD
 			static_cast<void>(MetadataPagePoolAllocator(io, second, MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY)));
 }
 
+TEST_F(RelocatableMetadataPagePoolTest, RootDiscoveryUsesBootstrapRoutesWhenPhysicalRootsAreAbsent) {
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	CatalogTree tree(pages, allocator);
+	const Superblock populated = tree.upsertAndPublish(
+			bootstrap, initial, std::vector{entry(1U, 101U, 2U, 2U)}, LogSequenceNumber(2U));
+	MetadataPagePoolAllocator migrationAllocator(io, populated);
+	MetadataPageFile migrationPages(io, populated);
+	MetadataWriteBatch migration(migrationAllocator, populated, LogSequenceNumber(3U));
+	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrapMigration(migration));
+	migration.publish(bootstrap);
+	Superblock routed = migration.candidate();
+	routed.catalog_root = {};
+	routed.allocator_root = {};
+
+	EXPECT_NO_THROW(static_cast<void>(MetadataPagePoolAllocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER)));
+}
+
 TEST_F(RelocatableMetadataPagePoolTest, DiscoveryOnlyOpenAcceptsAnEmptyMetadataTail) {
 	const Superblock initial = superblock(1U, 1U);
 	SuperblockFile bootstrap(io);
@@ -367,8 +396,7 @@ TEST_F(RelocatableMetadataPagePoolTest, RootDiscoveryRejectsHeaderSegmentIdentit
 			(root.physical_slot.value() - 1U) * static_cast<uint64_t>(RSS_SEGMENT_SIZE);
 	MetadataPagePoolHeader header = allocator.poolHeader(root.physical_slot);
 	header.segment_id = SegmentId(header.segment_id.value() + 1U);
-	const auto headerBytes = MetadataPagePoolHeaderCodec::encode(header);
-	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES, headerBytes.data(), headerBytes.size());
+	writeControlHeaderCopies(*io, poolOffset, header);
 	io->sync();
 
 	expectFormatError(

@@ -103,6 +103,11 @@ namespace graph {
 		debug::ScopedPerfTimer totalTimer("db.close.total");
 		debug::ScopedPerfTimer storageTimer("db.close.storage");
 		backend_->close();
+		// The backend can reject close while a transaction-owned snapshot is
+		// pinned. Keep process-local query state intact until teardown succeeds.
+		if (queryEngine) {
+			queryEngine->resetEphemeralState();
+		}
 	}
 
 	bool Database::exists() const { return std::filesystem::exists(dbPath); }
@@ -139,7 +144,7 @@ namespace graph {
 		}
 		const uint64_t transactionId = nextLogicalTransactionId_.fetch_add(1U, std::memory_order_relaxed);
 		return Transaction(transactionId, logicalTransactions->beginLogicalGraphTransaction(readOnly),
-						   activeLogicalWriteTransactions_);
+						   activeLogicalWriteTransactions_, backend_);
 	}
 
 	void Database::setThreadPoolSize(size_t poolSize) {

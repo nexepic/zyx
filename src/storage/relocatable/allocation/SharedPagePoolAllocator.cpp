@@ -10,6 +10,7 @@
 
 #include <array>
 #include <bit>
+#include <limits>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -46,8 +47,8 @@ namespace graph::storage {
 
 		[[nodiscard]] bool matchesPoolAndOwnerKind(SegmentKind poolKind, PageOwnerKind ownerKind) {
 			switch (poolKind) {
-			case SegmentKind::SGK_ENTITY_PAGE_POOL:
-				return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
+				case SegmentKind::SGK_ENTITY_PAGE_POOL:
+					return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
 				case SegmentKind::SGK_PROPERTY_PAGE_POOL:
 					return ownerKind == PageOwnerKind::POK_PROPERTY;
 				case SegmentKind::SGK_INDEX_PAGE_POOL:
@@ -101,10 +102,71 @@ namespace graph::storage {
 																			   const SharedPagePoolHeader &header) {
 			std::array<std::byte, RSS_PAGE_SIZE> page{};
 			const auto envelopeBytes = SegmentEnvelopeCodec::encode(envelope);
-			const auto headerBytes = SharedPagePoolHeaderCodec::encode(header);
+			SharedPagePoolHeader active = header;
+			active.control_sequence = 1U;
+			SharedPagePoolHeader inactive = header;
+			inactive.control_sequence = 0U;
+			const auto activeBytes = SharedPagePoolHeaderCodec::encode(active);
+			const auto inactiveBytes = SharedPagePoolHeaderCodec::encode(inactive);
 			std::copy(envelopeBytes.begin(), envelopeBytes.end(), page.begin());
-			std::copy(headerBytes.begin(), headerBytes.end(), page.begin() + RSS_ENVELOPE_BYTES);
+			std::copy(activeBytes.begin(), activeBytes.end(), page.begin() + RSS_ENVELOPE_BYTES);
+			std::copy(inactiveBytes.begin(), inactiveBytes.end(),
+					  page.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES);
 			return page;
+		}
+
+		struct PoolControlHeaderSelection {
+			SharedPagePoolHeader header;
+			size_t offset = 0U;
+		};
+
+		[[nodiscard]] PoolControlHeaderSelection
+		selectPoolControlHeader(std::span<const std::byte, RSS_PAGE_SIZE> page) {
+			std::optional<PoolControlHeaderSelection> selected;
+			for (size_t record = 0U; record < RSS_SHARED_PAGE_POOL_CONTROL_RECORD_COUNT; ++record) {
+				const size_t offset = RSS_ENVELOPE_BYTES + record * RSS_SHARED_PAGE_POOL_HEADER_BYTES;
+				try {
+					const SharedPagePoolHeader header =
+							SharedPagePoolHeaderCodec::decode(page.subspan(offset, RSS_SHARED_PAGE_POOL_HEADER_BYTES));
+					if (!selected.has_value() || header.control_sequence > selected->header.control_sequence) {
+						selected = {header, offset};
+					}
+				} catch (const FormatException &) {
+					// A torn inactive record is expected to fail its checksum.  The other
+					// record remains the durable control state until publication succeeds.
+				}
+			}
+			if (!selected.has_value()) {
+				throwSharedPagePoolAllocatorError(FormatError::FERR_CHECKSUM_MISMATCH,
+												  "relocatable shared page-pool has no valid control record");
+			}
+			return *selected;
+		}
+
+		void rewriteInactivePoolControlRecord(StorageIO &io, uint64_t pageOffset, Generation generation,
+											  const SharedPagePoolHeader &replacement, const char *truncatedMessage) {
+			std::array<std::byte, RSS_PAGE_SIZE> page = readTypedPage(io, pageOffset, generation, truncatedMessage);
+			const PoolControlHeaderSelection current = selectPoolControlHeader(page);
+			const uint8_t invalidIdentity =
+					static_cast<uint8_t>(replacement.segment_id != current.header.segment_id) |
+					static_cast<uint8_t>(replacement.generation != current.header.generation) |
+					static_cast<uint8_t>(replacement.committed_lsn != current.header.committed_lsn) |
+					static_cast<uint8_t>(current.header.control_sequence == std::numeric_limits<uint64_t>::max());
+			if (invalidIdentity != 0U) {
+				throwSharedPagePoolAllocatorError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable shared page-pool control record has invalid replacement identity");
+			}
+			SharedPagePoolHeader next = replacement;
+			next.control_sequence = current.header.control_sequence + 1U;
+			const auto bytes = SharedPagePoolHeaderCodec::encode(next);
+			const size_t targetOffset = current.offset == RSS_ENVELOPE_BYTES
+												? RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES
+												: RSS_ENVELOPE_BYTES;
+			// Each record is independently checksummed.  Writing only the inactive
+			// record makes a short write unable to overwrite the envelope or the
+			// currently selected control record.
+			io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
 		}
 
 		[[nodiscard]] std::array<std::byte, RSS_PAGE_SIZE> makeOwnedPage(const PageOwnerHeader &owner,
@@ -145,6 +207,14 @@ namespace graph::storage {
 			}
 		}
 
+		void clearTypedSegmentThrough(StorageIO &io, uint64_t segmentOffset, Generation generation) {
+			// A virgin pool is unreachable until its catalog publication. Clear its
+			// bounded extent in one cache-bypassing range write, while the control
+			// and owned frames below retain their individual durable fault boundaries.
+			static const std::array<std::byte, RSS_SEGMENT_SIZE> zeros{};
+			io.writePagesThrough({segmentOffset, generation.value()}, zeros.data(), zeros.size());
+		}
+
 	} // namespace
 
 	SharedPagePoolAllocator::SharedPagePoolAllocator(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
@@ -159,7 +229,8 @@ namespace graph::storage {
 		}
 		if (openMode == SharedPagePoolOpenMode::SPPOM_RECONCILE) {
 			reconcileCurrentPools();
-		} else if (openMode != SharedPagePoolOpenMode::SPPOM_READ_ONLY) {
+		} else if (openMode != SharedPagePoolOpenMode::SPPOM_READ_ONLY &&
+				   openMode != SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION) {
 			throw std::invalid_argument("relocatable shared page-pool allocator has an unknown open mode");
 		}
 	}
@@ -250,6 +321,13 @@ namespace graph::storage {
 													 std::span<const SharedPagePoolPreparedAppend> pages,
 													 std::span<PageLocation> locations,
 													 LogSequenceNumber checkpointLsn) const {
+		prepareAppendPagesUnderWrite(*io_, data_region_offset_, pool, pages, locations, checkpointLsn);
+	}
+
+	void SharedPagePoolAllocator::prepareAppendPagesUnderWrite(
+			StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+			std::span<const SharedPagePoolPreparedAppend> pages, std::span<PageLocation> locations,
+			LogSequenceNumber checkpointLsn) {
 		// ZYX_COV_EXCL_START: BTreePageStore invokes this private helper only after validating a nonempty,
 		// cardinality-matched batch and a valid publication LSN.
 		if (pages.empty() || pages.size() != locations.size() || !checkpointLsn.isValid()) {
@@ -265,7 +343,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared page batch append requires one current sealed shared pool");
 		}
-		SharedPagePoolHeader capacity = readPoolHeader(pool);
+		SharedPagePoolHeader capacity = readPoolHeader(io, dataRegionOffset, pool);
 		std::set<PageId> pageIds;
 		for (size_t index = 0; index < pages.size(); ++index) {
 			const SharedPagePoolPreparedAppend &prepared = pages[index];
@@ -296,7 +374,8 @@ namespace graph::storage {
 			}
 		}
 
-		SharedPagePoolHeader header = readPoolHeader(pool);
+		SharedPagePoolHeader header = readPoolHeader(io, dataRegionOffset, pool);
+		const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
 		for (size_t index = 0; index < pages.size(); ++index) {
 			const std::optional<uint8_t> frame = SharedPagePoolFrameMap::allocateFirstFree(header);
 			if (!frame.has_value()) { // ZYX_COV_EXCL_LINE: the capacity preflight reserves one frame per page.
@@ -305,7 +384,18 @@ namespace graph::storage {
 			}
 			locations[index].page_index = *frame;
 			locations[index].free_bytes = pages[index].free_bytes;
-			writePreparedPage(pool, header, pages[index].owner, pages[index].payload, *frame);
+			const uint8_t invalid = static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, *frame)) |
+									static_cast<uint8_t>(pages[index].payload.size() != pages[index].owner.payload_bytes);
+			if (invalid != 0U) {
+				throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_STATE,
+												  "relocatable shared page batch append has inconsistent frame or payload metadata");
+			}
+			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(*frame) * RSS_PAGE_SIZE;
+			writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
+			// Persist the owner frame before switching the inactive control record so
+			// a failed write leaves only unreachable state for reconciliation.
+			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
+											 "relocatable shared page-pool control page is truncated");
 		}
 	}
 
@@ -314,6 +404,16 @@ namespace graph::storage {
 													  std::span<PageLocation> locations,
 													  LogSequenceNumber checkpointLsn,
 													  size_t preparedPrefixCount) const {
+		prepareNewPoolPagesUnderWrite(*io_, data_region_offset_, pool, pages, locations, checkpointLsn,
+									  preparedPrefixCount);
+	}
+
+	void SharedPagePoolAllocator::prepareNewPoolPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset,
+																const CatalogEntry &pool,
+																std::span<const SharedPagePoolPreparedAppend> pages,
+																std::span<PageLocation> locations,
+																LogSequenceNumber checkpointLsn,
+																size_t preparedPrefixCount) {
 		if (pages.empty() || pages.size() != locations.size() || pages.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
 			preparedPrefixCount > RSS_PAGE_POOL_DATA_FRAME_COUNT - pages.size() ||
 			!checkpointLsn.isValid()) { // ZYX_COV_EXCL_LINE: private callback receives a MetadataWriteBatch-validated
@@ -340,7 +440,7 @@ namespace graph::storage {
 			// A later typed callback may extend only the exact durable prefix emitted
 			// by earlier callbacks in this publication. Decoding the complete control
 			// page authenticates its envelope, checksum, generation, and frame map.
-			header = readPoolHeader(pool);
+			header = readPoolHeader(io, dataRegionOffset, pool);
 			const uint32_t expectedPrefixMask =
 					(UINT32_C(1) << static_cast<uint32_t>(preparedPrefixCount)) - UINT32_C(1);
 			if (header.allocated_frames != expectedPrefixMask) {
@@ -382,10 +482,8 @@ namespace graph::storage {
 			location.free_bytes = prepared.free_bytes;
 		}
 
-		const uint64_t poolOffset =
-				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
+		const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
 		if (preparedPrefixCount == 0U) {
-			clearTypedSegment(*io_, poolOffset, pool.generation);
 			SegmentEnvelope envelope;
 			envelope.header_bytes = RSS_PAGE_SIZE;
 			envelope.kind = pool.kind;
@@ -395,16 +493,21 @@ namespace graph::storage {
 			envelope.generation = pool.generation;
 			envelope.committed_lsn = pool.committed_lsn;
 			envelope.payload_bytes = RSS_PAGE_POOL_DATA_FRAME_COUNT * RSS_PAGE_SIZE;
-			writeTypedPage(*io_, poolOffset, pool.generation, makePoolControlPage(envelope, header));
+			clearTypedSegmentThrough(io, poolOffset, pool.generation);
+			writeTypedPage(io, poolOffset, pool.generation, makePoolControlPage(envelope, header));
+			for (size_t index = 0U; index < pages.size(); ++index) {
+				const uint64_t pageOffset =
+						poolOffset + static_cast<uint64_t>(locations[index].page_index) * RSS_PAGE_SIZE;
+				writeTypedPage(io, pageOffset, pool.generation,
+							   makeOwnedPage(pages[index].owner, pages[index].payload));
+			}
 		} else {
-			const auto poolHeaderBytes = SharedPagePoolHeaderCodec::encode(header);
-			rewriteTypedPageRange(*io_, poolOffset, pool.generation, RSS_ENVELOPE_BYTES, poolHeaderBytes,
-								  "relocatable shared page-pool control page is truncated");
-		}
-		for (size_t index = 0; index < pages.size(); ++index) {
-			const SharedPagePoolPreparedAppend &prepared = pages[index];
-			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(locations[index].page_index) * RSS_PAGE_SIZE;
-			writeTypedPage(*io_, pageOffset, pool.generation, makeOwnedPage(prepared.owner, prepared.payload));
+			rewriteInactivePoolControlRecord(io, poolOffset, pool.generation, header,
+											 "relocatable shared page-pool control page is truncated");
+			for (size_t index = 0U; index < pages.size(); ++index) {
+				const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(locations[index].page_index) * RSS_PAGE_SIZE;
+				writeTypedPage(io, pageOffset, pool.generation, makeOwnedPage(pages[index].owner, pages[index].payload));
+			}
 		}
 	}
 
@@ -510,42 +613,16 @@ namespace graph::storage {
 			validatePreparedOwner(appends[index].owner, appends[index].payload, appends[index].free_bytes,
 								  location.page_id);
 		}
-		for (const SharedPagePoolPreparedRetirement &retirement: retirements) {
-			const PageLocation &location = retirement.location;
-			const uint8_t invalidLocation =
-					static_cast<uint8_t>(location.segment_id != pool.segment_id) |
-					static_cast<uint8_t>(location.generation != pool.generation) |
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(retirement.expected_owner_id == 0U) |
-					static_cast<uint8_t>(retirement.expected_owner_kind == PageOwnerKind::POK_NONE) |
-					static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
-			// ZYX_COV_EXCL_START: the sole typed callers derive retirement sources from their pinned, deduplicated
-			// plan.
-			if (invalidLocation != 0U || !pageIds.insert(location.page_id).second) {
-				throwSharedPagePoolAllocatorError(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable shared page mutation has an invalid or duplicate retirement source");
+		if (!retirements.empty()) {
+			validateRetirementSources(pool, retirements);
+			for (const SharedPagePoolPreparedRetirement &retirement: retirements) {
+				if (!pageIds.insert(retirement.location.page_id).second) {
+					throwSharedPagePoolAllocatorError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable shared page mutation has a duplicate retirement Page ID");
+				}
+				retirementOwners.push_back(readPageOwner(pool, retirement.location.page_index));
 			}
-			// ZYX_COV_EXCL_STOP
-			const PageOwnerHeader owner = readPageOwner(pool, location.page_index);
-			const uint8_t invalidOwner = static_cast<uint8_t>(owner.page_id != location.page_id) |
-										 static_cast<uint8_t>(owner.owner_id != retirement.expected_owner_id) |
-										 static_cast<uint8_t>(owner.kind != retirement.expected_owner_kind) |
-										 static_cast<uint8_t>(owner.generation != location.generation) |
-										 static_cast<uint8_t>(owner.committed_lsn != retirement.expected_owner_lsn) |
-										 static_cast<uint8_t>(owner.flags != 0U) |
-										 static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, owner.kind));
-			// ZYX_COV_EXCL_START: retirement expectations are read from the pinned, writer-serialized Page
-			// Directory immediately before this callback runs.
-			if (invalidOwner != 0U) {
-				throwSharedPagePoolAllocatorError(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable shared page mutation retirement source is stale or already retired");
-			}
-			// ZYX_COV_EXCL_STOP
-			retirementOwners.push_back(owner);
 		}
 
 		SharedPagePoolHeader capacity = header;
@@ -554,7 +631,11 @@ namespace graph::storage {
 			if (!SharedPagePoolFrameMap::allocateFirstFree(capacity).has_value()) {
 				throwSharedPagePoolAllocatorError(
 						FormatError::FERR_INVALID_STATE,
-						"relocatable shared page-pool has insufficient frames for an atomic mutation");
+						"relocatable shared page-pool has insufficient frames for an atomic mutation (kind " +
+								std::to_string(static_cast<uint32_t>(pool.kind)) + ", segment " +
+								std::to_string(pool.segment_id.value()) + ", replacements " +
+								std::to_string(replacements.size()) + ", appends " + std::to_string(appends.size()) +
+								", owner " + std::to_string(pool.owner_id) + ")");
 			}
 			// ZYX_COV_EXCL_STOP
 		}
@@ -582,16 +663,123 @@ namespace graph::storage {
 			appendLocations[index].free_bytes = appends[index].free_bytes;
 			writePreparedPage(pool, header, appends[index].owner, appends[index].payload, *frame);
 		}
-		const uint64_t poolOffset =
-				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
-		for (size_t index = 0; index < retirements.size(); ++index) {
-			PageOwnerHeader retired = retirementOwners[index];
-			retired.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
-			const auto retiredBytes = PageOwnerHeaderCodec::encode(retired);
-			const uint64_t pageOffset =
-					poolOffset + static_cast<uint64_t>(retirements[index].location.page_index) * RSS_PAGE_SIZE;
-			rewriteTypedPageRange(*io_, pageOffset, pool.generation, 0U, retiredBytes,
-								  "relocatable retired shared page is truncated");
+		// Page Directory publication is the sole reachability transition.  A
+		// source owner stays immutable: rewriting it before the new directory root
+		// is durable could corrupt the still-published generation on a torn write.
+		static_cast<void>(retirementOwners);
+	}
+
+	void SharedPagePoolAllocator::validateRetirementSources(
+			const CatalogEntry &pool, std::span<const SharedPagePoolPreparedRetirement> retirements) const {
+		validateRetirementSourcesUnderWrite(*io_, data_region_offset_, pool, retirements);
+	}
+
+	void SharedPagePoolAllocator::validateRetirementSourcesUnderWrite(
+			const StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+			std::span<const SharedPagePoolPreparedRetirement> retirements) {
+		const uint8_t invalidPool = static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
+									static_cast<uint8_t>(!isSharedPoolKind(pool.kind));
+		if (invalidPool != 0U) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable retirement authentication requires a current sealed shared pool");
+		}
+		const SharedPagePoolHeader header = readPoolHeader(io, dataRegionOffset, pool);
+		const auto readOwner = [&io, dataRegionOffset, &pool](uint8_t frameIndex) {
+			const uint64_t poolOffset =
+					PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
+			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
+			const std::array<std::byte, RSS_PAGE_SIZE> page =
+					readTypedPage(io, pageOffset, pool.generation, "relocatable retirement owner header is truncated");
+			std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> bytes{};
+			std::copy_n(page.begin(), bytes.size(), bytes.begin());
+			return PageOwnerHeaderCodec::decode(bytes);
+		};
+		std::set<PageId> pageIds;
+		for (const SharedPagePoolPreparedRetirement &retirement: retirements) {
+			const PageLocation &location = retirement.location;
+			const uint8_t invalidLocation =
+					static_cast<uint8_t>(location.segment_id != pool.segment_id) |
+					static_cast<uint8_t>(location.generation != pool.generation) |
+					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+					static_cast<uint8_t>(retirement.expected_owner_id == 0U) |
+					static_cast<uint8_t>(retirement.expected_owner_kind == PageOwnerKind::POK_NONE) |
+					static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
+					static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
+			if (invalidLocation != 0U || !pageIds.insert(location.page_id).second) {
+				throwSharedPagePoolAllocatorError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable retirement authentication found an invalid or duplicate source");
+			}
+			const PageOwnerHeader owner = readOwner(location.page_index);
+			const uint8_t invalidOwner = static_cast<uint8_t>(owner.page_id != location.page_id) |
+										 static_cast<uint8_t>(owner.owner_id != retirement.expected_owner_id) |
+										 static_cast<uint8_t>(owner.kind != retirement.expected_owner_kind) |
+										 static_cast<uint8_t>(owner.generation != location.generation) |
+										 static_cast<uint8_t>(owner.committed_lsn != retirement.expected_owner_lsn) |
+										 static_cast<uint8_t>(owner.flags != 0U) |
+										 static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, owner.kind));
+			if (invalidOwner != 0U) {
+				throwSharedPagePoolAllocatorError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable retirement authentication found a stale or foreign source");
+			}
+		}
+	}
+
+	void SharedPagePoolAllocator::validatePreparedPublicationsUnderWrite(
+			const StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+			std::span<const SharedPagePoolPreparedPublication> publications) {
+		const uint8_t invalidPool = static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
+									static_cast<uint8_t>(!isSharedPoolKind(pool.kind));
+		if (invalidPool != 0U || publications.empty()) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable publication authentication requires a current shared pool and assigned frames");
+		}
+		const SharedPagePoolHeader header = readPoolHeader(io, dataRegionOffset, pool);
+		const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
+		const auto readOwner = [&io, poolOffset, &pool](uint8_t frameIndex) {
+			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
+			const std::array<std::byte, RSS_PAGE_SIZE> page =
+					readTypedPage(io, pageOffset, pool.generation, "relocatable publication owner header is truncated");
+			std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> bytes{};
+			std::copy_n(page.begin(), bytes.size(), bytes.begin());
+			return PageOwnerHeaderCodec::decode(bytes);
+		};
+		std::set<PageId> pageIds;
+		std::set<uint8_t> frames;
+		for (const SharedPagePoolPreparedPublication &publication: publications) {
+			const PageLocation &location = publication.location;
+			const uint8_t invalidLocation =
+					static_cast<uint8_t>(location.segment_id != pool.segment_id) |
+					static_cast<uint8_t>(location.generation != pool.generation) |
+					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+					static_cast<uint8_t>(publication.expected_owner_id == 0U) |
+					static_cast<uint8_t>(publication.expected_owner_kind == PageOwnerKind::POK_NONE) |
+					static_cast<uint8_t>(!publication.expected_owner_lsn.isValid()) |
+					static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
+			if (invalidLocation != 0U || !pageIds.insert(location.page_id).second ||
+				!frames.insert(location.page_index).second) {
+				throwSharedPagePoolAllocatorError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable publication authentication found an invalid or duplicate assigned frame");
+			}
+			const PageOwnerHeader owner = readOwner(location.page_index);
+			const uint8_t invalidOwner = static_cast<uint8_t>(owner.page_id != location.page_id) |
+										 static_cast<uint8_t>(owner.owner_id != publication.expected_owner_id) |
+										 static_cast<uint8_t>(owner.kind != publication.expected_owner_kind) |
+										 static_cast<uint8_t>(owner.generation != location.generation) |
+										 static_cast<uint8_t>(owner.committed_lsn != publication.expected_owner_lsn) |
+										 static_cast<uint8_t>(owner.flags != 0U) |
+										 static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, owner.kind));
+			if (invalidOwner != 0U) {
+				throwSharedPagePoolAllocatorError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable publication authentication found a missing, stale, or foreign assigned frame");
+			}
 		}
 	}
 
@@ -962,9 +1150,7 @@ namespace graph::storage {
 							std::to_string(envelope.segment_id.value()) + " (kind " +
 							std::to_string(static_cast<uint32_t>(envelope.kind)) + ")");
 		}
-		std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> poolHeaderBytes{};
-		std::copy_n(poolPage.begin() + RSS_ENVELOPE_BYTES, poolHeaderBytes.size(), poolHeaderBytes.begin());
-		const SharedPagePoolHeader poolHeader = SharedPagePoolHeaderCodec::decode(poolHeaderBytes);
+		const SharedPagePoolHeader poolHeader = selectPoolControlHeader(poolPage).header;
 		const uint8_t invalidPoolHeader =
 				static_cast<uint8_t>(poolHeader.segment_id != pool.segment_id) |
 				static_cast<uint8_t>(poolHeader.generation != pool.generation) |
@@ -1195,9 +1381,7 @@ namespace graph::storage {
 							std::to_string(envelope.segment_id.value()) + " (kind " +
 							std::to_string(static_cast<uint32_t>(envelope.kind)) + ")");
 		}
-		std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> bytes{};
-		std::copy_n(poolPage.begin() + RSS_ENVELOPE_BYTES, bytes.size(), bytes.begin());
-		const SharedPagePoolHeader header = SharedPagePoolHeaderCodec::decode(bytes);
+		const SharedPagePoolHeader header = selectPoolControlHeader(poolPage).header;
 		if (header.segment_id != entry.segment_id || header.generation != entry.generation ||
 			header.committed_lsn != entry.committed_lsn) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_STATE,
@@ -1259,20 +1443,19 @@ namespace graph::storage {
 									static_cast<uint8_t>(!matchesPoolAndOwnerKind(entry.kind, owner.kind));
 			return invalid == 0U;
 		};
-		const auto currentFrameIsRetired = [&frames, &header, &isCompatibleLocation](const PageLocation &location,
-																					 PageId pageId) {
-			const uint8_t invalidLocation =
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
-			if (invalidLocation != 0U) {
-				return false;
-			}
-			const auto frame = std::ranges::find(frames, location.page_index, &FrameState::frame_index);
-			return frame != frames.end() && frame->owner.page_id == pageId &&
-				   isCompatibleLocation(location, frame->owner) &&
-				   (frame->owner.flags & RSS_PAGE_OWNER_FLAG_RETIRED) != 0U;
-		};
+		const auto currentFrameIsCompatibleReplacement =
+				[&frames, &header, &isCompatibleLocation](const PageLocation &location, PageId pageId) {
+					const uint8_t invalidLocation =
+							static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+							static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+							static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
+					if (invalidLocation != 0U) {
+						return false;
+					}
+					const auto replacement = std::ranges::find(frames, location.page_index, &FrameState::frame_index);
+					return replacement != frames.end() && replacement->owner.page_id == pageId &&
+						   replacement->owner.flags == 0U && isCompatibleLocation(location, replacement->owner);
+				};
 		std::vector<uint8_t> reactivateFrames;
 		const auto canReclaimRetiredFrame = [&entry, &isFrameVisibleToActiveSnapshot](const FrameState &frame) {
 			return !isFrameVisibleToActiveSnapshot(frame.owner.page_id, entry.segment_id, frame.frame_index,
@@ -1280,7 +1463,7 @@ namespace graph::storage {
 		};
 		for (const FrameState &frame: frames) {
 			if (!frame.location.has_value()) {
-				if ((frame.owner.flags & RSS_PAGE_OWNER_FLAG_RETIRED) == 0U || canReclaimRetiredFrame(frame)) {
+				if (canReclaimRetiredFrame(frame)) {
 					SharedPagePoolFrameMap::release(reconciled, frame.frame_index);
 				}
 				continue;
@@ -1300,7 +1483,7 @@ namespace graph::storage {
 				// A remote current mapping is either a published cross-pool move whose
 				// local source is retired, or an unpublished destination frame. The
 				// Page Directory is the sole reachability authority in both cases.
-				if ((frame.owner.flags & RSS_PAGE_OWNER_FLAG_RETIRED) == 0U || canReclaimRetiredFrame(frame)) {
+				if (canReclaimRetiredFrame(frame)) {
 					SharedPagePoolFrameMap::release(reconciled, frame.frame_index);
 				}
 				continue;
@@ -1316,35 +1499,26 @@ namespace graph::storage {
 				}
 				continue;
 			}
-			if ((frame.owner.flags & RSS_PAGE_OWNER_FLAG_RETIRED) != 0U) {
-				if (canReclaimRetiredFrame(frame)) {
-					SharedPagePoolFrameMap::release(reconciled, frame.frame_index);
-				}
-				continue;
-			}
-			if (!currentFrameIsRetired(*frame.location, frame.owner.page_id)) {
+			if (!currentFrameIsCompatibleReplacement(*frame.location, frame.owner.page_id)) {
 				throwSharedPagePoolAllocatorError(
 						FormatError::FERR_INVALID_STATE,
-						"relocatable shared page recovery found two live frames for one Page ID");
+						"relocatable shared page recovery found an invalid replacement frame");
 			}
-			// The current directory still selects a retired source, so this live
-			// frame is an interrupted replacement that never became reachable.
-			SharedPagePoolFrameMap::release(reconciled, frame.frame_index);
+			// The current directory selects a different COW frame for this Page ID.
+			// Keep the old immutable owner only while an older snapshot can still
+			// resolve it; otherwise its allocation bit is safely reusable.
+			if (canReclaimRetiredFrame(frame)) {
+				SharedPagePoolFrameMap::release(reconciled, frame.frame_index);
+			}
 		}
 		for (const uint8_t frameIndex: reactivateFrames) {
-			// ZYX_COV_EXCL_START: only exact current-frame candidates enter this list, and the loop never releases
-			// them.
-			if (!SharedPagePoolFrameMap::isAllocated(reconciled, frameIndex)) {
-				continue;
-			}
-			// ZYX_COV_EXCL_STOP
 			const auto frame = std::ranges::find(frames, frameIndex, &FrameState::frame_index);
-			if (frame == frames.end()) { // ZYX_COV_EXCL_LINE: every reactivation candidate comes from `frames`.
+			if (frame == frames.end()) {
 				throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_STATE,
-												  "relocatable shared page recovery lost a retired frame record");
+												  "relocatable shared page recovery lost a reachable frame record");
 			}
 			PageOwnerHeader active = frame->owner;
-			active.flags = 0;
+			active.flags = 0U;
 			const auto activeBytes = PageOwnerHeaderCodec::encode(active);
 			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
 			rewriteTypedPageRange(*io_, pageOffset, entry.generation, 0U, activeBytes,
@@ -1353,9 +1527,8 @@ namespace graph::storage {
 		if (reconciled.allocated_frames == header.allocated_frames) {
 			return !reactivateFrames.empty();
 		}
-		const auto bytes = SharedPagePoolHeaderCodec::encode(reconciled);
-		rewriteTypedPageRange(*io_, poolOffset, entry.generation, RSS_ENVELOPE_BYTES, bytes,
-							  "relocatable reconciled shared page-pool control page is truncated");
+		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, reconciled,
+										 "relocatable reconciled shared page-pool control page is truncated");
 		return true;
 	}
 
@@ -1416,7 +1589,7 @@ namespace graph::storage {
 				}
 				continue;
 			}
-			if ((owner.flags & RSS_PAGE_OWNER_FLAG_RETIRED) == 0U || canReclaimRetired) {
+			if (canReclaimRetired) {
 				SharedPagePoolFrameMap::release(reconciled, frameIndex);
 			}
 		}
@@ -1432,9 +1605,8 @@ namespace graph::storage {
 		if (reconciled.allocated_frames == header.allocated_frames) {
 			return !reactivateFrames.empty();
 		}
-		const auto bytes = SharedPagePoolHeaderCodec::encode(reconciled);
-		rewriteTypedPageRange(*io_, poolOffset, entry.generation, RSS_ENVELOPE_BYTES, bytes,
-							  "relocatable startup-reconciled shared page-pool control page is truncated");
+		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, reconciled,
+										 "relocatable startup-reconciled shared page-pool control page is truncated");
 		return true;
 	}
 
@@ -1454,9 +1626,8 @@ namespace graph::storage {
 		// The candidate must be complete before its allocation bit becomes durable.
 		// Otherwise a failed page write leaves recovery unable to distinguish a torn
 		// unpublished owner from corruption in a previously allocated frame.
-		const auto poolBytes = SharedPagePoolHeaderCodec::encode(poolHeader);
-		rewriteTypedPageRange(*io_, offset, entry.generation, RSS_ENVELOPE_BYTES, poolBytes,
-							  "relocatable shared page-pool control page is truncated");
+		rewriteInactivePoolControlRecord(*io_, offset, entry.generation, poolHeader,
+										 "relocatable shared page-pool control page is truncated");
 	}
 
 	void SharedPagePoolAllocator::writePreparedReplacement(const CatalogEntry &entry,
@@ -1481,15 +1652,10 @@ namespace graph::storage {
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, entry.physical_slot);
 		const uint64_t newPageOffset = poolOffset + static_cast<uint64_t>(newFrame) * RSS_PAGE_SIZE;
 		writeTypedPage(*io_, newPageOffset, entry.generation, makeOwnedPage(newOwner, payload));
-		PageOwnerHeader retired = oldOwner;
-		retired.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
-		const auto retiredBytes = PageOwnerHeaderCodec::encode(retired);
-		const uint64_t oldPageOffset = poolOffset + static_cast<uint64_t>(oldFrame) * RSS_PAGE_SIZE;
-		rewriteTypedPageRange(*io_, oldPageOffset, entry.generation, 0U, retiredBytes,
-							  "relocatable replacement source page is truncated");
-		const auto poolBytes = SharedPagePoolHeaderCodec::encode(poolHeader);
-		rewriteTypedPageRange(*io_, poolOffset, entry.generation, RSS_ENVELOPE_BYTES, poolBytes,
-							  "relocatable shared page-pool control page is truncated");
+		static_cast<void>(oldOwner);
+		static_cast<void>(oldFrame);
+		rewriteInactivePoolControlRecord(*io_, poolOffset, entry.generation, poolHeader,
+										 "relocatable shared page-pool control page is truncated");
 	}
 
 	void SharedPagePoolAllocator::writePreparedCrossPoolEvacuation(
@@ -1515,17 +1681,12 @@ namespace graph::storage {
 				destinationOffset + static_cast<uint64_t>(destinationFrame) * RSS_PAGE_SIZE;
 		writeTypedPage(*io_, destinationPageOffset, destinationPool.generation,
 					   makeOwnedPage(destinationOwner, payload));
-		PageOwnerHeader retired = sourceOwner;
-		retired.flags = RSS_PAGE_OWNER_FLAG_RETIRED;
-		const auto retiredBytes = PageOwnerHeaderCodec::encode(retired);
-		const uint64_t sourceOffset =
-				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, sourcePool.physical_slot);
-		const uint64_t sourcePageOffset = sourceOffset + static_cast<uint64_t>(sourceFrame) * RSS_PAGE_SIZE;
-		rewriteTypedPageRange(*io_, sourcePageOffset, sourcePool.generation, 0U, retiredBytes,
-							  "relocatable evacuation source page is truncated");
-		const auto destinationPoolBytes = SharedPagePoolHeaderCodec::encode(destinationHeader);
-		rewriteTypedPageRange(*io_, destinationOffset, destinationPool.generation, RSS_ENVELOPE_BYTES,
-							  destinationPoolBytes, "relocatable destination page-pool control page is truncated");
+		static_cast<void>(sourcePool);
+		static_cast<void>(sourceHeader);
+		static_cast<void>(sourceOwner);
+		static_cast<void>(sourceFrame);
+		rewriteInactivePoolControlRecord(*io_, destinationOffset, destinationPool.generation, destinationHeader,
+										 "relocatable destination page-pool control page is truncated");
 	}
 
 	void SharedPagePoolAllocator::writePreparedPool(const CatalogEntry &entry, const PageOwnerHeader &owner,

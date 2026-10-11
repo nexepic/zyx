@@ -143,7 +143,9 @@ namespace {
 	}
 
 	void recalculateDataChecksums(std::vector<std::byte> &bytes) {
-		const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, 56U);
+		const size_t payloadBytes = std::min(
+				static_cast<size_t>(LittleEndianCodec::readU32(bytes, 56U)),
+				bytes.size() - RSS_LARGE_VALUE_DATA_PAGE_HEADER_BYTES);
 		LittleEndianCodec::writeU32(
 				bytes, DATA_PAYLOAD_CRC_OFFSET,
 				checksum(std::span(bytes).subspan(RSS_LARGE_VALUE_DATA_PAGE_HEADER_BYTES, payloadBytes)));
@@ -235,6 +237,25 @@ TEST(RelocatableLargeValueRefTest, RejectsNonCanonicalIdentityAndWellChecksummed
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableLargeValueRefTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::vector<std::byte> encoded = LargeValueRefCodec::encode(manifest().reference());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateReferenceChecksums(mutation);
+			try {
+				const LargeValueRef decoded = LargeValueRefCodec::decode(mutation);
+				EXPECT_EQ(LargeValueRefCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Rejected references never reach property or LargeValue readers.
+			}
+		}
+	}
+}
+
 TEST(RelocatableLargeValueManifestPageTest, RoundTripsMixedChunksAndBindsTypedOwner) {
 	const LargeValueManifest expected = manifest();
 	const PageOwnerHeader owner = manifestOwner(expected);
@@ -323,6 +344,25 @@ TEST(RelocatableLargeValueManifestPageTest, FailsClosedForMalformedChunksAndUnus
 
 	expectFormatError([&] { static_cast<void>(LargeValueManifestPageCodec::decode(std::span(encoded).first(1U))); },
 					  FormatError::FERR_BUFFER_TOO_SMALL);
+}
+
+TEST(RelocatableLargeValueManifestPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::vector<std::byte> encoded = LargeValueManifestPageCodec::encode(manifest());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateManifestChecksums(mutation);
+			try {
+				const LargeValueManifest decoded = LargeValueManifestPageCodec::decode(mutation);
+				EXPECT_EQ(LargeValueManifestPageCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// All rejected mutations must stop at the typed format boundary.
+			}
+		}
+	}
 }
 
 TEST(RelocatableLargeValueManifestPageTest, RejectsChecksummedHeaderAndLogicalShapeCorruption) {
@@ -519,6 +559,25 @@ TEST(RelocatableLargeValueDataPageTest, RejectsChecksummedAndCanonicalLayoutCorr
 	recalculateDataChecksums(corrupt);
 	expectFormatError([&] { static_cast<void>(LargeValueDataPageCodec::decode(corrupt)); },
 					  FormatError::FERR_RESERVED_BITS);
+}
+
+TEST(RelocatableLargeValueDataPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const std::vector<std::byte> encoded = LargeValueDataPageCodec::encode(firstDataPage());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateDataChecksums(mutation);
+			try {
+				const LargeValueDataPage decoded = LargeValueDataPageCodec::decode(mutation);
+				EXPECT_EQ(LargeValueDataPageCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// All rejected mutations must stop at the typed format boundary.
+			}
+		}
+	}
 }
 
 TEST(RelocatableLargeValueDataPageTest, RejectsEveryInvalidFrameIdentityAndChecksummedHeaderShape) {

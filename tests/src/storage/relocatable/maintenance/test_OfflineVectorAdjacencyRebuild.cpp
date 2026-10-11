@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
@@ -38,6 +39,11 @@ namespace {
 			EXPECT_EQ(error.error(), expected);
 		}
 	}
+
+	class ThrowOnCancellationCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override { throw std::runtime_error("test cancellation"); }
+	};
 
 	Superblock initialSuperblock() {
 		Superblock result;
@@ -339,6 +345,13 @@ TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, RejectsZeroNormCosineRecord
 			FormatError::FERR_INVALID_HEADER);
 }
 
+TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, PropagatesCancellationBeforeGraphConstruction) {
+	ThrowOnCancellationCheck cancellation;
+	EXPECT_THROW(static_cast<void>(OfflineVectorAdjacencyRebuild::buildGraph(
+				 VectorDistanceMetric::VDM_L2, 2U, canonicalRecords(), options(), &cancellation)),
+			 std::runtime_error);
+}
+
 TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, CandidatePrunedConstructionSupportsInputsBeyondTheExactLimit) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	VectorPageStore vectors(io, *metadata);
@@ -499,6 +512,42 @@ TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, RejectsAnUnknownMetricBefor
 						static_cast<VectorDistanceMetric>(std::numeric_limits<uint16_t>::max()), 2U, records, rebuild));
 			},
 			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest,
+		RejectsInvalidCandidatePrunedOptionsAtTheDirectGraphConstructionBoundary) {
+	const std::vector<CanonicalVectorRecord> records = canonicalRecords();
+	const auto expectInvalid = [&](const std::function<void(OfflineVectorAdjacencyRebuildOptions &)> &mutate) {
+		OfflineVectorAdjacencyRebuildOptions rebuild = candidateOptions();
+		mutate(rebuild);
+		expectFormatError(
+				[&] {
+					static_cast<void>(OfflineVectorAdjacencyRebuild::buildGraph(
+							VectorDistanceMetric::VDM_L2, 2U, records, rebuild));
+				},
+				FormatError::FERR_INVALID_HEADER);
+	};
+
+	expectInvalid([](auto &value) { value.maximum_candidate_records = 0U; });
+	expectInvalid([&records](auto &value) { value.maximum_candidate_records = records.size() - 1U; });
+	expectInvalid([](auto &value) { value.candidate_search_budget = 0U; });
+	expectInvalid([](auto &value) { value.candidate_search_budget = 17U; });
+	expectInvalid([](auto &value) { value.pruning_alpha = 0.5F; });
+	expectInvalid([](auto &value) { value.pruning_alpha = std::numeric_limits<float>::quiet_NaN(); });
+}
+
+TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest,
+		CandidatePrunedConstructionSupportsTheInnerProductMetricWithoutDistanceDominance) {
+	const std::vector<CanonicalVectorRecord> records = candidateRecords(6U);
+	OfflineVectorAdjacencyRebuildOptions rebuild = candidateOptions();
+	rebuild.maximum_degree = 2U;
+
+	const OfflineVectorAdjacencyPreparedGraph graph = OfflineVectorAdjacencyRebuild::buildGraph(
+			VectorDistanceMetric::VDM_INNER_PRODUCT, 2U, records, rebuild);
+	ASSERT_EQ(graph.records.size(), records.size());
+	for (const VectorAdjacencyMaterializationRecord &record: graph.records) {
+		EXPECT_LE(record.neighbors.size(), rebuild.maximum_degree);
+	}
 }
 
 TEST_F(RelocatableOfflineVectorAdjacencyRebuildTest, RejectsRawInputThatDoesNotMatchTheDurableVectorLocation) {

@@ -21,7 +21,7 @@ ZYX 根据操作类型使用两种互补的错误报告机制。
 |------|---------|
 | `Database::open()` | 文件 I/O 错误、文件头损坏 |
 | `Database::openIfExists()` | 文件不存在、文件头损坏 |
-| `Transaction::commit()` | WAL 同步失败、存储刷新失败 |
+| `Transaction::commit()` | native 数据写入、Superblock 发布或存储同步失败 |
 | `Transaction::rollback()` | Undo 过程中存储 I/O 错误 |
 
 ```cpp
@@ -78,7 +78,7 @@ try {
 
     tx.commit();
 } catch (const std::exception& e) {
-    // 生命周期错误（WAL 同步、存储失败等）
+    // 生命周期错误（native 发布或存储失败等）
     std::cerr << "系统错误: " << e.what() << std::endl;
 }
 ```

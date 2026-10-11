@@ -357,6 +357,85 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest, RejectsInvalidOptionsBefor
 		[&] {
 				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
 						{}, pages, entities, labels, roots, catalog, *metadata, invalid));
+		},
+		FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
+	   RejectsEveryZeroCapacityAndDefinitionLimitBeforeScanningOrPublishing) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	EntityPageStore entities(destination_io, *metadata);
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	BTreePageStore pages(pool, *metadata);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	SystemCatalog catalog(pages, *metadata);
+
+	for (const auto makeInvalid = [this](auto adjust) {
+			OfflineScalarIndexMaterializationOptions options = indexOptions();
+			adjust(options);
+			return options;
+		};
+		 const OfflineScalarIndexMaterializationOptions &invalid:
+		 {makeInvalid([](auto &options) { options.maximum_definitions = 0U; }),
+		  makeInvalid([](auto &options) { options.maximum_property_names = 0U; }),
+		  makeInvalid([](auto &options) { options.build.maximum_entries = 0U; }),
+		  makeInvalid([](auto &options) { options.build.maximum_pages = 0U; })}) {
+		expectFormatError([&] { OfflineScalarIndexMaterializer::validateOptions(invalid); },
+					  FormatError::FERR_INVALID_HEADER);
+	}
+
+	OfflineScalarIndexMaterializationOptions definitionBound = indexOptions();
+	definitionBound.maximum_definitions = 1U;
+	const std::array<IndexDefinition, 2U> definitions{{
+			{1U, "first", IndexDefinitionEntityKind::IDEK_NODE, IndexDefinitionKind::IDK_LABEL, 0U, {}, 0U, ""},
+			{2U, "second", IndexDefinitionEntityKind::IDEK_EDGE, IndexDefinitionKind::IDK_LABEL, 0U, {}, 0U, ""},
+	}};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const Generation generation = before.superblock().generation;
+	before.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						definitions, pages, entities, labels, roots, catalog, *metadata, definitionBound));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin after = metadata->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, generation);
+	after.release();
+}
+
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
+	   RejectsAnIndexDefinitionWhosePropertyNamesExceedTheConfiguredMaterializationBound) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	EntityPageStore entities(destination_io, *metadata);
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	BTreePageStore pages(pool, *metadata);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	SystemCatalog catalog(pages, *metadata);
+	OfflineScalarIndexMaterializationOptions options = indexOptions();
+	options.maximum_property_names = 1U;
+	const std::array<IndexDefinition, 1U> definitions{{
+			{1U,
+			 "composite",
+			 IndexDefinitionEntityKind::IDEK_NODE,
+			 IndexDefinitionKind::IDK_COMPOSITE,
+			 0U,
+			 {"first", "second"},
+			 0U,
+			 ""},
+	}};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const Generation generation = before.superblock().generation;
+	before.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						definitions, pages, entities, labels, roots, catalog, *metadata, options));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin after = metadata->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, generation);
+	after.release();
 }

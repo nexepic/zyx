@@ -898,6 +898,89 @@ namespace {
 		current.release();
 	}
 
+	TEST_F(RelocatableBTreePageStoreTest, RetainsRightLeafAndRepairsBothLinksWhenDeletingAnEmptyMiddleLeaf) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+		SlottedPagePool pages(io, *metadata);
+		NativeBTreeWriteContext writes(io, *metadata, pages);
+		BTreePageStore store(pages, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+							   LogSequenceNumber(2))
+					.has_value());
+		const IndexRootLocation initialRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&initialRoot, 1), {}, LogSequenceNumber(3)));
+
+		const std::vector<std::byte> leftKey = largeKey(std::byte{'a'});
+		const std::vector<std::byte> erasedKey = largeKey(std::byte{'b'});
+		const std::vector<std::byte> rightKey = largeKey(std::byte{'c'});
+		const std::vector<std::byte> middleSeparator{std::byte{'b'}};
+		const std::vector<std::byte> rightSeparator{std::byte{'c'}};
+		PageId leftLeafId;
+		PageId middleLeafId;
+		PageId rightLeafId;
+		static_cast<void>(store.materializeAndPublishTree(
+				request.segment_id, 17U, 4U, 0U, LogSequenceNumber(4),
+				[&](const CatalogEntry &pool, std::span<const PageId> pageIds) {
+					leftLeafId = pageIds[1];
+					middleLeafId = pageIds[2];
+					rightLeafId = pageIds[3];
+					BTreePageHeader rootHeader;
+					rootHeader.index_id = 17U;
+					rootHeader.page_id = pageIds[0];
+					rootHeader.generation = pool.generation;
+					rootHeader.kind = BTreeNodeKind::BPN_INTERNAL;
+					rootHeader.level = 1U;
+					rootHeader.leftmost_child = leftLeafId;
+					BTreePage root = BTreePage::create(treeOwner(pool, pageIds[0], LogSequenceNumber(4)), rootHeader);
+					root.insert({middleSeparator, middleLeafId.value()});
+					root.insert({rightSeparator, rightLeafId.value()});
+
+					auto makeLeaf = [&](PageId pageId, PageId leftSibling, PageId rightSibling,
+										const std::vector<std::byte> &key, uint64_t value) {
+						BTreePageHeader header;
+						header.index_id = 17U;
+						header.page_id = pageId;
+						header.generation = pool.generation;
+						header.left_sibling = leftSibling;
+						header.right_sibling = rightSibling;
+						BTreePage leaf = BTreePage::create(treeOwner(pool, pageId, LogSequenceNumber(4)), header);
+						leaf.insert({key, value});
+						return leaf;
+					};
+					std::vector<BTreePage> tree;
+					tree.reserve(4U);
+					tree.push_back(std::move(root));
+					tree.push_back(makeLeaf(leftLeafId, {}, middleLeafId, leftKey, 1U));
+					tree.push_back(makeLeaf(middleLeafId, leftLeafId, rightLeafId, erasedKey, 2U));
+					tree.push_back(makeLeaf(rightLeafId, middleLeafId, {}, rightKey, 3U));
+					return tree;
+				}));
+
+		BTreeIndex index(17U, store, *metadata);
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		EXPECT_EQ(index.find(before, erasedKey), std::optional<uint64_t>(2U));
+		auto transaction = writes.beginTransaction();
+		transaction.stageScalarIndexErase(store, 17U, erasedKey);
+		ASSERT_TRUE(transaction.commit().committed());
+		EXPECT_EQ(index.find(before, erasedKey), std::optional<uint64_t>(2U));
+		EXPECT_EQ(store.read(before, leftLeafId).header().right_sibling, middleLeafId);
+		EXPECT_EQ(store.read(before, rightLeafId).header().left_sibling, middleLeafId);
+
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, middleLeafId).has_value());
+		EXPECT_EQ(store.read(current, leftLeafId).header().right_sibling, rightLeafId);
+		EXPECT_EQ(store.read(current, rightLeafId).header().left_sibling, leftLeafId);
+		const BTreePage root = store.read(current, metadata->findIndexRoot(current, 17U).root_page_id);
+		ASSERT_EQ(root.entries().size(), 1U);
+		EXPECT_EQ(root.entries().front().key, rightSeparator);
+		EXPECT_EQ(root.entries().front().value_or_child, rightLeafId.value());
+		EXPECT_EQ(index.find(current, leftKey), std::optional<uint64_t>(1U));
+		EXPECT_FALSE(index.find(current, erasedKey).has_value());
+		EXPECT_EQ(index.find(current, rightKey), std::optional<uint64_t>(3U));
+		before.release();
+		current.release();
+	}
+
 	TEST_F(RelocatableBTreePageStoreTest, RejectsAMissingSuccessorPredecessorLinkWhileSplittingAnOverlayLeaf) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 		SlottedPagePool pages(io, *metadata);
@@ -1617,11 +1700,11 @@ namespace {
 		before.release();
 
 		MetadataSnapshotPin current = metadata->openSnapshot();
-		// The first deterministic overlay owns the remaining current-pool frame
-		// and therefore preserves its logical root PageId. The second overlay must
-		// rebuild into a fresh pool rather than race that same frame allocator.
-		EXPECT_EQ(metadata->findIndexRoot(current, 17U), roots.front());
-		EXPECT_NE(metadata->findIndexRoot(current, 18U), roots.back());
+		// The shared-pool capacity planner selects the largest demand and then the
+		// earliest staged Index ID as its deterministic fresh-rebuild candidate.
+		// Index 18 retains the sole current-pool frame; Index 17 receives a new root.
+		EXPECT_NE(metadata->findIndexRoot(current, 17U), roots.front());
+		EXPECT_EQ(metadata->findIndexRoot(current, 18U), roots.back());
 		EXPECT_EQ(firstIndex.find(current, firstKey), std::optional<uint64_t>(1U));
 		EXPECT_EQ(firstIndex.find(current, firstInsertedKey), std::optional<uint64_t>(2U));
 		EXPECT_EQ(secondIndex.find(current, secondKey), std::optional<uint64_t>(3U));

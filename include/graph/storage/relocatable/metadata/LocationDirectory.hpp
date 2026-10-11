@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -21,10 +22,10 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_LOCATION_LEAF_MAGIC = 0x4C58595AU; // Little-endian bytes: ZYXL
-		// Version 3 is the native Entity Map encoding. Version 2 could encode the
-		// retired fixed-record EntityLocation bridge under the same directory types,
-		// so it must never be accepted by a version-25 database.
-		constexpr uint16_t RSS_LOCATION_LEAF_VERSION = 3;
+	// Version 3 is the native Entity Map encoding. Version 2 could encode the
+	// retired fixed-record EntityLocation bridge under the same directory types,
+	// so it must never be accepted by a version-25 database.
+	constexpr uint16_t RSS_LOCATION_LEAF_VERSION = 3;
 	constexpr uint32_t RSS_LOCATION_LEAF_HEADER_BYTES = 64;
 	constexpr uint32_t RSS_LOCATION_ENTRY_BYTES = 32;
 	constexpr uint32_t RSS_LOCATION_LEAF_MAX_ENTRIES =
@@ -47,7 +48,7 @@ namespace graph::storage {
 
 	struct LocationLeafPage {
 		MetadataDirectoryType directory_type = MetadataDirectoryType::MDT_PAGE;
-		PageId page_id{};
+		MetadataPageId page_id{};
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
 		std::vector<LocationLeafEntry> entries;
@@ -206,10 +207,90 @@ namespace graph::storage {
 	class MetadataWriteBatch;
 	class MetadataPageFile;
 	class MetadataPageAllocator;
+	class LocationDirectory;
 	struct Superblock;
+
+	// Owns one bounded append-only path for a streamed logical-location
+	// directory. It is deliberately narrow: only new contiguous IDs or explicitly
+	// sparse monotonic Edge/Edge-Property IDs can be appended, which keeps
+	// streamed publication memory bounded.
+	class LocationDirectoryAppendSession final {
+	public:
+		LocationDirectoryAppendSession(LocationDirectoryAppendSession &&) noexcept;
+		LocationDirectoryAppendSession &operator=(LocationDirectoryAppendSession &&) noexcept;
+		~LocationDirectoryAppendSession();
+
+		LocationDirectoryAppendSession(const LocationDirectoryAppendSession &) = delete;
+		LocationDirectoryAppendSession &operator=(const LocationDirectoryAppendSession &) = delete;
+
+		void append(const PageLocation &location);
+		void append(const EntityPageLocation &location);
+		void append(const EntityPropertyLocation &location);
+		void append(const LargeValueManifestLocation &location);
+		void finish();
+		[[nodiscard]] bool isFinished() const noexcept;
+
+	private:
+		struct Impl;
+		explicit LocationDirectoryAppendSession(std::unique_ptr<Impl> implementation) noexcept;
+
+		std::unique_ptr<Impl> implementation_;
+
+		friend class LocationDirectory;
+	};
 
 	class LocationDirectory final {
 	public:
+		// A streamed publisher assigns Page IDs monotonically before exposing the
+		// corresponding pool frames.  This constrained append path keeps the Page
+		// Directory COW state bounded by one leaf and one radix path.
+		using PageLocationCursor = std::function<std::optional<PageLocation>()>;
+		using PageLocationSink = std::function<void(const PageLocation &)>;
+		using PageLocationProducer = std::function<void(const PageLocationSink &)>;
+		[[nodiscard]] LocationDirectoryAppendSession beginAppendPageLocations(MetadataWriteBatch &batch,
+																			  uint64_t firstPageId, uint64_t lastPageId,
+																			  size_t expectedCount);
+		void prepareAppendPageLocations(MetadataWriteBatch &batch, uint64_t firstPageId, uint64_t lastPageId,
+										size_t expectedCount, const PageLocationCursor &cursor);
+		void prepareAppendPageLocations(MetadataWriteBatch &batch, uint64_t firstPageId, uint64_t lastPageId,
+										size_t expectedCount, const PageLocationProducer &producer);
+
+		// A streamed Edge publication owns ordered, never-before-visible logical-ID
+		// lease ranges. Interleaved writers may leave gaps between ranges, so this
+		// path accepts strictly increasing IDs inside one declared lower/upper
+		// bound. It retains only one directory leaf and one mutable radix path; it
+		// is not a general replacement API, whose arbitrary key order requires a
+		// wider COW working set.
+		using EdgePageLocationCursor = std::function<std::optional<EntityPageLocation>()>;
+		using EdgePageLocationSink = std::function<void(const EntityPageLocation &)>;
+		// The push form lets a writer materialize one typed Entity page, persist it,
+		// and immediately transfer its directory mappings into this bounded COW
+		// builder. It avoids an import-sized mapping vector at the metadata boundary.
+		using EdgePageLocationProducer = std::function<void(const EdgePageLocationSink &)>;
+		[[nodiscard]] LocationDirectoryAppendSession beginAppendEdgePageLocations(MetadataWriteBatch &batch,
+																				  uint64_t firstEdgeId,
+																				  uint64_t lastEdgeId,
+																				  size_t expectedCount);
+		// Edge property roots are sparse because edges without Properties do not
+		// consume a directory record. The session still keeps only one leaf and
+		// one radix path, but accepts strictly increasing rather than contiguous
+		// logical keys.
+		[[nodiscard]] LocationDirectoryAppendSession beginAppendEdgePropertyLocations(MetadataWriteBatch &batch,
+																					  uint64_t firstEdgeId,
+																					  uint64_t lastEdgeId,
+																					  size_t expectedCount);
+		// New LargeValue IDs are allocated from the writer-fenced monotonic
+		// counter. Appending their Manifest routes accepts strictly increasing IDs
+		// because streamed content dedup may reserve a provisional range while
+		// materializing only its canonical subset.
+		[[nodiscard]] LocationDirectoryAppendSession beginAppendLargeValueManifestLocations(MetadataWriteBatch &batch,
+																							LargeValueId firstValueId,
+																							LargeValueId lastValueId,
+																							size_t expectedCount);
+		void prepareAppendEdgePageLocations(MetadataWriteBatch &batch, uint64_t firstEdgeId, uint64_t lastEdgeId,
+											size_t expectedCount, const EdgePageLocationCursor &cursor);
+		void prepareAppendEdgePageLocations(MetadataWriteBatch &batch, uint64_t firstEdgeId, uint64_t lastEdgeId,
+											size_t expectedCount, const EdgePageLocationProducer &producer);
 		LocationDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator);
 
 		void prepareUpsertPages(MetadataWriteBatch &batch, std::span<const PageLocation> entries);
@@ -237,6 +318,9 @@ namespace graph::storage {
 											   std::span<const LargeValueId> erasedValueIds);
 		void prepareReplaceRetireQueue(MetadataWriteBatch &batch, std::span<const RetireQueueEntry> entries,
 									   std::span<const PhysicalSlotId> erasedSlots);
+		// Candidate location roots stay physical while same-batch writers compose.
+		// The publication gate logicalizes every typed non-bootstrap root afterward.
+		void prepareLogicalRootChildren(MetadataWriteBatch &batch);
 
 		[[nodiscard]] PageLocation findPage(const Superblock &superblock, PageId pageId) const;
 		[[nodiscard]] ExtentLocation findExtent(const Superblock &superblock, ExtentId extentId) const;
@@ -283,17 +367,29 @@ namespace graph::storage {
 									const std::function<void(const EntityPageLocation &)> &visitor) const;
 		void visitEdgePageLocations(const Superblock &superblock,
 									const std::function<void(const EntityPageLocation &)> &visitor) const;
-		[[nodiscard]] bool visitNodePageLocationsUntil(
-				const Superblock &superblock, const std::function<bool(const EntityPageLocation &)> &visitor) const;
-		[[nodiscard]] bool visitEdgePageLocationsUntil(
-				const Superblock &superblock, const std::function<bool(const EntityPageLocation &)> &visitor) const;
-		[[nodiscard]] bool visitNodePageLocationsAfter(
-				const Superblock &superblock, uint64_t afterNodeId, size_t maximumMetadataPages,
-				const std::function<bool(const EntityPageLocation &)> &visitor,
-				size_t *visitedMetadataPages = nullptr) const;
+		[[nodiscard]] bool
+		visitNodePageLocationsUntil(const Superblock &superblock,
+									const std::function<bool(const EntityPageLocation &)> &visitor) const;
+		[[nodiscard]] bool
+		visitEdgePageLocationsUntil(const Superblock &superblock,
+									const std::function<bool(const EntityPageLocation &)> &visitor) const;
+		[[nodiscard]] bool visitNodePageLocationsAfter(const Superblock &superblock, uint64_t afterNodeId,
+													   size_t maximumMetadataPages,
+													   const std::function<bool(const EntityPageLocation &)> &visitor,
+													   size_t *visitedMetadataPages = nullptr) const;
 		void visitEntityProperties(const Superblock &superblock,
 								   const std::function<void(const EntityPropertyLocation &)> &visitor) const;
+		// The cursor is the stable directory identity, not a page or slot that a
+		// relocation could replace while a maintenance pass is paused.
+		[[nodiscard]] bool
+		visitEntityPropertiesAfter(const Superblock &superblock, uint64_t afterDirectoryId, size_t maximumMetadataPages,
+								   const std::function<bool(const EntityPropertyLocation &)> &visitor,
+								   size_t *visitedMetadataPages = nullptr) const;
 		void visitStates(const Superblock &superblock, const std::function<void(const StateLocation &)> &visitor) const;
+		[[nodiscard]] bool visitStatesAfter(const Superblock &superblock, uint64_t afterStateId,
+											size_t maximumMetadataPages,
+											const std::function<bool(const StateLocation &)> &visitor,
+											size_t *visitedMetadataPages = nullptr) const;
 		void visitExtents(const Superblock &superblock,
 						  const std::function<void(const ExtentLocation &)> &visitor) const;
 		void visitIndexRoots(const Superblock &superblock,
@@ -305,16 +401,27 @@ namespace graph::storage {
 		// Resumes Vector Manifest traversal after one logical Index ID. The caller
 		// supplies a metadata-page budget so durable maintenance can rediscover
 		// rebuild debt without an unbounded directory walk.
-		[[nodiscard]] bool visitVectorManifestsAfter(
-				const Superblock &superblock, uint64_t afterIndexId, size_t maximumMetadataPages,
-				const std::function<bool(const VectorManifestLocation &)> &visitor,
-			size_t *visitedMetadataPages = nullptr) const;
+		[[nodiscard]] bool visitVectorManifestsAfter(const Superblock &superblock, uint64_t afterIndexId,
+													 size_t maximumMetadataPages,
+													 const std::function<bool(const VectorManifestLocation &)> &visitor,
+													 size_t *visitedMetadataPages = nullptr) const;
 		void visitLargeValueManifests(const Superblock &superblock,
 									  const std::function<void(const LargeValueManifestLocation &)> &visitor) const;
+		// Resumes by stable logical value ID so a maintenance cursor never relies on
+		// a physical page location that relocation may replace.
+		[[nodiscard]] bool
+		visitLargeValueManifestsAfter(const Superblock &superblock, uint64_t afterValueId, size_t maximumMetadataPages,
+									  const std::function<bool(const LargeValueManifestLocation &)> &visitor,
+									  size_t *visitedMetadataPages = nullptr) const;
 		void visitRetireQueue(const Superblock &superblock,
 							  const std::function<void(const RetireQueueEntry &)> &visitor) const;
 
 	private:
+		using LocationEntrySink = std::function<void(const LocationLeafEntry &)>;
+		using LocationEntryProducer = std::function<void(const LocationEntrySink &)>;
+		void prepareAppendLocations(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,
+									uint64_t firstLogicalId, uint64_t lastLogicalId, size_t expectedCount,
+									const LocationEntryProducer &producer);
 		void prepareUpsert(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,
 						   std::span<const LocationLeafEntry> entries);
 		void prepareReplace(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,

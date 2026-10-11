@@ -57,6 +57,10 @@ std::shared_ptr<Expression> litInt(int64_t v) {
 	return std::make_shared<LiteralExpression>(v);
 }
 
+std::shared_ptr<Expression> litDouble(double v) {
+	return std::make_shared<LiteralExpression>(v);
+}
+
 // Helper to create a FunctionCallExpression for aggregate tests
 std::shared_ptr<Expression> makeCountExpr(std::shared_ptr<Expression> arg, bool distinct = false) {
 	std::vector<std::unique_ptr<Expression>> args;
@@ -189,6 +193,41 @@ TEST_F(LogicalPlanBuilderCoverageTest, ReturnWithDistinctAggregate) {
 	auto input = std::make_unique<LogicalSingleRow>();
 	auto result = builder.buildReturn(body, std::move(input));
 	ASSERT_NE(result, nullptr);
+}
+
+TEST_F(LogicalPlanBuilderCoverageTest, PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity) {
+	ProjectionBody body;
+	body.hasAggregates = true;
+	ProjectionItem percentile;
+	std::vector<std::unique_ptr<Expression>> arguments;
+	arguments.push_back(varRef("value")->clone());
+	arguments.push_back(litDouble(0.25)->clone());
+	percentile.expression = std::make_shared<FunctionCallExpression>("percentileDisc", std::move(arguments));
+	percentile.alias = "quartile";
+	percentile.isTopLevelAggregate = true;
+	percentile.containsAggregate = true;
+	body.items.push_back(std::move(percentile));
+
+	auto result = builder.buildReturn(body, std::make_unique<LogicalSingleRow>());
+	auto *aggregate = dynamic_cast<LogicalAggregate *>(result.get());
+	ASSERT_NE(aggregate, nullptr);
+	ASSERT_EQ(aggregate->getAggregations().size(), 1U);
+	ASSERT_NE(aggregate->getAggregations().front().extraArg, nullptr);
+	EXPECT_EQ(aggregate->getAggregations().front().extraArg->toString(), "0.25");
+
+	ProjectionBody invalidBody;
+	invalidBody.hasAggregates = true;
+	ProjectionItem invalidPercentile;
+	std::vector<std::unique_ptr<Expression>> invalidArguments;
+	invalidArguments.push_back(varRef("value")->clone());
+	invalidPercentile.expression =
+			std::make_shared<FunctionCallExpression>("percentileCont", std::move(invalidArguments));
+	invalidPercentile.alias = "invalid";
+	invalidPercentile.isTopLevelAggregate = true;
+	invalidPercentile.containsAggregate = true;
+	invalidBody.items.push_back(std::move(invalidPercentile));
+
+	EXPECT_THROW(builder.buildReturn(invalidBody, std::make_unique<LogicalSingleRow>()), std::invalid_argument);
 }
 
 // ============================================================================

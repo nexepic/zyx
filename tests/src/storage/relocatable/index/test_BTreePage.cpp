@@ -8,6 +8,7 @@
 
 #include <array>
 #include <functional>
+#include <random>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -118,6 +119,7 @@ TEST(RelocatableBTreePageCodecTest, RejectsMalformedPageHeaders) {
 TEST(RelocatableBTreePageCodecTest, RoundTripsVariableKeysAndRejectsMalformedEntries) {
 	const BTreePageEntry entry{{std::byte{0x00}, std::byte{0xFF}, std::byte{0x42}}, 123};
 	const std::vector<std::byte> encoded = BTreePageEntryCodec::encode(entry);
+	EXPECT_EQ(BTreePageEntryCodec::encodedSize(entry), encoded.size());
 	EXPECT_EQ(BTreePageEntryCodec::decode(encoded), entry);
 	expectFormatError([&] { static_cast<void>(BTreePageEntryCodec::decode(std::span(encoded).first(31))); },
 					  FormatError::FERR_BUFFER_TOO_SMALL);
@@ -133,7 +135,9 @@ TEST(RelocatableBTreePageCodecTest, RoundTripsVariableKeysAndRejectsMalformedEnt
 	LittleEndianCodec::writeU64(corrupt, 24, 1);
 	expectFormatError([&] { static_cast<void>(BTreePageEntryCodec::decode(corrupt)); },
 					  FormatError::FERR_RESERVED_BITS);
-	EXPECT_EQ(BTreePageEntryCodec::decode(BTreePageEntryCodec::encode({{}, 0})), (BTreePageEntry{{}, 0}));
+	const BTreePageEntry empty{{}, 0};
+	EXPECT_EQ(BTreePageEntryCodec::encodedSize(empty), BTreePageEntryCodec::encode(empty).size());
+	EXPECT_EQ(BTreePageEntryCodec::decode(BTreePageEntryCodec::encode(empty)), empty);
 }
 
 TEST(RelocatableBTreePageCodecTest, StoresOrderedEntriesInPackedPayload) {
@@ -211,6 +215,44 @@ TEST(RelocatableBTreePageCodecTest, BulkMaterializesOneValidatedPackedPayload) {
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableBTreePageCodecTest, RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation) {
+	PageOwnerHeader owner;
+	owner.page_id = PageId(61U);
+	owner.owner_id = 17U;
+	owner.kind = PageOwnerKind::POK_INDEX;
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	owner.generation = Generation(2U);
+	owner.committed_lsn = LogSequenceNumber(9U);
+	BTreePageHeader header;
+	header.index_id = owner.owner_id;
+	header.page_id = owner.page_id;
+	header.generation = owner.generation;
+	std::vector<BTreePageEntry> entries;
+	entries.reserve(17U);
+	for (uint8_t suffix = 0U; suffix < 17U; ++suffix) {
+		std::vector<std::byte> key(24U, std::byte{'p'});
+		key.push_back(static_cast<std::byte>(suffix));
+		entries.push_back({std::move(key), static_cast<uint64_t>(suffix) + 1U});
+	}
+	const std::vector<std::byte> canonical = BTreePage::createWithEntries(owner, header, entries).serialize();
+	ASSERT_EQ(canonical.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+
+	for (size_t byteOffset = 0U; byteOffset < canonical.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = canonical;
+			mutation[byteOffset] ^= std::byte{static_cast<unsigned char>(1U << bit)};
+			try {
+				const BTreePage decoded = BTreePage::open(owner, mutation);
+				EXPECT_EQ(decoded.serialize(), mutation)
+						<< "index-page mutation was normalized at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Invalid owner, slot, packed payload, or key state must fail closed.
+			}
+		}
+	}
+}
+
 TEST(RelocatableBTreePageCodecTest, FindsKeysAcrossPackedRestartGroups) {
 	std::vector<BTreePageEntry> entries;
 	entries.reserve(19U);
@@ -229,6 +271,42 @@ TEST(RelocatableBTreePageCodecTest, FindsKeysAcrossPackedRestartGroups) {
 	std::vector<std::byte> missing(48U, std::byte{'p'});
 	missing.push_back(std::byte{19});
 	EXPECT_FALSE(PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, missing).has_value());
+}
+
+TEST(RelocatableBTreePageCodecTest, RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads) {
+	// A deterministic corpus makes format failures reproducible on every platform.
+	std::mt19937_64 random(0x5A59585F42545245ULL);
+	std::vector<BTreePageEntry> entries;
+	entries.reserve(17U);
+	for (uint8_t suffix = 0U; suffix < 17U; ++suffix) {
+		std::vector<std::byte> key(24U, std::byte{'p'});
+		key.push_back(static_cast<std::byte>(suffix));
+		entries.push_back({std::move(key), static_cast<uint64_t>(suffix) + 1U});
+	}
+	const std::vector<std::byte> canonical = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+	const auto assertRejectedOrCanonical = [](const std::vector<std::byte> &bytes, const size_t trial) {
+		try {
+			const std::vector<BTreePageEntry> decoded = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, bytes);
+			EXPECT_EQ(PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, decoded), bytes)
+					<< "packed payload corpus trial " << trial;
+		} catch (const FormatException &) {
+			// Random on-disk bytes must be rejected through the typed codec boundary.
+		}
+	};
+
+	for (size_t trial = 0U; trial < 256U; ++trial) {
+		std::vector<std::byte> bytes(static_cast<size_t>(random() % RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) + 1U);
+		for (std::byte &byte: bytes) {
+			byte = static_cast<std::byte>(random() & 0xFFU);
+		}
+		assertRejectedOrCanonical(bytes, trial);
+	}
+	for (size_t trial = 0U; trial < 256U; ++trial) {
+		std::vector<std::byte> mutated = canonical;
+		const size_t offset = static_cast<size_t>(random() % mutated.size());
+		mutated[offset] ^= static_cast<std::byte>((random() & 0xFFU) | 1U);
+		assertRejectedOrCanonical(mutated, trial);
+	}
 }
 
 TEST(RelocatableBTreePageCodecTest, StoresKeyOnlyLeafEntriesWithoutValueBytes) {
@@ -526,6 +604,40 @@ TEST(RelocatableBTreePageCodecTest, RejectsAReusedPackedPayloadSlotGeneration) {
 
 	expectFormatError([&] { static_cast<void>(BTreePage::open(owner, malformed.serialize())); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableBTreePageCodecTest, RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner) {
+	PageOwnerHeader owner;
+	owner.page_id = PageId(62U);
+	owner.owner_id = 17U;
+	owner.kind = PageOwnerKind::POK_INDEX;
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	owner.generation = Generation(2U);
+	owner.committed_lsn = LogSequenceNumber(10U);
+	BTreePageHeader header;
+	header.index_id = owner.owner_id;
+	header.page_id = owner.page_id;
+	header.generation = owner.generation;
+	const std::vector<std::byte> emptyPayload = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, {});
+
+	SlottedPage reusedHeader = SlottedPage::create(owner);
+	const SlottedSlotReference originalHeader = reusedHeader.insert(BTreePageHeaderCodec::encode(header));
+	ASSERT_EQ(originalHeader.slot_id, 0U);
+	reusedHeader.erase(originalHeader);
+	const SlottedSlotReference replacementHeader = reusedHeader.insert(BTreePageHeaderCodec::encode(header));
+	ASSERT_EQ(replacementHeader.slot_id, 0U);
+	ASSERT_EQ(replacementHeader.generation, 2U);
+	static_cast<void>(reusedHeader.insert(emptyPayload));
+	expectFormatError([&] { static_cast<void>(BTreePage::open(owner, reusedHeader.serialize())); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	SlottedPage foreignHeader = SlottedPage::create(owner);
+	BTreePageHeader mismatched = header;
+	mismatched.index_id = owner.owner_id + 1U;
+	static_cast<void>(foreignHeader.insert(BTreePageHeaderCodec::encode(mismatched)));
+	static_cast<void>(foreignHeader.insert(emptyPayload));
+	expectFormatError([&] { static_cast<void>(BTreePage::open(owner, foreignHeader.serialize())); },
+					  FormatError::FERR_INVALID_STATE);
 }
 
 TEST(RelocatableBTreePageCodecTest, FailsClosedForPageOwnershipAndSlottedRecordInvariants) {

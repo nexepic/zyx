@@ -3,13 +3,14 @@
 // Vector index end-to-end tests: CREATE VECTOR INDEX, insert, search via
 // db.index.vector.queryNodes, score semantics, train, persistence, errors.
 //
-// Cross-binding contract (confirmed in C++ test_VectorIndex.cpp and via probe):
-//  - metric must be 'L2' | 'IP' | 'Cosine' (exact case) else silently treated as L2.
+// Cross-binding contract (implemented by the native relocatable vector store):
+//  - metric names are ASCII-case-insensitive and normalize to l2, ip, or cosine;
+//    unsupported metrics are rejected rather than silently changing semantics.
 //  - the query vector passed to queryNodes MUST be a literal list `[...]` in the
 //    Cypher string (CALL args are evaluated with an empty context; `$vec` would
 //    collapse to empty and throw "queryVector argument must be a List of floats.").
-//  - L2 score = squared distance (lower = closer). IP/Cosine score = negative
-//    inner product (lower = closer). Results sorted ascending by score.
+//  - L2 score = squared distance, IP score = negative inner product, and Cosine
+//    score = 1 - cosine similarity. Lower scores are closer in every metric.
 //  - search works WITHOUT training (flat/raw greedy search) for small graphs.
 
 const { test } = require('node:test');
@@ -71,25 +72,29 @@ test('Vector - search returns up to k results sorted ascending by score', withDb
     assert.ok(r[0].score <= r[1].score && r[1].score <= r[2].score);
 }));
 
-test('Vector - Cosine metric returns negative inner-product score', withDb(async (db) => {
+test('Vector - Cosine metric returns angular distance', withDb(async (db) => {
     await db.execute(`CREATE VECTOR INDEX vec_cos ON :V(embedding) OPTIONS {dimension: 2, metric: 'Cosine'}`);
     await db.execute('CREATE (:V {id: 1, embedding: [1.0, 0.0]})');
     await db.execute('CREATE (:V {id: 2, embedding: [0.0, 1.0]})');
     const r = (await db.execute(`CALL db.index.vector.queryNodes('vec_cos', 1, [1.0, 0.0]) YIELD node, score RETURN node.id AS id, score`)).fetchAll();
     assert.ok(r.length >= 1);
     assert.strictEqual(r[0].id, 1);
-    // Negated inner product of matching unit vectors is ~-1.0
-    assert.ok(Math.abs(r[0].score - (-1.0)) < 5e-2);
+    // A matching direction has cosine similarity 1, hence distance 1 - 1 = 0.
+    assert.ok(Math.abs(r[0].score) < 5e-2);
 }));
 
-test('Vector - metric string is case-sensitive (COSINE falls back to L2 behaviour)', withDb(async (db) => {
-    // 'COSINE' is not a recognized metric; the engine treats it as L2 (convention).
+test('Vector - metric names normalize case and unsupported metrics are rejected', withDb(async (db) => {
+    // Uppercase input selects the same cosine metric, rather than silently L2.
     await db.execute(`CREATE VECTOR INDEX vec_upper ON :V(embedding) OPTIONS {dimension: 2, metric: 'COSINE'}`);
-    await db.execute('CREATE (:V {id: 1, embedding: [1.0, 0.0]})');
-    // Search must still succeed (engine does not throw on unknown metric, it defaults to L2)
+    await db.execute('CREATE (:V {id: 1, embedding: [2.0, 0.0]})');
     const r = (await db.execute(`CALL db.index.vector.queryNodes('vec_upper', 1, [1.0, 0.0]) YIELD node, score RETURN node.id AS id, score`)).fetchAll();
     assert.ok(r.length >= 1);
     assert.strictEqual(r[0].id, 1);
+    assert.ok(Math.abs(r[0].score) < 5e-2);
+
+    const invalid = await db.execute(`CREATE VECTOR INDEX vec_invalid ON :V(embedding) OPTIONS {dimension: 2, metric: 'invalid'}`);
+    assert.equal(invalid.isSuccess, false);
+    assert.match(String(invalid.error ?? ''), /metric/i);
 }));
 
 test('Vector - insert via parameterized list property', withDb(async (db) => {

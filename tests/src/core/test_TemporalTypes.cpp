@@ -430,6 +430,24 @@ TEST(TemporalDateTest, FromISOFebruary28NonLeapYear) {
 	EXPECT_EQ(d.day(), 28);
 }
 
+TEST(TemporalDateTest, RejectsInvalidOrTrailingDateInput) {
+	EXPECT_THROW(static_cast<void>(TemporalDate::fromISO("2023-02-29")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDate::fromISO("2024-02-29extra")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDate::fromYMD(2024, 13, 1)), std::runtime_error);
+}
+
+TEST(TemporalDateTimeTest, RejectsInvalidDateTimeComponentsAndTrailingInput) {
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromISO("2024-01-01T24:00:00")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromISO("2024-01-01T01:02:03extra")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 2, 30, 1, 2, 3)), std::runtime_error);
+}
+
+TEST(TemporalDurationTest, RejectsIncompleteDurationInput) {
+	EXPECT_THROW(static_cast<void>(TemporalDuration::fromISO("P")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDuration::fromISO("P1")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDuration::fromISO("PT")), std::runtime_error);
+}
+
 TEST(TemporalDateTest, EqualTotalDaysAndEqualNanosNotLess) {
 	TemporalDuration a;
 	a.months = 1;

@@ -1,5 +1,6 @@
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -7,7 +8,10 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <span>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,8 +20,15 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/format/Format.hpp"
+#include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "storage/relocatable/format/RelocatableProcessCrashSupport.hpp"
 #include "zyx/zyx_driver_abi.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 using namespace graph::storage;
@@ -42,7 +53,7 @@ namespace {
 
 	void materializeEmptyRelocatableDatabase(const std::string &databasePath) {
 		auto data = std::make_shared<std::fstream>(databasePath,
-											 std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+												   std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
 		ASSERT_TRUE(data->is_open());
 		const file_handle_t dataWrite = portable_open_rw(databasePath.c_str());
 		const file_handle_t dataRead = portable_open(databasePath.c_str(), O_RDONLY);
@@ -57,6 +68,38 @@ namespace {
 		static_cast<void>(portable_close_rw(dataWrite));
 		static_cast<void>(portable_close(dataRead));
 		data->close();
+	}
+
+	Superblock recoverPublishedSuperblock(const std::filesystem::path &databasePath) {
+		auto data = std::make_shared<std::fstream>(databasePath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!data->is_open()) {
+			throw std::runtime_error("crash-test child cannot open database Superblocks");
+		}
+		const file_handle_t dataWrite = portable_open_rw(databasePath.c_str());
+		const file_handle_t dataRead = portable_open(databasePath.c_str(), O_RDONLY);
+		if (dataWrite == INVALID_FILE_HANDLE || dataRead == INVALID_FILE_HANDLE) {
+			if (dataWrite != INVALID_FILE_HANDLE) {
+				static_cast<void>(portable_close_rw(dataWrite));
+			}
+			if (dataRead != INVALID_FILE_HANDLE) {
+				static_cast<void>(portable_close(dataRead));
+			}
+			throw std::runtime_error("crash-test child cannot open Superblock descriptors");
+		}
+		try {
+			auto io = std::make_shared<StorageIO>(data, dataWrite, dataRead);
+			const Superblock superblock = SuperblockFile(io).recover();
+			io.reset();
+			static_cast<void>(portable_close_rw(dataWrite));
+			static_cast<void>(portable_close(dataRead));
+			data->close();
+			return superblock;
+		} catch (...) {
+			static_cast<void>(portable_close_rw(dataWrite));
+			static_cast<void>(portable_close(dataRead));
+			data->close();
+			throw;
+		}
 	}
 
 	ArrowSchema scalarSchema(const char *format, const char *name) {
@@ -169,10 +212,7 @@ protected:
 
 	void cleanupFiles() {
 		std::error_code ec;
-		for (const std::string &suffix: {"", "-wal"}) {
-			fs::remove_all(dbPath + suffix, ec);
-			ec.clear();
-		}
+		fs::remove_all(dbPath, ec);
 	}
 
 	std::pair<int64_t, int64_t> createEndpoints() {
@@ -183,9 +223,7 @@ protected:
 		return {source, target};
 	}
 
-	int64_t countEdges(const char *type) {
-		return countEdges(db, type);
-	}
+	int64_t countEdges(const char *type) { return countEdges(db, type); }
 
 	int64_t countEdges(zyx_driver_db_t *database, const char *type) {
 		zyx_driver_result_t *result = nullptr;
@@ -238,6 +276,204 @@ protected:
 		ASSERT_NE(db, nullptr);
 	}
 };
+
+class DISABLED_RelocatableDriverAbiIngestScaleTest : public RelocatableDriverAbiIngestTest {};
+
+namespace graph::test {
+
+	int runDriverAbiIngestProcessCrashChild(std::string_view mode, const std::filesystem::path &databasePath,
+											const std::filesystem::path &markerPath) {
+		const bool crashBeforePublication = mode == "driver-abi-ingest-before-publication";
+		const bool crashAfterPublication = mode == "driver-abi-ingest-after-publication";
+		const bool crashBeforeRebasedPublication = mode == "driver-abi-ingest-before-rebased-publication";
+		const bool crashAfterRebasedPublication = mode == "driver-abi-ingest-after-rebased-publication";
+		const bool completeRebasedPublication = mode == "driver-abi-ingest-rebased-publication";
+		if (!crashBeforePublication && !crashAfterPublication && !crashBeforeRebasedPublication &&
+			!crashAfterRebasedPublication && !completeRebasedPublication) {
+			return -1;
+		}
+
+		zyx_driver_db_t *childDb = nullptr;
+		zyx_driver_ingest_t *ingest = nullptr;
+		zyx_driver_edge_ingestor_t *ingestor = nullptr;
+		zyx_driver_error_t *childError = nullptr;
+		const auto releaseError = [&childError] {
+			zyx_driver_error_free(childError);
+			childError = nullptr;
+		};
+		try {
+			const auto requireOk = [&childError, &releaseError](zyx_driver_status_t status,
+																std::string_view operation) {
+				if (status == ZYX_DRIVER_OK) {
+					return;
+				}
+				const char *const message = zyx_driver_error_message(childError);
+				const std::string reason = std::string(operation) +
+										   " failed: " + (message != nullptr ? message : "unknown Driver ABI error");
+				releaseError();
+				throw std::runtime_error(reason);
+			};
+
+			requireOk(zyx_driver_db_open_if_exists(databasePath.string().c_str(), &childDb, &childError),
+					  "open database");
+			IngestEdgeSchema schema;
+			const bool rebasedStaleHandle =
+					crashBeforeRebasedPublication || crashAfterRebasedPublication || completeRebasedPublication;
+			const size_t stagedEdgeCount = rebasedStaleHandle ? 1024U : 1U;
+			IngestEdgeBatch batch(
+					std::vector<int64_t>(stagedEdgeCount, 1), std::vector<int64_t>(stagedEdgeCount, 2),
+					std::vector<int64_t>(stagedEdgeCount, 2026),
+					std::vector<std::string>(stagedEdgeCount, rebasedStaleHandle ? std::string(192U, 's') : "crash"));
+			requireOk(zyx_driver_ingest_begin(childDb, &ingest, &childError), "begin ingest");
+			const char *const relationship = completeRebasedPublication
+													 ? "CROSS_PROCESS_REBASE_REL"
+													 : (rebasedStaleHandle ? "CRASH_REBASE_REL" : "CRASH_REL");
+			requireOk(zyx_driver_ingest_prepare_edges(ingest, relationship, &schema.root, &ingestor, &childError),
+					  "prepare edge ingest");
+			requireOk(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &childError), "write edge batch");
+
+			if (rebasedStaleHandle) {
+				graph::test::relocatable_crash::writeMarker(markerPath);
+				const std::filesystem::path resumeMarker = markerPath.string() + ".resume";
+				if (!graph::test::relocatable_crash::waitForMarker(resumeMarker)) {
+					throw std::runtime_error("parent did not publish the external Edge before crash-test timeout");
+				}
+				if (completeRebasedPublication) {
+					requireOk(zyx_driver_ingest_commit(ingest, &childError), "commit rebased ingest");
+					requireOk(zyx_driver_edge_ingestor_close(ingestor, &childError), "close edge ingestor");
+					ingestor = nullptr;
+					requireOk(zyx_driver_ingest_close(ingest, &childError), "close ingest");
+					ingest = nullptr;
+					requireOk(zyx_driver_db_close(childDb, &childError), "close database");
+					childDb = nullptr;
+					graph::test::relocatable_crash::writeMarker(markerPath.string() + ".complete");
+					return 0;
+				}
+				const std::filesystem::path crashMarker = markerPath.string() + ".crash";
+				const Superblock externalPublication = recoverPublishedSuperblock(databasePath);
+				if (crashAfterRebasedPublication) {
+					std::atomic<bool> observedPublication{false};
+					StorageIO::ScopedNativeWriteHookForTesting pauseAfterRebasedGraphPublication(
+							[&observedPublication, &crashMarker, externalPublication](file_handle_t fd, const void *bytes,
+																							  size_t byteCount, pwrite_off_t offset) {
+								if (byteCount == RSS_PAGE_SIZE &&
+									(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U)) &&
+									!observedPublication.load(std::memory_order_relaxed)) {
+									try {
+										const Superblock candidate = SuperblockCodec::decode(
+												std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+										if (candidate.generation > externalPublication.generation &&
+											candidate.edge_entity_directory_root != externalPublication.edge_entity_directory_root) {
+											observedPublication.store(true, std::memory_order_relaxed);
+											const pwrite_ssize_t written = portable_pwrite(fd, bytes, byteCount, offset);
+											if (written != static_cast<pwrite_ssize_t>(byteCount)) {
+												return written;
+											}
+											graph::test::relocatable_crash::writeMarker(crashMarker);
+											graph::test::relocatable_crash::waitToBeKilled();
+										}
+									} catch (const FormatException &) {
+										// Only the new authenticated graph publication arms this crash point.
+									}
+								}
+								return portable_pwrite(fd, bytes, byteCount, offset);
+							});
+					requireOk(zyx_driver_ingest_commit(ingest, &childError), "commit rebased ingest");
+					return 102;
+				}
+				std::atomic<bool> observedPublicEntity{false};
+				StorageIO::ScopedNativeWriteHookForTesting pauseBeforeRebasedGraphPublication(
+						[&observedPublicEntity, &crashMarker](file_handle_t fd, const void *bytes, size_t byteCount,
+															  pwrite_off_t offset) {
+							if (byteCount == RSS_PAGE_SIZE && !observedPublicEntity.load(std::memory_order_relaxed)) {
+								try {
+									const auto page = std::span<const std::byte>(static_cast<const std::byte *>(bytes),
+																				 byteCount);
+									if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+										PageOwnerKind::POK_ENTITY) {
+										observedPublicEntity.store(true, std::memory_order_relaxed);
+										graph::test::relocatable_crash::writeMarker(crashMarker);
+										graph::test::relocatable_crash::waitToBeKilled();
+									}
+								} catch (const FormatException &) {
+									// Only an authenticated public Entity page arms this crash point.
+								}
+							}
+							return portable_pwrite(fd, bytes, byteCount, offset);
+						});
+				requireOk(zyx_driver_ingest_commit(ingest, &childError), "commit rebased ingest");
+				return 102;
+			}
+
+			if (crashBeforePublication) {
+				std::atomic<bool> observedPublicEntity{false};
+				StorageIO::ScopedNativeWriteHookForTesting pauseBeforeGraphPublication(
+						[&observedPublicEntity, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount,
+															 pwrite_off_t offset) {
+							if (byteCount == RSS_PAGE_SIZE && !observedPublicEntity.load(std::memory_order_relaxed)) {
+								try {
+									const auto page = std::span<const std::byte>(static_cast<const std::byte *>(bytes),
+																				 byteCount);
+									if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+										PageOwnerKind::POK_ENTITY) {
+										observedPublicEntity.store(true, std::memory_order_relaxed);
+										graph::test::relocatable_crash::writeMarker(markerPath);
+										graph::test::relocatable_crash::waitToBeKilled();
+									}
+								} catch (const FormatException &) {
+									// Only an authenticated public Entity page arms this crash point.
+								}
+							}
+							return portable_pwrite(fd, bytes, byteCount, offset);
+						});
+				requireOk(zyx_driver_ingest_commit(ingest, &childError), "commit ingest");
+				return 102;
+			}
+
+			std::atomic<bool> observedPublication{false};
+			StorageIO::ScopedNativeWriteHookForTesting pauseAfterGraphPublication(
+					[&observedPublication, &markerPath](file_handle_t fd, const void *bytes, size_t byteCount,
+														pwrite_off_t offset) {
+						if (byteCount == RSS_PAGE_SIZE &&
+							(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U)) &&
+							!observedPublication.load(std::memory_order_relaxed)) {
+							try {
+								const Superblock candidate = SuperblockCodec::decode(
+										std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+								if (candidate.edge_entity_directory_root.isValid()) {
+									observedPublication.store(true, std::memory_order_relaxed);
+									const pwrite_ssize_t written = portable_pwrite(fd, bytes, byteCount, offset);
+									if (written != static_cast<pwrite_ssize_t>(byteCount)) {
+										return written;
+									}
+									graph::test::relocatable_crash::writeMarker(markerPath);
+									graph::test::relocatable_crash::waitToBeKilled();
+								}
+							} catch (const FormatException &) {
+								// Ignore non-Superblock control writes while locating the final route.
+							}
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			requireOk(zyx_driver_ingest_commit(ingest, &childError), "commit ingest");
+			return 102;
+		} catch (const std::exception &exception) {
+			releaseError();
+			if (ingestor != nullptr) {
+				static_cast<void>(zyx_driver_edge_ingestor_close(ingestor, nullptr));
+			}
+			if (ingest != nullptr) {
+				static_cast<void>(zyx_driver_ingest_close(ingest, nullptr));
+			}
+			if (childDb != nullptr) {
+				static_cast<void>(zyx_driver_db_close(childDb, nullptr));
+			}
+			graph::test::relocatable_crash::writeFailureMarker(markerPath, exception.what());
+			return 101;
+		}
+	}
+
+} // namespace graph::test
 
 TEST_F(DriverAbiIngestTest, ArrowEdgeIngestCommitsMultipleBatchesWithContiguousIds) {
 	const auto [source, target] = createEndpoints();
@@ -341,6 +577,1022 @@ TEST_F(RelocatableDriverAbiIngestTest, ArrowEdgeIngestStagesRowsUntilCommitAndDr
 	ingest = nullptr;
 	EXPECT_EQ(countEdges(reader, "RSS_INGEST_REL"), 1);
 	EXPECT_EQ(zyx_driver_db_close(reader, &error), ZYX_DRIVER_OK);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, StreamedIngestRebasesOverAConcurrentAbiEdgePublication) {
+	const auto [source, target] = createEndpoints();
+	zyx_driver_db_t *concurrentWriter = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(concurrentWriter, nullptr);
+
+	IngestEdgeSchema schema;
+	// Exceed one sealed scratch run so the rebase covers durable private staging,
+	// not only an in-memory Arrow batch.
+	constexpr size_t stagedEdgeCount = 1024U;
+	IngestEdgeBatch batch(std::vector<int64_t>(stagedEdgeCount, source), std::vector<int64_t>(stagedEdgeCount, target),
+					  std::vector<int64_t>(stagedEdgeCount, 2026),
+					  std::vector<std::string>(stagedEdgeCount, std::string(192U, 's')));
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASED_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t concurrentEdge = 0;
+	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_CONCURRENT_REL", nullptr,
+								  &concurrentEdge, &error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(concurrentEdge, 0);
+	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
+	concurrentWriter = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("ABI_REBASED_REL"), static_cast<int64_t>(stagedEdgeCount));
+	EXPECT_EQ(countEdges("ABI_CONCURRENT_REL"), 1);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest,
+	StreamedIngestRebaseFailurePreservesExternalPublicationAndAllowsRetry) {
+	const auto [source, target] = createEndpoints();
+	zyx_driver_db_t *concurrentWriter = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(concurrentWriter, nullptr);
+
+	IngestEdgeSchema schema;
+	constexpr size_t stagedEdgeCount = 1024U;
+	IngestEdgeBatch stagedBatch(std::vector<int64_t>(stagedEdgeCount, source),
+								std::vector<int64_t>(stagedEdgeCount, target),
+								std::vector<int64_t>(stagedEdgeCount, 2026),
+								std::vector<std::string>(stagedEdgeCount, std::string(192U, 's')));
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASE_RETRY_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &stagedBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t concurrentEdge = 0;
+	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_REBASE_EXTERNAL_REL", nullptr,
+										&concurrentEdge, &error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(concurrentEdge, 0);
+	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
+	concurrentWriter = nullptr;
+
+	std::atomic<bool> sawPublicEntityPage{false};
+	std::atomic<bool> failedDataFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observePublicEntityPage(
+				[&sawPublicEntityPage](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE) {
+						try {
+							const auto page =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+								PageOwnerKind::POK_ENTITY) {
+								sawPublicEntityPage.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated public Entity page arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFirstRebasedDataFence(
+				[&sawPublicEntityPage, &failedDataFence](file_handle_t fd) {
+					if (!sawPublicEntityPage.load(std::memory_order_relaxed) ||
+						failedDataFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_WRITE_FAULT);
+#else
+					errno = EIO;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawPublicEntityPage.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedDataFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("ABI_REBASE_RETRY_REL"), 0);
+	EXPECT_EQ(countEdges("ABI_REBASE_EXTERNAL_REL"), 1);
+
+	IngestEdgeBatch retryBatch({source}, {target}, {2027}, {"retry"});
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASE_RETRY_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &retryBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges("ABI_REBASE_RETRY_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_REBASE_EXTERNAL_REL"), 1);
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest,
+	   StreamedIngestRebaseGraphSuperblockShortWritePreservesExternalPublicationAndAllowsRetry) {
+	const auto [source, target] = createEndpoints();
+	zyx_driver_db_t *concurrentWriter = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(concurrentWriter, nullptr);
+
+	IngestEdgeSchema schema;
+	constexpr size_t stagedEdgeCount = 1024U;
+	IngestEdgeBatch stagedBatch(std::vector<int64_t>(stagedEdgeCount, source),
+								std::vector<int64_t>(stagedEdgeCount, target),
+								std::vector<int64_t>(stagedEdgeCount, 2026),
+								std::vector<std::string>(stagedEdgeCount, std::string(192U, 's')));
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASE_SUPERBLOCK_SHORT_WRITE_REL", &schema.root, &ingestor,
+											  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &stagedBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t concurrentEdge = 0;
+	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_REBASE_SUPERBLOCK_EXTERNAL_REL", nullptr,
+										&concurrentEdge, &error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(concurrentEdge, 0);
+	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
+	concurrentWriter = nullptr;
+	const Superblock externalPublication = recoverPublishedSuperblock(dbPath);
+
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortRebasedGraphPublicationSuperblock(
+				[&injected, externalPublication](file_handle_t fd, const void *bytes, size_t byteCount,
+												 pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U)) &&
+						!injected.load(std::memory_order_relaxed)) {
+						try {
+							const Superblock candidate = SuperblockCodec::decode(
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+							if (candidate.generation > externalPublication.generation &&
+								candidate.edge_entity_directory_root !=
+										externalPublication.edge_entity_directory_root) {
+								injected.store(true, std::memory_order_relaxed);
+								return portable_pwrite(fd, bytes, 16U, offset);
+							}
+						} catch (const FormatException &) {
+							// Only the rebased authenticated graph publication arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("ABI_REBASE_SUPERBLOCK_SHORT_WRITE_REL"), 0);
+	EXPECT_EQ(countEdges("ABI_REBASE_SUPERBLOCK_EXTERNAL_REL"), 1);
+
+	IngestEdgeBatch retryBatch({source}, {target}, {2027}, {"retry"});
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASE_SUPERBLOCK_SHORT_WRITE_REL", &schema.root, &ingestor,
+											  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &retryBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges("ABI_REBASE_SUPERBLOCK_SHORT_WRITE_REL"), 1);
+	EXPECT_EQ(countEdges("ABI_REBASE_SUPERBLOCK_EXTERNAL_REL"), 1);
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest, StreamedIngestRebaseFinalFenceFailureRecoversBothPublications) {
+	const auto [source, target] = createEndpoints();
+	zyx_driver_db_t *concurrentWriter = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &concurrentWriter, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(concurrentWriter, nullptr);
+
+	IngestEdgeSchema schema;
+	constexpr size_t stagedEdgeCount = 1024U;
+	IngestEdgeBatch stagedBatch(std::vector<int64_t>(stagedEdgeCount, source),
+								std::vector<int64_t>(stagedEdgeCount, target),
+								std::vector<int64_t>(stagedEdgeCount, 2026),
+								std::vector<std::string>(stagedEdgeCount, std::string(192U, 's')));
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "ABI_REBASE_FINAL_FENCE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &stagedBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+
+	int64_t concurrentEdge = 0;
+	ASSERT_EQ(zyx_driver_db_create_edge(concurrentWriter, source, target, "ABI_REBASE_FINAL_EXTERNAL_REL", nullptr,
+										&concurrentEdge, &error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(concurrentEdge, 0);
+	ASSERT_EQ(zyx_driver_db_close(concurrentWriter, &error), ZYX_DRIVER_OK);
+	concurrentWriter = nullptr;
+	// The external Edge has already made the edge directory valid, so distinguish
+	// the final rebased graph publication by its newer generation and new root.
+	auto superblockStream = std::make_shared<std::fstream>(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(superblockStream->is_open());
+	const file_handle_t superblockWrite = portable_open_rw(dbPath.c_str());
+	const file_handle_t superblockRead = portable_open(dbPath.c_str(), O_RDONLY);
+	ASSERT_NE(superblockWrite, INVALID_FILE_HANDLE);
+	ASSERT_NE(superblockRead, INVALID_FILE_HANDLE);
+	auto superblockIo = std::make_shared<StorageIO>(superblockStream, superblockWrite, superblockRead);
+	const Superblock externalPublication = SuperblockFile(superblockIo).recover();
+	superblockIo.reset();
+	EXPECT_EQ(portable_close_rw(superblockWrite), 0);
+	EXPECT_EQ(portable_close(superblockRead), 0);
+	superblockStream->close();
+
+	std::atomic<bool> sawGraphPublication{false};
+	std::atomic<bool> failedFinalFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeGraphPublication(
+				[&sawGraphPublication, externalPublication](file_handle_t fd, const void *bytes, size_t byteCount,
+															pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+						try {
+							const Superblock candidate = SuperblockCodec::decode(
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+							if (candidate.generation > externalPublication.generation &&
+								candidate.edge_entity_directory_root !=
+										externalPublication.edge_entity_directory_root) {
+								sawGraphPublication.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated graph-publication Superblock arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failRebasedFinalPublicationFence(
+				[&sawGraphPublication, &failedFinalFence](file_handle_t fd) {
+					if (!sawGraphPublication.load(std::memory_order_relaxed) ||
+						failedFinalFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_WRITE_FAULT);
+#else
+					errno = EIO;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawGraphPublication.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedFinalFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	int64_t unexpectedNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "MustReopen", nullptr, &unexpectedNode, &error),
+			  ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("ABI_REBASE_FINAL_FENCE_REL"), static_cast<int64_t>(stagedEdgeCount));
+	EXPECT_EQ(countEdges("ABI_REBASE_FINAL_EXTERNAL_REL"), 1);
+	int64_t newNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "WritableAfterRebaseFinalFence", nullptr, &newNode, &error), ZYX_DRIVER_OK);
+	EXPECT_GT(newNode, target);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, PublicShortWritePoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"public-short-write"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PUBLIC_SHORT_WRITE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortPublicEntityPage(
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE && !injected.load(std::memory_order_relaxed)) {
+						try {
+							const auto page =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+								PageOwnerKind::POK_ENTITY) {
+								injected.store(true, std::memory_order_relaxed);
+								return portable_pwrite(fd, bytes, 16U, offset);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated public Entity page arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("PUBLIC_SHORT_WRITE_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PUBLIC_SHORT_WRITE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("PUBLIC_SHORT_WRITE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, PrivateScratchShortWritePoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"private-short-write"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PRIVATE_SHORT_WRITE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortPrivateScratchSegment(
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_SEGMENT_SIZE && !injected.load(std::memory_order_relaxed)) {
+						try {
+							const auto segment =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							const SegmentEnvelope envelope =
+									SegmentEnvelopeCodec::decode(segment.first(RSS_ENVELOPE_BYTES));
+							if (envelope.kind == SegmentKind::SGK_BULK_SCRATCH &&
+								envelope.state == SegmentState::SGS_SEALED && envelope.payload_bytes != 0U) {
+								injected.store(true, std::memory_order_relaxed);
+								return portable_pwrite(fd, bytes, 16U, offset);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated sealed scratch image arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("PRIVATE_SHORT_WRITE_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PRIVATE_SHORT_WRITE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("PRIVATE_SHORT_WRITE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, PublicDataFenceFailurePoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"public-data-fence"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PUBLIC_DATA_FENCE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> sawPublicEntityPage{false};
+	std::atomic<bool> failedDataFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observePublicEntityPage(
+				[&sawPublicEntityPage](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE) {
+						try {
+							const auto page =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+								PageOwnerKind::POK_ENTITY) {
+								sawPublicEntityPage.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated public Entity page arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFirstPublicDataFence(
+				[&sawPublicEntityPage, &failedDataFence](file_handle_t fd) {
+					if (!sawPublicEntityPage.load(std::memory_order_relaxed) ||
+						failedDataFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawPublicEntityPage.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedDataFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("PUBLIC_DATA_FENCE_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PUBLIC_DATA_FENCE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("PUBLIC_DATA_FENCE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, DiskFullDuringCommitPoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"disk-full"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "DISK_FULL_REL", &schema.root, &ingestor, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> sawPrivateScratchSegment{false};
+	std::atomic<bool> failedDataFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observePrivateScratchSegment(
+				[&sawPrivateScratchSegment](file_handle_t fd, const void *bytes, size_t byteCount,
+											pwrite_off_t offset) {
+					if (byteCount == RSS_SEGMENT_SIZE) {
+						try {
+							const auto segment =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							const SegmentEnvelope envelope =
+									SegmentEnvelopeCodec::decode(segment.first(RSS_ENVELOPE_BYTES));
+							if (envelope.kind == SegmentKind::SGK_BULK_SCRATCH &&
+								envelope.state == SegmentState::SGS_SEALED && envelope.payload_bytes != 0U) {
+								sawPrivateScratchSegment.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only authenticated sealed scratch images arm this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFirstPublicationFence(
+				[&sawPrivateScratchSegment, &failedDataFence](file_handle_t fd) {
+					if (!sawPrivateScratchSegment.load(std::memory_order_relaxed) ||
+						failedDataFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawPrivateScratchSegment.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedDataFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	// The failed publication is terminal for this session; a caller must release
+	// it and reopen rather than trying to continue from an indeterminate write.
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("DISK_FULL_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "DISK_FULL_REL", &schema.root, &ingestor, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges("DISK_FULL_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, PrivateScratchDataFenceIoFailurePoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"private-scratch-data-fence"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PRIVATE_SCRATCH_DATA_FENCE_REL", &schema.root, &ingestor,
+									  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> sawPrivateScratchSegment{false};
+	std::atomic<bool> failedDataFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observePrivateScratchSegment(
+				[&sawPrivateScratchSegment](file_handle_t fd, const void *bytes, size_t byteCount,
+													 pwrite_off_t offset) {
+					if (byteCount == RSS_SEGMENT_SIZE) {
+						try {
+							const auto segment =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							const SegmentEnvelope envelope =
+									SegmentEnvelopeCodec::decode(segment.first(RSS_ENVELOPE_BYTES));
+							if (envelope.kind == SegmentKind::SGK_BULK_SCRATCH &&
+								envelope.state == SegmentState::SGS_SEALED && envelope.payload_bytes != 0U) {
+								sawPrivateScratchSegment.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only authenticated sealed scratch images arm this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failPrivateScratchDataFence(
+				[&sawPrivateScratchSegment, &failedDataFence](file_handle_t fd) {
+					if (!sawPrivateScratchSegment.load(std::memory_order_relaxed) ||
+						failedDataFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_WRITE_FAULT);
+#else
+					errno = EIO;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawPrivateScratchSegment.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedDataFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("PRIVATE_SCRATCH_DATA_FENCE_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "PRIVATE_SCRATCH_DATA_FENCE_REL", &schema.root, &ingestor,
+									  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges("PRIVATE_SCRATCH_DATA_FENCE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, GraphSuperblockShortWritePoisonsTheAbiSessionAndPreservesTheOldGraph) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"graph-superblock-short-write"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "GRAPH_SUPERBLOCK_SHORT_WRITE_REL", &schema.root, &ingestor,
+									  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortGraphPublicationSuperblock(
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U)) &&
+						!injected.load(std::memory_order_relaxed)) {
+						try {
+							const auto page =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							if (SuperblockCodec::decode(page).edge_entity_directory_root.isValid()) {
+								injected.store(true, std::memory_order_relaxed);
+								return portable_pwrite(fd, bytes, 16U, offset);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated graph-publication Superblock arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("GRAPH_SUPERBLOCK_SHORT_WRITE_REL"), 0);
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "GRAPH_SUPERBLOCK_SHORT_WRITE_REL", &schema.root, &ingestor,
+									  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges("GRAPH_SUPERBLOCK_SHORT_WRITE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, FinalFenceFailurePoisonsTheAbiSessionAndReopenRecoversTheCompleteGeneration) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"final-fence"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "FINAL_FENCE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	std::atomic<bool> sawGraphPublication{false};
+	std::atomic<bool> failedFinalFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeGraphPublication(
+				[&sawGraphPublication](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+						try {
+							const auto page =
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+							if (SuperblockCodec::decode(page).edge_entity_directory_root.isValid()) {
+								sawGraphPublication.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only an authenticated graph-publication Superblock arms this fault point.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence(
+				[&sawGraphPublication, &failedFinalFence](file_handle_t fd) {
+					if (!sawGraphPublication.load(std::memory_order_relaxed) ||
+						failedFinalFence.exchange(true, std::memory_order_relaxed)) {
+						return portable_fsync(fd);
+					}
+#ifdef _WIN32
+					SetLastError(ERROR_WRITE_FAULT);
+#else
+					errno = EIO;
+#endif
+					return -1;
+				});
+		EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_IO_ERROR);
+	}
+	EXPECT_TRUE(sawGraphPublication.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedFinalFence.load(std::memory_order_relaxed));
+	ASSERT_NE(error, nullptr);
+	EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_IO_ERROR);
+	freeError();
+
+	// A failed final durability fence has an indeterminate outcome. The old handle
+	// must reject further writes until it is closed and the file is reopened.
+	EXPECT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	int64_t unexpectedNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "MustReopen", nullptr, &unexpectedNode, &error),
+			  ZYX_DRIVER_TRANSACTION_ERROR);
+	freeError();
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+	ASSERT_FALSE(fs::exists(dbPath + "-wal"));
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("FINAL_FENCE_REL"), 1);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, ProcessCrashBeforePublicationRetainsTheOldGraphAndAllowsRetry) {
+	const auto [source, target] = createEndpoints();
+	ASSERT_EQ(source, 1);
+	ASSERT_EQ(target, 2);
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	const fs::path markerPath = dbPath + ".crash-marker";
+	graph::test::relocatable_crash::CrashChild child(dbPath, markerPath, "driver-abi-ingest-before-publication");
+	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
+	child.terminate();
+
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("CRASH_REL"), 0);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+
+	IngestEdgeSchema schema;
+	IngestEdgeBatch batch({source}, {target}, {2026}, {"retry"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "CRASH_REL", &schema.root, &ingestor, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &batch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("CRASH_REL"), 1);
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest,
+	ProcessCrashBeforeRebasedPublicationRetainsExternalGraphAndAllowsRetry) {
+	const auto [source, target] = createEndpoints();
+	ASSERT_EQ(source, 1);
+	ASSERT_EQ(target, 2);
+
+	const fs::path stagedMarker = dbPath + ".rebase-staged-marker";
+	const fs::path resumeMarker = stagedMarker.string() + ".resume";
+	const fs::path crashMarker = stagedMarker.string() + ".crash";
+	graph::test::relocatable_crash::CrashChild child(dbPath, stagedMarker,
+													 "driver-abi-ingest-before-rebased-publication");
+	ASSERT_TRUE(child.waitForMarker(stagedMarker)) << child.failureReason();
+
+	int64_t externalEdge = 0;
+	ASSERT_EQ(
+			zyx_driver_db_create_edge(db, source, target, "CRASH_REBASE_EXTERNAL_REL", nullptr, &externalEdge, &error),
+			ZYX_DRIVER_OK);
+	EXPECT_GT(externalEdge, 0);
+	graph::test::relocatable_crash::writeMarker(resumeMarker);
+	ASSERT_TRUE(child.waitForMarker(crashMarker)) << child.failureReason();
+	child.terminate();
+
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("CRASH_REBASE_EXTERNAL_REL"), 1);
+	EXPECT_EQ(countEdges("CRASH_REBASE_REL"), 0);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+
+	IngestEdgeSchema schema;
+	IngestEdgeBatch retryBatch({source}, {target}, {2027}, {"retry"});
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "CRASH_REBASE_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &retryBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges("CRASH_REBASE_REL"), 1);
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest,
+	ProcessCompletesRebasedPublicationAcrossProcessesAndRemainsWritable) {
+	const auto [source, target] = createEndpoints();
+	ASSERT_EQ(source, 1);
+	ASSERT_EQ(target, 2);
+
+	const fs::path stagedMarker = dbPath + ".rebase-staged-marker";
+	const fs::path resumeMarker = stagedMarker.string() + ".resume";
+	const fs::path completeMarker = stagedMarker.string() + ".complete";
+	graph::test::relocatable_crash::CrashChild child(dbPath, stagedMarker, "driver-abi-ingest-rebased-publication");
+	ASSERT_TRUE(child.waitForMarker(stagedMarker)) << child.failureReason();
+
+	int64_t externalEdge = 0;
+	ASSERT_EQ(zyx_driver_db_create_edge(db, source, target, "CROSS_PROCESS_REBASE_EXTERNAL_REL", nullptr, &externalEdge,
+										&error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(externalEdge, 0);
+	graph::test::relocatable_crash::writeMarker(resumeMarker);
+	ASSERT_TRUE(child.waitForSuccessfulExit()) << child.failureReason();
+	ASSERT_TRUE(child.waitForMarker(completeMarker)) << child.failureReason();
+
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("CROSS_PROCESS_REBASE_EXTERNAL_REL"), 1);
+	EXPECT_EQ(countEdges("CROSS_PROCESS_REBASE_REL"), 1024);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	int64_t newNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "WritableAfterCrossProcessRebase", nullptr, &newNode, &error),
+			  ZYX_DRIVER_OK);
+	EXPECT_GT(newNode, target);
+}
+
+TEST_F(DISABLED_RelocatableDriverAbiIngestScaleTest,
+	   ProcessCrashAfterRebasedPublicationBeforeFinalSyncRecoversBothGraphsAndRemainsWritable) {
+	const auto [source, target] = createEndpoints();
+	ASSERT_EQ(source, 1);
+	ASSERT_EQ(target, 2);
+
+	const fs::path stagedMarker = dbPath + ".rebase-staged-marker";
+	const fs::path resumeMarker = stagedMarker.string() + ".resume";
+	const fs::path crashMarker = stagedMarker.string() + ".crash";
+	graph::test::relocatable_crash::CrashChild child(dbPath, stagedMarker,
+													 "driver-abi-ingest-after-rebased-publication");
+	ASSERT_TRUE(child.waitForMarker(stagedMarker)) << child.failureReason();
+
+	int64_t externalEdge = 0;
+	ASSERT_EQ(
+			zyx_driver_db_create_edge(db, source, target, "CRASH_REBASE_EXTERNAL_REL", nullptr, &externalEdge, &error),
+			ZYX_DRIVER_OK);
+	EXPECT_GT(externalEdge, 0);
+	graph::test::relocatable_crash::writeMarker(resumeMarker);
+	ASSERT_TRUE(child.waitForMarker(crashMarker)) << child.failureReason();
+	child.terminate();
+
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("CRASH_REBASE_EXTERNAL_REL"), 1);
+	EXPECT_EQ(countEdges("CRASH_REBASE_REL"), 1024);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	int64_t newNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "WritableAfterRebasedCrash", nullptr, &newNode, &error), ZYX_DRIVER_OK);
+	EXPECT_GT(newNode, target);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest,
+	   ProcessCrashAfterPublicationBeforeFinalSyncRecoversTheCompleteGraphAndRemainsWritable) {
+	const auto [source, target] = createEndpoints();
+	ASSERT_EQ(source, 1);
+	ASSERT_EQ(target, 2);
+	ASSERT_EQ(zyx_driver_db_close(db, &error), ZYX_DRIVER_OK);
+	db = nullptr;
+
+	const fs::path markerPath = dbPath + ".crash-marker";
+	graph::test::relocatable_crash::CrashChild child(dbPath, markerPath, "driver-abi-ingest-after-publication");
+	ASSERT_TRUE(child.waitForMarker(markerPath)) << child.failureReason();
+	child.terminate();
+
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(db, nullptr);
+	EXPECT_EQ(countEdges("CRASH_REL"), 1);
+	EXPECT_FALSE(fs::exists(dbPath + ".wal"));
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	int64_t newNode = 0;
+	EXPECT_EQ(zyx_driver_db_create_node(db, "WritableAfterCrash", nullptr, &newNode, &error), ZYX_DRIVER_OK);
+	EXPECT_GT(newNode, target);
 }
 
 TEST_F(DriverAbiIngestTest, InvalidOffsetsPoisonSessionAndReportRowAndField) {

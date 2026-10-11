@@ -13,6 +13,7 @@
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/vector/VectorPage.hpp"
 
@@ -150,12 +151,14 @@ namespace graph::storage {
 		preparePqNewPoolPages(uint64_t indexId, std::span<const PqVectorMaterializationRecord> records,
 							  const VectorPqMaterializationOptions &options,
 							  std::span<VectorPqMaterializationPoolBatch> batches,
-							  LogSequenceNumber checkpointLsn) const;
+							  LogSequenceNumber checkpointLsn,
+							  const CancellationCheckpoint *cancellation = nullptr) const;
 		// Marks previously visible derived PQ frames retired without changing a
 		// directory root. An enclosing rebuild batch must erase their PageIds and
 		// publish its replacement mapping and Manifest in that same generation.
 		void prepareDerivedPqRetirements(std::span<const ExistingPoolPageRetirementBatch> batches,
-										LogSequenceNumber checkpointLsn) const;
+										LogSequenceNumber checkpointLsn,
+										const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] SharedPagePoolAllocation append(SharedPagePoolAppendRequest request, const VectorPage &page,
 													  LogSequenceNumber checkpointLsn,
 													  const MetadataPublishOptions &options = {});

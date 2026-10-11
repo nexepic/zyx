@@ -9,10 +9,13 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
+#include <system_error>
 
 #include <gtest/gtest.h>
 
@@ -22,6 +25,10 @@
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "storage/relocatable/metadata/MetadataPagePoolTestFixture.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 using graph::storage::test_support::RelocatableMetadataPagePoolTest;
@@ -43,6 +50,18 @@ namespace {
 		} catch (const FormatException &error) {
 			EXPECT_EQ(error.error(), expected);
 		}
+	}
+
+	uint64_t inactiveControlRecordOffset(std::span<const std::byte, RSS_PAGE_SIZE> controlPage,
+										 uint64_t poolOffset) {
+		const MetadataPagePoolHeader first = MetadataPagePoolHeaderCodec::decode(
+				controlPage.subspan(RSS_ENVELOPE_BYTES, RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+		const MetadataPagePoolHeader second = MetadataPagePoolHeaderCodec::decode(
+				controlPage.subspan(RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES,
+										RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+		return poolOffset + (first.control_sequence >= second.control_sequence
+								 ? RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES
+								 : RSS_ENVELOPE_BYTES);
 	}
 
 } // namespace
@@ -69,9 +88,103 @@ TEST_F(RelocatableMetadataPagePoolTest, KeepsControlPageUpdatesUnderTheDurablePo
 	EXPECT_EQ(std::popcount(MetadataPagePoolHeaderCodec::decode(headerBytes).allocated_frames), 2U);
 
 	const BufferPoolStats stats = io->bufferPoolStats();
-	EXPECT_EQ(stats.hits, 3U);
-	EXPECT_EQ(stats.misses, 0U);
-	EXPECT_EQ(stats.disk_read_bytes, 0U);
+	// The inactive-record update invalidates the whole generation-tagged control
+	// page so a failed partial write cannot later be overwritten by stale bytes.
+	EXPECT_GE(stats.misses, 1U);
+	EXPECT_EQ(stats.disk_read_bytes, stats.misses * RSS_PAGE_SIZE);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, ControlRecordShortWriteRetainsThePreviousAllocationBitmap) {
+	const file_handle_t writeHandle = portable_open_rw(testFilePath.string().c_str());
+	const file_handle_t readHandle = portable_open(testFilePath.string().c_str(), O_RDONLY);
+	ASSERT_NE(writeHandle, INVALID_FILE_HANDLE);
+	ASSERT_NE(readHandle, INVALID_FILE_HANDLE);
+	auto nativeIo = std::make_shared<StorageIO>(file, writeHandle, readHandle);
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(nativeIo);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(nativeIo, initial);
+	const PhysicalPageRef first = allocator.allocatePage(Generation(1U));
+	ASSERT_TRUE(first.isValid());
+	nativeIo->sync();
+
+	const uint64_t poolOffset = RSS_FILE_BOOTSTRAP_BYTES;
+	std::array<std::byte, RSS_PAGE_SIZE> controlPage{};
+	ASSERT_EQ(nativeIo->readAt(poolOffset, controlPage.data(), controlPage.size()), controlPage.size());
+	const uint64_t targetOffset = inactiveControlRecordOffset(controlPage, poolOffset);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortInactiveRecord(
+				[targetOffset, &interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == targetOffset &&
+						byteCount == RSS_METADATA_PAGE_POOL_HEADER_BYTES) {
+						interrupted = true;
+						return portable_pwrite(fd, bytes, 16U, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator.allocatePage(Generation(1U))), std::system_error);
+	}
+	ASSERT_TRUE(interrupted);
+
+	MetadataPagePoolAllocator recovered(nativeIo, initial, MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
+	EXPECT_EQ(recovered.stats().allocated_pages, 1U);
+	const PhysicalPageRef retried = recovered.allocatePage(Generation(1U));
+	EXPECT_EQ(retried.physical_slot, first.physical_slot);
+	EXPECT_EQ(retried.frame_index, first.frame_index + 1U);
+
+	nativeIo.reset();
+	EXPECT_EQ(portable_close_rw(writeHandle), 0);
+	EXPECT_EQ(portable_close(readHandle), 0);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, ControlRecordDiskFullRetainsThePreviousAllocationBitmap) {
+	const file_handle_t writeHandle = portable_open_rw(testFilePath.string().c_str());
+	const file_handle_t readHandle = portable_open(testFilePath.string().c_str(), O_RDONLY);
+	ASSERT_NE(writeHandle, INVALID_FILE_HANDLE);
+	ASSERT_NE(readHandle, INVALID_FILE_HANDLE);
+	auto nativeIo = std::make_shared<StorageIO>(file, writeHandle, readHandle);
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(nativeIo);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(nativeIo, initial);
+	const PhysicalPageRef first = allocator.allocatePage(Generation(1U));
+	ASSERT_TRUE(first.isValid());
+	nativeIo->sync();
+
+	const uint64_t poolOffset = RSS_FILE_BOOTSTRAP_BYTES;
+	std::array<std::byte, RSS_PAGE_SIZE> controlPage{};
+	ASSERT_EQ(nativeIo->readAt(poolOffset, controlPage.data(), controlPage.size()), controlPage.size());
+	const uint64_t targetOffset = inactiveControlRecordOffset(controlPage, poolOffset);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting diskFull(
+				[targetOffset, &interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == targetOffset &&
+						byteCount == RSS_METADATA_PAGE_POOL_HEADER_BYTES) {
+						interrupted = true;
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(allocator.allocatePage(Generation(1U))), std::system_error);
+	}
+	ASSERT_TRUE(interrupted);
+
+	MetadataPagePoolAllocator recovered(nativeIo, initial, MetadataPagePoolOpenMode::CPOM_DISCOVER_ONLY);
+	EXPECT_EQ(recovered.stats().allocated_pages, 1U);
+	const PhysicalPageRef retried = recovered.allocatePage(Generation(1U));
+	EXPECT_EQ(retried.physical_slot, first.physical_slot);
+	EXPECT_EQ(retried.frame_index, first.frame_index + 1U);
+
+	nativeIo.reset();
+	EXPECT_EQ(portable_close_rw(writeHandle), 0);
+	EXPECT_EQ(portable_close(readHandle), 0);
 }
 
 TEST_F(RelocatableMetadataPagePoolTest, RejectsShortRawControlPageReadsDuringPoolDiscovery) {

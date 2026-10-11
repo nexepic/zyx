@@ -40,7 +40,7 @@ namespace graph::parser::cypher::helpers {
  *
  * - buildExpression(): Returns Expression* AST
  * - Supports complex expressions including arithmetic, comparison, logical, and string operators
- * - Used by ExpressionEvaluator for runtime evaluation
+ * - Interpreted by the logical runtime during query execution
  */
 class ExpressionBuilder {
 public:
@@ -67,9 +67,7 @@ public:
 	 *
 	 * @code
 	 * auto expr = ExpressionBuilder::buildExpression(ctx);
-	 * EvaluationContext evalCtx(record);
-	 * ExpressionEvaluator evaluator(evalCtx);
-	 * PropertyValue result = evaluator.evaluate(expr.get());
+	 * // The logical runtime evaluates the returned tree against each record.
 	 * @endcode
 	 */
 	static std::unique_ptr<graph::query::expressions::Expression> buildExpression(

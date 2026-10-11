@@ -70,8 +70,8 @@ namespace graph::storage {
 			for (const std::string &name: definition.property_names) {
 				const std::optional<uint32_t> token = propertyTokenResolver(snapshot, name);
 				if (!token.has_value()) {
-					tokens.clear();
-					return tokens;
+					fail(FormatError::FERR_INVALID_STATE,
+							"native constraint support-tree planning could not resolve a Property-key Token");
 				}
 				if (*token == 0U) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -177,23 +177,13 @@ namespace graph::storage {
 		}
 
 		const std::vector<uint32_t> propertyTokens = resolvePropertyTokens(snapshot, definition, propertyTokenResolver);
-		const bool propertyKeysAssigned = propertyTokens.size() == definition.property_names.size();
 		ExternalBTreeEntrySorter sorter({options.maximum_entries, options.sort_run_bytes, options.maximum_sort_runs});
-		bool scopedEntityExists = false;
 		const auto add = [&](uint64_t entityId, const std::vector<uint64_t> &labels, uint64_t typeId,
 				const std::vector<PropertyCollectionRootEntry> &properties) {
 			const bool inScope = definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE
 						? std::ranges::find(labels, definition.schema_token_id) != labels.end()
 						: typeId == definition.schema_token_id;
 			if (!inScope) {
-				return;
-			}
-			scopedEntityExists = true;
-			if (!propertyKeysAssigned) {
-				if (definition.kind == ConstraintDefinitionKind::CDK_NODE_KEY) {
-					fail(FormatError::FERR_INVALID_STATE,
-							"native constraint support-tree cannot build a Node KEY with an unassigned Property key");
-				}
 				return;
 			}
 			const std::optional<std::vector<std::byte>> canonical = canonicalValues(
@@ -217,15 +207,8 @@ namespace graph::storage {
 						return true;
 					}));
 		}
-		if (!propertyKeysAssigned && definition.kind == ConstraintDefinitionKind::CDK_NODE_KEY && scopedEntityExists) {
-			fail(FormatError::FERR_INVALID_STATE,
-					"native constraint support-tree cannot build a Node KEY with an unassigned Property key");
-		}
-
 		const OrderedBTreeEntrySource source = sorter.finish();
-		if (propertyKeysAssigned) {
-			validateCanonicalEntries(definition, graph, snapshot, propertyTokens, source, options.maximum_collisions);
-		}
+		validateCanonicalEntries(definition, graph, snapshot, propertyTokens, source, options.maximum_collisions);
 		return BulkBTreeBuilder::planNativeTree(
 				pages, metadata, snapshot, definition.constraint_id, source,
 				{options.first_slot, options.last_slot, definition.constraint_id, options.maximum_entries,

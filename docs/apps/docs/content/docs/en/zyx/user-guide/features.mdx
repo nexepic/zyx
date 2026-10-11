@@ -45,7 +45,7 @@ flowchart TB
     LI["Label Index"]
     PI["Property Index\n(B+Tree)"]
     CI["Composite Index"]
-    VI["Vector Index\n(DiskANN + PQ)"]
+    VI["Vector Index\n(native adjacency + PQ)"]
   end
 
   API --> QE
@@ -64,7 +64,7 @@ flowchart TB
 | Storage format | Segment-based with CRC32 checksums and zlib compression |
 | Segment size | 128 KB fixed-size segments, linked-list chains per entity type |
 | File I/O | Cross-platform `pread`/`pwrite` (POSIX) with `fstream` fallback (Windows) |
-| Integrity | `verifyIntegrity()` validates CRC on every segment |
+| Integrity | Native integrity scanner validates checksums, ownership, and reachable roots |
 | Compaction | Optional background segment compaction |
 
 ### Cypher Query Language
@@ -123,7 +123,7 @@ flowchart LR
     A["Label Index\nO(1) label lookup"]
     B["Property Index\nB+Tree exact/range"]
     C["Composite Index\nMulti-key, prefix match"]
-    D["Vector Index\nDiskANN + PQ"]
+    D["Vector Index\nnative adjacency + PQ"]
   end
 ```
 
@@ -132,15 +132,15 @@ flowchart LR
 | Label | Fast node/edge lookup by label | `CREATE INDEX FOR (n:Person) ON (n.name)` |
 | Property (B+Tree) | Exact match and range scan | `CREATE INDEX FOR (n:Person) ON (n.age)` |
 | Composite | Multi-property lookup, prefix match | `CREATE INDEX FOR (n:Person) ON (n.lastName, n.firstName)` |
-| Vector (DiskANN) | Approximate nearest neighbor search | `CREATE VECTOR INDEX movie_emb FOR (n:Movie) ON (n.embedding) OPTIONS {dimension: 128, metric: "Cosine"}` |
+| Vector | Approximate nearest neighbor search | `CREATE VECTOR INDEX movie_emb FOR (n:Movie) ON (n.embedding) OPTIONS {dimension: 128, metric: "Cosine"}` |
 
 ### Vector Search
 
-ZYX includes a production-grade vector search engine based on the DiskANN algorithm with Product Quantization (PQ) compression.
+ZYX provides native relocatable vector search with atomically published adjacency and Product Quantization (PQ) derived data.
 
 | Feature | Detail |
 |---------|--------|
-| Algorithm | DiskANN — navigable small-world graph with alpha-based pruning |
+| Algorithm | Native bounded adjacency traversal with atomically published derived generations |
 | Distance metrics | L2 (Euclidean), Inner Product, Cosine |
 | Storage | BFloat16 (2 bytes/dim, 50% compression vs float32) |
 | Quantization | Product Quantization with 256 centroids per subspace |
@@ -203,7 +203,7 @@ flowchart LR
     R2["Read-Only Txn 2\n(Snapshot)"]
     R3["Read-Only Txn N\n(Snapshot)"]
   end
-  W --> |WAL + fsync| D["Durable Storage"]
+  W --> |"Single-file publication + sync"| D["Durable Storage"]
   R1 -.-> S["Committed Snapshot"]
   R2 -.-> S
   R3 -.-> S
@@ -211,13 +211,13 @@ flowchart LR
 
 | Property | Implementation |
 |----------|---------------|
-| **Atomicity** | UndoLog reverses all changes on rollback |
+| **Atomicity** | Rollback discards the transaction overlay and restores its captured committed snapshot |
 | **Consistency** | Constraints validated on every insert/update/delete |
 | **Isolation** | Single-writer / multi-reader; read-only transactions get immutable snapshots |
-| **Durability** | WAL with `fsync` on commit; group commit with 1 ms batching window |
+| **Durability** | The committed single-file generation is synchronized before commit returns |
 
-:::info WAL Efficiency
-WAL file creation is deferred until the first write transaction. Read-only workloads never touch the WAL file. Auto-checkpoint triggers at 1 MB threshold (configurable).
+:::info Native Storage
+The native format persists committed generations in one database file. Read-only workloads do not create WAL or recovery sidecar files.
 :::
 
 ### Schema Constraints
@@ -272,11 +272,11 @@ ZYX includes a built-in thread pool for parallel query execution:
 | Component | Parallelization |
 |-----------|-----------------|
 | Query operators | NodeScan, Filter, Sort run in parallel |
-| Batch writes | `FileStorage::save()` parallel segment preparation |
+| Batch writes | Native logical write planning and single-file COW generation publication |
 | PQ training | K-means training across subspaces |
-| Vector search | DiskANN re-ranking and PQ distance computation |
+| Vector search | Native adjacency traversal, PQ scoring, and bounded refinement |
 
-For the native logical runtime, set the embedding application's thread-pool policy before issuing queries. The retired `dbms.setConfig` procedure is intentionally unavailable until native configuration updates have one durable metadata transaction boundary.
+For the native logical runtime, set the embedding application's thread-pool policy before issuing queries. `thread.pool.size` remains a Database-instance startup option and is intentionally rejected by `dbms.setConfig`; resizing a live pool is not a database-file configuration change.
 
 :::info WASM Mode
 When compiled to WebAssembly, ZYX automatically runs in single-threaded mode. No configuration needed.
@@ -284,7 +284,7 @@ When compiled to WebAssembly, ZYX automatically runs in single-threaded mode. No
 
 ### Runtime Configuration
 
-The native logical runtime does not expose configuration or statistics mutation through Cypher. `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, and `dbms.resetStats` fail closed rather than using the retired State-manager storage path. This prevents configuration writes from bypassing metadata WAL recovery and the graph publication fence.
+The native logical runtime exposes `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, and `dbms.resetStats` as autocommit-only procedures. Durable query limits and slow-query policy use the same single-file COW metadata publication boundary as graph metadata; unsupported keys fail closed before a write. `stats.enabled` is process-local: it controls only QueryEngine runtime counters and never suppresses storage I/O or Buffer Pool diagnostics. `storage.compaction.enabled` is available only when the embedding explicitly enables native maintenance support.
 
 ## Multi-Language API
 

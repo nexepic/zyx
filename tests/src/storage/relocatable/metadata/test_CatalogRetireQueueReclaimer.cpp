@@ -198,6 +198,28 @@ TEST_F(RelocatableMetadataStoreTest, CatalogRetireQueueReclaimerRejectsCorruptAn
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableMetadataStoreTest, CatalogRetireQueueReclaimerRejectsStaleRelocationGeneration) {
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	request.require_absent = true;
+	const Superblock current = publishReservedSegments(io, std::span(&request, 1U));
+	CatalogRetireQueueReclaimerComponents components(io, current);
+
+	const PhysicalSlotId destinationSlot(41U);
+	CatalogEntry destination = components.catalog.find(current, request.segment_id);
+	destination.physical_slot = destinationSlot;
+	destination.generation = Generation(2U);
+	destination.committed_lsn = LogSequenceNumber(3U);
+	const RetireQueueEntry stale{PhysicalSlotId(40U), request.segment_id, Generation(1U),
+								 RetireQueueDisposition::RQD_RELOCATED_SOURCE};
+	const Superblock corrupted =
+			stageRawQueueEntries(components, current, std::span(&stale, 1U), std::span(&destinationSlot, 1U),
+								 &destination, LogSequenceNumber(3U));
+	MetadataWriteGuard writer = components.snapshots.beginWrite();
+	expectFormatError([&] { static_cast<void>(components.reclaimer.collectReclaimable(corrupted, writer)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataStoreTest, CatalogRetireQueueReclaimerRejectsAQueuedCurrentCatalogSlot) {
 	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
 	request.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;

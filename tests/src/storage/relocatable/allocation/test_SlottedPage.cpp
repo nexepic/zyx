@@ -131,6 +131,33 @@ TEST(RelocatableSlottedPageTest, BindsVariablePageBytesToTheirSharedPoolOwner) {
 	expectFormatError([&] { static_cast<void>(SlottedPage::create(invalidLsn)); }, FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableSlottedPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	SlottedPage page = SlottedPage::create(PageId(37), Generation(5));
+	const SlottedSlotReference first = page.insert(bytes("first-value"));
+	static_cast<void>(page.insert(bytes("second-value-with-more-bytes")));
+	page.erase(first);
+	const std::vector<std::byte> encoded = page.serialize();
+	ASSERT_EQ(encoded.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			reseal(mutation);
+			try {
+				const SlottedPage decoded = SlottedPage::open(mutation);
+				if (decoded.serialize() != mutation) {
+					ADD_FAILURE() << "slotted-page mutation was normalized at byte " << byteOffset << ", bit "
+							  << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// A checksum-valid mutation is safe only when the typed boundary rejects it.
+			}
+		}
+	}
+}
+
 TEST(RelocatableSlottedPageTest, RebindsAnActiveOwnerWithoutChangingStableSlotReferences) {
 	PageOwnerHeader source;
 	source.page_id = PageId(29);
@@ -159,6 +186,43 @@ TEST(RelocatableSlottedPageTest, RebindsAnActiveOwnerWithoutChangingStableSlotRe
 	PageOwnerHeader differentPage = destination;
 	differentPage.page_id = PageId(30);
 	expectFormatError([&] { page.rebindOwner(differentPage); }, FormatError::FERR_INVALID_STATE);
+	PageOwnerHeader differentOwner = destination;
+	differentOwner.owner_id = 44;
+	expectFormatError([&] { page.rebindOwner(differentOwner); }, FormatError::FERR_INVALID_STATE);
+	PageOwnerHeader differentKind = destination;
+	differentKind.kind = PageOwnerKind::POK_INDEX;
+	expectFormatError([&] { page.rebindOwner(differentKind); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST(RelocatableSlottedPageTest, ExposesBoundOwnerAndOnlyCurrentLiveSlotReferences) {
+	PageOwnerHeader owner;
+	owner.page_id = PageId(34);
+	owner.owner_id = 143;
+	owner.kind = PageOwnerKind::POK_ENTITY_LABEL;
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	owner.generation = Generation(11);
+	owner.committed_lsn = LogSequenceNumber(21);
+	SlottedPage page = SlottedPage::create(owner);
+
+	EXPECT_EQ(page.ownerId(), owner.owner_id);
+	EXPECT_EQ(page.ownerKind(), owner.kind);
+	EXPECT_EQ(page.ownerCommittedLsn(), owner.committed_lsn);
+	EXPECT_TRUE(page.liveSlots().empty());
+
+	const SlottedSlotReference first = page.insert(bytes("first"));
+	const SlottedSlotReference second = page.insert(bytes("second"));
+	page.erase(first);
+	EXPECT_EQ(page.liveSlots(), std::vector<SlottedSlotReference>{second});
+
+	SlottedPage reopened = SlottedPage::open(owner, page.serialize());
+	EXPECT_EQ(reopened.ownerId(), owner.owner_id);
+	EXPECT_EQ(reopened.ownerKind(), owner.kind);
+	EXPECT_EQ(reopened.ownerCommittedLsn(), owner.committed_lsn);
+	EXPECT_EQ(reopened.liveSlots(), std::vector<SlottedSlotReference>{second});
+
+	SlottedPage *const self = &page;
+	page = std::move(*self);
+	EXPECT_EQ(page.liveSlots(), std::vector<SlottedSlotReference>{second});
 }
 
 TEST(RelocatableSlottedPageTest, InsertsReadsAndUsesAllOverwritePlacementStrategies) {

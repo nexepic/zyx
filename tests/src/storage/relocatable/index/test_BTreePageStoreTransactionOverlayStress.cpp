@@ -348,6 +348,93 @@ namespace {
 		current.release();
 	}
 
+	TEST_F(RelocatableBTreePageStoreTest, RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+		SlottedPagePool pages(io, *metadata);
+		NativeBTreeWriteContext writes(io, *metadata, pages);
+		BTreePageStore store(pages, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+								   LogSequenceNumber(2))
+						.has_value());
+		const IndexRootLocation initialRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&initialRoot, 1), {}, LogSequenceNumber(3)));
+		const std::vector<std::byte> leftKey = largeKey(std::byte{'a'});
+		const std::vector<std::byte> rightKey = largeKey(std::byte{'b'});
+		static_cast<void>(store.materializeAndPublishTree(
+				request.segment_id, 17U, 3U, 0U, LogSequenceNumber(4),
+				[&](const CatalogEntry &pool, std::span<const PageId> pageIds) {
+					BTreePageHeader rootHeader;
+					rootHeader.index_id = 17U;
+					rootHeader.page_id = pageIds[0];
+					rootHeader.generation = pool.generation;
+					rootHeader.kind = BTreeNodeKind::BPN_INTERNAL;
+					rootHeader.level = 1U;
+					rootHeader.leftmost_child = pageIds[1];
+					BTreePage root = BTreePage::create(treeOwner(pool, pageIds[0], LogSequenceNumber(4)), rootHeader);
+					root.insert({rightKey, pageIds[2].value()});
+
+					BTreePageHeader leftHeader;
+					leftHeader.index_id = 17U;
+					leftHeader.page_id = pageIds[1];
+					leftHeader.generation = pool.generation;
+					leftHeader.right_sibling = pageIds[2];
+					BTreePage left = BTreePage::create(treeOwner(pool, pageIds[1], LogSequenceNumber(4)), leftHeader);
+					left.insert({leftKey, 1U});
+
+					BTreePageHeader rightHeader;
+					rightHeader.index_id = 17U;
+					rightHeader.page_id = pageIds[2];
+					rightHeader.generation = pool.generation;
+					rightHeader.left_sibling = pageIds[1];
+					BTreePage right = BTreePage::create(treeOwner(pool, pageIds[2], LogSequenceNumber(4)), rightHeader);
+					right.insert({rightKey, 2U});
+
+					std::vector<BTreePage> tree;
+					tree.reserve(3U);
+					tree.push_back(std::move(root));
+					tree.push_back(std::move(left));
+					tree.push_back(std::move(right));
+					return tree;
+				}));
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const IndexRootLocation root = metadata->findIndexRoot(snapshot, 17U);
+		const BTreePage sourceRoot = store.read(snapshot, root.root_page_id);
+		PageOwnerHeader owner;
+		owner.page_id = sourceRoot.slottedPage().pageId();
+		owner.owner_id = sourceRoot.slottedPage().ownerId();
+		owner.kind = sourceRoot.slottedPage().ownerKind();
+		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		owner.generation = sourceRoot.slottedPage().pageGeneration();
+		owner.committed_lsn = sourceRoot.slottedPage().ownerCommittedLsn();
+		BTreePageHeader corruptedHeader = sourceRoot.header();
+		const std::vector<BTreePageEntry> rootEntries = sourceRoot.entries();
+		corruptedHeader.right_sibling = corruptedHeader.leftmost_child;
+		corruptedHeader.entry_count = 0U;
+		snapshot.release();
+		BTreePage corruptedRoot = BTreePage::create(owner, corruptedHeader);
+		for (const BTreePageEntry &entry: rootEntries) {
+			corruptedRoot.insert(entry);
+		}
+		overwriteCurrentBTreePage(*io, *metadata, root.root_page_id, owner, corruptedRoot);
+		snapshot = metadata->openSnapshot();
+		EXPECT_TRUE(store.read(snapshot, root.root_page_id).header().right_sibling.isValid());
+		snapshot.release();
+
+		expectFormatError(
+				[&] { static_cast<void>(store.erase(17U, leftKey, LogSequenceNumber(5))); },
+				FormatError::FERR_INVALID_STATE);
+		{
+			auto transaction = writes.beginTransaction();
+			transaction.stageScalarIndexErase(store, 17U, leftKey);
+			expectFormatError(
+					[&] {
+						static_cast<void>(transaction.commit());
+					},
+					FormatError::FERR_INVALID_STATE);
+		}
+	}
+
 	TEST_F(RelocatableBTreePageStoreTest, RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 		SlottedPagePool pages(io, *metadata);

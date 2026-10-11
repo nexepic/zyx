@@ -29,6 +29,19 @@
 
 class CypherDataModificationTest : public QueryTestFixture {};
 
+TEST_F(CypherDataModificationTest, InTransactionsRejectsInvalidBatchSizesBeforeMutation) {
+	(void) execute("CREATE (:BatchInput {value: 1})");
+	const std::string prefix =
+			"MATCH (input:BatchInput) CALL { WITH input CREATE (:BatchOutput {value: input.value}) } ";
+
+	// QueryEngine consistently wraps parser/planner validation failures in its
+	// public error boundary, before a native mutation batch is opened.
+	EXPECT_THROW(static_cast<void>(execute(prefix + "IN TRANSACTIONS OF 0 ROWS")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(execute(prefix + "IN TRANSACTIONS OF -1 ROWS")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(execute(prefix + "IN TRANSACTIONS OF 1.5 ROWS")), std::runtime_error);
+	EXPECT_EQ(execute("MATCH (:BatchOutput) RETURN 1").rowCount(), 0U);
+}
+
 // ============================================================================
 // 1. MERGE Operator Tests
 // ============================================================================

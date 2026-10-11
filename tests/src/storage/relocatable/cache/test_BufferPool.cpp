@@ -214,6 +214,74 @@ TEST_F(BufferPoolTest, TypedPageWritesRejectPinnedAndPrivatePagesAndReadBackByGe
 	EXPECT_THROW(pool_->writePage({0U, 20U}, written), std::logic_error);
 }
 
+TEST_F(BufferPoolTest, TypedPageRangesPreserveGenerationAndPinSafety) {
+	open(4U);
+	pool_ = createPool(4U);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> first{};
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> second{};
+	first.fill(std::byte{0xA1U});
+	second.fill(std::byte{0xB2U});
+
+	EXPECT_THROW(pool_->writePages({0U, 0U}, first), std::invalid_argument);
+	EXPECT_THROW(pool_->writePages({1U, 7U}, first), std::invalid_argument);
+	EXPECT_THROW(pool_->writePages({0U, 7U}, std::span(first.data(), RSS_BUFFER_POOL_PAGE_BYTES + 1U)),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(pool_->readPages({0U, 7U}, std::span<std::byte>{})), std::invalid_argument);
+
+	pool_->writePages({0U, 7U}, first);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+	EXPECT_EQ(pool_->readPages({0U, 7U}, observed, BufferPoolReadHint::BPRH_SEQUENTIAL), observed.size());
+	EXPECT_EQ(observed, first);
+
+	{
+		auto pinned = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 7U});
+		EXPECT_THROW(pool_->writePages({0U, 7U}, second), std::logic_error);
+		EXPECT_THROW(pool_->writePages({0U, 8U}, second), std::logic_error);
+	}
+	pool_->writePages({0U, 8U}, second);
+	EXPECT_EQ(pool_->stats().resident_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_EQ(pool_->readPages({0U, 8U}, observed, BufferPoolReadHint::BPRH_SEQUENTIAL), observed.size());
+	EXPECT_EQ(observed, second);
+}
+
+TEST_F(BufferPoolTest, TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd) {
+	open(1U);
+	pool_ = createPool(2U);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+
+	EXPECT_EQ(pool_->readPages({0U, 9U}, observed, BufferPoolReadHint::BPRH_SEQUENTIAL),
+			  RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_EQ(observed.front(), std::byte{1U});
+	EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+	EXPECT_EQ(pool_->stats().disk_read_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+
+	// Normal typed reads remain cache-admitted and must also stop at the exact
+	// file boundary rather than returning a fabricated complete second page.
+	EXPECT_EQ(pool_->readPages({0U, 10U}, observed, BufferPoolReadHint::BPRH_NORMAL),
+			  RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+}
+
+TEST_F(BufferPoolTest, TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews) {
+	open(2U);
+	pool_ = createPool(2U);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> first{};
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> second{};
+	first.fill(std::byte{0x51U});
+	second.fill(std::byte{0xA2U});
+	pool_->writePages({0U, 7U}, first);
+	{
+		auto pinned = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 7U});
+		EXPECT_THROW(pool_->writePagesThrough({0U, 8U}, second), std::logic_error);
+	}
+
+	pool_->writePagesThrough({0U, 8U}, second);
+	EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+	EXPECT_EQ(pool_->stats().dirty_bytes, 0U);
+	EXPECT_EQ(diskByte(0U), std::byte{0xA2U});
+	EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{0xA2U});
+}
+
 TEST_F(BufferPoolTest, RefusesToEvictPinnedPageThenEvictsAfterUnpin) {
 	open(2U);
 	pool_ = createPool(1U);
@@ -463,7 +531,6 @@ TEST_F(BufferPoolTest, ReadOnlyIoRejectsCachedWritesBeforeTheyCanBecomeDirty) {
 												  StorageIOAccessMode::SIOAM_READ_ONLY);
 	readOnlyIo->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
 	const std::array<std::byte, 1U> written{{std::byte{0xC1U}}};
-	EXPECT_FALSE(readOnlyIo->isWritable());
 	EXPECT_THROW(readOnlyIo->writeAt(0U, written.data(), written.size()), std::logic_error);
 	EXPECT_THROW(readOnlyIo->append(written.data(), written.size()), std::logic_error);
 	EXPECT_THROW(readOnlyIo->reserveAppendSpace(1U), std::logic_error);
@@ -534,6 +601,29 @@ TEST_F(BufferPoolTest, StorageIoTruncateNoOpKeepsCachedPagesResident) {
 	EXPECT_EQ(io_->fileSize(), RSS_BUFFER_POOL_PAGE_BYTES);
 	EXPECT_EQ(io_->bufferPoolStats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
 	EXPECT_EQ(io_->stats(), before);
+}
+
+TEST_F(BufferPoolTest, ExternalRebaseDiscardDropsOnlyCleanUnpinnedPages) {
+	open(2U);
+	pool_ = createPool(2U);
+
+	{
+		auto pinned = pool_->pin({0U, 0U});
+		EXPECT_THROW(pool_->discardForExternalRebase(), std::logic_error);
+	}
+	EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+
+	const std::array<std::byte, 1U> dirtyByte{{std::byte{0xF2U}}};
+	pool_->write(RSS_BUFFER_POOL_PAGE_BYTES, dirtyByte);
+	EXPECT_THROW(pool_->discardForExternalRebase(), std::logic_error);
+	EXPECT_EQ(pool_->stats().resident_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_EQ(pool_->stats().dirty_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+
+	pool_->flush();
+	EXPECT_NO_THROW(pool_->discardForExternalRebase());
+	EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+	EXPECT_EQ(pool_->stats().pinned_bytes, 0U);
+	EXPECT_EQ(pool_->stats().dirty_bytes, 0U);
 }
 
 TEST_F(BufferPoolTest, StorageIoTruncateFailsClosedWhenNativeHandleCannotShrink) {

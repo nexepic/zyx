@@ -7,6 +7,8 @@
  **/
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 
 #include <gtest/gtest.h>
@@ -50,6 +52,26 @@ namespace {
 														 bytes.size() - RSS_STATE_RECORD_HEADER_BYTES));
 		LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET,
 								graph::utils::calculateCrc(bytes.data(), RSS_STATE_RECORD_HEADER_BYTES));
+	}
+
+	void expectChecksumValidSingleBitMutationsToRejectOrRoundTrip(const std::vector<std::byte> &encoded) {
+		for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = encoded;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				recalculateChecksums(mutation);
+				try {
+					const StateRecord decoded = StateRecordCodec::decode(mutation);
+					if (StateRecordCodec::encode(decoded) != mutation) {
+						ADD_FAILURE() << "State record mutation was normalized at byte " << byteOffset << ", bit "
+								  << static_cast<unsigned>(bit);
+						return;
+					}
+				} catch (const FormatException &) {
+					// A checksum-valid mutation is safe only when the typed boundary rejects it.
+				}
+			}
+		}
 	}
 
 } // namespace
@@ -133,6 +155,12 @@ TEST(RelocatableStateRecordTest, FailsClosedForTruncatedChecksummedAndMalformedB
 	recalculateChecksums(malformed);
 	expectFormatError([&] { static_cast<void>(StateRecordCodec::decode(malformed)); },
 				  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableStateRecordTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	expectChecksumValidSingleBitMutationsToRejectOrRoundTrip(StateRecordCodec::encode(inlineRecord()));
+	expectChecksumValidSingleBitMutationsToRejectOrRoundTrip(
+			StateRecordCodec::encode({72, "vector.registry", StateRecordStorageKind::SRS_LARGE_VALUE, LargeValueId(51), {}}));
 }
 
 TEST(RelocatableStateRecordTest, RejectsMalformedPayloadLengthsModesAndIdentities) {

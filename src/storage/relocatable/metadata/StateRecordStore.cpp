@@ -8,10 +8,11 @@
 
 #include "graph/storage/relocatable/metadata/StateRecordStore.hpp"
 
-#include <limits>
-#include <optional>
 #include <stdexcept>
-#include <vector>
+	#include <array>
+	#include <limits>
+	#include <optional>
+	#include <vector>
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 
@@ -76,20 +77,60 @@ namespace graph::storage {
 		return record;
 	}
 
-	StateLocation StateRecordStore::ensure(const StateRecord &record, const StateRecordStoreOptions &options) {
+	StateLocation StateRecordStore::upsert(const StateRecord &record, const StateRecordStoreOptions &options) {
 		validateOptions(options);
 		const std::vector<std::byte> encoded = StateRecordCodec::encode(record);
 		const uint32_t requiredBytes = minimumInsertBytes(encoded.size());
 		std::vector<SegmentId> pools;
+		std::optional<StateLocation> existingLocation;
 		{
-			const MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+			MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 			if (metadata_.findStateLocationOptional(snapshot, record.state_id).has_value()) {
-				const StateRecord existing = read(snapshot, record.state_id);
-				if (existing != record) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable State record conflicts with an already published State ID");
+				existingLocation = metadata_.findStateLocation(snapshot, record.state_id);
+				const StateRecord existingRecord = read(snapshot, record.state_id);
+				if (existingRecord == record) {
+					return *existingLocation;
 				}
-				return metadata_.findStateLocation(snapshot, record.state_id);
+				const SlottedPage page = pages_.read(snapshot, existingLocation->page_id);
+				const std::vector<std::byte> previous =
+						page.read({existingLocation->page_id, existingLocation->slot_id, existingLocation->slot_generation});
+				if (encoded.size() > previous.size()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "relocatable State record replacement exceeds its stable slot capacity");
+				}
+				const PageLocation expectedPage = metadata_.findPageLocation(snapshot, existingLocation->page_id);
+				snapshot.release();
+				const LogSequenceNumber checkpointLsn = nextCheckpointLsn(metadata_);
+				const StateLocation existing = *existingLocation;
+				static_cast<void>(metadata_.replaceStatePageAndUpsertLocation(
+						expectedPage, existing, checkpointLsn,
+						[this, &page, &encoded, checkpointLsn, existing](const CatalogEntry &pool, const PageLocation &expected,
+																								 PageLocation &replacement, StateLocation &) {
+							SlottedPage replacementPage = page.clone();
+							replacementPage.overwrite(
+									{expected.page_id, existing.slot_id, existing.slot_generation}, encoded);
+							const LogSequenceNumber expectedOwnerLsn = replacementPage.ownerCommittedLsn();
+							PageOwnerHeader owner;
+							owner.page_id = replacementPage.pageId();
+							owner.owner_id = replacementPage.ownerId();
+							owner.kind = replacementPage.ownerKind();
+							owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+							owner.generation = pool.generation;
+							owner.committed_lsn = checkpointLsn;
+							replacementPage.rebindOwner(owner);
+							const std::array expectedPages{expected};
+							const std::array replacements{SharedPagePoolPreparedReplacement{
+									owner, expectedOwnerLsn, replacementPage.serialize(),
+									replacementPage.stats().contiguous_free_bytes}};
+							const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
+							std::array<PageLocation, 1U> replacementPages{replacement};
+							std::array<PageLocation, 0U> noAppendPages{};
+							pages_.prepareMutationPages(pool, expectedPages, replacements, noAppends, replacementPages,
+									noAppendPages, checkpointLsn);
+							replacement = replacementPages.front();
+						}));
+				pages_.invalidateFreeSpaceIndex(expectedPage.segment_id);
+				return *existingLocation;
 			}
 			for (const CatalogEntry &pool: metadata_.findCurrentStatePagePools(snapshot, options.page_owner_id)) {
 				pools.push_back(pool.segment_id);
@@ -101,53 +142,66 @@ namespace graph::storage {
 			if (placement.has_value()) {
 				MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 				SlottedPage page = pages_.read(snapshot, placement->page_id);
+				const PageLocation expectedPage = metadata_.findPageLocation(snapshot, placement->page_id);
 				const SlottedSlotReference slot = page.insert(encoded);
 				snapshot.release();
-				static_cast<void>(pages_.replacePage(page, nextCheckpointLsn(metadata_)));
 				const StateLocation location = toLocation(record.state_id, slot);
-				static_cast<void>(
-						metadata_.upsertStateLocations(std::span(&location, 1), {}, nextCheckpointLsn(metadata_)));
+				const LogSequenceNumber checkpointLsn = nextCheckpointLsn(metadata_);
+				static_cast<void>(metadata_.replaceStatePageAndUpsertLocation(
+						expectedPage, location, checkpointLsn,
+						[this, &page, checkpointLsn](const CatalogEntry &pool, const PageLocation &expected,
+																					 PageLocation &replacement, StateLocation &) {
+							const LogSequenceNumber expectedOwnerLsn = page.ownerCommittedLsn();
+							PageOwnerHeader owner;
+							owner.page_id = page.pageId();
+							owner.owner_id = page.ownerId();
+							owner.kind = page.ownerKind();
+							owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+							owner.generation = pool.generation;
+							owner.committed_lsn = checkpointLsn;
+							page.rebindOwner(owner);
+							const std::array expectedPages{expected};
+							const std::array replacements{SharedPagePoolPreparedReplacement{
+									owner, expectedOwnerLsn, page.serialize(), page.stats().contiguous_free_bytes}};
+							const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
+							std::array<PageLocation, 1U> replacementPages{replacement};
+							std::array<PageLocation, 0U> noAppendPages{};
+							pages_.prepareMutationPages(pool, expectedPages, replacements, noAppends, replacementPages,
+																	 noAppendPages, checkpointLsn);
+							replacement = replacementPages.front();
+						}));
+				pages_.invalidateFreeSpaceIndex(expectedPage.segment_id);
 				return location;
 			}
 		}
 
-		const PageId pageId = metadata_.allocateLogicalPageId(nextCheckpointLsn(metadata_));
-		SegmentId segmentId;
-		{
-			const MetadataSnapshotPin snapshot = metadata_.openSnapshot();
-			if (snapshot.superblock().next_logical_segment_id == 0U) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "relocatable State record store cannot allocate another logical Segment ID");
-			}
-			segmentId = SegmentId(snapshot.superblock().next_logical_segment_id);
-		}
 		const LogSequenceNumber allocationLsn = nextCheckpointLsn(metadata_);
-		SlottedPagePoolAllocationRequest request;
-		request.segment_id = segmentId;
-		request.pool_kind = SegmentKind::SGK_STATE_PAGE_POOL;
-		request.pool_owner_id = options.page_owner_id;
-		request.generation = Generation(1);
-		request.page_id = pageId;
-		request.page_owner_id = options.page_owner_id;
-		request.page_owner_kind = PageOwnerKind::POK_STATE;
-		PageOwnerHeader owner;
-		owner.page_id = pageId;
-		owner.owner_id = options.page_owner_id;
-		owner.kind = PageOwnerKind::POK_STATE;
-		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
-		owner.generation = request.generation;
-		owner.committed_lsn = allocationLsn;
-		SlottedPage page = SlottedPage::create(owner);
-		const SlottedSlotReference slot = page.insert(encoded);
-		const std::optional<SlottedPagePoolAllocation> allocation =
-				pages_.allocatePage(request, page, options.first_slot, options.last_slot, allocationLsn);
-		if (!allocation.has_value()) {
+		const std::optional<StatePagePoolMaterialization> materialized = metadata_.materializeStatePagePool(
+				options.page_owner_id, record.state_id, options.first_slot, options.last_slot, allocationLsn,
+				[this, &encoded, allocationLsn](const CatalogEntry &pool, PageId pageId, PageLocation &pageLocation,
+																				 StateLocation &stateLocation) {
+					PageOwnerHeader owner;
+					owner.page_id = pageId;
+					owner.owner_id = pool.owner_id;
+					owner.kind = PageOwnerKind::POK_STATE;
+					owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+					owner.generation = pool.generation;
+					owner.committed_lsn = allocationLsn;
+					SlottedPage page = SlottedPage::create(owner);
+					const SlottedSlotReference slot = page.insert(encoded);
+					const std::array prepared{SharedPagePoolPreparedAppend{
+							owner, page.serialize(), page.stats().contiguous_free_bytes}};
+					pageLocation = {pageId, pool.segment_id, 0U, pool.generation,
+										page.stats().contiguous_free_bytes};
+					stateLocation = {stateLocation.state_id, pageId, slot.slot_id, slot.generation};
+					pages_.prepareNewPoolPages(pool, prepared, std::span(&pageLocation, 1U), allocationLsn);
+				});
+		if (!materialized.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable State record store has no free physical destination slot");
 		}
-		const StateLocation location = toLocation(record.state_id, slot);
-		static_cast<void>(metadata_.upsertStateLocations(std::span(&location, 1), {}, nextCheckpointLsn(metadata_)));
-		return location;
+		pages_.invalidateFreeSpaceIndex(materialized->pool.segment_id);
+		return materialized->state;
 	}
 
 } // namespace graph::storage

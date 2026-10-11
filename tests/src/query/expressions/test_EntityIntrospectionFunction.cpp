@@ -18,19 +18,17 @@
  * limitations under the License.
  **/
 
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include <gtest/gtest.h>
-#include <filesystem>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
-#include "storage/LegacyPhysicalStorageTestHarness.hpp"
-#include "graph/storage/FileStorage.hpp"
-#include "graph/storage/data/DataManager.hpp"
 
 using namespace graph;
 using namespace graph::query::expressions;
@@ -134,6 +132,24 @@ TEST_F(EntityIntrospectionTest, Labels_NodeWithZeroLabelId) {
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
 	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
 	EXPECT_TRUE(list.empty());
+}
+
+TEST_F(EntityIntrospectionTest, Labels_SkipsZeroIdInsideMalformedMetadata) {
+	Record record;
+	Node node(1, 7);
+	auto& metadata = node.getMutableMetadata();
+	metadata.labelIds[1] = 0;
+	metadata.labelCount = 2;
+	record.setNode("n", node);
+	EvaluationContext context(record);
+
+	const ScalarFunction* func = registry_->lookupScalarFunction("labels");
+	ASSERT_NE(func, nullptr);
+
+	const PropertyValue result = func->evaluate({PropertyValue(std::string("n"))}, context);
+	const auto& labels = std::get<std::vector<PropertyValue>>(result.getVariant());
+	ASSERT_EQ(labels.size(), 1UL);
+	EXPECT_EQ(std::get<int64_t>(labels.front().getVariant()), 7);
 }
 
 TEST_F(EntityIntrospectionTest, Labels_NotANode) {
@@ -401,7 +417,7 @@ TEST_F(EntityIntrospectionTest, Labels_NodeWithZeroLabelId_NoDataManager) {
 	Record record;
 	Node node(5, 0);
 	record.setNode("n", node);
-	EvaluationContext context(record); // no DataManager
+	EvaluationContext context(record); // no physical storage manager
 
 	const ScalarFunction* func = registry_->lookupScalarFunction("labels");
 	ASSERT_NE(func, nullptr);
@@ -420,7 +436,7 @@ TEST_F(EntityIntrospectionTest, Type_EdgeWithZeroLabel_NoDataManager) {
 	Record record;
 	Edge edge(5, 10, 20, 0);
 	record.setEdge("r", edge);
-	EvaluationContext context(record); // no DataManager
+	EvaluationContext context(record); // no physical storage manager
 
 	const ScalarFunction* func = registry_->lookupScalarFunction("type");
 	ASSERT_NE(func, nullptr);
@@ -429,7 +445,7 @@ TEST_F(EntityIntrospectionTest, Type_EdgeWithZeroLabel_NoDataManager) {
 	args.push_back(PropertyValue(std::string("r")));
 	PropertyValue result = func->evaluate(args, context);
 
-	// With no DataManager and labelId=0, should return PropertyValue(0)
+	// With no storage manager and labelId=0, should return PropertyValue(0)
 	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
 	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 0);
 }
@@ -617,121 +633,4 @@ TEST_F(EntityIntrospectionTest, Id_NodeNotEdge) {
 	argsEdge.push_back(PropertyValue(std::string("r")));
 	PropertyValue edgeResult = func->evaluate(argsEdge, context);
 	EXPECT_EQ(std::get<int64_t>(edgeResult.getVariant()), 200);
-}
-
-// ============================================================================
-// DataManager branch coverage: labels() and type() with DataManager
-// ============================================================================
-
-class EntityIntrospectionWithDataManagerTest : public ::testing::Test {
-protected:
-	void SetUp() override {
-		registry_ = &FunctionRegistry::getInstance();
-
-		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath_ = std::filesystem::temp_directory_path() /
-			("test_entity_introspection_" + to_string(uuid) + ".dat");
-
-		database_ = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath_.string());
-		database_->open();
-		auto storage = database_->storage();
-		dataManager_ = storage->getDataManager().get();
-	}
-
-	void TearDown() override {
-		database_->close();
-		database_.reset();
-		std::error_code ec;
-		if (std::filesystem::exists(testFilePath_)) {
-			std::filesystem::remove(testFilePath_, ec);
-		}
-	}
-
-	FunctionRegistry* registry_;
-	std::filesystem::path testFilePath_;
-	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database_;
-	graph::storage::DataManager* dataManager_ = nullptr;
-};
-
-TEST_F(EntityIntrospectionWithDataManagerTest, Labels_WithDataManager_NonZeroLabelId) {
-	// Cover: labelsImpl branch where dm != nullptr AND labelId != 0
-	// This resolves the label name via DataManager
-	int64_t labelId = dataManager_->getOrCreateTokenId("Person");
-
-	Record record;
-	Node node(1, labelId);
-	record.setNode("n", node);
-	EvaluationContext context(record, dataManager_);
-
-	const ScalarFunction* func = registry_->lookupScalarFunction("labels");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	args.push_back(PropertyValue(std::string("n")));
-	PropertyValue result = func->evaluate(args, context);
-
-	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	ASSERT_EQ(list.size(), 1UL);
-	EXPECT_EQ(std::get<std::string>(list[0].getVariant()), "Person");
-}
-
-TEST_F(EntityIntrospectionWithDataManagerTest, Labels_WithDataManager_ZeroLabelId) {
-	// Cover: labelsImpl branch where dm != nullptr AND labelId == 0
-	// This falls through to the no-DataManager path with empty label list
-	Record record;
-	Node node(2, 0);
-	record.setNode("n", node);
-	EvaluationContext context(record, dataManager_);
-
-	const ScalarFunction* func = registry_->lookupScalarFunction("labels");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	args.push_back(PropertyValue(std::string("n")));
-	PropertyValue result = func->evaluate(args, context);
-
-	EXPECT_EQ(result.getType(), PropertyType::LIST);
-	const auto& list = std::get<std::vector<PropertyValue>>(result.getVariant());
-	EXPECT_TRUE(list.empty());
-}
-
-TEST_F(EntityIntrospectionWithDataManagerTest, Type_WithDataManager_NonZeroLabelId) {
-	// Cover: typeImpl branch where dm != nullptr AND labelId != 0
-	// This resolves the relationship type name via DataManager
-	int64_t labelId = dataManager_->getOrCreateTokenId("KNOWS");
-
-	Record record;
-	Edge edge(1, 10, 20, labelId);
-	record.setEdge("r", edge);
-	EvaluationContext context(record, dataManager_);
-
-	const ScalarFunction* func = registry_->lookupScalarFunction("type");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	args.push_back(PropertyValue(std::string("r")));
-	PropertyValue result = func->evaluate(args, context);
-
-	EXPECT_EQ(result.getType(), PropertyType::STRING);
-	EXPECT_EQ(std::get<std::string>(result.getVariant()), "KNOWS");
-}
-
-TEST_F(EntityIntrospectionWithDataManagerTest, Type_WithDataManager_ZeroLabelId) {
-	// Cover: typeImpl branch where dm != nullptr AND labelId == 0
-	// Falls through to return labelId as integer (0)
-	Record record;
-	Edge edge(2, 10, 20, 0);
-	record.setEdge("r", edge);
-	EvaluationContext context(record, dataManager_);
-
-	const ScalarFunction* func = registry_->lookupScalarFunction("type");
-	ASSERT_NE(func, nullptr);
-
-	std::vector<PropertyValue> args;
-	args.push_back(PropertyValue(std::string("r")));
-	PropertyValue result = func->evaluate(args, context);
-
-	EXPECT_EQ(result.getType(), PropertyType::INTEGER);
-	EXPECT_EQ(std::get<int64_t>(result.getVariant()), 0);
 }

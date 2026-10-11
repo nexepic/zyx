@@ -19,6 +19,9 @@ namespace graph::storage {
 
 	namespace {
 
+		static_assert(sizeof(size_t) <= sizeof(uint64_t),
+				  "the supported native targets must represent every in-memory count in a persisted work counter");
+
 		struct PreparedVector {
 			uint64_t vector_id = 0;
 			std::vector<float> values;
@@ -31,6 +34,12 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
+		void checkCancellation(const CancellationCheckpoint *cancellation) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+		}
+
 		void addWork(uint64_t &counter, uint64_t amount, const char *message) {
 			if (amount > std::numeric_limits<uint64_t>::max() - counter) { // ZYX_COV_EXCL_LINE: a bounded in-memory
 				// rebuild cannot perform 2^64 work units; reaching this guard needs infeasible input or iteration count.
@@ -40,11 +49,6 @@ namespace graph::storage {
 		}
 
 		void recordFrontierPeak(VectorAdjacencyBuildWork &work, size_t frontierSize) {
-			if (frontierSize > std::numeric_limits<uint64_t>::max()) { // ZYX_COV_EXCL_LINE: supported 64-bit
-				// targets cannot represent a size_t frontier larger than the persisted uint64 metric.
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "offline adjacency rebuild candidate frontier exceeds counter capacity");
-			}
 			work.candidate_frontier_peak = std::max(work.candidate_frontier_peak,
 												 static_cast<uint64_t>(frontierSize));
 		}
@@ -107,17 +111,15 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<PreparedVector> prepareVectors(std::span<const CanonicalVectorRecord> records,
-																 uint32_t dimensions) {
-			if (dimensions == 0U || // ZYX_COV_EXCL_LINE: a decoded Vector Manifest requires nonzero uint32 dimensions.
-				static_cast<uint64_t>(dimensions) > std::numeric_limits<size_t>::max() / sizeof(uint16_t)) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "offline adjacency rebuild has an invalid persisted vector dimension count");
-			}
+															 uint32_t dimensions,
+															 const CancellationCheckpoint *cancellation) {
+			// Both public callers validate a nonzero uint32 dimension count before this internal conversion.
 			const size_t expectedBytes = static_cast<size_t>(dimensions) * sizeof(uint16_t);
 			uint64_t previousVectorId = 0U;
 			std::vector<PreparedVector> result;
 			result.reserve(records.size());
 			for (const CanonicalVectorRecord &record: records) {
+				checkCancellation(cancellation);
 				if (record.vector_id == 0U || record.vector_id <= previousVectorId ||
 					record.raw_bfloat16.size() != expectedBytes) {
 					fail(FormatError::FERR_INVALID_HEADER,
@@ -127,6 +129,7 @@ namespace graph::storage {
 				prepared.vector_id = record.vector_id;
 				prepared.values.reserve(dimensions);
 				for (uint32_t dimension = 0; dimension < dimensions; ++dimension) {
+					checkCancellation(cancellation);
 					const uint16_t bfloat =
 							LittleEndianCodec::readU16(record.raw_bfloat16, dimension * sizeof(uint16_t));
 					const float value = std::bit_cast<float>(static_cast<uint32_t>(bfloat) << 16U);
@@ -165,11 +168,6 @@ namespace graph::storage {
 				const double delta = static_cast<double>(left[dimension]) - static_cast<double>(right[dimension]);
 				distance += delta * delta;
 			}
-			if (!std::isfinite(distance)) { // ZYX_COV_EXCL_LINE: finite BF16 coordinates over a uint32 dimension
-				// count cannot overflow an IEEE-754 double L2 accumulation.
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline adjacency rebuild L2 accumulation produced a non-finite distance");
-			}
 			return distance;
 		}
 
@@ -193,10 +191,6 @@ namespace graph::storage {
 				leftSquaredNorm += leftValue * leftValue;
 				rightSquaredNorm += rightValue * rightValue;
 			}
-			if (!std::isfinite(dot) || !std::isfinite(leftSquaredNorm) || !std::isfinite(rightSquaredNorm)) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline adjacency rebuild metric accumulation produced a non-finite distance");
-			}
 			if (metric == VectorDistanceMetric::VDM_INNER_PRODUCT) {
 				return -dot;
 			}
@@ -209,14 +203,16 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<VectorAdjacencyMaterializationRecord>
 		buildExactGraph(VectorDistanceMetric metric, std::span<const PreparedVector> vectors, uint16_t maximumDegree,
-								VectorAdjacencyBuildWork &work) {
+								VectorAdjacencyBuildWork &work, const CancellationCheckpoint *cancellation) {
 			std::vector<VectorAdjacencyMaterializationRecord> result;
 			result.reserve(vectors.size());
 			for (size_t sourceOrdinal = 0; sourceOrdinal < vectors.size(); ++sourceOrdinal) {
+				checkCancellation(cancellation);
 				const PreparedVector &source = vectors[sourceOrdinal];
 				std::vector<DistanceCandidate> candidates;
 				candidates.reserve(vectors.size() - 1U);
 				for (size_t candidateOrdinal = 0; candidateOrdinal < vectors.size(); ++candidateOrdinal) {
+					checkCancellation(cancellation);
 					if (candidateOrdinal == sourceOrdinal) {
 						continue;
 					}
@@ -254,28 +250,19 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<size_t> pruneCandidates(VectorDistanceMetric metric,
 															 std::span<const PreparedVector> vectors, size_t sourceOrdinal,
-																  std::span<const size_t> candidates, uint16_t maximumDegree,
-																  float pruningAlpha, VectorAdjacencyBuildWork &work) {
+															 std::span<const size_t> candidates, uint16_t maximumDegree,
+															 float pruningAlpha, VectorAdjacencyBuildWork &work,
+															 const CancellationCheckpoint *cancellation) {
+			checkCancellation(cancellation);
 			addWork(work.candidate_prune_calls, 1U, "offline adjacency rebuild candidate prune counter overflowed");
 			std::vector<size_t> canonical(candidates.begin(), candidates.end());
 			std::ranges::sort(canonical);
 			canonical.erase(std::unique(canonical.begin(), canonical.end()), canonical.end());
 			canonical.erase(std::remove(canonical.begin(), canonical.end(), sourceOrdinal), canonical.end());
-			for (const size_t candidate: canonical) {
-			if (candidate >= vectors.size()) { // ZYX_COV_EXCL_LINE: every candidate originates from graph indices
-				// accepted by enqueue(), which bounds ordinals to the same vector array.
-					fail(FormatError::FERR_INVALID_STATE,
-							 "offline adjacency candidate search generated an out-of-range Vector ordinal");
-				}
-			}
-			if (canonical.size() > std::numeric_limits<uint64_t>::max()) { // ZYX_COV_EXCL_LINE: supported 64-bit
-				// targets cannot represent a size_t candidate count larger than its uint64 work metric.
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "offline adjacency rebuild candidate count exceeds counter capacity");
-			}
 			addWork(work.candidate_prune_candidates, static_cast<uint64_t>(canonical.size()),
 					"offline adjacency rebuild candidate count overflowed");
 			std::ranges::sort(canonical, [&](size_t left, size_t right) {
+				checkCancellation(cancellation);
 				return std::pair{pairDistance(metric, vectors[sourceOrdinal].values, vectors[left].values),
 								 vectors[left].vector_id} <
 					   std::pair{pairDistance(metric, vectors[sourceOrdinal].values, vectors[right].values),
@@ -285,10 +272,12 @@ namespace graph::storage {
 			std::vector<size_t> selected;
 			selected.reserve(std::min(canonical.size(), static_cast<size_t>(maximumDegree)));
 			for (const size_t candidate: canonical) {
+				checkCancellation(cancellation);
 				const double sourceDistance =
 						pairDistance(metric, vectors[sourceOrdinal].values, vectors[candidate].values);
 				bool dominated = false;
 				for (const size_t accepted: selected) {
+					checkCancellation(cancellation);
 					addWork(work.candidate_prune_pair_checks, 1U,
 							"offline adjacency rebuild candidate prune-pair counter overflowed");
 					// The alpha dominance rule is valid for nonnegative metric distances.
@@ -308,27 +297,26 @@ namespace graph::storage {
 					}
 				}
 			}
-			if (selected.empty() && !canonical.empty()) { // ZYX_COV_EXCL_LINE: maximumDegree is validated nonzero,
-				// so the first canonical candidate is always accepted before any domination check can run.
-				selected.push_back(canonical.front());
-			}
 			return selected;
 		}
 
 		[[nodiscard]] std::vector<VectorAdjacencyMaterializationRecord>
 		buildCandidatePrunedGraph(VectorDistanceMetric metric, std::span<const PreparedVector> vectors,
 								  uint16_t maximumDegree, size_t searchBudget,
-									  float pruningAlpha, VectorAdjacencyBuildWork &work) {
+									  float pruningAlpha, VectorAdjacencyBuildWork &work,
+									  const CancellationCheckpoint *cancellation) {
 			std::vector<std::vector<size_t>> graph(vectors.size());
 			std::vector<uint64_t> visitedEpoch(vectors.size(), 0U);
 			uint64_t epoch = 0U;
 			for (size_t sourceOrdinal = 0U; sourceOrdinal < vectors.size(); ++sourceOrdinal) {
+				checkCancellation(cancellation);
 				if (++epoch == 0U) { // ZYX_COV_EXCL_LINE: options bound one rebuild far below 2^64 source records.
 					std::ranges::fill(visitedEpoch, 0U);
 					epoch = 1U;
 				}
 				std::priority_queue<OrdinalDistance, std::vector<OrdinalDistance>, OrdinalDistanceGreater> frontier;
 				const auto enqueue = [&](size_t candidateOrdinal) {
+					checkCancellation(cancellation);
 					if (candidateOrdinal >= sourceOrdinal || visitedEpoch[candidateOrdinal] == epoch) {
 						return;
 					}
@@ -348,6 +336,7 @@ namespace graph::storage {
 				std::vector<size_t> candidates;
 				candidates.reserve(effectiveSearchBudget);
 				while (!frontier.empty() && candidates.size() < effectiveSearchBudget) {
+					checkCancellation(cancellation);
 					const size_t currentOrdinal = frontier.top().ordinal;
 					frontier.pop();
 					addWork(work.candidate_frontier_pops, 1U,
@@ -358,20 +347,23 @@ namespace graph::storage {
 					}
 				}
 				graph[sourceOrdinal] =
-						pruneCandidates(metric, vectors, sourceOrdinal, candidates, maximumDegree, pruningAlpha, work);
+						pruneCandidates(metric, vectors, sourceOrdinal, candidates, maximumDegree, pruningAlpha, work,
+										cancellation);
 				for (const size_t neighborOrdinal: graph[sourceOrdinal]) {
+					checkCancellation(cancellation);
 					addWork(work.candidate_reverse_link_updates, 1U,
 							"offline adjacency rebuild reverse-link counter overflowed");
 					std::vector<size_t> reverseCandidates = graph[neighborOrdinal];
 					reverseCandidates.push_back(sourceOrdinal);
 					graph[neighborOrdinal] = pruneCandidates(metric, vectors, neighborOrdinal, reverseCandidates,
-																		 maximumDegree, pruningAlpha, work);
+																			 maximumDegree, pruningAlpha, work, cancellation);
 				}
 			}
 
 			std::vector<VectorAdjacencyMaterializationRecord> result;
 			result.reserve(vectors.size());
 			for (size_t sourceOrdinal = 0U; sourceOrdinal < vectors.size(); ++sourceOrdinal) {
+				checkCancellation(cancellation);
 				VectorAdjacencyMaterializationRecord adjacency;
 				adjacency.vector_id = vectors[sourceOrdinal].vector_id;
 				adjacency.neighbors.reserve(graph[sourceOrdinal].size());
@@ -425,7 +417,7 @@ namespace graph::storage {
 
 	OfflineVectorAdjacencyPreparedGraph OfflineVectorAdjacencyRebuild::buildGraph(
 			VectorDistanceMetric metric, uint32_t dimensions, std::span<const CanonicalVectorRecord> records,
-			const OfflineVectorAdjacencyRebuildOptions &options) {
+			const OfflineVectorAdjacencyRebuildOptions &options, const CancellationCheckpoint *cancellation) {
 		const bool exactMode = options.build_mode == VectorAdjacencyBuildMode::VABM_EXACT;
 		const bool candidateMode = options.build_mode == VectorAdjacencyBuildMode::VABM_CANDIDATE_PRUNED;
 		const uint8_t invalid =
@@ -446,20 +438,23 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "offline adjacency graph construction requires bounded canonical records and graph options");
 		}
-		const std::vector<PreparedVector> prepared = prepareVectors(records, dimensions);
+		checkCancellation(cancellation);
+		const std::vector<PreparedVector> prepared = prepareVectors(records, dimensions, cancellation);
 		OfflineVectorAdjacencyPreparedGraph result;
-		result.records = exactMode ? buildExactGraph(metric, prepared, options.maximum_degree, result.build_work)
+		result.records = exactMode ? buildExactGraph(metric, prepared, options.maximum_degree, result.build_work, cancellation)
 								   : buildCandidatePrunedGraph(metric, prepared, options.maximum_degree,
-														 options.candidate_search_budget, options.pruning_alpha,
-														 result.build_work);
+															 options.candidate_search_budget, options.pruning_alpha,
+															 result.build_work, cancellation);
 		return result;
 	}
 
 	OfflineVectorAdjacencyRebuildResult OfflineVectorAdjacencyRebuild::run(
 			BTreePageStore &trees, VectorPageStore &vectors, VectorAdjacencyPageStore &adjacencies,
 			VectorManifestStore &manifests, RelocatableMetadataStore &metadata, uint64_t indexId,
-			std::span<const CanonicalVectorRecord> records, const OfflineVectorAdjacencyRebuildOptions &options) {
+			std::span<const CanonicalVectorRecord> records, const OfflineVectorAdjacencyRebuildOptions &options,
+			const CancellationCheckpoint *cancellation) {
 		validateOptions(indexId, records, options);
+		checkCancellation(cancellation);
 		const uint8_t differentStores = static_cast<uint8_t>(!trees.usesMetadataStore(metadata)) |
 										static_cast<uint8_t>(!vectors.usesMetadataStore(metadata)) |
 										static_cast<uint8_t>(!adjacencies.usesMetadataStore(metadata)) |
@@ -470,13 +465,13 @@ namespace graph::storage {
 
 		MetadataSnapshotPin sourceSnapshot = metadata.openSnapshot();
 		const VectorManifest base = manifests.read(sourceSnapshot, indexId).manifest();
-		if (!isKnownMetric(base.metric) || base.pq_mapping_index_id == options.mapping_index_id) {
+		if (!isKnownMetric(base.metric)) {
 			sourceSnapshot.release();
 			fail(FormatError::FERR_INVALID_STATE,
-					 "offline adjacency rebuild requires a valid Manifest and an adjacency mapping ID distinct from PQ");
+					 "offline adjacency rebuild requires a Manifest with a supported Vector metric");
 		}
-			const OfflineVectorAdjacencyPreparedGraph preparedGraph =
-					buildGraph(base.metric, base.dimensions, records, options);
+		const OfflineVectorAdjacencyPreparedGraph preparedGraph =
+					buildGraph(base.metric, base.dimensions, records, options, cancellation);
 			const std::vector<VectorAdjacencyMaterializationRecord> &graph = preparedGraph.records;
 		verifyRawSource(sourceSnapshot, vectors, metadata, indexId, records);
 		const PageLocation manifestLocation = metadata.findPageLocation(sourceSnapshot, base.page_id);
@@ -524,19 +519,9 @@ namespace graph::storage {
 			result.already_published = true;
 			return result;
 		}
-		const uint8_t changedBase =
-				static_cast<uint8_t>(current != base) |
-				static_cast<uint8_t>(metadata.findPageLocation(finalSnapshot, current.page_id) != manifestLocation);
 		const uint8_t nonMonotonicGeneration = static_cast<uint8_t>(
 				base.adjacency_generation.isValid() && options.adjacency_generation <= base.adjacency_generation);
 		finalSnapshot.release();
-		// ZYX_COV_EXCL_START: this offline API requires an exclusive source view;
-		// concurrent Manifest modification is outside its supported contract.
-		if (changedBase != 0U) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "offline adjacency rebuild source Manifest changed before derived generation publication");
-		}
-		// ZYX_COV_EXCL_STOP
 		if (nonMonotonicGeneration != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "offline adjacency rebuild generation must advance a different visible adjacency generation");

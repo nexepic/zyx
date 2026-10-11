@@ -19,6 +19,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <span>
 #include <vector>
 
@@ -27,9 +29,12 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_METADATA_PAGE_POOL_MAGIC = 0x5058595AU; // Little-endian bytes: ZYXP
-	constexpr uint16_t RSS_METADATA_PAGE_POOL_VERSION = 2;
+	constexpr uint16_t RSS_METADATA_PAGE_POOL_VERSION = 4;
 	constexpr uint16_t RSS_METADATA_PAGE_POOL_HEADER_BYTES = 64;
+	constexpr uint16_t RSS_METADATA_PAGE_POOL_CONTROL_RECORD_COUNT = 2;
 	constexpr uint32_t RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK = (1U << RSS_PAGE_POOL_DATA_FRAME_COUNT) - 1U;
+	constexpr uint32_t MPPF_EMERGENCY_RESERVE_ORIGIN = 1U << 0U;
+	constexpr uint32_t MPPF_KNOWN_FLAGS = MPPF_EMERGENCY_RESERVE_ORIGIN;
 
 	struct MetadataPagePoolHeader {
 		PhysicalSlotId physical_slot{};
@@ -37,6 +42,8 @@ namespace graph::storage {
 		uint32_t allocated_frames = 0;
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
+		uint64_t control_sequence = 0U;
+		uint32_t flags = 0U;
 	};
 
 	class MetadataPagePoolHeaderCodec {
@@ -50,7 +57,7 @@ namespace graph::storage {
 		uint64_t pools = 0;
 		uint64_t allocated_pages = 0;
 		uint64_t free_pages = 0;
-		PageId next_page_id{};
+		MetadataPageId next_page_id{};
 		bool poisoned = false;
 	};
 
@@ -69,9 +76,29 @@ namespace graph::storage {
 		MetadataPagePoolAllocator(std::shared_ptr<StorageIO> io, const Superblock &superblock,
 								  MetadataPagePoolOpenMode openMode = MetadataPagePoolOpenMode::CPOM_RECOVER);
 
-		[[nodiscard]] PageId allocatePageId() override;
+		[[nodiscard]] MetadataPageId allocateMetadataPageId() override;
 		[[nodiscard]] MetadataPageAllocation allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
 														  std::span<const PhysicalSlotId> excludedPoolSlots) override;
+		[[nodiscard]] MetadataPageAllocation
+		allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+					 std::span<const PhysicalSlotId> excludedPoolSlots,
+					 std::span<const PhysicalSlotRange> excludedDataSlotRanges) override;
+		[[nodiscard]] MetadataPageAllocation
+		allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+					 std::span<const PhysicalSlotId> excludedPoolSlots,
+					 std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+					 const MetadataSlotReservationLookup *reservationLookup) override;
+		void beginUnpublishedBatch(const Superblock &current) override;
+		void endUnpublishedBatch(const Superblock &current) noexcept override;
+		void reserveMetadataFrames(size_t count, std::span<const PhysicalSlotId> excludedPoolSlots,
+								   std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+								   const MetadataSlotReservationLookup *reservationLookup) override;
+		void releaseMetadataFrames() noexcept override;
+		[[nodiscard]] std::vector<PhysicalSlotId>
+		ensureMetadataFrameCapacity(Generation generation, LogSequenceNumber checkpointLsn, size_t count,
+										std::span<const PhysicalSlotId> excludedPoolSlots,
+										std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+										const MetadataSlotReservationLookup *reservationLookup) override;
 		// Direct component tests may allocate an unpublished page. Production
 		// metadata mutations use the context-bearing interface above.
 		[[nodiscard]] PhysicalPageRef allocatePage(Generation generation);
@@ -81,10 +108,18 @@ namespace graph::storage {
 		void abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
 									 std::span<const PhysicalSlotId> dataSlots,
 									 uint64_t initialFileSize) noexcept override;
+		void abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
+									 std::span<const PhysicalSlotId> dataSlots,
+									 std::span<const PhysicalSlotRange> dataSlotRanges,
+									 uint64_t initialFileSize) noexcept override;
 
 		// Open-time recovery preserves pages reachable from the recovered Catalog
 		// root and returns only unreachable pool frames to the local free bitmap.
 		void recover(const Superblock &superblock);
+		// Rebuild the process-local pool registry from a newer durable root before
+		// a separate database handle continues a sequential publication. Callers
+		// must first release every local metadata snapshot.
+		void rebaseToPublishedSuperblock(const Superblock &superblock);
 		// Validates a candidate tree without changing frame ownership. Publication
 		// uses this before making the candidate Superblock recoverable.
 		void validateReachability(const Superblock &superblock);
@@ -104,9 +139,13 @@ namespace graph::storage {
 		void createEmergencyReserve(const MetadataEmergencyReserveDescriptor &reserve);
 		// Replaces a consumed reserve with a new, empty tail pool. The former pool
 		// keeps its permanent token and becomes eligible for normal Catalog
-		// ownership in the enclosing metadata batch.
-		[[nodiscard]] MetadataEmergencyReserveDescriptor
-		rotateEmergencyReserve(SegmentId nextPoolToken, Generation generation, LogSequenceNumber committedLsn);
+		// ownership in the enclosing metadata batch. A supplied slot must be the
+		// append slot or the final existing slot; callers may supply the latter
+		// only after the durable AllocatorRoot proved it free.
+		[[nodiscard]] MetadataEmergencyReserveDescriptor rotateEmergencyReserve(SegmentId nextPoolToken,
+																				Generation generation,
+																				LogSequenceNumber committedLsn,
+																				PhysicalSlotId successorSlot = {});
 		void restoreEmergencyReserve(const MetadataEmergencyReserveDescriptor &previous,
 									 const MetadataEmergencyReserveDescriptor &expectedCurrent) noexcept;
 		[[nodiscard]] MetadataEmergencyReserveDescriptor emergencyReserve() const;
@@ -118,7 +157,14 @@ namespace graph::storage {
 		// The caller must serialize this operation with metadata publication so no
 		// in-flight copy-on-write generation can lose an unpublished page.
 		void reclaimUnreachable(const Superblock &current, std::span<const Superblock> activeSnapshots);
+		// Keeps a relocated source pool out of normal COW allocation until every
+		// process-local snapshot has drained and reachability reconciliation clears it.
+		void protectPoolUntilSnapshotsDrain(PhysicalSlotId slot);
 		[[nodiscard]] MetadataPagePoolStats stats() const;
+		// Reports frames that normal COW allocation may consume. The emergency
+		// reserve is intentionally excluded because allocatePage() cannot use it
+		// unless an append fails with ENOSPC.
+		[[nodiscard]] uint64_t allocatableFreePages() const;
 		[[nodiscard]] bool isMetadataPoolSlot(PhysicalSlotId slot) const;
 		[[nodiscard]] bool isMetadataPoolEmpty(PhysicalSlotId slot) const;
 		[[nodiscard]] MetadataPagePoolHeader poolHeader(PhysicalSlotId slot) const;
@@ -139,6 +185,10 @@ namespace graph::storage {
 		struct PoolState {
 			MetadataPagePoolHeader header;
 		};
+		struct ActiveBatchContext {
+			Superblock superblock;
+			uint32_t depth = 0U;
+		};
 
 		[[nodiscard]] uint64_t slotOffset(PhysicalSlotId slot) const;
 		void discoverPoolsLocked();
@@ -147,12 +197,20 @@ namespace graph::storage {
 											   Generation expectedGeneration, LogSequenceNumber expectedLsn,
 											   std::array<std::byte, RSS_PAGE_SIZE> *controlPage = nullptr) const;
 		[[nodiscard]] PoolState &createPoolLocked(Generation generation, LogSequenceNumber checkpointLsn,
-												  std::span<const PhysicalSlotId> excludedPoolSlots);
+												  std::span<const PhysicalSlotId> excludedPoolSlots,
+												  std::span<const PhysicalSlotRange> excludedDataSlotRanges = {},
+												  const MetadataSlotReservationLookup *reservationLookup = nullptr);
+		[[nodiscard]] std::optional<PhysicalSlotId>
+		findReusableFreeSlotLocked(Generation generation, std::span<const PhysicalSlotId> excludedPoolSlots,
+								   std::span<const PhysicalSlotRange> excludedDataSlotRanges = {},
+								   const MetadataSlotReservationLookup *reservationLookup = nullptr);
 		[[nodiscard]] PoolState &createPoolAtLocked(PhysicalSlotId slot, SegmentId segmentId, Generation generation,
-													LogSequenceNumber checkpointLsn);
+													LogSequenceNumber checkpointLsn, uint32_t flags = 0U,
+													bool reuseExistingSlot = false);
 		void eraseUnpublishedPoolLocked(PhysicalSlotId slot);
 		void abandonUnpublishedBatchLocked(std::span<const PhysicalSlotId> poolSlots,
-										   std::span<const PhysicalSlotId> dataSlots, uint64_t initialFileSize);
+										   std::span<const PhysicalSlotId> dataSlots,
+										   std::span<const PhysicalSlotRange> dataSlotRanges, uint64_t initialFileSize);
 		void writePoolLocked(const PoolState &pool);
 		// `recover()` can only clear poison after every retained in-memory pool
 		// still has the exact durable envelope/header it claims to represent.
@@ -164,8 +222,19 @@ namespace graph::storage {
 		std::shared_ptr<StorageIO> io_;
 		uint64_t data_region_offset_ = 0;
 		std::map<uint64_t, PoolState> pools_;
+		// Relocated source pools stay unavailable while older snapshots can still
+		// resolve their frames, preserving eventual evacuation/reclaim progress.
+		std::set<uint64_t> snapshot_protected_pool_slots_;
+		// Process-local search hint only. Durable pool headers remain the source of
+		// truth; mutations that can make an earlier pool reusable clear this hint.
+		std::optional<uint64_t> allocation_cursor_slot_;
 		MetadataEmergencyReserveDescriptor emergency_reserve_{};
-		PageId next_page_id_{1};
+		std::map<uint64_t, std::vector<ActiveBatchContext>> active_batches_;
+		// Only one writer batch can reserve route/header capacity at a time. The
+		// remaining units are consumed by allocatePage() before it may allocate
+		// from ordinary, unreserved metadata capacity.
+		std::optional<size_t> reserved_metadata_frames_;
+		MetadataPageId next_page_id_{1};
 		bool page_id_exhausted_ = false;
 		bool poisoned_ = false;
 		mutable std::mutex mutex_;

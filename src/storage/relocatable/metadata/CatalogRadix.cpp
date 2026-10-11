@@ -62,7 +62,8 @@ namespace graph::storage {
 				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_STATE) ||
 				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_RETIRE_QUEUE) ||
 				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_ENTITY_PROPERTY) ||
-				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST);
+				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST) ||
+				   rawType == static_cast<uint32_t>(MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE);
 		}
 
 		void writeChild(std::span<std::byte> bytes, size_t offset, const PhysicalPageRef &child) {
@@ -107,6 +108,14 @@ namespace graph::storage {
 			uint32_t count = 0;
 			for (const PhysicalPageRef &child: page.children) {
 				validateChild(child);
+				count += child.isValid() ? 1U : 0U;
+			}
+			return count;
+		}
+
+		[[nodiscard]] uint32_t countLogicalChildren(const CatalogRadixPage &page) {
+			uint32_t count = 0;
+			for (const MetadataPageId child: page.logical_children) {
 				count += child.isValid() ? 1U : 0U;
 			}
 			return count;
@@ -159,13 +168,42 @@ namespace graph::storage {
 									   "invalid relocatable Catalog radix page header");
 			}
 			validateAllocatorSummary(page);
+			if (page.logical_children_enabled) {
+				if (page.directory_type == MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
+					throwCatalogRadixError(FormatError::FERR_INVALID_STATE,
+										   "metadata PageId route branch must retain physical children");
+				}
+				for (size_t index = 0U; index < page.children.size(); ++index) {
+					const PhysicalPageRef &child = page.children[index];
+					const bool hasPhysicalData = child.isValid() || child.physical_slot.isValid() ||
+												 child.frame_index != 0 || child.generation.isValid();
+					const bool resolvedChild =
+							page.logical_children_resolved && page.logical_children[index].isValid() && child.isValid();
+					if (hasPhysicalData && !resolvedChild) {
+						throwCatalogRadixError(FormatError::FERR_INVALID_HEADER,
+											   "logical metadata radix page has physical child data");
+					}
+				}
+				static_cast<void>(countLogicalChildren(page));
+				return;
+			}
+			for (const MetadataPageId child: page.logical_children) {
+				if (child.isValid()) {
+					throwCatalogRadixError(FormatError::FERR_INVALID_HEADER,
+										   "physical metadata radix page has logical child data");
+				}
+			}
+			if (page.logical_children_resolved) {
+				throwCatalogRadixError(FormatError::FERR_INVALID_HEADER,
+									   "physical metadata radix page cannot retain logical resolution state");
+			}
 			static_cast<void>(countChildren(page));
 		}
 
 		void writeHeader(std::span<std::byte> bytes, const CatalogRadixPage &page, uint32_t childCount,
-						 uint32_t payloadCrc, uint32_t headerCrc) {
+						 uint32_t payloadCrc, uint32_t headerCrc, uint16_t version) {
 			LittleEndianCodec::writeU32(bytes, MAGIC_OFFSET, RSS_CATALOG_RADIX_PAGE_MAGIC);
-			LittleEndianCodec::writeU16(bytes, FORMAT_VERSION_OFFSET, RSS_CATALOG_RADIX_PAGE_VERSION);
+			LittleEndianCodec::writeU16(bytes, FORMAT_VERSION_OFFSET, version);
 			LittleEndianCodec::writeU16(bytes, HEADER_BYTES_OFFSET, RSS_CATALOG_RADIX_HEADER_BYTES);
 			LittleEndianCodec::writeU16(bytes, KIND_OFFSET, static_cast<uint16_t>(page.kind));
 			LittleEndianCodec::writeU16(bytes, LEVEL_OFFSET, page.level);
@@ -188,7 +226,7 @@ namespace graph::storage {
 				throwCatalogRadixError(FormatError::FERR_INVALID_MAGIC,
 									   "relocatable Catalog radix page magic does not match");
 			}
-			if (version != RSS_CATALOG_RADIX_PAGE_VERSION) {
+			if (version != RSS_CATALOG_RADIX_PAGE_VERSION && version != RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION) {
 				throwCatalogRadixError(FormatError::FERR_UNSUPPORTED_VERSION,
 									   "unsupported relocatable Catalog radix page version");
 			}
@@ -228,17 +266,24 @@ namespace graph::storage {
 
 	std::array<std::byte, RSS_PAGE_SIZE> CatalogRadixPageCodec::encode(const CatalogRadixPage &page) {
 		validatePage(page);
-		const uint32_t childCount = countChildren(page);
+		const uint32_t childCount = page.logical_children_enabled ? countLogicalChildren(page) : countChildren(page);
+		const uint16_t version =
+				page.logical_children_enabled ? RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION : RSS_CATALOG_RADIX_PAGE_VERSION;
 		std::array<std::byte, RSS_PAGE_SIZE> bytes{};
-		writeHeader(bytes, page, childCount, 0, 0);
+		writeHeader(bytes, page, childCount, 0, 0, version);
 		for (size_t index = 0; index < page.children.size(); ++index) {
-			writeChild(bytes, RSS_CATALOG_RADIX_HEADER_BYTES + index * RSS_CATALOG_RADIX_CHILD_BYTES,
-					   page.children[index]);
+			const size_t offset = RSS_CATALOG_RADIX_HEADER_BYTES + index * RSS_CATALOG_RADIX_CHILD_BYTES;
+			if (page.logical_children_enabled) {
+				LittleEndianCodec::writeU64(bytes, offset, page.logical_children[index].value());
+				LittleEndianCodec::writeU64(bytes, offset + sizeof(uint64_t), 0);
+			} else {
+				writeChild(bytes, offset, page.children[index]);
+			}
 		}
 		const uint32_t payloadCrc = calculateCrc(std::span(bytes).subspan(RSS_CATALOG_RADIX_HEADER_BYTES));
-		writeHeader(bytes, page, childCount, payloadCrc, 0);
+		writeHeader(bytes, page, childCount, payloadCrc, 0, version);
 		const uint32_t headerCrc = calculateCrc(std::span(bytes).first(RSS_CATALOG_RADIX_HEADER_BYTES));
-		writeHeader(bytes, page, childCount, payloadCrc, headerCrc);
+		writeHeader(bytes, page, childCount, payloadCrc, headerCrc, version);
 		return bytes;
 	}
 
@@ -261,8 +306,8 @@ namespace graph::storage {
 		}
 
 		const uint32_t childCount = LittleEndianCodec::readU32(bytes, CHILD_COUNT_OFFSET);
-		validateHeader(LittleEndianCodec::readU32(bytes, MAGIC_OFFSET),
-					   LittleEndianCodec::readU16(bytes, FORMAT_VERSION_OFFSET),
+		const uint16_t version = LittleEndianCodec::readU16(bytes, FORMAT_VERSION_OFFSET);
+		validateHeader(LittleEndianCodec::readU32(bytes, MAGIC_OFFSET), version,
 					   LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET),
 					   LittleEndianCodec::readU16(bytes, KIND_OFFSET), LittleEndianCodec::readU16(bytes, LEVEL_OFFSET),
 					   LittleEndianCodec::readU32(bytes, FLAGS_OFFSET),
@@ -279,17 +324,31 @@ namespace graph::storage {
 		page.directory_type = static_cast<MetadataDirectoryType>(LittleEndianCodec::readU32(bytes, FLAGS_OFFSET) &
 																 RSS_METADATA_DIRECTORY_TYPE_MASK);
 		page.level = LittleEndianCodec::readU16(bytes, LEVEL_OFFSET);
-		page.page_id = PageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
+		page.page_id = MetadataPageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
 		page.generation = Generation(LittleEndianCodec::readU64(bytes, GENERATION_OFFSET));
 		page.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, COMMITTED_LSN_OFFSET));
+		page.logical_children_enabled = version == RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION;
+		page.logical_children_resolved = false;
 		std::copy_n(bytes.begin() + ALLOCATOR_FREE_CHILDREN_OFFSET, page.allocator_free_children.size(),
 					page.allocator_free_children.begin());
 		for (size_t index = 0; index < page.children.size(); ++index) {
-			page.children[index] =
-					readChild(bytes, RSS_CATALOG_RADIX_HEADER_BYTES + index * RSS_CATALOG_RADIX_CHILD_BYTES);
+			const size_t offset = RSS_CATALOG_RADIX_HEADER_BYTES + index * RSS_CATALOG_RADIX_CHILD_BYTES;
+			if (page.logical_children_enabled) {
+				const uint64_t logicalId = LittleEndianCodec::readU64(bytes, offset);
+				const uint64_t reserved = LittleEndianCodec::readU64(bytes, offset + sizeof(uint64_t));
+				if (reserved != 0U) {
+					throwCatalogRadixError(FormatError::FERR_RESERVED_BITS,
+										   "logical metadata radix child has nonzero reserved location data");
+				}
+				page.logical_children[index] = MetadataPageId(logicalId);
+			} else {
+				page.children[index] = readChild(bytes, offset);
+			}
 		}
 		validatePage(page);
-		if (countChildren(page) != childCount) {
+		const uint32_t decodedChildCount =
+				page.logical_children_enabled ? countLogicalChildren(page) : countChildren(page);
+		if (decodedChildCount != childCount) {
 			throwCatalogRadixError(FormatError::FERR_INVALID_HEADER,
 								   "relocatable Catalog radix child count does not match its references");
 		}

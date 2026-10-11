@@ -15,6 +15,13 @@ namespace graph::storage {
 
 	namespace {
 
+		static_assert(std::numeric_limits<size_t>::digits <= std::numeric_limits<uint64_t>::digits);
+		// A finite BF16 coordinate difference squared for every addressable dimension remains finite in double.
+		static_assert(static_cast<long double>(std::numeric_limits<uint64_t>::max()) * 4.0L *
+				  static_cast<long double>(std::numeric_limits<float>::max()) *
+				  static_cast<long double>(std::numeric_limits<float>::max()) <
+				  static_cast<long double>(std::numeric_limits<double>::max()));
+
 		struct PreparedVector {
 			uint64_t vector_id = 0;
 			std::vector<float> values;
@@ -66,10 +73,6 @@ namespace graph::storage {
 				const double delta = static_cast<double>(left[dimension]) - static_cast<double>(right[dimension]);
 				distance += delta * delta;
 			}
-			if (!std::isfinite(distance)) { // ZYX_COV_EXCL_LINE: finite BF16 values cannot overflow a double L2 sum.
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline adjacency quality L2 accumulation produced a non-finite distance");
-			}
 			return distance;
 		}
 
@@ -105,14 +108,14 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "offline adjacency quality requires a bounded multi-Vector recall@k input");
 		}
+		const uint64_t recallAt = static_cast<uint64_t>(options.recall_at);
+		if (static_cast<uint64_t>(options.maximum_records) > std::numeric_limits<uint64_t>::max() / recallAt) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					 "offline adjacency quality maximum record count overflows the report");
+		}
 		const std::vector<PreparedVector> vectors = prepareVectors(records);
 		validateAdjacency(vectors, adjacency);
 		const uint64_t vectorCount = static_cast<uint64_t>(vectors.size());
-		const uint64_t recallAt = static_cast<uint64_t>(options.recall_at);
-		if (vectorCount > std::numeric_limits<uint64_t>::max() / recallAt) {
-			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-				 "offline adjacency quality exact-neighbor count overflowed");
-		}
 
 		VectorAdjacencyQualityReport result;
 		result.vector_count = vectorCount;

@@ -280,6 +280,23 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesEntityIntrospectionFuncti
 	EXPECT_EQ(row.at("edge_properties").asPrimitive(), PropertyValue(PropertyValue::MapType{}));
 }
 
+TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesMapProjectionThroughTheLogicalStorageBoundary) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse(
+			"MATCH (n:Person) WHERE n.name = 'Ada' "
+			"RETURN n {.*, .name, missing: null, greeting: 'hello'} AS projection");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	const PropertyValue projection = result.getRows().front().at("projection").asPrimitive();
+	ASSERT_EQ(projection.getType(), PropertyType::MAP);
+	EXPECT_EQ(projection.getMap().at("name"), PropertyValue("Ada"));
+	EXPECT_EQ(projection.getMap().at("missing"), PropertyValue());
+	EXPECT_EQ(projection.getMap().at("greeting"), PropertyValue("hello"));
+}
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, ProducesCompletePatternComprehensionAndPreservesOuterBindings) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);

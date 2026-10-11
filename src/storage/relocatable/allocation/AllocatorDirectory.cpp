@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #include <algorithm>
@@ -26,6 +27,26 @@ namespace graph::storage {
 
 		[[noreturn]] void throwAllocatorDirectoryError(FormatError error, const char *message) {
 			throw FormatException(error, message);
+		}
+
+		[[nodiscard]] PhysicalPageRef allocatorRootReference(MetadataPageFile &pages, const Superblock &superblock) {
+			if (!superblock.usesPageDirectoryBootstrap()) {
+				return superblock.allocator_root;
+			}
+			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			if (bootstrap.generation > superblock.generation || bootstrap.committed_lsn > superblock.checkpoint_lsn) {
+				throwAllocatorDirectoryError(FormatError::FERR_INVALID_HEADER,
+									 "relocatable Allocator bootstrap is newer than its Superblock");
+			}
+			if (bootstrap.generation != superblock.generation) {
+				return superblock.allocator_root;
+			}
+			const MetadataPageId rootId = bootstrap.metadata_directory_roots[
+					static_cast<size_t>(MetadataDirectoryRootOrdinal::MDRO_ALLOCATOR)];
+			if (!rootId.isValid()) {
+				return {};
+			}
+			return MetadataPageRouteDirectory(pages).find(superblock, bootstrap.metadata_page_directory_root, rootId);
 		}
 
 		constexpr uint64_t RSS_MAX_PHYSICAL_PAGE_GENERATION = std::numeric_limits<uint64_t>::max() >> 5U;
@@ -173,6 +194,134 @@ namespace graph::storage {
 			}
 		}
 
+		[[nodiscard]] MetadataPageId readAllocatorChildPageId(MetadataPageFile &pages, PhysicalPageRef reference,
+																 bool radixChild) {
+			if (!reference.isValid()) {
+				throwAllocatorDirectoryError(FormatError::FERR_INVALID_HEADER,
+												"relocatable free-space radix child reference is invalid");
+			}
+			return radixChild ? pages.readMetadataRadixUnresolved(reference).page_id
+							  : pages.readAllocatorLeaf(reference).page_id;
+		}
+
+		void normalizePhysicalChildren(MetadataRadixPage &page) {
+			if (!page.logical_children_enabled) {
+				return;
+			}
+			page.logical_children.fill({});
+			page.logical_children_enabled = false;
+			page.logical_children_resolved = false;
+		}
+
+		[[nodiscard]] MetadataRadixPage readRadixForMutation(MetadataPageFile &pages, PhysicalPageRef reference,
+																			const MetadataWriteBatch &batch) {
+			const MetadataRadixPage unresolved = pages.readMetadataRadixUnresolved(reference);
+			// Existing logical pages must resolve through their published route;
+			// fresh COW pages remain physical until this batch publishes its route.
+			if (!unresolved.logical_children_enabled) {
+				return pages.readMetadataRadix(reference, batch.candidate());
+			}
+			MetadataRadixPage page = unresolved;
+			const PageDirectoryBootstrap currentBootstrap =
+					pages.readPageDirectoryBootstrap(batch.current().page_directory_root);
+			for (size_t index = 0U; index < page.logical_children.size(); ++index) {
+				const MetadataPageId childId = page.logical_children[index];
+				if (!childId.isValid()) {
+					continue;
+				}
+				const auto pending = batch.pendingMetadataPageRoute(childId);
+				page.children[index] = pending.has_value()
+						? *pending
+						: MetadataPageRouteDirectory(pages).find(batch.current(), currentBootstrap.metadata_page_directory_root,
+																			 childId);
+			}
+			page.logical_children_resolved = true;
+			return page;
+		}
+
+		[[nodiscard]] std::optional<AllocatorLeafPage>
+		readLeafForMutation(MetadataPageFile &pages, const MetadataWriteBatch &batch,
+																		uint64_t ordinal) {
+			const PhysicalPageRef candidateRoot = batch.candidate().allocator_root;
+			if (!candidateRoot.isValid()) {
+				return std::nullopt;
+			}
+			MetadataRadixPage node = readRadixForMutation(pages, candidateRoot, batch);
+			validateRadix(node, true, node.level, batch.candidate());
+			if (!rootCoversOrdinal(ordinal, node.level)) {
+				return std::nullopt;
+			}
+			for (;;) {
+				const PhysicalPageRef child = node.children[childIndex(ordinal, node.level)];
+				if (!child.isValid()) {
+					return std::nullopt;
+				}
+				if (node.level == 0U) {
+					AllocatorLeafPage leaf = pages.readAllocatorLeaf(child);
+					validateLeafRoute(leaf, ordinal, batch.candidate());
+					return leaf;
+				}
+				node = readRadixForMutation(pages, child, batch);
+				validateRadix(node, false, static_cast<uint16_t>(node.level), batch.candidate());
+			}
+		}
+
+		[[nodiscard]] bool isAllocatedForMutation(MetadataPageFile &pages, const MetadataWriteBatch &batch,
+																			PhysicalSlotId slot) {
+			const std::optional<AllocatorLeafPage> leaf =
+					readLeafForMutation(pages, batch, leafOrdinal(slot));
+			if (!leaf.has_value() || slot < leaf->first_slot ||
+				slot.value() - leaf->first_slot.value() >= leaf->slot_count) {
+				return false;
+			}
+			const uint64_t offset = slot.value() - leaf->first_slot.value();
+			return (std::to_integer<uint8_t>(leaf->allocated_slots[offset / 8U]) & (1U << (offset % 8U))) != 0U;
+		}
+
+		void encodeLogicalChildren(MetadataRadixPage &page, MetadataPageFile &pages) {
+			for (size_t index = 0U; index < page.children.size(); ++index) {
+				const PhysicalPageRef reference = page.children[index];
+				if (!reference.isValid()) {
+					page.logical_children[index] = {};
+					continue;
+				}
+				page.logical_children[index] = readAllocatorChildPageId(pages, reference, page.level != 0U);
+				page.children[index] = {};
+			}
+			page.logical_children_enabled = true;
+			page.logical_children_resolved = false;
+		}
+
+		[[nodiscard]] PhysicalPageRef logicalizeOwnedInternalChildren(PhysicalPageRef reference, bool isRoot,
+																 MetadataPageFile &pages, MetadataWriteBatch &batch) {
+			if (!batch.ownsAllocatedPage(reference)) {
+				return reference;
+			}
+			// This candidate may already refer to pages staged in the same batch.
+			MetadataRadixPage page = pages.readMetadataRadixUnresolved(reference);
+			validateRadix(page, isRoot, page.level, batch.candidate());
+			if (page.generation != batch.generation() || page.committed_lsn != batch.checkpointLsn()) {
+				throwAllocatorDirectoryError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable free-space logical-child publication found an invalid candidate radix page");
+			}
+			if (page.logical_children_enabled) {
+				return reference;
+			}
+			if (page.level != 0U) {
+				for (PhysicalPageRef &child: page.children) {
+					if (child.isValid()) {
+						child = logicalizeOwnedInternalChildren(child, false, pages, batch);
+					}
+				}
+			}
+			encodeLogicalChildren(page, pages);
+			const PhysicalPageRef logicalReference = batch.allocatePage();
+			pages.writeMetadataRadix(logicalReference, page);
+			batch.registerMetadataPageRoute(page.page_id, logicalReference);
+			return logicalReference;
+		}
+
 		[[nodiscard]] bool slotBit(const AllocatorLeafPage &leaf, PhysicalSlotId slot) {
 			const uint64_t offset = slot.value() - leaf.first_slot.value();
 			if (offset >= leaf.slot_count) {
@@ -204,11 +353,12 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::optional<AllocatorLeafPage>
-		readLeafForOrdinal(const MetadataPageFile &pages, const Superblock &superblock, uint64_t ordinal) {
-			if (!superblock.allocator_root.isValid()) {
+		readLeafForOrdinal(MetadataPageFile &pages, const Superblock &superblock, uint64_t ordinal) {
+			const PhysicalPageRef rootReference = allocatorRootReference(pages, superblock);
+			if (!rootReference.isValid()) {
 				return std::nullopt;
 			}
-			MetadataRadixPage node = pages.readMetadataRadix(superblock.allocator_root);
+			MetadataRadixPage node = pages.readMetadataRadix(rootReference, superblock);
 			validateRadix(node, true, node.level, superblock);
 			if (!rootCoversOrdinal(ordinal, node.level)) {
 				return std::nullopt;
@@ -224,7 +374,7 @@ namespace graph::storage {
 					return leaf;
 				}
 				const uint16_t childLevel = static_cast<uint16_t>(node.level - 1U);
-				node = pages.readMetadataRadix(child);
+				node = pages.readMetadataRadix(child, superblock);
 				validateRadix(node, false, childLevel, superblock);
 			}
 		}
@@ -257,17 +407,18 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 
-		[[nodiscard]] std::optional<uint64_t> findFirstFreeLeafOrdinal(const MetadataPageFile &pages,
+		[[nodiscard]] std::optional<uint64_t> findFirstFreeLeafOrdinal(MetadataPageFile &pages,
 																	   const Superblock &superblock,
 																	   uint64_t firstOrdinal, uint64_t lastOrdinal) {
 			if (firstOrdinal > lastOrdinal) {
 				return std::nullopt;
 			}
-			if (!superblock.allocator_root.isValid()) {
+			const PhysicalPageRef rootReference = allocatorRootReference(pages, superblock);
+			if (!rootReference.isValid()) {
 				return firstOrdinal;
 			}
 
-			const MetadataRadixPage root = pages.readMetadataRadix(superblock.allocator_root);
+			const MetadataRadixPage root = pages.readMetadataRadix(rootReference, superblock);
 			validateRadix(root, true, root.level, superblock);
 			const uint64_t rootSpan = saturatedRadixPower(static_cast<uint16_t>(root.level + 1U));
 			const uint64_t rootLastOrdinal =
@@ -311,7 +462,7 @@ namespace graph::storage {
 					if (node.level == 0U) {
 						return candidate;
 					}
-					const MetadataRadixPage child = pages.readMetadataRadix(node.children[index]);
+					const MetadataRadixPage child = pages.readMetadataRadix(node.children[index], superblock);
 					if (const std::optional<uint64_t> found =
 								visit(child, false, static_cast<uint16_t>(node.level - 1U), childBase);
 						found.has_value()) {
@@ -379,7 +530,7 @@ namespace graph::storage {
 
 		try {
 			AllocatorLeafPage leaf;
-			leaf.page_id = allocator_.allocatePageId();
+			leaf.page_id = allocator_.allocateMetadataPageId();
 			leaf.first_slot = PhysicalSlotId(1);
 			leaf.slot_count = RSS_ALLOCATOR_PAGE_SLOT_CAPACITY;
 			leaf.generation = initial.generation;
@@ -395,7 +546,7 @@ namespace graph::storage {
 			root.kind = CatalogRadixPageKind::CRPK_ROOT;
 			root.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 			root.level = 0;
-			root.page_id = allocator_.allocatePageId();
+			root.page_id = allocator_.allocateMetadataPageId();
 			root.generation = initial.generation;
 			root.committed_lsn = initial.checkpoint_lsn;
 			root.children[0] = leafReference;
@@ -430,6 +581,14 @@ namespace graph::storage {
 			return false;
 		}
 		return slotBit(*leaf, slot);
+	}
+
+	bool AllocatorDirectory::isAllocatedForMutation(const MetadataWriteBatch &batch, PhysicalSlotId slot) const {
+		if (!slot.isValid()) {
+			throwAllocatorDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable free-space mutation lookup requires a valid slot");
+		}
+		return ::graph::storage::isAllocatedForMutation(pages_, batch, slot);
 	}
 
 	std::optional<PhysicalSlotId> AllocatorDirectory::findFirstFree(const Superblock &superblock,
@@ -517,7 +676,7 @@ namespace graph::storage {
 		const Superblock &current = batch.candidate();
 		const Generation generation = batch.generation();
 		const LogSequenceNumber checkpointLsn = batch.checkpointLsn();
-		if (isAllocated(current, slot) == allocated) {
+				if (::graph::storage::isAllocatedForMutation(pages_, batch, slot) == allocated) {
 			throwAllocatorDirectoryError(FormatError::FERR_INVALID_STATE,
 										 "relocatable free-space transition does not change slot state");
 		}
@@ -531,6 +690,7 @@ namespace graph::storage {
 		std::function<WrittenRadixNode(const MetadataRadixPage &, bool)> writeNode;
 		writeNode = [&](const MetadataRadixPage &source, bool isRoot) {
 			MetadataRadixPage page = source;
+			normalizePhysicalChildren(page);
 			page.kind = isRoot ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
 			page.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 			page.generation = generation;
@@ -542,7 +702,7 @@ namespace graph::storage {
 					leaf = pages_.readAllocatorLeaf(page.children[index]);
 					validateLeafRoute(leaf, ordinal, current);
 				} else {
-					leaf.page_id = batch.allocatePageId();
+					leaf.page_id = batch.allocateMetadataPageId();
 					leaf.first_slot = PhysicalSlotId(firstSlotFor(ordinal));
 					leaf.slot_count = static_cast<uint32_t>(
 							std::min<uint64_t>(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY,
@@ -553,18 +713,19 @@ namespace graph::storage {
 				setSlotBit(leaf, slot, allocated);
 				const PhysicalPageRef leafReference = batch.allocatePage();
 				pages_.writeAllocatorLeaf(leafReference, leaf);
+				batch.registerMetadataPageRoute(leaf.page_id, leafReference);
 				page.children[index] = leafReference;
 				setAllocatorChildHasFree(page, index, leafHasFreeSlot(leaf));
 			} else {
 				MetadataRadixPage child;
 				if (page.children[index].isValid()) {
-					child = pages_.readMetadataRadix(page.children[index]);
+					child = readRadixForMutation(pages_, page.children[index], batch);
 					validateRadix(child, false, static_cast<uint16_t>(page.level - 1U), current);
 				} else {
 					child.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 					child.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 					child.level = static_cast<uint16_t>(page.level - 1U);
-					child.page_id = batch.allocatePageId();
+					child.page_id = batch.allocateMetadataPageId();
 				}
 				const WrittenRadixNode rewrittenChild = writeNode(child, false);
 				page.children[index] = rewrittenChild.reference;
@@ -572,12 +733,13 @@ namespace graph::storage {
 			}
 			const PhysicalPageRef reference = batch.allocatePage();
 			pages_.writeMetadataRadix(reference, page);
+			batch.registerMetadataPageRoute(page.page_id, reference);
 			return WrittenRadixNode{reference, radixSubtreeHasFreeSlot(page)};
 		};
 
 		MetadataRadixPage root;
 		if (current.allocator_root.isValid()) {
-			root = pages_.readMetadataRadix(current.allocator_root);
+			root = readRadixForMutation(pages_, current.allocator_root, batch);
 			validateRadix(root, true, root.level, current);
 			while (root.level < targetLevel) {
 				MetadataRadixPage oldRoot = root;
@@ -587,11 +749,12 @@ namespace graph::storage {
 				const bool oldRootHasFreeSlot = radixSubtreeHasFreeSlot(oldRoot);
 				const PhysicalPageRef oldRootReference = batch.allocatePage();
 				pages_.writeMetadataRadix(oldRootReference, oldRoot);
+				batch.registerMetadataPageRoute(oldRoot.page_id, oldRootReference);
 				root = {};
 				root.kind = CatalogRadixPageKind::CRPK_ROOT;
 				root.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 				root.level = static_cast<uint16_t>(oldRoot.level + 1U);
-				root.page_id = batch.allocatePageId();
+				root.page_id = batch.allocateMetadataPageId();
 				root.children[0] = oldRootReference;
 				setAllocatorChildHasFree(root, 0U, oldRootHasFreeSlot);
 			}
@@ -599,9 +762,17 @@ namespace graph::storage {
 			root.kind = CatalogRadixPageKind::CRPK_ROOT;
 			root.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 			root.level = targetLevel;
-			root.page_id = batch.allocatePageId();
+			root.page_id = batch.allocateMetadataPageId();
 		}
 		batch.setAllocatorRoot(writeNode(root, true).reference);
+	}
+
+	void AllocatorDirectory::prepareLogicalRootChildren(MetadataWriteBatch &batch) {
+		if (!batch.candidate().usesPageDirectoryBootstrap() || !batch.candidate().allocator_root.isValid() ||
+			!batch.ownsAllocatedPage(batch.candidate().allocator_root)) {
+			return;
+		}
+		batch.setAllocatorRoot(logicalizeOwnedInternalChildren(batch.candidate().allocator_root, true, pages_, batch));
 	}
 
 	std::optional<AllocatorReservation> AllocatorDirectory::reserveFirstFreeAndPublish(
@@ -616,9 +787,14 @@ namespace graph::storage {
 	}
 
 	std::optional<PhysicalSlotId> AllocatorDirectory::prepareReserveFirstFree(MetadataWriteBatch &batch,
-																			  PhysicalSlotId firstSlot,
-																			  PhysicalSlotId lastSlot) {
-		const std::optional<PhysicalSlotId> freeSlot = findFirstFree(batch.candidate(), firstSlot, lastSlot);
+																		  PhysicalSlotId firstSlot,
+																		  PhysicalSlotId lastSlot) {
+		const PhysicalPageRef candidateRoot = batch.candidate().allocator_root;
+		const bool requiresPublishedRoute =
+				candidateRoot.isValid() && pages_.readMetadataRadixUnresolved(candidateRoot).logical_children_enabled;
+		const std::optional<PhysicalSlotId> freeSlot =
+				requiresPublishedRoute ? findFirstFree(batch.current(), firstSlot, lastSlot)
+										  : findFirstFree(batch.candidate(), firstSlot, lastSlot);
 		if (freeSlot.has_value()) {
 			batch.reserveDataSlot(*freeSlot);
 			prepareSetAllocated(batch, *freeSlot, true);

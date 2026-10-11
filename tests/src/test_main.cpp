@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
@@ -38,6 +39,7 @@ namespace graph::test {
 
 class TerseSuitePrinter : public ::testing::TestEventListener {
 private:
+	bool verbose_suite_progress_;
     std::stringstream captured_stdout_;
     std::stringstream captured_stderr_;
     std::streambuf* old_stdout_buf_{nullptr};
@@ -57,6 +59,8 @@ private:
     }
 
 public:
+	explicit TerseSuitePrinter(bool verboseSuiteProgress) : verbose_suite_progress_(verboseSuiteProgress) {}
+
     void OnTestProgramStart(const ::testing::UnitTest& unit_test) override {
         total_suites_ = unit_test.test_suite_to_run_count();
         std::cout << "\n\033[38;5;105;1m================================================================================\033[0m\n"
@@ -127,6 +131,9 @@ public:
 
     void OnTestSuiteEnd(const ::testing::TestSuite& test_suite) override {
         completed_suites_++;
+		if (!verbose_suite_progress_ && suite_failed_tests_ == 0) {
+			return;
+		}
         std::cout << getProgressPrefix();
         
         if (suite_failed_tests_ == 0) {
@@ -168,8 +175,10 @@ int main(int argc, char **argv) {
     // Remove the default GTest printer
     delete listeners.Release(listeners.default_result_printer());
     
-    // Add our modern progress printer
-    listeners.Append(new TerseSuitePrinter);
+	// Full regressions can suppress successful-suite progress so non-interactive
+	// runners retain the final result and failures without exhausting log limits.
+	const bool verboseSuiteProgress = std::getenv("ZYX_TEST_TERSE_OUTPUT") == nullptr;
+    listeners.Append(new TerseSuitePrinter(verboseSuiteProgress));
 
     return RUN_ALL_TESTS();
 }

@@ -26,6 +26,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
+#include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
 
 using namespace graph::storage;
@@ -382,7 +383,11 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RejectsAStaleRetiremen
 
 TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, InspectsUnknownNamespacesConservativelyAndRejectsRetiredOwners) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
 	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
 	const VectorAdjacencyMaterializationResult staged =
 			adjacencies.materialize(17, stagedRecords(), stagedOptions(), LogSequenceNumber(2));
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
@@ -400,6 +405,11 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, InspectsUnknownNamespa
 	MetadataSnapshotPin unknownSnapshot = metadata->openSnapshot();
 	EXPECT_FALSE(adjacencies.inspectDerivedPage(unknownSnapshot, location.page_id).has_value());
 	unknownSnapshot.release();
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	const DerivedObjectReachabilityReclaimReport report = reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(3));
+	EXPECT_EQ(report.non_derived_adjacency_pages_retained, 1U);
+	EXPECT_EQ(report.derived_adjacency_pages_retired, 0U);
+	EXPECT_EQ(report.published_generation, report.scanned_generation);
 
 	PageOwnerHeader retiredOwner = unknownOwner;
 	retiredOwner.owner_id = VectorAdjacencyPageStore::derivedOwnerId(17);
@@ -478,6 +488,17 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RejectsUnboundedCleanu
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(reclaimOptions(), LogSequenceNumber{})); },
 					  FormatError::FERR_INVALID_HEADER);
+	for (size_t DerivedObjectReachabilityReclaimOptions::*bound:
+		 std::array{&DerivedObjectReachabilityReclaimOptions::maximum_vector_manifests,
+					&DerivedObjectReachabilityReclaimOptions::maximum_vector_locations,
+					&DerivedObjectReachabilityReclaimOptions::maximum_mapping_entries,
+					&DerivedObjectReachabilityReclaimOptions::maximum_candidate_pages,
+					&DerivedObjectReachabilityReclaimOptions::maximum_retirements}) {
+		invalid = reclaimOptions();
+		invalid.*bound = std::numeric_limits<size_t>::max();
+		expectFormatError([&] { static_cast<void>(reclaimer.reclaim(invalid, LogSequenceNumber(2))); },
+					  FormatError::FERR_INVALID_HEADER);
+	}
 	invalid = reclaimOptions();
 	invalid.maximum_mapping_roots = 0;
 	expectFormatError(
@@ -485,6 +506,16 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RejectsUnboundedCleanu
 			FormatError::FERR_INVALID_HEADER);
 	invalid = reclaimOptions();
 	invalid.maximum_mapping_tree_pages = 0;
+	expectFormatError(
+			[&] { static_cast<void>(reclaimer.reclaimMappingTrees(invalid, LogSequenceNumber(2))); },
+			FormatError::FERR_INVALID_HEADER);
+	invalid = reclaimOptions();
+	invalid.maximum_mapping_roots = std::numeric_limits<size_t>::max();
+	expectFormatError(
+			[&] { static_cast<void>(reclaimer.reclaimMappingTrees(invalid, LogSequenceNumber(2))); },
+			FormatError::FERR_INVALID_HEADER);
+	invalid = reclaimOptions();
+	invalid.maximum_mapping_tree_pages = std::numeric_limits<size_t>::max();
 	expectFormatError(
 			[&] { static_cast<void>(reclaimer.reclaimMappingTrees(invalid, LogSequenceNumber(2))); },
 			FormatError::FERR_INVALID_HEADER);
@@ -502,6 +533,136 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, DoesNotPublishWhenNoDe
 	EXPECT_EQ(report.scanned_generation, Generation(1));
 	EXPECT_EQ(report.published_generation, Generation(1));
 	EXPECT_EQ(report.derived_adjacency_pages_retired, 0U);
+}
+
+TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest,
+		AppliesAValidDeltaOverlayBeforeEvaluatingDerivedAdjacencyReachability) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+
+	const uint64_t deltaMappingIndexId = RSS_DELTA_MAPPING_INTERNAL_INDEX_PREFIX | UINT64_C(0xB1);
+	const std::array<VectorDeltaEntry, 1U> entries = {{{1U, 1U, VectorDeltaOperation::VDO_INSERT}}};
+	const VectorDeltaMappingBuildOptions buildOptions{
+			{PhysicalSlotId(62U), PhysicalSlotId(62U), deltaMappingIndexId, entries.size(), 1U}, entries.size()};
+	static_cast<void>(
+			VectorDeltaMapping::build(trees, *metadata, deltaMappingIndexId, entries, buildOptions, LogSequenceNumber(4)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const IndexRootLocation deltaRoot = metadata->findIndexRoot(snapshot, deltaMappingIndexId);
+	VectorManifest manifest = manifests.read(snapshot, 17U).manifest();
+	snapshot.release();
+	manifest.delta_mapping_index_id = deltaMappingIndexId;
+	manifest.delta_mapping_root_page_id = deltaRoot.root_page_id;
+	manifest.delta_mapping_root_generation = deltaRoot.root_generation;
+	manifest.delta_entry_count = entries.size();
+	manifest.committed_lsn = LogSequenceNumber(5);
+	overwriteManifest(io, *metadata, manifest);
+
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	const DerivedObjectReachabilityReclaimReport report = reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(6));
+	EXPECT_EQ(report.vector_locations, canonicalRecords().size());
+	EXPECT_EQ(report.vector_manifests, 1U);
+	EXPECT_EQ(report.reachable_adjacency_pages, 0U);
+	EXPECT_EQ(report.derived_adjacency_pages_retired, 0U);
+	EXPECT_EQ(report.published_generation, report.scanned_generation);
+}
+
+TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest,
+		FailsClosedForAnInvalidDeltaRootOrCardinalityBeforeRetiringDerivedPages) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const VectorAdjacencyMaterializationResult stale =
+			adjacencies.materialize(17U, stagedRecords(), stagedOptions(), LogSequenceNumber(4));
+
+	const uint64_t deltaMappingIndexId = RSS_DELTA_MAPPING_INTERNAL_INDEX_PREFIX | UINT64_C(0xB2);
+	const std::array<VectorDeltaEntry, 1U> entries = {{{1U, 1U, VectorDeltaOperation::VDO_INSERT}}};
+	const VectorDeltaMappingBuildOptions buildOptions{
+			{PhysicalSlotId(62U), PhysicalSlotId(62U), deltaMappingIndexId, entries.size(), 1U}, entries.size()};
+	static_cast<void>(
+			VectorDeltaMapping::build(trees, *metadata, deltaMappingIndexId, entries, buildOptions, LogSequenceNumber(5)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const IndexRootLocation deltaRoot = metadata->findIndexRoot(snapshot, deltaMappingIndexId);
+	const Generation generationBeforeFailures = snapshot.superblock().generation;
+	const VectorManifest current = manifests.read(snapshot, 17U).manifest();
+	snapshot.release();
+
+	VectorManifest staleRoot = current;
+	staleRoot.delta_mapping_index_id = deltaMappingIndexId;
+	staleRoot.delta_mapping_root_page_id = deltaRoot.root_page_id;
+	staleRoot.delta_mapping_root_generation = Generation(deltaRoot.root_generation.value() + 1U);
+	staleRoot.delta_entry_count = entries.size();
+	staleRoot.committed_lsn = LogSequenceNumber(6);
+	overwriteManifest(io, *metadata, staleRoot);
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(7))); },
+					  FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin afterStaleRoot = metadata->openSnapshot();
+	EXPECT_EQ(afterStaleRoot.superblock().generation, generationBeforeFailures);
+	EXPECT_TRUE(metadata->findPageLocationOptional(afterStaleRoot, stale.pages.front().page_id).has_value());
+	afterStaleRoot.release();
+
+	VectorManifest staleCardinality = current;
+	staleCardinality.delta_mapping_index_id = deltaMappingIndexId;
+	staleCardinality.delta_mapping_root_page_id = deltaRoot.root_page_id;
+	staleCardinality.delta_mapping_root_generation = deltaRoot.root_generation;
+	staleCardinality.delta_entry_count = entries.size() + 1U;
+	staleCardinality.committed_lsn = LogSequenceNumber(8);
+	overwriteManifest(io, *metadata, staleCardinality);
+	DerivedObjectReachabilityReclaimOptions bounded = reclaimOptions();
+	bounded.maximum_mapping_entries = entries.size();
+	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(bounded, LogSequenceNumber(9))); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(9))); },
+					  FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin afterStaleCardinality = metadata->openSnapshot();
+	EXPECT_EQ(afterStaleCardinality.superblock().generation, generationBeforeFailures);
+	EXPECT_TRUE(metadata->findPageLocationOptional(afterStaleCardinality, stale.pages.front().page_id).has_value());
+}
+
+TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, AppliesAValidEraseDeltaOverlayBeforeRetiringDerivedPages) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+
+	const uint64_t deltaMappingIndexId = RSS_DELTA_MAPPING_INTERNAL_INDEX_PREFIX | UINT64_C(0xB3);
+	const std::array<VectorDeltaEntry, 1U> entries = {{{6U, 6U, VectorDeltaOperation::VDO_ERASE}}};
+	const VectorDeltaMappingBuildOptions buildOptions{
+			{PhysicalSlotId(62U), PhysicalSlotId(62U), deltaMappingIndexId, entries.size(), 1U}, entries.size()};
+	static_cast<void>(
+			VectorDeltaMapping::build(trees, *metadata, deltaMappingIndexId, entries, buildOptions, LogSequenceNumber(4)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const IndexRootLocation deltaRoot = metadata->findIndexRoot(snapshot, deltaMappingIndexId);
+	VectorManifest manifest = manifests.read(snapshot, 17U).manifest();
+	snapshot.release();
+	manifest.delta_mapping_index_id = deltaMappingIndexId;
+	manifest.delta_mapping_root_page_id = deltaRoot.root_page_id;
+	manifest.delta_mapping_root_generation = deltaRoot.root_generation;
+	manifest.delta_entry_count = entries.size();
+	manifest.committed_lsn = LogSequenceNumber(5);
+	overwriteManifest(io, *metadata, manifest);
+
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	const DerivedObjectReachabilityReclaimReport report = reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(6));
+	EXPECT_EQ(report.vector_locations, canonicalRecords().size());
+	EXPECT_EQ(report.vector_manifests, 1U);
+	EXPECT_EQ(report.reachable_adjacency_pages, 0U);
+	EXPECT_EQ(report.derived_adjacency_pages_retired, 0U);
+	EXPECT_EQ(report.published_generation, report.scanned_generation);
 }
 
 TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, EnforcesPqDirectoryBoundsAndSkipsManifestsWithoutPqMappings) {
@@ -533,6 +694,38 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, EnforcesPqDirectoryBou
 	expectFormatError([&] { static_cast<void>(reclaimer.reclaimPq(limited, LogSequenceNumber(6))); },
 					  FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(metadata->activeSnapshotCount(), 0U);
+}
+
+TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RetainsAnActiveCompletePqMapping) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+
+	std::vector<PqVectorMaterializationRecord> records;
+	for (const CanonicalVectorRecord &record: canonicalRecords()) {
+		records.push_back({record.vector_id, {1U, 2U}});
+	}
+	const VectorPqMaterializationResult pq =
+			vectors.materializePq(17U, records, {PhysicalSlotId(50U), PhysicalSlotId(50U), Generation(1U), 16U, 4U},
+										LogSequenceNumber(4U));
+	ASSERT_EQ(pq.mappings.size(), records.size());
+	static_cast<void>(VectorPqMapping::build(trees, *metadata, VISIBLE_PQ_MAPPING_INDEX_ID, pq.mappings,
+													 pqMappingOptions(VISIBLE_PQ_MAPPING_INDEX_ID, PhysicalSlotId(51U)),
+													 LogSequenceNumber(5U)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const IndexRootLocation root = metadata->findIndexRoot(snapshot, VISIBLE_PQ_MAPPING_INDEX_ID);
+	snapshot.release();
+	bindPqMapping(*metadata, manifests, 17U, root, LogSequenceNumber(6U));
+
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	const DerivedObjectReachabilityReclaimReport report = reclaimer.reclaimPq(reclaimOptions(), LogSequenceNumber(7U));
+	EXPECT_EQ(report.reachable_pq_pages, pq.pages.size());
+	EXPECT_EQ(report.derived_pq_pages_retired, 0U);
+	EXPECT_EQ(report.published_generation, report.scanned_generation);
 }
 
 TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RejectsPageStoresAttachedToAnotherMetadataInstance) {
@@ -729,6 +922,53 @@ TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RefusesAMappingToAnoth
 	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
 	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(7))); },
 					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest,
+		FailsClosedWhenAnAdjacencyMappingTargetsAnUnknownPageOwnerNamespace) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorAdjacencyPageStore adjacencies(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const VectorAdjacencyMaterializationResult staged =
+			adjacencies.materialize(17U, stagedRecords(), stagedOptions(), LogSequenceNumber(4));
+
+	std::vector<VectorAdjacencyPageMapping> mappings;
+	mappings.reserve(canonicalRecords().size());
+	for (const CanonicalVectorRecord &record: canonicalRecords()) {
+		mappings.push_back({record.vector_id, staged.pages.front().page_id});
+	}
+	static_cast<void>(VectorAdjacencyMapping::build(
+			trees, *metadata, MAPPING_INDEX_ID, mappings, mappingOptions(MAPPING_INDEX_ID, PhysicalSlotId(62)),
+			LogSequenceNumber(5)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const IndexRootLocation root = metadata->findIndexRoot(snapshot, MAPPING_INDEX_ID);
+	const PageLocation location = metadata->findPageLocation(snapshot, staged.pages.front().page_id);
+	const SlottedPage page = adjacencies.readPage(snapshot, staged.pages.front().page_id);
+	snapshot.release();
+	bindAdjacencyMapping(*metadata, manifests, 17U, root, Generation(1), LogSequenceNumber(6));
+	MetadataSnapshotPin beforeFailure = metadata->openSnapshot();
+	const Generation generationBeforeFailure = beforeFailure.superblock().generation;
+	beforeFailure.release();
+
+	const PageOwnerHeader unknownOwner{location.page_id,
+								 99U,
+								 PageOwnerKind::POK_VECTOR_ADJACENCY,
+								 0U,
+								 static_cast<uint32_t>(page.serialize().size()),
+								 location.generation,
+								 LogSequenceNumber(4)};
+	overwritePageOwner(io, *metadata, location.page_id, unknownOwner);
+
+	DerivedObjectReachabilityReclaimer reclaimer(trees, vectors, adjacencies, manifests, *metadata);
+	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(reclaimOptions(), LogSequenceNumber(7))); },
+					  FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin afterFailure = metadata->openSnapshot();
+	EXPECT_EQ(afterFailure.superblock().generation, generationBeforeFailure);
+	EXPECT_TRUE(metadata->findPageLocationOptional(afterFailure, location.page_id).has_value());
 }
 
 TEST_F(RelocatableDerivedObjectReachabilityReclaimerTest, RefusesAManifestWhoseAdjacencyRootDiffersFromTheIndexDirectory) {

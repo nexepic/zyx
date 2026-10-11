@@ -134,9 +134,9 @@ TEST_F(StorageIOTest, ConstructorRejectsUnknownAccessMode) {
 	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
 	ASSERT_TRUE(stream->is_open());
 
-	EXPECT_THROW(static_cast<void>(std::make_shared<StorageIO>(
-				 stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE, static_cast<StorageIOAccessMode>(0U))),
-			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE,
+															   static_cast<StorageIOAccessMode>(0U))),
+				 std::invalid_argument);
 }
 
 TEST_F(StorageIOTest, PositionedOperationsRejectUnaddressableRangesBeforeIo) {
@@ -146,14 +146,81 @@ TEST_F(StorageIOTest, PositionedOperationsRejectUnaddressableRangesBeforeIo) {
 
 	EXPECT_THROW(io->writeAt(std::numeric_limits<uint64_t>::max(), &byte, 1U), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(io->readAt(std::numeric_limits<uint64_t>::max(), &output, 1U)),
-			 std::invalid_argument);
+				 std::invalid_argument);
 	const uint64_t unrepresentableOffset = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1U;
 	EXPECT_THROW(io->writeAt(unrepresentableOffset, &byte, 1U), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(io->readAt(unrepresentableOffset, &output, 1U)), std::invalid_argument);
 	EXPECT_THROW(io->writeAt(0U, &byte, std::numeric_limits<size_t>::max()), std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(io->readAt(0U, &output, std::numeric_limits<size_t>::max())),
-			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readAt(0U, &output, std::numeric_limits<size_t>::max())), std::invalid_argument);
 }
+
+TEST_F(StorageIOTest, TypedPageRangesRejectMalformedInputsAndRoundTripThroughTheCache) {
+	auto io = createIO(true);
+	io->enableBufferPool(2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> written{};
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+	written.fill(std::byte{0xC3U});
+
+	EXPECT_THROW(io->writePages({0U, 0U}, written.data(), written.size()), std::invalid_argument);
+	EXPECT_THROW(io->writePages({1U, 3U}, written.data(), written.size()), std::invalid_argument);
+	EXPECT_THROW(io->writePages({0U, 3U}, nullptr, written.size()), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readPages({0U, 3U}, observed.data(), RSS_BUFFER_POOL_PAGE_BYTES - 1U)),
+				 std::invalid_argument);
+
+	io->writePages({0U, 3U}, written.data(), written.size());
+	EXPECT_EQ(io->readPages({0U, 3U}, observed.data(), observed.size(), BufferPoolReadHint::BPRH_SEQUENTIAL),
+			  observed.size());
+	EXPECT_EQ(observed, written);
+	io->sync();
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(StorageIOTest, TypedPageRangeShortNativeWriteFailsClosed) {
+	auto io = createIO(true);
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{};
+	StorageIO::ScopedNativeWriteHookForTesting shortWrite(
+			[](file_handle_t, const void *, size_t size, pwrite_off_t) -> pwrite_ssize_t {
+				return static_cast<pwrite_ssize_t>(size - 1U);
+			});
+
+	EXPECT_THROW(io->writePages({0U, 9U}, page.data(), page.size()), std::system_error);
+}
+
+TEST_F(StorageIOTest, TypedPageRangePreservesShortAndFailedReadSemantics) {
+	auto io = createIO(true);
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{};
+	{
+		StorageIO::ScopedNativeReadHookForTesting shortRead(
+				[](file_handle_t, void *, size_t size, pwrite_off_t) -> pwrite_ssize_t {
+					return static_cast<pwrite_ssize_t>(size - 1U);
+				});
+		EXPECT_EQ(io->readPages({0U, 9U}, page.data(), page.size()), page.size() - 1U);
+	}
+	{
+		StorageIO::ScopedNativeReadHookForTesting failedRead(
+				[](file_handle_t, void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return -1; });
+		EXPECT_THROW(static_cast<void>(io->readPages({0U, 9U}, page.data(), page.size())), std::runtime_error);
+	}
+}
+
+TEST_F(StorageIOTest, TypedPageWriteThroughDropsCachedImageBeforeShortNativeWrite) {
+	auto io = createIO(true);
+	io->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> page{};
+	page.fill(std::byte{0xD4U});
+	io->writePages({0U, 7U}, page.data(), page.size());
+	io->sync();
+	ASSERT_EQ(io->bufferPoolStats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+	StorageIO::ScopedNativeWriteHookForTesting shortWrite(
+			[](file_handle_t, const void *, size_t size, pwrite_off_t) -> pwrite_ssize_t {
+				return static_cast<pwrite_ssize_t>(size - 1U);
+			});
+
+	EXPECT_THROW(io->writePagesThrough({0U, 8U}, page.data(), page.size()), std::system_error);
+	EXPECT_EQ(io->bufferPoolStats().resident_bytes, 0U);
+	EXPECT_EQ(io->bufferPoolStats().dirty_bytes, 0U);
+}
+#endif
 
 TEST_F(StorageIOTest, UncachedSafetyGuardsRejectEmptyBuffersBeforeNativeIo) {
 	auto io = createIO(true);
@@ -168,36 +235,87 @@ TEST_F(StorageIOTest, UncachedSafetyGuardsRejectEmptyBuffersBeforeNativeIo) {
 
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 TEST_F(StorageIOTest, NativeFaultHooksRejectEmptyAndNestedScopes) {
-	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeWriteHookForTesting(
-				 StorageIO::NativeWriteHookForTesting{})),
-			 std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeSyncHookForTesting(
-				 StorageIO::NativeSyncHookForTesting{})),
-			 std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeReadHookForTesting(
-				 StorageIO::NativeReadHookForTesting{})),
-			 std::invalid_argument);
-	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeTruncateHookForTesting(
-				 StorageIO::NativeTruncateHookForTesting{})),
-			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeWriteHookForTesting(StorageIO::NativeWriteHookForTesting{})),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(
+						 StorageIO::ScopedAllThreadNativeWriteHookForTesting(StorageIO::NativeWriteHookForTesting{})),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeSyncHookForTesting(StorageIO::NativeSyncHookForTesting{})),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(
+						 StorageIO::ScopedAllThreadNativeSyncHookForTesting(StorageIO::NativeSyncHookForTesting{})),
+				 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeReadHookForTesting(StorageIO::NativeReadHookForTesting{})),
+				 std::invalid_argument);
+	EXPECT_THROW(
+			static_cast<void>(StorageIO::ScopedNativeTruncateHookForTesting(StorageIO::NativeTruncateHookForTesting{})),
+			std::invalid_argument);
 
-	const StorageIO::NativeWriteHookForTesting writeHook =
-			[](file_handle_t, const void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return 0; };
+	const StorageIO::NativeWriteHookForTesting writeHook = [](file_handle_t, const void *, size_t,
+															  pwrite_off_t) -> pwrite_ssize_t { return 0; };
 	StorageIO::ScopedNativeWriteHookForTesting activeWriteHook(writeHook);
 	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeWriteHookForTesting(writeHook)), std::logic_error);
+	StorageIO::ScopedAllThreadNativeWriteHookForTesting activeAllThreadWriteHook(writeHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedAllThreadNativeWriteHookForTesting(writeHook)), std::logic_error);
 
 	const StorageIO::NativeSyncHookForTesting syncHook = [](file_handle_t) { return 0; };
 	StorageIO::ScopedNativeSyncHookForTesting activeSyncHook(syncHook);
 	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeSyncHookForTesting(syncHook)), std::logic_error);
+	StorageIO::ScopedAllThreadNativeSyncHookForTesting activeAllThreadSyncHook(syncHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedAllThreadNativeSyncHookForTesting(syncHook)), std::logic_error);
 
-	const StorageIO::NativeReadHookForTesting readHook =
-			[](file_handle_t, void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return 0; };
+	const StorageIO::NativeReadHookForTesting readHook = [](file_handle_t, void *, size_t,
+															pwrite_off_t) -> pwrite_ssize_t { return 0; };
 	StorageIO::ScopedNativeReadHookForTesting activeReadHook(readHook);
 	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeReadHookForTesting(readHook)), std::logic_error);
 
 	const StorageIO::NativeTruncateHookForTesting truncateHook = [](file_handle_t, uint64_t) { return 0; };
 	StorageIO::ScopedNativeTruncateHookForTesting activeTruncateHook(truncateHook);
 	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeTruncateHookForTesting(truncateHook)), std::logic_error);
+}
+
+TEST_F(StorageIOTest, ThreadLocalWriteHookTakesPrecedenceOverAllThreadWriteHook) {
+	auto io = createIO(true);
+	const char first = 'a';
+	const char second = 'b';
+	std::atomic<uint32_t> allThreadCalls{0U};
+	std::atomic<uint32_t> localCalls{0U};
+	StorageIO::ScopedAllThreadNativeWriteHookForTesting allThreadHook(
+			[&allThreadCalls](file_handle_t fd, const void *bytes, size_t size, pwrite_off_t offset) {
+				allThreadCalls.fetch_add(1U, std::memory_order_relaxed);
+				return portable_pwrite(fd, bytes, size, offset);
+			});
+	{
+		StorageIO::ScopedNativeWriteHookForTesting localHook(
+				[&localCalls](file_handle_t fd, const void *bytes, size_t size, pwrite_off_t offset) {
+					localCalls.fetch_add(1U, std::memory_order_relaxed);
+					return portable_pwrite(fd, bytes, size, offset);
+				});
+		io->writeAt(0U, &first, 1U);
+	}
+	io->writeAt(1U, &second, 1U);
+	EXPECT_EQ(localCalls.load(std::memory_order_relaxed), 1U);
+	EXPECT_EQ(allThreadCalls.load(std::memory_order_relaxed), 1U);
+}
+
+TEST_F(StorageIOTest, ThreadLocalSyncHookTakesPrecedenceOverAllThreadSyncHook) {
+	auto io = createIO(true);
+	std::atomic<uint32_t> allThreadCalls{0U};
+	std::atomic<uint32_t> localCalls{0U};
+	StorageIO::ScopedAllThreadNativeSyncHookForTesting allThreadHook([&allThreadCalls](file_handle_t fd) {
+		allThreadCalls.fetch_add(1U, std::memory_order_relaxed);
+		return portable_fsync(fd);
+	});
+	{
+		StorageIO::ScopedNativeSyncHookForTesting localHook([&localCalls](file_handle_t fd) {
+			localCalls.fetch_add(1U, std::memory_order_relaxed);
+			return portable_fsync(fd);
+		});
+		io->sync();
+	}
+	io->sync();
+	EXPECT_EQ(localCalls.load(std::memory_order_relaxed), 1U);
+	EXPECT_EQ(allThreadCalls.load(std::memory_order_relaxed), 1U);
 }
 
 TEST_F(StorageIOTest, NativeWriteFailureWithoutPlatformErrorUsesGenericIoError) {
@@ -580,35 +698,41 @@ TEST_F(StorageIOTest, BufferPoolHelpersAreNoOpsWithoutCacheAndFlushCachedWrites)
 	EXPECT_EQ(io->bufferPoolStats(), BufferPoolStats{});
 }
 
-// ============================================================================
-// getStream returns valid stream
-// ============================================================================
-
-TEST_F(StorageIOTest, GetStreamReturnsValidStream) {
+TEST_F(StorageIOTest, ControlRecordWriteInvalidatesTheGenerationTaggedCacheEntry) {
 	auto io = createIO(true);
-	auto stream = io->getStream();
-	ASSERT_NE(stream, nullptr);
-	EXPECT_TRUE(stream->good());
+	const BufferPoolPageKey key{0U, 7U};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> initial{};
+	std::array<std::byte, 16U> replacement{};
+	for (size_t index = 0U; index < replacement.size(); ++index) {
+		replacement[index] = static_cast<std::byte>(index + 1U);
+	}
+
+	io->enableBufferPool(2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	io->writeAt(key, initial.data(), initial.size());
+	io->sync();
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> cached{};
+	ASSERT_EQ(io->readAt(key, cached.data(), cached.size()), cached.size());
+	ASSERT_EQ(io->bufferPoolStats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+
+	io->writeControlRecord(key, 64U, replacement);
+	EXPECT_EQ(io->bufferPoolStats().resident_bytes, 0U);
+
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> reread{};
+	ASSERT_EQ(io->readAt(key, reread.data(), reread.size()), reread.size());
+	EXPECT_TRUE(std::equal(replacement.begin(), replacement.end(), reread.begin() + 64U));
+	EXPECT_EQ(reread[63U], std::byte{0U});
+	EXPECT_EQ(reread[80U], std::byte{0U});
 }
 
-// ============================================================================
-// Accessor methods
-// ============================================================================
-
-TEST_F(StorageIOTest, GetWriteFdReturnsValidHandle) {
+TEST_F(StorageIOTest, ControlRecordWriteRejectsInvalidTypedPageRanges) {
 	auto io = createIO(true);
-	EXPECT_NE(io->getWriteFd(), INVALID_FILE_HANDLE);
-}
+	const std::array<std::byte, 1U> byte{std::byte{0x11}};
+	const BufferPoolPageKey valid{0U, 1U};
 
-TEST_F(StorageIOTest, GetReadFdReturnsValidHandle) {
-	auto io = createIO(true);
-	EXPECT_NE(io->getReadFd(), INVALID_FILE_HANDLE);
-}
-
-TEST_F(StorageIOTest, GetFdsReturnInvalidWhenNotProvided) {
-	auto io = createIO(false);
-	EXPECT_EQ(io->getWriteFd(), INVALID_FILE_HANDLE);
-	EXPECT_EQ(io->getReadFd(), INVALID_FILE_HANDLE);
+	EXPECT_THROW(io->writeControlRecord(valid, RSS_BUFFER_POOL_PAGE_BYTES, byte), std::invalid_argument);
+	EXPECT_THROW(io->writeControlRecord({0U, 0U}, 0U, byte), std::invalid_argument);
+	EXPECT_THROW(io->writeControlRecord({1U, 1U}, 0U, byte), std::invalid_argument);
+	EXPECT_THROW(io->writeControlRecord(valid, 0U, std::span<const std::byte>{}), std::invalid_argument);
 }
 
 // ============================================================================

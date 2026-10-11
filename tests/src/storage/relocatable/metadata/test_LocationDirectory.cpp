@@ -13,6 +13,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 #include <boost/uuid/uuid.hpp>
@@ -21,9 +22,11 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
@@ -55,7 +58,7 @@ namespace {
 	LocationLeafPage leaf(MetadataDirectoryType type = MetadataDirectoryType::MDT_PAGE) {
 		LocationLeafPage result;
 		result.directory_type = type;
-		result.page_id = PageId(4);
+		result.page_id = MetadataPageId(4);
 		result.generation = Generation(2);
 		result.committed_lsn = LogSequenceNumber(3);
 		if (type == MetadataDirectoryType::MDT_PAGE) {
@@ -74,6 +77,50 @@ namespace {
 		LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET, 0);
 		LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET,
 									graph::utils::calculateCrc(bytes.data(), RSS_LOCATION_LEAF_HEADER_BYTES));
+	}
+
+	LocationLeafPage representativeLeaf(MetadataDirectoryType type) {
+		LocationLeafPage result;
+		result.directory_type = type;
+		result.page_id = MetadataPageId(91U);
+		result.generation = Generation(6U);
+		result.committed_lsn = LogSequenceNumber(12U);
+		switch (type) {
+			case MetadataDirectoryType::MDT_PAGE:
+				result.entries = {{3U, SegmentId(30U), Generation(2U), 1U, 1U, 1024U},
+								  {8U, SegmentId(31U), Generation(3U), 8U, 1U, 2048U}};
+				break;
+			case MetadataDirectoryType::MDT_EXTENT:
+				result.entries = {{3U, SegmentId(30U), Generation(2U), 1U, 2U},
+								  {8U, SegmentId(31U), Generation(3U), 8U, 24U}};
+				break;
+			case MetadataDirectoryType::MDT_NODE_ENTITY:
+			case MetadataDirectoryType::MDT_EDGE_ENTITY:
+			case MetadataDirectoryType::MDT_STATE:
+			case MetadataDirectoryType::MDT_VECTOR_LOCATION:
+				result.entries = {{3U, SegmentId(30U), Generation(2U), 0U, 1U},
+								  {8U, SegmentId(31U), Generation(3U), 17U, 1U}};
+				break;
+			case MetadataDirectoryType::MDT_ENTITY_PROPERTY:
+				result.entries = {{3U, SegmentId(30U), Generation(2U), 0U, 1U},
+								  {(UINT64_C(1) << 63U) | 8U, SegmentId(31U), Generation(3U), 1U, 1U}};
+				break;
+			case MetadataDirectoryType::MDT_INDEX_ROOT:
+			case MetadataDirectoryType::MDT_VECTOR_MANIFEST:
+			case MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST:
+				result.entries = {{3U, SegmentId(30U), Generation(2U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U},
+								  {8U, SegmentId(31U), Generation(3U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U}};
+				break;
+			case MetadataDirectoryType::MDT_RETIRE_QUEUE:
+				result.entries = {{3U, SegmentId(30U), Generation(2U),
+								   static_cast<uint16_t>(RetireQueueDisposition::RQD_RELOCATED_SOURCE), 1U},
+								  {8U, SegmentId(31U), Generation(3U),
+								   static_cast<uint16_t>(RetireQueueDisposition::RQD_RETIRED_SEGMENT), 1U}};
+				break;
+			default:
+				throw std::invalid_argument("not a Location leaf directory type");
+		}
+		return result;
 	}
 
 	PageLocation page(uint64_t pageId, uint64_t segmentId, uint16_t pageIndex, uint64_t generation = 1,
@@ -150,7 +197,7 @@ TEST(RelocatableLocationLeafCodecTest, SupportsNodeAndEdgeEntityLocationsWithZer
 		 {MetadataDirectoryType::MDT_NODE_ENTITY, MetadataDirectoryType::MDT_EDGE_ENTITY}) {
 		LocationLeafPage entityLeaf;
 		entityLeaf.directory_type = type;
-		entityLeaf.page_id = PageId(1);
+		entityLeaf.page_id = MetadataPageId(1);
 		entityLeaf.generation = Generation(1);
 		entityLeaf.committed_lsn = LogSequenceNumber(1);
 		entityLeaf.entries = {{1, SegmentId(10), Generation(2), 0, 1}, {2, SegmentId(10), Generation(2), 1633, 1}};
@@ -184,7 +231,7 @@ TEST(RelocatableEntityPropertyKeyTest, EncodesNodeAndEdgeNamespacesWithoutProper
 TEST(RelocatableLocationLeafCodecTest, SupportsEntityPropertyLocations) {
 	LocationLeafPage page;
 	page.directory_type = MetadataDirectoryType::MDT_ENTITY_PROPERTY;
-	page.page_id = PageId(1);
+	page.page_id = MetadataPageId(1);
 	page.generation = Generation(1);
 	page.committed_lsn = LogSequenceNumber(1);
 	page.entries = {{1U, SegmentId(20), Generation(1), 0U, 1U},
@@ -195,10 +242,77 @@ TEST(RelocatableLocationLeafCodecTest, SupportsEntityPropertyLocations) {
 	EXPECT_EQ(decoded.entries, page.entries);
 }
 
+TEST(RelocatableLocationLeafCodecTest, RejectsOrExactlyRoundTripsEveryChecksumValidPropertyDirectoryMutation) {
+	LocationLeafPage page;
+	page.directory_type = MetadataDirectoryType::MDT_ENTITY_PROPERTY;
+	page.page_id = MetadataPageId(71U);
+	page.generation = Generation(3U);
+	page.committed_lsn = LogSequenceNumber(5U);
+	page.entries = {{7U, SegmentId(20U), Generation(3U), 1U, 1U},
+					{(UINT64_C(1) << 63U) | 9U, SegmentId(21U), Generation(4U), 2U, 1U}};
+	const LocationLeafPageCodec::Bytes encoded = LocationLeafPageCodec::encode(page);
+	LocationLeafPageCodec::Bytes nonCanonical = encoded;
+	nonCanonical[RSS_LOCATION_LEAF_HEADER_BYTES + page.entries.size() * RSS_LOCATION_ENTRY_BYTES] = std::byte{1U};
+	recalculateCrc(nonCanonical);
+	expectFormatError([&] { static_cast<void>(LocationLeafPageCodec::decode(nonCanonical)); },
+					  FormatError::FERR_RESERVED_BITS);
+
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateCrc(mutation);
+			try {
+				const LocationLeafPage decoded = LocationLeafPageCodec::decode(mutation);
+				if (LocationLeafPageCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "property directory mutation was normalized at byte " << byteOffset << ", bit "
+								  << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical location directory image must fail closed.
+			}
+		}
+	}
+}
+
+TEST(RelocatableLocationLeafCodecTest, RejectsOrExactlyRoundTripsEveryChecksumValidDirectoryTypeMutation) {
+	const std::array directoryTypes{MetadataDirectoryType::MDT_PAGE,
+									MetadataDirectoryType::MDT_EXTENT,
+									MetadataDirectoryType::MDT_NODE_ENTITY,
+									MetadataDirectoryType::MDT_EDGE_ENTITY,
+									MetadataDirectoryType::MDT_INDEX_ROOT,
+									MetadataDirectoryType::MDT_VECTOR_LOCATION,
+									MetadataDirectoryType::MDT_VECTOR_MANIFEST,
+									MetadataDirectoryType::MDT_STATE,
+									MetadataDirectoryType::MDT_RETIRE_QUEUE,
+									MetadataDirectoryType::MDT_ENTITY_PROPERTY,
+									MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST};
+	for (const MetadataDirectoryType directoryType: directoryTypes) {
+		const LocationLeafPageCodec::Bytes encoded = LocationLeafPageCodec::encode(representativeLeaf(directoryType));
+		for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = encoded;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				recalculateCrc(mutation);
+				try {
+					const LocationLeafPage decoded = LocationLeafPageCodec::decode(mutation);
+					EXPECT_EQ(LocationLeafPageCodec::encode(decoded), mutation)
+							<< "directory type " << static_cast<unsigned>(directoryType)
+							<< " mutation was normalized at byte " << byteOffset << ", bit "
+							<< static_cast<unsigned>(bit);
+				} catch (const FormatException &) {
+					// A checksum-valid mutation is safe only when the typed boundary rejects it.
+				}
+			}
+		}
+	}
+}
+
 TEST(RelocatableLocationLeafCodecTest, SupportsDedicatedIndexRootDirectoryEntries) {
 	LocationLeafPage indexRoots;
 	indexRoots.directory_type = MetadataDirectoryType::MDT_INDEX_ROOT;
-	indexRoots.page_id = PageId(1);
+	indexRoots.page_id = MetadataPageId(1);
 	indexRoots.generation = Generation(1);
 	indexRoots.committed_lsn = LogSequenceNumber(1);
 	indexRoots.entries = {{7, SegmentId(101), Generation(3), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1},
@@ -223,7 +337,7 @@ TEST(RelocatableLocationLeafCodecTest, SupportsDedicatedIndexRootDirectoryEntrie
 TEST(RelocatableLocationLeafCodecTest, SupportsAndValidatesRetireQueueEntries) {
 	LocationLeafPage queue;
 	queue.directory_type = MetadataDirectoryType::MDT_RETIRE_QUEUE;
-	queue.page_id = PageId(1);
+	queue.page_id = MetadataPageId(1);
 	queue.generation = Generation(4);
 	queue.committed_lsn = LogSequenceNumber(8);
 	queue.entries = {
@@ -267,7 +381,7 @@ TEST(RelocatableLocationLeafCodecTest, RejectsInvalidEntriesAndCorruptDiskBytes)
 	expectFormatError([&] { static_cast<void>(LocationLeafPageCodec::encode(invalid)); },
 					  FormatError::FERR_INVALID_HEADER);
 	const std::array<std::function<void(LocationLeafPage &)>, 10> mutations = {
-			[](LocationLeafPage &page) { page.page_id = PageId{}; },
+			[](LocationLeafPage &page) { page.page_id = MetadataPageId{}; },
 			[](LocationLeafPage &page) { page.generation = Generation{}; },
 			[](LocationLeafPage &page) { page.committed_lsn = LogSequenceNumber{}; },
 			[](LocationLeafPage &page) { page.entries.clear(); },
@@ -438,7 +552,7 @@ TEST_F(RelocatableLocationDirectoryTest, ReplacesAndErasesNativeEntityPageLocati
 	MetadataWriteBatch invalidOverlap(allocator, deepPublished, LogSequenceNumber(5));
 	expectFormatError(
 			[&] { directory.prepareReplaceNodePageLocations(invalidOverlap, std::span(&replacement, 1), overlapping); },
-					  FormatError::FERR_INVALID_HEADER);
+			FormatError::FERR_INVALID_HEADER);
 	const std::array missing = {uint64_t{99}};
 	MetadataWriteBatch missingErase(allocator, deepPublished, LogSequenceNumber(5));
 	expectFormatError([&] { directory.prepareReplaceNodePageLocations(missingErase, {}, missing); },
@@ -535,11 +649,468 @@ TEST_F(RelocatableLocationDirectoryTest, StreamsNativeEntityPageMappingsWithoutL
 
 	EXPECT_FALSE(directory.visitEdgePageLocationsUntil(published, [](const EntityPageLocation &) { return false; }));
 	expectFormatError([&] { static_cast<void>(directory.visitNodePageLocationsUntil(published, {})); },
-				  FormatError::FERR_INVALID_HEADER);
-	expectFormatError([&] {
-		static_cast<void>(directory.visitNodePageLocationsAfter(published, 0U, 0U,
-																							  [](const EntityPageLocation &) { return true; }));
-	}, FormatError::FERR_INVALID_HEADER);
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.visitNodePageLocationsAfter(
+						published, 0U, 0U, [](const EntityPageLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, StreamsAContiguousNewEdgeRangeAcrossDirectoryLeaves) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const EntityPageLocation existing{1U, PageId(11U), 0U, 1U};
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	const uint64_t first = RSS_LOCATION_LEAF_MAX_ENTRIES;
+	const std::array additions = {EntityPageLocation{first, PageId(31U), 0U, 1U},
+								  EntityPageLocation{first + 1U, PageId(31U), 1U, 1U},
+								  EntityPageLocation{first + 2U, PageId(32U), 0U, 1U}};
+	size_t cursor = 0U;
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	directory.prepareAppendEdgePageLocations(
+			append, first, first + additions.size() - 1U, additions.size(), [&]() -> std::optional<EntityPageLocation> {
+				return cursor == additions.size() ? std::nullopt
+												  : std::optional<EntityPageLocation>(additions[cursor++]);
+			});
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_FALSE(directory.findEdgePageLocationOptional(before, additions.front().entity_id).has_value());
+	EXPECT_EQ(directory.findEdgePageLocation(after, existing.entity_id), existing);
+	for (const EntityPageLocation &location: additions) {
+		EXPECT_EQ(directory.findEdgePageLocation(after, location.entity_id), location);
+	}
+}
+
+TEST_F(RelocatableLocationDirectoryTest, StreamsStrictlyOrderedEdgeLeaseRangesWithInterleavedIdGaps) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const std::array additions = {EntityPageLocation{10U, PageId(31U), 0U, 1U},
+								  EntityPageLocation{11U, PageId(31U), 1U, 1U},
+								  EntityPageLocation{20U, PageId(32U), 0U, 1U}};
+	MetadataWriteBatch append(allocator, initial, LogSequenceNumber(2U));
+	auto session = directory.beginAppendEdgePageLocations(append, 10U, 20U, additions.size());
+	for (const EntityPageLocation &location: additions) {
+		session.append(location);
+	}
+	session.finish();
+	append.publish(bootstrap);
+	const Superblock published = append.candidate();
+
+	for (const EntityPageLocation &location: additions) {
+		EXPECT_EQ(directory.findEdgePageLocation(published, location.entity_id), location);
+	}
+	EXPECT_FALSE(directory.findEdgePageLocationOptional(published, 12U).has_value());
+}
+
+TEST_F(RelocatableLocationDirectoryTest, RejectsAStreamThatDivergesFromItsDeclaredEdgeRange) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	bool emitted = false;
+	expectFormatError(
+			[&] {
+				directory.prepareAppendEdgePageLocations(batch, 10U, 11U, 2U,
+														 [&]() -> std::optional<EntityPageLocation> {
+															 if (emitted) {
+																 return std::nullopt;
+															 }
+															 emitted = true;
+															 return EntityPageLocation{11U, PageId(4U), 0U, 1U};
+														 });
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, AcceptsAProducerThatPushesMappingsWithoutAnIntermediateVector) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	MetadataWriteBatch append(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareAppendEdgePageLocations(append, 8U, 9U, 2U,
+											 [](const LocationDirectory::EdgePageLocationSink &consume) {
+												 consume(EntityPageLocation{8U, PageId(21U), 0U, 1U});
+												 consume(EntityPageLocation{9U, PageId(21U), 1U, 1U});
+											 });
+	append.publish(bootstrap);
+	const Superblock published = append.candidate();
+
+	EXPECT_EQ(directory.findEdgePageLocation(published, 8U), (EntityPageLocation{8U, PageId(21U), 0U, 1U}));
+	EXPECT_EQ(directory.findEdgePageLocation(published, 9U), (EntityPageLocation{9U, PageId(21U), 1U, 1U}));
+}
+
+TEST_F(RelocatableLocationDirectoryTest, GrowsTheStreamedEdgeDirectoryRootWithoutMaterializingTheRange) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const EntityPageLocation first{1U, PageId(7U), 0U, 1U};
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEdgePageLocations(seed, std::span(&first, 1U), {});
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	const uint64_t distantId = static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT + 1U;
+	const EntityPageLocation distant{distantId, PageId(8U), 0U, 1U};
+	bool emitted = false;
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	directory.prepareAppendEdgePageLocations(append, distantId, distantId, 1U,
+											 [&]() -> std::optional<EntityPageLocation> {
+												 if (emitted) {
+													 return std::nullopt;
+												 }
+												 emitted = true;
+												 return distant;
+											 });
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_EQ(directory.findEdgePageLocation(before, first.entity_id), first);
+	EXPECT_FALSE(directory.findEdgePageLocationOptional(before, distant.entity_id).has_value());
+	EXPECT_EQ(directory.findEdgePageLocation(after, first.entity_id), first);
+	EXPECT_EQ(directory.findEdgePageLocation(after, distant.entity_id), distant);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, PreservesAHigherRootWhenStreamingAReservedLowerEdgeRange) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const uint64_t distantId = static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT + 1U;
+	const EntityPageLocation existing{distantId, PageId(11U), 0U, 1U};
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEdgePageLocations(seed, std::span(&existing, 1U), {});
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	const EntityPageLocation reserved{1U, PageId(12U), 0U, 1U};
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	auto session = directory.beginAppendEdgePageLocations(append, reserved.entity_id, reserved.entity_id, 1U);
+	session.append(reserved);
+	session.finish();
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_EQ(directory.findEdgePageLocation(after, reserved.entity_id), reserved);
+	EXPECT_EQ(directory.findEdgePageLocation(after, existing.entity_id), existing);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, PreservesTheExistingSparseSubtreeAcrossMultiLevelStreamedRootGrowth) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const EntityPageLocation first{1U, PageId(7U), 0U, 1U};
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEdgePageLocations(seed, std::span(&first, 1U), {});
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	// This leaf lies beyond two radix fan-out boundaries and forces a root
+	// expansion from level zero to level two.  The old root must remain routed
+	// through the new root's zero branch while the distant leaf uses branch one.
+	const uint64_t distantId =
+			static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT * RSS_CATALOG_RADIX_FANOUT +
+			1U;
+	const EntityPageLocation distant{distantId, PageId(8U), 0U, 1U};
+	bool emitted = false;
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	directory.prepareAppendEdgePageLocations(append, distantId, distantId, 1U,
+											 [&]() -> std::optional<EntityPageLocation> {
+												 if (emitted) {
+													 return std::nullopt;
+												 }
+												 emitted = true;
+												 return distant;
+											 });
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_EQ(directory.findEdgePageLocation(before, first.entity_id), first);
+	EXPECT_FALSE(directory.findEdgePageLocationOptional(before, distant.entity_id).has_value());
+	EXPECT_EQ(directory.findEdgePageLocation(after, first.entity_id), first);
+	EXPECT_EQ(directory.findEdgePageLocation(after, distant.entity_id), distant);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, ComposesCatalogPageAndEdgeAppendSessionsInOneGeneration) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	CatalogTree catalog(pages, allocator);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	// Interleave records exactly as a streamed Entity materializer does: no
+	// import-sized intermediate mapping collection is needed by any directory.
+	auto catalogSession = catalog.beginAppend(batch, SegmentId(41U), SegmentId(42U), 2U);
+	auto pageSession = directory.beginAppendPageLocations(batch, 81U, 82U, 2U);
+	auto edgeSession = directory.beginAppendEdgePageLocations(batch, 501U, 502U, 2U);
+	catalogSession.append(CatalogEntry{SegmentId(41U), PhysicalSlotId(17U), SegmentKind::SGK_ENTITY_PAGE_POOL, 0U,
+									   Generation(2U), SegmentState::SGS_SEALED, LogSequenceNumber(2U)});
+	pageSession.append(page(81U, 41U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U, 0U));
+	edgeSession.append(EntityPageLocation{501U, PageId(81U), 0U, 1U});
+	catalogSession.append(CatalogEntry{SegmentId(42U), PhysicalSlotId(18U), SegmentKind::SGK_ENTITY_PAGE_POOL, 0U,
+									   Generation(2U), SegmentState::SGS_SEALED, LogSequenceNumber(2U)});
+	pageSession.append(page(82U, 42U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U, 0U));
+	edgeSession.append(EntityPageLocation{502U, PageId(82U), 0U, 1U});
+
+	catalogSession.finish();
+	pageSession.finish();
+	edgeSession.finish();
+	EXPECT_TRUE(catalogSession.isFinished());
+	EXPECT_TRUE(pageSession.isFinished());
+	EXPECT_TRUE(edgeSession.isFinished());
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	EXPECT_EQ(catalog.find(published, SegmentId(41U)).physical_slot, PhysicalSlotId(17U));
+	EXPECT_EQ(catalog.find(published, SegmentId(42U)).physical_slot, PhysicalSlotId(18U));
+	EXPECT_EQ(directory.findPage(published, PageId(81U)), page(81U, 41U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U));
+	EXPECT_EQ(directory.findPage(published, PageId(82U)), page(82U, 42U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U));
+	EXPECT_EQ(directory.findEdgePageLocation(published, 501U), (EntityPageLocation{501U, PageId(81U), 0U, 1U}));
+	EXPECT_EQ(directory.findEdgePageLocation(published, 502U), (EntityPageLocation{502U, PageId(82U), 0U, 1U}));
+}
+
+TEST_F(RelocatableLocationDirectoryTest, StreamsSparseEdgePropertyRootsWithoutCollectingAllMappings) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	// Edges 12 and 13 have no Properties, so an Entity Property directory must
+	// accept a sparse, monotonically ordered Edge-ID range.
+	auto properties = directory.beginAppendEdgePropertyLocations(batch, 11U, 14U, 2U);
+	const EntityPropertyLocation first{{EntityPropertyOwnerKind::EPOK_EDGE, 11U}, PageId(81U), 3U, 1U};
+	const EntityPropertyLocation second{{EntityPropertyOwnerKind::EPOK_EDGE, 14U}, PageId(82U), 5U, 1U};
+	properties.append(first);
+	properties.append(second);
+	properties.finish();
+	EXPECT_TRUE(properties.isFinished());
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	EXPECT_EQ(directory.findEntityProperty(published, first.key), first);
+	EXPECT_EQ(directory.findEntityProperty(published, second.key), second);
+	EXPECT_FALSE(
+			directory.findEntityPropertyOptional(published, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_EDGE, 12U})
+					.has_value());
+}
+
+TEST_F(RelocatableLocationDirectoryTest, StreamsSparseLargeValueManifestsWithoutCollectingAllMappings) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	const LargeValueManifestLocation existing{LargeValueId(1U), PageId(71U), Generation(1U)};
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceLargeValueManifests(seed, std::span(&existing, 1U), {});
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	MetadataWriteBatch batch(allocator, before, LogSequenceNumber(3U));
+
+	// Deduplicated streamed publication reserves one monotonic provisional
+	// interval while materializing only canonical values. The directory retains
+	// one COW path and accepts the resulting sparse, increasing IDs.
+	auto manifests = directory.beginAppendLargeValueManifestLocations(batch, LargeValueId(41U), LargeValueId(43U), 2U);
+	const LargeValueManifestLocation first{LargeValueId(41U), PageId(81U), Generation(2U)};
+	const LargeValueManifestLocation second{LargeValueId(43U), PageId(82U), Generation(2U)};
+	manifests.append(first);
+	manifests.append(second);
+	manifests.finish();
+	EXPECT_TRUE(manifests.isFinished());
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	EXPECT_EQ(directory.findLargeValueManifest(before, existing.value_id), existing);
+	EXPECT_EQ(directory.findLargeValueManifest(published, existing.value_id), existing);
+	EXPECT_EQ(directory.findLargeValueManifest(published, first.value_id), first);
+	EXPECT_EQ(directory.findLargeValueManifest(published, second.value_id), second);
+	EXPECT_FALSE(directory.findLargeValueManifestOptional(published, LargeValueId(42U)).has_value());
+}
+
+TEST_F(RelocatableLocationDirectoryTest, StreamsNewPageLocationsAcrossDirectoryLeaves) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const PageLocation existing = page(1U, 11U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 512U);
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareUpsertPages(seed, std::span(&existing, 1U));
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	const uint64_t first = RSS_LOCATION_LEAF_MAX_ENTRIES;
+	const std::array additions = {
+			page(first, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U, 0U),
+			page(first + 1U, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 2U, 256U),
+			page(first + 2U, 32U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U, 128U),
+	};
+	size_t cursor = 0U;
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	directory.prepareAppendPageLocations(
+			append, first, first + additions.size() - 1U, additions.size(), [&]() -> std::optional<PageLocation> {
+				return cursor == additions.size() ? std::nullopt : std::optional<PageLocation>(additions[cursor++]);
+			});
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_FALSE(directory.findPageOptional(before, additions.front().page_id).has_value());
+	EXPECT_EQ(directory.findPage(after, existing.page_id), existing);
+	for (const PageLocation &location: additions) {
+		EXPECT_EQ(directory.findPage(after, location.page_id), location);
+	}
+}
+
+TEST_F(RelocatableLocationDirectoryTest, ChainsPageAppendSessionsInsideOneMetadataGeneration) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	// A streamed publication must be able to finish Entity/Property routes before
+	// appending later LargeValue routes. Each session extends the candidate root,
+	// so no session needs to retain the earlier PageLocation mappings.
+	auto first = directory.beginAppendPageLocations(batch, 11U, 12U, 2U);
+	first.append(page(11U, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 0U));
+	first.append(page(12U, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 0U));
+	first.finish();
+
+	auto second = directory.beginAppendPageLocations(batch, 13U, 14U, 2U);
+	second.append(page(13U, 32U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 0U));
+	second.append(page(14U, 32U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 0U));
+	second.finish();
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	EXPECT_EQ(directory.findPage(published, PageId(11U)), page(11U, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 0U));
+	EXPECT_EQ(directory.findPage(published, PageId(12U)), page(12U, 31U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 0U));
+	EXPECT_EQ(directory.findPage(published, PageId(13U)), page(13U, 32U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 0U));
+	EXPECT_EQ(directory.findPage(published, PageId(14U)), page(14U, 32U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 0U));
+}
+
+TEST_F(RelocatableLocationDirectoryTest, RejectsPageStreamThatDivergesFromItsDeclaredRange) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	bool emitted = false;
+	expectFormatError(
+			[&] {
+				directory.prepareAppendPageLocations(batch, 10U, 11U, 2U, [&]() -> std::optional<PageLocation> {
+					if (emitted) {
+						return std::nullopt;
+					}
+					emitted = true;
+					return page(11U, 4U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U);
+				});
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, AcceptsPageProducerWithoutAnIntermediateVector) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	MetadataWriteBatch append(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareAppendPageLocations(append, 8U, 9U, 2U, [](const LocationDirectory::PageLocationSink &consume) {
+		consume(page(8U, 21U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 128U));
+		consume(page(9U, 21U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 64U));
+	});
+	append.publish(bootstrap);
+	const Superblock published = append.candidate();
+
+	EXPECT_EQ(directory.findPage(published, PageId(8U)), page(8U, 21U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, 128U));
+	EXPECT_EQ(directory.findPage(published, PageId(9U)), page(9U, 21U, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U, 1U, 64U));
+}
+
+TEST_F(RelocatableLocationDirectoryTest, PreservesExistingPageRoutesAcrossMultiLevelStreamedRootGrowth) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const PageLocation existing = page(1U, 7U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U);
+	MetadataWriteBatch seed(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareUpsertPages(seed, std::span(&existing, 1U));
+	seed.publish(bootstrap);
+	const Superblock before = seed.candidate();
+
+	const uint64_t distantId =
+			static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT * RSS_CATALOG_RADIX_FANOUT +
+			1U;
+	const PageLocation distant = page(distantId, 8U, RSS_PAGE_POOL_FIRST_DATA_FRAME, 2U);
+	bool emitted = false;
+	MetadataWriteBatch append(allocator, before, LogSequenceNumber(3U));
+	directory.prepareAppendPageLocations(append, distantId, distantId, 1U, [&]() -> std::optional<PageLocation> {
+		if (emitted) {
+			return std::nullopt;
+		}
+		emitted = true;
+		return distant;
+	});
+	append.publish(bootstrap);
+	const Superblock after = append.candidate();
+
+	EXPECT_EQ(directory.findPage(before, existing.page_id), existing);
+	EXPECT_FALSE(directory.findPageOptional(before, distant.page_id).has_value());
+	EXPECT_EQ(directory.findPage(after, existing.page_id), existing);
+	EXPECT_EQ(directory.findPage(after, distant.page_id), distant);
 }
 
 TEST_F(RelocatableLocationDirectoryTest, ResumesSparseNodeDirectoryRoutesWithinAnExplicitPageBudget) {
@@ -551,8 +1122,9 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesSparseNodeDirectoryRoutesWithinA
 	LocationDirectory directory(pages, allocator);
 
 	EXPECT_TRUE(directory.visitNodePageLocationsAfter(initial, std::numeric_limits<uint64_t>::max(), 1U,
-																	 [](const EntityPageLocation &) { return true; }));
-	EXPECT_TRUE(directory.visitNodePageLocationsAfter(initial, 0U, 1U, [](const EntityPageLocation &) { return true; }));
+													  [](const EntityPageLocation &) { return true; }));
+	EXPECT_TRUE(
+			directory.visitNodePageLocationsAfter(initial, 0U, 1U, [](const EntityPageLocation &) { return true; }));
 	const EntityPageLocation first{1U, PageId(10U), 0U, 1U};
 	MetadataWriteBatch firstBatch(allocator, initial, LogSequenceNumber(2U));
 	directory.prepareReplaceNodePageLocations(firstBatch, std::span(&first, 1U), {});
@@ -567,28 +1139,29 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesSparseNodeDirectoryRoutesWithinA
 	const Superblock published = deepBatch.candidate();
 
 	std::vector<EntityPageLocation> visited;
-	EXPECT_FALSE(directory.visitNodePageLocationsAfter(
-			published, deepId - 1U, 4U, [&visited](const EntityPageLocation &location) {
-		visited.push_back(location);
-		return false;
-	}));
+	EXPECT_FALSE(directory.visitNodePageLocationsAfter(published, deepId - 1U, 4U,
+													   [&visited](const EntityPageLocation &location) {
+														   visited.push_back(location);
+														   return false;
+													   }));
 	EXPECT_EQ(visited, (std::vector<EntityPageLocation>{deep[0]}));
 	visited.clear();
-	EXPECT_TRUE(directory.visitNodePageLocationsAfter(published, deepId, 3U, [&visited](const EntityPageLocation &location) {
-		visited.push_back(location);
-		return true;
-	}));
+	EXPECT_TRUE(directory.visitNodePageLocationsAfter(published, deepId, 3U,
+													  [&visited](const EntityPageLocation &location) {
+														  visited.push_back(location);
+														  return true;
+													  }));
 	EXPECT_EQ(visited, (std::vector<EntityPageLocation>{deep[1]}));
 	expectFormatError(
 			[&] {
-				static_cast<void>(directory.visitNodePageLocationsAfter(published, deepId - 1U, 3U,
-																																	[](const EntityPageLocation &) { return true; }));
+				static_cast<void>(directory.visitNodePageLocationsAfter(
+						published, deepId - 1U, 3U, [](const EntityPageLocation &) { return true; }));
 			},
 			FormatError::FERR_INVALID_STATE);
 	expectFormatError(
 			[&] {
-				static_cast<void>(directory.visitNodePageLocationsAfter(published, deepId - 1U, 0U,
-																																	[](const EntityPageLocation &) { return true; }));
+				static_cast<void>(directory.visitNodePageLocationsAfter(
+						published, deepId - 1U, 0U, [](const EntityPageLocation &) { return true; }));
 			},
 			FormatError::FERR_INVALID_HEADER);
 }
@@ -615,7 +1188,7 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesAndErasesDeepNodeRoutesWithinM
 	const Superblock published = batch.candidate();
 	std::vector<EntityPageLocation> visited;
 	directory.visitNodePageLocations(published,
-															[&visited](const EntityPageLocation &location) { visited.push_back(location); });
+									 [&visited](const EntityPageLocation &location) { visited.push_back(location); });
 	EXPECT_EQ(visited, (std::vector<EntityPageLocation>{deep[0], deep[1]}));
 
 	size_t visitedMetadataPages = std::numeric_limits<size_t>::max();
@@ -943,10 +1516,10 @@ TEST_F(RelocatableLocationDirectoryTest, SupportsEveryTypedDirectoryLookupAndTra
 	std::vector<EntityPageLocation> visitedEdges;
 	directory.visitPages(published,
 						 [&visitedPages](const PageLocation &location) { visitedPages.push_back(location); });
-	directory.visitNodePageLocations(published,
-															 [&visitedNodes](const EntityPageLocation &location) { visitedNodes.push_back(location); });
-	directory.visitEdgePageLocations(published,
-															 [&visitedEdges](const EntityPageLocation &location) { visitedEdges.push_back(location); });
+	directory.visitNodePageLocations(
+			published, [&visitedNodes](const EntityPageLocation &location) { visitedNodes.push_back(location); });
+	directory.visitEdgePageLocations(
+			published, [&visitedEdges](const EntityPageLocation &location) { visitedEdges.push_back(location); });
 	EXPECT_EQ(visitedPages, std::vector<PageLocation>{pageLocation});
 	EXPECT_EQ(visitedNodes, std::vector<EntityPageLocation>{nodeLocation});
 	EXPECT_EQ(visitedEdges, std::vector<EntityPageLocation>{edgeLocation});
@@ -961,7 +1534,7 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesVectorManifestTraversalWithinAnE
 	MetadataPagePoolAllocator allocator(dataIo, initial);
 	LocationDirectory directory(pages, allocator);
 	const std::array manifests = {VectorManifestLocation{9U, PageId(18U), Generation(1U)},
-									 VectorManifestLocation{17U, PageId(19U), Generation(1U)}};
+								  VectorManifestLocation{17U, PageId(19U), Generation(1U)}};
 	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
 	directory.prepareReplaceVectorManifests(batch, manifests, {});
 	batch.publish(bootstrap);
@@ -980,12 +1553,11 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesVectorManifestTraversalWithinAnE
 	EXPECT_EQ(metadataPages, 2U);
 
 	resumed.clear();
-	EXPECT_TRUE(directory.visitVectorManifestsAfter(
-			published, manifests.back().index_id, 2U,
-			[&resumed](const VectorManifestLocation &location) {
-				resumed.push_back(location);
-				return true;
-			}));
+	EXPECT_TRUE(directory.visitVectorManifestsAfter(published, manifests.back().index_id, 2U,
+													[&resumed](const VectorManifestLocation &location) {
+														resumed.push_back(location);
+														return true;
+													}));
 	EXPECT_TRUE(resumed.empty());
 	expectFormatError(
 			[&] {
@@ -994,7 +1566,113 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesVectorManifestTraversalWithinAnE
 			},
 			FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(directory.visitVectorManifestsAfter(published, 0U, 2U, {})); },
-				  FormatError::FERR_INVALID_HEADER);
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, ResumesLargeValueManifestTraversalWithinAnExplicitMetadataPageBudget) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	const std::array manifests = {LargeValueManifestLocation{LargeValueId(9U), PageId(18U), Generation(1U)},
+								  LargeValueManifestLocation{LargeValueId(17U), PageId(19U), Generation(1U)}};
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceLargeValueManifests(batch, manifests, {});
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	std::vector<LargeValueManifestLocation> resumed;
+	size_t metadataPages = 0U;
+	EXPECT_FALSE(directory.visitLargeValueManifestsAfter(
+			published, manifests.front().value_id.value(), 2U,
+			[&resumed](const LargeValueManifestLocation &location) {
+				resumed.push_back(location);
+				return false;
+			},
+			&metadataPages));
+	EXPECT_EQ(resumed, (std::vector<LargeValueManifestLocation>{manifests.back()}));
+	EXPECT_EQ(metadataPages, 2U);
+
+	resumed.clear();
+	EXPECT_TRUE(directory.visitLargeValueManifestsAfter(published, manifests.back().value_id.value(), 2U,
+														[&resumed](const LargeValueManifestLocation &location) {
+															resumed.push_back(location);
+															return true;
+														}));
+	EXPECT_TRUE(resumed.empty());
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.visitLargeValueManifestsAfter(
+						published, 0U, 0U, [](const LargeValueManifestLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.visitLargeValueManifestsAfter(published, 0U, 2U, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, ResumesLargeValueOwnerDirectoriesWithStableLogicalCursors) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	const std::array properties = {
+			EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 9U}, PageId(18U), 1U, 1U},
+			EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 17U}, PageId(19U), 2U, 1U},
+	};
+	const std::array states = {
+			StateLocation{9U, PageId(20U), 3U, 1U},
+			StateLocation{17U, PageId(21U), 4U, 1U},
+	};
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEntityProperties(batch, properties, {});
+	directory.prepareReplaceStates(batch, states, {});
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	std::vector<EntityPropertyLocation> resumedProperties;
+	size_t propertyMetadataPages = 0U;
+	EXPECT_FALSE(directory.visitEntityPropertiesAfter(
+			published, properties.front().key.directoryId(), 2U,
+			[&resumedProperties](const EntityPropertyLocation &location) {
+				resumedProperties.push_back(location);
+				return false;
+			},
+			&propertyMetadataPages));
+	EXPECT_EQ(resumedProperties, (std::vector<EntityPropertyLocation>{properties.back()}));
+	EXPECT_EQ(propertyMetadataPages, 2U);
+
+	std::vector<StateLocation> resumedStates;
+	size_t stateMetadataPages = 0U;
+	EXPECT_FALSE(directory.visitStatesAfter(
+			published, states.front().state_id, 2U,
+			[&resumedStates](const StateLocation &location) {
+				resumedStates.push_back(location);
+				return false;
+			},
+			&stateMetadataPages));
+	EXPECT_EQ(resumedStates, (std::vector<StateLocation>{states.back()}));
+	EXPECT_EQ(stateMetadataPages, 2U);
+
+	EXPECT_TRUE(directory.visitEntityPropertiesAfter(published, properties.back().key.directoryId(), 2U,
+													 [](const EntityPropertyLocation &) { return true; }));
+	EXPECT_TRUE(directory.visitStatesAfter(published, states.back().state_id, 2U,
+										   [](const StateLocation &) { return true; }));
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.visitEntityPropertiesAfter(
+						published, 0U, 0U, [](const EntityPropertyLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						directory.visitStatesAfter(published, 0U, 0U, [](const StateLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEarlyStopContracts) {
@@ -1065,6 +1743,68 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 	expectFormatError([&] { directory.visitVectorManifests(published, {}); }, FormatError::FERR_INVALID_HEADER);
 }
 
+TEST_F(RelocatableLocationDirectoryTest, ResolvesTypedBootstrapRootsWithoutSuperblockPhysicalReferences) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const ExtentLocation extentLocation = extent(1U, 20U, 1U, 1U);
+	const EntityPageLocation nodeLocation{1U, PageId(21U), 0U, 1U};
+	const EntityPageLocation edgeLocation{1U, PageId(22U), 0U, 1U};
+	const EntityPropertyLocation propertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 1U}, PageId(23U), 0U, 1U};
+	const StateLocation stateLocation{1U, PageId(24U), 0U, 1U};
+	const IndexRootLocation indexRoot{1U, PageId(25U), Generation(1U)};
+	const VectorLocation vectorLocation{1U, PageId(26U), 0U, 1U};
+	const VectorManifestLocation vectorManifest{1U, PageId(27U), Generation(1U)};
+	const LargeValueManifestLocation largeValueManifest{LargeValueId(1U), PageId(28U), Generation(1U)};
+	const RetireQueueEntry retireEntry{PhysicalSlotId(70U), SegmentId(29U), Generation(1U),
+									   RetireQueueDisposition::RQD_RETIRED_SEGMENT};
+
+	MetadataWriteBatch seeded(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareUpsertExtents(seeded, std::span(&extentLocation, 1U));
+	directory.prepareReplaceNodePageLocations(seeded, std::span(&nodeLocation, 1U), {});
+	directory.prepareReplaceEdgePageLocations(seeded, std::span(&edgeLocation, 1U), {});
+	directory.prepareReplaceEntityProperties(seeded, std::span(&propertyLocation, 1U), {});
+	directory.prepareReplaceStates(seeded, std::span(&stateLocation, 1U), {});
+	directory.prepareReplaceIndexRoots(seeded, std::span(&indexRoot, 1U), {});
+	directory.prepareReplaceVectorLocations(seeded, std::span(&vectorLocation, 1U), {});
+	directory.prepareReplaceVectorManifests(seeded, std::span(&vectorManifest, 1U), {});
+	directory.prepareReplaceLargeValueManifests(seeded, std::span(&largeValueManifest, 1U), {});
+	directory.prepareReplaceRetireQueue(seeded, std::span(&retireEntry, 1U), {});
+	seeded.publish(bootstrap);
+
+	MetadataWriteBatch migration(allocator, seeded.candidate(), LogSequenceNumber(3U));
+	static_cast<void>(MetadataPageRouteDirectory(pages).prepareInitialBootstrapMigration(migration));
+	migration.publish(bootstrap);
+	Superblock routed = migration.candidate();
+	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
+	routed.extent_directory_root = {};
+	routed.node_entity_directory_root = {};
+	routed.edge_entity_directory_root = {};
+	routed.entity_property_directory_root = {};
+	routed.state_directory_root = {};
+	routed.index_root_directory_root = {};
+	routed.vector_location_directory_root = {};
+	routed.vector_manifest_directory_root = {};
+	routed.large_value_manifest_directory_root = {};
+	routed.retire_queue_root = {};
+
+	EXPECT_EQ(directory.findExtent(routed, extentLocation.extent_id), extentLocation);
+	EXPECT_EQ(directory.findNodePageLocation(routed, nodeLocation.entity_id), nodeLocation);
+	EXPECT_EQ(directory.findEdgePageLocation(routed, edgeLocation.entity_id), edgeLocation);
+	EXPECT_EQ(directory.findEntityProperty(routed, propertyLocation.key), propertyLocation);
+	EXPECT_EQ(directory.findState(routed, stateLocation.state_id), stateLocation);
+	EXPECT_EQ(directory.findIndexRoot(routed, indexRoot.index_id), indexRoot);
+	EXPECT_EQ(directory.findVectorLocation(routed, vectorLocation.vector_id), vectorLocation);
+	EXPECT_EQ(directory.findVectorManifest(routed, vectorManifest.index_id), vectorManifest);
+	EXPECT_EQ(directory.findLargeValueManifest(routed, largeValueManifest.value_id), largeValueManifest);
+	EXPECT_EQ(directory.findRetireQueueEntryOptional(routed, retireEntry.physical_slot),
+			  std::optional<RetireQueueEntry>(retireEntry));
+}
+
 TEST_F(RelocatableLocationDirectoryTest, RejectsMalformedPublishedRootsAndRoutes) {
 	const Superblock initial = superblock();
 	SuperblockFile(dataIo).initializeNew(initial);
@@ -1082,7 +1822,7 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsMalformedPublishedRootsAndRoutes
 		root.kind = kind;
 		root.directory_type = type;
 		root.level = level;
-		root.page_id = allocator.allocatePageId();
+		root.page_id = allocator.allocateMetadataPageId();
 		root.generation = Generation(1);
 		root.committed_lsn = lsn;
 		root.children[childIndex] = child;
@@ -1163,7 +1903,7 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsMalformedPublishedRootsAndRoutes
 	malformedInternal.kind = CatalogRadixPageKind::CRPK_ROOT;
 	malformedInternal.directory_type = MetadataDirectoryType::MDT_PAGE;
 	malformedInternal.level = 0;
-	malformedInternal.page_id = allocator.allocatePageId();
+	malformedInternal.page_id = allocator.allocateMetadataPageId();
 	malformedInternal.generation = Generation(1);
 	malformedInternal.committed_lsn = LogSequenceNumber(1);
 	malformedInternal.children[0] = validLeafReference;
@@ -1193,7 +1933,7 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsMalformedPublishedRootsAndRoutes
 		internal.kind = kind;
 		internal.directory_type = type;
 		internal.level = level;
-		internal.page_id = allocator.allocatePageId();
+		internal.page_id = allocator.allocateMetadataPageId();
 		internal.generation = generation;
 		internal.committed_lsn = LogSequenceNumber(1);
 		internal.children[0] = validLeafReference;

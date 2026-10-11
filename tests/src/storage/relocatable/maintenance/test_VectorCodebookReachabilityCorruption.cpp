@@ -162,3 +162,28 @@ TEST_F(RelocatableVectorCodebookReachabilityCorruptionTest, RejectsAPartialExten
 	VectorCodebookReachabilityReclaimer reclaimer(*physical_, *manifests_, *metadata_);
 	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(options(), nextCheckpointLsn())), FormatException);
 }
+
+TEST_F(RelocatableVectorCodebookReachabilityCorruptionTest, RejectsAnExtentDirectorySpanOutsideTheDataFrameRange) {
+	writeInlineCodebook(17U, SegmentId(9701U));
+	const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const ExtentLocation root =
+			metadata_->findExtentLocation(snapshot, VectorCodebookExtentIdCodec::manifestExtentId(17U));
+	const ExtentLocation shifted{root.extent_id, root.segment_id, static_cast<uint16_t>(root.first_page + 1U),
+								 static_cast<uint16_t>(root.page_count - 1U), root.generation};
+	static_cast<void>(metadata_->upsertLocations({}, std::span(&shifted, 1U), nextCheckpointLsn()));
+
+	VectorCodebookReachabilityReclaimer reclaimer(*physical_, *manifests_, *metadata_);
+	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(options(), nextCheckpointLsn())), FormatException);
+}
+
+TEST_F(RelocatableVectorCodebookReachabilityCorruptionTest, IgnoresAnExtentOwnedByAnotherStorageKind) {
+	const PhysicalSegmentAllocationRequest request{SegmentId(9703U), SegmentKind::SGK_STATE_PAGE_POOL, 17U,
+															 Generation(1U), RSS_ENVELOPE_BYTES, {}, {}};
+	ASSERT_TRUE(physical_->allocate(request, PhysicalSlotId(40U), PhysicalSlotId(95U), nextCheckpointLsn()).has_value());
+	const ExtentLocation unrelated{ExtentId(9703U), SegmentId(9703U), RSS_PAGE_POOL_FIRST_DATA_FRAME,
+											 RSS_PAGE_POOL_DATA_FRAME_COUNT, Generation(1U)};
+	static_cast<void>(metadata_->upsertLocations({}, std::span(&unrelated, 1U), nextCheckpointLsn()));
+
+	VectorCodebookReachabilityReclaimer reclaimer(*physical_, *manifests_, *metadata_);
+	EXPECT_NO_THROW(static_cast<void>(reclaimer.reclaim(options(), nextCheckpointLsn())));
+}

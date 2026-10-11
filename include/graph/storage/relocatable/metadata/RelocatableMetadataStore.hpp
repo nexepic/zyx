@@ -28,6 +28,7 @@
 #include "graph/storage/relocatable/metadata/CatalogSlotReservation.hpp"
 #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPoolOwnership.hpp"
 #include "graph/storage/relocatable/metadata/MetadataReservationCoordinator.hpp"
 #include "graph/storage/relocatable/metadata/MetadataRetirement.hpp"
@@ -39,12 +40,15 @@
 namespace graph::storage {
 
 	class BTreePageStore;
+	class SystemCatalog;
 	class DerivedObjectReachabilityReclaimer;
 	class VectorCodebookReachabilityReclaimer;
 	class VectorAdjacencyPageStore;
 	class VectorPageStore;
 	class LargeValueStore;
 	class RelocatableIntegrityScanner;
+	class NativeStreamedGraphDeferredPublication;
+	struct NativeStreamedGraphFinalPublicationRequest;
 	struct LargeValueMaterializationResult;
 
 	struct MetadataPagePoolReclamation {
@@ -209,6 +213,11 @@ namespace graph::storage {
 		PageLocation expected_location;
 		uint64_t expected_page_owner_id = 0U;
 		LogSequenceNumber expected_owner_lsn{};
+		// A full source pool may be pinned by old snapshots. These bounds authorize
+		// the metadata writer to reserve a fresh compatible destination pool while
+		// preserving the stable PageId through the Page Directory publication.
+		PhysicalSlotId first_slot{};
+		PhysicalSlotId last_slot{};
 		std::vector<EntityPropertyLocation> upserted_properties;
 		std::vector<EntityPropertyKey> erased_properties;
 		// A relocation removes these slots from the source page but keeps their
@@ -231,6 +240,14 @@ namespace graph::storage {
 		// A retirement deliberately has no replacement frame. The data preparer
 		// must mark the source frame retired while the metadata writer is held.
 		bool retire_page = false;
+		// The destination pool is newly reserved by this metadata generation. Its
+		// candidate frame must be initialized before the Catalog/Page Directory
+		// roots become recoverable.
+		bool destination_is_new_pool = false;
+		// Exactly one replacement initializes each newly reserved pool. Later
+		// replacements append through the checked cross-pool COW path so a batch
+		// packs up to the physical pool capacity instead of wasting fresh pools.
+		bool destination_initializes_new_pool = false;
 	};
 
 	// Property-page creation is pool-batched. One request either appends several
@@ -335,6 +352,17 @@ namespace graph::storage {
 	};
 	using EntityPropertyPagePoolPreparer =
 			std::function<void(const CatalogEntry &, PageId, PageLocation &, EntityPropertyLocation &)>;
+	// State records use the same slotted-page COW protocol as Properties, but
+	// their State Directory entry must become reachable in that exact generation.
+	struct StatePagePoolMaterialization {
+		Superblock superblock;
+		CatalogEntry pool;
+		PageLocation page;
+		StateLocation state;
+	};
+	using StatePagePoolPreparer = std::function<void(const CatalogEntry &, PageId, PageLocation &, StateLocation &)>;
+	using StatePageReplacementPreparer =
+			std::function<void(const CatalogEntry &, const PageLocation &, PageLocation &, StateLocation &)>;
 	using EntityPageReplacementBatchPreparer = std::function<void(std::span<EntityPageReplacementMaterialization>)>;
 	using EntityPageMutationBatchPreparer = std::function<void(std::span<EntityPageReplacementMaterialization>,
 															   std::span<EntityPageAppendBatchMaterialization>)>;
@@ -705,6 +733,104 @@ namespace graph::storage {
 		VectorManifestLocation manifest_location;
 	};
 
+	// A private full-segment artifact belongs to one native graph transaction,
+	// but deliberately has no published Catalog, Allocator, or graph-directory
+	// route. The metadata writer assigns a candidate-only SegmentId and physical
+	// slot while it owns the graph publication; once its typed consumer has
+	// materialized final pages, the slot remains free in the published allocator.
+	// Thus a successful transaction leaves neither a temporary Catalog record nor
+	// a second retirement publication behind.
+	// SGK_BULK_SCRATCH is the first consumer; the representation remains typed so
+	// future bounded builders do not need an adjacency-specific publication path.
+	struct NativeGraphPrivateSegmentRequest {
+		SegmentKind kind = SegmentKind::SGK_NONE;
+		uint64_t owner_id = 0U;
+		PhysicalSlotId first_slot{};
+		PhysicalSlotId last_slot{};
+		uint16_t header_bytes = RSS_ENVELOPE_BYTES;
+		std::vector<std::byte> header_extension;
+		std::vector<std::byte> payload;
+
+		constexpr bool operator==(const NativeGraphPrivateSegmentRequest &) const = default;
+	};
+
+	// A homogeneous private candidate set can be described without allocating one
+	// request object per scratch fragment. Its identities remain callback-scoped;
+	// no public route may retain them after publication returns.
+	struct NativeGraphPrivateSegmentPlan {
+		SegmentKind kind = SegmentKind::SGK_NONE;
+		uint64_t owner_id = 0U;
+		PhysicalSlotId first_slot{};
+		PhysicalSlotId last_slot{};
+		uint16_t header_bytes = RSS_ENVELOPE_BYTES;
+		std::vector<std::byte> header_extension;
+		size_t segment_count = 0U;
+	};
+
+	// This identity is valid only while the enclosing metadata writer owns its
+	// unpublished candidate. It intentionally contains no physical location, so
+	// graph builders cannot persist a raw-slot reference into public state.
+	struct NativeGraphPrivateSegmentMaterialization {
+		SegmentId segment_id{};
+		Generation generation{};
+		uint64_t owner_id = 0U;
+
+		[[nodiscard]] constexpr bool isValid() const {
+			return segment_id.isValid() && generation.isValid() && owner_id != 0U;
+		}
+		constexpr bool operator==(const NativeGraphPrivateSegmentMaterialization &) const = default;
+	};
+
+	// Candidate SegmentIds are allocated contiguously by one metadata batch. The
+	// set exposes ordinal access instead of materializing a second identity vector
+	// solely so a manifest can refer to its sibling scratch fragments.
+	class NativeGraphPrivateSegmentSet final {
+	public:
+		NativeGraphPrivateSegmentSet(SegmentId firstSegmentId, Generation generation, size_t count, uint64_t ownerId);
+
+		[[nodiscard]] size_t size() const { return count_; }
+		[[nodiscard]] NativeGraphPrivateSegmentMaterialization at(size_t ordinal) const;
+		[[nodiscard]] NativeGraphPrivateSegmentMaterialization operator[](size_t ordinal) const { return at(ordinal); }
+		[[nodiscard]] NativeGraphPrivateSegmentMaterialization front() const { return at(0U); }
+		[[nodiscard]] NativeGraphPrivateSegmentMaterialization back() const { return at(count_ - 1U); }
+		[[nodiscard]] size_t ordinalOf(const NativeGraphPrivateSegmentMaterialization &identity) const;
+
+	private:
+		SegmentId first_segment_id_{};
+		Generation generation_{};
+		size_t count_ = 0U;
+		uint64_t owner_id_ = 0U;
+	};
+
+	// The reader is deliberately scoped to the metadata publication callback.
+	// It resolves only candidate SGK_BULK_SCRATCH identities and never opens a
+	// public snapshot or exposes a physical slot.
+	using NativeGraphPrivateSegmentReader =
+			std::function<std::vector<std::byte>(const NativeGraphPrivateSegmentMaterialization &)>;
+	// This writer is valid only during early publication planning. It can fill an
+	// already reserved private candidate exactly once; it cannot allocate an
+	// identity, choose a physical slot, or publish metadata. A later candidate
+	// reader becomes available only after this phase has completed and synced.
+	using NativeGraphPrivateSegmentWriter =
+			std::function<void(const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>)>;
+	// Orders a private multi-pass planner's writes before it reopens them through
+	// the scoped reader. It has no metadata, allocation, or publication authority.
+	using NativeGraphPrivateSegmentFence = std::function<void()>;
+	// A compact private reservation marker lets an immutable candidate layout
+	// reserve output identities before a bounded planner can construct their
+	// bytes. It is never a public format and must be replaced through the scoped
+	// writer before a typed consumer interprets that candidate.
+	class NativeGraphPrivateSegmentReservation final {
+	public:
+		[[nodiscard]] static std::vector<std::byte> payload();
+	};
+	// Runs after every private SegmentId is assigned but before any candidate
+	// image is written. It is the only supported way for a manifest payload to
+	// name sibling private segments without guessing future logical IDs.
+	using NativeGraphPrivateSegmentImagePreparer =
+			std::function<std::vector<std::byte>(const NativeGraphPrivateSegmentSet &, size_t)>;
+	using NativeGraphPrivateSegmentPreparer =
+			std::function<void(const NativeGraphPrivateSegmentSet &, const NativeGraphPrivateSegmentReader &)>;
 	struct NativeGraphDerivedStateMutation {
 		// Sorted by IndexId and free of duplicates. This gives one native graph
 		// generation a deterministic, fail-closed derived-state publication order.
@@ -721,10 +847,23 @@ namespace graph::storage {
 		// Sorted by public IndexId and disjoint from bootstrap entries. Each delta
 		// is bound to roots and a manifest already visible in the pinned snapshot.
 		std::vector<NativeGraphVectorDeltaMutation> vector_deltas;
+		// Private artifacts are candidate-only. No published Catalog, Allocator,
+		// Entity, Page, Extent, Index, or Manifest directory may route to them.
+		std::vector<NativeGraphPrivateSegmentRequest> private_segments;
+		// Use this compact form when every private candidate has the same physical
+		// allocation and envelope contract. It prevents bulk builders from growing
+		// transaction state merely to repeat one request per fragment.
+		std::optional<NativeGraphPrivateSegmentPlan> private_segment_plan;
+		// An append-only transaction-private source tail is never made public. A
+		// streamed coordinator reserves this exact range for the lifetime of one
+		// metadata batch so final pool allocation cannot overwrite source bytes
+		// before they have been copied into candidate-private segments.
+		std::optional<PhysicalSlotRange> external_private_tail_reservation;
 
 		[[nodiscard]] constexpr bool empty() const {
 			return index_tree_mutations.empty() && reused_large_values.empty() && vector_bootstraps.empty() &&
-				   vector_deltas.empty();
+				   vector_deltas.empty() && private_segments.empty() && !private_segment_plan.has_value() &&
+				   !external_private_tail_reservation.has_value();
 		}
 	};
 
@@ -794,6 +933,57 @@ namespace graph::storage {
 	// materialize every frame before the enclosing native graph transaction can
 	// publish its single A/B Superblock generation.
 	using NativeGraphDerivedStatePreparer = std::function<void(std::vector<std::vector<IndexTreeMutationPoolBatch>> &)>;
+
+	// A deferred Index plan is intentionally narrower than a general metadata
+	// callback. It can add one internally validated tree transition after its
+	// private scratch source has been durably staged, but before any Index pool
+	// or PageId is assigned. This keeps the two bulk-builder passes inside one
+	// writer-owned candidate without exposing mutable metadata state.
+	struct NativeGraphDeferredIndexPlan {
+		NativeGraphIndexTreeMutation mutation;
+		IndexTreeMultiPoolMutationPreparer preparer;
+	};
+	struct NativeGraphDeferredIndexPlans {
+		std::vector<NativeGraphDeferredIndexPlan> plans;
+	};
+	// An early streamed coordinator derives an immutable Index plan while its
+	// callback-scoped private resolver remains valid. The metadata transaction
+	// owns this sink and validates every submitted transition before allocating a
+	// public Index page or publishing the enclosing generation.
+	using NativeGraphDeferredIndexPlanSink = std::function<void(NativeGraphDeferredIndexPlan)>;
+
+	// Planning runs while the metadata writer has fenced the current durable
+	// generation. The snapshot is intentionally read-only and callback-scoped:
+	// it lets a bulk builder inspect an existing tree without recursively taking
+	// the reader lock or receiving any metadata mutation capability.
+	struct NativeGraphDeferredIndexPlanningContext {
+		const NativeGraphPrivateSegmentSet &private_segments;
+		const NativeGraphPrivateSegmentReader &private_segment_reader;
+		const MetadataSnapshotPin &current_snapshot;
+	};
+
+	// This is the first phase of a streamed graph publication. Its source is
+	// already durable and private. Only metadata-owned coordinators may use the
+	// writer-scoped batch to reserve logical identities and prepare frames; graph
+	// transactions never receive this context or physical-slot authority.
+	struct NativeGraphEarlyPublicationPlanningContext {
+		const NativeGraphPrivateSegmentSet &private_segments;
+		const NativeGraphPrivateSegmentReader &private_segment_reader;
+		const NativeGraphPrivateSegmentWriter &private_segment_writer;
+		const NativeGraphPrivateSegmentFence &private_segment_fence;
+		const MetadataSnapshotPin &current_snapshot;
+		MetadataWriteBatch &metadata_batch;
+		const Superblock &current_superblock;
+		LogSequenceNumber checkpoint_lsn{};
+		const NativeGraphDeferredIndexPlanSink &deferred_index_plan_sink;
+	};
+
+	using NativeGraphEarlyPublicationPlanner = std::function<void(const NativeGraphEarlyPublicationPlanningContext &)>;
+
+	using NativeGraphDeferredIndexPlanner =
+			std::function<NativeGraphDeferredIndexPlan(const NativeGraphDeferredIndexPlanningContext &)>;
+	using NativeGraphDeferredIndexPlansPlanner =
+			std::function<NativeGraphDeferredIndexPlans(const NativeGraphDeferredIndexPlanningContext &)>;
 	// Runs only after the metadata writer has assigned both mapping roots and all
 	// Vector pool/Page identities. It must fill the raw pages and immutable
 	// manifest without changing any metadata-owned identity in the plan.
@@ -826,10 +1016,17 @@ namespace graph::storage {
 		friend class OfflineVectorPqRebuild;
 		friend class LargeValueStore;
 		friend class RelocatableIntegrityScanner;
+		friend class RelocatableMetadataStoreVectorTestAccess;
+		friend class RelocatableStorageBackend;
 
 	public:
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> initializeNew(std::shared_ptr<StorageIO> io,
 																					 const Superblock &initial);
+		// Completes the creation-only bootstrap convergence before the caller
+		// exposes the file to a later open. Internal tools that own their StorageIO
+		// use this instead of publishing the bootstrap-only intermediate state.
+		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore>
+		initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial);
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> open(std::shared_ptr<StorageIO> io);
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> openReadOnly(std::shared_ptr<StorageIO> io);
 
@@ -841,25 +1038,40 @@ namespace graph::storage {
 		~RelocatableMetadataStore();
 
 		[[nodiscard]] MetadataSnapshotPin openSnapshot() const;
+		// A sequential writer using another database handle may advance the durable
+		// root. Rebuild local metadata-pool ownership before this handle publishes
+		// more storage. Local snapshots would protect the old pool map, so callers
+		// must release them first.
+		void refreshAfterExternalPublication();
 		// Reserves non-reusable Node/Edge identities in this database file. The
 		// operation changes no graph roots and uses a single A/B publication, so
 		// callers amortize it with bounded ranges rather than one publication per ID.
-		[[nodiscard]] NativeGraphLogicalIdLease reserveNativeGraphLogicalIds(uint64_t nodeCount,
-																 uint64_t edgeCount,
-																 const MetadataPublishOptions &options = {});
+		[[nodiscard]] NativeGraphLogicalIdLease
+		reserveNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount,
+									 const MetadataPublishOptions &options = {});
 		// Allocates from one metadata-store-owned lease stream shared by every
 		// planner. A caller receives only the consumed durable ranges, while the
 		// bounded remainder stays private to this store for later requests.
-		[[nodiscard]] NativeGraphLogicalIdReservation acquireNativeGraphLogicalIds(
-				uint64_t nodeCount, uint64_t edgeCount, uint64_t minimumLeaseBlockSize);
+		[[nodiscard]] NativeGraphLogicalIdReservation
+		acquireNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount, uint64_t minimumLeaseBlockSize);
 		// Claims the process-local capabilities returned by one acquisition. A
 		// claimed or abandoned range is never reissued, while an arbitrary range
 		// below the durable high-water mark cannot be presented as a lease.
 		[[nodiscard]] bool claimNativeGraphLogicalIdReservation(const NativeGraphLogicalIdReservation &reservation);
 		void abandonNativeGraphLogicalIdReservation(const NativeGraphLogicalIdReservation &reservation) noexcept;
+		// The sole streamed Edge coordinator owns one metadata batch for all
+		// Entity/Property/LargeValue, Catalog, adjacency, and index roots.
+		[[nodiscard]] Superblock publishStreamedEdgeGraph(const NativeStreamedGraphFinalPublicationRequest &request,
+														  SystemCatalog &catalog, BTreePageStore &adjacencyPages,
+														  LargeValueStore *largeValueStore,
+														  LogSequenceNumber checkpointLsn,
+														  const MetadataPublishOptions &options = {});
 		// Snapshot-local cursors use this zero-I/O ownership check before retaining
 		// a generation fence. It does not interpret any untrusted persisted bytes.
 		[[nodiscard]] bool ownsSnapshot(const MetadataSnapshotPin &snapshot) const noexcept;
+		// Logical-ID leasing advances a bootstrap header to preserve the route
+		// generation invariant without changing either route branch or typed root.
+		[[nodiscard]] bool isIdentityOnlyBootstrapAdvance(const Superblock &before, const Superblock &after) const;
 		[[nodiscard]] Superblock upsertCatalog(std::span<const CatalogEntry> entries, LogSequenceNumber checkpointLsn,
 											   const MetadataPublishOptions &options = {});
 		// Publishes Page and Extent directory mutations in one metadata generation.
@@ -893,6 +1105,18 @@ namespace graph::storage {
 										  PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
 										  const EntityPropertyPagePoolPreparer &preparer,
 										  const MetadataPublishOptions &options = {});
+		// Creates the first State page and State Directory location in one COW
+		// generation. The caller makes the typed page durable inside `preparer`.
+		[[nodiscard]] std::optional<StatePagePoolMaterialization>
+		materializeStatePagePool(uint64_t pageOwnerId, uint64_t stateId, PhysicalSlotId firstSlot,
+								 PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
+								 const StatePagePoolPreparer &preparer, const MetadataPublishOptions &options = {});
+		// Replaces a State slotted page and publishes its new State Directory
+		// location through one COW root switch.
+		[[nodiscard]] Superblock replaceStatePageAndUpsertLocation(const PageLocation &expectedPage,
+																   StateLocation state, LogSequenceNumber checkpointLsn,
+																   const StatePageReplacementPreparer &preparer,
+																   const MetadataPublishOptions &options = {});
 		[[nodiscard]] Superblock upsertStateLocations(std::span<const StateLocation> locations,
 													  std::span<const uint64_t> erasedStateIds,
 													  LogSequenceNumber checkpointLsn,
@@ -1050,7 +1274,12 @@ namespace graph::storage {
 				std::span<const LargeValueId> erasedLargeValueIds = {},
 				const ExistingPoolPagesRetirementPreparer &largeValueRetirementPreparer = {},
 				const MetadataPublishOptions &options = {}, NativeGraphLogicalIdReservation logicalIdReservation = {},
-				std::optional<Generation> expectedMetadataGeneration = std::nullopt);
+				std::optional<Generation> expectedMetadataGeneration = std::nullopt,
+				const NativeGraphPrivateSegmentImagePreparer &privateSegmentImagePreparer = {},
+				const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer = {},
+				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
+				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
+				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {});
 		// Retires one fixed Entity page and removes matching Node or Edge Entity Map
 		// entries in the same publication. Prior snapshots retain the old directory
 		// roots and may continue reading the retired physical frame.
@@ -1169,6 +1398,12 @@ namespace graph::storage {
 		[[nodiscard]] Superblock retireCatalogSegment(SegmentId segmentId, Generation expectedGeneration,
 													  LogSequenceNumber checkpointLsn,
 													  const MetadataPublishOptions &options = {});
+		// Retires a bounded set through one Catalog/Retire Queue publication. This
+		// is the cleanup primitive for graph-unreachable scratch and avoids one
+		// Superblock switch per segment while retaining exact generation fences.
+		[[nodiscard]] Superblock retireCatalogSegments(std::span<const CatalogSegmentRetirementRequest> requests,
+													   LogSequenceNumber checkpointLsn,
+													   const MetadataPublishOptions &options = {});
 
 		// Releases a retired slot only after every process-local metadata snapshot
 		// has been released. The retired Catalog history remains diagnostic-only.
@@ -1207,10 +1442,10 @@ namespace graph::storage {
 		// share one Superblock publication.
 		[[nodiscard]] MetadataPagePoolReclamation
 		reclaimEmptyMetadataPagePools(LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options = {});
-		// Rewrites all current metadata roots away from one sparse pool. The
-		// operation is skipped while any process-local snapshot is active because
-		// that snapshot can still resolve the source frames. `maxLiveFrames` is a
-		// density threshold, capped by the metadata-pool frame capacity.
+		// Rewrites one sparse metadata pool. With active snapshots, only fully
+		// routed PageId targets are relocated; old snapshots retain their source
+		// frames until garbage collection. Physical-root fallback remains blocked.
+		// `maxLiveFrames` is a density threshold, capped by pool frame capacity.
 		[[nodiscard]] MetadataPagePoolEvacuation
 		evacuateSparseMetadataPagePool(LogSequenceNumber checkpointLsn,
 									   uint32_t maxLiveFrames = RSS_PAGE_POOL_DATA_FRAME_COUNT / 4U,
@@ -1290,8 +1525,17 @@ namespace graph::storage {
 												   const std::function<bool(const PageLocation &)> &visitor) const;
 		void visitEntityPropertyLocations(const MetadataSnapshotPin &snapshot,
 										  const std::function<void(const EntityPropertyLocation &)> &visitor) const;
+		[[nodiscard]] bool
+		visitEntityPropertyLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterDirectoryId,
+										  size_t maximumMetadataPages,
+										  const std::function<bool(const EntityPropertyLocation &)> &visitor,
+										  size_t *visitedMetadataPages = nullptr) const;
 		void visitStateLocations(const MetadataSnapshotPin &snapshot,
 								 const std::function<void(const StateLocation &)> &visitor) const;
+		[[nodiscard]] bool visitStateLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterStateId,
+													size_t maximumMetadataPages,
+													const std::function<bool(const StateLocation &)> &visitor,
+													size_t *visitedMetadataPages = nullptr) const;
 		void visitExtentLocations(const MetadataSnapshotPin &snapshot,
 								  const std::function<void(const ExtentLocation &)> &visitor) const;
 		void visitIndexRoots(const MetadataSnapshotPin &snapshot,
@@ -1308,6 +1552,11 @@ namespace graph::storage {
 		void
 		visitLargeValueManifestLocations(const MetadataSnapshotPin &snapshot,
 										 const std::function<void(const LargeValueManifestLocation &)> &visitor) const;
+		[[nodiscard]] bool
+		visitLargeValueManifestLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterValueId,
+											  size_t maximumMetadataPages,
+											  const std::function<bool(const LargeValueManifestLocation &)> &visitor,
+											  size_t *visitedMetadataPages = nullptr) const;
 		[[nodiscard]] EntityPropertyLocation findEntityPropertyLocation(const MetadataSnapshotPin &snapshot,
 																		const EntityPropertyKey &key) const;
 		[[nodiscard]] std::optional<EntityPropertyLocation>
@@ -1339,16 +1588,31 @@ namespace graph::storage {
 		[[nodiscard]] RelocatableTailTruncationResult truncateReleasedTail();
 		[[nodiscard]] RelocatableCompactionObservation observeCompactionState() const;
 		[[nodiscard]] MetadataPagePoolStats pagePoolStats() const;
+		// Performs the one-time Page Directory format migration as a dedicated
+		// transaction. A capacity preflight completes before candidate allocation,
+		// keeping ordinary metadata COW failure ordering unchanged.
+		[[nodiscard]] Superblock migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
+																 const MetadataPublishOptions &options = {});
 		[[nodiscard]] uint64_t activeSnapshotCount() const;
 		[[nodiscard]] bool usesDataStorage(const std::shared_ptr<StorageIO> &io) const { return io_ == io; }
 
 	private:
+		// The public backend creation path uses this stronger one-shot protocol.
+		// Standalone migration remains available for format fixtures and recovery
+		// tests, while new files converge ownership and routes before exposure.
+		[[nodiscard]] Superblock convergeInitialBootstrap(LogSequenceNumber checkpointLsn,
+														  const MetadataPublishOptions &options = {});
+		// Completes the typed metadata route branch before the single A/B switch,
+		// then performs pool ownership publication and snapshot reclamation.
+		void prepareBootstrapRoutes(MetadataWriteBatch &batch);
+		void publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
+						  const MetadataPublishOptions &options);
 		[[nodiscard]] std::optional<CatalogSlotReservations> reserveFirstFreeAndUpsertCatalogImpl(
 				std::span<const CatalogSlotReservationRequest> requests, std::span<const PageLocation> pages,
 				std::span<const ExtentLocation> extents, std::span<const EntityPageLocation> entityPageNodes,
 				std::span<const EntityPageLocation> entityPageEdges, std::span<const VectorManifestLocation> manifests,
-				PhysicalSlotId firstSlot, PhysicalSlotId lastSlot,
-				LogSequenceNumber checkpointLsn, const CatalogSlotReservationPreparer *preparer,
+				PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
+				const CatalogSlotReservationPreparer *preparer,
 				const EntityPagePoolReservationPreparer *entityPagePreparer, std::span<PageLocation> mutableEntityPages,
 				const MetadataPublishOptions &options);
 		[[nodiscard]] Superblock upsertLocationsImpl(std::span<const PageLocation> pages,
@@ -1422,11 +1686,13 @@ namespace graph::storage {
 		// LargeValue pages are deliberately excluded: their Manifest Directory and
 		// persistent content-index entry must be erased through the native graph
 		// LargeValue publication boundary in the same generation.
-		[[nodiscard]] Superblock retirePagesInExistingPools(
-				Generation expectedMetadataGeneration, std::span<const IndexRootLocation> erasedRoots,
-				std::span<const PageRetirement> retirements, LogSequenceNumber checkpointLsn,
-				const ExistingPoolPagesRetirementPreparer &preparer, const MetadataPublishOptions &options = {},
-				std::span<const uint64_t> erasedVectorIds = {});
+		[[nodiscard]] Superblock retirePagesInExistingPools(Generation expectedMetadataGeneration,
+															std::span<const IndexRootLocation> erasedRoots,
+															std::span<const PageRetirement> retirements,
+															LogSequenceNumber checkpointLsn,
+															const ExistingPoolPagesRetirementPreparer &preparer,
+															const MetadataPublishOptions &options = {},
+															std::span<const uint64_t> erasedVectorIds = {});
 		[[nodiscard]] Superblock retireVectorCodebookExtents(Generation expectedMetadataGeneration,
 															 std::span<const ExtentRetirement> retirements,
 															 LogSequenceNumber checkpointLsn,

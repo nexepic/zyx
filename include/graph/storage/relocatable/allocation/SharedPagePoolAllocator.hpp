@@ -38,6 +38,10 @@ namespace graph::storage {
 	enum class SharedPagePoolOpenMode : uint8_t {
 		SPPOM_RECONCILE = 1,
 		SPPOM_READ_ONLY = 2,
+		// Attach without a database-wide scan. Allocation and reclamation reconcile
+		// the selected pool before it can reuse a frame, while reads authenticate
+		// every routed frame on demand.
+		SPPOM_DEFER_RECONCILIATION = 3,
 	};
 
 	struct SharedPagePoolAllocationRequest {
@@ -127,6 +131,17 @@ namespace graph::storage {
 	struct SharedPagePoolPreparedRetirement {
 		PageLocation location;
 		uint64_t expected_owner_id = 0;
+		PageOwnerKind expected_owner_kind = PageOwnerKind::POK_NONE;
+		LogSequenceNumber expected_owner_lsn{};
+	};
+
+	// A metadata coordinator uses this bounded post-write proof before it makes
+	// new Page Directory routes durable. The typed writer has already selected
+	// the payload; this only authenticates the durable pool-control and owner
+	// headers for the exact frames it was assigned.
+	struct SharedPagePoolPreparedPublication {
+		PageLocation location;
+		uint64_t expected_owner_id = 0U;
 		PageOwnerKind expected_owner_kind = PageOwnerKind::POK_NONE;
 		LogSequenceNumber expected_owner_lsn{};
 	};
@@ -249,6 +264,19 @@ namespace graph::storage {
 		void prepareNewPoolPages(const CatalogEntry &pool, std::span<const SharedPagePoolPreparedAppend> pages,
 								 std::span<PageLocation> locations, LogSequenceNumber checkpointLsn,
 								 size_t preparedPrefixCount = 0U) const;
+		// A metadata coordinator that already owns the writer fence uses this form
+		// to initialize candidate pool frames without opening a nested snapshot.
+		// It has identical validation and write ordering to prepareNewPoolPages().
+		static void prepareNewPoolPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+												  std::span<const SharedPagePoolPreparedAppend> pages,
+												  std::span<PageLocation> locations, LogSequenceNumber checkpointLsn,
+												  size_t preparedPrefixCount = 0U);
+		// Appends to a current pool while the enclosing metadata coordinator already
+		// owns the writer fence. This mirrors prepareAppendPages() without opening
+		// a nested snapshot or publishing an intermediate directory root.
+		static void prepareAppendPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+													 std::span<const SharedPagePoolPreparedAppend> pages,
+													 std::span<PageLocation> locations, LogSequenceNumber checkpointLsn);
 		// Writes a group of replacement and appended frames while a single metadata
 		// writer owns the current Page Directory root. All supplied frames are
 		// durable before the caller switches that root, preserving snapshot COW.
@@ -258,6 +286,21 @@ namespace graph::storage {
 								  std::span<PageLocation> replacementLocations, std::span<PageLocation> appendLocations,
 								  LogSequenceNumber checkpointLsn,
 								  std::span<const SharedPagePoolPreparedRetirement> retirements = {}) const;
+		// Authenticates retirement sources before a compound writer prepares any
+		// replacement data. This keeps an invalid typed owner from leaving an
+		// unreachable candidate suffix merely to discover a stale plan.
+		void validateRetirementSources(const CatalogEntry &pool,
+									   std::span<const SharedPagePoolPreparedRetirement> retirements) const;
+		// Writer-safe form for metadata coordinators that already hold the writer
+		// guard and therefore must not acquire a nested metadata snapshot.
+		static void validateRetirementSourcesUnderWrite(const StorageIO &io, uint64_t dataRegionOffset,
+														const CatalogEntry &pool,
+														std::span<const SharedPagePoolPreparedRetirement> retirements);
+		// Writer-safe post-materialization validation. It reads only the newly
+		// assigned frames, never the global Page Directory or unrelated pool data.
+		static void
+		validatePreparedPublicationsUnderWrite(const StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+											   std::span<const SharedPagePoolPreparedPublication> publications);
 		// Writes COW destinations in one current target pool. Sources may belong
 		// to other compatible pools, which lets a full source remain readable by
 		// old snapshots without imposing a per-pool write-size ceiling.

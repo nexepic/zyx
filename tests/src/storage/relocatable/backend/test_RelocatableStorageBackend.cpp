@@ -7,13 +7,57 @@
  **/
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
+#include <atomic>
+#include <cerrno>
 #include <iterator>
 #include <limits>
 
 #include "graph/storage/relocatable/vector/VectorAdjacency.hpp"
 #include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
+#include "graph/storage/relocatable/index/NativeBulkRun.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace relocatable_storage_backend_test;
+
+TEST_F(RelocatableStorageBackendTest, WritableOpenReclaimsInterruptedSingleFileBulkScratchBeforeReadersExist) {
+	materializeNativeDatabase();
+	SegmentId scratchSegment;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		PhysicalSegmentAllocator physical(io, *metadata);
+		NativeBulkRunStore store(physical, *metadata,
+									 {PhysicalSlotId(40U), PhysicalSlotId(40U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES});
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const LogSequenceNumber checkpoint(snapshot.superblock().checkpoint_lsn.value() + 1U);
+		snapshot.release();
+		const NativeBulkRunFragment fragment{{{{std::byte{0x10U}}, 1U}}};
+		scratchSegment = store.write(71U, fragment, checkpoint).segment_id;
+		metadata.reset();
+		io->sync();
+		io.reset();
+		data->close();
+	}
+
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	ASSERT_NO_THROW(backend.open());
+	ASSERT_NO_THROW(backend.close());
+
+	auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findCatalog(snapshot, scratchSegment).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
+}
 
 TEST_F(RelocatableStorageBackendTest, ReadsCanonicalLogicalRecordsOnlyFromNativeEntityPages) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
@@ -283,7 +327,7 @@ TEST_F(RelocatableStorageBackendTest, DatabaseFactoryExposesTheBoundedRelocatabl
 	EXPECT_TRUE(internalDatabase.getStorageBackend()->capabilities().supports_query_execution);
 	EXPECT_FALSE(internalDatabase.getStorageBackend()->capabilities().supports_read_write_transactions);
 	// The Database facade must dispatch lifecycle operations through the relocatable
-	// backend rather than assuming a legacy FileStorage handle exists.
+	// backend rather than assuming a retired physical storage handle exists.
 	EXPECT_NO_THROW(internalDatabase.flush());
 
 	auto engine = internalDatabase.getQueryEngine();
@@ -295,7 +339,7 @@ TEST_F(RelocatableStorageBackendTest, DatabaseFactoryExposesTheBoundedRelocatabl
 	EXPECT_EQ(logicalNode.labels, (std::vector<std::string>{"Person"}));
 	EXPECT_EQ(logicalNode.properties.at("alpha"), PropertyValue(42));
 	ASSERT_NE(internalDatabase.getThreadPool(), nullptr);
-	// A logical backend owns no legacy FileStorage or vector-index subsystem.
+	// A logical backend owns no retired physical storage or vector-index subsystem.
 	// Resizing after query-engine initialization must preserve that separation.
 	EXPECT_NO_THROW(internalDatabase.setThreadPoolSize(1U));
 	{
@@ -495,6 +539,42 @@ TEST_F(RelocatableStorageBackendTest, NativeInitializationRejectsUnsafeModesAndP
 	EXPECT_EQ(std::string(std::istreambuf_iterator<char>(preserved), {}), "preserve");
 }
 
+TEST_F(RelocatableStorageBackendTest, InitialBootstrapPublicationFailureRemovesPartialFileAndAllowsRetry) {
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	std::atomic<bool> failedConvergencePublication{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failConvergenceSuperblock(
+				[&failedConvergencePublication](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if ((offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U)) &&
+						byteCount == RSS_PAGE_SIZE && !failedConvergencePublication.load(std::memory_order_relaxed)) {
+						const Superblock candidate = SuperblockCodec::decode(
+								std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+						if (candidate.generation == Generation(2U) && candidate.usesPageDirectoryBootstrap()) {
+							failedConvergencePublication.store(true, std::memory_order_relaxed);
+#ifdef _WIN32
+							SetLastError(ERROR_WRITE_FAULT);
+#else
+							errno = EIO;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(std::move(options))), std::system_error);
+	}
+	EXPECT_TRUE(failedConvergencePublication.load(std::memory_order_relaxed));
+	EXPECT_FALSE(std::filesystem::exists(data_path_));
+
+	RelocatableStorageBackendOptions retryOptions = backendOptions();
+	retryOptions.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	auto retry = RelocatableStorageBackend::initializeNew(std::move(retryOptions));
+	ASSERT_NE(retry, nullptr);
+	ASSERT_NO_THROW(retry->open());
+	EXPECT_NO_THROW(retry->close());
+}
+
 TEST_F(RelocatableStorageBackendTest, RejectsReleasedSnapshotsUnsupportedOpenModesAndInvalidFiles) {
 	materializeNativeDatabase();
 	std::ifstream beforeInput(data_path_, std::ios::binary);
@@ -532,6 +612,53 @@ TEST_F(RelocatableStorageBackendTest, RejectsReleasedSnapshotsUnsupportedOpenMod
 	emptyPath.data_path.clear();
 	RelocatableStorageBackend emptyPathBackend(std::move(emptyPath));
 	EXPECT_THROW(emptyPathBackend.open(), std::runtime_error);
+}
+
+TEST_F(RelocatableStorageBackendTest, LifecycleBoundariesRejectOperationsOutsideAnOpenBackend) {
+	materializeNativeDatabase();
+	RelocatableStorageBackend backend(backendOptions());
+
+	// Every public storage family must fail before it can dereference an unopened
+	// resource graph; close must restore that same boundary.
+	EXPECT_THROW(backend.flush(), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.openSnapshot()), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.beginLogicalGraphTransaction(true)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"unopened"}, {}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.listLogicalIndexes(1U)), std::logic_error);
+	EXPECT_THROW(backend.pauseMaintenance(), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.verifyIntegrity()), std::logic_error);
+
+	backend.open();
+	const RelocatableStorageBackend &constBackend = backend;
+	EXPECT_THROW(static_cast<void>(constBackend.maintenanceMetrics()), std::logic_error);
+	EXPECT_THROW(static_cast<void>(constBackend.maintenanceFailure()), std::logic_error);
+	backend.close();
+
+	EXPECT_THROW(backend.flush(), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.openSnapshot()), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.beginLogicalGraphTransaction(true)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"closed"}, {}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.listLogicalIndexes(1U)), std::logic_error);
+	EXPECT_THROW(backend.pauseMaintenance(), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.verifyIntegrity()), std::logic_error);
+}
+
+TEST_F(RelocatableStorageBackendTest, ReadOnlyFlushIsANoOpAndPreservesTheCompleteDatabaseFile) {
+	materializeNativeDatabase();
+	std::ifstream before(data_path_, std::ios::binary);
+	ASSERT_TRUE(before.is_open());
+	const std::vector<char> expected{std::istreambuf_iterator<char>(before), {}};
+
+	RelocatableStorageBackend backend(backendOptions());
+	backend.open();
+	ASSERT_TRUE(backend.isReadOnly());
+	EXPECT_NO_THROW(backend.flush());
+	backend.close();
+
+	std::ifstream after(data_path_, std::ios::binary);
+	ASSERT_TRUE(after.is_open());
+	const std::vector<char> actual{std::istreambuf_iterator<char>(after), {}};
+	EXPECT_EQ(actual, expected);
 }
 
 TEST_F(RelocatableStorageBackendTest, RejectsSnapshotsOwnedByAnotherNativeDatabase) {
@@ -677,6 +804,50 @@ TEST_F(RelocatableStorageBackendTest, ReadOnlyBackendRejectsEveryNonemptyLogical
 	LogicalGraphMutationBatch write;
 	write.node_creates = {{{"forbidden"}, {}}};
 	EXPECT_THROW(static_cast<void>(backend.executeLogicalGraphMutationBatch(write)), std::logic_error);
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, DirectNativeReadSurfaceRejectsInvalidBoundsAndUnknownLogicalIds) {
+	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+	RelocatableStorageBackend backend(backendOptions());
+	backend.open();
+	RelocatableReadSnapshot snapshot = backend.openSnapshot();
+
+	EXPECT_FALSE(backend.containsLogicalNode(snapshot, 0U));
+	EXPECT_FALSE(backend.containsLogicalNode(snapshot, fixture.mentions_edge_id + 1000U));
+	EXPECT_THROW(static_cast<void>(backend.readNode(snapshot, 0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.readEdge(snapshot, 0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.visitNodesUntil(snapshot, 0U,
+				[](const LogicalGraphNode &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.visitEdgesUntil(snapshot, 0U,
+				[](const LogicalGraphEdge &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.visitAdjacentEdgesUntil(
+				snapshot, fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, 0U,
+				[](const LogicalGraphEdge &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.scanAdjacentEdges(
+				snapshot, fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 0U)),
+				FormatException);
+
+	// Exact lookup is an optimization only. Unsupported predicates must request
+	// the caller's scan fallback, while a missing canonical label is a complete
+	// empty answer with no physical lookup ambiguity.
+	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {}, {{"alpha", PropertyValue(int64_t(42))}}, 1U, 4U),
+				std::nullopt);
+	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {"Person", "Other"},
+				{{"alpha", PropertyValue(int64_t(42))}}, 1U, 4U), std::nullopt);
+	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {"Person"}, {{"", PropertyValue(int64_t(42))}}, 1U, 4U),
+				std::nullopt);
+	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {"Person"}, {{"alpha", PropertyValue()}}, 1U, 4U),
+				std::nullopt);
+	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {"NoSuchLabel"},
+				{{"alpha", PropertyValue(int64_t(42))}}, 1U, 4U),
+				(std::optional<std::vector<LogicalGraphNode>>(std::vector<LogicalGraphNode>{})));
+	EXPECT_THROW(static_cast<void>(backend.findNodesByExactProperties(
+				snapshot, {"Person"}, {{"alpha", PropertyValue(int64_t(42))}}, 0U, 4U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.findNodesByExactProperties(
+				snapshot, {"Person"}, {{"alpha", PropertyValue(int64_t(42))}}, 1U, 0U)), FormatException);
+
+	snapshot.release();
 	backend.close();
 }
 
@@ -1147,6 +1318,42 @@ TEST_F(RelocatableStorageBackendTest, LogicalTransactionRollbackPublishesNothing
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, ActiveLogicalTransactionDestructorAbandonsItsProvisionalIdsWithoutPublishing) {
+	static_cast<void>(materializeNativeGraphFixture());
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	uint64_t provisionalId = 0U;
+	Superblock afterLease;
+	{
+		std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+		LogicalGraphMutationBatch batch;
+		batch.node_creates = {{{"DestructorAbandoned"}, {}}};
+		const LogicalGraphMutationBatchResult staged = transaction->stageMutationBatch(std::move(batch));
+		ASSERT_EQ(staged.created_node_ids.size(), 1U);
+		provisionalId = staged.created_node_ids.front();
+
+		RelocatableReadSnapshot leased = backend.openSnapshot();
+		afterLease = leased.superblock();
+		leased.release();
+	}
+
+	RelocatableReadSnapshot afterDestructor = backend.openSnapshot();
+	EXPECT_EQ(afterDestructor.superblock(), afterLease);
+	afterDestructor.release();
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	EXPECT_THROW(static_cast<void>(snapshot->readNode(provisionalId)), FormatException);
+	snapshot.reset();
+
+	const std::vector<uint64_t> committed = backend.createLogicalNodes({{{"AfterDestructor"}, {}}});
+	ASSERT_EQ(committed.size(), 1U);
+	EXPECT_GT(committed.front(), provisionalId);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, LogicalTransactionCancelsCreatedEntitiesWithoutReusingProvisionalIds) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
 	RelocatableStorageBackendOptions options = backendOptions();
@@ -1280,6 +1487,30 @@ TEST_F(RelocatableStorageBackendTest, ReadOnlyLogicalTransactionRejectsStagingAn
 	EXPECT_TRUE(result.created_node_ids.empty());
 	EXPECT_TRUE(result.created_edge_ids.empty());
 	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, WritableEmptyLogicalTransactionCommitPreservesThePublishedGeneration) {
+	static_cast<void>(materializeNativeGraphFixture());
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	RelocatableReadSnapshot before = backend.openSnapshot();
+	const Superblock publishedBeforeCommit = before.superblock();
+	before.release();
+
+	std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+	const LogicalGraphMutationBatchResult committed = transaction->commit();
+	EXPECT_TRUE(committed.created_node_ids.empty());
+	EXPECT_TRUE(committed.created_edge_ids.empty());
+	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);
+
+	RelocatableReadSnapshot after = backend.openSnapshot();
+	EXPECT_EQ(after.superblock(), publishedBeforeCommit);
+	after.release();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
 }
@@ -1737,4 +1968,61 @@ TEST_F(RelocatableStorageBackendTest, ReadOnlyOpenRecoversDurableInterruptedPubl
 	backend.close();
 	EXPECT_EQ(std::filesystem::file_size(data_path_), bytesBeforeOpen);
 	EXPECT_FALSE(std::filesystem::exists(data_path_.string() + ".wal"));
+}
+
+TEST_F(RelocatableStorageBackendTest,
+       FinalGraphPublicationSyncFailureRequiresReopenBeforeAnotherWriteAndRecoversTheCompleteGeneration) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	std::atomic<uint32_t> inactiveSuperblockWrites{0U};
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeInactiveSuperblock(
+				[&inactiveSuperblockWrites](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+						inactiveSuperblockWrites.fetch_add(1U, std::memory_order_relaxed);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence(
+				[&inactiveSuperblockWrites, &syncCalls](file_handle_t fd) {
+					syncCalls.fetch_add(1U, std::memory_order_relaxed);
+					// The first inactive Superblock reserves durable logical IDs. Fail
+					// only after the Graph batch writes its own root publication.
+					if (inactiveSuperblockWrites.load(std::memory_order_relaxed) >= 2U) {
+#ifdef _WIN32
+						SetLastError(ERROR_WRITE_FAULT);
+#else
+						errno = EIO;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+		EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"PublishedBeforeFenceFailure"}, {}}})),
+				 std::runtime_error);
+	}
+	EXPECT_GE(inactiveSuperblockWrites.load(std::memory_order_relaxed), 2U);
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"MustReopenFirst"}, {}}})), std::logic_error);
+	backend.close();
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	RelocatableReadSnapshot recovered = reopened.openSnapshot();
+	std::vector<std::string> labels;
+	reopened.visitNodes(recovered, 8U, [&labels](const LogicalGraphNode &node) {
+		labels.insert(labels.end(), node.labels.begin(), node.labels.end());
+	});
+	EXPECT_EQ(labels, (std::vector<std::string>{"PublishedBeforeFenceFailure"}));
+	recovered.release();
+	EXPECT_EQ(reopened.createLogicalNodes({{{"WritableAfterReopen"}, {}}}).size(), 1U);
+	reopened.close();
 }

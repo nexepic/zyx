@@ -506,6 +506,26 @@ TEST(TypedDistinctSetTest, DirectFallbackInsertsPreserveStructuredValueSemantics
 	EXPECT_EQ(set.size(), 3U);
 }
 
+TEST(TypedDistinctSetTest, HandlesBytesInvalidScalarTypesAndEmptyPartitions) {
+	TypedDistinctSet set;
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0x12}, std::byte{0x34}});
+
+	EXPECT_TRUE(set.insert(bytes));
+	EXPECT_FALSE(set.insert(bytes));
+	EXPECT_FALSE(set.insertScalar(scalarFallback(graph::PropertyType::BYTES, bytes)));
+	EXPECT_TRUE(set.insertScalar(scalarValue(graph::PropertyType::BYTES)));
+	EXPECT_FALSE(set.insertScalar(scalarValue(static_cast<graph::PropertyType>(255U))));
+
+	TypedDistinctSet empty;
+	set.mergeFrom(empty);
+	EXPECT_EQ(set.size(), 2U);
+
+	TypedDistinctSet strings;
+	EXPECT_TRUE(strings.insertString("native"));
+	set.mergeFrom(strings);
+	EXPECT_EQ(set.size(), 3U);
+}
+
 TEST(TypedScalarValueTest, ConvertsScalarValuesForOrderingAndFallbackValues) {
 	const auto stringValue = scalarString("abc");
 	EXPECT_EQ(std::get<std::string>(propertyValueFromScalar(stringValue).getVariant()), "abc");
@@ -529,6 +549,55 @@ TEST(TypedScalarValueTest, ConvertsScalarValuesForOrderingAndFallbackValues) {
 	EXPECT_FALSE(isNullScalar(compositeFallback));
 }
 
+TEST(TypedScalarValueTest, ConvertsEveryScalarTypeWithoutLosingFallbackValues) {
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0xab}});
+	const PropertyValue::MapType map{{"key", PropertyValue(int64_t{7})}};
+	const PropertyValue mapValue(map);
+	const PropertyValue listValue(std::vector<PropertyValue>{PropertyValue("entry")});
+
+	EXPECT_EQ(propertyValueFromScalar(scalarValue(graph::PropertyType::NULL_TYPE)), PropertyValue());
+	EXPECT_EQ(propertyValueFromScalar(scalarBoolean(true)), PropertyValue(true));
+	EXPECT_EQ(propertyValueFromScalar(scalarInteger(graph::PropertyType::INTEGER, 12)), PropertyValue(int64_t{12}));
+	EXPECT_EQ(propertyValueFromScalar(scalarDouble(1.5)), PropertyValue(1.5));
+	EXPECT_EQ(propertyValueFromScalar(scalarInteger(graph::PropertyType::DATE, 42)), PropertyValue(TemporalDate{42}));
+	EXPECT_EQ(propertyValueFromScalar(scalarInteger(graph::PropertyType::DATETIME, 84)),
+			  PropertyValue(TemporalDateTime{84}));
+	EXPECT_EQ(propertyValueFromScalar(scalarDuration(TemporalDuration{1, 2, 3})),
+			  PropertyValue(TemporalDuration{1, 2, 3}));
+	EXPECT_EQ(propertyValueFromScalar(scalarFallback(graph::PropertyType::BYTES, bytes)), bytes);
+	EXPECT_EQ(propertyValueFromScalar(scalarValue(graph::PropertyType::BYTES)), PropertyValue());
+	EXPECT_EQ(propertyValueFromScalar(scalarFallback(graph::PropertyType::LIST, listValue)), listValue);
+	EXPECT_EQ(propertyValueFromScalar(scalarFallback(graph::PropertyType::MAP, mapValue)), mapValue);
+	EXPECT_EQ(propertyValueFromScalar(scalarFallback(graph::PropertyType::COMPOSITE, mapValue)), mapValue);
+	EXPECT_EQ(propertyValueFromScalar(scalarValue(static_cast<graph::PropertyType>(255U))), PropertyValue());
+
+	EXPECT_EQ(orderKeyFromScalar(scalarValue(graph::PropertyType::NULL_TYPE)).compare(TypedOrderKey::fromNull()), 0);
+	EXPECT_EQ(orderKeyFromScalar(scalarBoolean(true)).compare(TypedOrderKey::from(PropertyValue(true))), 0);
+	EXPECT_EQ(orderKeyFromScalar(scalarInteger(graph::PropertyType::INTEGER, 12)).compare(
+				  TypedOrderKey::from(PropertyValue(int64_t{12}))),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarDouble(1.5)).compare(TypedOrderKey::from(PropertyValue(1.5))), 0);
+	EXPECT_EQ(orderKeyFromScalar(scalarInteger(graph::PropertyType::DATE, 42)).compare(
+				  TypedOrderKey::from(PropertyValue(TemporalDate{42}))),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarInteger(graph::PropertyType::DATETIME, 84)).compare(
+				  TypedOrderKey::from(PropertyValue(TemporalDateTime{84}))),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarDuration(TemporalDuration{1, 2, 3})).compare(
+				  TypedOrderKey::from(PropertyValue(TemporalDuration{1, 2, 3}))),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarFallback(graph::PropertyType::BYTES, bytes)).compare(TypedOrderKey::from(bytes)),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarValue(graph::PropertyType::BYTES)).compare(TypedOrderKey::fromNull()), 0);
+	EXPECT_EQ(orderKeyFromScalar(scalarFallback(graph::PropertyType::LIST, listValue)).compare(
+				  TypedOrderKey::from(listValue)),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarFallback(graph::PropertyType::MAP, mapValue)).compare(TypedOrderKey::from(mapValue)),
+			  0);
+	EXPECT_EQ(orderKeyFromScalar(scalarValue(static_cast<graph::PropertyType>(255U))).compare(TypedOrderKey::fromNull()),
+			  0);
+}
+
 TEST(TypedGroupCounterTest, ClearAndIgnoreNonPositiveCounts) {
 	TypedGroupCounter counter;
 	counter.add(PropertyValue("ignored"), 0);
@@ -548,6 +617,33 @@ TEST(TypedGroupCounterTest, ClearAndIgnoreNonPositiveCounts) {
 	counter.clear();
 	EXPECT_EQ(counter.size(), 0U);
 	EXPECT_TRUE(counter.toVector().empty());
+}
+
+TEST(TypedGroupCounterTest, CountsBytesAndEveryScalarFallbackRoute) {
+	TypedGroupCounter counter;
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0x7f}});
+	const PropertyValue listValue(std::vector<PropertyValue>{PropertyValue(int64_t{1})});
+	const PropertyValue::MapType map{{"key", PropertyValue(int64_t{2})}};
+	const PropertyValue mapValue(map);
+
+	counter.add(PropertyValue(true));
+	counter.add(PropertyValue("text"));
+	counter.add(PropertyValue(TemporalDateTime{55}));
+	counter.add(bytes);
+	counter.addScalar(scalarFallback(graph::PropertyType::BYTES, bytes));
+	counter.addScalar(scalarValue(graph::PropertyType::BYTES));
+	counter.addScalar(scalarFallback(graph::PropertyType::MAP, mapValue));
+	counter.addScalar(scalarFallback(graph::PropertyType::COMPOSITE, mapValue));
+	counter.addScalar(scalarFallback(graph::PropertyType::LIST, listValue));
+	counter.addScalar(scalarValue(static_cast<graph::PropertyType>(255U)));
+
+	const auto groups = collectGroupCounts(counter);
+	EXPECT_EQ(counter.size(), 7U);
+	EXPECT_EQ(groups.at("true"), 1);
+	EXPECT_EQ(groups.at("string:text"), 1);
+	EXPECT_EQ(groups.at("datetime:55"), 1);
+	EXPECT_EQ(groups.at("null"), 2);
+	EXPECT_EQ(groups.at("fallback"), 5);
 }
 
 TEST(TypedOrderKeyTest, FallbackListValuesUsePropertyValueOrdering) {

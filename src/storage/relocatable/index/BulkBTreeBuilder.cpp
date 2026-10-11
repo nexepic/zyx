@@ -88,8 +88,75 @@ namespace graph::storage {
 
 		[[nodiscard]] bool validLeafValue(const BTreePageEntry &entry, BTreeLeafValueLayout leafValueLayout) {
 			return leafValueLayout == BTreeLeafValueLayout::BLVL_U64 ? entry.value_or_child != 0U
-																									 : entry.value_or_child == 0U;
+																			 : entry.value_or_child == 0U;
 		}
+
+		[[nodiscard]] size_t encodedVarintBytes(uint64_t value) {
+			size_t result = 1U;
+			while (value >= 0x80U) {
+				value >>= 7U;
+				++result;
+			}
+			return result;
+		}
+
+		[[nodiscard]] size_t commonPrefix(std::span<const std::byte> left, std::span<const std::byte> right) {
+			size_t count = 0U;
+			while (count < left.size() && count < right.size() && left[count] == right[count]) {
+				++count;
+			}
+			return count;
+		}
+
+		// The source is ordered, so leaf fit can be tracked from the packed codec's
+		// prefix-compression format without rebuilding the complete page per entry.
+		class PackedPageSizeTracker final {
+		public:
+			PackedPageSizeTracker(BTreeNodeKind kind, BTreeLeafValueLayout leafValueLayout, size_t capacity) :
+				kind_(kind), leaf_value_layout_(leafValueLayout), capacity_(capacity) {}
+
+			[[nodiscard]] bool canAppend(const BTreePageEntry &entry) const {
+				const bool includesValue =
+						kind_ == BTreeNodeKind::BPN_INTERNAL || leaf_value_layout_ == BTreeLeafValueLayout::BLVL_U64;
+				const bool restart = (entry_count_ % RSS_BTREE_PACKED_RESTART_INTERVAL) == 0U;
+				const size_t shared = restart ? 0U : commonPrefix(previous_key_, entry.key);
+				const uint64_t streamIncrement = static_cast<uint64_t>(encodedVarintBytes(shared)) +
+												 static_cast<uint64_t>(encodedVarintBytes(entry.key.size() - shared)) +
+												 static_cast<uint64_t>(entry.key.size() - shared) +
+												 (includesValue ? static_cast<uint64_t>(encodedVarintBytes(entry.value_or_child)) : 0U);
+				const uint64_t nextEntryCount = static_cast<uint64_t>(entry_count_) + 1U;
+				const uint64_t restartCount =
+						(nextEntryCount + RSS_BTREE_PACKED_RESTART_INTERVAL - 1U) / RSS_BTREE_PACKED_RESTART_INTERVAL;
+				const uint64_t total = static_cast<uint64_t>(RSS_BTREE_PACKED_HEADER_BYTES) +
+								   restartCount * sizeof(uint32_t) + stream_bytes_ + streamIncrement;
+				return total <= capacity_;
+			}
+
+			void append(const BTreePageEntry &entry) {
+				if (!canAppend(entry)) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "relocatable bulk B+Tree size tracker appended an entry that does not fit");
+				}
+				const bool includesValue =
+						kind_ == BTreeNodeKind::BPN_INTERNAL || leaf_value_layout_ == BTreeLeafValueLayout::BLVL_U64;
+				const bool restart = (entry_count_ % RSS_BTREE_PACKED_RESTART_INTERVAL) == 0U;
+				const size_t shared = restart ? 0U : commonPrefix(previous_key_, entry.key);
+				stream_bytes_ += static_cast<uint64_t>(encodedVarintBytes(shared)) +
+								 static_cast<uint64_t>(encodedVarintBytes(entry.key.size() - shared)) +
+								 static_cast<uint64_t>(entry.key.size() - shared) +
+								 (includesValue ? static_cast<uint64_t>(encodedVarintBytes(entry.value_or_child)) : 0U);
+				previous_key_ = entry.key;
+				++entry_count_;
+			}
+
+		private:
+			BTreeNodeKind kind_;
+			BTreeLeafValueLayout leaf_value_layout_;
+			size_t capacity_;
+			uint64_t stream_bytes_ = 0U;
+			size_t entry_count_ = 0U;
+			std::vector<std::byte> previous_key_;
+		};
 
 		[[nodiscard]] bool tryInsert(BTreePage &page, const BTreePageEntry &entry) {
 			try {
@@ -125,11 +192,13 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] InputSummary planLeaves(uint64_t indexId, const OrderedBTreeEntrySource &source,
-													const BulkBTreeBuildOptions &options, std::vector<NodePlan> &nodes,
-													std::vector<size_t> &leafOrdinals) {
+																					 const BulkBTreeBuildOptions &options, std::vector<NodePlan> &nodes,
+																					 std::vector<size_t> &leafOrdinals) {
 			OrderedBTreeEntryCursor cursor = openCursor(source);
 			InputSummary summary;
-			BTreePage page = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0, options.leaf_value_layout);
+			const BTreePage measuring = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0, options.leaf_value_layout);
+			const size_t payloadCapacity = measuring.slottedPage().stats().contiguous_free_bytes;
+			PackedPageSizeTracker page(BTreeNodeKind::BPN_LEAF, options.leaf_value_layout, payloadCapacity);
 			std::vector<std::byte> firstKey;
 			std::vector<std::byte> previousKey;
 			size_t entriesInPage = 0;
@@ -148,7 +217,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable bulk B+Tree source exceeded its configured entry bound");
 				}
-				if (!tryInsert(page, entry)) {
+				if (!page.canAppend(entry)) {
 					if (entriesInPage == 0U) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable bulk B+Tree source entry cannot fit in an empty leaf page");
@@ -158,10 +227,10 @@ namespace graph::storage {
 					leaf.leaf_entry_count = entriesInPage;
 					appendNode(nodes, std::move(leaf), options.maximum_pages);
 					leafOrdinals.push_back(nodes.size() - 1U);
-					page = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0, options.leaf_value_layout);
+					page = PackedPageSizeTracker(BTreeNodeKind::BPN_LEAF, options.leaf_value_layout, payloadCapacity);
 					firstKey = entry.key;
 					entriesInPage = 0;
-					if (!tryInsert(page, entry)) { // ZYX_COV_EXCL_LINE: a fresh leaf has the same header and capacity.
+					if (!page.canAppend(entry)) { // ZYX_COV_EXCL_LINE: a fresh leaf has the same capacity.
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable bulk B+Tree source entry cannot fit in a fresh leaf page");
 					}
@@ -170,6 +239,7 @@ namespace graph::storage {
 					firstKey = entry.key;
 				}
 				previousKey = entry.key;
+				page.append(entry);
 				++entriesInPage;
 				++summary.entry_count;
 				updateSemanticCrc(summary.semantic_crc, entry);
@@ -212,7 +282,11 @@ namespace graph::storage {
 						parent.first_key = childFirstKey;
 						continue;
 					}
-					if (!tryInsert(page, {childFirstKey, PageId(1).value()})) {
+					// Page IDs are allocated from the logical metadata sequence and may
+					// require the full uint64 varint width. Planning with a one-byte
+					// placeholder would under-estimate a packed internal page once the
+					// real IDs are materialized.
+					if (!tryInsert(page, {childFirstKey, std::numeric_limits<uint64_t>::max()})) {
 						appendNode(nodes, std::move(parent), options.maximum_pages);
 						parentOrdinals.push_back(nodes.size() - 1U);
 						parent = {};
@@ -268,17 +342,20 @@ namespace graph::storage {
 
 	} // namespace
 
-	BTreeInitialTreeMutationPlan BulkBTreeBuilder::planNativeTree(
+	BTreeInitialTreeMutationPlan planNativeTreeImpl(
 			BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
-			uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options) {
+			uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options,
+			bool requireExistingRoot) {
 		validateOptions(options, indexId, LogSequenceNumber(1U), source);
 		if (!snapshot.isValid() || !pages.usesMetadataStore(metadata)) {
 			fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native bulk B+Tree planning requires one live metadata domain");
 		}
-		if (metadata.findIndexRootOptional(snapshot, indexId).has_value()) {
+		const bool hasRoot = metadata.findIndexRootOptional(snapshot, indexId).has_value();
+		if (hasRoot != requireExistingRoot) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native bulk B+Tree planning cannot replace an existing Index root");
+					 requireExistingRoot ? "relocatable native bulk B+Tree replacement requires an existing Index root"
+										 : "relocatable native bulk B+Tree planning cannot replace an existing Index root");
 		}
 
 		std::vector<NodePlan> plannedNodes;
@@ -293,6 +370,7 @@ namespace graph::storage {
 		const size_t poolCount = (pageCount - 1U) / RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
 		BTreeInitialTreeMutationPlan result;
 		result.index_id = indexId;
+		result.entry_count = summary.entry_count;
 		result.new_pool_mutations.reserve(poolCount);
 		for (size_t poolOrdinal = 0U; poolOrdinal < poolCount; ++poolOrdinal) {
 			const size_t firstPage = poolOrdinal * RSS_PAGE_POOL_DATA_FRAME_COUNT;
@@ -367,13 +445,14 @@ namespace graph::storage {
 								 "relocatable native bulk B+Tree internal page has no leftmost child");
 					}
 					header.leftmost_child = assignedPageIds[node.children.front()];
-					BTreePage page = BTreePage::create(
-							pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header);
+					std::vector<BTreePageEntry> entries;
+					entries.reserve(node.children.size() - 1U);
 					for (size_t child = 1U; child < node.children.size(); ++child) {
 						const size_t childOrdinal = node.children[child];
-						page.insert({(*nodes)[childOrdinal].first_key, assignedPageIds[childOrdinal].value()});
+						entries.push_back({(*nodes)[childOrdinal].first_key, assignedPageIds[childOrdinal].value()});
 					}
-					return page;
+					return BTreePage::createWithEntries(
+							pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header, entries);
 				}
 				if (nextLeafOrdinal != ordinal) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -386,8 +465,8 @@ namespace graph::storage {
 				header.left_sibling = ordinal == 0U ? PageId{} : assignedPageIds[ordinal - 1U];
 				header.right_sibling = ordinal + 1U == leafCount ? PageId{} : assignedPageIds[ordinal + 1U];
 				header.leaf_value_layout = leafValueLayout;
-				BTreePage page = BTreePage::create(
-						pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header);
+				std::vector<BTreePageEntry> entries;
+				entries.reserve(node.leaf_entry_count);
 				for (size_t entryOrdinal = 0U; entryOrdinal < node.leaf_entry_count; ++entryOrdinal) {
 					const std::optional<BTreePageEntry> next = secondCursor();
 					if (!next.has_value() || !validLeafValue(*next, leafValueLayout) ||
@@ -396,7 +475,7 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE,
 								 "relocatable native bulk B+Tree second pass differs from its planned leaves");
 					}
-					page.insert(*next);
+					entries.push_back(*next);
 					secondPreviousKey = next->key;
 					++secondEntryCount;
 					updateSemanticCrc(secondSemanticCrc, *next);
@@ -408,7 +487,8 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable native bulk B+Tree second pass differs from its first pass");
 				}
-				return page;
+				return BTreePage::createWithEntries(
+						pageOwner(indexId, pageId, pool.pool.generation, checkpointLsn), header, entries);
 			};
 			for (size_t poolOrdinal = 0U; poolOrdinal < batches.size(); ++poolOrdinal) {
 				IndexTreeMutationPoolBatch &batch = batches[poolOrdinal];
@@ -421,6 +501,18 @@ namespace graph::storage {
 			}
 		};
 		return result;
+	}
+
+	BTreeInitialTreeMutationPlan BulkBTreeBuilder::planNativeTree(
+			BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
+			uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options) {
+		return planNativeTreeImpl(pages, metadata, snapshot, indexId, source, options, false);
+	}
+
+	BTreeInitialTreeMutationPlan BulkBTreeBuilder::planNativeReplacementTree(
+			BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
+			uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options) {
+		return planNativeTreeImpl(pages, metadata, snapshot, indexId, source, options, true);
 	}
 
 	BulkBTreeBuildResult BulkBTreeBuilder::build(BTreePageStore &pages, RelocatableMetadataStore &metadata,

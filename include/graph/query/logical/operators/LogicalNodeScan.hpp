@@ -8,7 +8,7 @@
 #pragma once
 
 #include "graph/query/logical/LogicalOperator.hpp"
-#include "graph/query/execution/ScanConfigs.hpp"
+#include "graph/query/logical/LogicalScanHint.hpp"
 #include "graph/core/PropertyTypes.hpp"
 
 #include <optional>
@@ -51,8 +51,8 @@ struct ParameterPropertyPredicate {
  * @brief Leaf operator that scans nodes matching a variable, optional labels,
  *        and optional property predicates.
  *
- * Optimizer rules may enrich this operator with additional property predicates
- * (predicate pushdown) before physical planning.
+ * Logical-plan transformations may enrich this operator with additional
+ * property predicates before the storage-neutral runtime evaluates it.
  */
 class LogicalNodeScan : public LogicalOperator {
 public:
@@ -97,7 +97,7 @@ public:
         cloned->rangePredicates_ = rangePredicates_;
         cloned->compositeEquality_ = compositeEquality_;
         cloned->parameterPropertyPredicates_ = parameterPropertyPredicates_;
-        cloned->preferredScanType_ = preferredScanType_;
+        cloned->preferred_scan_hint_ = preferred_scan_hint_;
         return cloned;
     }
 
@@ -123,7 +123,7 @@ public:
     }
 
     // -------------------------------------------------------------------------
-    // Mutators (for optimizer use)
+    // Mutators for logical-plan transformations.
     // -------------------------------------------------------------------------
 
     void setPropertyPredicates(std::vector<std::pair<std::string, graph::PropertyValue>> predicates) {
@@ -149,14 +149,14 @@ public:
         compositeEquality_ = std::move(pred);
     }
 
-    /** @brief Sets the preferred scan strategy chosen by EnhancedIndexSelectionRule. */
-    void setPreferredScanType(graph::query::execution::ScanType t) {
-        preferredScanType_ = t;
+    /** @brief Sets an optional storage-neutral scan preference. */
+    void setPreferredScanHint(LogicalScanHint hint) {
+        preferred_scan_hint_ = hint;
     }
 
-    /** @brief Returns the scan-strategy hint set by the optimizer (default: FULL_SCAN). */
-    [[nodiscard]] graph::query::execution::ScanType getPreferredScanType() const {
-        return preferredScanType_;
+    /** @brief Returns the optional scan preference (default: full scan). */
+    [[nodiscard]] LogicalScanHint getPreferredScanHint() const {
+        return preferred_scan_hint_;
     }
 
 private:
@@ -166,8 +166,7 @@ private:
     std::vector<ParameterPropertyPredicate> parameterPropertyPredicates_;
     std::vector<RangePredicate> rangePredicates_;
     std::optional<CompositeEqualityPredicate> compositeEquality_;
-    graph::query::execution::ScanType preferredScanType_ =
-        graph::query::execution::ScanType::FULL_SCAN;
+    LogicalScanHint preferred_scan_hint_ = LogicalScanHint::LSH_FULL;
 };
 
 } // namespace graph::query::logical

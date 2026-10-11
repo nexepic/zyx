@@ -18,6 +18,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 
@@ -52,6 +54,19 @@ namespace {
 		result.page_owner_id = 99;
 		result.page_owner_kind = PageOwnerKind::POK_PROPERTY;
 		return result;
+	}
+
+	void overwritePageOwner(const std::shared_ptr<StorageIO> &io, RelocatableMetadataStore &metadata, PageId pageId,
+							const PageOwnerHeader &owner) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const PageLocation location = metadata.findPageLocation(snapshot, pageId);
+		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+																									 pool.physical_slot) +
+									static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		snapshot.release();
+		const auto bytes = PageOwnerHeaderCodec::encode(owner);
+		io->writeAt(offset, bytes.data(), bytes.size());
 	}
 
 } // namespace
@@ -518,6 +533,45 @@ TEST_F(RelocatableSlottedPagePoolTest, SelectsRecordPlacementFromTheCallerSnapsh
 	beforeAppend.release();
 }
 
+TEST_F(RelocatableSlottedPagePoolTest, RebuildsRecordPlacementCacheAfterMetadataOnlyPublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	SlottedPagePool pool(io, *metadata);
+	ASSERT_TRUE(
+			pool.allocateEmptyPage(request(60U, 160U), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+	const std::array pools = {SegmentId(60U)};
+	const SlottedPagePlacement expected{SegmentId(60U), PageId(160U),
+										 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES};
+	EXPECT_EQ(pool.findBestFitPageForRecord(pools, PageOwnerKind::POK_PROPERTY, 1U),
+			  std::optional<SlottedPagePlacement>(expected));
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const PageLocation location = metadata->findPageLocation(snapshot, PageId(160U));
+	snapshot.release();
+	static_cast<void>(metadata->upsertLocations(std::span(&location, 1U), {}, LogSequenceNumber(3U)));
+	EXPECT_EQ(pool.findBestFitPageForRecord(pools, PageOwnerKind::POK_PROPERTY, 1U),
+			  std::optional<SlottedPagePlacement>(expected));
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, NeverSelectsAVectorRawPoolForSlottedRecordPlacement) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	SharedPagePoolAllocator shared(io, *metadata);
+	SharedPagePoolAllocationRequest rawPage;
+	rawPage.segment_id = SegmentId(70U);
+	rawPage.pool_kind = SegmentKind::SGK_VECTOR_RAW_POOL;
+	rawPage.pool_owner_id = 17U;
+	rawPage.generation = Generation(1U);
+	rawPage.page_id = PageId(170U);
+	rawPage.page_owner_id = 17U;
+	rawPage.page_owner_kind = PageOwnerKind::POK_VECTOR_RAW;
+	ASSERT_TRUE(shared.allocateNewPoolPage(rawPage, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+
+	SlottedPagePool pool(io, *metadata);
+	const std::array pools = {SegmentId(70U)};
+	EXPECT_FALSE(pool.findBestFitPageForRecord(pools, PageOwnerKind::POK_PROPERTY, 1U).has_value());
+}
+
 TEST_F(RelocatableSlottedPagePoolTest, SelectsTightestRecordPlacementAcrossPoolsRegardlessOfCallerOrder) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	SlottedPagePool pool(io, *metadata);
@@ -712,6 +766,34 @@ TEST_F(RelocatableSlottedPagePoolTest, RejectsEvacuationOfAPageSupersededAfterIt
 			  std::vector<std::byte>(value.begin(), value.end()));
 }
 
+TEST_F(RelocatableSlottedPagePoolTest, RejectsReplacementAndEvacuationAfterTheCurrentOwnerIsRetired) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	SlottedPagePool pool(io, *metadata);
+	ASSERT_TRUE(
+			pool.allocateEmptyPage(request(64U, 164U), PhysicalSlotId(44U), PhysicalSlotId(44U), LogSequenceNumber(2U))
+					.has_value());
+	ASSERT_TRUE(
+			pool.allocateEmptyPage(request(65U, 165U), PhysicalSlotId(45U), PhysicalSlotId(45U), LogSequenceNumber(3U))
+					.has_value());
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const SlottedPage stalePage = pool.read(snapshot, PageId(164U));
+	snapshot.release();
+	PageOwnerHeader retiredOwner{.page_id = PageId(164U),
+								 .owner_id = 99U,
+								 .kind = PageOwnerKind::POK_PROPERTY,
+								 .flags = RSS_PAGE_OWNER_FLAG_RETIRED,
+								 .payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+								 .generation = Generation(1U),
+								 .committed_lsn = LogSequenceNumber(2U)};
+	overwritePageOwner(io, *metadata, PageId(164U), retiredOwner);
+
+	expectFormatError([&] { static_cast<void>(pool.replacePage(stalePage, LogSequenceNumber(4U))); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(pool.evacuatePage(stalePage, SegmentId(65U), LogSequenceNumber(4U))); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableSlottedPagePoolTest, RetiresAndReleasesAnEmptyTypedPool) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	SlottedPagePool pool(io, *metadata);
@@ -842,7 +924,7 @@ TEST_F(RelocatableSlottedPagePoolTest, RejectsAAllocatorDirectoryEntryThatDisagr
 				  FormatError::FERR_INVALID_STATE);
 }
 
-TEST_F(RelocatableSlottedPagePoolTest, RejectsReplacementWhileTheCurrentOwnerIsRetiredAfterInterruptedPublication) {
+TEST_F(RelocatableSlottedPagePoolTest, KeepsTheSourceOwnerLiveAfterInterruptedPublicationUntilReplacementCommits) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	SlottedPagePool pool(io, *metadata);
 	ASSERT_TRUE(pool.allocateEmptyPage(request(57, 107), PhysicalSlotId(44), PhysicalSlotId(44), LogSequenceNumber(2))
@@ -856,10 +938,85 @@ TEST_F(RelocatableSlottedPagePoolTest, RejectsReplacementWhileTheCurrentOwnerIsR
 	MetadataPublishOptions options;
 	options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
 	EXPECT_THROW(static_cast<void>(pool.replacePage(page, LogSequenceNumber(4), options)), BootstrapPublishInterrupted);
-	expectFormatError([&] { static_cast<void>(pool.evacuatePage(page, SegmentId(58), LogSequenceNumber(5))); },
-				  FormatError::FERR_INVALID_STATE);
-	expectFormatError([&] { static_cast<void>(pool.replacePage(page, LogSequenceNumber(5))); },
+	const SharedPagePoolAllocation evacuated = pool.evacuatePage(page, SegmentId(58), LogSequenceNumber(5));
+	EXPECT_EQ(evacuated.pool.segment_id, SegmentId(58));
+	// The failed publication must not pre-retire the source. Once the later COW
+	// move commits, the original page image becomes stale and is rejected.
+	expectFormatError([&] { static_cast<void>(pool.replacePage(page, LogSequenceNumber(6))); },
 				  FormatError::FERR_INVALID_STATE);
 	snapshot.release();
 	pool.reclaimRetiredFrames(SegmentId(57));
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, ReconcilesInterruptedTypedReplacementBeforeRetryingItsPublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	SlottedPagePool pool(io, *metadata);
+	ASSERT_TRUE(pool.allocateEmptyPage(request(57U, 107U), PhysicalSlotId(44U), PhysicalSlotId(44U),
+											  LogSequenceNumber(2U))
+					.has_value());
+
+	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
+	SlottedPage replacement = pool.read(oldSnapshot, PageId(107U));
+	const std::array value = {std::byte{0xA1U}, std::byte{0xB2U}};
+	const SlottedSlotReference reference = replacement.insert(value);
+	MetadataPublishOptions options;
+	options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
+	EXPECT_THROW(static_cast<void>(pool.replacePage(replacement, LogSequenceNumber(4U), options)),
+				 BootstrapPublishInterrupted);
+
+	// Reconciliation must discard only the unreachable candidate frame. The old
+	// Page Directory route remains authoritative until a later publication succeeds.
+	pool.reconcilePool(SegmentId(57U));
+	MetadataSnapshotPin recoveredSnapshot = metadata->openSnapshot();
+	EXPECT_EQ(pool.read(recoveredSnapshot, PageId(107U)).stats().live_slot_count, 0U);
+	EXPECT_EQ(pool.read(oldSnapshot, PageId(107U)).stats().live_slot_count, 0U);
+	recoveredSnapshot.release();
+
+	static_cast<void>(pool.replacePage(replacement, LogSequenceNumber(5U)));
+	MetadataSnapshotPin currentSnapshot = metadata->openSnapshot();
+	EXPECT_EQ(pool.read(currentSnapshot, PageId(107U)).read(reference),
+			  std::vector<std::byte>(value.begin(), value.end()));
+	EXPECT_EQ(pool.read(oldSnapshot, PageId(107U)).stats().live_slot_count, 0U);
+	currentSnapshot.release();
+	oldSnapshot.release();
+
+	metadata.reset();
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPool(io, *reopenedMetadata);
+	MetadataSnapshotPin reopenedSnapshot = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(reopenedPool.read(reopenedSnapshot, PageId(107U)).read(reference),
+			  std::vector<std::byte>(value.begin(), value.end()));
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, RejectsOrExactlyRoundTripsEverySingleBitPageMutation) {
+	PageOwnerHeader owner;
+	owner.page_id = PageId(901U);
+	owner.owner_id = 902U;
+	owner.kind = PageOwnerKind::POK_PROPERTY;
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	owner.generation = Generation(3U);
+	owner.committed_lsn = LogSequenceNumber(4U);
+	SlottedPage page = SlottedPage::create(owner);
+	const std::array first{std::byte{0x11U}, std::byte{0x22U}, std::byte{0x33U}};
+	const std::array second{std::byte{0xA1U}, std::byte{0xB2U}};
+	static_cast<void>(page.insert(first));
+	static_cast<void>(page.insert(second));
+	const std::vector<std::byte> canonical = page.serialize();
+	ASSERT_EQ(canonical.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+
+	for (size_t byteOffset = 0U; byteOffset < canonical.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = canonical;
+			mutation[byteOffset] ^= std::byte{static_cast<unsigned char>(1U << bit)};
+			try {
+				const SlottedPage decoded = SlottedPage::open(mutation);
+				EXPECT_EQ(decoded.serialize(), mutation)
+						<< "checksum-valid mutation was normalized at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// A mutation may be rejected when it breaks the authenticated page
+				// header, slot directory, or record framing.
+			}
+		}
+	}
 }

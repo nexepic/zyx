@@ -9,9 +9,13 @@
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
+#include "graph/storage/relocatable/property/LargeValueStore.hpp"
+
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <map>
 #include <set>
 #include <string>
@@ -21,6 +25,11 @@ namespace graph::storage {
 	namespace {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
+
+		[[nodiscard]] uint64_t elapsedNanoseconds(const std::chrono::steady_clock::time_point start) {
+			return static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count());
+		}
 
 		[[nodiscard]] bool isNodePage(EntityPageRecordKind kind) { return kind == EntityPageRecordKind::EPRK_NODE; }
 
@@ -69,6 +78,70 @@ namespace graph::storage {
 				return;
 			}
 			fail(FormatError::FERR_INVALID_ENUM, "native Entity page batch has an unsupported auxiliary owner kind");
+		}
+
+		struct PropertyLargeValueDerivedStatePlan {
+			NativeGraphDerivedStateMutation state;
+			NativeGraphDerivedStatePreparer preparer;
+		};
+
+		[[nodiscard]] PropertyLargeValueDerivedStatePlan planPropertyLargeValueDerivedState(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyRootMutationPlan> propertyPlans,
+				const PropertyCollectionRootStore &propertyRoots,
+				const PropertyCollectionRootStoreOptions &propertyOptions, LogSequenceNumber checkpointLsn) {
+			PropertyLargeValueDerivedStatePlan result;
+			std::vector<NativeGraphLargeValueMutation> newValues;
+			for (const EntityPropertyRootMutationPlan &plan: propertyPlans) {
+				newValues.insert(newValues.end(), plan.large_values.begin(), plan.large_values.end());
+				result.state.reused_large_values.insert(result.state.reused_large_values.end(),
+																plan.reused_large_values.begin(), plan.reused_large_values.end());
+			}
+			std::ranges::sort(result.state.reused_large_values, {}, &LargeValueRef::value_id);
+			result.state.reused_large_values.erase(
+					std::unique(result.state.reused_large_values.begin(), result.state.reused_large_values.end(),
+								[](const LargeValueRef &left, const LargeValueRef &right) { return left == right; }),
+					result.state.reused_large_values.end());
+			for (size_t ordinal = 1U; ordinal < result.state.reused_large_values.size(); ++ordinal) {
+				if (!result.state.reused_large_values[ordinal - 1U].value_id.isValid() ||
+					result.state.reused_large_values[ordinal - 1U].value_id ==
+							result.state.reused_large_values[ordinal].value_id) {
+					fail(FormatError::FERR_INVALID_HEADER,
+							 "native Entity page batch reuses one LargeValue identity with conflicting references");
+				}
+			}
+			if (!result.state.reused_large_values.empty() &&
+				!result.state.reused_large_values.back().value_id.isValid()) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native Entity page batch reuses an invalid LargeValue identity");
+			}
+			if (newValues.empty()) {
+				if (!result.state.empty()) {
+					result.preparer = [](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+						if (!batches.empty()) {
+							fail(FormatError::FERR_INVALID_STATE,
+								 "reused LargeValue publication unexpectedly prepared Index pages");
+						}
+					};
+				}
+				return result;
+			}
+			LargeValueStore *largeValues = propertyRoots.largeValueStore();
+			if (largeValues == nullptr) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native Entity page batch LargeValue plans require a local persistent content index");
+			}
+			LargeValueContentIndexPublicationPlan indexPlan = largeValues->planNativeGraphContentIndexMutation(
+					snapshot, newValues, propertyOptions.first_slot, propertyOptions.last_slot);
+			result.state.index_tree_mutations.push_back(std::move(indexPlan.mutation));
+			result.preparer = [preparer = std::move(indexPlan.preparer), checkpointLsn](
+									  std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+				if (batches.size() != 1U || !preparer) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native Entity page batch changed its LargeValue content-index materialization plan");
+				}
+				preparer(batches.front(), checkpointLsn);
+			};
+			return result;
 		}
 
 	} // namespace
@@ -258,11 +331,16 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable native Edge scan requires a nonzero record bound and visitor");
 		}
+		debug::ScopedPerfTimer timer("native_graph.read.edge_entity_map_scan");
+		const bool tracing = debug::PerfTrace::isEnabled();
+		uint64_t entityRecordNanoseconds = 0U;
+		uint64_t visitorNanoseconds = 0U;
+		uint64_t records = 0U;
 		uint64_t previousId = 0U;
 		size_t visited = 0U;
 		std::optional<LoadedPage> currentPage;
 		PageId currentPageId;
-		return metadata_.visitEdgePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
+		const bool exhausted = metadata_.visitEdgePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
 			if (visited == maximumRecords) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native Edge scan exceeded its caller-supplied record bound");
@@ -272,17 +350,34 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native Edge directory scan contains an invalid or unordered Entity Map entry");
 			}
+			const auto recordStart = tracing ? std::chrono::steady_clock::now()
+															 : std::chrono::steady_clock::time_point{};
 			LoadedPage &loaded =
 					loadScanPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_EDGE, currentPage, currentPageId);
 			const std::optional<EdgeEntityRecord> record = loaded.page.findEdge(entry.slot_id, entry.slot_generation);
+			if (tracing) {
+				entityRecordNanoseconds += elapsedNanoseconds(recordStart);
+			}
 			if (!record.has_value()) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native Edge scan Entity Map entry does not resolve to a live page slot");
 			}
 			++visited;
 			previousId = entry.entity_id;
-			return visitor(entry.entity_id, *record) && visited < maximumRecords;
+			const auto visitorStart = tracing ? std::chrono::steady_clock::now()
+															  : std::chrono::steady_clock::time_point{};
+			const bool keepGoing = visitor(entry.entity_id, *record);
+			if (tracing) {
+				visitorNanoseconds += elapsedNanoseconds(visitorStart);
+				++records;
+			}
+			return keepGoing && visited < maximumRecords;
 		});
+		if (tracing) {
+			debug::PerfTrace::addDurationBatch("native_graph.read.edge_entity_record", entityRecordNanoseconds, records);
+			debug::PerfTrace::addDurationBatch("native_graph.read.edge_entity_visitor", visitorNanoseconds, records);
+		}
+		return exhausted;
 	}
 
 	bool EntityPageStore::visitNodesAfter(const MetadataSnapshotPin &snapshot, uint64_t afterNodeId,
@@ -407,9 +502,11 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native Entity page batch requires one metadata domain and valid Property-pool allocation options");
 		}
-		return applyBatchTransactionInternal(snapshot, mutations, appends, newPools, propertyPlans, &propertyRoots,
-											 &propertyOptions, &auxiliaryPages, nullptr, nullptr, nullptr, nullptr,
-											 checkpointLsn, options, {});
+		PropertyLargeValueDerivedStatePlan derivedState = planPropertyLargeValueDerivedState(
+				snapshot, propertyPlans, propertyRoots, propertyOptions, checkpointLsn);
+		return applyNativeGraphBatchTransaction(snapshot, mutations, appends, newPools, propertyPlans, propertyRoots,
+												propertyOptions, auxiliaryPages, derivedState.state, derivedState.preparer,
+												checkpointLsn, options);
 	}
 
 	EntityPageBatchResult EntityPageStore::applyNativeGraphBatchTransaction(
@@ -420,8 +517,12 @@ namespace graph::storage {
 			const EntityPageAuxiliaryMutationBatch &auxiliaryPages, const NativeGraphDerivedStateMutation &derivedState,
 			const NativeGraphDerivedStatePreparer &derivedStatePreparer, LogSequenceNumber checkpointLsn,
 			const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation,
-			const NativeGraphVectorBootstrapPreparer &vectorBootstrapPreparer,
-			const NativeGraphVectorDeltaPreparer &vectorDeltaPreparer) {
+		const NativeGraphVectorBootstrapPreparer &vectorBootstrapPreparer,
+		const NativeGraphVectorDeltaPreparer &vectorDeltaPreparer,
+		const NativeGraphPrivateSegmentImagePreparer &privateSegmentImagePreparer,
+		const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer,
+		const NativeGraphDeferredIndexPlanner &deferredIndexPlanner,
+		const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner) {
 		if (!propertyRoots.usesMetadataStore(metadata_) || !propertyOptions.first_slot.isValid() ||
 			propertyOptions.first_slot > propertyOptions.last_slot || propertyOptions.page_owner_id == 0U ||
 			(derivedState.empty() ? static_cast<bool>(derivedStatePreparer) : !derivedStatePreparer) ||
@@ -431,15 +532,11 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native Entity page batch requires valid Property options and a matching derived-state preparer");
 		}
-		if (!logicalIdReservation.empty() &&
-			!metadata_.claimNativeGraphLogicalIdReservation(logicalIdReservation)) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native Entity page batch does not own its logical-ID lease capability");
-		}
 		return applyBatchTransactionInternal(snapshot, mutations, appends, newPools, propertyPlans, &propertyRoots,
-											 &propertyOptions, &auxiliaryPages, &derivedState, &derivedStatePreparer,
-											 &vectorBootstrapPreparer, &vectorDeltaPreparer, checkpointLsn, options,
-											 logicalIdReservation);
+										 &propertyOptions, &auxiliaryPages, &derivedState, &derivedStatePreparer,
+										 &vectorBootstrapPreparer, &vectorDeltaPreparer, checkpointLsn, options,
+									 logicalIdReservation, &privateSegmentImagePreparer, &privateSegmentPreparer,
+									 &deferredIndexPlanner, &earlyPublicationPlanner);
 	}
 
 	EntityPageBatchResult EntityPageStore::applyBatchTransactionInternal(
@@ -448,10 +545,15 @@ namespace graph::storage {
 			std::span<const EntityPropertyRootMutationPlan> propertyPlans,
 			const PropertyCollectionRootStore *propertyRoots, const PropertyCollectionRootStoreOptions *propertyOptions,
 			const EntityPageAuxiliaryMutationBatch *auxiliaryPages, const NativeGraphDerivedStateMutation *derivedState,
-			const NativeGraphDerivedStatePreparer *derivedStatePreparer,
-			const NativeGraphVectorBootstrapPreparer *vectorBootstrapPreparer,
-			const NativeGraphVectorDeltaPreparer *vectorDeltaPreparer, LogSequenceNumber checkpointLsn,
-			const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation) {
+		const NativeGraphDerivedStatePreparer *derivedStatePreparer,
+		const NativeGraphVectorBootstrapPreparer *vectorBootstrapPreparer,
+		const NativeGraphVectorDeltaPreparer *vectorDeltaPreparer, LogSequenceNumber checkpointLsn,
+		const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation,
+		const NativeGraphPrivateSegmentImagePreparer *privateSegmentImagePreparer,
+		const NativeGraphPrivateSegmentPreparer *privateSegmentPreparer,
+		const NativeGraphDeferredIndexPlanner *deferredIndexPlanner,
+		const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner) {
+		debug::ScopedPerfTimer timer("native_graph.entity_batch");
 		const bool hasDerivedState = derivedState != nullptr && !derivedState->empty();
 		const bool hasVectorBootstrap = hasDerivedState && !derivedState->vector_bootstraps.empty();
 		const bool hasVectorDelta = hasDerivedState && !derivedState->vector_deltas.empty();
@@ -618,6 +720,21 @@ namespace graph::storage {
 						 "native Entity page batch received duplicate or invalid LargeValue IDs");
 				}
 				largeValueMutations.push_back(largeValue);
+			}
+		}
+		// A Property-page COW source remains allocated until a later reconciliation
+		// pass. Reclaim frames that no active snapshot can resolve before deciding
+		// whether this batch needs another Property pool.
+		std::map<uint64_t, size_t> propertyReplacementDemand;
+		for (const NativeGraphPropertyPageReplacementRequest &request: propertyReplacementRequests) {
+			if (!request.retire_page) {
+				++propertyReplacementDemand[request.expected_pool.segment_id.value()];
+			}
+		}
+		for (const auto &[segmentId, requiredFrames]: propertyReplacementDemand) {
+			const CatalogEntry pool = metadata_.findCatalog(snapshot, SegmentId(segmentId));
+			if (requiredFrames > allocator_.availableFrameCount(pool)) {
+				allocator_.reclaimRetiredFrames(pool.segment_id);
 			}
 		}
 		std::ranges::sort(pendingNewPropertyPlanOrdinals, {},
@@ -1204,6 +1321,10 @@ namespace graph::storage {
 		const NativeGraphDerivedStatePreparer noDerivedStatePreparer{};
 		const NativeGraphVectorBootstrapPreparer noVectorBootstrapPreparer{};
 		const NativeGraphVectorDeltaPreparer noVectorDeltaPreparer{};
+		const NativeGraphPrivateSegmentImagePreparer noPrivateSegmentImagePreparer{};
+		const NativeGraphPrivateSegmentPreparer noPrivateSegmentPreparer{};
+		const NativeGraphEarlyPublicationPlanner noEarlyPublicationPlanner{};
+		const NativeGraphDeferredIndexPlanner noDeferredIndexPlanner{};
 		const NativeGraphDerivedStateMutation &activeDerivedState = hasDerivedState ? *derivedState : noDerivedState;
 		const NativeGraphDerivedStatePreparer &activeDerivedStatePreparer =
 				hasDerivedState ? *derivedStatePreparer : noDerivedStatePreparer;
@@ -1211,6 +1332,14 @@ namespace graph::storage {
 				hasVectorBootstrap ? *vectorBootstrapPreparer : noVectorBootstrapPreparer;
 		const NativeGraphVectorDeltaPreparer &activeVectorDeltaPreparer =
 				hasVectorDelta ? *vectorDeltaPreparer : noVectorDeltaPreparer;
+		const NativeGraphDeferredIndexPlanner &activeDeferredIndexPlanner =
+				deferredIndexPlanner != nullptr ? *deferredIndexPlanner : noDeferredIndexPlanner;
+		const NativeGraphPrivateSegmentImagePreparer &activePrivateSegmentImagePreparer =
+				privateSegmentImagePreparer != nullptr ? *privateSegmentImagePreparer : noPrivateSegmentImagePreparer;
+		const NativeGraphPrivateSegmentPreparer &activePrivateSegmentPreparer =
+				privateSegmentPreparer != nullptr ? *privateSegmentPreparer : noPrivateSegmentPreparer;
+		const NativeGraphEarlyPublicationPlanner &activeEarlyPublicationPlanner =
+				earlyPublicationPlanner != nullptr ? *earlyPublicationPlanner : noEarlyPublicationPlanner;
 		Superblock superblock;
 		try {
 			superblock = metadata_.mutateNativeGraphPagesWithLargeValues(
@@ -1643,7 +1772,9 @@ namespace graph::storage {
 														 materializedPropertyPageBatches.end());
 					},
 					activeDerivedStatePreparer, activeVectorBootstrapPreparer, activeVectorDeltaPreparer, {}, {}, {},
-					options, logicalIdReservation);
+					options, logicalIdReservation, snapshot.superblock().generation,
+					activePrivateSegmentImagePreparer, activePrivateSegmentPreparer, activeDeferredIndexPlanner,
+					activeEarlyPublicationPlanner);
 		} catch (...) {
 			// A callback may already have written a candidate frame when another pool
 			// fails or A/B Superblock publication is interrupted. Once metadata releases

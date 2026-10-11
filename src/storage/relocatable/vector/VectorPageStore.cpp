@@ -21,6 +21,12 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
+		void checkCancellation(const CancellationCheckpoint *cancellation) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+		}
+
 		void validateRawMaterializationInput(uint64_t indexId, std::span<const RawVectorMaterializationRecord> records,
 											 const VectorRawMaterializationOptions &options,
 											 LogSequenceNumber checkpointLsn) {
@@ -36,12 +42,10 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER, "relocatable raw Vector materialization requires bounded "
 													   "records, pages, placement, and checkpoint LSN");
 			}
-			// ZYX_COV_EXCL_START: a test record over 4 GiB cannot be materialized within the bounded test environment.
-			if (records.front().bytes.size() > std::numeric_limits<uint32_t>::max()) {
+			if (records.front().bytes.size() > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
 				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable raw Vector materialization record stride exceeds the persisted width");
+					 "relocatable raw Vector materialization record stride exceeds one Vector page");
 			}
-			// ZYX_COV_EXCL_STOP
 			const uint32_t recordBytes = static_cast<uint32_t>(records.front().bytes.size());
 			if (records.front().bytes.size() < sizeof(uint64_t) ||
 				VectorPageStore::rawSlotCapacity(recordBytes) == 0U) {
@@ -86,12 +90,10 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER, "relocatable PQ Vector materialization code width is invalid or "
 													   "exceeds the persisted record stride");
 			}
-			// ZYX_COV_EXCL_START: a single test code vector over the 32-bit durable width exceeds test memory limits.
-			if (records.front().codes.size() > std::numeric_limits<uint32_t>::max() - sizeof(uint64_t)) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable PQ Vector materialization code width is "
-															"invalid or exceeds the persisted record stride");
+			if (records.front().codes.size() > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - sizeof(uint64_t)) {
+				fail(FormatError::FERR_INVALID_HEADER, "relocatable PQ Vector materialization code width exceeds one "
+																									 "Vector page");
 			}
-			// ZYX_COV_EXCL_STOP
 			const uint32_t recordBytes = static_cast<uint32_t>(sizeof(uint64_t) + records.front().codes.size());
 			// rawSlotCapacity either returns a nonzero capacity or fails closed, so
 			// callers cannot proceed with an unrepresentable page layout.
@@ -110,16 +112,6 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<std::byte> pqRecord(const PqVectorMaterializationRecord &record) {
-			// ZYX_COV_EXCL_START: this private encoder runs only after validatePqMaterializationInput validates every
-			// record.
-			if (record.vector_id == 0U || record.codes.empty() ||
-				record.codes.size() > std::numeric_limits<size_t>::max() - sizeof(uint64_t)) {
-				fail(record.codes.size() > std::numeric_limits<size_t>::max() - sizeof(uint64_t)
-							 ? FormatError::FERR_ARITHMETIC_OVERFLOW
-							 : FormatError::FERR_INVALID_HEADER,
-					 "relocatable PQ Vector record has an invalid identity or code length");
-			}
-			// ZYX_COV_EXCL_STOP
 			std::vector<std::byte> bytes(sizeof(uint64_t) + record.codes.size());
 			LittleEndianCodec::writeU64(bytes, 0, record.vector_id);
 			for (size_t index = 0; index < record.codes.size(); ++index) {
@@ -289,10 +281,12 @@ namespace graph::storage {
 
 	VectorPqMaterializationResult
 	VectorPageStore::preparePqNewPoolPages(uint64_t indexId, std::span<const PqVectorMaterializationRecord> records,
-										   const VectorPqMaterializationOptions &options,
-										   std::span<VectorPqMaterializationPoolBatch> batches,
-										   LogSequenceNumber checkpointLsn) const {
+									   const VectorPqMaterializationOptions &options,
+									   std::span<VectorPqMaterializationPoolBatch> batches,
+									   LogSequenceNumber checkpointLsn,
+									   const CancellationCheckpoint *cancellation) const {
 		validatePqMaterializationInput(indexId, records, options, checkpointLsn);
+		checkCancellation(cancellation);
 		const uint32_t recordBytes = static_cast<uint32_t>(sizeof(uint64_t) + records.front().codes.size());
 		const uint16_t slotsPerPage = rawSlotCapacity(recordBytes);
 		const size_t pageCount = (records.size() - 1U) / slotsPerPage + 1U;
@@ -313,6 +307,7 @@ namespace graph::storage {
 		std::set<uint64_t> pageIds;
 		size_t globalPageOrdinal = 0U;
 		for (size_t poolOrdinal = 0U; poolOrdinal < batches.size(); ++poolOrdinal) {
+			checkCancellation(cancellation);
 			VectorPqMaterializationPoolBatch &batch = batches[poolOrdinal];
 			const size_t expectedPageCount =
 					std::min(pageCount - globalPageOrdinal, static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT));
@@ -332,6 +327,7 @@ namespace graph::storage {
 			std::vector<SharedPagePoolPreparedAppend> prepared;
 			prepared.reserve(expectedPageCount);
 			for (size_t pageOrdinal = 0U; pageOrdinal < expectedPageCount; ++pageOrdinal, ++globalPageOrdinal) {
+				checkCancellation(cancellation);
 				const PageId pageId = batch.page_ids[pageOrdinal];
 				const PageLocation expectedLocation = batch.locations[pageOrdinal];
 				const uint8_t invalidLocation =
@@ -367,6 +363,7 @@ namespace graph::storage {
 											checkpointLsn};
 				VectorPage page = VectorPage::create(owner, header);
 				for (size_t recordOrdinal = 0U; recordOrdinal < recordCount; ++recordOrdinal) {
+					checkCancellation(cancellation);
 					const PqVectorMaterializationRecord &record = records[firstRecord + recordOrdinal];
 					static_cast<void>(page.insert(pqRecord(record)));
 					result.mappings.push_back({record.vector_id, header.page_id});
@@ -380,13 +377,15 @@ namespace graph::storage {
 	}
 
 	void VectorPageStore::prepareDerivedPqRetirements(std::span<const ExistingPoolPageRetirementBatch> batches,
-													  LogSequenceNumber checkpointLsn) const {
+													  LogSequenceNumber checkpointLsn,
+													  const CancellationCheckpoint *cancellation) const {
 		if (batches.empty() || !checkpointLsn.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable prepared PQ retirement requires batches and a checkpoint LSN");
 		}
 		std::set<uint64_t> pageIds;
 		for (const ExistingPoolPageRetirementBatch &batch: batches) {
+			checkCancellation(cancellation);
 			const CatalogEntry &pool = batch.pool;
 			const uint8_t invalidPool = static_cast<uint8_t>(pool.kind != SegmentKind::SGK_VECTOR_PQ_POOL) |
 										static_cast<uint8_t>(pool.owner_id == 0U) |
@@ -403,6 +402,7 @@ namespace graph::storage {
 			std::vector<SharedPagePoolPreparedRetirement> prepared;
 			prepared.reserve(batch.retirements.size());
 			for (const PageRetirement &retirement: batch.retirements) {
+				checkCancellation(cancellation);
 				const PageLocation &location = retirement.location;
 				const uint8_t invalidRetirement =
 						static_cast<uint8_t>(location.segment_id != pool.segment_id) |
@@ -858,17 +858,9 @@ namespace graph::storage {
 	}
 
 	SegmentKind VectorPageStore::poolKind(VectorStorageKind kind) {
-		if (kind == VectorStorageKind::VSK_RAW) {
-			return SegmentKind::SGK_VECTOR_RAW_POOL;
-		}
-		if (kind == VectorStorageKind::VSK_PQ) {
-			return SegmentKind::SGK_VECTOR_PQ_POOL;
-		}
-		throw FormatException(
-				FormatError::FERR_INVALID_ENUM,
-				"relocatable vector page has an unknown storage kind"); // ZYX_COV_EXCL_LINE: VectorPage validation
-																		// permits only the two storage kinds before
-																		// this private helper is reached.
+		// VectorPage validation admits only RAW and PQ before this private mapper is reached.
+		return kind == VectorStorageKind::VSK_RAW ? SegmentKind::SGK_VECTOR_RAW_POOL
+																										: SegmentKind::SGK_VECTOR_PQ_POOL;
 	}
 
 } // namespace graph::storage

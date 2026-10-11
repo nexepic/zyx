@@ -55,10 +55,5 @@ protected:
 		std::error_code ec;
 		if (fs::exists(dbPath))
 			fs::remove_all(dbPath, ec);
-		// Native storage owns sidecars independently of the data file.
-		for (const std::string &suffix: {".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
-			ec.clear();
-			fs::remove_all(dbPath + suffix, ec);
-		}
 	}
 };

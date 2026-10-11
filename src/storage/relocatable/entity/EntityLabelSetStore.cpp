@@ -422,7 +422,7 @@ namespace graph::storage {
 				 .record_kind = EntityPageRecordKind::EPRK_NODE,
 				 .node_updates = {{planned.node_id, planned.replacement_node}}},
 		}};
-		EntityPageStore entities(io_, metadata_);
+		EntityPageStore entities(io_, metadata_, SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION);
 		const EntityPageBatchResult published = entities.applyAuxiliaryEntityBatchTransaction(
 				snapshot, mutation, {}, {}, planned.auxiliary_pages, checkpointLsn, options);
 		return {published.superblock, planned.replacement_node, planned.previous_overflow, planned.current_overflow,

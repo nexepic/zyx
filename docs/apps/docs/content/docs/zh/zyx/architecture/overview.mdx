@@ -11,7 +11,7 @@ projectOrder: 1
 ---
 # 架构概述
 
-> 本页仍包含当前代码路径的历史概览。面向长期实现的规范性设计以[原生单文件存储重构方案](native-single-file-storage-plan)为准；该方案明确不保留 legacy/migration 兼容路径，并要求数据库始终使用单一文件。
+> 本页描述当前 native logical/relocatable 生产路径。[原生单文件存储重构方案](native-single-file-storage-plan)是格式和生命周期的规范性契约。legacy `DataManager`、段链、外部 WAL 和物理执行器仅作为迁移历史资料，不属于当前架构。
 
 ZYX 是可嵌入式图数据库引擎，核心是单进程内库调用模型，不依赖独立服务进程。
 
@@ -34,20 +34,19 @@ graph TB
     subgraph "查询层"
         Parser["ANTLR4 Cypher 解析器"]
         Planner["逻辑计划器 + 优化器"]
-        Executor["物理执行器"]
+        Runtime["逻辑读写运行时"]
     end
 
     subgraph "存储层"
-        DM[DataManager]
-        PM[PersistenceManager]
-        FS[FileStorage]
-        WAL[WALManager]
-        PB[PageBufferPool]
+        Adapter["LogicalGraph* 适配器"]
+        Backend["RelocatableStorageBackend"]
+        Metadata["Metadata snapshot + System Catalog"]
+        Stores["有类型 Entity / Property / B+Tree / Vector store"]
+        IO["StorageIO + generation-aware Buffer Pool"]
     end
 
     subgraph "核心层"
         DB[Database]
-        TM[TransactionManager]
         TX[Transaction]
     end
 
@@ -58,37 +57,36 @@ graph TB
     WASM --> ABI
 
     CPP --> DB
-    DB --> TM
     DB --> TX
 
-    TX --> DM
-    TX --> WAL
+    TX --> Overlay["Transaction overlay"]
+    Overlay --> Backend
 
-    Parser --> Planner --> Executor
-    Executor --> DM
+    Parser --> Planner --> Runtime
+    Runtime --> Adapter --> Backend
 
-    DM --> PM
-    PM --> FS
-    DM --> PB
+    Backend --> Metadata
+    Backend --> Stores --> IO
 ```
 
 **各层职责：**
 
 - **应用层** — CLI 工具、benchmark 套件以及嵌入 ZYX 的宿主应用。
 - **API 层** — C++ API（`zyx.hpp`）、稳定 Driver ABI（`zyx_driver_abi.h`）、语言绑定及 WASM 绑定。
-- **查询层** — Cypher 文本经解析、计划、优化后，作为物理算子流水线执行。
-- **存储层** — `DataManager` 统一管理实体读写，`PersistenceManager` 跟踪脏数据，`FileStorage` 管理段式文件，`WALManager` 处理预写日志，`PageBufferPool` 提供 LRU 段缓存。
-- **核心层** — `Database` 为顶层入口；`TransactionManager` 实现单写多读并发；`Transaction` 为外部句柄。
+- **查询层** — Cypher 文本生成带类型的逻辑计划。逻辑优化器在不改变语义的前提下做有界 scan 与 row-window 归一化；逻辑读写运行时通过 storage-neutral 接口执行计划。
+- **存储层** — `RelocatableStorageBackend` 负责单一数据库文件、pinned metadata snapshot、canonical System Catalog、有类型 page store 与 native maintenance。`StorageIO` 和 generation-aware Buffer Pool 是有类型 I/O 边界；生产协议不依赖外部 WAL/SHM sidecar。
+- **核心层** — `Database` 拥有 backend，并惰性初始化 `QueryEngine` 和线程池；`Transaction` 拥有 native logical transaction、read-your-writes overlay 和 pinned lifetime。
 
 ## 关键对象
 
 | 对象 | 职责 |
 |------|------|
-| `graph::Database` | 生命周期管理，QueryEngine / ThreadPool / WAL 惰性初始化 |
+| `graph::Database` | backend 生命周期管理，QueryEngine / ThreadPool 惰性初始化 |
 | `graph::query::QueryEngine` | Cypher 解析、计划构建与执行 |
-| `graph::storage::FileStorage` | 段式文件布局，flush/save 协调 |
-| `graph::storage::DataManager` | Node / Edge / Property / Blob / Index / State 统一 I/O 入口 |
-| `TransactionManager` | 单写锁、快照管理，commit/rollback 协调 |
+| `graph::storage::RelocatableStorageBackend` | 单文件 native graph、schema、Vector、snapshot 与 maintenance 边界 |
+| `graph::storage::RelocatableMetadataStore` | A/B Superblock publication、Catalog root、allocator state 与 snapshot pin |
+| `graph::storage::StorageIO` | 已校验 positioned I/O 与 data/Superblock sync fence |
+| `graph::Transaction` | transaction-owned logical overlay、commit/rollback 与 backend lifetime |
 
 ## 主执行路径
 
@@ -99,16 +97,17 @@ sequenceDiagram
     participant App
     participant DB as Database
     participant QE as QueryEngine
-    participant DM as DataManager
+    participant RT as 逻辑运行时
+    participant B as Relocatable Backend
 
     App->>DB: beginTransaction()
-    DB->>App: Transaction（已获取写锁）
+    DB->>App: Transaction（overlay 与 snapshot）
     App->>QE: execute("CREATE (n:User {name: 'Alice'})")
-    QE->>QE: 解析 → 逻辑计划 → 优化 → 物理计划
-    QE->>DM: 执行算子
-    DM->>DM: 分配 ID、写入实体、标记脏
+    QE->>QE: 解析 → 逻辑计划 → 优化
+    QE->>RT: 执行有类型逻辑算子
+    RT->>B: 暂存 native graph mutation
     App->>App: tx.commit()
-    Note over App,DM: 见下方写入路径
+    Note over App,B: 见下方写入路径
 ```
 
 ### 写入路径（提交）
@@ -116,20 +115,19 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant TX as Transaction
-    participant WAL as WALManager
-    participant PM as PersistenceManager
-    participant SW as StorageWriter
-    participant FS as FileStorage
+    participant Overlay as Logical transaction overlay
+    participant B as RelocatableStorageBackend
+    participant M as RelocatableMetadataStore
+    participant IO as StorageIO
 
-    TX->>WAL: 写入 WAL_TXN_COMMIT + sync
-    TX->>PM: createSnapshot() 捕获所有脏注册表
-    PM-->>TX: FlushSnapshot（nodes, edges, props, blobs, indexes, states）
-    TX->>SW: writeSnapshot(snapshot)
-    SW->>FS: 将各实体类型持久化到对应段链
-    SW->>FS: 更新 FileHeader（max IDs）
-    TX->>WAL: 若达到阈值则 checkpoint()
-    TX->>PM: commitSnapshot() — 交换双缓冲、清空 flushing 集
-    TX->>TX: 释放写锁，发布新 CommittedSnapshot
+    TX->>Overlay: 验证最终 graph state
+    Overlay->>B: 规划有界 typed COW page
+    B->>IO: 写入 candidate data/metadata page
+    IO->>IO: data sync fence
+    B->>M: 发布一个完整 metadata generation
+    M->>IO: A/B Superblock sync fence
+    M-->>TX: reopen 后只见 old-or-new generation
+    TX->>TX: retire overlay 并释放 transaction resource
 ```
 
 ### 读取路径
@@ -138,34 +136,29 @@ sequenceDiagram
 sequenceDiagram
     participant App
     participant TX as Transaction（只读）
-    participant DM as DataManager
-    participant PM as PersistenceManager
-    participant PB as PageBufferPool
+    participant B as Relocatable Backend
+    participant M as Metadata Snapshot
+    participant BP as BufferPool
     participant IO as StorageIO
 
     App->>TX: beginReadOnlyTransaction()
-    TX->>TX: 获取共享锁，捕获 CommittedSnapshot
-    App->>DM: getNode(id)
-    DM->>PM: 检查 flushing 脏集
-    alt 脏数据命中
-        PM-->>DM: 从脏注册表返回
-    else 干净数据
-        DM->>PB: getPage(segmentOffset)
-        alt 缓存命中
-            PB-->>DM: 缓存页
-        else 缓存未命中
-            PB->>IO: pread（段数据）
-            IO-->>PB: 原始字节
-            PB-->>DM: 页数据
-        end
+    TX->>B: 打开 logical read snapshot
+    B->>M: pin 一个 metadata generation
+    App->>B: 解析 logical Node / adjacency / property
+    B->>BP: 以 physical route 与 generation 读取 typed page
+    alt 缓存命中
+        BP-->>B: pinned page bytes
+    else 缓存未命中
+        BP->>IO: positioned typed-page read
+        IO-->>BP: validated page bytes
     end
-    DM-->>App: Node
+    B-->>App: logical result
 ```
 
 ## 设计原则
 
 1. **嵌入式优先** — ZYX 是库而非服务器，直接链接到进程内。
-2. **单写多读** — `std::shared_mutex` 提供排他写权限，同时允许多个并发读。
-3. **段式存储** — 固定大小（128 KB）段，每实体类型独立链表。
-4. **惰性初始化** — `QueryEngine`、`ThreadPool`、`WAL` 仅在首次访问时创建，保持启动快速。
-5. **双缓冲脏跟踪** — `PersistenceManager` 维护 active/flushing 两组脏映射，使读取可在 I/O 期间继续。
+2. **Pinned snapshot** — 每次 native read 都经由一个 immutable metadata generation 解析，page relocation/reuse 不会混合 generation。
+3. **单文件 COW publication** — candidate page durable 后才进行一次 A/B Superblock publication；reopen 只能观察完整 old 或完整 new generation。
+4. **有类型且有界的 I/O** — Entity、Property、Index、Catalog 和 Vector store 保留 owner/generation/checksum 校验，并使用有限 cursor 和 admission-aware cache read。
+5. **Fail closed** — 格式错误的 route、key、checksum、owner、generation 或资源上限一律拒绝，不回退到 legacy representation。

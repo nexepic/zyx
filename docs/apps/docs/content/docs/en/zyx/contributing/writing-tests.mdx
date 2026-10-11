@@ -28,7 +28,7 @@ ZYX follows these testing principles:
 ### Basic Test File
 
 ```cpp
-// tests/src/core/test_Database.cpp
+// tests/src/core/test_Example.cpp
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
 
@@ -276,23 +276,7 @@ TEST_F(GraphTestFixture, FindShortestPath) {
 
 ### Using Mocks
 
-```cpp
-class MockStorage : public IStorage {
-public:
-    MOCK_METHOD(Entity*, loadEntity, (uint64_t id), (override));
-    MOCK_METHOD(void, saveEntity, (Entity* entity), (override));
-};
-
-TEST_F(QueryExecutorTest, UseMockStorage) {
-    MockStorage mockStorage;
-
-    EXPECT_CALL(mockStorage, loadEntity(123))
-        .WillOnce(Return(testEntity));
-
-    QueryExecutor executor(&mockStorage);
-    executor.execute("MATCH (n) WHERE id(n) = 123 RETURN n");
-}
-```
+For query execution, test the native logical boundary rather than a retired physical executor. `tests/src/query/api/test_QueryEngineLogicalBackend.cpp` demonstrates a real `QueryEngine` fixture backed by the logical read/write interfaces, while `tests/src/query/execution/test_LogicalPlanReadRuntime.cpp` covers bounded read-runtime behavior.
 
 ## Performance Tests
 

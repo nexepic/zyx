@@ -24,7 +24,11 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_CATALOG_RADIX_PAGE_MAGIC = 0x5258595AU; // Little-endian bytes: ZYXR
+	// Version 4 stores physical children. Version 5 stores MetadataPageId
+	// children for relocatable metadata directories; only bootstrap route pages
+	// keep the physical representation because they are the resolver's anchor.
 	constexpr uint16_t RSS_CATALOG_RADIX_PAGE_VERSION = 4;
+	constexpr uint16_t RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION = 5;
 	// Allocator radix pages persist one bit per child indicating that the
 	// corresponding subtree still contains at least one reusable physical slot.
 	// Keeping the summary in the common radix envelope lets the allocator skip a
@@ -64,17 +68,28 @@ namespace graph::storage {
 		MDT_RETIRE_QUEUE = 12,
 		MDT_ENTITY_PROPERTY = 13,
 		MDT_LARGE_VALUE_MANIFEST = 14,
+		// This physical-only branch maps MetadataPageId to a metadata frame. It
+		// must never be decoded as a data PageId location directory.
+		MDT_METADATA_PAGE_ROUTE = 15,
 	};
 
 	struct CatalogRadixPage {
 		CatalogRadixPageKind kind = CatalogRadixPageKind::CRPK_INTERNAL;
 		MetadataDirectoryType directory_type = MetadataDirectoryType::MDT_CATALOG;
 		uint16_t level = 1;
-		PageId page_id{};
+		MetadataPageId page_id{};
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
 		std::array<std::byte, RSS_CATALOG_RADIX_ALLOCATOR_SUMMARY_BYTES> allocator_free_children{};
 		std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> children{};
+		std::array<MetadataPageId, RSS_CATALOG_RADIX_FANOUT> logical_children{};
+		// Logical pages are encoded as version 5 and resolved through the
+		// bootstrap route branch before callers inspect `children`. Route-branch
+		// pages remain physical and must leave this flag clear.
+		bool logical_children_enabled = false;
+		// Set only after the bootstrap route resolver materializes the physical
+		// targets for a decoded logical page.
+		bool logical_children_resolved = false;
 	};
 
 	class CatalogRadixPageCodec {

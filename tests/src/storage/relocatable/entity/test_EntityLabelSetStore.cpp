@@ -470,6 +470,88 @@ TEST_F(RelocatableEntityLabelSetStoreTest, ReusesDeadSlotWithoutChargingAnotherD
 	current.release();
 }
 
+TEST_F(RelocatableEntityLabelSetStoreTest,
+	   RelocatesReusedLabelSlotWhileOldSnapshotKeepsItsOriginalGenerationReadable) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(
+			entities.allocateNode(nodePool(31U, 901U, 101U, 40U), 1001U, node(7U), LogSequenceNumber(2U)).has_value());
+	MetadataSnapshotPin insertSnapshot = metadata->openSnapshot();
+	static_cast<void>(entities.insertNode(insertSnapshot, PageId(101U), 1002U, node(1001U), LogSequenceNumber(3U)));
+	insertSnapshot.release();
+	MetadataSnapshotPin secondInsertSnapshot = metadata->openSnapshot();
+	static_cast<void>(
+			entities.insertNode(secondInsertSnapshot, PageId(101U), 1003U, node(2001U), LogSequenceNumber(4U)));
+	secondInsertSnapshot.release();
+	// The destination is a live pool, so relocation never depends on an orphaned frame.
+	ASSERT_TRUE(
+			entities.allocateNode(nodePool(32U, 901U, 201U, 41U), 1004U, node(3001U), LogSequenceNumber(5U)).has_value());
+	SlottedPagePool pages(io, *metadata);
+	EntityLabelSetStore labelsStore(io, *metadata, pages);
+
+	const std::vector<uint64_t> firstLabels = labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 2U);
+	MetadataSnapshotPin firstWrite = metadata->openSnapshot();
+	const EntityLabelSetUpdateResult first =
+			labelsStore.updateNodeLabels(firstWrite, 1001U, firstLabels, appendTo(31U, 102U), LogSequenceNumber(6U));
+	firstWrite.release();
+	ASSERT_TRUE(first.current_overflow.isValid());
+	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
+	EXPECT_EQ(labelsStore.readNodeLabels(oldSnapshot, entities.readNode(oldSnapshot, 1001U)), firstLabels);
+
+	MetadataSnapshotPin sharedWrite = metadata->openSnapshot();
+	EntityLabelSetWritePlan existingOnly;
+	existingOnly.candidate_pool_segments = {SegmentId(31U)};
+	const std::vector<uint64_t> sharedLabels = labels(1001U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 2U);
+	const EntityLabelSetUpdateResult shared = labelsStore.updateNodeLabels(
+			sharedWrite, 1002U, sharedLabels, existingOnly, LogSequenceNumber(7U));
+	sharedWrite.release();
+	ASSERT_EQ(shared.current_overflow.page_id, first.current_overflow.page_id);
+	ASSERT_NE(shared.current_overflow.slot_id, first.current_overflow.slot_id);
+	MetadataSnapshotPin shrinkWrite = metadata->openSnapshot();
+	static_cast<void>(labelsStore.updateNodeLabels(
+			shrinkWrite, 1001U, labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY), {}, LogSequenceNumber(8U)));
+	shrinkWrite.release();
+	MetadataSnapshotPin reuseWrite = metadata->openSnapshot();
+	const std::vector<uint64_t> replacementLabels = labels(1001U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 2U);
+	const EntityLabelSetUpdateResult replacement = labelsStore.updateNodeLabels(
+			reuseWrite, 1003U, replacementLabels, existingOnly, LogSequenceNumber(9U));
+	reuseWrite.release();
+	ASSERT_EQ(replacement.current_overflow.page_id, first.current_overflow.page_id);
+	EXPECT_EQ(replacement.current_overflow.slot_id, first.current_overflow.slot_id);
+	EXPECT_EQ(replacement.current_overflow.slot_generation, first.current_overflow.slot_generation + 1U);
+
+	MetadataSnapshotPin relocationSnapshot = metadata->openSnapshot();
+	const EntityPageMutationResult relocated = entities.evacuatePoolPage(
+			relocationSnapshot, first.current_overflow.page_id, SegmentId(32U), LogSequenceNumber(10U));
+	EXPECT_EQ(relocated.pool.segment_id, SegmentId(32U));
+	EXPECT_EQ(metadata->findPageLocation(oldSnapshot, first.current_overflow.page_id).segment_id, SegmentId(31U));
+	EXPECT_EQ(labelsStore.readNodeLabels(oldSnapshot, entities.readNode(oldSnapshot, 1001U)), firstLabels);
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findPageLocation(current, replacement.current_overflow.page_id).segment_id, SegmentId(32U));
+	EXPECT_EQ(labelsStore.readNodeLabels(current, entities.readNode(current, 1002U)), sharedLabels);
+	EXPECT_EQ(labelsStore.readNodeLabels(current, entities.readNode(current, 1003U)), replacementLabels);
+	expectFormatError([&] { static_cast<void>(labelsStore.read(current, first.current_overflow)); },
+				  FormatError::FERR_INVALID_STATE);
+	relocationSnapshot.release();
+	oldSnapshot.release();
+	current.release();
+	entities.reclaimRetiredFrames(SegmentId(31U));
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	EntityPageStore reopenedEntities(io, *reopened);
+	SlottedPagePool reopenedPages(io, *reopened);
+	EntityLabelSetStore reopenedLabels(io, *reopened, reopenedPages);
+	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findPageLocation(reopenedSnapshot, replacement.current_overflow.page_id).segment_id,
+			  SegmentId(32U));
+	EXPECT_EQ(reopenedLabels.readNodeLabels(reopenedSnapshot, reopenedEntities.readNode(reopenedSnapshot, 1003U)),
+			  replacementLabels);
+	expectFormatError([&] { static_cast<void>(reopenedLabels.read(reopenedSnapshot, first.current_overflow)); },
+				  FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableEntityLabelSetStoreTest, UsesNewPoolFallbackAndRejectsOversizedOrPartialLabelsBeforePublication) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);

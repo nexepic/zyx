@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -29,6 +30,7 @@
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 
 using namespace graph::storage;
@@ -70,6 +72,27 @@ namespace {
 			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
 		}
 		return key;
+	}
+
+	void appendBigEndianU32(std::vector<std::byte> &target, uint32_t value);
+
+	std::vector<std::byte> configurationPrefix(std::string_view name) {
+		std::vector<std::byte> key = {std::byte{12U}};
+		appendBigEndianU32(key, static_cast<uint32_t>(name.size()));
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	std::vector<std::byte> configurationKey(std::string_view name, const PropertyValue &value) {
+		std::vector<std::byte> key = configurationPrefix(name);
+		CanonicalPropertyValueCodec::append(key, value);
+		return key;
+	}
+
+	std::vector<std::byte> graphCardinalityKey(uint8_t kind) {
+		return {std::byte{13U}, static_cast<std::byte>(kind)};
 	}
 
 	void appendBigEndianU32(std::vector<std::byte> &target, uint32_t value) {
@@ -178,6 +201,7 @@ namespace {
 	}
 
 	constexpr uint64_t SYSTEM_CATALOG_BOOTSTRAP_VALUE = UINT64_C(0x5A5958434154414C);
+	constexpr uint64_t SYSTEM_CATALOG_CONFIGURATION_VALUE = UINT64_C(0x434F4E4649475552);
 
 } // namespace
 
@@ -249,6 +273,231 @@ TEST_F(SystemCatalogTest, ReturnsAbsentMappingsBeforeTheCatalogRootExists) {
 	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST), std::nullopt);
 	EXPECT_TRUE(catalog.readIndexDefinitions(snapshot, 1U).empty());
 	EXPECT_TRUE(catalog.readConstraintDefinitions(snapshot, 1U).empty());
+	EXPECT_EQ(catalog.findConfiguration(snapshot, "query.timeout_ms"), std::nullopt);
+	EXPECT_TRUE(catalog.readConfigurations(snapshot, 1U).empty());
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	createSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{30}));
+	createSession.setConfiguration("query.slow_log.enabled", PropertyValue(true));
+	// Replacing a staged value must leave one canonical record, not two values
+	// for the same name in the initial catalog root.
+	createSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{45}));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	EXPECT_EQ(catalog.findConfiguration(before, "query.timeout_ms"), std::nullopt);
+	before.release();
+	MetadataSnapshotPin initial = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findConfiguration(initial, "query.timeout_ms"), PropertyValue(int64_t{45}));
+	EXPECT_EQ(catalog.readConfigurations(initial, 4U),
+			  (std::vector<NativeConfigurationRecord>{{"query.slow_log.enabled", PropertyValue(true)},
+																 {"query.timeout_ms", PropertyValue(int64_t{45})}}));
+
+	NativeGraphWriteTransaction update = planner.beginTransaction();
+	SystemCatalogWriteSession updateSession = catalog.beginWrite(update);
+	updateSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{60}));
+	updateSession.finish();
+	ASSERT_TRUE(update.commit().committed());
+	EXPECT_EQ(catalog.findConfiguration(initial, "query.timeout_ms"), PropertyValue(int64_t{45}));
+	initial.release();
+
+	reopenNativeStores();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	SystemCatalog reopenedCatalog(reopenedIndexes, *metadata_);
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_EQ(reopenedCatalog.findConfiguration(reopened, "query.timeout_ms"), PropertyValue(int64_t{60}));
+	EXPECT_EQ(reopenedCatalog.findConfiguration(reopened, "query.slow_log.enabled"), PropertyValue(true));
+	EXPECT_THROW(static_cast<void>(reopenedCatalog.readConfigurations(reopened, 0U)), FormatException);
+	reopened.release();
+}
+
+TEST_F(SystemCatalogTest, PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.readGraphCardinalityStatistics(before), std::nullopt);
+
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	createSession.setGraphCardinalityStatistics({3U, 5U});
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+	EXPECT_EQ(catalog.readGraphCardinalityStatistics(before), std::nullopt);
+	before.release();
+
+	MetadataSnapshotPin first = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.readGraphCardinalityStatistics(first),
+			  std::optional<NativeGraphCardinalityStatistics>({3U, 5U}));
+	first.release();
+
+	NativeGraphWriteTransaction update = planner.beginTransaction();
+	SystemCatalogWriteSession updateSession = catalog.beginWrite(update);
+	updateSession.setGraphCardinalityStatistics({2U, 4U});
+	updateSession.finish();
+	ASSERT_TRUE(update.commit().committed());
+
+	reopenNativeStores();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	SystemCatalog reopenedCatalog(reopenedIndexes, *metadata_);
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_EQ(reopenedCatalog.readGraphCardinalityStatistics(reopened),
+			  std::optional<NativeGraphCardinalityStatistics>({2U, 4U}));
+	reopened.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenGraphCardinalityRecordIsPartial) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	const std::array<BTreePageEntry, 2U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{graphCardinalityKey(1U), 3U},
+	};
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	seed.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(seed.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.readGraphCardinalityStatistics(snapshot)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PersistsEverySupportedScalarConfigurationValue) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	session.setConfiguration("config.boolean", PropertyValue(true));
+	session.setConfiguration("config.integer", PropertyValue(int64_t{-42}));
+	session.setConfiguration("config.double", PropertyValue(1.25));
+	session.setConfiguration("config.string", PropertyValue("native"));
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findConfiguration(snapshot, "config.boolean"), PropertyValue(true));
+	EXPECT_EQ(catalog.findConfiguration(snapshot, "config.integer"), PropertyValue(int64_t{-42}));
+	EXPECT_EQ(catalog.findConfiguration(snapshot, "config.double"), PropertyValue(1.25));
+	EXPECT_EQ(catalog.findConfiguration(snapshot, "config.string"), PropertyValue("native"));
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	EXPECT_THROW(session.setConfiguration("", PropertyValue(true)), FormatException);
+	EXPECT_THROW(session.setConfiguration("query.invalid", PropertyValue(std::vector<PropertyValue>{PropertyValue(true)})),
+			 FormatException);
+	session.finish();
+	transaction.rollback();
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_TRUE(catalog.readConfigurations(snapshot, 1U).empty());
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenPersistedConfigurationEntriesAreMalformed) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(create);
+	session.setConfiguration("valid", PropertyValue(true));
+	session.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	std::vector<std::byte> trailing = configurationKey("trail", PropertyValue(true));
+	trailing.push_back(std::byte{0U});
+	const std::array truncatedLength{std::byte{12U}, std::byte{0U}};
+	const std::vector<std::byte> invalidName =
+			{std::byte{12U}, std::byte{0U}, std::byte{0U}, std::byte{0U}, std::byte{0U}};
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, truncatedLength,
+							  SYSTEM_CATALOG_CONFIGURATION_VALUE);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, configurationPrefix("short"),
+							  SYSTEM_CATALOG_CONFIGURATION_VALUE);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, trailing, SYSTEM_CATALOG_CONFIGURATION_VALUE);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, configurationKey("wrong", PropertyValue(true)), 0U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, invalidName,
+							  SYSTEM_CATALOG_CONFIGURATION_VALUE);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findConfiguration(snapshot, "short")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConfiguration(snapshot, "trail")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConfiguration(snapshot, "wrong")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConfigurations(snapshot, 8U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenPersistedDefinitionKeysAreTruncated) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(create);
+	session.setConfiguration("valid", PropertyValue(true));
+	session.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	// A B+Tree page can be structurally valid while an entry violates the
+	// System Catalog's subtype key grammar. Readers must reject it before
+	// exposing a partial definition inventory.
+	const std::array truncatedIndexKey{std::byte{6U}};
+	const std::array truncatedConstraintKey{std::byte{9U}};
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, truncatedIndexKey, 1U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, truncatedConstraintKey, 1U);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 8U)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, 8U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RejectsAmbiguousOrBoundedPersistedConfigurationRecords) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(create);
+	session.setConfiguration("alpha", PropertyValue(true));
+	session.setConfiguration("bravo", PropertyValue(int64_t{7}));
+	session.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	MetadataSnapshotPin beforeCorruption = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findConfiguration(beforeCorruption, "absent"), std::nullopt);
+	EXPECT_THROW(static_cast<void>(catalog.readConfigurations(beforeCorruption, 1U)), FormatException);
+	beforeCorruption.release();
+
+	// A second value with the same name is a persisted corruption, not an
+	// implicit last-write-wins update. Inject it through the production COW
+	// transaction path so the read-side validation sees a durable tree state.
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID,
+							  configurationKey("alpha", PropertyValue(false)),
+							  SYSTEM_CATALOG_CONFIGURATION_VALUE);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findConfiguration(snapshot, "alpha")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConfigurations(snapshot, 8U)), FormatException);
 	snapshot.release();
 }
 
@@ -397,17 +646,88 @@ TEST_F(SystemCatalogTest, RejectsInvalidAndFinishedWriteSessionRequests) {
 	EXPECT_THROW(detached.finish(), std::logic_error);
 }
 
-TEST_F(SystemCatalogTest, KeepsAnActiveCatalogSessionUsableAfterMoveConstructionAndAssignment) {
+static_assert(std::is_move_constructible_v<SystemCatalogWriteSession>);
+static_assert(!std::is_move_assignable_v<SystemCatalogWriteSession>);
+
+TEST_F(SystemCatalogTest, RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	IndexDefinition invalidIndex;
+	invalidIndex.name = "invalid_idx";
+	invalidIndex.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	invalidIndex.kind = IndexDefinitionKind::IDK_PROPERTY;
+	EXPECT_THROW(static_cast<void>(session.createIndexDefinition(std::move(invalidIndex))), FormatException);
+
+	IndexDefinition firstIndex;
+	firstIndex.name = "first_idx";
+	firstIndex.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	firstIndex.kind = IndexDefinitionKind::IDK_PROPERTY;
+	firstIndex.property_names = {"email"};
+	firstIndex = session.createIndexDefinition(std::move(firstIndex));
+	EXPECT_EQ(firstIndex.index_id, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST);
+	IndexDefinition duplicateIndex = firstIndex;
+	duplicateIndex.index_id = 0U;
+	duplicateIndex.name = "duplicate_idx";
+	EXPECT_THROW(static_cast<void>(session.createIndexDefinition(std::move(duplicateIndex))), FormatException);
+	IndexDefinition secondIndex = firstIndex;
+	secondIndex.index_id = 0U;
+	secondIndex.name = "second_idx";
+	secondIndex.property_names = {"name"};
+	secondIndex = session.createIndexDefinition(std::move(secondIndex));
+	EXPECT_EQ(secondIndex.index_id, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U);
+
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	ConstraintDefinition invalidConstraint;
+	invalidConstraint.name = "invalid_constraint";
+	invalidConstraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	invalidConstraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	invalidConstraint.schema_token_id = label;
+	EXPECT_THROW(static_cast<void>(session.createConstraintDefinition(std::move(invalidConstraint))), FormatException);
+
+	ConstraintDefinition firstConstraint;
+	firstConstraint.name = "first_unique";
+	firstConstraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	firstConstraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	firstConstraint.schema_token_id = label;
+	firstConstraint.property_names = {"email"};
+	firstConstraint = session.createConstraintDefinition(std::move(firstConstraint));
+	EXPECT_EQ(firstConstraint.constraint_id, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST);
+	ConstraintDefinition duplicateConstraint = firstConstraint;
+	duplicateConstraint.constraint_id = 0U;
+	duplicateConstraint.name = "duplicate_unique";
+	EXPECT_THROW(static_cast<void>(session.createConstraintDefinition(std::move(duplicateConstraint))), FormatException);
+	ConstraintDefinition secondConstraint = firstConstraint;
+	secondConstraint.constraint_id = 0U;
+	secondConstraint.name = "second_unique";
+	secondConstraint.property_names = {"name"};
+	secondConstraint = session.createConstraintDefinition(std::move(secondConstraint));
+	EXPECT_EQ(secondConstraint.constraint_id, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U);
+
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.readIndexDefinitions(snapshot, 4U),
+			  (std::vector<IndexDefinition>{firstIndex, secondIndex}));
+	EXPECT_EQ(catalog.readConstraintDefinitions(snapshot, 4U),
+			  (std::vector<ConstraintDefinition>{firstConstraint, secondConstraint}));
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, KeepsAnActiveCatalogSessionUsableAfterMoveConstruction) {
 	BTreePageStore indexes(*slotted_pages_, *metadata_);
 	SystemCatalog catalog(indexes, *metadata_);
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
 	NativeGraphWriteTransaction transaction = planner.beginTransaction();
 	SystemCatalogWriteSession original = catalog.beginWrite(transaction);
 	SystemCatalogWriteSession moved(std::move(original));
-	SystemCatalogWriteSession assigned;
-	assigned = std::move(moved);
-	const uint32_t token = assigned.ensurePropertyToken("moved");
-	assigned.finish();
+	EXPECT_THROW(static_cast<void>(original.ensurePropertyToken("moved_from_constructor")), std::logic_error);
+	const uint32_t token = moved.ensurePropertyToken("moved");
+	moved.finish();
 	ASSERT_TRUE(transaction.commit().committed());
 
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
@@ -517,6 +837,60 @@ TEST_F(SystemCatalogTest, RejectsStaleFirstRootPublicationWithoutLeakingMappings
 	EXPECT_EQ(catalog.findPropertyToken(snapshot, "winner"), winnerToken);
 	EXPECT_EQ(catalog.findPropertyToken(snapshot, "stale"), std::nullopt);
 	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication) {
+	{
+		BTreePageStore indexes(*slotted_pages_, *metadata_);
+		SystemCatalog catalog(indexes, *metadata_);
+		NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+		NativeGraphWriteTransaction create = planner.beginTransaction();
+		SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+		createSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{30}));
+		createSession.finish();
+		ASSERT_TRUE(create.commit().committed());
+
+		NativeGraphWriteTransaction interrupted = planner.beginTransaction();
+		SystemCatalogWriteSession interruptedSession = catalog.beginWrite(interrupted);
+		interruptedSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{60}));
+		interruptedSession.finish();
+		MetadataPublishOptions beforePublication;
+		beforePublication.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
+		EXPECT_THROW(static_cast<void>(interrupted.commit(beforePublication)), BootstrapPublishInterrupted);
+		EXPECT_EQ(interrupted.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+
+		MetadataSnapshotPin current = metadata_->openSnapshot();
+		EXPECT_EQ(catalog.findConfiguration(current, "query.timeout_ms"), PropertyValue(int64_t{30}));
+		current.release();
+	}
+
+	reopenNativeStores();
+	{
+		BTreePageStore indexes(*slotted_pages_, *metadata_);
+		SystemCatalog catalog(indexes, *metadata_);
+		NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+		MetadataSnapshotPin recoveredOld = metadata_->openSnapshot();
+		EXPECT_EQ(catalog.findConfiguration(recoveredOld, "query.timeout_ms"), PropertyValue(int64_t{30}));
+		recoveredOld.release();
+
+		NativeGraphWriteTransaction interrupted = planner.beginTransaction();
+		SystemCatalogWriteSession interruptedSession = catalog.beginWrite(interrupted);
+		interruptedSession.setConfiguration("query.timeout_ms", PropertyValue(int64_t{60}));
+		interruptedSession.finish();
+		MetadataPublishOptions afterPublication;
+		afterPublication.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
+		EXPECT_THROW(static_cast<void>(interrupted.commit(afterPublication)), BootstrapPublishInterrupted);
+		EXPECT_EQ(interrupted.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+	}
+
+	reopenNativeStores();
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin recoveredNew = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findConfiguration(recoveredNew, "query.timeout_ms"), PropertyValue(int64_t{60}));
+	EXPECT_EQ(catalog.readConfigurations(recoveredNew, 2U),
+			  (std::vector<NativeConfigurationRecord>{{"query.timeout_ms", PropertyValue(int64_t{60})}}));
+	recoveredNew.release();
 }
 
 TEST_F(SystemCatalogTest, RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock) {

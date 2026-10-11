@@ -87,7 +87,7 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `beginTransaction` | `Transaction beginTransaction()` | 开始带固定快照的乐观读写事务 |
-| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | 开始面向大型直接 API 导入的读写事务。`commit()` 保证 WAL 持久化；主数据库 checkpoint 可延迟到 `save()` 或正常 `close()`。 |
+| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | 开始面向大型直接 API 导入的读写事务。`commit()` 原子发布一个持久化的 native 单文件 generation；不会创建 WAL sidecar。 |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | 开始只读事务，快照隔离，可多并发 |
 | `hasActiveTransaction` | `bool hasActiveTransaction() const` | 检查是否有任意活跃公共事务 |
 
@@ -150,6 +150,8 @@ auto columnarEdgeIds = db.createEdgesColumnar(
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边；空 `edgeType` 创建无类型关系，返回边 ID |
 | `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | 批量创建同类型边；空类型创建无类型关系，返回边 ID 列表 |
 | `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | 按 source/target ID 列与属性列批量创建边；空类型创建无类型关系 |
+
+列式方法会在发布任何 mutation 前验证整个输入批次。列形状不合法时抛出 `std::invalid_argument`；边的端点不存在或已失效时抛出 `zyx::BulkInputError`。该异常通过稳定的 `rowIndex()` 与 `fieldPath()` 标识被拒绝的输入单元，无需解析错误文本。
 
 ### 二进制值
 
@@ -253,49 +255,55 @@ double ms = result.getDuration();
 `QueryBuilder` 提供流式、编程式的查询构建方式，无需拼接 Cypher 字符串：
 
 ```cpp
-auto plan = db.query()
-    .match_("n", "Person", "name", std::string("Alice"))
-    .return_({"n"})
+zyx::PreparedQuery query = db.query()
+    .match("n", "Person", "name", std::string("Alice"))
+    .returning({"n"})
     .build();
+zyx::Result result = db.execute(query);
 ```
+
+`PreparedQuery` 是 move-only 且可复用的对象。它保存 typed logical plan 和 bound value，不保存 Cypher 文本、storage
+handle、planner 或 physical operator。`Transaction::query()` 与 `Transaction::execute(query)` 使用该 transaction 的
+logical overlay，保持 read-your-writes visibility。identifier 使用受支持的 ASCII grammar，非法输入在 `build()` 时被拒绝；
+Value 是 typed binding，绝不会被转义后拼接进 Cypher string。
 
 ### 读操作
 
 | 方法 | 说明 |
 |------|------|
-| `match_(variable, label, key, value)` | 添加单标签节点 MATCH 模式，可选属性过滤 |
-| `match_(variable, labels, key, value)` | 多标签版本 |
-| `where_(variable, key, value)` | 添加 WHERE 过滤 |
-| `return_(variables)` | 设置 RETURN 子句 |
-| `skip_(offset)` | 设置 SKIP |
-| `limit_(count)` | 设置 LIMIT |
-| `orderBy_(items)` | 设置 ORDER BY，`SortOrder{variable, property, ascending}` |
+| `match(variable, label, key, value)` | 添加单标签节点 MATCH 模式，可选属性过滤 |
+| `match(variable, labels, key, value)` | 多标签版本 |
+| `where(variable, key, value)` | 添加 WHERE equality 过滤 |
+| `returning(variables)` | 设置 RETURN variable |
+| `skip(offset)` | 设置 SKIP |
+| `limit(count)` | 设置 LIMIT |
+| `orderBy(items)` | 设置 ORDER BY，`QueryBuilder::SortOrder{variable, property, ascending}` |
 
 ### 写操作
 
 | 方法 | 说明 |
 |------|------|
-| `create_(variable, label, props)` | 创建节点 |
-| `create_(variable, labels, props)` | 创建多标签节点 |
-| `create_(variable, type, sourceVar, targetVar, props)` | 创建边 |
-| `delete_(variables, detach)` | 删除变量（`detach = true` 即 DETACH DELETE） |
-| `set_(variable, key, value)` | 设置属性 |
-| `setLabel_(variable, label)` | 添加标签 |
-| `remove_(variable, key, isLabel)` | 删除属性（`isLabel = true` 时删除标签） |
+| `createNode(variable, label, props)` | 创建节点 |
+| `createNode(variable, labels, props)` | 创建多标签节点 |
+| `createEdge(variable, type, sourceVariable, targetVariable, props)` | 创建边 |
+| `deleteEntities(variables, detach)` | 删除变量（`detach = true` 即 DETACH DELETE） |
+| `setProperty(variable, key, value)` | 设置属性 |
+| `addLabel(variable, label)` | 添加标签 |
+| `remove(variable, key, isLabel)` | 删除属性（`isLabel = true` 时删除标签） |
 
 ### 索引管理
 
 | 方法 | 说明 |
 |------|------|
-| `createIndex_(label, property, indexName)` | 创建属性索引 |
-| `dropIndex_(indexName)` | 按名称删除索引 |
-| `dropIndex_(label, property)` | 按标签+属性删除索引 |
-| `showIndexes_()` | 列出所有索引 |
+| `createIndex(label, property, indexName)` | 创建属性索引 |
+| `dropIndex(indexName)` | 按名称删除索引 |
+| `dropIndex(label, property)` | 按标签+属性删除索引 |
+| `showIndexes()` | 列出所有索引 |
 
 ### 存储过程与收尾
 
 | 方法 | 说明 |
 |------|------|
-| `call_(procedure, args)` | 调用存储过程（如向量索引操作） |
+| `call(procedure, args)` | 调用存储过程（如向量索引操作） |
 | `unwind(list, alias)` | 添加 UNWIND 子句 |
-| `build()` | 编译为 `unique_ptr<PhysicalOperator>` |
+| `build()` | 返回 move-only `PreparedQuery`，由 `Database::execute` 或 `Transaction::execute` 执行 |

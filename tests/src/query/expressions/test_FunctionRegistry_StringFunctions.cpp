@@ -68,8 +68,9 @@ TEST_F(FunctionRegistryTest, ToStringFunction_Null) {
 	args.push_back(PropertyValue()); // NULL
 	PropertyValue result = func->evaluate(args, *context_);
 
-	EXPECT_EQ(result.getType(), PropertyType::STRING);
-	EXPECT_EQ(std::get<std::string>(result.getVariant()), "null");
+	// Cypher NULL propagates through a scalar conversion; the PropertyValue
+	// display representation "null" is not a public string result.
+	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
 }
 
 TEST_F(FunctionRegistryTest, ToStringFunction_EmptyArgs) {

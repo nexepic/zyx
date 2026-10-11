@@ -28,13 +28,16 @@
 #include "QueryResult.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/QueryContext.hpp"
+#include "graph/query/NativeConfigurationService.hpp"
 #include "graph/query/QueryPlan.hpp"
 #include "graph/query/cache/PlanCache.hpp"
 #include "graph/query/execution/LogicalPlanMutationRuntime.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "graph/query/execution/LogicalPlanSchemaRuntime.hpp"
+#include "graph/query/gds/LogicalProjectionCatalog.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/LogicalGraphAdministration.hpp"
 #include "graph/storage/LogicalGraphSchema.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 #include "query/parser/common/IQueryParser.hpp"
@@ -65,6 +68,12 @@ namespace graph::query {
 		// derived-page allocation work.
 		size_t maximum_vector_training_records = 100'000U;
 		size_t maximum_vector_training_pages = 4'096U;
+		// GDS procedures operate on an already bounded projection, but their CPU
+		// work must have an independent cap so an iteration-heavy CALL cannot
+		// monopolize an embedded database process.
+		size_t maximum_gds_algorithm_edges = 10'000'000U;
+		size_t maximum_gds_algorithm_iterations = 128U;
+		size_t maximum_gds_algorithm_work_units = 50'000'000U;
 		// Empty means disabled. Database wires a canonical database-directory
 		// root; embedders can instead provide a narrower dedicated import root.
 		std::optional<std::filesystem::path> csv_import_root;
@@ -99,12 +108,19 @@ namespace graph::query {
 		// its staged final state and writes remain unpublished until that owner
 		// commits, rather than opening an independent auto-commit snapshot.
 		QueryResult executePlanWithLogicalTransactionOverlay(QueryPlan plan, const QueryContext &ctx,
-															 storage::LogicalGraphReadBackend &readBackend,
-															 storage::LogicalGraphWriteBackend &writeBackend);
+														 storage::LogicalGraphReadBackend &readBackend,
+														 storage::LogicalGraphWriteBackend &writeBackend,
+														 gds::LogicalProjectionCatalog *transactionProjectionCatalog = nullptr);
+		// A public Transaction may execute only through an engine attached to its
+		// own logical backend. This prevents an overlay from being combined with a
+		// different Database's policy, catalog, or lifecycle state.
+		[[nodiscard]] bool usesLogicalReadBackend(const storage::LogicalGraphReadBackend &backend) const noexcept;
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+		// Database close ends the process-local lifetime of derived projections.
+		// They must never become visible after the same file is reopened.
+		void resetEphemeralState() noexcept;
 
 		[[nodiscard]] cache::PlanCache &getPlanCache() { return planCache_; }
-		[[nodiscard]] const cache::PlanCache &getPlanCache() const { return planCache_; }
 
 	private:
 		std::shared_ptr<storage::LogicalGraphReadBackend> logicalBackend_;
@@ -112,6 +128,12 @@ namespace graph::query {
 		std::shared_ptr<storage::LogicalGraphSchemaBackend> logicalSchemaBackend_;
 		std::shared_ptr<storage::LogicalGraphVectorSearchBackend> logicalVectorSearchBackend_;
 		std::shared_ptr<storage::LogicalGraphVectorMaintenanceBackend> logicalVectorMaintenanceBackend_;
+		std::shared_ptr<storage::LogicalGraphAdministrationBackend> logicalAdministrationBackend_;
+		std::shared_ptr<NativeConfigurationService> nativeConfigurationService_;
+		// Projections are process-local derived views. Keeping the catalog here gives
+		// every Database-owned QueryEngine an isolated lifetime without persisting
+		// derived graph state in the database file.
+		std::shared_ptr<gds::LogicalProjectionCatalog> logicalProjectionCatalog_;
 		LogicalReadExecutionOptions logicalReadOptions_;
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
 		concurrent::ThreadPool *threadPool_ = nullptr;

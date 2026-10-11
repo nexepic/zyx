@@ -718,6 +718,8 @@ public:
     ReadingClauseContext* readingClause(size_t i);
     std::vector<UpdatingClauseContext *> updatingClause();
     UpdatingClauseContext* updatingClause(size_t i);
+    std::vector<CallSubqueryContext *> callSubquery();
+    CallSubqueryContext* callSubquery(size_t i);
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

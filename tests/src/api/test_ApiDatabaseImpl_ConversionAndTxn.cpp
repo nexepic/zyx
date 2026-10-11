@@ -191,8 +191,6 @@ TEST_F(CppApiTest, BatchMethodsAutoOpenDatabase) {
 	auto freshPath = (tempDir / ("auto_open_test_" + std::to_string(unique))).string();
 	std::error_code ec;
 	fs::remove(freshPath, ec);
-	fs::remove(freshPath + ".wal", ec);
-	fs::remove(freshPath + ".migration", ec);
 	auto freshDb = std::make_unique<zyx::Database>(freshPath);
 	// Do NOT call freshDb->open()
 
@@ -207,8 +205,6 @@ TEST_F(CppApiTest, BatchMethodsAutoOpenDatabase) {
 
 	freshDb->close();
 	fs::remove_all(freshPath, ec);
-	fs::remove(freshPath + ".wal", ec);
-	fs::remove(freshPath + ".migration", ec);
 }
 
 TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
@@ -261,16 +257,40 @@ TEST_F(CppApiTest, CreateNodePropertyIndexesBuildsMultipleIndexes) {
 	EXPECT_EQ(std::get<int64_t>(ageRes.get("count(u)")), 1);
 }
 
-TEST_F(CppApiTest, UnsupportedLegacyConfigurationProcedureFailsClosed) {
+TEST_F(CppApiTest, NativeConfigurationProcedureUsesAutocommitAndRejectsExplicitTransactions) {
 	const auto result = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
-	EXPECT_FALSE(result.isSuccess());
-	EXPECT_NE(result.getError().find("stored procedure"), std::string::npos);
+	EXPECT_TRUE(result.isSuccess()) << result.getError();
 
 	ASSERT_TRUE(db->execute("BEGIN").isSuccess());
 	const auto transactionResult = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
 	EXPECT_FALSE(transactionResult.isSuccess());
-	EXPECT_NE(transactionResult.getError().find("transaction overlays"), std::string::npos);
+	EXPECT_NE(transactionResult.getError().find("autocommit-only"), std::string::npos);
 	EXPECT_TRUE(db->execute("ROLLBACK").isSuccess());
+}
+
+TEST_F(CppApiTest, NativeConfigurationPublicationSurvivesReopenWithoutALegacyWal) {
+	const auto setTimeout = db->execute("CALL dbms.setConfig('query.timeout_ms', 1234)");
+	ASSERT_TRUE(setTimeout.isSuccess()) << setTimeout.getError();
+	const auto setMemory = db->execute("CALL dbms.setConfig('query.max_memory_mb', 96)");
+	ASSERT_TRUE(setMemory.isSuccess()) << setMemory.getError();
+
+	db->close();
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	db->open();
+
+	auto timeout = db->execute("CALL dbms.getConfig('query.timeout_ms')");
+	ASSERT_TRUE(timeout.isSuccess()) << timeout.getError();
+	ASSERT_TRUE(timeout.hasNext());
+	timeout.next();
+	EXPECT_EQ(timeout.get("key"), zyx::Value(std::string("query.timeout_ms")));
+	EXPECT_EQ(timeout.get("value"), zyx::Value(int64_t{1234}));
+
+	auto memory = db->execute("CALL dbms.getConfig('query.max_memory_mb')");
+	ASSERT_TRUE(memory.isSuccess()) << memory.getError();
+	ASSERT_TRUE(memory.hasNext());
+	memory.next();
+	EXPECT_EQ(memory.get("key"), zyx::Value(std::string("query.max_memory_mb")));
+	EXPECT_EQ(memory.get("value"), zyx::Value(int64_t{96}));
 }
 
 TEST_F(CppApiTest, TransactionControlTokensAcceptTrailingDelimitersAndWhitespace) {
@@ -390,8 +410,6 @@ TEST_F(CppApiTest, TransactionReadOnlyFlagsCoverWriteAndAutoOpenedReadOnlyTransa
 	auto freshPath = (tempDir / ("readonly_auto_open_test_" + std::to_string(unique))).string();
 	std::error_code ec;
 	fs::remove(freshPath, ec);
-	fs::remove(freshPath + ".wal", ec);
-	fs::remove(freshPath + ".migration", ec);
 	{
 		zyx::Database freshDb(freshPath);
 		auto readOnlyTxn = freshDb.beginReadOnlyTransaction();
@@ -402,8 +420,6 @@ TEST_F(CppApiTest, TransactionReadOnlyFlagsCoverWriteAndAutoOpenedReadOnlyTransa
 		freshDb.close();
 	}
 	fs::remove_all(freshPath, ec);
-	fs::remove(freshPath + ".wal", ec);
-	fs::remove(freshPath + ".migration", ec);
 }
 
 TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {

@@ -59,10 +59,6 @@ namespace graph {
 
 		[[nodiscard]] bool isChained() const { return getNextId() != 0; }
 
-		[[nodiscard]] bool isChainStart() const { return getPrevId() == 0 && getNextId() != 0; }
-
-		[[nodiscard]] bool isChainEnd() const { return getNextId() == 0 && getPrevId() != 0; }
-
 		[[nodiscard]] int32_t getChainPosition() const {
 			return static_cast<const Derived *>(this)->getMetadata().chainPosition;
 		}
@@ -80,14 +76,6 @@ namespace graph {
 
 		[[nodiscard]] uint32_t getEntityType() const {
 			return static_cast<const Derived *>(this)->getMetadata().entityType;
-		}
-
-		void setEntityId(int64_t newEntityId) {
-			static_cast<Derived *>(this)->getMutableMetadata().entityId = newEntityId;
-		}
-
-		void setEntityType(uint32_t newEntityType) {
-			static_cast<Derived *>(this)->getMutableMetadata().entityType = newEntityType;
 		}
 
 		void setEntityInfo(int64_t newEntityId, uint32_t newEntityType) {

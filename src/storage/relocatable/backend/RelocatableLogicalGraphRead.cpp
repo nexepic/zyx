@@ -49,6 +49,8 @@ namespace graph::storage {
 				return backend_.containsLogicalNode(snapshot_, nodeId);
 			}
 
+			[[nodiscard]] bool supportsNodeExistenceProbes() const override { return true; }
+
 			[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
 				return native_reads_.readEdge(snapshot_.metadataSnapshot(), edgeId);
 			}
@@ -58,7 +60,21 @@ namespace graph::storage {
 												 const std::vector<std::pair<std::string, PropertyValue>> &properties,
 												 size_t maximumNodes, size_t maximumPropertyEntries) const override {
 				return backend_.findNativeNodesByExactProperties(snapshot_.metadataSnapshot(), labels, properties,
-																 maximumNodes, maximumPropertyEntries);
+																				 maximumNodes, maximumPropertyEntries);
+			}
+
+			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
+			findNodesByPropertyRange(const std::vector<std::string> &labels, const LogicalGraphPropertyRange &range,
+								 size_t maximumNodes, size_t maximumPropertyEntries) const override {
+				return backend_.findNativeNodesByPropertyRange(snapshot_.metadataSnapshot(), labels, range, maximumNodes,
+																									maximumPropertyEntries);
+			}
+
+			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByCompositePropertyRange(
+					const std::vector<std::string> &labels, const LogicalGraphCompositePropertyRange &request,
+					size_t maximumNodes, size_t maximumPropertyEntries) const override {
+				return backend_.findNativeNodesByCompositePropertyRange(snapshot_.metadataSnapshot(), labels, request,
+																									maximumNodes, maximumPropertyEntries);
 			}
 
 			void visitNodes(size_t maximumRecords,
@@ -115,12 +131,32 @@ namespace graph::storage {
 				static_cast<void>(native_reads_.visitEdgesUntil(snapshot_.metadataSnapshot(), maximumRecords, visitor));
 			}
 
+			void visitEdgeTopologies(
+					size_t maximumRecords, const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
+				if (!visitor) {
+					throw FormatException(FormatError::FERR_INVALID_HEADER,
+									  "logical graph Edge topology scan requires a visitor");
+				}
+				static_cast<void>(
+						native_reads_.visitEdgeTopologiesUntil(snapshot_.metadataSnapshot(), maximumRecords, visitor));
+			}
+
 			void visitAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
 									const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
 				requireVisitor(visitor);
-				static_cast<void>(
-						native_reads_.visitAdjacentEdgesUntil(snapshot_.metadataSnapshot(), nodeId, direction, maximumEdges,
-																										visitor));
+				static_cast<void>(native_reads_.visitAdjacentEdgesUntil(snapshot_.metadataSnapshot(), nodeId, direction,
+																		maximumEdges, visitor));
+			}
+
+			void visitAdjacentEdgeTopologies(
+					uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
+					const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
+				if (!visitor) {
+					throw FormatException(FormatError::FERR_INVALID_HEADER,
+										  "logical graph adjacency topology scan requires a visitor");
+				}
+				static_cast<void>(native_reads_.visitAdjacentEdgeTopologiesUntil(snapshot_.metadataSnapshot(), nodeId,
+																				 direction, maximumEdges, visitor));
 			}
 
 			[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
@@ -136,6 +172,18 @@ namespace graph::storage {
 			[[nodiscard]] LogicalGraphVectorSearchResult
 			searchLogicalVector(const LogicalGraphVectorSearchRequest &request) const override {
 				return backend_.searchLogicalVector(snapshot_, request);
+			}
+
+			[[nodiscard]] std::optional<LogicalGraphVectorIndexDescriptor>
+			describeLogicalVectorIndex(const LogicalGraphVectorSearchRequest &request) const override {
+				return backend_.describeLogicalVectorIndex(snapshot_, request);
+			}
+
+			[[nodiscard]] std::optional<LogicalGraphVectorSearchHit>
+			scoreLogicalVectorExactOverlayCandidate(const LogicalGraphVectorSearchRequest &request,
+													   const LogicalGraphVectorIndexDescriptor &index,
+													   const LogicalGraphNode &node) const override {
+				return backend_.scoreLogicalVectorExactOverlayCandidate(snapshot_, request, index, node);
 			}
 
 	private:

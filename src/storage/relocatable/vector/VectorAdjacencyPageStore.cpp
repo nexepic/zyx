@@ -28,6 +28,12 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
+		void checkCancellation(const CancellationCheckpoint *cancellation) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+		}
+
 		void validateInput(uint64_t indexId, std::span<const VectorAdjacencyMaterializationRecord> records,
 						   const VectorAdjacencyMaterializationOptions &options, LogSequenceNumber checkpointLsn) {
 			const uint8_t invalid = static_cast<uint8_t>(indexId == 0U) |
@@ -98,7 +104,12 @@ namespace graph::storage {
 	} // namespace
 
 	VectorAdjacencyPageStore::VectorAdjacencyPageStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata) :
-		allocator_(std::move(io), metadata), metadata_(metadata) {}
+		VectorAdjacencyPageStore(std::move(io), metadata, SharedPagePoolOpenMode::SPPOM_RECONCILE) {}
+
+	VectorAdjacencyPageStore::VectorAdjacencyPageStore(std::shared_ptr<StorageIO> io,
+													 RelocatableMetadataStore &metadata,
+													 SharedPagePoolOpenMode openMode) :
+		allocator_(std::move(io), metadata, openMode), metadata_(metadata) {}
 
 	uint64_t VectorAdjacencyPageStore::derivedOwnerId(uint64_t indexId) {
 		if (indexId == 0U || (indexId & RSS_DERIVED_ADJACENCY_OWNER_MASK) != 0U) {
@@ -146,8 +157,10 @@ namespace graph::storage {
 	VectorAdjacencyMaterializationResult VectorAdjacencyPageStore::prepareNewPoolPages(
 			uint64_t indexId, std::span<const VectorAdjacencyMaterializationRecord> records,
 			const VectorAdjacencyMaterializationOptions &options,
-			std::span<VectorAdjacencyMaterializationPoolBatch> batches, LogSequenceNumber checkpointLsn) const {
+			std::span<VectorAdjacencyMaterializationPoolBatch> batches, LogSequenceNumber checkpointLsn,
+			const CancellationCheckpoint *cancellation) const {
 		validateInput(indexId, records, options, checkpointLsn);
+		checkCancellation(cancellation);
 		const uint64_t ownerId = derivedOwnerId(indexId);
 		const std::vector<StagedAdjacencyRecord> encoded = encodeRecords(records);
 		const std::vector<AdjacencyPagePlan> plans = planPages(encoded, options.maximum_pages);
@@ -163,6 +176,7 @@ namespace graph::storage {
 		result.mappings.reserve(records.size());
 		size_t globalPageOrdinal = 0U;
 		for (VectorAdjacencyMaterializationPoolBatch &batch: batches) {
+			checkCancellation(cancellation);
 			const size_t expectedPageCount =
 					std::min(plans.size() - globalPageOrdinal, static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT));
 			const uint8_t invalidPool =
@@ -180,11 +194,13 @@ namespace graph::storage {
 			std::vector<SharedPagePoolPreparedAppend> prepared;
 			prepared.reserve(expectedPageCount);
 			for (size_t pageOrdinal = 0U; pageOrdinal < expectedPageCount; ++pageOrdinal, ++globalPageOrdinal) {
+				checkCancellation(cancellation);
 				const AdjacencyPagePlan &plan = plans[globalPageOrdinal];
 				const PageOwnerHeader owner{batch.page_ids[pageOrdinal], ownerId, PageOwnerKind::POK_VECTOR_ADJACENCY,
 														0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, batch.pool.generation, checkpointLsn};
 				SlottedPage page = SlottedPage::create(owner);
 				for (size_t recordOrdinal = 0U; recordOrdinal < plan.record_count; ++recordOrdinal) {
+					checkCancellation(cancellation);
 					const StagedAdjacencyRecord &record = encoded[plan.first_record + recordOrdinal];
 					static_cast<void>(page.insert(record.bytes));
 					result.mappings.push_back({record.vector_id, owner.page_id});
@@ -199,13 +215,15 @@ namespace graph::storage {
 	}
 
 	void VectorAdjacencyPageStore::prepareDerivedRetirements(
-			std::span<const ExistingPoolPageRetirementBatch> batches, LogSequenceNumber checkpointLsn) const {
+			std::span<const ExistingPoolPageRetirementBatch> batches, LogSequenceNumber checkpointLsn,
+			const CancellationCheckpoint *cancellation) const {
 		if (batches.empty() || !checkpointLsn.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable prepared adjacency retirement requires batches and a checkpoint LSN");
 		}
 		std::set<uint64_t> pageIds;
 		for (const ExistingPoolPageRetirementBatch &batch: batches) {
+			checkCancellation(cancellation);
 			const CatalogEntry &pool = batch.pool;
 			const uint8_t invalidPool =
 					static_cast<uint8_t>(pool.kind != SegmentKind::SGK_VECTOR_ADJACENCY_POOL) |
@@ -223,6 +241,7 @@ namespace graph::storage {
 			std::vector<SharedPagePoolPreparedRetirement> prepared;
 			prepared.reserve(batch.retirements.size());
 			for (const PageRetirement &retirement: batch.retirements) {
+				checkCancellation(cancellation);
 				const PageLocation &location = retirement.location;
 				const uint8_t invalidRetirement =
 						static_cast<uint8_t>(location.segment_id != pool.segment_id) |

@@ -41,6 +41,7 @@ namespace graph::storage {
 		constexpr size_t NODE_FIRST_CHUNK_OFFSET = 106U;
 		constexpr size_t NODE_FIRST_OFFSET_OFFSET = 110U;
 		constexpr size_t NODE_LOGICAL_BYTES_OFFSET = 118U;
+		constexpr size_t NODE_RESERVED_OFFSET = NODE_LOGICAL_BYTES_OFFSET + sizeof(uint64_t);
 		constexpr size_t MEDIA_TYPE_OFFSET = 128U;
 
 		constexpr size_t CHUNK_ORDINAL_OFFSET = 0U;
@@ -59,6 +60,7 @@ namespace graph::storage {
 		constexpr size_t CHILD_LOGICAL_BYTES_OFFSET = 24U;
 
 		constexpr size_t DATA_VALUE_ID_OFFSET = 16U;
+		constexpr size_t DATA_RESERVED_OFFSET = FLAGS_OFFSET + sizeof(uint32_t);
 		constexpr size_t DATA_PAGE_ID_OFFSET = 24U;
 		constexpr size_t DATA_GENERATION_OFFSET = 32U;
 		constexpr size_t DATA_CHUNK_ORDINAL_OFFSET = 40U;
@@ -69,6 +71,7 @@ namespace graph::storage {
 		constexpr size_t DATA_PAYLOAD_BYTES_OFFSET = 56U;
 		constexpr size_t DATA_PAYLOAD_CRC_OFFSET = 60U;
 		constexpr size_t DATA_HEADER_CRC_OFFSET = 64U;
+		constexpr size_t DATA_HEADER_RESERVED_OFFSET = DATA_HEADER_CRC_OFFSET + sizeof(uint32_t);
 
 		constexpr size_t REF_GENERATION_OFFSET = 32U;
 		constexpr size_t REF_LOGICAL_BYTES_OFFSET = 40U;
@@ -485,6 +488,8 @@ namespace graph::storage {
 		if (invalid != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "LargeValue manifest header is invalid");
 		}
+		requireZero(bytes.subspan(NODE_RESERVED_OFFSET, MEDIA_TYPE_OFFSET - NODE_RESERVED_OFFSET),
+					"LargeValue manifest node-header reserved bytes are nonzero");
 		if (checksum(bytes.subspan(RSS_LARGE_VALUE_MANIFEST_HEADER_BYTES)) !=
 			LittleEndianCodec::readU32(bytes, PAYLOAD_CRC_OFFSET)) {
 			fail(FormatError::FERR_CHECKSUM_MISMATCH, "LargeValue manifest payload checksum does not match");
@@ -599,6 +604,11 @@ namespace graph::storage {
 		if (invalid != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "LargeValue data page header is invalid");
 		}
+		requireZero(bytes.subspan(DATA_RESERVED_OFFSET, DATA_VALUE_ID_OFFSET - DATA_RESERVED_OFFSET),
+					"LargeValue data page header reserved bytes are nonzero");
+		requireZero(bytes.subspan(DATA_HEADER_RESERVED_OFFSET,
+								 RSS_LARGE_VALUE_DATA_PAGE_HEADER_BYTES - DATA_HEADER_RESERVED_OFFSET),
+					"LargeValue data page trailing header reserved bytes are nonzero");
 		const std::span<const std::byte> payload = bytes.subspan(RSS_LARGE_VALUE_DATA_PAGE_HEADER_BYTES, payloadBytes);
 		if (checksum(payload) != LittleEndianCodec::readU32(bytes, DATA_PAYLOAD_CRC_OFFSET)) {
 			fail(FormatError::FERR_CHECKSUM_MISMATCH, "LargeValue data page payload checksum does not match");

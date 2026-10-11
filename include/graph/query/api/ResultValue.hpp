@@ -46,7 +46,7 @@ namespace graph::query {
 	};
 
 	// A logical relationship result retains the canonical endpoint IDs and
-	// relationship type without depending on DataManager token resolution.
+	// relationship type without depending on a physical token registry.
 	struct LogicalEdgeResult {
 		uint64_t edge_id = 0U;
 		uint64_t source_node_id = 0U;

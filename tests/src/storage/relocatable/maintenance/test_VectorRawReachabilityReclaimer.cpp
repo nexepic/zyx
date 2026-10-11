@@ -863,6 +863,9 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsEveryRawMaintenance
 		VectorRawReachabilityReclaimOptions invalid = options();
 		invalid.*bound = 0U;
 		EXPECT_THROW(static_cast<void>(reclaim.reclaim(invalid, nextCheckpointLsn())), FormatException);
+		invalid = options();
+		invalid.*bound = std::numeric_limits<size_t>::max();
+		EXPECT_THROW(static_cast<void>(reclaim.reclaim(invalid, nextCheckpointLsn())), FormatException);
 	}
 	EXPECT_THROW(static_cast<void>(reclaim.reclaim(options(), {})), FormatException);
 }
@@ -878,6 +881,9 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsEveryCodebookMainte
 		VectorCodebookReachabilityReclaimOptions invalid = codebookOptions();
 		invalid.*bound = 0U;
 		EXPECT_THROW(static_cast<void>(reclaimer.reclaim(invalid, nextCheckpointLsn())), FormatException);
+		invalid = codebookOptions();
+		invalid.*bound = std::numeric_limits<size_t>::max();
+		EXPECT_THROW(static_cast<void>(reclaimer.reclaim(invalid, nextCheckpointLsn())), FormatException);
 	}
 	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(codebookOptions(), {})), FormatException);
 }
@@ -892,6 +898,9 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsEveryTypedPoolMaint
 	for (const auto bound: bounds) {
 		VectorPagePoolReclaimOptions invalid = stateOptions().empty_pools;
 		invalid.*bound = 0U;
+		EXPECT_THROW(static_cast<void>(reclaimer.reclaim(invalid, nextCheckpointLsn())), FormatException);
+		invalid = stateOptions().empty_pools;
+		invalid.*bound = std::numeric_limits<size_t>::max();
 		EXPECT_THROW(static_cast<void>(reclaimer.reclaim(invalid, nextCheckpointLsn())), FormatException);
 	}
 	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(stateOptions().empty_pools, {})), FormatException);
@@ -1396,6 +1405,66 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, FailsClosedForAnActiveMani
 	EXPECT_THROW(static_cast<void>(state.reclaim(stateOptions(), nextCheckpointLsn())), FormatException);
 }
 
+TEST_F(RelocatableVectorRawReachabilityReclaimerTest,
+		FailsClosedForAnActiveManifestWhoseVectorNodeMappingRootWasReplaced) {
+	IndexDefinition definition = vectorDefinition();
+	publishIndex(definition);
+	buildMappingRoot(definition.index_id);
+	const VectorManifest manifest = materializeManifest(definition.index_id);
+	const std::array<uint64_t, 1U> erasedRoots = {manifest.vector_node_mapping_index_id};
+	static_cast<void>(trees_->publishRoots({}, erasedRoots, nextCheckpointLsn()));
+	static_cast<void>(buildVectorNodeMappingRoot(definition.index_id));
+
+	EXPECT_THROW(static_cast<void>(reclaimer().reclaim(options(), nextCheckpointLsn())), FormatException);
+}
+
+TEST_F(RelocatableVectorRawReachabilityReclaimerTest,
+		FailsClosedForAnActiveManifestWhoseDeltaMappingRootWasReplaced) {
+	IndexDefinition definition = vectorDefinition();
+	publishIndex(definition);
+	buildMappingRoot(definition.index_id);
+	const VectorRawMaterializationResult raw = materializeRaw(definition.index_id);
+	VectorManifest manifest = materializeManifest(definition.index_id);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const uint64_t deltaMappingIndexId =
+			VectorDeltaMapping::selectMappingIndexId(snapshot, *metadata_, definition.index_id);
+	snapshot.release();
+	const std::array<VectorDeltaEntry, 1U> entries = {{{1U, 1U, VectorDeltaOperation::VDO_INSERT}}};
+	const VectorDeltaMappingBuildOptions buildOptions{
+			{PhysicalSlotId(40U), PhysicalSlotId(95U), deltaMappingIndexId, entries.size(), 1U}, entries.size()};
+	static_cast<void>(
+			VectorDeltaMapping::build(*trees_, *metadata_, deltaMappingIndexId, entries, buildOptions, nextCheckpointLsn()));
+	snapshot = metadata_->openSnapshot();
+	const IndexRootLocation originalDeltaRoot = metadata_->findIndexRoot(snapshot, deltaMappingIndexId);
+	snapshot.release();
+	manifest.delta_mapping_index_id = deltaMappingIndexId;
+	manifest.delta_mapping_root_page_id = originalDeltaRoot.root_page_id;
+	manifest.delta_mapping_root_generation = originalDeltaRoot.root_generation;
+	manifest.delta_entry_count = entries.size();
+	overwriteManifestFrame(manifest);
+	VectorIndexStateReclaimer state(*physical_, *slotted_pages_, *trees_, *raw_pages_, *adjacency_pages_, *manifests_,
+																								*catalog_, *metadata_);
+	EXPECT_EQ(state.reclaim(stateOptions(), nextCheckpointLsn()).manifests.active_manifests_retained, 1U);
+
+	const std::array<uint64_t, 1U> erasedRoots = {deltaMappingIndexId};
+	static_cast<void>(trees_->publishRoots({}, erasedRoots, nextCheckpointLsn()));
+	static_cast<void>(
+			VectorDeltaMapping::build(*trees_, *metadata_, deltaMappingIndexId, entries, buildOptions, nextCheckpointLsn()));
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const Generation beforeGeneration = before.superblock().generation;
+	before.release();
+
+	EXPECT_THROW(static_cast<void>(state.reclaim(stateOptions(), nextCheckpointLsn())), FormatException);
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, beforeGeneration);
+	EXPECT_TRUE(metadata_->findVectorManifestOptional(after, definition.index_id).has_value());
+	EXPECT_TRUE(metadata_->findVectorLocationOptional(after, 1U).has_value());
+	EXPECT_TRUE(metadata_->findPageLocationOptional(after, raw.pages.front().page_id).has_value());
+	after.release();
+}
+
 TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsAManifestOwnedByAnActiveNonVectorIndex) {
 	IndexDefinition definition = {0U,
 										"person_score",
@@ -1740,6 +1809,26 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsCodebookRetirementA
 	VectorCodebookReachabilityReclaimOptions catalogBound = codebookOptions();
 	catalogBound.maximum_catalog_entries = 1U;
 	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(catalogBound, nextCheckpointLsn())), FormatException);
+}
+
+TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RejectsMaintenanceRetireQueueScansThatExceedTheConfiguredBound) {
+	materializeCodebook(17U, SegmentId(9701U));
+	materializeCodebook(18U, SegmentId(9702U));
+	VectorCodebookStore codebooks(*physical_, *metadata_);
+	ASSERT_TRUE(codebooks.relocateExtent(17U, VectorCodebookExtentIdCodec::manifestExtentId(17U), PhysicalSlotId(50U),
+									 PhysicalSlotId(95U), nextCheckpointLsn())
+									.has_value());
+	ASSERT_TRUE(codebooks.relocateExtent(18U, VectorCodebookExtentIdCodec::manifestExtentId(18U), PhysicalSlotId(50U),
+									 PhysicalSlotId(95U), nextCheckpointLsn())
+									.has_value());
+	VectorCodebookReachabilityReclaimer reclaimer(*physical_, *manifests_, *metadata_);
+	VectorCodebookReachabilityReclaimOptions bounded = codebookOptions();
+	bounded.maximum_retire_queue_entries = 1U;
+	EXPECT_THROW(static_cast<void>(reclaimer.reclaim(bounded, nextCheckpointLsn())), FormatException);
+	VectorPagePoolReclaimer pools(*slotted_pages_, *catalog_, *metadata_);
+	VectorPagePoolReclaimOptions poolBound = stateOptions().empty_pools;
+	poolBound.maximum_retire_queue_entries = 1U;
+	EXPECT_THROW(static_cast<void>(pools.reclaim(poolBound, nextCheckpointLsn())), FormatException);
 }
 
 TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RetiresMultipleUnreferencedCodebooksInOneBoundedRun) {

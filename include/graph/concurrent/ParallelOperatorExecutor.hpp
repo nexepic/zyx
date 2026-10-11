@@ -14,20 +14,15 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <limits>
-#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "graph/concurrent/ParallelExecutionPolicy.hpp"
-#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::concurrent {
 
@@ -55,25 +50,20 @@ namespace graph::concurrent {
 	};
 
 	namespace detail {
-		template<typename State>
-		struct ParallelOperatorStateStorage {
-			explicit ParallelOperatorStateStorage(size_t partitionCount) : states(partitionCount) {}
-			std::vector<State> states;
+		struct ParallelOperatorCallbacks {
+			void *context = nullptr;
+			bool (*run)(void *context, size_t partition) = nullptr;
+			void (*merge)(void *context, size_t partition) = nullptr;
 		};
 
-		inline uint64_t elapsedNs(std::chrono::steady_clock::time_point start) {
-			return static_cast<uint64_t>(
-					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start)
-							.count());
-		}
-
-		inline std::string childPhase(std::string_view phase, std::string_view suffix) {
-			std::string name;
-			name.reserve(phase.size() + suffix.size());
-			name.append(phase.data(), phase.size());
-			name.append(suffix.data(), suffix.size());
-			return name;
-		}
+		// The scheduling/telemetry loop is deliberately non-template so every
+		// query operator shares one compact, consistently tested implementation.
+		[[nodiscard]] bool runOperatorIndexedPartitionsCore(size_t partitionCount,
+															ThreadPool *pool,
+															const ParallelOperatorOptions &options,
+															const ParallelWorkEstimate &estimate,
+															const ParallelExecutionDecision &decision,
+															const ParallelOperatorCallbacks &callbacks);
 
 		template<typename Worker, typename State>
 		bool invokeIndexedWorker(Worker &&worker, size_t partition, State &state) {
@@ -95,76 +85,54 @@ namespace graph::concurrent {
 			}
 		}
 
-		inline ParallelWorkEstimate makeEstimate(size_t partitionCount, const ParallelOperatorOptions &options) {
-			return {.workloadKind = options.workloadKind,
-					.partitions = partitionCount,
-					.estimatedItems = options.estimatedItems,
-					.estimatedBytes = options.estimatedBytes,
-					.minPartitions = options.minPartitions,
-					.minItems = options.minItems,
-					.minItemsPerWorker = options.minItemsPerWorker,
-					.minBytesPerWorker = options.minBytesPerWorker,
-					.maxWorkers = options.maxWorkers,
-					.estimatedStateBytesPerItem = options.estimatedStateBytesPerItem,
-					.frontierWidth = options.frontierWidth,
-					.traversalDepth = options.traversalDepth};
+		[[nodiscard]] ParallelWorkEstimate makeEstimate(size_t partitionCount, const ParallelOperatorOptions &options);
+		[[nodiscard]] size_t chooseRangePartitionCount(size_t totalItems,
+																ThreadPool *pool,
+																const ParallelOperatorOptions &options);
+
+		template<typename State, typename Worker, typename Merger>
+		struct IndexedCallbackContext {
+			explicit IndexedCallbackContext(size_t partitionCount, Worker &worker, Merger &merger) :
+					states(partitionCount), worker(worker), merger(merger) {}
+
+			std::vector<State> states;
+			Worker &worker;
+			Merger &merger;
+		};
+
+		template<typename State, typename Worker, typename Merger>
+		bool runIndexedCallback(void *context, size_t partition) {
+			auto &typed = *static_cast<IndexedCallbackContext<State, Worker, Merger> *>(context);
+			return invokeIndexedWorker(typed.worker, partition, typed.states[partition]);
 		}
 
-		inline int64_t clampProfileValue(size_t value) {
-			return static_cast<int64_t>(
-					std::min<size_t>(value, static_cast<size_t>(std::numeric_limits<int64_t>::max())));
+		template<typename State, typename Worker, typename Merger>
+		void mergeIndexedCallback(void *context, size_t partition) {
+			auto &typed = *static_cast<IndexedCallbackContext<State, Worker, Merger> *>(context);
+			std::invoke(typed.merger, partition, typed.states[partition]);
 		}
 
-		inline void emitEstimateValue(std::string_view phase, std::string_view suffix, size_t value) {
-			if (value == 0) {
-				return;
-			}
-			const std::string valuePhase = childPhase(phase, suffix);
-			debug::PerfTrace::addValue(valuePhase, clampProfileValue(value));
+		template<typename State, typename Worker, typename Merger>
+		struct RangeCallbackContext {
+			RangeCallbackContext(const std::vector<ParallelRangePartition> &partitions, Worker &worker, Merger &merger) :
+					partitions(partitions), states(partitions.size()), worker(worker), merger(merger) {}
+
+			const std::vector<ParallelRangePartition> &partitions;
+			std::vector<State> states;
+			Worker &worker;
+			Merger &merger;
+		};
+
+		template<typename State, typename Worker, typename Merger>
+		bool runRangeCallback(void *context, size_t partition) {
+			auto &typed = *static_cast<RangeCallbackContext<State, Worker, Merger> *>(context);
+			return invokeRangeWorker(typed.worker, typed.partitions[partition], typed.states[partition]);
 		}
 
-		inline void emitDecisionProfile(
-				std::string_view phase,
-				const ParallelWorkEstimate &estimate,
-				const ParallelExecutionDecision &decision) {
-			if (!debug::PerfTrace::isEnabled() || phase.empty()) {
-				return;
-			}
-			const std::string workersPhase = childPhase(phase, ".workers");
-			const std::string baselinePhase = childPhase(phase, ".baseline_workers");
-			const std::string hardLimitPhase = childPhase(phase, ".hard_worker_limit");
-			const std::string adaptivePhase = childPhase(phase, ".adaptive");
-			const std::string reasonCodePhase = childPhase(phase, ".decision_reason_code");
-			const std::string reasonPhase = childPhase(
-					childPhase(phase, ".decision."), parallelDecisionReasonName(decision.reason));
-
-			emitEstimateValue(phase, ".estimated_items", estimate.estimatedItems);
-			emitEstimateValue(phase, ".estimated_bytes", estimate.estimatedBytes);
-			emitEstimateValue(phase, ".state_bytes_per_item", estimate.estimatedStateBytesPerItem);
-			emitEstimateValue(phase, ".frontier_width", estimate.frontierWidth);
-			emitEstimateValue(phase, ".traversal_depth", estimate.traversalDepth);
-			debug::PerfTrace::addValue(workersPhase, static_cast<int64_t>(decision.useParallel ? decision.workerCount : 1));
-			debug::PerfTrace::addValue(baselinePhase, static_cast<int64_t>(decision.baselineWorkerCount));
-			debug::PerfTrace::addValue(hardLimitPhase, static_cast<int64_t>(decision.hardWorkerLimit));
-			debug::PerfTrace::addValue(adaptivePhase, decision.usedAdaptiveRecommendation ? 1 : 0);
-			debug::PerfTrace::addValue(reasonCodePhase, parallelDecisionReasonCode(decision.reason));
-			debug::PerfTrace::addValue(reasonPhase, 1);
-		}
-
-		inline size_t chooseRangePartitionCount(size_t totalItems,
-												ThreadPool *pool,
-												const ParallelOperatorOptions &options) {
-			if (totalItems == 0) {
-				return 0;
-			}
-			const size_t poolWorkers = pool ? std::max<size_t>(1, pool->getThreadCount()) : size_t{1};
-			const size_t workerLimit = options.maxWorkers == 0 ? poolWorkers : std::min(poolWorkers, options.maxWorkers);
-			const size_t targetPartitions = std::max<size_t>(1, workerLimit) * 4;
-			size_t byGranularity = totalItems;
-			if (options.minItemsPerWorker != 0) {
-				byGranularity = std::max<size_t>(1, ceilDiv(totalItems, options.minItemsPerWorker));
-			}
-			return std::max<size_t>(1, std::min({totalItems, targetPartitions, byGranularity}));
+		template<typename State, typename Worker, typename Merger>
+		void mergeRangeCallback(void *context, size_t partition) {
+			auto &typed = *static_cast<RangeCallbackContext<State, Worker, Merger> *>(context);
+			std::invoke(typed.merger, partition, typed.states[partition]);
 		}
 	} // namespace detail
 
@@ -198,66 +166,16 @@ namespace graph::concurrent {
 												  const ParallelExecutionDecision &decision,
 												  Worker &&worker,
 												  Merger &&merger) {
-		if (partitionCount == 0) {
-			return true;
-		}
-
-		const bool traceEnabled = debug::PerfTrace::isEnabled() && !options.phase.empty();
-		const auto totalStart = std::chrono::steady_clock::now();
-		const std::string taskPhase = traceEnabled ? detail::childPhase(options.phase, ".task") : std::string{};
-		const std::string mergePhase = traceEnabled ? detail::childPhase(options.phase, ".merge") : std::string{};
-
-		detail::ParallelOperatorStateStorage<State> storage(partitionCount);
-		std::atomic<bool> failed{false};
-		std::atomic<uint64_t> taskNs{0};
-		std::atomic<uint64_t> taskCalls{0};
-		auto runOne = [&](size_t partition) {
-			if (failed.load(std::memory_order_relaxed)) {
-				return;
-			}
-			const auto taskStart = std::chrono::steady_clock::now();
-			const bool ok = detail::invokeIndexedWorker(worker, partition, storage.states[partition]);
-			const uint64_t elapsed = detail::elapsedNs(taskStart);
-			taskNs.fetch_add(elapsed, std::memory_order_relaxed);
-			taskCalls.fetch_add(1, std::memory_order_relaxed);
-			if (!ok) {
-				failed.store(true, std::memory_order_relaxed);
-			}
-		};
-
-		detail::emitDecisionProfile(options.phase, estimate, decision);
-		if (decision.useParallel) {
-			pool->parallelFor(0, partitionCount, decision.workerCount, runOne);
-		} else {
-			for (size_t partition = 0; partition < partitionCount; ++partition) {
-				runOne(partition);
-				if (failed.load(std::memory_order_relaxed)) {
-					break;
-				}
-			}
-		}
-		if (traceEnabled) {
-			debug::PerfTrace::addDurationBatch(
-					taskPhase, taskNs.load(std::memory_order_relaxed), taskCalls.load(std::memory_order_relaxed));
-		}
-
-		if (failed.load(std::memory_order_relaxed)) {
-			recordParallelExecution(pool, estimate, decision, detail::elapsedNs(totalStart), taskNs.load(), 0, false);
-			return false;
-		}
-
-		const auto mergeStart = std::chrono::steady_clock::now();
-		for (size_t partition = 0; partition < storage.states.size(); ++partition) {
-			std::invoke(merger, partition, storage.states[partition]);
-		}
-		const uint64_t mergeNs = detail::elapsedNs(mergeStart);
-		const uint64_t totalNs = detail::elapsedNs(totalStart);
-		if (traceEnabled) {
-			debug::PerfTrace::addDuration(mergePhase, mergeNs);
-			debug::PerfTrace::addDuration(options.phase, totalNs);
-		}
-		recordParallelExecution(pool, estimate, decision, totalNs, taskNs.load(std::memory_order_relaxed), mergeNs);
-		return true;
+		detail::IndexedCallbackContext<State, Worker, Merger> context(partitionCount, worker, merger);
+		return detail::runOperatorIndexedPartitionsCore(
+				partitionCount,
+				pool,
+				options,
+				estimate,
+				decision,
+				{.context = &context,
+				 .run = &detail::runIndexedCallback<State, Worker, Merger>,
+				 .merge = &detail::mergeIndexedCallback<State, Worker, Merger>});
 	}
 
 	template<typename State, typename Worker, typename Merger>
@@ -279,16 +197,18 @@ namespace graph::concurrent {
 	bool runOperatorRangePartitions(size_t begin, size_t end, size_t partitionCount, ThreadPool *pool,
 									const ParallelOperatorOptions &options, Worker &&worker, Merger &&merger) {
 		const auto partitions = buildRangePartitions(begin, end, partitionCount);
-		auto indexedWorker = [&](size_t partitionIndex, State &state) {
-			if constexpr (std::is_same_v<std::invoke_result_t<Worker, const ParallelRangePartition &, State &>, bool>) {
-				return std::invoke(worker, partitions[partitionIndex], state);
-			} else {
-				std::invoke(worker, partitions[partitionIndex], state);
-				return true;
-			}
-		};
-		return runOperatorIndexedPartitions<State>(
-				partitions.size(), pool, options, indexedWorker, std::forward<Merger>(merger));
+		const ParallelWorkEstimate estimate = detail::makeEstimate(partitions.size(), options);
+		const auto decision = decideParallelExecution(pool, estimate);
+		detail::RangeCallbackContext<State, Worker, Merger> context(partitions, worker, merger);
+		return detail::runOperatorIndexedPartitionsCore(
+				partitions.size(),
+				pool,
+				options,
+				estimate,
+				decision,
+				{.context = &context,
+				 .run = &detail::runRangeCallback<State, Worker, Merger>,
+				 .merge = &detail::mergeRangeCallback<State, Worker, Merger>});
 	}
 
 	template<typename State, typename Worker, typename Merger>
@@ -303,55 +223,19 @@ namespace graph::concurrent {
 		const ParallelWorkEstimate estimate = detail::makeEstimate(partitionCount, options);
 		const auto decision = decideParallelExecution(pool, estimate);
 
-		if (decision.useParallel) {
-			const auto partitions = buildRangePartitions(begin, end, partitionCount);
-			auto indexedWorker = [&](size_t partitionIndex, State &state) {
-				if constexpr (std::is_same_v<std::invoke_result_t<Worker, const ParallelRangePartition &, State &>, bool>) {
-					return std::invoke(worker, partitions[partitionIndex], state);
-				} else {
-					std::invoke(worker, partitions[partitionIndex], state);
-					return true;
-				}
-			};
-			return runOperatorIndexedPartitionsWithDecision<State>(
-					partitions.size(),
-					pool,
-					options,
-					estimate,
-					decision,
-					indexedWorker,
-					std::forward<Merger>(merger));
-		}
-
-		const bool traceEnabled = debug::PerfTrace::isEnabled() && !options.phase.empty();
-		const auto totalStart = std::chrono::steady_clock::now();
-		const std::string taskPhase = traceEnabled ? detail::childPhase(options.phase, ".task") : std::string{};
-		const std::string mergePhase = traceEnabled ? detail::childPhase(options.phase, ".merge") : std::string{};
-		detail::emitDecisionProfile(options.phase, estimate, decision);
-
-		State state;
-		const auto taskStart = std::chrono::steady_clock::now();
-		const bool ok = detail::invokeRangeWorker(worker, ParallelRangePartition{begin, end}, state);
-		const uint64_t taskNs = detail::elapsedNs(taskStart);
-		if (traceEnabled) {
-			debug::PerfTrace::addDuration(taskPhase, taskNs);
-		}
-		if (!ok) {
-			const uint64_t totalNs = detail::elapsedNs(totalStart);
-			recordParallelExecution(pool, estimate, decision, totalNs, taskNs, 0, false);
-			return false;
-		}
-
-		const auto mergeStart = std::chrono::steady_clock::now();
-		std::invoke(merger, size_t{0}, state);
-		const uint64_t mergeNs = detail::elapsedNs(mergeStart);
-		const uint64_t totalNs = detail::elapsedNs(totalStart);
-		if (traceEnabled) {
-			debug::PerfTrace::addDuration(mergePhase, mergeNs);
-			debug::PerfTrace::addDuration(options.phase, totalNs);
-		}
-		recordParallelExecution(pool, estimate, decision, totalNs, taskNs, mergeNs);
-		return true;
+		const std::vector<ParallelRangePartition> partitions = decision.useParallel
+															 ? buildRangePartitions(begin, end, partitionCount)
+															 : std::vector<ParallelRangePartition>{{begin, end}};
+		detail::RangeCallbackContext<State, Worker, Merger> context(partitions, worker, merger);
+		return detail::runOperatorIndexedPartitionsCore(
+				partitions.size(),
+				pool,
+				options,
+				estimate,
+				decision,
+				{.context = &context,
+				 .run = &detail::runRangeCallback<State, Worker, Merger>,
+				 .merge = &detail::mergeRangeCallback<State, Worker, Merger>});
 	}
 
 	class ParallelOperatorExecutor {

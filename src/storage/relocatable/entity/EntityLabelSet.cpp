@@ -9,8 +9,6 @@
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
 
 #include <algorithm>
-#include <limits>
-
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -32,10 +30,6 @@ namespace graph::storage {
 		}
 
 		void validateLabelCount(size_t labelCount) {
-			if (labelCount > std::numeric_limits<uint32_t>::max()) {
-				throwLabelSetError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-							   "relocatable Entity label overflow count exceeds its wire field");
-			}
 			if (labelCount > RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS) {
 				throwLabelSetError(FormatError::FERR_INVALID_STATE,
 							   "relocatable Entity label overflow exceeds one typed slotted-page record");
@@ -52,19 +46,9 @@ namespace graph::storage {
 			validateLabelCount(labelIds.size());
 		}
 
-		[[nodiscard]] size_t checkedTotalBytes(uint32_t labelCount) {
+		[[nodiscard]] size_t checkedTotalBytes(size_t labelCount) {
 			validateLabelCount(labelCount);
-			const size_t count = static_cast<size_t>(labelCount);
-			if (count > (std::numeric_limits<size_t>::max() - LABELS_OFFSET) / LABEL_BYTES) {
-				throwLabelSetError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-							   "relocatable Entity label overflow byte count exceeds addressable memory");
-			}
-			const size_t encodedBytes = LABELS_OFFSET + count * LABEL_BYTES;
-			if (alignEntityLabelSetRecordBytes(encodedBytes) != encodedBytes) {
-				throwLabelSetError(FormatError::FERR_INVALID_HEADER,
-							   "relocatable Entity label overflow record violates its alignment contract");
-			}
-			return encodedBytes;
+			return LABELS_OFFSET + labelCount * LABEL_BYTES;
 		}
 
 		[[nodiscard]] uint32_t checksum(std::span<const std::byte> bytes) {
@@ -78,10 +62,6 @@ namespace graph::storage {
 		const uint32_t labelCount = static_cast<uint32_t>(labelIds.size());
 		const size_t totalBytes = checkedTotalBytes(labelCount);
 		const size_t payloadBytes = totalBytes - LABELS_OFFSET;
-		if (payloadBytes > std::numeric_limits<uint32_t>::max()) {
-			throwLabelSetError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-						   "relocatable Entity label overflow payload exceeds its wire field");
-		}
 
 		std::vector<std::byte> bytes(totalBytes);
 		LittleEndianCodec::writeU32(bytes, MAGIC_OFFSET, RSS_ENTITY_LABEL_SET_MAGIC);
@@ -123,7 +103,7 @@ namespace graph::storage {
 						   "relocatable Entity label overflow has an unsupported version");
 		}
 		const uint32_t labelCount = LittleEndianCodec::readU32(bytes, LABEL_COUNT_OFFSET);
-		const size_t totalBytes = checkedTotalBytes(labelCount);
+		const size_t totalBytes = checkedTotalBytes(static_cast<size_t>(labelCount));
 		const uint8_t invalidHeader =
 				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, HEADER_BYTES_OFFSET) !=
 									  RSS_ENTITY_LABEL_SET_HEADER_BYTES) |

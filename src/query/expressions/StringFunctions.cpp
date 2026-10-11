@@ -29,7 +29,7 @@ static PropertyValue toStringImpl(
 	const std::vector<PropertyValue>& args,
 	[[maybe_unused]] const EvaluationContext& context
 ) {
-	if (args.empty()) {
+	if (args.empty() || EvaluationContext::isNull(args[0])) {
 		return PropertyValue();
 	}
 	return PropertyValue(args[0].toString());
@@ -288,7 +288,7 @@ static PropertyValue rTrimImpl(
 
 static PropertyValue splitImpl(
 	const std::vector<PropertyValue>& args,
-	[[maybe_unused]] const EvaluationContext& context
+	const EvaluationContext& context
 ) {
 	if (args.size() < 2 || EvaluationContext::isNull(args[0]) || EvaluationContext::isNull(args[1])) {
 		return PropertyValue();
@@ -299,6 +299,7 @@ static PropertyValue splitImpl(
 	std::vector<PropertyValue> result;
 	if (delimiter.empty()) {
 		for (char c : str) {
+			context.requireCollectionCapacity(result.size() + 1U, "split");
 			result.push_back(PropertyValue(std::string(1, c)));
 		}
 		return PropertyValue(result);
@@ -307,9 +308,11 @@ static PropertyValue splitImpl(
 	size_t pos = 0;
 	size_t found;
 	while ((found = str.find(delimiter, pos)) != std::string::npos) {
+		context.requireCollectionCapacity(result.size() + 1U, "split");
 		result.push_back(PropertyValue(str.substr(pos, found - pos)));
 		pos = found + delimiter.length();
 	}
+	context.requireCollectionCapacity(result.size() + 1U, "split");
 	result.push_back(PropertyValue(str.substr(pos)));
 	return PropertyValue(result);
 }

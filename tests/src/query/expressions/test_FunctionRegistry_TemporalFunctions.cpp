@@ -53,8 +53,7 @@ TEST_F(FunctionRegistryTest, DateFunction_MapArg) {
 TEST_F(FunctionRegistryTest, DateFunction_InvalidType) {
 	const ScalarFunction* func = registry->lookupScalarFunction("date");
 	std::vector<PropertyValue> args{PropertyValue(static_cast<int64_t>(123))};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 TEST_F(FunctionRegistryTest, DatetimeFunction_NoArgs) {
@@ -90,8 +89,7 @@ TEST_F(FunctionRegistryTest, DatetimeFunction_MapArg) {
 TEST_F(FunctionRegistryTest, DatetimeFunction_InvalidType) {
 	const ScalarFunction* func = registry->lookupScalarFunction("datetime");
 	std::vector<PropertyValue> args{PropertyValue(static_cast<int64_t>(123))};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 TEST_F(FunctionRegistryTest, DurationFunction_StringArg) {
@@ -125,8 +123,7 @@ TEST_F(FunctionRegistryTest, DurationFunction_NullArg) {
 TEST_F(FunctionRegistryTest, DurationFunction_InvalidType) {
 	const ScalarFunction* func = registry->lookupScalarFunction("duration");
 	std::vector<PropertyValue> args{PropertyValue(static_cast<int64_t>(123))};
-	auto result = func->evaluate(args, *context_);
-	EXPECT_EQ(result.getType(), PropertyType::NULL_TYPE);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 TEST_F(FunctionRegistryTest, DateFunction_MapWithMissingFields) {
@@ -149,30 +146,22 @@ TEST_F(FunctionRegistryTest, DatetimeFunction_MapWithMissingFields) {
 	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
 }
 
-// Cover the false branch of "it->second.getType() == PropertyType::INTEGER"
-// in dateImpl: key "year" exists but holds a string, so the branch is NOT taken
-// and the default value (1970) is used.
-TEST_F(FunctionRegistryTest, DateFunction_MapYearNonInteger_UsesDefault) {
+TEST_F(FunctionRegistryTest, DateFunction_RejectsNonIntegerYear) {
 	const ScalarFunction* func = registry->lookupScalarFunction("date");
 	PropertyValue::MapType map;
-	map["year"] = PropertyValue(std::string("2024")); // string, not integer
-	map["month"] = PropertyValue(std::string("3"));   // string, not integer
+	map["year"] = PropertyValue(std::string("2024"));
+	map["month"] = PropertyValue(std::string("3"));
 	std::vector<PropertyValue> args{PropertyValue(map)};
-	auto result = func->evaluate(args, *context_);
-	// Should still return a DATE (using defaults year=1970, month=1, day=1)
-	EXPECT_EQ(result.getType(), PropertyType::DATE);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
-// Cover the false branch of the INTEGER type check in datetimeImpl map path.
-TEST_F(FunctionRegistryTest, DatetimeFunction_MapYearNonInteger_UsesDefault) {
+TEST_F(FunctionRegistryTest, DatetimeFunction_RejectsNonIntegerYear) {
 	const ScalarFunction* func = registry->lookupScalarFunction("datetime");
 	PropertyValue::MapType map;
-	map["year"] = PropertyValue(std::string("2024")); // string, not integer
-	map["hour"] = PropertyValue(std::string("10"));   // string, not integer
+	map["year"] = PropertyValue(std::string("2024"));
+	map["hour"] = PropertyValue(std::string("10"));
 	std::vector<PropertyValue> args{PropertyValue(map)};
-	auto result = func->evaluate(args, *context_);
-	// Should still return a DATETIME (using defaults)
-	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+	EXPECT_THROW(static_cast<void>(func->evaluate(args, *context_)), std::invalid_argument);
 }
 
 // Cover the durationImpl empty-args guard (args.empty() branch).

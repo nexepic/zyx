@@ -406,7 +406,7 @@ def test_zyx_adapter_defaults_binary_path(tmp_path: Path, monkeypatch):
     assert adapter.timeout_seconds == 600
 
 
-def test_zyx_adapter_cleans_database_artifact_family(tmp_path: Path):
+def test_zyx_adapter_cleans_single_file_database_artifacts(tmp_path: Path):
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     adapter = ZyxAdapter(database="zyx", dataset_dir=dataset_dir, scale="smoke")
@@ -422,9 +422,9 @@ def test_zyx_adapter_cleans_database_artifact_family(tmp_path: Path):
 
     removed = adapter.cleanup_artifacts()
 
-    assert removed == [db_path, wal_path, load_path]
+    assert removed == [db_path, load_path]
     assert not db_path.exists()
-    assert not wal_path.exists()
+    assert wal_path.read_text() == "wal"
     assert not load_path.exists()
     assert unrelated.read_text() == "keep"
 

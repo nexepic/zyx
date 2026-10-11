@@ -16,8 +16,6 @@ protected:
     void SetUp() override {
         dbPath = std::filesystem::temp_directory_path() / "test_import_db";
         std::filesystem::remove_all(dbPath);
-        std::filesystem::remove(dbPath.string() + ".wal");
-        std::filesystem::remove(dbPath.string() + ".migration");
         
         nodeFile = std::filesystem::temp_directory_path() / "nodes.csv";
         edgeFile = std::filesystem::temp_directory_path() / "edges.csv";
@@ -31,8 +29,6 @@ protected:
 
     void TearDown() override {
         std::filesystem::remove_all(dbPath);
-        std::filesystem::remove(dbPath.string() + ".wal");
-        std::filesystem::remove(dbPath.string() + ".migration");
         std::filesystem::remove(nodeFile);
         std::filesystem::remove(edgeFile);
         std::filesystem::remove(jsonlNodeFile);

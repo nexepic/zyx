@@ -51,9 +51,10 @@ ORDER BY communityId, nodeId
 | 字段 | 类型 | 含义 |
 |---|---|---|
 | `nodeId` | 整数 | 原始数据库节点 ID |
-| `communityId` | 整数 | 本次运行生成的稠密社区 ID |
+| `communityId` | 整数 | 该社区中最小的原始节点 ID，作为其规范 ID |
 
-社区 ID 只用于标识单次结果中的划分。不要把其数值当作跨投影重建或跨运行稳定的标识符。
+社区 ID 只用于标识单次结果中的划分。对于同一个 immutable projection 与相同选项，ZYX 使用该社区中最小的原始节点 ID
+生成规范 ID，以获得确定性结果而不暴露内部的稠密工作标签。投影重建或不同选项可能产生不同分区，因而 ID 也可能不同。
 
 ## 参数
 
@@ -84,9 +85,9 @@ flowchart TD
 
 ### 局部移动
 
-每个节点检查相邻社区，并在模块度增益为正时移动。并行 worker 通过原子值读取最新社区标签，因此局部移动可以采用异步更新，同时避免并发读写未定义行为。每个社区的度数总和也使用原子更新。
-
-节点数少于 1,024 的图使用串行 executor 路径，以避免分区开销。更大的工作负载会在该过程的线程池中分区执行。
+每个节点检查相邻社区，并在模块度增益为正时移动。局部移动刻意保持串行，因此固定 immutable projection
+与 option set 始终使用相同的 tie-breaking 和 partition 演化过程。runtime 只会并行化彼此独立的 degree-scan batch；worker
+不会修改 community assignment，也不会调用 query cancellation callback。
 
 ### 精化
 
@@ -125,7 +126,9 @@ RETURN name, nodeCount, edgeCount, hasCsr, memoryBytes, csrMemoryBytes, stale
 CALL gds.graph.drop('social')
 ```
 
-并行异步移动可能使不同运行产生不同的社区 ID 数值或等价划分。应比较划分质量与成员关系，而不是直接比较 `communityId` 数值。
+对于同一个 immutable projection 与相同 option set，native implementation 会产生确定的 partition 和规范
+`communityId`。重建 projection 或使用不同选项仍可能改变 partition，因此 application logic 应将 membership
+和 graph version 视为语义 identity，而不要假设一个 community 可以跨 rebuild 保持不变。
 
 ## 调优建议
 

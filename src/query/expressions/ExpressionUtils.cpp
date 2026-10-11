@@ -44,6 +44,32 @@ bool ExpressionUtils::isAggregateFunction(const std::string& functionName) {
 	return std::find(names.begin(), names.end(), nameLower) != names.end();
 }
 
+void ExpressionUtils::validateAggregateFunctionCall(const FunctionCallExpression& functionCall) {
+	std::string nameLower = functionCall.getFunctionName();
+	std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+				   [](unsigned char character) { return std::tolower(character); });
+	if (!isAggregateFunction(nameLower)) {
+		throw std::invalid_argument("cannot validate a non-aggregate function as an aggregate");
+	}
+
+	const size_t argumentCount = functionCall.getArgumentCount();
+	if (nameLower == "count") {
+		if (argumentCount > 1U || (functionCall.isDistinct() && argumentCount == 0U)) {
+			throw std::invalid_argument("count aggregate requires zero or one argument");
+		}
+		return;
+	}
+	if (nameLower == "percentiledisc" || nameLower == "percentilecont") {
+		if (argumentCount != 2U) {
+			throw std::invalid_argument("percentile aggregate requires a value and percentile argument");
+		}
+		return;
+	}
+	if (argumentCount != 1U) {
+		throw std::invalid_argument("aggregate requires exactly one argument");
+	}
+}
+
 // =============================================================================
 // containsAggregate — complete recursive check over ALL expression types
 // =============================================================================
@@ -145,12 +171,18 @@ bool ExpressionUtils::containsAggregate(const Expression* expr) {
 			}
 			return false;
 		}
+		case ExpressionType::EXPR_LIST_LITERAL: {
+			auto *list = static_cast<const ListLiteralExpression*>(expr);
+			for (const auto &element : list->getElements()) {
+				if (containsAggregate(element.get())) return true;
+			}
+			return false;
+		}
 		case ExpressionType::LITERAL:
 		case ExpressionType::VARIABLE_REFERENCE:
 		case ExpressionType::PROPERTY_ACCESS:
 		case ExpressionType::PARAMETER:
 		case ExpressionType::SHORTEST_PATH:
-		case ExpressionType::EXPR_LIST_LITERAL:
 			return false;
 	}
 	return false; // unreachable, but satisfies compiler
@@ -169,7 +201,10 @@ void collectVarsImpl(const Expression* expr, SetType& out) {
 	switch (expr->getExpressionType()) {
 		case ExpressionType::VARIABLE_REFERENCE:
 		case ExpressionType::PROPERTY_ACCESS: {
-			auto* varExpr = static_cast<const VariableReferenceExpression*>(expr);
+			auto* varExpr = dynamic_cast<const VariableReferenceExpression*>(expr);
+			if (!varExpr) {
+				throw std::logic_error("variable expression type does not match its expression tag");
+			}
 			out.insert(varExpr->getVariableName());
 			break;
 		}
@@ -274,7 +309,9 @@ void collectVarsImpl(const Expression* expr, SetType& out) {
 		}
 		case ExpressionType::MAP_PROJECTION: {
 			auto* mapProj = static_cast<const MapProjectionExpression*>(expr);
-			out.insert(mapProj->getVariable());
+			if (!mapProj->isMapLiteral()) {
+				out.insert(mapProj->getVariable());
+			}
 			for (const auto& item : mapProj->getItems()) {
 				if (item.expression) {
 					collectVarsImpl(item.expression.get(), out);
@@ -288,9 +325,15 @@ void collectVarsImpl(const Expression* expr, SetType& out) {
 			out.insert(sp->getEndVar());
 			break;
 		}
+		case ExpressionType::EXPR_LIST_LITERAL: {
+			auto* list = static_cast<const ListLiteralExpression*>(expr);
+			for (const auto& element : list->getElements()) {
+				collectVarsImpl(element.get(), out);
+			}
+			break;
+		}
 		case ExpressionType::LITERAL:
 		case ExpressionType::PARAMETER:
-		case ExpressionType::EXPR_LIST_LITERAL:
 			break;
 	}
 }
@@ -325,6 +368,7 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 		               [](unsigned char c) { return std::tolower(c); });
 
 		if (isAggregateFunction(funcNameLower)) {
+			validateAggregateFunctionCall(*funcCall);
 			std::string tempAlias = "__agg_" + std::to_string(counter++);
 
 			std::shared_ptr<Expression> argExpr = nullptr;
@@ -383,6 +427,31 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 				return std::make_unique<InExpression>(std::move(newValue), std::move(newList));
 			}
 			return std::make_unique<InExpression>(std::move(newValue), inExpr->getListValues());
+		}
+		case ExpressionType::EXPR_LIST_LITERAL: {
+			auto* list = static_cast<const ListLiteralExpression*>(expr);
+			if (list->isStatic()) {
+				return list->clone();
+			}
+			std::vector<std::unique_ptr<Expression>> elements;
+			elements.reserve(list->getElements().size());
+			for (const auto& element : list->getElements()) {
+				elements.push_back(extractAndReplaceAggregates(element.get(), aggItems, counter));
+			}
+			return std::make_unique<ListLiteralExpression>(std::move(elements));
+		}
+		case ExpressionType::MAP_PROJECTION: {
+			auto* mapProjection = static_cast<const MapProjectionExpression*>(expr);
+			std::vector<MapProjectionItem> items;
+			items.reserve(mapProjection->getItems().size());
+			for (const auto& item : mapProjection->getItems()) {
+				items.emplace_back(item.type, item.key,
+						item.expression ? extractAndReplaceAggregates(item.expression.get(), aggItems, counter) : nullptr);
+			}
+			if (mapProjection->isMapLiteral()) {
+				return std::make_unique<MapProjectionExpression>(std::move(items));
+			}
+			return std::make_unique<MapProjectionExpression>(mapProjection->getVariable(), std::move(items));
 		}
 		case ExpressionType::CASE_EXPRESSION: {
 			auto* caseExpr = static_cast<const CaseExpression*>(expr);

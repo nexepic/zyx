@@ -567,6 +567,7 @@ TEST_F(CompareBenchmarkTest, RunExecutesSmallOperationalDynamicProfile) {
 	operational_dynamic.scale = "tiny";
 	operational_dynamic.profile = std::string(kProfileOperationalDynamic);
 	operational_dynamic.iterations = 1;
+	operational_dynamic.includeLargeBatchWorkloads = false;
 
 	EXPECT_EQ(run(operational_dynamic), 0);
 

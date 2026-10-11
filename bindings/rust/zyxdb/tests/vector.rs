@@ -1,15 +1,16 @@
 //! Vector index end-to-end tests for the Rust binding.
 //!
-//! Cross-binding contract (see bindings/nodejs/test/vector.test.js and the
-//! C++ test_VectorIndex.cpp authority):
-//!  - metric must be 'L2' | 'IP' | 'Cosine' (exact case); other spellings
-//!    silently fall back to L2.
+//! Cross-binding contract (implemented by the native relocatable vector store):
+//!  - metric names are ASCII-case-insensitive and normalize to l2, ip, or
+//!    cosine; unsupported metrics are rejected rather than silently changing
+//!    semantics.
 //!  - the query vector for db.index.vector.queryNodes MUST be a literal list in
 //!    the Cypher string (CALL args are evaluated with an empty context, so a
 //!    $param collapses to empty and the call fails). The Rust `Params` API has
 //!    no list value anyway, so literals are the only option.
-//!  - L2 score = squared distance; IP/Cosine score = negative inner product;
-//!    results sorted ascending by score (lower is closer).
+//!  - L2 score = squared distance, IP score = negative inner product, and
+//!    Cosine score = 1 - cosine similarity; results sort ascending (lower is
+//!    closer).
 //!  - search works without training for small graphs (flat/raw greedy search).
 //!
 //! Note: the Rust high-level crate does NOT wrap QueryResult.is_success; engine
@@ -73,23 +74,28 @@ fn search_returns_up_to_k_sorted_ascending() {
 }
 
 #[test]
-fn cosine_metric_returns_negative_inner_product() {
+fn cosine_metric_returns_angular_distance() {
     let (_dir, db) = temp_db();
     db.execute("CREATE VECTOR INDEX vcos ON :V(embedding) OPTIONS {dimension: 2, metric: 'Cosine'}", None).unwrap();
     db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})", None).unwrap();
     db.execute("CREATE (:V {id: 2, embedding: [0.0, 1.0]})", None).unwrap();
     let res = search(&db, "vcos", 1, &[1.0, 0.0]);
     assert_eq!(res[0].0, 1);
-    assert!((res[0].1 - (-1.0)).abs() < 5e-2, "expected ~-1.0, got {}", res[0].1);
+    assert!(res[0].1.abs() < 5e-2, "expected ~0.0, got {}", res[0].1);
 }
 
 #[test]
-fn uppercase_cosine_silently_uses_l2() {
+fn metric_names_normalize_case_and_unsupported_metrics_are_rejected() {
     let (_dir, db) = temp_db();
     db.execute("CREATE VECTOR INDEX vup ON :V(embedding) OPTIONS {dimension: 2, metric: 'COSINE'}", None).unwrap();
-    db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})", None).unwrap();
+    db.execute("CREATE (:V {id: 1, embedding: [2.0, 0.0]})", None).unwrap();
     let res = search(&db, "vup", 1, &[1.0, 0.0]);
     assert_eq!(res[0].0, 1);
+    assert!(res[0].1.abs() < 5e-2, "expected cosine distance ~0.0, got {}", res[0].1);
+
+    assert!(db.execute(
+        "CREATE VECTOR INDEX vinvalid ON :V(embedding) OPTIONS {dimension: 2, metric: 'invalid'}", None
+    ).is_err());
 }
 
 #[test]

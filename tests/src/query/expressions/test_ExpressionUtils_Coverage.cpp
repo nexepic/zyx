@@ -58,6 +58,43 @@ TEST_F(ExpressionUtilsCoverageTest, IsAggregate_Stdev) {
 	EXPECT_TRUE(ExpressionUtils::isAggregateFunction("PERCENTILEDISC"));
 }
 
+TEST_F(ExpressionUtilsCoverageTest, ValidatesAggregateArityBeforeLogicalLowering) {
+	const auto makeCall = [](std::string name, std::vector<std::unique_ptr<Expression>> arguments,
+							 bool distinct = false) {
+		return FunctionCallExpression(std::move(name), std::move(arguments), distinct);
+	};
+	const auto oneArgument = [](std::unique_ptr<Expression> argument) {
+		std::vector<std::unique_ptr<Expression>> arguments;
+		arguments.push_back(std::move(argument));
+		return arguments;
+	};
+	const auto twoArguments = [](std::unique_ptr<Expression> first, std::unique_ptr<Expression> second) {
+		std::vector<std::unique_ptr<Expression>> arguments;
+		arguments.push_back(std::move(first));
+		arguments.push_back(std::move(second));
+		return arguments;
+	};
+
+	auto countStar = makeCall("count", {});
+	EXPECT_NO_THROW(ExpressionUtils::validateAggregateFunctionCall(countStar));
+	auto sum = makeCall("sum", oneArgument(lit(1)));
+	EXPECT_NO_THROW(ExpressionUtils::validateAggregateFunctionCall(sum));
+	auto percentile =
+			makeCall("percentileDisc", twoArguments(var("value"), std::make_unique<LiteralExpression>(0.5)));
+	EXPECT_NO_THROW(ExpressionUtils::validateAggregateFunctionCall(percentile));
+
+	auto countTooMany = makeCall("count", twoArguments(lit(1), lit(2)));
+	EXPECT_THROW(ExpressionUtils::validateAggregateFunctionCall(countTooMany), std::invalid_argument);
+	auto distinctCountStar = makeCall("count", {}, true);
+	EXPECT_THROW(ExpressionUtils::validateAggregateFunctionCall(distinctCountStar), std::invalid_argument);
+	auto sumMissingValue = makeCall("sum", {});
+	EXPECT_THROW(ExpressionUtils::validateAggregateFunctionCall(sumMissingValue), std::invalid_argument);
+	auto percentileMissingArgument = makeCall("percentileCont", oneArgument(var("value")));
+	EXPECT_THROW(ExpressionUtils::validateAggregateFunctionCall(percentileMissingArgument), std::invalid_argument);
+	auto scalarFunction = makeCall("abs", oneArgument(lit(1)));
+	EXPECT_THROW(ExpressionUtils::validateAggregateFunctionCall(scalarFunction), std::invalid_argument);
+}
+
 // ============================================================================
 // containsAggregate: ListSlice with agg in start/end
 // ============================================================================
@@ -215,6 +252,54 @@ TEST_F(ExpressionUtilsCoverageTest, ContainsAggregate_ShortestPath) {
 TEST_F(ExpressionUtilsCoverageTest, ContainsAggregate_ListLiteral) {
 	auto ll = std::make_unique<ListLiteralExpression>(PropertyValue(std::vector<PropertyValue>{}));
 	EXPECT_FALSE(ExpressionUtils::containsAggregate(ll.get()));
+}
+
+TEST_F(ExpressionUtilsCoverageTest, DynamicListLiteralAnalyzesAndExtractsItsChildren) {
+	std::vector<std::unique_ptr<Expression>> elements;
+	elements.push_back(aggCall("count", var("input")));
+	elements.push_back(std::make_unique<BinaryOpExpression>(
+			var("outer"), BinaryOperatorType::BOP_ADD, lit(1)));
+	auto list = std::make_unique<ListLiteralExpression>(std::move(elements));
+
+	EXPECT_TRUE(ExpressionUtils::containsAggregate(list.get()));
+	std::unordered_set<std::string> variables;
+	ExpressionUtils::collectVariables(list.get(), variables);
+	EXPECT_EQ(variables, (std::unordered_set<std::string>{"input", "outer"}));
+
+	std::vector<graph::query::logical::LogicalAggItem> aggregates;
+	size_t counter = 0U;
+	auto extracted = ExpressionUtils::extractAndReplaceAggregates(list.get(), aggregates, counter);
+	auto *extractedList = dynamic_cast<ListLiteralExpression *>(extracted.get());
+	ASSERT_NE(extractedList, nullptr);
+	EXPECT_FALSE(extractedList->isStatic());
+	ASSERT_EQ(extractedList->getElements().size(), 2U);
+	EXPECT_EQ(extractedList->getElements().front()->getExpressionType(), ExpressionType::VARIABLE_REFERENCE);
+	EXPECT_EQ(aggregates.size(), 1U);
+	EXPECT_EQ(counter, 1U);
+}
+
+TEST_F(ExpressionUtilsCoverageTest, DynamicMapLiteralAnalyzesAndExtractsItsChildren) {
+	std::vector<MapProjectionItem> items;
+	items.emplace_back(MapProjectionItemType::MPROP_LITERAL, "count", aggCall("count", var("input")));
+	items.emplace_back(MapProjectionItemType::MPROP_LITERAL, "outer", var("outer"));
+	auto map = std::make_unique<MapProjectionExpression>(std::move(items));
+
+	EXPECT_TRUE(map->isMapLiteral());
+	EXPECT_TRUE(ExpressionUtils::containsAggregate(map.get()));
+	std::unordered_set<std::string> variables;
+	ExpressionUtils::collectVariables(map.get(), variables);
+	EXPECT_EQ(variables, (std::unordered_set<std::string>{"input", "outer"}));
+
+	std::vector<graph::query::logical::LogicalAggItem> aggregates;
+	size_t counter = 0U;
+	auto extracted = ExpressionUtils::extractAndReplaceAggregates(map.get(), aggregates, counter);
+	auto *extractedMap = dynamic_cast<MapProjectionExpression *>(extracted.get());
+	ASSERT_NE(extractedMap, nullptr);
+	EXPECT_TRUE(extractedMap->isMapLiteral());
+	ASSERT_EQ(extractedMap->getItems().size(), 2U);
+	EXPECT_EQ(extractedMap->getItems().front().expression->getExpressionType(), ExpressionType::VARIABLE_REFERENCE);
+	EXPECT_EQ(aggregates.size(), 1U);
+	EXPECT_EQ(counter, 1U);
 }
 
 // ============================================================================

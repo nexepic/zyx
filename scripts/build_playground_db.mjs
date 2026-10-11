@@ -61,46 +61,13 @@ async function buildDatabase(mod, driver, dbPath, seedQueries, label) {
   // Close to flush data to main file
   driver.close(db);
 
-  // If WAL file exists in MEMFS, reopen the database to trigger WAL recovery
-  // which merges WAL data into the main file, then close again.
-  const walPath = dbPath + "-wal";
-  let hasWal = false;
-  try {
-    const walStat = mod.FS.stat(walPath);
-    hasWal = walStat.size > 0;
-  } catch {
-    // No WAL file
-  }
-
-  if (hasWal) {
-    console.log(`  WAL detected, reopening to trigger recovery...`);
-    const db2 = driver.open(dbPath);
-    // Begin a read-only transaction to trigger ensureWALAndTransactionManager recovery.
-    const txn = driver.beginReadOnly(db2);
-    driver.closeTxn(txn);
-    driver.close(db2);
-  }
-
   // Read the database file from MEMFS
   const data = mod.FS.readFile(dbPath);
   console.log(`  Database size: ${(data.length / 1024).toFixed(1)} KB`);
 
-  // Verify WAL is gone or empty after recovery
-  try {
-    const walData = mod.FS.readFile(walPath);
-    if (walData.length > 32) {
-      console.warn(`  Warning: WAL still has ${(walData.length / 1024).toFixed(1)} KB after recovery`);
-    }
-  } catch {
-    // No WAL file — expected
-  }
-
   // Clean up MEMFS
   try {
     mod.FS.unlink(dbPath);
-  } catch {}
-  try {
-    mod.FS.unlink(walPath);
   } catch {}
 
   return { data };

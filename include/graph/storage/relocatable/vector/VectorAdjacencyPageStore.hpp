@@ -10,6 +10,7 @@
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include "graph/storage/relocatable/vector/VectorAdjacency.hpp"
@@ -67,6 +68,8 @@ struct DerivedVectorAdjacencyPage {
 	class VectorAdjacencyPageStore final {
 	public:
 		VectorAdjacencyPageStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata);
+		VectorAdjacencyPageStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+								 SharedPagePoolOpenMode openMode);
 		[[nodiscard]] static uint64_t derivedOwnerId(uint64_t indexId);
 		[[nodiscard]] static std::vector<VectorAdjacencyMaterializationPoolRequest>
 		planNewPoolRequests(uint64_t indexId, std::span<const VectorAdjacencyMaterializationRecord> records,
@@ -89,11 +92,13 @@ struct DerivedVectorAdjacencyPage {
 		prepareNewPoolPages(uint64_t indexId, std::span<const VectorAdjacencyMaterializationRecord> records,
 							const VectorAdjacencyMaterializationOptions &options,
 							std::span<VectorAdjacencyMaterializationPoolBatch> batches,
-							LogSequenceNumber checkpointLsn) const;
+							LogSequenceNumber checkpointLsn,
+							const CancellationCheckpoint *cancellation = nullptr) const;
 		// Retires derived adjacency source frames before an enclosing compound
 		// publication removes their Page Directory references.
 		void prepareDerivedRetirements(std::span<const ExistingPoolPageRetirementBatch> batches,
-								 LogSequenceNumber checkpointLsn) const;
+								 LogSequenceNumber checkpointLsn,
+								 const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] SlottedPage readPage(const MetadataSnapshotPin &snapshot, PageId pageId) const;
 		// Returns no value for another valid typed page in the shared pool.
 		// Malformed or cross-namespace pages fail closed.

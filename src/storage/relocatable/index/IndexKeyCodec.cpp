@@ -162,6 +162,10 @@ namespace graph::storage {
 		return requireRepresentableIndexKey([&] { return buildComposite(values); });
 	}
 
+	std::optional<std::vector<std::byte>> IndexKeyCodec::tryEncodeComposite(std::span<const PropertyValue> values) {
+		return tryBuildIndexKey([&] { return buildComposite(values); });
+	}
+
 	std::vector<std::byte> IndexKeyCodec::encodeEntryKey(const PropertyValue &value, uint64_t entityId) {
 		return requireRepresentableIndexKey([&] { return appendEntityId(buildValue(value), entityId); });
 	}

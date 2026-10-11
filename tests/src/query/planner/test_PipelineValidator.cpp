@@ -48,7 +48,16 @@ TEST(PipelineValidatorTest, LogicalRequirePrecedingReportsTheClauseName) {
 			graph::query::PipelineValidator::ValidationMode::REQUIRE_PRECEDING);
 		FAIL() << "Expected runtime_error";
 	} catch (const std::runtime_error &e) {
-		std::string msg = e.what();
-		EXPECT_TRUE(msg.find("REMOVE") != std::string::npos);
+		EXPECT_EQ(std::string(e.what()), "REMOVE clause must follow a MATCH or CREATE clause.");
 	}
+}
+
+TEST(PipelineValidatorTest, LogicalRejectsUnknownValidationMode) {
+	const auto invalidMode =
+		static_cast<graph::query::PipelineValidator::ValidationMode>(-1);
+
+	EXPECT_THROW(
+		(void)graph::query::PipelineValidator::ensureValidLogicalPipeline(
+			nullptr, "MATCH", invalidMode),
+		std::runtime_error);
 }

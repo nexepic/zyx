@@ -1,117 +1,49 @@
 ---
 title: 项目结构
-description: 理解 ZYX 代码库组织对于有效贡献至关重要。本文档解释目录结构和文件组织。
-category: Contributing
-categoryOrder: 3
+description: 面向贡献者的当前 ZYX 源码布局和所有权边界。
+category: Development
+categoryOrder: 2
 order: 3
 project: zyx
 projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # 项目结构
 
-理解 ZYX 代码库组织对于有效贡献至关重要。本文档解释目录结构和文件组织。
+ZYX 是一个 C++20 嵌入式图数据库。当前存储实现是原生可重定位单文件格式；已退役的 fixed-record `FileStorage`、`DataManager`、segment-chain 和外置 WAL 实现不在源码树中，也不是兼容路径。
 
-## 顶层目录结构
+## 公开接口
 
-```
-zyx/
-├── include/              # 公共头文件
-├── src/                  # 实现源文件
-├── tests/                # 测试文件
-├── apps/                 # 应用程序（CLI、基准测试）
-├── scripts/              # 构建和实用脚本
-├── docs/                 # 文档
-└── buildDir/             # 构建输出（生成）
-```
+- `include/zyx/zyx.hpp` 是 C++ 嵌入 API。
+- `include/zyx/zyx_driver_abi.h` 是稳定的 C Driver ABI，Rust、Python、Node.js 和 WASM binding 都经由它接入。
+- `bindings/` 包含各语言适配层。修改公开 ABI 时必须同步保持其所有权和生命周期契约。
 
-## Include 目录
+## 原生运行时
 
-### 公共头文件 (`include/zyx/`)
+| 区域 | 位置 | 职责 |
+|---|---|---|
+| Core | `include/graph/core/`、`src/core/` | Database 生命周期、Transaction、Value 和公开操作协调。 |
+| Storage 边界 | `include/graph/storage/`、`src/storage/` | 逻辑图接口、backend 选择、跨平台 I/O、storage format 检查和 transaction overlay。 |
+| 原生存储 | `include/graph/storage/relocatable/`、`src/storage/relocatable/` | 可重定位 page、directory、COW publication、A/B Superblock、integrity 检查、maintenance、index 和 LargeValue。 |
+| Query engine | `include/graph/query/`、`src/query/` | Cypher parser、planning、optimization、逻辑 read/mutation runtime、procedure 和算法。 |
+| API 与 CLI | `src/api/`、`src/cli/` | C++ API 实现、Driver ABI 和命令行接口。 |
 
-```cpp
-include/zyx/
-├── zyx.hpp              # C++ 主公共头文件
-├── zyx_driver_abi.h     # 稳定的 C-facing Driver ABI 头文件
-└── value.hpp            # 公共 Value 类型定义
-```
+`StorageIO`、`PreadHelper` 和 `PwriteHelper` 是 native 文件 I/O 的平台抽象边界。不得新增仅适用于 POSIX 的存储路径；必须继续支持 macOS、Linux 和 Windows。
 
-`zyx_driver_abi.h` 是唯一受支持的 C-facing ABI 头文件。
+## 测试和应用
 
-### 内部头文件 (`include/graph/`)
+- `tests/src/` 包含单元和组件测试；`tests/integration/` 包含端到端覆盖。CMake 会发现 `test_*.cpp` 并构建一个 `zyx_test_suite` 可执行文件。
+- `apps/cli/` 是 CLI。`apps/benchmark/`、`apps/compare_benchmark/` 和各 calibration application 都应走当前公开/native 路径。
+- `benchmarks/graphdb-comparison/` 包含外部对比 harness 及其 Python 测试。
 
-包含内部实现头文件，按模块组织。
+新增测试必须观察公开行为或当前 native owner。不要重新创建已经退役的 fixed-record 实现细节测试。
 
-## Source 目录
+## 构建和文档
 
-包含所有实现源文件，镜像 include 目录的结构。
+- `CMakeLists.txt` 定义项目和 targets；`cmake/SourceSets.cmake` allowlist 当前 source，并拒绝已退役的存储路径。
+- `scripts/` 包含 build、test、binding、release 和 parser generation 工作流。
+- `docs/apps/docs/content/docs/en/` 和 `docs/apps/docs/content/docs/zh/` 分别是英文和中文文档根目录。修改面向贡献者的架构或行为时必须同步更新两者。
 
-## Test 目录
-
-### 集成测试 (`tests/integration/`)
-
-端到端测试，验证完整系统工作流。
-
-### 单元测试 (`tests/src/`)
-
-按模块组织的单元测试。
-
-## 组件职责
-
-### 核心组件
-
-**Database**：主入口点，生命周期管理，组件协调
-
-**Transaction**：ACID 事务管理，操作批处理，回滚处理
-
-**Entity**：节点和边表示，属性管理，状态跟踪
-
-### 存储组件
-
-**FileStorage**：文件 I/O 操作，段管理，空间分配
-
-**WAL**：写前日志，崩溃恢复，检查点管理
-
-**Cache**：LRU 缓存，脏跟踪，预取
-
-### 查询组件
-
-**QueryEngine**：查询编排，结果聚合，错误处理
-
-**QueryPlanner**：逻辑计划生成，优化规则，计划选择
-
-**QueryExecutor**：物理计划执行，操作符调度，结果流式传输
-
-## 文件命名约定
-
-### 头文件
-
-- **公共头文件**：`PascalCase.hpp`（例如 `Database.hpp`）
-- **内部头文件**：`PascalCase.hpp`（例如 `QueryPlanner.hpp`）
-
-### 源文件
-
-- **实现**：与头文件名匹配的 `PascalCase.cpp`
-- **测试**：`test_PascalCase.cpp`（例如 `test_Database.cpp`）
-
-## 添加新功能
-
-1. 添加公共 API
-2. 实现功能
-3. 添加测试
-4. 更新构建文件
-
-## 代码组织原则
-
-1. **关注点分离**：每个组件具有单一职责
-2. **分层架构**：清晰的依赖方向
-3. **接口隔离**：小而专注的接口
-4. **依赖注入**：组件通过构造函数接收依赖
-5. **可测试性**：所有组件都可以单元测试
-
-## 另请参阅
-
-- [开发设置](/zh/docs/zyx/contributing/development-setup) - 入门指南
-- [代码规范](/zh/docs/zyx/contributing/code-style) - 编码标准
-- [测试指南](/zh/docs/zyx/contributing/testing) - 测试实践
+提交存储改动前，开发过程中运行相关的 focused test，并在最终验证运行 `./scripts/run_tests.sh --quick`。格式和迁移验收标准参见[原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)。

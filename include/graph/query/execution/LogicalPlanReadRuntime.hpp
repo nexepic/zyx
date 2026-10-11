@@ -95,10 +95,16 @@ namespace graph::query::execution {
 		// Executes against a caller-owned logical snapshot. Mutation planners use
 		// this form to retain the exact optimistic fence that selected their rows.
 		[[nodiscard]] LogicalPlanReadRuntimeStats executeWithSnapshot(storage::LogicalGraphReadSnapshot &snapshot,
-																	  const logical::LogicalOperator &root,
-																	  const LogicalPlanReadRuntimeBounds &bounds,
-																	  const RowVisitor &visitor,
-																	  const QueryContext &context) const;
+												  const logical::LogicalOperator &root,
+												  const LogicalPlanReadRuntimeBounds &bounds,
+												  const RowVisitor &visitor,
+												  const QueryContext &context) const;
+		// Evaluates a subtree from a supplied logical input row. This is used by
+		// batched write subqueries to re-resolve imports under each fresh snapshot.
+		[[nodiscard]] LogicalPlanReadRuntimeStats executeWithSnapshotAndInputRow(
+				storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
+				const LogicalPlanReadRuntimeBounds &bounds, const LogicalPlanReadRow &inputRow,
+				const RowVisitor &visitor, const QueryContext &context) const;
 
 		// Materializes result entities only at the output boundary. Logical Node
 		// and Edge values retain resolved labels/types and complete Property maps,

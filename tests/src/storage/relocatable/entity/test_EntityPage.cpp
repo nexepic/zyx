@@ -223,6 +223,29 @@ TEST(RelocatableEntityPageTest, EdgePageUsesFixedCapacityAndRejectsCrossKindOper
 	expectFormatError([&] { static_cast<void>(page.insert(edge())); }, FormatError::FERR_INVALID_STATE);
 }
 
+TEST(RelocatableEntityPageTest, EdgeBatchInsertIsAtomicAndPreservesDurableSlotGenerations) {
+	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
+	std::vector<EdgeEntityRecord> records{edge(), {.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U},
+										 {.source_node_id = 14U, .target_node_id = 15U, .type_id = 18U}};
+	const std::vector<uint16_t> slots = page.insertEdges(records);
+	ASSERT_EQ(slots.size(), records.size());
+	for (size_t index = 0U; index < records.size(); ++index) {
+		EXPECT_EQ(slots[index], index);
+		EXPECT_EQ(page.slotGeneration(slots[index]), 1U);
+		EXPECT_EQ(*page.findEdge(slots[index], 1U), records[index]);
+	}
+	const std::vector<std::byte> beforeFailure = page.serialize();
+	std::vector<EdgeEntityRecord> invalid{{.source_node_id = 16U, .target_node_id = 17U, .type_id = 19U},
+										 {.source_node_id = 0U, .target_node_id = 18U, .type_id = 20U}};
+	expectFormatError([&] { static_cast<void>(page.insertEdges(invalid)); }, FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(page.serialize(), beforeFailure);
+
+	EntityPage reopened = EntityPage::open(owner(), page.serialize());
+	for (size_t index = 0U; index < records.size(); ++index) {
+		EXPECT_EQ(*reopened.findEdge(slots[index], 1U), records[index]);
+	}
+}
+
 TEST(RelocatableEntityPageTest, HeaderAndOwnerValidationFailClosed) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
 	EntityPageHeader header = page.header();
@@ -316,6 +339,36 @@ TEST(RelocatableEntityPageTest, OpenRejectsChecksumAndLayoutCorruption) {
 	corrupt[recordOffset + 56U] = std::byte{4};
 	refreshPageChecksums(corrupt);
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableEntityPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	EntityPage nodePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+	ASSERT_EQ(nodePage.insert(node()), 0U);
+	EntityPage edgePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
+	ASSERT_EQ(edgePage.insert(edge()), 0U);
+	ASSERT_EQ(edgePage.insert({.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}), 1U);
+	const std::array<std::vector<std::byte>, 2> encodedPages{nodePage.serialize(), edgePage.serialize()};
+
+	for (size_t pageIndex = 0U; pageIndex < encodedPages.size(); ++pageIndex) {
+		const std::vector<std::byte> &encoded = encodedPages[pageIndex];
+		for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = encoded;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				refreshPageChecksums(mutation);
+				try {
+					EntityPage decoded = EntityPage::open(owner(), mutation);
+					if (decoded.serialize() != mutation) {
+						ADD_FAILURE() << "Entity page mutation was silently normalized for page " << pageIndex
+										 << " at byte " << byteOffset << ", bit " << static_cast<unsigned>(bit);
+						return;
+					}
+				} catch (const FormatException &) {
+					// Every non-canonical mutation must fail at the typed format boundary.
+				}
+			}
+		}
+	}
 }
 
 TEST(RelocatableEntityPageTest, RejectsAReusedSlotWhoseGenerationIsExhausted) {

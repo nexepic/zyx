@@ -25,6 +25,8 @@ namespace graph::storage {
 		constexpr size_t ENTITY_ENTRY_COUNT_OFFSET = 20;
 		constexpr size_t ENTITY_PAYLOAD_BYTES_OFFSET = 24;
 		constexpr size_t ENTITY_RESERVED_OFFSET = 28;
+		constexpr size_t LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET = 8;
+		constexpr size_t LARGE_VALUE_PAYLOAD_BYTES_OFFSET = 12;
 		constexpr size_t LARGE_VALUE_FLAGS_OFFSET = 8;
 		constexpr size_t LARGE_VALUE_OWNER_ID_OFFSET = 12;
 		constexpr size_t LARGE_VALUE_OWNER_TYPE_OFFSET = 20;
@@ -68,12 +70,18 @@ namespace graph::storage {
 			LittleEndianCodec::writeU32(bytes, offset, value);
 		}
 
-		[[nodiscard]] std::vector<std::byte> encodePayload(const PropertyCollectionRoot &root) {
-			requireU32Size(root.entries.size(), "relocatable Property collection root has too many entries");
+		[[nodiscard]] std::vector<std::byte> encodeEntries(std::span<const PropertyCollectionRootEntry> entries) {
+			requireU32Size(entries.size(), "relocatable Property collection root has too many entries");
 			std::vector<std::byte> payload;
-			for (const PropertyCollectionRootEntry &entry: root.entries) {
+			uint32_t previousToken = 0U;
+			for (const PropertyCollectionRootEntry &entry: entries) {
+				if (entry.key_token == 0U || entry.key_token <= previousToken) {
+					throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property collection root tokens are not strictly ordered");
+				}
 				appendU32(payload, entry.key_token);
 				CanonicalPropertyValueCodec::append(payload, entry.value);
+				previousToken = entry.key_token;
 			}
 			requireU32Size(payload.size(), "relocatable Property collection root payload is too large");
 			return payload;
@@ -117,7 +125,7 @@ namespace graph::storage {
 
 	std::vector<std::byte> EntityPropertyCollectionRootCodec::encode(const PropertyCollectionRoot &root) {
 		validateOwnerAndEntries(root);
-		const std::vector<std::byte> payload = encodePayload(root);
+		const std::vector<std::byte> payload = encodeEntries(root.entries);
 		std::vector<std::byte> bytes(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
 		LittleEndianCodec::writeU32(bytes, 0, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC);
 		LittleEndianCodec::writeU16(bytes, 4, RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION);
@@ -159,6 +167,45 @@ namespace graph::storage {
 					  LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET));
 		validateOwnerAndEntries(root);
 		return root;
+	}
+
+	std::vector<std::byte>
+	EntityPropertyLargeValuePayloadCodec::encode(const std::span<const PropertyCollectionRootEntry> entries) {
+		const std::vector<std::byte> payload = encodeEntries(entries);
+		std::vector<std::byte> bytes(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		LittleEndianCodec::writeU32(bytes, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC);
+		LittleEndianCodec::writeU16(bytes, 4U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION);
+		LittleEndianCodec::writeU16(bytes, 6U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		LittleEndianCodec::writeU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET,
+								static_cast<uint32_t>(entries.size()));
+		LittleEndianCodec::writeU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET, static_cast<uint32_t>(payload.size()));
+		bytes.insert(bytes.end(), payload.begin(), payload.end());
+		return bytes;
+	}
+
+	std::vector<PropertyCollectionRootEntry>
+	EntityPropertyLargeValuePayloadCodec::decode(const std::span<const std::byte> bytes) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property LargeValue payload is truncated");
+		}
+		const uint8_t invalid =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET) !=
+									 bytes.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		if (invalid != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload header is invalid");
+		}
+		PropertyCollectionRoot decoded;
+		decodeEntries(decoded, bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES),
+					  LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET));
+		return std::move(decoded.entries);
+	}
+
+	bool EntityPropertyLargeValuePayloadCodec::hasMagic(const std::span<const std::byte> bytes) {
+		return bytes.size() >= sizeof(uint32_t) &&
+			   LittleEndianCodec::readU32(bytes, 0U) == RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC;
 	}
 
 	std::vector<std::byte>

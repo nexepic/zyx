@@ -30,7 +30,7 @@ namespace graph::storage {
 	// Each bit represents one physical 128 KiB slot in a contiguous range. A set
 	// bit means the slot is allocated or reserved; clear means free.
 	struct AllocatorLeafPage {
-		PageId page_id{};
+		MetadataPageId page_id{};
 		PhysicalSlotId first_slot{};
 		uint32_t slot_count = 0;
 		Generation generation{};

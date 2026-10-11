@@ -8,9 +8,11 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -79,6 +81,9 @@ namespace graph::storage {
 										   const std::function<bool(const LogicalGraphNode &)> &visitor) const;
 		[[nodiscard]] bool visitEdgesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
 										   const std::function<bool(const LogicalGraphEdge &)> &visitor) const;
+		[[nodiscard]] bool visitEdgeTopologiesUntil(
+				const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+				const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const;
 		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(const MetadataSnapshotPin &snapshot, uint64_t afterNodeId,
 														  size_t maximumRecords, size_t maximumMetadataPages) const;
 		[[nodiscard]] LogicalGraphAdjacencyPage
@@ -90,15 +95,40 @@ namespace graph::storage {
 		[[nodiscard]] bool visitAdjacentEdgesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 												   LogicalGraphReadDirection direction, size_t maximumRecords,
 												   const std::function<bool(const LogicalGraphEdge &)> &visitor) const;
+		[[nodiscard]] bool
+		visitAdjacentEdgeTopologiesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+										 LogicalGraphReadDirection direction, size_t maximumRecords,
+										 const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const;
 
 	private:
 		[[nodiscard]] LogicalGraphNode materializeNode(const MetadataSnapshotPin &snapshot,
 													   const PageBackedGraphNode &node) const;
 		[[nodiscard]] LogicalGraphEdge materializeEdge(const MetadataSnapshotPin &snapshot,
-													   const PageBackedGraphEdge &edge) const;
+																	   const PageBackedGraphEdge &edge) const;
+		[[nodiscard]] std::string resolveNodeLabelName(const MetadataSnapshotPin &snapshot, uint64_t tokenId) const;
+		[[nodiscard]] std::string resolveRelationshipTypeName(const MetadataSnapshotPin &snapshot,
+																				uint64_t tokenId) const;
+		[[nodiscard]] std::string resolvePropertyKeyName(const MetadataSnapshotPin &snapshot, uint32_t tokenId) const;
+		// Caller holds name_cache_mutex_. A cache entry is never shared across
+		// metadata generations, so a pinned older snapshot cannot observe a name
+		// resolved from a later System Catalog generation.
+		void alignNameCacheGeneration(uint64_t generation) const;
+		struct TokenNameCacheEntry {
+			uint64_t token_id = 0U;
+			std::string name;
+		};
+		// The cache is an opportunistic direct map, not a catalog. A collision
+		// simply resolves the name again, keeping memory bounded for huge schemas.
+		static constexpr size_t NAME_CACHE_SLOT_COUNT = 256U;
+		using TokenNameCache = std::array<TokenNameCacheEntry, NAME_CACHE_SLOT_COUNT>;
 
 		PageBackedGraphReadAdapter &pages_;
 		const PageBackedGraphNameResolver &names_;
+		mutable std::mutex name_cache_mutex_;
+		mutable uint64_t name_cache_generation_ = 0U;
+		mutable TokenNameCache node_label_names_{};
+		mutable TokenNameCache relationship_type_names_{};
+		mutable TokenNameCache property_key_names_{};
 		friend class PageBackedLogicalGraphAdjacencyCursor;
 	};
 

@@ -289,8 +289,7 @@ TEST_F(CompressUtilsTest, ZlibDecompressExactSizeMatch) {
 
 TEST_F(CompressUtilsTest, ZlibCompressDecompressWithNullsInMiddle) {
 	// Create a string with null bytes in the middle
-	std::string data = std::string("Before\0After", 14); // "Before" + '\0' + "After" = 6 + 1 + 5 = 12, but we specify 14 to include null terminator
-	data = std::string("Before") + '\0' + std::string("After"); // Correct way: 6 + 1 + 5 = 12 bytes
+	const std::string data{"Before\0After", sizeof("Before\0After") - 1U};
 
 	std::string compressed = graph::utils::zlibCompress(data);
 	std::string decompressed = graph::utils::zlibDecompress(compressed, data.size());
@@ -567,4 +566,3 @@ TEST_F(CompressUtilsTest, ZlibCompressZeroBytesRepeated) {
 	std::string decompressed = graph::utils::zlibDecompress(compressed, zeroData.size());
 	EXPECT_EQ(decompressed, zeroData);
 }
-

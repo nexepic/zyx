@@ -66,9 +66,19 @@ namespace {
 		bool return_empty_nonterminal_adjacency_page = false;
 		bool return_oversized_adjacency_page = false;
 		bool return_invalid_adjacency_page_endpoint = false;
+		bool return_nonmonotonic_adjacency_page = false;
 		bool enable_exact_node_lookup = false;
+		bool enable_range_node_lookup = false;
+		bool enable_composite_range_node_lookup = false;
+		std::optional<LogicalGraphPropertyRange> expected_range_lookup;
+		std::optional<LogicalGraphCompositePropertyRange> expected_composite_range_lookup;
+		std::shared_ptr<size_t> edge_topology_scan_count;
+		std::shared_ptr<size_t> edge_record_scan_count;
 		std::shared_ptr<size_t> exact_lookup_count;
+		std::shared_ptr<size_t> range_lookup_count;
+		std::shared_ptr<size_t> composite_range_lookup_count;
 		std::shared_ptr<size_t> node_read_count;
+		std::shared_ptr<size_t> node_existence_probe_count;
 	};
 
 	class TestLogicalGraphSnapshot final : public LogicalGraphReadSnapshot {
@@ -94,6 +104,15 @@ namespace {
 			return found->second;
 		}
 
+		[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
+			if (data_.node_existence_probe_count) {
+				++*data_.node_existence_probe_count;
+			}
+			return data_.nodes.contains(nodeId);
+		}
+
+		[[nodiscard]] bool supportsNodeExistenceProbes() const override { return true; }
+
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
 		findNodesByExactProperties(const std::vector<std::string> &labels,
 											 const std::vector<std::pair<std::string, PropertyValue>> &properties,
@@ -107,6 +126,40 @@ namespace {
 			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != std::vector<std::string>{"Person"} ||
 				properties != std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}}) {
 				throw std::runtime_error("test logical graph exact lookup received an unexpected request");
+			}
+			return std::vector<LogicalGraphNode>{data_.nodes.at(1U)};
+		}
+
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
+		findNodesByPropertyRange(const std::vector<std::string> &labels, const LogicalGraphPropertyRange &range,
+								 size_t maximumNodes, size_t maximumPropertyEntries) const override {
+			if (!data_.enable_range_node_lookup) {
+				return std::nullopt;
+			}
+			if (data_.range_lookup_count) {
+				++*data_.range_lookup_count;
+			}
+			const LogicalGraphPropertyRange expected = data_.expected_range_lookup.value_or(
+					LogicalGraphPropertyRange{"age", PropertyValue(30), PropertyValue(), true, true});
+			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != std::vector<std::string>{"Person"} ||
+				range != expected) {
+				throw std::runtime_error("test logical graph range lookup received an unexpected request");
+			}
+			return std::vector<LogicalGraphNode>{data_.nodes.at(1U), data_.nodes.at(2U)};
+		}
+
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByCompositePropertyRange(
+				const std::vector<std::string> &labels, const LogicalGraphCompositePropertyRange &request,
+				size_t maximumNodes, size_t maximumPropertyEntries) const override {
+			if (!data_.enable_composite_range_node_lookup) {
+				return std::nullopt;
+			}
+			if (data_.composite_range_lookup_count) {
+				++*data_.composite_range_lookup_count;
+			}
+			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != std::vector<std::string>{"Person"} ||
+				!data_.expected_composite_range_lookup.has_value() || request != *data_.expected_composite_range_lookup) {
+				throw std::runtime_error("test logical graph composite range lookup received an unexpected request");
 			}
 			return std::vector<LogicalGraphNode>{data_.nodes.at(1U)};
 		}
@@ -214,6 +267,9 @@ namespace {
 			const size_t end = std::min(adjacent.size(), first + maximumRecords);
 			page.edges.insert(page.edges.end(), adjacent.begin() + static_cast<std::ptrdiff_t>(first),
 							  adjacent.begin() + static_cast<std::ptrdiff_t>(end));
+			if (data_.return_nonmonotonic_adjacency_page && page.edges.size() > 1U) {
+				std::swap(page.edges[0], page.edges[1]);
+			}
 			if (end < adjacent.size()) {
 				page.continuation = {page.edges.back().edge_id, adjacent[end].edge_id};
 				if (data_.return_invalid_adjacency_continuation) {
@@ -231,12 +287,32 @@ namespace {
 
 		void visitEdges(size_t maximumRecords,
 						const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			if (data_.edge_record_scan_count) {
+				++*data_.edge_record_scan_count;
+			}
 			if (data_.edges.size() > maximumRecords) {
 				throw std::runtime_error("test logical graph Edge scan exceeds its bound");
 			}
 			for (const auto &[id, edge]: data_.edges) {
 				static_cast<void>(id);
 				if (!visitor(edge) && !data_.ignore_stop_signal) {
+					return;
+				}
+			}
+		}
+
+		void visitEdgeTopologies(
+				size_t maximumRecords, const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
+			if (data_.edge_topology_scan_count) {
+				++*data_.edge_topology_scan_count;
+			}
+			if (!data_.ignore_edge_bound && data_.edges.size() > maximumRecords) {
+				throw std::runtime_error("test logical graph Edge topology scan exceeds its bound");
+			}
+			for (const auto &[id, edge]: data_.edges) {
+				static_cast<void>(id);
+				if (!visitor({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type}) &&
+					!data_.ignore_stop_signal) {
 					return;
 				}
 			}
@@ -358,13 +434,13 @@ namespace {
 		[[nodiscard]] std::unique_ptr<logical::LogicalOperator> detachChild(size_t) override { return nullptr; }
 	};
 
-	[[nodiscard]] VectorizedPropertyPredicate predicate(std::string key, VectorPredicateOp op, PropertyValue value,
-														std::optional<PropertyValue> upper = std::nullopt) {
-		VectorizedPropertyPredicate result;
-		result.propertyKey = std::move(key);
+	[[nodiscard]] LogicalPropertyPredicate predicate(std::string key, LogicalPropertyPredicateOp op, PropertyValue value,
+															std::optional<PropertyValue> upper = std::nullopt) {
+		LogicalPropertyPredicate result;
+		result.property_key = std::move(key);
 		result.op = op;
 		result.value = std::move(value);
-		result.upperValue = std::move(upper);
+		result.upper_value = std::move(upper);
 		return result;
 	}
 

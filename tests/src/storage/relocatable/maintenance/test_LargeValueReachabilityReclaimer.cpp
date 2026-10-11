@@ -37,14 +37,15 @@ namespace {
 
 		[[nodiscard]] std::string_view mediaType() const noexcept override { return media_type_; }
 
-		[[nodiscard]] size_t scanReachable(const MetadataSnapshotPin &, size_t maximumLocations,
-										   LargeValueOwnershipScanSink &sink) const override {
-			if (maximumLocations == 0U) {
+		[[nodiscard]] Progress scanReachableAfter(const MetadataSnapshotPin &, uint64_t, size_t maximumLocations,
+												  size_t maximumMetadataPages,
+												  LargeValueOwnershipScanSink &sink) const override {
+			if (maximumLocations == 0U || maximumMetadataPages == 0U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "test ownership scanner received no remaining scan budget");
 			}
 			sink.markReachable(reference_);
-			return 1U;
+			return {1U, 1U, 1U, true};
 		}
 
 	private:
@@ -61,12 +62,12 @@ namespace {
 
 		[[nodiscard]] std::string_view mediaType() const noexcept override { return media_type_; }
 
-		[[nodiscard]] size_t scanReachable(const MetadataSnapshotPin &, size_t,
-										   LargeValueOwnershipScanSink &sink) const override {
+		[[nodiscard]] Progress scanReachableAfter(const MetadataSnapshotPin &, uint64_t, size_t, size_t,
+												  LargeValueOwnershipScanSink &sink) const override {
 			for (size_t index = 0U; index < marked_references_; ++index) {
 				sink.markReachable(reference_);
 			}
-			return reported_locations_;
+			return {reported_locations_, reported_locations_, 0U, true};
 		}
 
 	private:
@@ -100,8 +101,10 @@ namespace {
 	[[nodiscard]] LargeValueReachabilityReclaimOptions reclaimOptions() {
 		LargeValueReachabilityReclaimOptions options;
 		options.maximum_manifest_locations = 32U;
+		options.maximum_manifest_metadata_pages = 32U;
 		options.maximum_manifest_nodes = 32U;
 		options.maximum_owner_locations = 32U;
+		options.maximum_owner_metadata_pages = 32U;
 		options.maximum_data_pages = 64U;
 		options.maximum_retirements = 64U;
 		options.maximum_page_locations = 128U;
@@ -278,6 +281,77 @@ TEST_F(RelocatableMetadataStoreTest,
 			  std::vector<std::byte>(orphanBytes.begin(), orphanBytes.end()));
 }
 
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	const LargeValueWriteResult live =
+			values.write(std::array{std::byte{0x11}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	const LargeValueWriteResult orphan =
+			values.write(std::array{std::byte{0x22}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	static_cast<void>(publishEntityPropertyReference(*metadata, propertyPages, live.reference));
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+
+	LargeValueMaintenanceJournalAdvance manifests = reclaimer.advanceJournal(snapshot, journal, reclaimOptions());
+	EXPECT_EQ(manifests.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES);
+	EXPECT_EQ(manifests.journal.candidate_value_ids,
+			  (std::vector<LargeValueId>{live.reference.value_id, orphan.reference.value_id}));
+	EXPECT_TRUE(manifests.journal.reachable_value_ids.empty());
+
+	LargeValueMaintenanceJournalAdvance properties =
+			reclaimer.advanceJournal(snapshot, manifests.journal, reclaimOptions());
+	EXPECT_EQ(properties.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES);
+	EXPECT_EQ(properties.journal.reachable_value_ids, (std::vector<LargeValueId>{live.reference.value_id}));
+	EXPECT_GT(properties.owner_locations_scanned, 0U);
+
+	LargeValueMaintenanceJournalAdvance states = reclaimer.advanceJournal(snapshot, properties.journal, reclaimOptions());
+	EXPECT_EQ(states.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM);
+	EXPECT_EQ(states.journal.reachable_value_ids, (std::vector<LargeValueId>{live.reference.value_id}));
+
+	LargeValueMaintenanceJournal stale = states.journal;
+	stale.scan_generation = Generation(stale.scan_generation.value() + 1U);
+	expectFormatError([&] { static_cast<void>(reclaimer.advanceJournal(snapshot, stale, reclaimOptions())); },
+					  FormatError::FERR_INVALID_STATE);
+	// Journal advancement records evidence only; it must not alter either route.
+	EXPECT_TRUE(metadata->findLargeValueManifestOptional(snapshot, live.reference.value_id).has_value());
+	EXPECT_TRUE(metadata->findLargeValueManifestOptional(snapshot, orphan.reference.value_id).has_value());
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	const LargeValueWriteResult live =
+			values.write(std::array{std::byte{0x41}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	const LargeValueWriteResult orphan =
+			values.write(std::array{std::byte{0x42}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	static_cast<void>(publishEntityPropertyReference(*metadata, propertyPages, live.reference));
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	ASSERT_EQ(journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM);
+
+	const LargeValueReachabilityReclaimReport report =
+			reclaimer.reclaimJournal(snapshot, journal, reclaimOptions(), nextCheckpointLsn(*metadata));
+	EXPECT_EQ(report.scanned_generation, journal.scan_generation);
+	EXPECT_EQ(report.reachable_values, 1U);
+	EXPECT_EQ(report.retired_values, 1U);
+	EXPECT_EQ(report.retired_manifest_pages, 1U);
+	EXPECT_EQ(report.retired_data_pages, 1U);
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_TRUE(metadata->findLargeValueManifestOptional(current, live.reference.value_id).has_value());
+	EXPECT_FALSE(metadata->findLargeValueManifestOptional(current, orphan.reference.value_id).has_value());
+	EXPECT_EQ(values.read(current, live.reference), std::vector<std::byte>{std::byte{0x41}});
+	current.release();
+}
+
 TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	LargeValueStore values(io, *metadata);
@@ -289,10 +363,10 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRetainsStateValuesThroug
 			values.write(orphanBytes, stateValueWriteOptions(), nextCheckpointLsn(*metadata));
 	StateRecordStore states(pages, *metadata);
 	static_cast<void>(
-			states.ensure({7U, "state.external", StateRecordStorageKind::SRS_LARGE_VALUE, live.reference.value_id, {}},
+			states.upsert({7U, "state.external", StateRecordStorageKind::SRS_LARGE_VALUE, live.reference.value_id, {}},
 						  stateRecordStoreOptions()));
 	static_cast<void>(
-			states.ensure({8U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
+			states.upsert({8U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
 						  stateRecordStoreOptions()));
 
 	MetadataSnapshotPin pinned = metadata->openSnapshot();
@@ -321,7 +395,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsStateReferencesWi
 	const LargeValueWriteResult propertyValue =
 			values.write(std::array{std::byte{0x61}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
 	StateRecordStore states(pages, *metadata);
-	static_cast<void>(states.ensure(
+	static_cast<void>(states.upsert(
 			{9U, "state.invalid", StateRecordStorageKind::SRS_LARGE_VALUE, propertyValue.reference.value_id, {}},
 			stateRecordStoreOptions()));
 	LargeValueReachabilityReclaimer reclaimer(values, pages, *metadata);
@@ -337,7 +411,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsStateRoutesWithMi
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
 	const StateLocation stored =
-			states.ensure({7U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
+			states.upsert({7U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
 						  stateRecordStoreOptions());
 	const StateLocation mismatched{8U, stored.page_id, stored.slot_id, stored.slot_generation};
 	static_cast<void>(metadata->upsertStateLocations(std::span(&mismatched, 1U), {}, nextCheckpointLsn(*metadata)));
@@ -356,7 +430,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsStateReferencesWi
 	const LargeValueWriteResult text = values.write(std::array{std::byte{0x61}}, options, nextCheckpointLsn(*metadata));
 	StateRecordStore states(pages, *metadata);
 	static_cast<void>(
-			states.ensure({7U, "state.text", StateRecordStorageKind::SRS_LARGE_VALUE, text.reference.value_id, {}},
+			states.upsert({7U, "state.text", StateRecordStorageKind::SRS_LARGE_VALUE, text.reference.value_id, {}},
 						  stateRecordStoreOptions()));
 
 	LargeValueReachabilityReclaimer reclaimer(values, pages, *metadata);
@@ -370,13 +444,14 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerAppliesTheSharedOwnerLoc
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
 	static_cast<void>(
-			states.ensure({7U, "state.first", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
+			states.upsert({7U, "state.first", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
 						  stateRecordStoreOptions()));
 	static_cast<void>(
-			states.ensure({8U, "state.second", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x56}}},
+			states.upsert({8U, "state.second", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x56}}},
 						  stateRecordStoreOptions()));
 	LargeValueReachabilityReclaimOptions options = reclaimOptions();
 	options.maximum_owner_locations = 1U;
+	options.maximum_owner_metadata_pages = 32U;
 	LargeValueReachabilityReclaimer reclaimer(values, pages, *metadata);
 	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(options, nextCheckpointLsn(*metadata))); },
 					  FormatError::FERR_INVALID_STATE);
@@ -438,12 +513,12 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsManifestPoolsOuts
 	orphan.page_id = PageId(900002U);
 	const LogSequenceNumber checkpointLsn = nextCheckpointLsn(*metadata);
 	const PageOwnerHeader owner{orphan.page_id,
-								  written.reference.value_id.value(),
-								  PageOwnerKind::POK_LARGE_VALUE_MANIFEST,
-								  0U,
-								  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
-								  poolGeneration,
-								  checkpointLsn};
+								written.reference.value_id.value(),
+								PageOwnerKind::POK_LARGE_VALUE_MANIFEST,
+								0U,
+								RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+								poolGeneration,
+								checkpointLsn};
 	SharedPagePoolAllocationRequest request;
 	request.segment_id = SegmentId(900002U);
 	request.pool_kind = SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL;
@@ -884,6 +959,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsUntrustedScannerC
 
 	LargeValueReachabilityReclaimOptions ownerBound = reclaimOptions();
 	ownerBound.maximum_owner_locations = 1U;
+	ownerBound.maximum_owner_metadata_pages = 32U;
 	const LargeValueOwnershipScannerPtr oversizedResult = std::make_shared<ConfigurableLargeValueOwnershipScanner>(
 			firstOptions.media_type, first.reference, 0U, ownerBound.maximum_owner_locations + 1U);
 	const std::array<LargeValueOwnershipScannerPtr, 1U> oversizedResultScanners{{oversizedResult}};
@@ -976,7 +1052,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsStateRouteOutside
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
 	static_cast<void>(
-			states.ensure({7U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
+			states.upsert({7U, "state.inline", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x55}}},
 						  stateRecordStoreOptions()));
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	const StateLocation location = metadata->findStateLocation(snapshot, 7U);
@@ -1070,6 +1146,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerAppliesTheSharedOwnerLoc
 
 	LargeValueReachabilityReclaimOptions options = reclaimOptions();
 	options.maximum_owner_locations = 1U;
+	options.maximum_owner_metadata_pages = 32U;
 	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
 	expectFormatError([&] { static_cast<void>(reclaimer.reclaim(options, nextCheckpointLsn(*metadata))); },
 					  FormatError::FERR_INVALID_STATE);
@@ -1088,7 +1165,9 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsEveryInvalidPolic
 						  FormatError::FERR_INVALID_HEADER);
 	};
 	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_manifest_locations = 0U; });
+	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_manifest_metadata_pages = 0U; });
 	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_owner_locations = 0U; });
+	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_owner_metadata_pages = 0U; });
 	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_retirements = 0U; });
 	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.maximum_pools = 0U; });
 	expectInvalid([](LargeValueReachabilityReclaimOptions &options) { options.first_index_slot = PhysicalSlotId{}; });

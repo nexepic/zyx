@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
@@ -30,6 +31,7 @@ namespace graph::storage {
 	class PropertyCollectionRootStore;
 	class VectorManifestStore;
 	class VectorPageStore;
+	struct LargeValueContentIndexPublicationPlan;
 	struct NativeGraphWritePlannerContext;
 
 	// All enum members carry a prefix to remain safe on Windows builds.
@@ -62,6 +64,10 @@ namespace graph::storage {
 	// Entity pools are shared by Node, Edge, and LabelSet pages. Property roots
 	// stay in their own typed pool namespace and remain owner-keyed.
 	struct NativeGraphWritePlannerOptions {
+		// The default reservation is the maximum number of Node or Edge identities
+		// one logical transaction may retain. Keep the adjacency default derived from
+		// that bound: each Edge has one OUT and one IN key mutation.
+		static constexpr size_t DEFAULT_MAXIMUM_LOGICAL_ID_RESERVATION = 10'000'000U;
 		PhysicalSlotId first_slot = PhysicalSlotId(1U);
 		PhysicalSlotId last_slot = PhysicalSlotId(std::numeric_limits<uint64_t>::max());
 		uint64_t entity_pool_owner_id = 1U;
@@ -75,14 +81,18 @@ namespace graph::storage {
 		// Bounds the two directional key mutations retained by one graph write.
 		// The initial global tree uses the streaming bulk builder once this exceeds
 		// a small transaction-local tree bootstrap.
-		size_t maximum_global_adjacency_write_entries = 10'000'000U;
+		size_t maximum_global_adjacency_write_entries = 2U * DEFAULT_MAXIMUM_LOGICAL_ID_RESERVATION;
+		// Rebuild an existing global adjacency tree only for a material batch. This
+		// merges one sequential source pass with the sorted final-state mutations,
+		// avoiding a B+Tree descent and COW split for each bulk Edge operation.
+		size_t global_adjacency_bulk_rebuild_entry_threshold = 4096U;
 		// One durable high-water publication grants this many IDs to the shared
 		// planner context. Unused IDs are intentionally never recycled, preserving
 		// uniqueness across rollback and process crashes.
 		size_t logical_id_lease_block_size = 4096U;
 		// Bounds all Node or Edge identities retained by one transaction, including
 		// cancelled branch reservations. This keeps lease planning O(bounded work).
-		size_t maximum_logical_id_reservation = 10'000'000U;
+		size_t maximum_logical_id_reservation = DEFAULT_MAXIMUM_LOGICAL_ID_RESERVATION;
 		PropertyCollectionRootStoreOptions property_roots = {PhysicalSlotId(1U),
 															 PhysicalSlotId(std::numeric_limits<uint64_t>::max()), 1U};
 	};
@@ -270,13 +280,20 @@ namespace graph::storage {
 		[[nodiscard]] EdgeChange &mutableEdge(uint64_t edgeId);
 		void stageGlobalAdjacencyMutation(GlobalAdjacencyDirection direction, uint64_t nodeId, uint64_t edgeId,
 									  BTreeScalarIndexOperationKind kind);
-		[[nodiscard]] std::vector<BTreeScalarIndexOperation> canonicalGlobalAdjacencyOperations() const;
+		// Canonicalize in place at the commit boundary. Bulk ingest normally has
+		// unique keys, so materializing an additional map and result vector would
+		// multiply peak memory without adding semantic information.
+		[[nodiscard]] const std::vector<BTreeScalarIndexOperation> &canonicalGlobalAdjacencyOperations();
 		void prepareGlobalAdjacencyMutationPlan();
 		// Replays a bounded adjacency-only final state after validating every
 		// authoritative source record against the current snapshot.
 		[[nodiscard]] bool rebaseAdjacencyOnly(MetadataSnapshotPin &current);
 		[[nodiscard]] bool hasRemainingIncidentEdge(uint64_t nodeId) const;
-		void prepareScalarIndexMutationPlans();
+		// Plans every current-pool Index mutation in this graph publication as one
+		// shared frame budget. The optional content-index callback can rebuild that
+		// derived tree into fresh pools when it competes with scalar/adjacency trees.
+		void prepareIndexMutationPlans(LargeValueContentIndexPublicationPlan *contentIndexPlan = nullptr,
+														const std::function<void()> &forceFreshContentIndexPlan = {});
 
 		std::shared_ptr<NativeGraphWritePlannerContext> context_;
 		MetadataSnapshotPin snapshot_;
@@ -290,9 +307,16 @@ namespace graph::storage {
 		// operations are planned with the Edge Entity mutations and published in
 		// the same metadata generation.
 		std::vector<BTreeScalarIndexOperation> global_adjacency_operations_;
+		bool global_adjacency_operations_canonical_ = false;
 		std::optional<BTreeStructuralMutationPlan> global_adjacency_plan_;
 		std::optional<BTreeTreeRetirementPlan> global_adjacency_retirement_plan_;
 		std::optional<BTreeInitialTreeMutationPlan> global_adjacency_initial_plan_;
+		std::optional<BTreeInitialTreeMutationPlan> global_adjacency_replacement_plan_;
+		std::optional<BTreeTreeRetirementPlan> global_adjacency_replacement_retirement_plan_;
+		// Large adjacency batches are encoded into candidate-only scratch and
+		// rebuilt under the metadata writer fence. This applies to both first-tree
+		// creation and replacement of an existing root.
+		bool global_adjacency_deferred_bulk_ = false;
 		std::map<uint64_t, PropertyCollectionRoot> properties_;
 		std::vector<StagedScalarIndexMutation> scalar_index_mutations_;
 		std::vector<StagedInitialScalarIndexMutation> initial_scalar_index_mutations_;

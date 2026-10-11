@@ -1,455 +1,166 @@
 # Architecture Reference
 
+## Scope And Source Of Truth
+
+This document describes the current native production path. The authoritative source-set allowlists are in `cmake/SourceSets.cmake`; a source file left in the checkout is not automatically a production dependency. The native format and its failure/lifecycle contracts are specified by `docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx` and its acceptance matrix.
+
+Legacy `FileStorage`, `DataManager`, segment-chain, external-WAL, physical-executor, and old Vector trees have been physically retired from the source tree. Their documentation is historical migration material only; do not use those names or designs for new production code.
+
 ## Layered Architecture
 
 ```mermaid
 graph TD
-    A[Applications - CLI, Benchmark] --> B[Public API - C++ & C]
-    B --> C[Query Engine - Parser, Planner, Optimizer, Executor]
-    C --> D[Core - Database, Transaction, Entity Management]
-    D --> E[Storage Layer - FileStorage, WAL, Cache, Constraints, Indexes]
-    E --> F[Utilities - Compression, Checksums, Serialization, Vector Engine]
+    A["Applications, bindings, CLI, WASM"] --> B["Public C++ API and Driver ABI"]
+    B --> C["Database and logical transactions"]
+    C --> D["Cypher parser, logical plan, optimizer, logical runtimes"]
+    D --> E["Logical graph backend interfaces"]
+    E --> F["RelocatableStorageBackend"]
+    F --> G["Typed pages, metadata snapshots, BufferPool, StorageIO"]
+    G --> H["One native database file and A/B Superblock"]
 ```
 
-## Key Components
+### Database And Transactions
 
-### Database (`include/graph/core/Database.hpp`)
+`include/graph/core/Database.hpp` is the main internal entry point. It owns the generic `StorageBackend`, its `RelocatableStorageBackend` native implementation, and a lazily initialized `QueryEngine`.
 
-- Main entry point for database operations
-- Manages lifecycle: open, close, transactions
-- Coordinates between storage engine and query engine
-- Provides access to `FileStorage` and `QueryEngine`
+- `Database::open()`, `flush()`, and `close()` operate on the native backend.
+- `beginTransaction()`, `beginBulkTransaction()`, and `beginReadOnlyTransaction()` create native logical transactions.
+- `Transaction` owns a pinned logical transaction plus a read-your-writes `LogicalGraphTransactionOverlay`.
+- Queries executed through a public `Transaction` use that overlay explicitly; a database-scoped query does not inherit another transaction's state.
+- Schema mutation is intentionally excluded from transaction overlays. Read-only execution rejects data and schema mutation before a mutation runtime is entered.
 
-### Storage System (`include/graph/storage/FileStorage.hpp`)
+The backend publishes visible state through copy-on-write metadata and a single A/B Superblock publication point. A snapshot carries backend provenance and a pinned metadata root; malformed cross-backend, stale, or invalid state must fail closed.
 
-- **Segment-based storage**: Custom file format with checksums and compression
-- **Component hierarchy**:
-    - `FileHeaderManager`: Manages file-level metadata
-    - `SegmentTracker`: Tracks segment allocation and usage
-    - `SpaceManager`: Manages free space across segments
-    - `DataManager`: Coordinates node/edge/property/blob data managers
-        - `NodeManager`, `EdgeManager`, `PropertyManager`, `BlobManager`: Entity-specific CRUD
-        - `StateManager`: Temporal state tracking via state chains
-        - `TransactionContext`: Transaction-scoped state for data operations
-    - `IndexManager`: Manages label indexes, property indexes, and segment indexes
-        - `LabelIndex`, `PropertyIndex`: Core index types
-        - `EntityTypeIndexManager`: Per-type index management
-        - `VectorIndexManager`: Vector similarity index management
-        - `IndexBuilder`: Bulk index construction
-    - `ConstraintManager`: Schema constraint enforcement
-        - `UniqueConstraint`, `NotNullConstraint`, `NodeKeyConstraint`, `TypeConstraint`
-    - `DeletionManager`: Tombstone management and space reclamation
-    - `PageBufferPool`: Segment-level LRU cache with targeted invalidation
-    - `PersistenceManager`: Manages entity persistence to disk
-    - `SnapshotManager`: Committed state snapshot management for read isolation
-    - `CommittedSnapshot`: Immutable snapshot of committed dirty entity state
-    - `DirtyEntityRegistry`: Double-buffered (active/flushing) dirty entity tracking
-    - `TokenRegistry`: Maps string labels/types to integer tokens
-    - `WALManager`: Write-Ahead Log for durability and crash recovery
-    - `UndoLog`: Transaction-scoped undo log for fine-grained rollback
-    - `StorageBootstrap`: Initialization and bootstrap logic
-- **ACID compliance**: Full transaction support with WAL
-- **State management**: Temporal state tracking via state chains (`StateChainManager`)
+### Storage
 
-### Query Engine (`include/graph/query/`)
-
-- **Parser** (`src/query/parser/`): ANTLR4-based Cypher parser
-    - `common/`: Base parser interface (`IQueryParser.hpp`)
-    - `cypher/`: Cypher-specific implementation
-        - `*.g4`: ANTLR4 grammar files (lexer and parser)
-        - `helpers/public/`: AST extraction, expression building, pattern building
-        - `helpers/internal/`: Internal parser utilities
-        - `clauses/`: Cypher clause handlers (reading, writing, result, admin)
-        - `generated/`: ANTLR4 auto-generated code (DO NOT EDIT)
-- **Planner** (`include/graph/query/planner/`): Converts parsed Cypher to logical plans
-    - `QueryPlanner`: Main planning entry point
-    - `PhysicalPlanConverter`: Converts logical plans to physical operators
-    - `PipelineValidator`: Validates query pipeline correctness
-    - `ProcedureRegistry`: Registry for callable procedures (e.g., GDS algorithms)
-    - `ScopeStack`: Variable scope management during planning
-- **Logical Plan** (`include/graph/query/logical/`): Intermediate representation
-    - `LogicalOperator` base class with operator-specific subclasses
-    - `LogicalPlanPrinter` for EXPLAIN output
-- **Optimizer** (`include/graph/query/optimizer/`): Rule-based and cost-based optimization
-    - `CostModel`, `Statistics`, `StatisticsCollector` for cost estimation
-    - Rules: `FilterPushdownRule`, `IndexPushdownRule`, `EnhancedIndexSelectionRule`, `ProjectionPushdownRule`, `JoinReorderRule`, `PredicateSimplificationRule`
-- **Executor** (`include/graph/query/execution/`): Executes physical plans
-    - Scan: `NodeScanOperator`, `TraversalOperator`, `VarLengthTraversalOperator`
-    - Mutation: `CreateNodeOperator`, `CreateEdgeOperator`, `MergeNodeOperator`, `MergeEdgeOperator`, `DeleteOperator`, `SetOperator`, `RemoveOperator`
-    - Query: `FilterOperator`, `SortOperator`, `ProjectOperator`, `LimitOperator`, `SkipOperator`, `UnwindOperator`, `UnionOperator`, `CartesianProductOperator`, `OptionalMatchOperator`, `CallSubqueryOperator`, `ForeachOperator`
-    - Aggregation: `AggregateOperator` with `AggregateAccumulator`
-    - Index/Schema: `CreateIndexOperator`, `DropIndexOperator`, `ShowIndexesOperator`, `CreateConstraintOperator`, `DropConstraintOperator`, `ShowConstraintsOperator`, `CreateVectorIndexOperator`
-    - Vector: `VectorSearchOperator`, `TrainVectorIndexOperator`
-    - GDS Algorithms: `GdsOperators` (shortest path via `AlgoShortestPathOperator`)
-    - CSV: `LoadCsvOperator` with `CsvReader`
-    - Admin: `ExplainOperator`, `ProfileOperator`, `ListConfigOperator`, `SetConfigOperator`, `ShowStatsOperator`, `ResetStatsOperator`, `TransactionControlOperator`
-    - Utility: `SingleRowOperator`, `RecordInjectorOperator`
-- **Expressions** (`include/graph/query/expressions/`): Expression evaluation
-    - `ExpressionEvaluator` with `EvaluationContext`
-    - `FunctionRegistry`: Built-in and user-defined functions
-    - Quantifier functions: `AllFunction`, `AnyFunction`, `NoneFunction`, `SingleFunction`
-    - List operations: `ListComprehensionExpression`, `ListSliceExpression`, `ReduceExpression`
-    - Pattern: `PatternComprehensionExpression`, `ExistsExpression`, `IsNullExpression`
-- **Algorithm** (`include/graph/query/algorithm/`): Neo4j GDS-compatible graph algorithms
-    - `GraphProjection` / `GraphProjectionManager`: Named graph projections
-    - `GraphAlgorithm`: Algorithm execution framework
-- **Plan Cache** (`include/graph/query/cache/`): Query plan caching (`PlanCache` stores `QueryPlan` with mutation
-  flags)
-- **Access Control** (`include/graph/query/ExecMode.hpp`): `ExecMode` enum for read-only/read-write enforcement;
-  `QueryPlan` carries `mutatesData`/`mutatesSchema` flags accumulated by `LogicalPlanBuilder`
-
-### Transaction System (`include/graph/core/Transaction.hpp`)
-
-- ACID transactions with full rollback capabilities
-- **Concurrency model**: Single-writer / multi-reader via `std::shared_mutex`
-    - Write transactions acquire exclusive lock (`std::unique_lock`)
-    - Read-only transactions acquire shared lock (`std::shared_lock`)
-    - Lock ownership lives on `Transaction` object (RAII — released when transaction ends)
-- **Undo Log** (`include/graph/storage/wal/UndoLog.hpp`): Fine-grained rollback of entity mutations within a
-  transaction. Each write operation records the inverse operation; on rollback, the undo log replays in reverse order.
-- **Snapshot Isolation** (`include/graph/storage/CommittedSnapshot.hpp`):
-    - `CommittedSnapshot` captures dirty entity state before each commit
-    - `SnapshotManager` provides thread-safe publish/acquire for immutable snapshots
-    - Read-only transactions receive a snapshot at `begin()` and see consistent committed state throughout their
-      lifetime, unaffected by concurrent writes
-    - `thread_local` snapshot pointer in `DataManager` for zero-contention reads
-- **WAL Integration**: Write operations are logged to WAL before disk writes for durability and crash recovery
-- **PageBufferPool**: Segment-level LRU cache with targeted invalidation (`invalidateDirtySegments`) — only evicts
-  pages for segments modified in a flush, rather than clearing the entire cache
-- **Read-only transactions**: `beginReadOnlyTransaction()` creates a transaction that rejects all write queries
-
-### Access Control (`include/graph/query/ExecMode.hpp`)
-
-3-layer defense for read-only enforcement:
-
-1. **Plan layer** (`QueryEngine::executePlan()`): `ExecMode` enum (EM_FULL / EM_READ_WRITE / EM_READ_ONLY) checked
-   against `QueryPlan` mutation flags (`mutatesData`, `mutatesSchema`) — O(1) check before execution
-2. **API layer**: `beginReadOnlyTransaction()` exposed in `graph::Database`, `zyx::Database` (C++ API), and the Driver ABI
-   (`zyx_driver_txn_begin_read_only`)
-3. **Storage layer**: `DataManager::guardReadOnly()` on all 12 write methods — final safety net backed by
-   `TransactionContext::readOnly_` flag
-
-Key files:
-- `include/graph/query/ExecMode.hpp`: ExecMode enum + helper functions
-- `include/graph/query/QueryPlan.hpp`: QueryPlan struct (plan root + mutation flags)
-- `include/graph/query/ir/LogicalPlanBuilder.hpp`: Stateful builder that accumulates mutation flags during plan
-  construction
-- `include/graph/query/planner/ProcedureRegistry.hpp`: ProcedureDescriptor with mutation metadata
-
-### Vector Engine (`include/graph/vector/`)
-
-- **Core**: `BFloat16` half-precision type, `VectorMetric` distance functions
-- **Index**: `DiskANNIndex` for disk-based approximate nearest neighbor search
-- **Quantization**: `NativeProductQuantizer`, `KMeans` for vector compression
-- **Registry**: `VectorIndexRegistry` manages vector index instances
-- **Configuration**: `VectorIndexConfig` for index parameters
-
-### Configuration (`include/graph/config/SystemConfigManager.hpp`)
-
-- Dynamic runtime configuration
-- Entity observer pattern for reactive updates
-- Per-module configurations (logging, memory, etc.)
-
-### Concurrency (`include/graph/concurrent/ThreadPool.hpp`)
-
-- Thread pool for parallel query execution and background tasks
-
-### Traversal (`include/graph/traversal/RelationshipTraversal.hpp`)
-
-- Graph traversal algorithms for relationship-based queries
-
-## Data Flow
-
-1. **Database open**: `Database::open()` → `StorageBootstrap` → `FileStorage::open()` → Initialize all components
-2. **Query execution**: Cypher string → Parser → QueryPlanner → Optimizer → `QueryPlan` (with mutation flags) →
-   ExecMode check → PhysicalPlanConverter → QueryExecutor → Storage operations
-3. **Write transaction**: `beginTransaction()` → Exclusive lock → Operations recorded in UndoLog + WAL → Commit:
-   capture `CommittedSnapshot` → flush dirty entities → publish snapshot → release lock
-4. **Read-only transaction**: `beginReadOnly()` → Shared lock → Acquire immutable `CommittedSnapshot` → All reads
-   check snapshot first, then cache/disk → Commit: release snapshot + lock
-5. **Persistence**: Entity changes → `DirtyEntityRegistry` → `PersistenceManager` → `PageBufferPool` →
-   FileStorage write → targeted cache invalidation → WAL
-
-## Public API
-
-- **C++ API**: `include/zyx/zyx.hpp` - Embeddable interface for C++ applications
-- **Driver ABI**: `include/zyx/zyx_driver_abi.h` - stable C-facing runtime boundary for Rust, Python, Node.js, WASM, and future bindings
-- **Types**: `include/zyx/value.hpp` - Data type definitions
-- **Query API**: `include/graph/query/api/` - `QueryEngine`, `QueryBuilder`, `QueryResult`, `ResultValue`
-- CLI tool: `buildDir/apps/cli/zyx` - Interactive REPL
-
-## Directory Structure
-
-```
-include/
-├── zyx/                     # Public headers (API)
-│   ├── zyx.hpp              # C++ API
-│   ├── zyx_driver_abi.h     # Stable Driver ABI for language bindings and WASM
-│   └── value.hpp            # Value types
-└── graph/                   # Internal headers
-    ├── core/               # Database, Transaction, Entity, State, Index, Types
-    ├── storage/            # FileStorage, WAL, cache, deletion, persistence
-    │   ├── constraints/    # Schema constraints (unique, not-null, node-key, type)
-    │   ├── data/           # Entity managers (node, edge, property, blob, state)
-    │   ├── dictionaries/   # TokenRegistry (label/type string↔token mapping)
-    │   ├── indexes/        # Label, property, vector, and segment indexes
-    │   ├── state/          # System state management
-    │   └── wal/            # Write-Ahead Log
-    ├── query/              # Query engine
-    │   ├── algorithm/      # GDS-compatible graph algorithms and projections
-    │   ├── api/            # QueryEngine, QueryBuilder, QueryResult
-    │   ├── cache/          # Query plan cache
-    │   ├── execution/      # Physical operators and executor
-    │   │   └── operators/  # All physical operator implementations
-    │   ├── expressions/    # Expression evaluation and function registry
-    │   ├── logical/        # Logical plan operators
-    │   │   └── operators/  # All logical operator implementations
-    │   ├── optimizer/      # Cost model, statistics, optimization rules
-    │   │   └── rules/      # Individual optimizer rules
-    │   └── planner/        # Query planner and physical plan converter
-    ├── traversal/          # Graph traversal algorithms
-    ├── vector/             # Vector index engine
-    │   ├── core/           # BFloat16, distance metrics
-    │   ├── index/          # DiskANN index implementation
-    │   └── quantization/   # Product quantization, KMeans
-    ├── concurrent/         # Thread pool
-    ├── config/             # Configuration management
-    ├── cli/                # CLI-specific components (REPL, commands)
-    ├── debug/              # Performance tracing
-    ├── log/                # Logging
-    └── utils/              # Checksum, compression, serialization utilities
-
-src/
-├── core/                   # Core implementation
-├── storage/                # Storage layer implementation
-│   ├── constraints/        # Constraint implementations
-│   ├── data/               # Entity manager implementations
-│   ├── dictionaries/       # TokenRegistry implementation
-│   ├── indexes/            # Index implementations
-│   ├── state/              # System state implementation
-│   └── wal/                # WAL implementation
-├── query/                  # Query engine implementation
-│   ├── algorithm/          # Graph algorithm implementations
-│   ├── api/                # QueryEngine, QueryBuilder implementations
-│   ├── execution/          # Executor and operator implementations
-│   │   └── operators/      # Physical operator implementations
-│   ├── expressions/        # Expression evaluator implementations
-│   ├── optimizer/          # Optimizer implementations
-│   ├── parser/             # Query parser implementations
-│   │   ├── common/         # Base parser interface (IQueryParser)
-│   │   └── cypher/         # Cypher parser
-│   │       ├── *.g4        # ANTLR4 grammar files
-│   │       ├── helpers/    # AST extraction, expression/pattern building
-│   │       │   ├── public/ # Public helper interfaces
-│   │       │   └── internal/ # Internal implementation helpers
-│   │       ├── clauses/    # Clause handlers (reading, writing, result, admin)
-│   │       └── generated/  # ANTLR4 auto-generated code (DO NOT EDIT)
-│   └── planner/            # Planner implementations
-├── traversal/              # Traversal implementation
-├── vector/                 # Vector engine implementation
-│   └── index/              # DiskANN implementation
-├── api/                    # Public C++ API and Driver ABI implementation
-├── cli/                    # CLI implementation
-├── config/                 # Configuration implementation
-├── debug/                  # Debug/perf tracing implementation
-└── utils/                  # Utility implementations
-
-apps/
-├── cli/                    # CLI application (REPL)
-└── benchmark/              # Performance benchmarking
-
-tests/
-├── include/                # Shared test utilities and helpers
-├── integration/            # Integration tests (end-to-end workflows)
-└── src/                    # Unit tests (mirrors source structure)
-    ├── api/                # C++ API and Driver ABI tests
-    ├── cli/                # CLI tests
-    ├── concurrent/         # Thread pool tests
-    ├── config/             # Configuration tests
-    ├── core/               # Database, transaction, entity tests
-    ├── log/                # Logging tests
-    ├── query/              # Query engine tests
-    │   ├── algorithm/      # Graph algorithm tests
-    │   ├── api/            # Query API tests
-    │   ├── cache/          # Plan cache tests
-    │   ├── execution/      # Executor tests
-    │   │   └── operators/  # Individual operator tests
-    │   ├── expressions/    # Expression evaluation tests
-    │   ├── logical/        # Logical plan tests
-    │   ├── optimizer/      # Optimizer rule tests
-    │   ├── parser/         # Parser tests
-    │   │   └── cypher/     # Cypher-specific parser tests
-    │   │       ├── clauses/
-    │   │       ├── helpers/
-    │   │       └── syntax/
-    │   └── planner/        # Planner tests
-    ├── storage/            # Storage tests
-    │   ├── constraints/    # Constraint tests
-    │   ├── data/           # Entity manager tests
-    │   ├── dictionaries/   # TokenRegistry tests
-    │   ├── Indexes/        # Index tests
-    │   ├── state/          # System state tests
-    │   └── wal/            # WAL tests
-    ├── traversal/          # Traversal tests
-    ├── utils/              # Utility tests
-    └── vector/             # Vector engine tests
-        ├── core/           # BFloat16, metrics tests
-        ├── index/          # DiskANN tests
-        └── quantization/   # Quantizer tests
-
-scripts/
-├── run_tests.sh            # Build + test + coverage
-├── build_release.sh        # Release build
-├── build_wasm.sh           # WASM build (zyx.js + zyx.wasm)
-├── setup_emsdk.sh          # Emscripten SDK + antlr4 WASM setup
-└── build_playground_db.mjs # Pre-build playground database files
-
-docs/apps/docs/
-├── home/                   # Homepage components
-│   ├── custom-home.tsx     # Homepage layout
-│   ├── playground.tsx      # Cypher Playground component
-│   └── graph-view.tsx      # D3 graph visualization
-└── public/
-    ├── wasm/               # Deployed WASM module
-    │   ├── zyx.js          # WASM JS loader
-    │   └── zyx.wasm        # WASM binary
-    └── data/               # Pre-built playground databases
-        ├── got.zyx          # Game of Thrones dataset
-        └── imdb.zyx        # IMDb Movies dataset
-
-CMakeLists.txt              # CMake build entry point; use ZYX_WASM=ON for Emscripten
-```
-
-## Dependencies (via Conan)
-
-- **boost**: Filesystem, system utilities
-- **zlib**: Compression
-- **gtest/gmock**: Testing framework
-- **cli11**: Command line interface
-- **antlr4-cppruntime**: Cypher parser generation
-
-## Dependencies (WASM, via Emscripten)
-
-- **Emscripten SDK**: C++ → WASM compiler toolchain (`scripts/setup_emsdk.sh`)
-- **antlr4-cppruntime**: Cross-compiled to WASM static library (`emsdk/antlr4-wasm/`)
-- **zlib**: Built-in Emscripten port (`-sUSE_ZLIB=1`)
-
-## Implementation Notes
-
-1. **Segment Architecture**: All data is stored in fixed-size segments with bitmap tracking for space management
-2. **State Chains**: All persistent modifications go through state chains for versioning and rollback
-3. **Dirty Tracking**: Modified entities are tracked via double-buffered `DirtyEntityRegistry` for efficient persistence
-4. **Page Buffer Pool**: Segment-level LRU cache with targeted invalidation (only dirty segments evicted on flush)
-5. **WAL Integration**: Write operations are logged to WAL before actual disk writes for durability
-6. **Undo Log**: Each write transaction records inverse operations for fine-grained rollback without full snapshot restore
-7. **Snapshot Isolation**: Read-only transactions acquire an immutable `CommittedSnapshot` at begin, providing consistent reads throughout transaction lifetime
-8. **Parser Generation**: ANTLR4 grammar files are in `src/query/parser/cypher/` - generated code should not be manually edited
-9. **Vector Engine**: DiskANN-based approximate nearest neighbor search with product quantization support
-10. **Graph Algorithms**: Neo4j GDS-compatible graph algorithms with named projection support
-
-## Library Build Outputs
-
-- **`zyx_core`**: Internal static library for tests and CLI (not installed)
-- **`libzyx`**: Public shared library for embedding (installed to system)
-- **pkg-config**: Generated for easy integration (`pkg-config --libs --cflags zyx`)
-
-## WASM Build Target
-
-Compiles ZYX to WebAssembly for browser-based usage via Emscripten.
-
-### Prerequisites
-
-```bash
-./scripts/setup_emsdk.sh   # Installs emsdk + builds antlr4-cppruntime for WASM
-```
-
-Outputs: `emsdk/` (Emscripten SDK), `emsdk/antlr4-wasm/` (antlr4 static lib for WASM)
-
-### Build
-
-```bash
-./scripts/build_wasm.sh    # Output: build_wasm/zyx.js + build_wasm/zyx.wasm
-```
-
-### How it works
-
-1. Uses `emcmake cmake` with `ZYX_WASM=ON` and the Emscripten toolchain
-2. Resolves WASM-compatible dependencies from `emsdk/antlr4-wasm/` and Emscripten-provided zlib
-3. Compiles `libzyx_core.a` + `libzyx_cypher_parser.a` as static WASM libraries
-4. Links with `em++` into final `zyx.js` + `zyx.wasm` module using `-sMODULARIZE`
-
-### Exported Driver ABI functions
-
-All browser-visible runtime functions are listed in `build_wasm.sh` `-sEXPORTED_FUNCTIONS`. Key categories:
-- **Lifecycle**: `zyx_driver_db_open`, `zyx_driver_db_open_if_exists`, `zyx_driver_db_close`, `zyx_driver_db_save`
-- **Execution**: `zyx_driver_db_execute`, `zyx_driver_txn_execute`
-- **Transactions**: `zyx_driver_txn_begin`, `zyx_driver_txn_begin_read_only`, `zyx_driver_txn_commit`,
-  `zyx_driver_txn_rollback`, `zyx_driver_txn_close`
-- **Parameters and values**: `zyx_driver_params_*`, `zyx_driver_value_*`
-- **Graph writes**: `zyx_driver_db_create_node`, `zyx_driver_db_create_node_with_labels`, `zyx_driver_db_create_edge`
-- **Result iteration**: `zyx_driver_result_next`, `zyx_driver_result_column_count`, `zyx_driver_result_column_name`
-- **Data access**: scalar getters plus `zyx_driver_result_get_value` and `zyx_driver_value_ref_*` nested traversal
-- **Errors and memory**: `zyx_driver_error_*`, `malloc`, `free`
-
-**When adding new Driver ABI functions**: Update `include/zyx/zyx_driver_abi.h`, the focused implementation files under
-`src/api/driver_abi/`, relevant binding declarations, and `scripts/build_wasm.sh` `-sEXPORTED_FUNCTIONS` when browser access is needed.
-
-The write-side Arrow ingest functions are intentionally not exported by the browser WASM target. The Playground always executes through read-only Driver ABI transactions.
-
-### Key files
-
-| File | Purpose |
-|------|---------|
-| `scripts/setup_emsdk.sh` | One-time emsdk + antlr4 WASM setup |
-| `scripts/build_wasm.sh` | WASM build script with exported function list |
-| `CMakeLists.txt` | Root CMake build graph; use `ZYX_WASM=ON` for Emscripten builds |
-| `docs/apps/docs/public/wasm/zyx.js` | Deployed WASM JS loader |
-| `docs/apps/docs/public/wasm/zyx.wasm` | Deployed WASM binary |
-
-## Cypher Playground (Homepage)
-
-Browser-based interactive Cypher query workspace embedded in the docs site homepage.
-
-### Architecture
+`include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp` is the native storage owner. It implements the generic storage, logical read, write, schema, administration, statistics, vector, and maintenance boundaries rather than exposing physical offsets to callers.
 
 ```mermaid
 graph LR
-    A[playground.tsx] --> B[wasmDriverAbi.ts] -->|Driver ABI ccall| C[zyx.js WASM Module]
-    C --> D[zyx.wasm - ZYX Engine]
-    D -->|MEMFS| E[Pre-built .zyx files]
-    A --> F[graph-view.tsx - D3 Visualization]
+    A["Logical graph operation"] --> B["RelocatableStorageBackend"]
+    B --> C["Pinned metadata snapshot"]
+    C --> D["Catalog, directories, typed page stores"]
+    D --> E["Allocator and BufferPool"]
+    E --> F["StorageIO"]
+    F --> G["Single database file"]
+    G --> H["A/B Superblock publication"]
 ```
 
-### Components
+Native storage responsibilities are divided by format family:
 
-| File | Purpose |
-|------|---------|
-| `docs/apps/docs/home/playground.tsx` | Main playground component (query editor, result display, dataset switching) |
-| `docs/apps/docs/home/wasmDriverAbi.ts` | TypeScript wrapper around Driver ABI handles, errors, values, and result traversal |
-| `docs/apps/docs/home/graph-view.tsx` | D3.js force-directed graph visualization |
-| `docs/apps/docs/home/custom-home.tsx` | Homepage layout integrating the playground |
-| `docs/apps/docs/public/data/*.zyx` | Pre-built database files fetched at runtime |
+| Area | Native components |
+|---|---|
+| Format and I/O | explicit little-endian codecs, `StorageIO`, checksums, superblock file, format validation |
+| Metadata | metadata store, Catalog tree, location directory, token/schema records, snapshot registry |
+| Allocation and cache | physical segment allocator, shared/slotted page pools, generation-aware `BufferPool` |
+| Graph data | entity pages, label sets, property and large-value stores, global adjacency B+Tree |
+| Schema and indexes | System Catalog, scalar/composite B+Tree indexes, constraints and support trees |
+| Vector | native raw/base/delta/vector page stores plus bounded maintenance and rebuild services |
+| Maintenance | integrity scanner, reachability reclaimers, explicit maintenance service |
 
-### Execution flow
+Every persisted field is decoded and validated before use. Lengths, offsets, counts, generations, owners, checksums, enum values, and reserved fields are format boundaries, not trusted in-memory state. Normal open is bounded; full integrity scans are explicitly requested rather than being an implicit full-file scan.
 
-1. WASM module loaded from `/wasm/zyx.js`
-2. Pre-built `.zyx` + `.zyx-wal` files fetched and written to Emscripten MEMFS
-3. Database opened through `WasmDriverAbi.open()` → `zyx_driver_db_open`
-4. **Read-only transaction** opened through `WasmDriverAbi.beginReadOnly()` → `zyx_driver_txn_begin_read_only`; all user queries use
-   `zyx_driver_txn_execute()` to prevent data mutation
-5. Results are materialized through Driver ABI scalar and nested value-ref APIs, then rendered as graph or table
+### Query Engine
 
-### Read-only enforcement
+`include/graph/query/api/QueryEngine.hpp` owns the current query pipeline:
 
-The Playground enforces read-only mode at the engine level (not client-side filtering):
-- Uses `zyx_driver_txn_begin_read_only` → `zyx_driver_txn_execute` for all queries
-- Write queries (CREATE, SET, DELETE, MERGE, DROP INDEX, etc.) are rejected by the engine with error:
-  `"Read-only transaction cannot execute write queries"`
-- 3-layer defense: QueryPlan mutation flags → ExecMode check → DataManager guard
-
-### Pre-built datasets
-
-Database files in `docs/apps/docs/public/data/` are pre-built offline. To regenerate:
-```bash
-node scripts/build_playground_db.mjs
+```mermaid
+graph LR
+    A["Cypher text"] --> B["CypherParserImpl"]
+    B --> C["CypherToPlanVisitor"]
+    C --> D["QueryPlan / LogicalOperator tree"]
+    D --> E["LogicalPlanOptimizer"]
+    E --> F["QueryEngine dispatch"]
+    F --> G["Schema, procedure, mutation, or read runtime"]
+    G --> H["QueryResult"]
 ```
+
+- ANTLR4 grammar and generated parser files live under `src/query/parser/cypher/`; regenerate them with `bash src/query/parser/cypher/generate.sh` after a grammar change.
+- `CypherToPlanVisitor` directly builds the storage-neutral logical tree and its mutation flags.
+- `PlanCache` caches reusable logical plans. Schema mutation invalidates cached plans.
+- `LogicalPlanOptimizer` has bounded pass/depth limits and only performs semantic-safe rewrites. It may use bounded native cardinality estimates, but it never reads physical pages.
+- `QueryEngine` dispatches schema plans to `LogicalPlanSchemaRuntime`, procedures to `LogicalPlanProcedureRuntime`, data mutation to `LogicalPlanMutationRuntime`, and native reads to `LogicalPlanReadRuntime`.
+- Unsupported runtime operators fail closed. Do not add a legacy physical-executor fallback.
+- `EXPLAIN` renders the logical tree without opening a snapshot or publishing work. `PROFILE` preserves normal execution and adds a logical timing summary.
+
+The current optimizer exposes only validated, conservative access hints: static equality and range scan shapes retain their filters; cardinality may reorder a Cartesian join only when both estimates are valid; and window normalization is bounded and overflow-safe. Do not document generic predicate/projection pushdown unless its semantic contract and native runtime support are implemented and tested.
+
+### Logical Graph Boundaries
+
+`LogicalGraphReadBackend`, `LogicalGraphWriteBackend`, `LogicalGraphSchemaBackend`, and related interfaces are the boundary between query code and the native format.
+
+- Read runtimes open logical snapshots and stream bounded rows.
+- Logical nodes and edges carry resolved logical labels/types/properties, never legacy token IDs or physical locations.
+- Native B+Tree scan hints are validated inside a pinned snapshot. Owner, label, property, value, entity ID, bounds, and corruption checks remain storage responsibilities.
+- Procedure, vector, GDS, CSV, and configuration paths have independent work, row, memory, path, or import-root constraints as appropriate.
+- A `QueryGuard` supplies timeout and resource policy at the execution boundary.
+
+### Public Surface And Bindings
+
+- C++ API: `include/zyx/zyx.hpp`
+- Stable Driver ABI: `include/zyx/zyx_driver_abi.h`
+- C++ implementation and ABI adapters: `src/api/`
+- Language bindings: `bindings/nodejs/`, `bindings/python/`, and `bindings/rust/`
+
+The Driver ABI is the long-term binding boundary. New public behavior must preserve result/value ownership, transaction lifetime, read-only enforcement, and error contracts across C++, Node.js, Python, Rust, and WASM where declared.
+
+### Vector And Algorithms
+
+Native Vector storage is in `include/graph/storage/relocatable/vector/` and its maintenance code. Shared math belongs in `include/graph/common/VectorMath.hpp`. The former `graph/vector` implementation has been physically removed; native code must use these relocatable owners exclusively.
+
+GDS projections are process-local derived state. A `QueryEngine` owns its database-scoped catalog, and a caller-owned transaction has a separate transaction-local catalog. Neither is a durable graph-format replacement without an explicit publication design.
+
+## Directory Guide
+
+```text
+include/
+  zyx/                         Public C++ API and Driver ABI
+  graph/
+    core/                      Database, Transaction, public graph types
+    storage/                   Generic logical/storage interfaces and native relocatable backend
+      relocatable/             Format, metadata, allocation, cache, entity, property, index, schema, vector, maintenance
+    query/                     Parser contracts, logical operators, optimizer, runtimes, expressions, GDS
+    common/                    Storage-independent shared utilities, including Vector math
+src/
+  api/                         Public API and Driver ABI implementations
+  core/                        Database and Transaction implementation
+  storage/relocatable/         Native storage implementation by format family
+  query/                       Logical parser, optimizer, runtimes, expressions, and GDS implementation
+tests/src/
+  storage/relocatable/         Native format, fault, integrity, and lifecycle tests
+  query/                       Native logical query and parser tests
+  api/                         C++ API and Driver ABI contract tests
+bindings/                      Node.js, Python, and Rust SDKs/tests
+cmake/SourceSets.cmake         Explicit native production and test source allowlists
+scripts/                       Build, test, coverage, release, and WASM scripts
+docs/apps/docs/                Documentation site and browser playground
+```
+
+## Build, Test, And Coverage
+
+The project uses CMake, Conan, Ninja, and Google Test. Use the commands in the root `AGENTS.md`:
+
+- `./scripts/run_tests.sh --quick` is the required complete local regression after code or build-configuration changes.
+- During development, pair a narrow `--gtest-filter` with `--file <source-path>` to inspect production coverage.
+- Final C7 acceptance requires the exact current test binary to reach at least 95% for line, branch, function, and region coverage, as well as clean macOS, Linux, and Windows builds/tests.
+- Run all binding tests after public API/ABI changes with `./scripts/test_bindings.sh`.
+
+## WASM And Playground
+
+`ZYX_WASM=ON` configures the Emscripten build. `scripts/build_wasm.sh` produces `build_wasm/zyx.js` and `build_wasm/zyx.wasm`; browser-visible Driver ABI functions must also be listed in its `-sEXPORTED_FUNCTIONS`.
+
+The docs playground uses the Driver ABI and begins read-only transactions with `zyx_driver_txn_begin_read_only` before executing user Cypher. The wrapper contract test is useful but does not replace a real wasm32 build and browser integration test. The normal native format is one database file; new playground/data workflows must not introduce external WAL or SHM sidecars.
+
+## Cross-Platform Requirements
+
+All changes must preserve macOS, Linux, and Windows behavior. In particular:
+
+- use prefixed enum members to avoid Windows macro collisions;
+- keep paths, file I/O, synchronization, and error reporting platform-neutral;
+- do not hardcode Visual Studio paths or versions;
+- do not rely on POSIX-only I/O without the existing portable `StorageIO` boundary;
+- keep generated files, build artifacts, coverage profiles, and machine-local configuration out of commits.
+
+## Legacy Retirement
+
+Before deleting a legacy family, identify its capability row and C-gate, find every source/test/binding/benchmark/documentation consumer, add and run the native behavior replacement, configure from a clean build directory, run the full suite and affected bindings, and obtain the required three-platform evidence. A clean native source list alone does not authorize deleting a retained behavior family.

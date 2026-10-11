@@ -15,6 +15,7 @@
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
 #include "graph/storage/relocatable/vector/VectorMappingIds.hpp"
 
@@ -112,7 +113,7 @@ namespace graph::storage {
 					  uint64_t mappingIndexId, uint64_t vectorId);
 		[[nodiscard]] static std::vector<VectorDeltaEntry>
 		scan(const MetadataSnapshotPin &snapshot, BTreePageStore &pages, RelocatableMetadataStore &metadata,
-			 uint64_t mappingIndexId, size_t maximumEntries);
+			 uint64_t mappingIndexId, size_t maximumEntries, const CancellationCheckpoint *cancellation = nullptr);
 		// Current Raw locations describe the post-mutation semantic state. Inserts
 		// must resolve there, while erase tombstones name records retained only by
 		// an older derived base and therefore must no longer have a Raw location.

@@ -19,6 +19,7 @@
  **/
 
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -71,8 +72,6 @@ TEST_F(CppApiTest, ExecuteAutoOpensDb) {
 														std::chrono::steady_clock::now().time_since_epoch().count()))).string();
 	std::error_code ec;
 	fs::remove(newPath, ec);
-	ec.clear();
-	fs::remove(newPath + ".wal", ec);
 	auto newDb = std::make_unique<zyx::Database>(newPath);
 
 	auto res = newDb->execute("RETURN 42 AS val");
@@ -80,8 +79,6 @@ TEST_F(CppApiTest, ExecuteAutoOpensDb) {
 
 	newDb->close();
 	fs::remove(newPath, ec);
-	ec.clear();
-	fs::remove(newPath + ".wal", ec);
 }
 
 TEST_F(CppApiTest, CloseAndReopenDatabase) {
@@ -99,6 +96,74 @@ TEST_F(CppApiTest, CloseAndReopenDatabase) {
 	auto val = res.get("n.key");
 	EXPECT_TRUE(std::holds_alternative<std::string>(val));
 	EXPECT_EQ(std::get<std::string>(val), "value");
+}
+
+TEST_F(CppApiTest, NativeTokenNamesPersistAcrossReopenAndRemainPublishable) {
+	const auto initial = db->execute(
+			"CREATE (source:TokenPersistPerson {name: 'Ada'})-[:TOKEN_PERSIST_KNOWS {since: 2026}]->"
+			"(target:TokenPersistCity {name: 'Suzhou'})");
+	ASSERT_TRUE(initial.isSuccess()) << initial.getError();
+
+	db->close();
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	db = std::make_unique<zyx::Database>(dbPath);
+	db->open();
+
+	auto preserved = db->execute(
+			"MATCH (source:TokenPersistPerson {name: 'Ada'})-[:TOKEN_PERSIST_KNOWS {since: 2026}]->"
+			"(target:TokenPersistCity {name: 'Suzhou'}) RETURN source");
+	ASSERT_TRUE(preserved.isSuccess()) << preserved.getError();
+	ASSERT_TRUE(preserved.hasNext());
+
+	const auto next = db->execute(
+			"MATCH (source:TokenPersistPerson {name: 'Ada'}) "
+			"CREATE (source)-[:TOKEN_PERSIST_VISITS {count: 1}]->(:TokenPersistCountry {code: 'CN'})");
+	ASSERT_TRUE(next.isSuccess()) << next.getError();
+
+	db->close();
+	db = std::make_unique<zyx::Database>(dbPath);
+	db->open();
+
+	auto oldNames = db->execute(
+			"MATCH (source:TokenPersistPerson {name: 'Ada'})-[:TOKEN_PERSIST_KNOWS {since: 2026}]->"
+			"(target:TokenPersistCity {name: 'Suzhou'}) RETURN source");
+	ASSERT_TRUE(oldNames.isSuccess()) << oldNames.getError();
+	EXPECT_TRUE(oldNames.hasNext());
+	auto newNames = db->execute(
+			"MATCH (:TokenPersistPerson)-[:TOKEN_PERSIST_VISITS {count: 1}]->"
+			"(:TokenPersistCountry {code: 'CN'}) RETURN 1");
+	ASSERT_TRUE(newNames.isSuccess()) << newNames.getError();
+	EXPECT_TRUE(newNames.hasNext());
+}
+
+TEST_F(CppApiTest, NativeTokenNamesRolledBackBeforePublicationCanBeRetriedAcrossReopen) {
+	auto transaction = db->beginTransaction();
+	ASSERT_TRUE(transaction.isActive());
+	const auto staged = transaction.execute(
+			"CREATE (:TokenRollbackSource {sourceKey: 'discarded'})-[:TOKEN_ROLLBACK_REL {relationKey: 1}]->"
+			"(:TokenRollbackTarget {targetKey: 'discarded'})");
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	transaction.rollback();
+
+	const auto invisible = db->execute(
+			"MATCH (:TokenRollbackSource)-[:TOKEN_ROLLBACK_REL]->(:TokenRollbackTarget) RETURN 1");
+	ASSERT_TRUE(invisible.isSuccess()) << invisible.getError();
+	EXPECT_FALSE(invisible.hasNext());
+
+	const auto retry = db->execute(
+			"CREATE (:TokenRollbackSource {sourceKey: 'published'})-[:TOKEN_ROLLBACK_REL {relationKey: 2}]->"
+			"(:TokenRollbackTarget {targetKey: 'published'})");
+	ASSERT_TRUE(retry.isSuccess()) << retry.getError();
+
+	db->close();
+	EXPECT_FALSE(fs::exists(dbPath + "-wal"));
+	db->open();
+
+	const auto published = db->execute(
+			"MATCH (:TokenRollbackSource {sourceKey: 'published'})-[:TOKEN_ROLLBACK_REL {relationKey: 2}]->"
+			"(:TokenRollbackTarget {targetKey: 'published'}) RETURN 1");
+	ASSERT_TRUE(published.isSuccess()) << published.getError();
+	EXPECT_TRUE(published.hasNext());
 }
 
 TEST_F(CppApiTest, FlushCloseReopenCycle) {
@@ -153,8 +218,6 @@ TEST_F(CppApiTest, ExecuteOnClosedDbCreatesNew) {
 														std::chrono::steady_clock::now().time_since_epoch().count()))).string();
 	std::error_code ec;
 	fs::remove(newPath, ec);
-	ec.clear();
-	fs::remove(newPath + ".wal", ec);
 	auto newDb = std::make_unique<zyx::Database>(newPath);
 	auto res = newDb->execute("CREATE (n:AutoOpen {val: 1})");
 	EXPECT_TRUE(res.isSuccess());
@@ -167,8 +230,6 @@ TEST_F(CppApiTest, ExecuteOnClosedDbCreatesNew) {
 
 	newDb->close();
 	fs::remove(newPath, ec);
-	ec.clear();
-	fs::remove(newPath + ".wal", ec);
 }
 
 TEST_F(CppApiTest, SaveOnClosedDb) {
@@ -177,4 +238,92 @@ TEST_F(CppApiTest, SaveOnClosedDb) {
 	db->open();
 	db->save();
 	SUCCEED();
+}
+
+TEST_F(CppApiTest, ConfiguresThreadPoolBeforeTheFirstQueryEngineUse) {
+	// The public setting must be retained until the lazily-created native
+	// QueryEngine first asks Database for its ThreadPool.
+	db->setThreadPoolSize(1U);
+	auto first = db->execute("RETURN 42 AS value");
+	ASSERT_TRUE(first.isSuccess()) << first.getError();
+	ASSERT_TRUE(first.hasNext());
+	first.next();
+	EXPECT_EQ(first.get("value"), zyx::Value(int64_t{42}));
+
+	// Once the engine exists, a replacement pool must be wired back to it.
+	db->setThreadPoolSize(2U);
+	auto second = db->execute("RETURN 7 AS value");
+	ASSERT_TRUE(second.isSuccess()) << second.getError();
+	ASSERT_TRUE(second.hasNext());
+	second.next();
+	EXPECT_EQ(second.get("value"), zyx::Value(int64_t{7}));
+}
+
+TEST_F(CppApiTest, RejectsMovedPreparedQueriesWithoutPublishingInDatabaseOrTransaction) {
+	zyx::PreparedQuery original = db->query()
+			.createNode("node", "MovedPreparedMustNotPublish")
+			.returning({"node"})
+			.build();
+	zyx::PreparedQuery retained = std::move(original);
+
+	const zyx::Result databaseResult = db->execute(original);
+	EXPECT_FALSE(databaseResult.isSuccess());
+	EXPECT_EQ(databaseResult.getError(), "PreparedQuery is empty or has been moved");
+
+	auto transaction = db->beginTransaction();
+	const zyx::Result transactionResult = transaction.execute(original);
+	EXPECT_FALSE(transactionResult.isSuccess());
+	EXPECT_EQ(transactionResult.getError(), "PreparedQuery is empty or has been moved");
+	transaction.rollback();
+
+	const zyx::Result absent = db->execute(
+			db->query().match("node", "MovedPreparedMustNotPublish").returning({"node"}).build());
+	ASSERT_TRUE(absent.isSuccess()) << absent.getError();
+	EXPECT_FALSE(absent.hasNext());
+	EXPECT_FALSE(retained.empty());
+}
+
+TEST_F(CppApiTest, ExecutesPreparedQueriesInsideCypherTransactionWithoutEarlyPublication) {
+	const zyx::Result begin = db->execute("BEGIN");
+	ASSERT_TRUE(begin.isSuccess()) << begin.getError();
+
+	const zyx::PreparedQuery create = db->query()
+			.createNode("node", "PreparedCypherTransaction", {{"value", int64_t{11}}})
+			.returning({"node"})
+			.build();
+	const zyx::Result staged = db->execute(create);
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	ASSERT_TRUE(staged.hasNext());
+
+	const zyx::Result rollback = db->execute("ROLLBACK");
+	ASSERT_TRUE(rollback.isSuccess()) << rollback.getError();
+
+	const zyx::Result absent = db->execute(
+			db->query().match("node", "PreparedCypherTransaction").returning({"node"}).build());
+	ASSERT_TRUE(absent.isSuccess()) << absent.getError();
+	EXPECT_FALSE(absent.hasNext());
+}
+
+TEST_F(CppApiTest, RejectsPreparedMutationsInReadOnlyAndFinalizedTransactionsWithoutPublishing) {
+	const zyx::PreparedQuery create = db->query()
+			.createNode("node", "PreparedTransactionMustNotPublish", {{"value", int64_t{5}}})
+			.returning({"node"})
+			.build();
+
+	auto readOnly = db->beginReadOnlyTransaction();
+	const zyx::Result readOnlyResult = readOnly.execute(create);
+	EXPECT_FALSE(readOnlyResult.isSuccess());
+	EXPECT_FALSE(readOnlyResult.getError().empty());
+	readOnly.commit();
+
+	auto finalized = db->beginTransaction();
+	finalized.rollback();
+	const zyx::Result finalizedResult = finalized.execute(create);
+	EXPECT_FALSE(finalizedResult.isSuccess());
+	EXPECT_EQ(finalizedResult.getError(), "Transaction is not active");
+
+	const zyx::Result absent = db->execute(
+			db->query().match("node", "PreparedTransactionMustNotPublish").returning({"node"}).build());
+	ASSERT_TRUE(absent.isSuccess()) << absent.getError();
+	EXPECT_FALSE(absent.hasNext());
 }

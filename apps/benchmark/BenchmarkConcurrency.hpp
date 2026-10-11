@@ -150,7 +150,7 @@ namespace zyx::benchmark {
 
 	// ========================================================================
 	// Concurrency Benchmark: Parallel Batch Insert
-	// Tests: FileStorage::save() parallel preparation
+	// Tests: native logical commit path under parallel preparation
 	// ========================================================================
 
 	class ConcurrentBatchInsertBench : public BenchmarkBase {
@@ -186,7 +186,7 @@ namespace zyx::benchmark {
 
 	// ========================================================================
 	// Concurrency Benchmark: Parallel PQ Training
-	// Tests: NativeProductQuantizer parallel subspace training
+	// Tests: native product-quantizer parallel subspace training
 	// ========================================================================
 
 	class ConcurrentPQTrainBench : public BenchmarkBase {

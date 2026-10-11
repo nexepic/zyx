@@ -154,12 +154,11 @@ namespace {
 					snapshot.superblock().data_region_offset, PhysicalSlotId(40U));
 			std::atomic<uint32_t> shortReads{0U};
 			{
-				StorageIO::ScopedNativeReadHookForTesting shortSecondExtentPage(
+				StorageIO::ScopedNativeReadHookForTesting shortCompleteExtentRead(
 						[&](file_handle_t fd, void *bytes, size_t byteCount, pwrite_off_t offset) {
-							if (static_cast<uint64_t>(offset) == segmentOffset + RSS_PAGE_SIZE &&
-								byteCount == RSS_PAGE_SIZE) {
+							if (static_cast<uint64_t>(offset) == segmentOffset && byteCount == RSS_SEGMENT_SIZE) {
 								shortReads.fetch_add(1U, std::memory_order_relaxed);
-								return portable_pread(fd, bytes, byteCount - 1U, offset);
+								return portable_pread(fd, bytes, byteCount - RSS_PAGE_SIZE, offset);
 							}
 							return portable_pread(fd, bytes, byteCount, offset);
 						});
@@ -190,10 +189,10 @@ namespace {
 			std::atomic<uint32_t> extentPageReads{0U};
 			{
 				StorageIO::ScopedNativeReadHookForTesting countExtentReads([&](file_handle_t fd, void *bytes,
-																			   size_t byteCount, pwrite_off_t offset) {
+																					   size_t byteCount, pwrite_off_t offset) {
 					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
-					if (absoluteOffset >= segmentOffset && absoluteOffset < segmentOffset + RSS_SEGMENT_SIZE) {
-						if (byteCount != RSS_PAGE_SIZE || (absoluteOffset - segmentOffset) % RSS_PAGE_SIZE != 0U) {
+					if (absoluteOffset == segmentOffset) {
+						if (byteCount != RSS_SEGMENT_SIZE) {
 							return static_cast<pwrite_ssize_t>(-1);
 						}
 						extentPageReads.fetch_add(1U, std::memory_order_relaxed);
@@ -205,7 +204,7 @@ namespace {
 				EXPECT_EQ(allocator.read(snapshot, testSegmentId()).payload,
 						  (std::vector<std::byte>(payload.begin(), payload.end())));
 			}
-			EXPECT_EQ(extentPageReads.load(std::memory_order_relaxed), 2U * (RSS_SEGMENT_SIZE / RSS_PAGE_SIZE));
+			EXPECT_EQ(extentPageReads.load(std::memory_order_relaxed), 2U);
 		}
 		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 	}

@@ -79,6 +79,10 @@ protected:
 		data_io_ = std::make_shared<StorageIO>(data_file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 		wal_io_ = std::make_shared<StorageIO>(wal_file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 		metadata_ = RelocatableMetadataStore::initializeNew(data_io_, initialSuperblock());
+		rebuildStores();
+	}
+
+	void rebuildStores() {
 		pages_ = std::make_unique<SlottedPagePool>(data_io_, *metadata_);
 		trees_ = std::make_unique<BTreePageStore>(*pages_, *metadata_);
 		page_entities_ = std::make_unique<EntityPageStore>(data_io_, *metadata_);
@@ -93,6 +97,20 @@ protected:
 																																										*trees_, writeOptions);
 		catalog_ = std::make_unique<SystemCatalog>(*trees_, *metadata_);
 		vector_manifests_ = std::make_unique<VectorManifestStore>(data_io_, *metadata_);
+	}
+
+	void reopen() {
+		vector_manifests_.reset();
+		catalog_.reset();
+		native_writes_.reset();
+		properties_.reset();
+		labels_.reset();
+		page_entities_.reset();
+		trees_.reset();
+		pages_.reset();
+		metadata_.reset();
+		metadata_ = RelocatableMetadataStore::open(data_io_);
+		rebuildStores();
 	}
 
 	void TearDown() override {
@@ -355,6 +373,43 @@ TEST_F(RelocatableScalarIndexTreeReachabilityReclaimerTest, RetiresDroppedAndOrp
 	EXPECT_EQ(second.published_generation, second.scanned_generation);
 }
 
+TEST_F(RelocatableScalarIndexTreeReachabilityReclaimerTest,
+	   DoesNotPartiallyRetireAnObsoleteTreeWhenMetadataPublicationIsInterrupted) {
+	IndexDefinition definition = sealedDefinition(7U, "interrupted_score");
+	publishSealed(definition);
+	buildRoot(definition.index_id, 71U);
+	tombstoneSealed(definition.index_id);
+
+	MetadataSnapshotPin oldSnapshot = metadata_->openSnapshot();
+	const std::vector<std::byte> rootKey = {std::byte{0x61U}};
+	EXPECT_EQ(BTreeIndex(definition.index_id, *trees_, *metadata_).find(oldSnapshot, rootKey),
+			  std::optional<uint64_t>(71U));
+
+	MetadataPublishOptions interrupted;
+	interrupted.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
+	auto treeReclaimer = reclaimer();
+	EXPECT_THROW(static_cast<void>(treeReclaimer.reclaim(options(), nextCheckpointLsn(), interrupted)),
+				 BootstrapPublishInterrupted);
+
+	// The old root stays visible until one atomic publication retires the root
+	// mapping and every reachable page together.
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_TRUE(metadata_->findIndexRootOptional(current, definition.index_id).has_value());
+	EXPECT_EQ(BTreeIndex(definition.index_id, *trees_, *metadata_).find(current, rootKey),
+			  std::optional<uint64_t>(71U));
+	current.release();
+	oldSnapshot.release();
+	reopen();
+
+	auto reopenedReclaimer = reclaimer();
+	const ScalarIndexTreeReclaimReport retry = reopenedReclaimer.reclaim(options(), nextCheckpointLsn());
+	EXPECT_EQ(retry.dropped_index_roots_retired, 1U);
+	EXPECT_EQ(retry.index_tree_pages_retired, 1U);
+
+	current = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(current, definition.index_id).has_value());
+}
+
 TEST_F(RelocatableScalarIndexTreeReachabilityReclaimerTest, RejectsUnknownSealedRootsAndInvalidBounds) {
 	buildRoot(11U, 11U);
 	auto reclaimer = this->reclaimer();
@@ -608,9 +663,18 @@ TEST_F(RelocatableScalarIndexTreeReachabilityReclaimerTest, RequiresEveryCollabo
 	SlottedPagePool foreignPages(foreignIo, *foreignMetadata);
 	BTreePageStore foreignTrees(foreignPages, *foreignMetadata);
 	SystemCatalog foreignCatalog(foreignTrees, *foreignMetadata);
+	VectorManifestStore foreignManifests(foreignIo, *foreignMetadata);
+	EXPECT_THROW(
+			static_cast<void>(ScalarIndexTreeReachabilityReclaimer(
+					foreignTrees, *catalog_, *vector_manifests_, *metadata_)),
+			std::invalid_argument);
 	EXPECT_THROW(
 			static_cast<void>(ScalarIndexTreeReachabilityReclaimer(
 					*trees_, foreignCatalog, *vector_manifests_, *metadata_)),
+			std::invalid_argument);
+	EXPECT_THROW(
+			static_cast<void>(ScalarIndexTreeReachabilityReclaimer(
+					*trees_, *catalog_, foreignManifests, *metadata_)),
 			std::invalid_argument);
 	foreignMetadata.reset();
 	foreignIo.reset();

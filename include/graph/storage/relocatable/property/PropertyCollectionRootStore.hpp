@@ -10,11 +10,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <vector>
 
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/metadata/Catalog.hpp"
 #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 
@@ -60,6 +62,14 @@ namespace graph::storage {
 		// new LargeValue frame. They remain separate from `large_values` so the
 		// metadata writer can reserve logical IDs only for new values.
 		std::vector<LargeValueRef> reused_large_values;
+	};
+
+	// Per-batch snapshot caches avoid reopening an immutable Property page while
+	// independently planning many roots that target that same page.
+	struct EntityPropertyBatchPageCache {
+		std::map<PageId, PageLocation> locations;
+		std::map<PageId, CatalogEntry> pools;
+		std::map<PageId, std::optional<SlottedPage>> pages;
 	};
 
 	class PropertyCollectionRootStore final {
@@ -127,7 +137,11 @@ namespace graph::storage {
 															  const SlottedPage &page) const;
 		[[nodiscard]] EntityPropertyRootMutationPlan planEntityRootReplacementWithLargeValueId(
 				const MetadataSnapshotPin &snapshot, const PropertyCollectionRoot &root,
-				const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId) const;
+				const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId,
+				const std::map<EntityPropertyKey, EntityPropertyLocation> *existingLocations = nullptr,
+				std::map<size_t, std::optional<SlottedPagePlacement>> *placementCache = nullptr,
+				const std::vector<SegmentId> *currentPropertyPools = nullptr,
+				EntityPropertyBatchPageCache *pageCache = nullptr) const;
 		SlottedPagePool &pages_;
 		LargeValueStore *large_values_ = nullptr;
 		RelocatableMetadataStore &metadata_;

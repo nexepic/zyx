@@ -13,7 +13,9 @@
 #include <climits>
 #include <deque>
 #include <limits>
+#include <numeric>
 #include <set>
+#include <tuple>
 #include <utility>
 
 #if ZYX_HAS_LZ4
@@ -41,6 +43,11 @@ namespace graph::storage {
 			std::vector<std::byte> stored;
 			uint16_t page_count = 0U;
 			PageId first_page_id{};
+		};
+
+		struct StreamedChunkPlan {
+			LargeValueCodec codec = LargeValueCodec::LVC_RAW;
+			uint16_t page_count = 0U;
 		};
 
 		struct PlannedManifestNode {
@@ -175,20 +182,23 @@ namespace graph::storage {
 			return value;
 		}
 
-		struct ContentIndexPublicationPlan {
-			NativeGraphIndexTreeMutation mutation;
-			BTreeStructuralMutationPreparer preparer;
-		};
-
-		[[nodiscard]] ContentIndexPublicationPlan
+		[[nodiscard]] LargeValueContentIndexPublicationPlan
 		makeContentIndexPublicationPlan(BTreePageStore &pages, RelocatableMetadataStore &metadata,
-										const MetadataSnapshotPin &snapshot,
-										std::span<const BTreeScalarIndexOperation> operations, PhysicalSlotId firstSlot,
-										PhysicalSlotId lastSlot) {
-			ContentIndexPublicationPlan result;
+									const MetadataSnapshotPin &snapshot,
+									std::span<const BTreeScalarIndexOperation> operations, PhysicalSlotId firstSlot,
+									PhysicalSlotId lastSlot, bool forceFreshRebuild = false) {
+			if (operations.empty() || !firstSlot.isValid() || !lastSlot.isValid() || firstSlot > lastSlot) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "LargeValue content-index publication requires operations and a valid allocation range");
+			}
+			LargeValueContentIndexPublicationPlan result;
 			if (metadata.findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID).has_value()) {
 				BTreeStructuralMutationPlan plan = pages.planScalarIndexTransactionMutation(
-						snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID, operations, true);
+						snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID, operations, true, forceFreshRebuild);
+				if (plan.expected_root.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID || !plan.preparer) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "LargeValue content-index mutation lost its pinned root or typed preparer");
+				}
 				result.mutation.index_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
 				result.mutation.expected_root = plan.expected_root;
 				result.mutation.pool_requests = std::move(plan.pool_requests);
@@ -205,6 +215,12 @@ namespace graph::storage {
 					const bool newlyReserved = root.pool_ordinal >= result.mutation.pool_requests.size();
 					const size_t poolOrdinal = newlyReserved ? root.pool_ordinal - result.mutation.pool_requests.size()
 															 : root.pool_ordinal;
+					const size_t poolCount = newlyReserved ? result.mutation.new_pool_requests.size()
+																	 : result.mutation.pool_requests.size();
+					if (poolOrdinal >= poolCount) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "LargeValue content-index root references an absent materialization pool");
+					}
 					result.mutation.replacement_root = {poolOrdinal, root.appended_page_ordinal, newlyReserved};
 				}
 				result.mutation.stable_replacement_root = plan.stable_replacement_root;
@@ -218,8 +234,19 @@ namespace graph::storage {
 				entries.push_back({operation.key, operation.value});
 			}
 			std::ranges::sort(entries, {}, &BTreePageEntry::key);
+			if (std::ranges::adjacent_find(entries, {}, &BTreePageEntry::key) != entries.end()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "LargeValue content-index publication contains duplicate content identities");
+			}
 			BTreeInitialTreeMutationPlan plan =
 					pages.planInitialTreeMutation(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID, entries);
+			if (plan.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID || plan.new_pool_mutations.empty() || !plan.preparer ||
+				plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
+				plan.root_page.appended_page_ordinal >=
+						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "LargeValue content-index initial tree lost its root or typed preparer");
+			}
 			result.mutation.index_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
 				result.mutation.new_pool_requests.push_back(
@@ -382,6 +409,34 @@ namespace graph::storage {
 														   const LargeValueCompressionOptions &compression,
 														   LargeValueExtentClass extentClass) {
 			std::vector<PlannedChunk> chunks;
+			const auto append = [&chunks](PlannedChunk &&chunk) { chunks.push_back(std::move(chunk)); };
+			const uint64_t targetBytes = std::min<uint64_t>(extentBytes(extentClass), maximumChunkStoredBytes());
+			size_t sourceOffset = 0U;
+			uint64_t logicalOffset = 0U;
+			while (sourceOffset < bytes.size()) {
+				const size_t remaining = bytes.size() - sourceOffset;
+				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
+				const uint64_t nextOffset = logicalOffset + chunkBytes;
+				if (nextOffset < logicalOffset || chunks.size() >= std::numeric_limits<uint32_t>::max()) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
+				}
+				const uint32_t uncompressedBytes = static_cast<uint32_t>(chunkBytes);
+				const std::span<const std::byte> source = bytes.subspan(sourceOffset, uncompressedBytes);
+				std::vector<std::byte> stored = selectStoredPayload(source, compression);
+				const uint16_t pageCount = pageCountForBytes(static_cast<uint32_t>(stored.size()));
+				append({sourceOffset, logicalOffset, uncompressedBytes, selectedCodec(source, compression, stored),
+						std::move(stored), pageCount, {}});
+				sourceOffset += static_cast<size_t>(chunkBytes);
+				logicalOffset = nextOffset;
+			}
+			return chunks;
+		}
+
+		// Streamed publication invokes this once per bounded logical extent. Unlike
+		// planChunks(), it never retains all compressed chunks of one large value.
+		template <typename Visitor>
+		void visitPlannedChunks(std::span<const std::byte> bytes, const LargeValueCompressionOptions &compression,
+							   LargeValueExtentClass extentClass, Visitor &&visit) {
 			size_t sourceOffset = 0U;
 			uint64_t logicalOffset = 0U;
 			const uint64_t targetBytes = std::min<uint64_t>(extentBytes(extentClass), maximumChunkStoredBytes());
@@ -390,26 +445,41 @@ namespace graph::storage {
 				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
 				const uint64_t nextOffset = logicalOffset + chunkBytes;
 				if (nextOffset < logicalOffset ||
-					chunks.size() >=
-							std::numeric_limits<uint32_t>::max()) { // ZYX_COV_EXCL_LINE: accepted input cannot allocate
-																	// a chunk-ordinal or offset overflow.
+					sourceOffset / static_cast<size_t>(targetBytes) >= std::numeric_limits<uint32_t>::max()) {
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
 				}
 				const uint32_t uncompressedBytes = static_cast<uint32_t>(chunkBytes);
 				const std::span<const std::byte> source = bytes.subspan(sourceOffset, uncompressedBytes);
 				std::vector<std::byte> stored = selectStoredPayload(source, compression);
 				const uint32_t storedBytes = static_cast<uint32_t>(stored.size());
-				chunks.push_back({sourceOffset,
-								  logicalOffset,
-								  uncompressedBytes,
-								  selectedCodec(source, compression, stored),
-								  std::move(stored),
-								  pageCountForBytes(storedBytes),
-								  {}});
+				visit(StreamedChunkPlan{selectedCodec(source, compression, stored), pageCountForBytes(storedBytes)});
 				sourceOffset += static_cast<size_t>(chunkBytes);
 				logicalOffset = nextOffset;
 			}
-			return chunks;
+		}
+
+		[[nodiscard]] size_t plannedManifestNodeCount(size_t chunkCount) {
+			if (chunkCount <= RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS) {
+				return 1U;
+			}
+			const auto roundedDivision = [](size_t value, size_t divisor) {
+				return value / divisor + static_cast<size_t>(value % divisor != 0U);
+			};
+			size_t nodeCount = roundedDivision(chunkCount, RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS);
+			size_t levelCount = nodeCount;
+			while (levelCount > RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN) {
+				levelCount = roundedDivision(levelCount, RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN);
+				if (levelCount > std::numeric_limits<size_t>::max() - nodeCount) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						 "LargeValue manifest hierarchy exceeds the platform size bound");
+				}
+				nodeCount += levelCount;
+			}
+			if (nodeCount == std::numeric_limits<size_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					 "LargeValue manifest hierarchy exceeds the platform size bound");
+			}
+			return nodeCount + 1U; // Root is always materialized after the bounded levels.
 		}
 
 		[[nodiscard]] LargeValueCodec aggregateCodec(std::span<const PlannedChunk> chunks) {
@@ -660,6 +730,29 @@ namespace graph::storage {
 		return makeContentIndexKey(reference);
 	}
 
+	LargeValueContentIndexPublicationPlan LargeValueStore::planNativeGraphContentIndexMutation(
+				const MetadataSnapshotPin &snapshot, std::span<const NativeGraphLargeValueMutation> values,
+				PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, bool forceFreshRebuild) const {
+		if (values.empty() || !firstSlot.isValid() || !lastSlot.isValid() || firstSlot > lastSlot) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph LargeValue content-index planning requires values and a valid allocation range");
+		}
+		std::vector<BTreeScalarIndexOperation> operations;
+		operations.reserve(values.size());
+		std::set<uint64_t> valueIds;
+		for (const NativeGraphLargeValueMutation &value: values) {
+			if (!value.reference.value_id.isValid() || !valueIds.insert(value.reference.value_id.value()).second) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph LargeValue content-index planning requires unique valid value identities");
+			}
+			static_cast<void>(LargeValueRefCodec::encode(value.reference));
+			operations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT, contentIndexKey(value.reference),
+							  value.reference.value_id.value()});
+		}
+		return makeContentIndexPublicationPlan(contentIndex(), metadata_, snapshot, operations, firstSlot, lastSlot,
+															forceFreshRebuild);
+	}
+
 	std::optional<LargeValueRef> LargeValueStore::findContentDuplicate(const MetadataSnapshotPin &snapshot,
 																	   std::span<const std::byte> bytes,
 																	   LargeValueKind kind, std::string_view mediaType,
@@ -739,14 +832,23 @@ namespace graph::storage {
 		}
 		validateMediaType(mediaType);
 		validateCompressionOptions(compression);
-		const std::vector<PlannedChunk> chunks = planChunks(bytes, compression, extentClass);
+		LargeValueCodec aggregate = LargeValueCodec::LVC_RAW;
+		bool hasChunk = false;
+		visitPlannedChunks(bytes, compression, extentClass, [&aggregate, &hasChunk](const StreamedChunkPlan &chunk) {
+			if (!hasChunk) {
+				aggregate = chunk.codec;
+				hasChunk = true;
+			} else if (aggregate != chunk.codec) {
+				aggregate = LargeValueCodec::LVC_MIXED;
+			}
+		});
 		LargeValueRef reference;
 		reference.value_id = valueId;
 		reference.generation = generation;
 		reference.logical_bytes = bytes.size();
 		reference.content_hash = utils::Sha256::digest(bytes);
 		reference.kind = kind;
-		reference.codec = aggregateCodec(chunks);
+		reference.codec = aggregate;
 		reference.media_type = std::move(mediaType);
 		static_cast<void>(LargeValueRefCodec::encode(reference));
 		return reference;
@@ -756,14 +858,274 @@ namespace graph::storage {
 												 const LargeValueCompressionOptions &compression,
 												 LargeValueExtentClass extentClass) const {
 		validateCompressionOptions(compression);
-		return totalPlannedDataPages(planChunks(bytes, compression, extentClass));
+		size_t pageCount = 0U;
+		visitPlannedChunks(bytes, compression, extentClass, [&pageCount](const StreamedChunkPlan &chunk) {
+			const size_t chunkPageCount = chunk.page_count;
+			if (chunkPageCount > std::numeric_limits<size_t>::max() - pageCount) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue data-page count exceeds the platform size bound");
+			}
+			pageCount += chunkPageCount;
+		});
+		return pageCount;
 	}
 
 	size_t LargeValueStore::plannedManifestPageCount(std::span<const std::byte> bytes,
 													 const LargeValueCompressionOptions &compression,
 													 LargeValueExtentClass extentClass) const {
 		validateCompressionOptions(compression);
-		return planManifestTree(planChunks(bytes, compression, extentClass)).nodes.size();
+		size_t chunkCount = 0U;
+		visitPlannedChunks(bytes, compression, extentClass, [&chunkCount](const StreamedChunkPlan &) {
+			if (chunkCount == std::numeric_limits<size_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue chunk count exceeds the platform size bound");
+			}
+			++chunkCount;
+		});
+		return plannedManifestNodeCount(chunkCount);
+	}
+
+	void LargeValueStore::materializeStreamedValue(const LargeValueStreamedMaterializationRequest &request,
+														 LogSequenceNumber checkpointLsn,
+														 const LargeValueStreamedOwnerResolver &resolveOwner,
+														 const LargeValueStreamedFrameVisitor &visit) const {
+		if (!request.reference.value_id.isValid() || !request.reference.generation.isValid() ||
+			!checkpointLsn.isValid() || !resolveOwner || !visit ||
+			(request.data_page_count == 0U && request.first_data_page_id.isValid()) ||
+			(request.data_page_count != 0U && !request.first_data_page_id.isValid()) ||
+			!request.first_manifest_page_id.isValid()) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "streamed LargeValue materialization requires bounded identities, page ranges, and typed consumers");
+		}
+		validateCompressionOptions(request.compression);
+		const LargeValueRef expected = planReference(
+				request.reference.value_id, request.reference.generation, request.logical_bytes, request.reference.kind,
+				request.reference.media_type, request.compression, request.extent_class);
+		const size_t expectedDataPages =
+				plannedDataPageCount(request.logical_bytes, request.compression, request.extent_class);
+		const size_t expectedManifestPages =
+				plannedManifestPageCount(request.logical_bytes, request.compression, request.extent_class);
+		if (request.reference != expected || request.data_page_count != expectedDataPages ||
+			request.manifest_page_count != expectedManifestPages ||
+			(request.data_page_count != 0U &&
+			 request.data_page_count - 1U > std::numeric_limits<uint64_t>::max() - request.first_data_page_id.value()) ||
+			request.manifest_page_count == 0U ||
+			request.manifest_page_count - 1U > std::numeric_limits<uint64_t>::max() - request.first_manifest_page_id.value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "streamed LargeValue materialization disagrees with its deterministic immutable plan");
+		}
+
+		const auto pageAt = [](PageId first, size_t ordinal) {
+			return PageId(first.value() + static_cast<uint64_t>(ordinal));
+		};
+		const auto ownerFor = [&](PageId pageId, PageOwnerKind kind) {
+			const PageOwnerHeader owner = resolveOwner(pageId, kind);
+			const uint8_t invalid = static_cast<uint8_t>(owner.page_id != pageId) |
+								static_cast<uint8_t>(owner.owner_id != request.reference.value_id.value()) |
+								static_cast<uint8_t>(owner.kind != kind) |
+								static_cast<uint8_t>(!owner.generation.isValid()) |
+								static_cast<uint8_t>(owner.committed_lsn != checkpointLsn);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "streamed LargeValue owner resolver returned an unauthenticated pool frame identity");
+			}
+			return owner;
+		};
+		const uint64_t extentBytesForChunks =
+				std::min<uint64_t>(extentBytes(request.extent_class), maximumChunkStoredBytes());
+		const auto chunkLogicalBytes = [&](size_t ordinal) {
+			const uint64_t offset = static_cast<uint64_t>(ordinal) * extentBytesForChunks;
+			return static_cast<uint32_t>(std::min<uint64_t>(request.logical_bytes.size() - offset, extentBytesForChunks));
+		};
+		const auto chunkLogicalOffset = [&](size_t ordinal) {
+			return static_cast<uint64_t>(ordinal) * extentBytesForChunks;
+		};
+
+		size_t dataPageOrdinal = 0U;
+		size_t observedChunkCount = 0U;
+		visitPlannedChunks(request.logical_bytes, request.compression, request.extent_class,
+				[&](const StreamedChunkPlan &expectedChunk) {
+					const uint64_t logicalOffset = chunkLogicalOffset(observedChunkCount);
+					const uint32_t logicalBytes = chunkLogicalBytes(observedChunkCount);
+					const std::span<const std::byte> source = request.logical_bytes.subspan(
+							static_cast<size_t>(logicalOffset), logicalBytes);
+					std::vector<std::byte> stored = selectStoredPayload(source, request.compression);
+					const uint32_t storedBytes = static_cast<uint32_t>(stored.size());
+					const uint16_t pageCount = pageCountForBytes(storedBytes);
+					if (expectedChunk.page_count != pageCount || dataPageOrdinal > request.data_page_count ||
+						pageCount > request.data_page_count - dataPageOrdinal) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "streamed LargeValue data-page replay diverged from its measured plan");
+					}
+					for (uint16_t pageOrdinal = 0U; pageOrdinal < pageCount; ++pageOrdinal) {
+						const PageId pageId = pageAt(request.first_data_page_id, dataPageOrdinal + pageOrdinal);
+						const uint32_t storedOffset =
+								static_cast<uint32_t>(pageOrdinal) * RSS_LARGE_VALUE_DATA_PAGE_MAX_STORED_BYTES;
+						const uint32_t payloadBytes = std::min(
+								RSS_LARGE_VALUE_DATA_PAGE_MAX_STORED_BYTES, storedBytes - storedOffset);
+						const LargeValueDataPage data{request.reference.value_id,
+												  pageId,
+												  request.reference.generation,
+												  static_cast<uint32_t>(observedChunkCount),
+												  pageOrdinal,
+												  pageCount,
+												  storedBytes,
+												  storedOffset,
+												  {stored.begin() + static_cast<std::ptrdiff_t>(storedOffset),
+												   stored.begin() + static_cast<std::ptrdiff_t>(storedOffset + payloadBytes)}};
+						const PageOwnerHeader owner = ownerFor(pageId, PageOwnerKind::POK_LARGE_VALUE_DATA);
+						visit(owner, LargeValueDataFrame::create(owner, data).serialize(), PageOwnerKind::POK_LARGE_VALUE_DATA);
+					}
+					dataPageOrdinal += pageCount;
+					++observedChunkCount;
+				});
+		if (dataPageOrdinal != request.data_page_count) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "streamed LargeValue data-page replay produced the wrong total page count");
+		}
+
+		const size_t chunkCount = observedChunkCount;
+		const auto roundedDivision = [](size_t value, size_t divisor) {
+			return value / divisor + static_cast<size_t>(value % divisor != 0U);
+		};
+		std::vector<size_t> levelCounts;
+		if (chunkCount > RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS) {
+			levelCounts.push_back(roundedDivision(chunkCount, RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS));
+			while (levelCounts.back() > RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN) {
+				levelCounts.push_back(roundedDivision(levelCounts.back(), RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN));
+			}
+		}
+		const size_t actualManifestPages =
+				levelCounts.empty() ? 1U : 1U + std::accumulate(levelCounts.begin(), levelCounts.end(), size_t{0U});
+		if (actualManifestPages != request.manifest_page_count) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "streamed LargeValue Manifest hierarchy disagrees with its reserved logical page range");
+		}
+		const auto levelPageOrdinal = [&levelCounts](size_t level, size_t ordinal) {
+			size_t result = 1U;
+			for (size_t higher = levelCounts.size(); higher > level + 1U; --higher) {
+				result += levelCounts[higher - 1U];
+			}
+			return result + ordinal;
+		};
+		const auto nodeFirstChunk = [](const auto &self, size_t level, size_t ordinal) -> size_t {
+			if (level == 0U) {
+				return ordinal * RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS;
+			}
+			return self(self, level - 1U, ordinal * RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN);
+		};
+		const auto nodeChunkCount = [&levelCounts, &nodeFirstChunk, chunkCount](const auto &self, size_t level,
+																						  size_t ordinal) -> size_t {
+			const size_t first = nodeFirstChunk(nodeFirstChunk, level, ordinal);
+			if (level == 0U) {
+				return std::min(chunkCount - first, static_cast<size_t>(RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS));
+			}
+			const size_t firstChild = ordinal * RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN;
+			const size_t childCount = std::min(levelCounts[level - 1U] - firstChild,
+																					static_cast<size_t>(RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN));
+			const size_t lastChild = firstChild + childCount - 1U;
+			const size_t lastFirst = nodeFirstChunk(nodeFirstChunk, level - 1U, lastChild);
+			return lastFirst + self(self, level - 1U, lastChild) - first;
+		};
+		const auto newManifest = [&](PageId pageId, LargeValueManifestNodeKind kind, uint16_t level) {
+			LargeValueManifest manifest;
+			manifest.value_id = request.reference.value_id;
+			manifest.page_id = pageId;
+			manifest.generation = request.reference.generation;
+			manifest.committed_lsn = checkpointLsn;
+			manifest.logical_bytes = request.reference.logical_bytes;
+			manifest.content_hash = request.reference.content_hash;
+			manifest.kind = request.reference.kind;
+			manifest.codec = request.reference.codec;
+			manifest.media_type = request.reference.media_type;
+			manifest.node_kind = kind;
+			manifest.node_level = level;
+			return manifest;
+		};
+		const auto emitManifest = [&](LargeValueManifest manifest) {
+			const PageOwnerHeader owner = ownerFor(manifest.page_id, PageOwnerKind::POK_LARGE_VALUE_MANIFEST);
+			visit(owner, LargeValueManifestPage::create(owner, manifest).serialize(),
+				  PageOwnerKind::POK_LARGE_VALUE_MANIFEST);
+		};
+		if (levelCounts.empty()) {
+			LargeValueManifest root = newManifest(request.first_manifest_page_id, LargeValueManifestNodeKind::LVMNK_ROOT, 0U);
+			dataPageOrdinal = 0U;
+			visitPlannedChunks(request.logical_bytes, request.compression, request.extent_class,
+					[&](const StreamedChunkPlan &chunk) {
+						const size_t ordinal = root.chunks.size();
+						const uint32_t logicalBytes = chunkLogicalBytes(ordinal);
+						const uint64_t logicalOffset = chunkLogicalOffset(ordinal);
+						const std::span<const std::byte> source = request.logical_bytes.subspan(
+								static_cast<size_t>(logicalOffset), logicalBytes);
+						std::vector<std::byte> stored = selectStoredPayload(source, request.compression);
+						root.chunks.push_back({static_cast<uint32_t>(ordinal), chunk.codec, logicalOffset, logicalBytes,
+										  static_cast<uint32_t>(stored.size()), utils::calculateCrc(source.data(), source.size()),
+										  utils::calculateCrc(stored.data(), stored.size()),
+										  pageAt(request.first_data_page_id, dataPageOrdinal), chunk.page_count});
+						dataPageOrdinal += chunk.page_count;
+					});
+			emitManifest(std::move(root));
+			return;
+		}
+
+		const size_t topLevel = levelCounts.size() - 1U;
+		LargeValueManifest root = newManifest(request.first_manifest_page_id, LargeValueManifestNodeKind::LVMNK_ROOT,
+													 static_cast<uint16_t>(levelCounts.size()));
+		for (size_t child = 0U; child < levelCounts[topLevel]; ++child) {
+			const size_t first = nodeFirstChunk(nodeFirstChunk, topLevel, child);
+			const size_t count = nodeChunkCount(nodeChunkCount, topLevel, child);
+			root.children.push_back({pageAt(request.first_manifest_page_id, levelPageOrdinal(topLevel, child)),
+								 static_cast<uint32_t>(first), static_cast<uint32_t>(count), chunkLogicalOffset(first),
+								 chunkLogicalOffset(first + count - 1U) + chunkLogicalBytes(first + count - 1U) -
+										 chunkLogicalOffset(first)});
+		}
+		emitManifest(std::move(root));
+		size_t leafDataPageOrdinal = 0U;
+		for (size_t level = topLevel + 1U; level-- > 0U;) {
+			for (size_t ordinal = 0U; ordinal < levelCounts[level]; ++ordinal) {
+				const PageId pageId = pageAt(request.first_manifest_page_id, levelPageOrdinal(level, ordinal));
+				const size_t first = nodeFirstChunk(nodeFirstChunk, level, ordinal);
+				const size_t count = nodeChunkCount(nodeChunkCount, level, ordinal);
+				LargeValueManifest node = newManifest(
+						pageId, level == 0U ? LargeValueManifestNodeKind::LVMNK_LEAF
+												: LargeValueManifestNodeKind::LVMNK_INTERNAL,
+						static_cast<uint16_t>(level));
+				node.first_chunk_ordinal = static_cast<uint32_t>(first);
+				node.first_uncompressed_offset = chunkLogicalOffset(first);
+				node.node_logical_bytes = chunkLogicalOffset(first + count - 1U) +
+									  chunkLogicalBytes(first + count - 1U) - node.first_uncompressed_offset;
+				if (level == 0U) {
+					for (size_t chunkOrdinal = first; chunkOrdinal < first + count; ++chunkOrdinal) {
+						const uint32_t logicalBytes = chunkLogicalBytes(chunkOrdinal);
+						const uint64_t logicalOffset = chunkLogicalOffset(chunkOrdinal);
+						const std::span<const std::byte> source = request.logical_bytes.subspan(
+								static_cast<size_t>(logicalOffset), logicalBytes);
+						std::vector<std::byte> stored = selectStoredPayload(source, request.compression);
+						const size_t firstDataOrdinal = leafDataPageOrdinal;
+						const uint16_t storedPageCount = pageCountForBytes(static_cast<uint32_t>(stored.size()));
+						node.chunks.push_back({static_cast<uint32_t>(chunkOrdinal), selectedCodec(source, request.compression, stored),
+										  logicalOffset, logicalBytes, static_cast<uint32_t>(stored.size()),
+										  utils::calculateCrc(source.data(), source.size()),
+										  utils::calculateCrc(stored.data(), stored.size()),
+										  pageAt(request.first_data_page_id, firstDataOrdinal), storedPageCount});
+						leafDataPageOrdinal += storedPageCount;
+					}
+				} else {
+					const size_t firstChild = ordinal * RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN;
+					const size_t childCount = std::min(levelCounts[level - 1U] - firstChild,
+																					static_cast<size_t>(RSS_LARGE_VALUE_MANIFEST_MAX_CHILDREN));
+					for (size_t child = firstChild; child < firstChild + childCount; ++child) {
+						const size_t childFirst = nodeFirstChunk(nodeFirstChunk, level - 1U, child);
+						const size_t childCountChunks = nodeChunkCount(nodeChunkCount, level - 1U, child);
+						node.children.push_back({pageAt(request.first_manifest_page_id, levelPageOrdinal(level - 1U, child)),
+											 static_cast<uint32_t>(childFirst), static_cast<uint32_t>(childCountChunks),
+											 chunkLogicalOffset(childFirst),
+											 chunkLogicalOffset(childFirst + childCountChunks - 1U) +
+													 chunkLogicalBytes(childFirst + childCountChunks - 1U) -
+													 chunkLogicalOffset(childFirst)});
+					}
+				}
+				emitManifest(std::move(node));
+			}
+		}
 	}
 
 	LargeValueWriteResult LargeValueStore::write(std::span<const std::byte> bytes,
@@ -793,8 +1155,9 @@ namespace graph::storage {
 			const std::array<BTreeScalarIndexOperation, 1U> operations{{
 					{BTreeScalarIndexOperationKind::BSIOP_UPSERT, key, reference.value_id.value()},
 			}};
-			ContentIndexPublicationPlan indexPlan = makeContentIndexPublicationPlan(
+			LargeValueContentIndexPublicationPlan indexPlan = makeContentIndexPublicationPlan(
 					contentIndex(), metadata_, snapshot, operations, options.first_data_slot, options.last_data_slot);
+			const Generation expectedMetadataGeneration = snapshot.superblock().generation;
 			snapshot.release();
 
 			NativeGraphLargeValueMutation mutation;
@@ -844,7 +1207,7 @@ namespace graph::storage {
 			const Superblock published = metadata_.mutateNativeGraphPagesWithLargeValues(
 					noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyPools,
 					values, derivedState, checkpointLsn, valuePreparer, indexPreparer, {}, {}, {}, {}, {},
-					publishOptions);
+					publishOptions, {}, expectedMetadataGeneration);
 			MetadataSnapshotPin publishedSnapshot = metadata_.openSnapshot();
 			try {
 				// A concurrent writer may have committed after this transaction. The
@@ -1488,13 +1851,53 @@ namespace graph::storage {
 				static_cast<uint8_t>(firstIndexSlot > lastIndexSlot) | static_cast<uint8_t>(!checkpointLsn.isValid());
 		if (invalidRetirement != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "LargeValue retirement requires a generation, manifest identities, "
-												   "page retirements, Index range, and checkpoint LSN");
+													   "page retirements, Index range, and checkpoint LSN");
+		}
+		uint64_t previousValueId = 0U;
+		for (const LargeValueId valueId: erasedValueIds) {
+			if (!valueId.isValid() || valueId.value() <= previousValueId) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "LargeValue retirement requires unique ordered immutable value identities");
+			}
+			previousValueId = valueId.value();
 		}
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			if (snapshot.superblock().generation != expectedMetadataGeneration) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue retirement scan generation is stale and must be repeated");
+			}
+			// Retirement makes a value unreachable by removing its content-index and
+			// Manifest-directory routes. Require the complete immutable tree here so
+			// a caller cannot leave orphaned child Manifest or data frames behind.
+			std::set<std::tuple<uint64_t, uint64_t, PageOwnerKind, LogSequenceNumber>> expectedFrames;
+			for (const LargeValueId valueId: erasedValueIds) {
+				const LargeValueManifest root = manifest(snapshot, valueId);
+				for (const LargeValueManifest &node: manifestTree(snapshot, root)) {
+					const PageRetirement manifestRetirement =
+							planPageRetirement(snapshot, node.page_id, valueId, PageOwnerKind::POK_LARGE_VALUE_MANIFEST);
+					expectedFrames.emplace(manifestRetirement.location.page_id.value(), manifestRetirement.expected_owner_id,
+									   manifestRetirement.expected_owner_kind, manifestRetirement.expected_owner_lsn);
+					for (const LargeValueChunk &chunk: node.chunks) {
+						for (uint16_t ordinal = 0U; ordinal < chunk.data_page_count; ++ordinal) {
+							const PageRetirement dataRetirement = planPageRetirement(
+									snapshot, PageId(chunk.first_data_page_id.value() + ordinal), valueId,
+									PageOwnerKind::POK_LARGE_VALUE_DATA);
+							expectedFrames.emplace(dataRetirement.location.page_id.value(),
+											   dataRetirement.expected_owner_id, dataRetirement.expected_owner_kind,
+											   dataRetirement.expected_owner_lsn);
+						}
+					}
+				}
+			}
+			std::set<std::tuple<uint64_t, uint64_t, PageOwnerKind, LogSequenceNumber>> requestedFrames;
+			for (const PageRetirement &retirement: retirements) {
+				requestedFrames.emplace(retirement.location.page_id.value(), retirement.expected_owner_id,
+										retirement.expected_owner_kind, retirement.expected_owner_lsn);
+			}
+			if (requestedFrames.size() != retirements.size() || requestedFrames != expectedFrames) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "LargeValue retirement must include exactly every current Manifest and data frame");
 			}
 			std::vector<BTreeScalarIndexOperation> operations;
 			operations.reserve(erasedValueIds.size());
@@ -1509,7 +1912,7 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue retirement found a Manifest without the required content index");
 			}
-			ContentIndexPublicationPlan indexPlan = makeContentIndexPublicationPlan(
+			LargeValueContentIndexPublicationPlan indexPlan = makeContentIndexPublicationPlan(
 					contentIndex(), metadata_, snapshot, operations, firstIndexSlot, lastIndexSlot);
 			snapshot.release();
 

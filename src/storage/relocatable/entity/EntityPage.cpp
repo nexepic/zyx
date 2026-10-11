@@ -410,6 +410,54 @@ namespace graph::storage {
 		throwEntityPageError(FormatError::FERR_INVALID_STATE, "relocatable Entity page has no free fixed-record slot");
 	}
 
+	std::vector<uint16_t> EntityPage::insertEdges(std::span<const EdgeEntityRecord> records) {
+		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+							 "relocatable Entity page does not store Edge records");
+		}
+		validateLayout();
+		if (records.empty()) {
+			return {};
+		}
+		if (records.size() > static_cast<size_t>(header_.slot_capacity - header_.live_count)) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+							 "relocatable Entity page has insufficient fixed-record slots for a batch");
+		}
+
+		std::vector<EdgeEntityRecordCodec::Bytes> encoded;
+		std::vector<uint16_t> slots;
+		encoded.reserve(records.size());
+		slots.reserve(records.size());
+		for (const EdgeEntityRecord &record: records) {
+			encoded.push_back(EdgeEntityRecordCodec::encode(record));
+		}
+		for (uint16_t slot = 0U; slot < header_.slot_capacity && slots.size() < records.size(); ++slot) {
+			if (isLive(slot)) {
+				continue;
+			}
+			if (LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot)) == std::numeric_limits<uint32_t>::max()) {
+				throwEntityPageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								 "relocatable Entity page slot generation is exhausted");
+			}
+			slots.push_back(slot);
+		}
+		if (slots.size() != records.size()) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+							 "relocatable Entity page batch lost a preflighted free fixed-record slot");
+		}
+		for (size_t index = 0U; index < slots.size(); ++index) {
+			const uint16_t slot = slots[index];
+			const uint32_t previous = LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot));
+			std::copy(encoded[index].begin(), encoded[index].end(), bytes_.begin() + recordOffset(slot));
+			setSlotGeneration(slot, previous + 1U);
+			setLive(slot, true);
+		}
+		header_.live_count = static_cast<uint16_t>(header_.live_count + slots.size());
+		refreshChecksums();
+		validateLayout();
+		return slots;
+	}
+
 	std::optional<NodeEntityRecord> EntityPage::findNode(uint16_t slot) const {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_NODE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,

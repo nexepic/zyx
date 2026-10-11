@@ -7,11 +7,13 @@
  **/
 
 #include <array>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
@@ -54,11 +56,45 @@ namespace {
 		return result;
 	}
 
+	void expectKeyMutationsToRejectOrExactlyRoundTrip(const std::vector<std::byte> &encodedKey) {
+		for (size_t byteOffset = 0U; byteOffset < encodedKey.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = encodedKey;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				try {
+					const VectorDeltaEntry decoded = VectorDeltaMapping::decodeEntry({mutation, 101U});
+					EXPECT_EQ(VectorDeltaMapping::key(decoded.vector_id, decoded.operation), mutation)
+							<< "Vector delta key mutation was normalized at byte " << byteOffset << ", bit "
+							<< static_cast<unsigned>(bit);
+				} catch (const FormatException &) {
+					// Invalid operation or zero identity must fail at the typed boundary.
+				}
+			}
+		}
+	}
+
 	std::vector<VectorDeltaEntry> entries() {
 		return {{1U, 101U, VectorDeltaOperation::VDO_ERASE},
 				{3U, 103U, VectorDeltaOperation::VDO_INSERT},
 				{8U, 108U, VectorDeltaOperation::VDO_ERASE}};
 	}
+
+	class ThrowingCancellationCheckpoint final : public CancellationCheckpoint {
+	public:
+		explicit ThrowingCancellationCheckpoint(size_t throwAfter) : throw_after_(throwAfter) {}
+
+		void check() const override {
+			++checks;
+			if (checks == throw_after_) {
+				throw std::runtime_error("test Vector delta scan cancellation");
+			}
+		}
+
+		mutable size_t checks = 0U;
+
+	private:
+		size_t throw_after_ = 0U;
+	};
 
 } // namespace
 
@@ -288,6 +324,92 @@ TEST_F(RelocatableVectorDeltaMappingTest, SelectsStableTypedIdsAndRejectsMalform
 				FormatError::FERR_INVALID_HEADER);
 	}
 	occupied.release();
+}
+
+TEST_F(RelocatableVectorDeltaMappingTest, RejectsOrExactlyRoundTripsEverySingleBitKeyMutation) {
+	expectKeyMutationsToRejectOrExactlyRoundTrip(VectorDeltaMapping::key(1U, VectorDeltaOperation::VDO_INSERT));
+	expectKeyMutationsToRejectOrExactlyRoundTrip(VectorDeltaMapping::key(1U, VectorDeltaOperation::VDO_ERASE));
+}
+
+TEST_F(RelocatableVectorDeltaMappingTest, RejectsForeignTreeStoreBeforeCreatingAnOverlay) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const uint64_t mappingIndexId = VectorDeltaMapping::selectMappingIndexId(snapshot, *metadata, VECTOR_INDEX_ID);
+	snapshot.release();
+
+	const std::filesystem::path foreignPath = path_.string() + ".foreign";
+	auto foreignFile = std::make_shared<std::fstream>(foreignPath,
+												  std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+	ASSERT_TRUE(foreignFile->is_open());
+	auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, initialSuperblock());
+	SlottedPagePool foreignSlotted(foreignIo, *foreignMetadata);
+	BTreePageStore foreignTrees(foreignSlotted, *foreignMetadata);
+	const std::array validEntries = {VectorDeltaEntry{1U, 101U, VectorDeltaOperation::VDO_INSERT}};
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(VectorDeltaMapping::build(foreignTrees, *metadata, mappingIndexId, validEntries,
+																	options(mappingIndexId), LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	foreignMetadata.reset();
+	foreignIo.reset();
+	foreignFile->close();
+	std::error_code error;
+	std::filesystem::remove(foreignPath, error);
+}
+
+TEST_F(RelocatableVectorDeltaMappingTest, RejectsZeroNodeIdsInDurableOverlayEntries) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	SlottedPagePool slotted(io_, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	MetadataSnapshotPin allocationSnapshot = metadata->openSnapshot();
+	const uint64_t mappingIndexId =
+			VectorDeltaMapping::selectMappingIndexId(allocationSnapshot, *metadata, VECTOR_INDEX_ID);
+	allocationSnapshot.release();
+	static_cast<void>(VectorDeltaMapping::build(trees, *metadata, mappingIndexId, entries(), options(mappingIndexId),
+																	 LogSequenceNumber(2U)));
+
+	static_cast<void>(trees.upsertRootLeaf(mappingIndexId, VectorDeltaMapping::key(3U, VectorDeltaOperation::VDO_INSERT),
+														  0U, LogSequenceNumber(3U)));
+	MetadataSnapshotPin zeroInsert = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(VectorDeltaMapping::findOperation(zeroInsert, trees, *metadata, mappingIndexId, 3U)); },
+			FormatError::FERR_INVALID_STATE);
+	zeroInsert.release();
+
+	static_cast<void>(trees.upsertRootLeaf(mappingIndexId, VectorDeltaMapping::key(1U, VectorDeltaOperation::VDO_ERASE),
+														  0U, LogSequenceNumber(4U)));
+	MetadataSnapshotPin zeroErase = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(VectorDeltaMapping::findOperation(zeroErase, trees, *metadata, mappingIndexId, 1U)); },
+			FormatError::FERR_INVALID_STATE);
+	zeroErase.release();
+}
+
+TEST_F(RelocatableVectorDeltaMappingTest, PropagatesCancellationAfterBTreeMaterialization) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	SlottedPagePool slotted(io_, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	MetadataSnapshotPin allocationSnapshot = metadata->openSnapshot();
+	const uint64_t mappingIndexId =
+			VectorDeltaMapping::selectMappingIndexId(allocationSnapshot, *metadata, VECTOR_INDEX_ID);
+	allocationSnapshot.release();
+	const std::array entry = {VectorDeltaEntry{1U, 101U, VectorDeltaOperation::VDO_INSERT}};
+	static_cast<void>(VectorDeltaMapping::build(trees, *metadata, mappingIndexId, entry, options(mappingIndexId),
+																	 LogSequenceNumber(2U)));
+
+	MetadataSnapshotPin cancellationSnapshot = metadata->openSnapshot();
+	// A single-entry leaf has three bounded B+Tree checkpoints before the
+	// Vector mapping decodes its first materialized entry.
+	ThrowingCancellationCheckpoint cancellation(4U);
+	EXPECT_THROW(static_cast<void>(VectorDeltaMapping::scan(cancellationSnapshot, trees, *metadata, mappingIndexId,
+																								  entry.size(), &cancellation)),
+				 std::runtime_error);
+	EXPECT_EQ(cancellation.checks, 4U);
+	cancellationSnapshot.release();
 }
 
 TEST(RelocatableVectorDeltaMappingBoundsTest, AccountsForInternalPagesWhenDerivingOverlayCapacity) {

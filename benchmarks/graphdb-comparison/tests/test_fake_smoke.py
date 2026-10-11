@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from dataset.generate import SCALES, generate_graph, write_dataset
 from runner.adapters.fake import FakeAdapter
 from runner.run import run_benchmark
@@ -684,11 +686,13 @@ def test_run_benchmark_records_write_durable_semantics(tmp_path: Path):
 
 
 def test_run_benchmark_writes_baseline_regression_gate(tmp_path: Path):
-    baseline_dir = tmp_path / "baseline"
-    baseline_dir.mkdir()
-    (baseline_dir / "summary.csv").write_text(
-        "database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode\n"
-        "fake,load_nodes_edges,smoke,1,100,100,100,100,100,100,100,10,ok,cypher\n"
+    baseline_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "baseline-results",
+        warmup=0,
+        iterations=1,
     )
 
     result_dir = run_benchmark(
@@ -705,9 +709,31 @@ def test_run_benchmark_writes_baseline_regression_gate(tmp_path: Path):
     environment = json.loads((result_dir / "environment.json").read_text())
     quality = json.loads((result_dir / "quality_gates.json").read_text())
     regression_gate = next(gate for gate in quality["gates"] if gate["name"] == "p50_regression_against_baseline")
+    provenance_gate = next(gate for gate in quality["gates"] if gate["name"] == "baseline_environment_provenance")
     assert environment["baseline_summary"].endswith("summary.csv")
     assert environment["max_regression_ratio"] == 10.0
+    assert provenance_gate["status"] == "passed"
     assert regression_gate["status"] == "passed"
+
+
+def test_run_benchmark_rejects_baseline_without_environment_provenance(tmp_path: Path):
+    baseline_dir = tmp_path / "baseline"
+    baseline_dir.mkdir()
+    (baseline_dir / "summary.csv").write_text(
+        "database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode\n"
+        "fake,load_nodes_edges,smoke,1,100,100,100,100,100,100,100,10,ok,cypher\n"
+    )
+
+    with pytest.raises(ValueError, match="baseline environment does not exist"):
+        run_benchmark(
+            databases=["fake"],
+            scale="smoke",
+            seed=42,
+            output_root=tmp_path / "results",
+            warmup=0,
+            iterations=1,
+            baseline_summary=baseline_dir / "summary.csv",
+        )
 
 
 def test_run_benchmark_writes_zyx_profiles_jsonl(tmp_path: Path, monkeypatch):

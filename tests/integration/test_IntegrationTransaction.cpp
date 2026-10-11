@@ -52,7 +52,6 @@ protected:
 		std::error_code ec;
 		if (fs::exists(testDbPath))
 			fs::remove_all(testDbPath, ec);
-		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
@@ -317,7 +316,6 @@ protected:
 		db.reset();
 		std::error_code ec;
 		fs::remove_all(testDbPath, ec);
-		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;
@@ -330,7 +328,7 @@ TEST_F(BulkApiTransactionTest, BulkApiWithImplicitTransaction) {
 	for (int i = 0; i < 5; ++i) {
 		batch.push_back({{"id", static_cast<int64_t>(i)}});
 	}
-	db->createNodes("BulkTest", batch);
+	static_cast<void>(db->createNodes("BulkTest", batch));
 
 	auto res = db->execute("MATCH (n:BulkTest) RETURN n.id");
 	EXPECT_TRUE(res.isSuccess());

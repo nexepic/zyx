@@ -76,6 +76,8 @@ namespace {
 	struct AggregateStats {
 		LogicalGraphVectorSearchStats work;
 		uint64_t measured_searches = 0U;
+		bool all_searches_used_adjacency = true;
+		bool all_searches_used_pq = true;
 	};
 
 	struct LatencyPercentiles {
@@ -216,6 +218,8 @@ namespace {
 		addCounter(aggregate.work.raw_vector_reads, value.raw_vector_reads, "Raw read");
 		aggregate.work.used_adjacency = aggregate.work.used_adjacency || value.used_adjacency;
 		aggregate.work.used_pq = aggregate.work.used_pq || value.used_pq;
+		aggregate.all_searches_used_adjacency = aggregate.all_searches_used_adjacency && value.used_adjacency;
+		aggregate.all_searches_used_pq = aggregate.all_searches_used_pq && value.used_pq;
 		if (aggregate.measured_searches == std::numeric_limits<uint64_t>::max()) {
 			throw std::overflow_error("calibration measured-search counter overflowed");
 		}
@@ -239,7 +243,8 @@ namespace {
 	}
 
 	[[nodiscard]] CalibrationGateResult evaluateGate(const Options &options, double recall,
-													 const LatencyPercentiles &latency, uint64_t peakRssBytes) {
+													 const LatencyPercentiles &latency, uint64_t peakRssBytes,
+													 bool allSearchesUsedAdjacency, bool allSearchesUsedPq) {
 		CalibrationGateResult result;
 		result.enforced = options.enforce_gates;
 		if (!result.enforced) {
@@ -256,6 +261,8 @@ namespace {
 		require(latency.p95 <= options.maximum_p95_latency_us, "latency_us.p95");
 		require(latency.p99 <= options.maximum_p99_latency_us, "latency_us.p99");
 		require(peakRssBytes <= options.maximum_peak_rss_bytes, "peak_rss_bytes");
+		require(allSearchesUsedAdjacency, "used_adjacency");
+		require(allSearchesUsedPq, "used_pq");
 		return result;
 	}
 
@@ -389,6 +396,10 @@ namespace {
 			   << "  },\n"
 			   << "  \"used_adjacency\": " << (stats.work.used_adjacency ? "true" : "false") << ",\n"
 			   << "  \"used_pq\": " << (stats.work.used_pq ? "true" : "false") << ",\n"
+			   << "  \"all_measured_searches_used_adjacency\": "
+			   << (stats.all_searches_used_adjacency ? "true" : "false") << ",\n"
+			   << "  \"all_measured_searches_used_pq\": " << (stats.all_searches_used_pq ? "true" : "false")
+			   << ",\n"
 			   << "  \"disk_bytes\": " << diskBytes << ",\n"
 			   << "  \"peak_rss_bytes\": " << peakRssBytes << ",\n"
 			   << "  \"gate\": {\n"
@@ -541,7 +552,9 @@ namespace {
 		const LatencyPercentiles latency = latencyPercentiles(approximateMicros);
 		const LatencyPercentiles exactLatency = latencyPercentiles(exactMicros);
 		const uint64_t peakRssBytes = peakResidentBytes();
-		const CalibrationGateResult gate = evaluateGate(options, recall, latency, peakRssBytes);
+		const CalibrationGateResult gate = evaluateGate(options, recall, latency, peakRssBytes,
+															 aggregate.all_searches_used_adjacency,
+															 aggregate.all_searches_used_pq);
 		if (fingerprintFile(options.queries_path) != dataset) {
 			throw std::runtime_error("calibration query dataset changed while the run was in progress");
 		}

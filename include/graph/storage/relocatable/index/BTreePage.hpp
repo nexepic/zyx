@@ -89,6 +89,7 @@ namespace graph::storage {
 
 	class BTreePageEntryCodec final {
 	public:
+		[[nodiscard]] static size_t encodedSize(const BTreePageEntry &entry);
 		[[nodiscard]] static std::vector<std::byte> encode(const BTreePageEntry &entry);
 		[[nodiscard]] static BTreePageEntry decode(std::span<const std::byte> bytes);
 	};

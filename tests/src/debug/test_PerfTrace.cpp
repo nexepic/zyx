@@ -13,23 +13,28 @@ protected:
 	void TearDown() override {
 		PerfTrace::reset();
 		PerfTrace::setEnabled(false);
+		PerfTrace::setValueCollectionEnabled(false);
 	}
 };
 
 TEST_F(PerfTraceTest, DefaultDisabled) {
 	EXPECT_FALSE(PerfTrace::isEnabled());
+	EXPECT_FALSE(PerfTrace::areValuesEnabled());
 }
 
 TEST_F(PerfTraceTest, SetEnabledToggle) {
 	PerfTrace::setEnabled(true);
 	EXPECT_TRUE(PerfTrace::isEnabled());
+	EXPECT_TRUE(PerfTrace::areValuesEnabled());
 	PerfTrace::setEnabled(false);
 	EXPECT_FALSE(PerfTrace::isEnabled());
+	EXPECT_FALSE(PerfTrace::areValuesEnabled());
 }
 
 TEST_F(PerfTraceTest, AddDurationWhenDisabled) {
 	// Should not record anything when disabled
 	PerfTrace::addDuration("op", 500);
+	PerfTrace::addDurationBatch("batch", 500, 1);
 	PerfTrace::setEnabled(true);
 	auto snapshot = PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.empty());
@@ -83,6 +88,32 @@ TEST_F(PerfTraceTest, AddValueWithValidKey) {
 	EXPECT_EQ(snapshot["workers"].calls, 0u);
 	EXPECT_EQ(snapshot["workers"].totalValue, 6);
 	EXPECT_EQ(snapshot["workers"].valueCalls, 2u);
+}
+
+TEST_F(PerfTraceTest, ValueOnlyCollectionSkipsDurationTimers) {
+	PerfTrace::setValueCollectionEnabled(true);
+	EXPECT_FALSE(PerfTrace::isEnabled());
+	EXPECT_TRUE(PerfTrace::areValuesEnabled());
+	PerfTrace::addDuration("duration", 100);
+	{
+		ScopedPerfTimer timer("scoped-duration");
+	}
+	PerfTrace::addValue("scratch", 7);
+
+	const auto snapshot = PerfTrace::snapshotAndReset();
+	ASSERT_EQ(snapshot.size(), 1U);
+	EXPECT_EQ(snapshot.at("scratch").totalValue, 7);
+	EXPECT_EQ(snapshot.at("scratch").valueCalls, 1U);
+	EXPECT_EQ(snapshot.at("scratch").calls, 0U);
+}
+
+TEST_F(PerfTraceTest, AddValueWhenValueCollectionDisabledIsIgnored) {
+	PerfTrace::addValue("workers", 4);
+	PerfTrace::setEnabled(true);
+	PerfTrace::setValueCollectionEnabled(false);
+	PerfTrace::addValue("workers", 2);
+
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
 }
 
 TEST_F(PerfTraceTest, ResetClearsData) {

@@ -7,12 +7,15 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 #include <boost/uuid/uuid.hpp>
@@ -20,9 +23,14 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -69,11 +77,11 @@ namespace {
 
 	class TestMetadataPageAllocator final : public MetadataPageAllocator {
 	public:
-		PageId allocatePageId() override {
-			if (invalidPageId) {
-				return PageId{};
+		MetadataPageId allocateMetadataPageId() override {
+			if (invalidMetadataPageId) {
+				return MetadataPageId{};
 			}
-			return PageId(nextPageId++);
+			return MetadataPageId(nextMetadataPageId++);
 		}
 
 		MetadataPageAllocation allocatePage(Generation generation, LogSequenceNumber,
@@ -95,11 +103,11 @@ namespace {
 
 		void abandonPage(PhysicalPageRef reference) noexcept override { abandonedReferences.push_back(reference); }
 
-		bool invalidPageId = false;
+		bool invalidMetadataPageId = false;
 		bool invalidPhysicalReference = false;
 		bool wrongPhysicalGeneration = false;
 		bool duplicatePhysicalReference = false;
-		uint64_t nextPageId = 1;
+		uint64_t nextMetadataPageId = 1;
 		uint64_t nextPhysicalPage = 0;
 		std::vector<PhysicalPageRef> returnedReferences;
 		std::vector<PhysicalPageRef> abandonedReferences;
@@ -193,6 +201,286 @@ TEST_F(RelocatableCatalogTreeTest, PublishesOneBatchIntoSharedLeavesAndSurvivesR
 			  PhysicalSlotId(103));
 }
 
+TEST_F(RelocatableCatalogTreeTest, NativeCandidateShortWriteRetainsOldGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		const PhysicalPageRef candidateLeaf{PhysicalSlotId(1U), 1U, Generation(2U)};
+		const uint64_t candidateOffset = pages.pageOffset(candidateLeaf);
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortCandidate(
+					[candidateOffset, &shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+																						pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_CATALOG_PAGE_HEADER_BYTES - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+		expectSameSuperblock(bootstrap.recover(), initial);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	expectSameSuperblock(recovered, superblock(1U, 1U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	const Superblock published = reopenedTree.upsertAndPublish(
+			reopenedBootstrap, recovered, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+	EXPECT_EQ(reopenedTree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeCandidateDiskFullRetainsOldGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		const PhysicalPageRef candidateLeaf{PhysicalSlotId(1U), 1U, Generation(2U)};
+		const uint64_t candidateOffset = pages.pageOffset(candidateLeaf);
+		bool diskFullObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting diskFullCandidate(
+					[candidateOffset, &diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+																						pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+							diskFullObserved = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(diskFullObserved);
+		expectSameSuperblock(bootstrap.recover(), initial);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	expectSameSuperblock(recovered, superblock(1U, 1U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	const Superblock published = reopenedTree.upsertAndPublish(
+			reopenedBootstrap, recovered, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+	EXPECT_EQ(reopenedTree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeRadixCandidateShortWriteRetainsOldGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		const PhysicalPageRef candidateRoot{PhysicalSlotId(1U), 2U, Generation(2U)};
+		const uint64_t candidateOffset = pages.pageOffset(candidateRoot);
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortCandidate(
+					[candidateOffset, &shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															 pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_CATALOG_PAGE_HEADER_BYTES - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+		expectSameSuperblock(bootstrap.recover(), initial);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	expectSameSuperblock(recovered, superblock(1U, 1U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	const Superblock published = reopenedTree.upsertAndPublish(
+			reopenedBootstrap, recovered, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+	EXPECT_EQ(reopenedTree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeRadixCandidateDiskFullRetainsOldGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		const PhysicalPageRef candidateRoot{PhysicalSlotId(1U), 2U, Generation(2U)};
+		const uint64_t candidateOffset = pages.pageOffset(candidateRoot);
+		bool diskFullObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting diskFullCandidate(
+					[candidateOffset, &diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+							diskFullObserved = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(diskFullObserved);
+		expectSameSuperblock(bootstrap.recover(), initial);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	expectSameSuperblock(recovered, superblock(1U, 1U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	const Superblock published = reopenedTree.upsertAndPublish(
+			reopenedBootstrap, recovered, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+	EXPECT_EQ(reopenedTree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeDataFenceFailureRetainsOldGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+		expectSameSuperblock(bootstrap.recover(), initial);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	expectSameSuperblock(recovered, superblock(1U, 1U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	const Superblock published = reopenedTree.upsertAndPublish(
+			reopenedBootstrap, recovered, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+	EXPECT_EQ(reopenedTree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeFinalFenceFailureReopensTheCompletePublishedGeneration) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const std::vector<CatalogEntry> entries = {entry(1U, 100U, 1U, 2U)};
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(tree.upsertAndPublish(bootstrap, initial, entries, LogSequenceNumber(2U))),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		const Superblock published = bootstrap.recover();
+		EXPECT_EQ(published.generation, Generation(2U));
+		EXPECT_EQ(tree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	EXPECT_EQ(recovered.generation, Generation(2U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	EXPECT_EQ(reopenedTree.find(recovered, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
 TEST_F(RelocatableCatalogTreeTest, PreservesTheOldRootWhileCopyingOnlyAffectedPaths) {
 	const Superblock initial = superblock(1, 1);
 	SuperblockFile bootstrap(io);
@@ -251,6 +539,130 @@ TEST_F(RelocatableCatalogTreeTest, GrowsTheRootWithoutRewritingUnchangedLeaves) 
 			bootstrap, second, std::vector{entry(firstSegmentInSecondRootChild, 201, 2, 4)}, LogSequenceNumber(4));
 	EXPECT_EQ(tree.find(third, SegmentId(firstSegmentInSecondRootChild)).physical_slot, PhysicalSlotId(201));
 	EXPECT_EQ(allocator.returnedReferences.size(), 9U); // Leaf, loaded internal node, and root are copied once.
+}
+
+TEST_F(RelocatableCatalogTreeTest, StreamsNewCatalogEntriesAcrossLeaves) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+	const Superblock before =
+			tree.upsertAndPublish(bootstrap, initial, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+
+	const uint64_t first = RSS_CATALOG_PAGE_MAX_ENTRIES;
+	const std::array additions = {entry(first, 101U, 1U, 3U), entry(first + 1U, 102U, 1U, 3U),
+									 entry(first + 2U, 103U, 1U, 3U)};
+	size_t cursor = 0U;
+	MetadataWriteBatch batch(allocator, before, LogSequenceNumber(3U));
+	tree.prepareAppend(batch, SegmentId(first), SegmentId(first + additions.size() - 1U), additions.size(),
+			[&]() -> std::optional<CatalogEntry> {
+				return cursor == additions.size() ? std::nullopt : std::optional<CatalogEntry>(additions[cursor++]);
+			});
+	batch.publish(bootstrap);
+	const Superblock after = batch.candidate();
+
+	EXPECT_FALSE(tree.findOptional(before, additions.front().segment_id).has_value());
+	EXPECT_EQ(tree.find(after, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	for (const CatalogEntry &catalogEntry: additions) {
+		EXPECT_EQ(tree.find(after, catalogEntry.segment_id).physical_slot, catalogEntry.physical_slot);
+	}
+}
+
+TEST_F(RelocatableCatalogTreeTest, RecordsFinalCandidateFramesForEveryCatalogCowPage) {
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	tree.prepareUpsert(batch, std::vector{entry(1U, 100U, 1U, 2U)});
+	const Superblock candidate = batch.candidate();
+	const CatalogRadixPage root = pages.readCatalogRadix(candidate.catalog_root);
+	ASSERT_TRUE(root.children[0].isValid());
+	const CatalogLeafPage leaf = pages.readCatalogLeaf(root.children[0]);
+	const std::vector<MetadataPageRoute> routes = batch.metadataPageRoutes();
+	ASSERT_EQ(routes.size(), 2U);
+	EXPECT_EQ(routes[0], (MetadataPageRoute{root.page_id, candidate.catalog_root}));
+	EXPECT_EQ(routes[1], (MetadataPageRoute{leaf.page_id, root.children[0]}));
+}
+
+TEST_F(RelocatableCatalogTreeTest, RejectsAStreamThatDivergesFromItsDeclaredSegmentRange) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	bool emitted = false;
+	expectFormatError(
+			[&] {
+				tree.prepareAppend(batch, SegmentId(10U), SegmentId(11U), 2U,
+								   [&]() -> std::optional<CatalogEntry> {
+									   if (emitted) {
+										   return std::nullopt;
+									   }
+									   emitted = true;
+									   return entry(11U, 100U, 1U, 2U);
+								   });
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableCatalogTreeTest, AcceptsAProducerWithoutAnIntermediateCatalogVector) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	tree.prepareAppend(batch, SegmentId(8U), SegmentId(9U), 2U, [](const CatalogTree::EntrySink &consume) {
+		consume(entry(8U, 101U, 1U, 2U));
+		consume(entry(9U, 102U, 1U, 2U));
+	});
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	EXPECT_EQ(tree.find(published, SegmentId(8U)).physical_slot, PhysicalSlotId(101U));
+	EXPECT_EQ(tree.find(published, SegmentId(9U)).physical_slot, PhysicalSlotId(102U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, PreservesExistingSparseSubtreeAcrossMultiLevelStreamedRootGrowth) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+	const Superblock before =
+			tree.upsertAndPublish(bootstrap, initial, std::vector{entry(1U, 100U, 1U, 2U)}, LogSequenceNumber(2U));
+
+	const uint64_t distantId = static_cast<uint64_t>(RSS_CATALOG_PAGE_MAX_ENTRIES) *
+								   RSS_CATALOG_RADIX_FANOUT * RSS_CATALOG_RADIX_FANOUT + 1U;
+	const CatalogEntry distant = entry(distantId, 200U, 1U, 3U);
+	bool emitted = false;
+	MetadataWriteBatch batch(allocator, before, LogSequenceNumber(3U));
+	tree.prepareAppend(batch, SegmentId(distantId), SegmentId(distantId), 1U,
+			[&]() -> std::optional<CatalogEntry> {
+				if (emitted) {
+					return std::nullopt;
+				}
+				emitted = true;
+				return distant;
+			});
+	batch.publish(bootstrap);
+	const Superblock after = batch.candidate();
+
+	EXPECT_EQ(tree.find(before, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	EXPECT_FALSE(tree.findOptional(before, distant.segment_id).has_value());
+	EXPECT_EQ(tree.find(after, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	EXPECT_EQ(tree.find(after, distant.segment_id).physical_slot, distant.physical_slot);
 }
 
 TEST_F(RelocatableCatalogTreeTest, RejectsInvalidBatchesAndStaleSuperblocksBeforeAllocatingPages) {
@@ -320,7 +732,7 @@ TEST_F(RelocatableCatalogTreeTest, RejectsBadAllocatorReferencesAndInvalidLookup
 	CatalogTree tree(pages, allocator);
 	expectFormatError([&] { static_cast<void>(tree.find(initial, SegmentId(1))); }, FormatError::FERR_INVALID_STATE);
 
-	allocator.invalidPageId = true;
+	allocator.invalidMetadataPageId = true;
 	expectFormatError(
 			[&] {
 				static_cast<void>(tree.upsertAndPublish(bootstrap, initial, std::vector{entry(1, 100, 1, 2)},
@@ -329,7 +741,7 @@ TEST_F(RelocatableCatalogTreeTest, RejectsBadAllocatorReferencesAndInvalidLookup
 			FormatError::FERR_INVALID_STATE);
 	expectSameSuperblock(bootstrap.recover(), initial);
 
-	allocator.invalidPageId = false;
+	allocator.invalidMetadataPageId = false;
 	allocator.invalidPhysicalReference = true;
 	expectFormatError(
 			[&] {
@@ -519,7 +931,7 @@ TEST_F(RelocatableCatalogTreeTest, RejectsCorruptPublishedRootsLeavesAndMissingE
 	expectFormatError([&] { static_cast<void>(tree.find(staleLsn, SegmentId(1))); }, FormatError::FERR_INVALID_STATE);
 
 	CatalogLeafPage misplaced;
-	misplaced.page_id = PageId(999);
+	misplaced.page_id = MetadataPageId(999);
 	misplaced.minimum_segment_id = SegmentId(85);
 	misplaced.maximum_segment_id = SegmentId(85);
 	misplaced.generation = Generation(2);
@@ -529,7 +941,7 @@ TEST_F(RelocatableCatalogTreeTest, RejectsCorruptPublishedRootsLeavesAndMissingE
 	expectFormatError([&] { static_cast<void>(tree.find(published, SegmentId(1))); }, FormatError::FERR_INVALID_HEADER);
 
 	CatalogLeafPage empty;
-	empty.page_id = PageId(1000);
+	empty.page_id = MetadataPageId(1000);
 	empty.generation = Generation(2);
 	empty.committed_lsn = LogSequenceNumber(2);
 	pages.writeCatalogLeaf(validRoot.children[0], empty);
@@ -632,6 +1044,84 @@ TEST_F(RelocatableCatalogTreeTest, ErasesEntriesWithCopyOnWriteAndPrunesEmptyBra
 	EXPECT_FALSE(reopenedTree.findOptional(recovered, SegmentId(1)).has_value());
 	EXPECT_EQ(reopenedTree.find(recovered, SegmentId(2)).physical_slot, PhysicalSlotId(101));
 	EXPECT_FALSE(reopenedTree.findOptional(recovered, SegmentId(deepSegmentId)).has_value());
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeCatalogUpsertUsesExactlyOneDataFenceAndOneSuperblockFence) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		std::atomic<uint32_t> syncCalls{0U};
+		Superblock published;
+		{
+			StorageIO::ScopedNativeSyncHookForTesting countPublicationSyncs([&syncCalls](file_handle_t fd) {
+				syncCalls.fetch_add(1U, std::memory_order_relaxed);
+				return portable_fsync(fd);
+			});
+			published = tree.upsertAndPublish(bootstrap, initial, std::vector{entry(1U, 100U, 1U, 2U)},
+					LogSequenceNumber(2U));
+		}
+		EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
+		EXPECT_EQ(tree.find(published, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	EXPECT_EQ(recovered.generation, Generation(2U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	EXPECT_EQ(reopenedTree.find(recovered, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+}
+
+TEST_F(RelocatableCatalogTreeTest, NativeCatalogEraseUsesExactlyOneDataFenceAndOneSuperblockFence) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		TestMetadataPageAllocator allocator;
+		CatalogTree tree(pages, allocator);
+		const Superblock first = tree.upsertAndPublish(
+				bootstrap, initial, std::vector{entry(1U, 100U, 1U, 2U), entry(2U, 101U, 1U, 2U)},
+				LogSequenceNumber(2U));
+
+		MetadataWriteBatch eraseBatch(allocator, first, LogSequenceNumber(3U));
+		tree.prepareErase(eraseBatch, std::array{SegmentId(1U)});
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting countPublicationSyncs([&syncCalls](file_handle_t fd) {
+				syncCalls.fetch_add(1U, std::memory_order_relaxed);
+				return portable_fsync(fd);
+			});
+			eraseBatch.publish(bootstrap);
+		}
+		EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
+		EXPECT_FALSE(tree.findOptional(eraseBatch.candidate(), SegmentId(1U)).has_value());
+		EXPECT_EQ(tree.find(eraseBatch.candidate(), SegmentId(2U)).physical_slot, PhysicalSlotId(101U));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	EXPECT_EQ(recovered.generation, Generation(3U));
+	MetadataPageFile reopenedPages(io, recovered);
+	TestMetadataPageAllocator allocator;
+	CatalogTree reopenedTree(reopenedPages, allocator);
+	EXPECT_FALSE(reopenedTree.findOptional(recovered, SegmentId(1U)).has_value());
+	EXPECT_EQ(reopenedTree.find(recovered, SegmentId(2U)).physical_slot, PhysicalSlotId(101U));
 }
 
 TEST_F(RelocatableCatalogTreeTest, RejectsMalformedOrAbsentEraseRequestsWithoutPublication) {

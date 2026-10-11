@@ -94,6 +94,45 @@ test('Persistence - scalar properties and types survive reopen', async () => {
     }
 });
 
+test('Persistence - large bytes survive reopen with independent Buffer ownership', async () => {
+    const dbPath = getTestDbPath();
+    const expected = Buffer.alloc(16 * 1024 + 137);
+    for (let index = 0; index < expected.length; ++index) {
+        expected[index] = (index * 37) % 251;
+    }
+
+    try {
+        let db = await reopen(dbPath);
+        const callerBuffer = Buffer.from(expected);
+
+        // Conversion to the native parameter owns a copy before the queued
+        // write executes; a caller mutation must never alter persisted bytes.
+        const write = db.createNode('PersistedBinary', { payload: callerBuffer });
+        callerBuffer.fill(0);
+        await write;
+        await db.save();
+        await db.close();
+
+        db = await reopen(dbPath);
+        const payload = (await db.execute(
+            'MATCH (n:PersistedBinary) RETURN n.payload AS payload'
+        )).single().payload;
+        assert.ok(Buffer.isBuffer(payload));
+        assert.deepStrictEqual(payload, expected);
+
+        // Result conversion returns a copied Buffer. Mutating it must not write
+        // through to the Driver ABI result or the persisted LargeValue.
+        payload.fill(0);
+        const reread = (await db.execute(
+            'MATCH (n:PersistedBinary) RETURN n.payload AS payload'
+        )).single().payload;
+        assert.deepStrictEqual(reread, expected);
+        await db.close();
+    } finally {
+        cleanup(dbPath);
+    }
+});
+
 test('Persistence - index survives reopen and is usable', async () => {
     const dbPath = getTestDbPath();
     try {

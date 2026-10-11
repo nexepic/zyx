@@ -84,6 +84,18 @@ namespace {
 		LittleEndianCodec::writeU32(bytes, 32, graph::utils::calculateCrc(bytes.data(), bytes.size()));
 	}
 
+	void refreshManifestChecksums(std::vector<std::byte> &bytes) {
+		if (LittleEndianCodec::readU32(bytes, RSS_VECTOR_CODEBOOK_HEADER_BYTES) == 0U) {
+			LittleEndianCodec::writeU32(
+					bytes, 28U,
+					graph::utils::calculateCrc(bytes.data() + RSS_VECTOR_CODEBOOK_MANIFEST_PREFIX_BYTES,
+										  bytes.size() - RSS_VECTOR_CODEBOOK_MANIFEST_PREFIX_BYTES));
+		}
+		LittleEndianCodec::writeU32(bytes, 32U, 0U);
+		LittleEndianCodec::writeU32(bytes, 32U,
+								 graph::utils::calculateCrc(bytes.data(), RSS_VECTOR_CODEBOOK_HEADER_BYTES));
+	}
+
 	std::vector<std::byte> manifestBlock() {
 		VectorCodebookManifest manifest;
 		manifest.header = header();
@@ -294,6 +306,53 @@ TEST(RelocatableVectorCodebookTest, RejectsMalformedHeadersAndPayloadShapesBefor
 	invalid.payload_bytes = 36;
 	expectFormatError([&] { static_cast<void>(VectorCodebookHeaderCodec::encode(invalid)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableVectorCodebookTest, RejectsOrExactlyRoundTripsEveryChecksumValidHeaderAndManifestMutation) {
+	const std::array<VectorCodebookExtentHeaderCodec::Bytes, 2U> headers = {
+			extentHeader(payload()), VectorCodebookExtentHeaderCodec::encode(dataExtentHeader(payload(), SegmentId(72U)))};
+	for (const auto &canonical : headers) {
+		for (size_t byteOffset = 0U; byteOffset < canonical.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = canonical;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				refreshExtentHeaderChecksum(mutation);
+				try {
+					const VectorCodebookExtentHeader decoded = VectorCodebookExtentHeaderCodec::decode(mutation);
+					if (VectorCodebookExtentHeaderCodec::encode(decoded) != mutation) {
+						ADD_FAILURE() << "Vector Codebook extent header mutation was normalized at byte " << byteOffset
+									  << ", bit " << static_cast<unsigned>(bit);
+						return;
+					}
+				} catch (const FormatException &) {
+					// Every non-canonical extent header must fail at the typed format boundary.
+				}
+			}
+		}
+	}
+
+	const std::array<std::vector<std::byte>, 2U> manifests = {
+			VectorCodebookManifestCodec::encode({header(), {}, payload()}),
+			VectorCodebookManifestCodec::encode(multiExtentManifest())};
+	for (const auto &canonical : manifests) {
+		for (size_t byteOffset = 0U; byteOffset < canonical.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = canonical;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				refreshManifestChecksums(mutation);
+				try {
+					const VectorCodebookManifest decoded = VectorCodebookManifestCodec::decode(mutation);
+					if (VectorCodebookManifestCodec::encode(decoded) != mutation) {
+						ADD_FAILURE() << "Vector Codebook manifest mutation was normalized at byte " << byteOffset
+									  << ", bit " << static_cast<unsigned>(bit);
+						return;
+					}
+				} catch (const FormatException &) {
+					// Every non-canonical manifest must fail at the typed format boundary.
+				}
+			}
+		}
+	}
 }
 
 TEST(RelocatableVectorCodebookTest, ValidatesTypedExtentHeadersAndPayloadsBeforePhysicalUse) {

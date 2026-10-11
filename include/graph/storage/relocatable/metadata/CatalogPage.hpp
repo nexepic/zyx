@@ -32,7 +32,7 @@ namespace graph::storage {
 
 	// A leaf is range-routed by a future Catalog radix root; it never uses a segment link.
 	struct CatalogLeafPage {
-		PageId page_id{};
+		MetadataPageId page_id{};
 		SegmentId minimum_segment_id{};
 		SegmentId maximum_segment_id{};
 		Generation generation{};

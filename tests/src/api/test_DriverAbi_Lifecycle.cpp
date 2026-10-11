@@ -28,9 +28,7 @@ protected:
 	void cleanup() {
 		std::error_code ec;
 		const auto removeDatabaseArtifacts = [&ec](const std::string &path) {
-			for (const std::string &suffix: {"", "-wal", ".wal"}) {
-				fs::remove_all(path + suffix, ec);
-			}
+			fs::remove_all(path, ec);
 		};
 		removeDatabaseArtifacts(dbPath);
 		for (const std::string &path: extraPaths) {

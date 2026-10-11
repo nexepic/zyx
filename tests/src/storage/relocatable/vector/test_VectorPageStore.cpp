@@ -7,23 +7,32 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <span>
+#include <stdexcept>
+#include <system_error>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -37,6 +46,11 @@ namespace {
 			EXPECT_EQ(error.error(), expected);
 		}
 	}
+
+	class ThrowOnCancellationCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override { throw std::runtime_error("test cancellation"); }
+	};
 
 	Superblock initialSuperblock() {
 		Superblock result;
@@ -171,6 +185,183 @@ protected:
 		std::error_code error;
 		std::filesystem::remove(path, error);
 	}
+
+	void expectReplacementDiskFullRetainsPublishedPageAndCanRetry(VectorStorageKind kind, SegmentId segmentId) {
+		const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+		ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+		{
+			auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorPageStore store(nativeIo, *metadata);
+			const VectorPageHeader originalHeader = header(kind, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+			ASSERT_TRUE(store.allocate(allocationRequest(originalHeader, segmentId),
+									   page(originalHeader, std::byte{0x11}), PhysicalSlotId(40U), PhysicalSlotId(40U),
+									   LogSequenceNumber(2U))
+								.has_value());
+
+			MetadataSnapshotPin before = metadata->openSnapshot();
+			const CatalogEntry pool = metadata->findCatalog(before, segmentId);
+			const uint64_t candidateOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+													 before.superblock().data_region_offset, pool.physical_slot) +
+											 static_cast<uint64_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U) * RSS_PAGE_SIZE;
+			before.release();
+			const VectorPageHeader replacementHeader =
+					header(kind, originalHeader.page_id, originalHeader.generation, LogSequenceNumber(3U));
+			const VectorPage replacement = page(replacementHeader, std::byte{0x22});
+			bool diskFullObserved = false;
+			{
+				StorageIO::ScopedNativeWriteHookForTesting failCandidate(
+						[candidateOffset, &diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															 pwrite_off_t offset) {
+							if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+								diskFullObserved = true;
+#ifdef _WIN32
+								SetLastError(ERROR_DISK_FULL);
+#else
+								errno = ENOSPC;
+#endif
+								return static_cast<pwrite_ssize_t>(-1);
+							}
+							return portable_pwrite(fd, bytes, byteCount, offset);
+						});
+				EXPECT_THROW(static_cast<void>(store.replace(replacement, segmentId, LogSequenceNumber(2U),
+															 LogSequenceNumber(3U))),
+							 std::system_error);
+			}
+			EXPECT_TRUE(diskFullObserved);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x11}));
+			EXPECT_EQ(metadata->findPageLocation(current, originalHeader.page_id).page_index,
+					  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+			current.release();
+			metadata.reset();
+
+			auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+			VectorPageStore recoveredStore(nativeIo, *recoveredMetadata);
+			MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+			EXPECT_EQ(recoveredStore.read(recovered, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x11}));
+			EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, originalHeader.page_id).page_index,
+					  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+			recovered.release();
+			EXPECT_EQ(recoveredStore.replace(replacement, segmentId, LogSequenceNumber(2U), LogSequenceNumber(3U))
+							  .location.page_index,
+					  2U);
+			MetadataSnapshotPin published = recoveredMetadata->openSnapshot();
+			EXPECT_EQ(recoveredStore.read(published, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x22}));
+		}
+		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+	}
+
+	void expectReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensCompletePage(VectorStorageKind kind,
+																						   SegmentId segmentId) {
+		const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+		ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+		{
+			auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorPageStore store(nativeIo, *metadata);
+			const VectorPageHeader originalHeader = header(kind, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+			ASSERT_TRUE(store.allocate(allocationRequest(originalHeader, segmentId),
+									   page(originalHeader, std::byte{0x11}), PhysicalSlotId(40U), PhysicalSlotId(40U),
+									   LogSequenceNumber(2U))
+								.has_value());
+			const VectorPageHeader replacementHeader =
+					header(kind, originalHeader.page_id, originalHeader.generation, LogSequenceNumber(3U));
+			const VectorPage replacement = page(replacementHeader, std::byte{0x22});
+			std::atomic<uint32_t> syncCalls{0U};
+			{
+				StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+					if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+				EXPECT_THROW(static_cast<void>(store.replace(replacement, segmentId, LogSequenceNumber(2U),
+															 LogSequenceNumber(3U))),
+							 std::runtime_error);
+			}
+			EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x22}));
+			EXPECT_EQ(metadata->findPageLocation(current, originalHeader.page_id).page_index, 2U);
+			current.release();
+			metadata.reset();
+
+			auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+			VectorPageStore recoveredStore(nativeIo, *recoveredMetadata);
+			MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+			EXPECT_EQ(recoveredStore.read(recovered, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x22}));
+			EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, originalHeader.page_id).page_index, 2U);
+		}
+		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+	}
+
+	void expectReplacementPrePublicationSyncFailureRetainsPublishedPageAndCanRetry(VectorStorageKind kind,
+																				   SegmentId segmentId) {
+		const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+		ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+		{
+			auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorPageStore store(nativeIo, *metadata);
+			const VectorPageHeader originalHeader = header(kind, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+			ASSERT_TRUE(store.allocate(allocationRequest(originalHeader, segmentId),
+									   page(originalHeader, std::byte{0x11}), PhysicalSlotId(40U), PhysicalSlotId(40U),
+									   LogSequenceNumber(2U))
+								.has_value());
+			const VectorPageHeader replacementHeader =
+					header(kind, originalHeader.page_id, originalHeader.generation, LogSequenceNumber(3U));
+			const VectorPage replacement = page(replacementHeader, std::byte{0x22});
+			std::atomic<uint32_t> syncCalls{0U};
+			{
+				StorageIO::ScopedNativeSyncHookForTesting failDataFence([&syncCalls](file_handle_t fd) {
+					if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+				EXPECT_THROW(static_cast<void>(store.replace(replacement, segmentId, LogSequenceNumber(2U),
+															 LogSequenceNumber(3U))),
+							 std::runtime_error);
+			}
+			EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x11}));
+			EXPECT_EQ(metadata->findPageLocation(current, originalHeader.page_id).page_index,
+					  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+			current.release();
+			metadata.reset();
+
+			auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+			VectorPageStore recoveredStore(nativeIo, *recoveredMetadata);
+			MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+			EXPECT_EQ(recoveredStore.read(recovered, originalHeader.page_id).read(0U),
+					  std::vector<std::byte>(16U, std::byte{0x11}));
+			EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, originalHeader.page_id).page_index,
+					  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+			recovered.release();
+			EXPECT_EQ(recoveredStore.replace(replacement, segmentId, LogSequenceNumber(2U), LogSequenceNumber(3U))
+							  .location.page_index,
+					  2U);
+		}
+		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+	}
 };
 
 TEST_F(RelocatableVectorPageStoreTest, MaterializesRawAndPqPagesThenAppendsAndReopensThem) {
@@ -223,18 +414,46 @@ TEST_F(RelocatableVectorPageStoreTest, MaterializesRawAndPqPagesThenAppendsAndRe
 	EXPECT_EQ(reopenedStore.read(reopenedSnapshot, appendedPqHeader.page_id).header(), expectedReplacedPq);
 }
 
+TEST_F(RelocatableVectorPageStoreTest, RawReplacementDiskFullRetainsThePublishedPageAndCanRetryAfterReopen) {
+	expectReplacementDiskFullRetainsPublishedPageAndCanRetry(VectorStorageKind::VSK_RAW, SegmentId(71U));
+}
+
+TEST_F(RelocatableVectorPageStoreTest, PqReplacementDiskFullRetainsThePublishedPageAndCanRetryAfterReopen) {
+	expectReplacementDiskFullRetainsPublishedPageAndCanRetry(VectorStorageKind::VSK_PQ, SegmentId(72U));
+}
+
+TEST_F(RelocatableVectorPageStoreTest, RawReplacementFinalSyncFailureReopensTheCompletePublishedPage) {
+	expectReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensCompletePage(VectorStorageKind::VSK_RAW,
+																					  SegmentId(71U));
+}
+
+TEST_F(RelocatableVectorPageStoreTest, PqReplacementFinalSyncFailureReopensTheCompletePublishedPage) {
+	expectReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensCompletePage(VectorStorageKind::VSK_PQ,
+																					  SegmentId(72U));
+}
+
+TEST_F(RelocatableVectorPageStoreTest, RawReplacementPrePublicationSyncFailureRetainsThePublishedPageAndCanRetry) {
+	expectReplacementPrePublicationSyncFailureRetainsPublishedPageAndCanRetry(VectorStorageKind::VSK_RAW,
+																			  SegmentId(71U));
+}
+
+TEST_F(RelocatableVectorPageStoreTest, PqReplacementPrePublicationSyncFailureRetainsThePublishedPageAndCanRetry) {
+	expectReplacementPrePublicationSyncFailureRetainsPublishedPageAndCanRetry(VectorStorageKind::VSK_PQ,
+																			  SegmentId(72U));
+}
+
 TEST_F(RelocatableVectorPageStoreTest, SequentialReadDoesNotRetainAColdVectorPage) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	VectorPageStore store(io, *metadata);
 	const VectorPageHeader firstHeader =
 			header(VectorStorageKind::VSK_RAW, PageId(101U), Generation(1U), LogSequenceNumber(2U));
 	ASSERT_TRUE(store.allocate(allocationRequest(firstHeader, SegmentId(71U)), page(firstHeader, std::byte{0x11}),
-								   PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
-					.has_value());
+							   PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+						.has_value());
 	const VectorPageHeader secondHeader =
 			header(VectorStorageKind::VSK_RAW, PageId(102U), Generation(1U), LogSequenceNumber(3U));
 	static_cast<void>(store.append(appendRequest(secondHeader, SegmentId(71U)), page(secondHeader, std::byte{0x22}),
-								  LogSequenceNumber(3U)));
+								   LogSequenceNumber(3U)));
 
 	io->sync();
 	io->enableBufferPool(64U * RSS_PAGE_SIZE);
@@ -378,6 +597,11 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsMalformedPqMaterializationBeforePu
 	expectFormatError([&] { static_cast<void>(store.materializePq(17, malformed, pqOptions(), LogSequenceNumber(2))); },
 					  FormatError::FERR_INVALID_HEADER);
 	malformed = valid;
+	malformed.front().vector_id = 0U;
+	expectFormatError(
+			[&] { static_cast<void>(store.materializePq(17U, malformed, pqOptions(), LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	malformed = valid;
 	malformed.back().vector_id = malformed.front().vector_id;
 	expectFormatError([&] { static_cast<void>(store.materializePq(17, malformed, pqOptions(), LogSequenceNumber(2))); },
 					  FormatError::FERR_INVALID_HEADER);
@@ -395,13 +619,42 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsMalformedPreparedPqBatchesAndDupli
 	const std::array<PqVectorMaterializationRecord, 1U> source{{pqRecord(1U, {1U, 2U})}};
 	std::array<VectorPqMaterializationPoolBatch, 0U> noPools{};
 	expectFormatError(
-			[&] { static_cast<void>(store.preparePqNewPoolPages(17U, source, pqOptions(), noPools, LogSequenceNumber(2U))); },
+			[&] {
+				static_cast<void>(
+						store.preparePqNewPoolPages(17U, source, pqOptions(), noPools, LogSequenceNumber(2U)));
+			},
 			FormatError::FERR_INVALID_STATE);
 	std::array<VectorPqMaterializationPoolBatch, 1U> malformedPool{};
 	expectFormatError(
 			[&] {
-				static_cast<void>(store.preparePqNewPoolPages(17U, source, pqOptions(), malformedPool,
-																		LogSequenceNumber(2U)));
+				static_cast<void>(
+						store.preparePqNewPoolPages(17U, source, pqOptions(), malformedPool, LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	VectorPqMaterializationOptions singlePage = pqOptions();
+	const uint16_t slotsPerPage = VectorPageStore::rawSlotCapacity(sizeof(uint64_t) + source.front().codes.size());
+	singlePage.maximum_records = static_cast<size_t>(slotsPerPage) + 1U;
+	singlePage.maximum_pages = 1U;
+	std::vector<PqVectorMaterializationRecord> overflowingSinglePage;
+	for (uint64_t vectorId = 1U; vectorId <= singlePage.maximum_records; ++vectorId) {
+		overflowingSinglePage.push_back(pqRecord(vectorId, {1U, 2U}));
+	}
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.preparePqNewPoolPages(17U, overflowingSinglePage, singlePage, noPools,
+															  LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	std::array<VectorPqMaterializationPoolBatch, 1U> invalidLocationBatch{};
+	invalidLocationBatch.front().pool = {
+			SegmentId(71U),			  PhysicalSlotId(40U),	SegmentKind::SGK_VECTOR_PQ_POOL, 17U, Generation(1U),
+			SegmentState::SGS_SEALED, LogSequenceNumber(2U)};
+	invalidLocationBatch.front().page_ids = {PageId(101U)};
+	invalidLocationBatch.front().locations = {PageLocation{}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.preparePqNewPoolPages(17U, source, pqOptions(), invalidLocationBatch,
+															  LogSequenceNumber(2U)));
 			},
 			FormatError::FERR_INVALID_STATE);
 
@@ -409,9 +662,8 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsMalformedPreparedPqBatchesAndDupli
 	expectFormatError([&] { store.prepareDerivedPqRetirements(noRetirements, LogSequenceNumber(2U)); },
 					  FormatError::FERR_INVALID_HEADER);
 	const std::array<ExistingPoolPageRetirementBatch, 1U> malformedRetirementPool{};
-	expectFormatError(
-			[&] { store.prepareDerivedPqRetirements(malformedRetirementPool, LogSequenceNumber(2U)); },
-			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { store.prepareDerivedPqRetirements(malformedRetirementPool, LogSequenceNumber(2U)); },
+					  FormatError::FERR_INVALID_STATE);
 
 	const VectorPqMaterializationResult materialized =
 			store.materializePq(17U, source, pqOptions(), LogSequenceNumber(2U));
@@ -423,10 +675,42 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsMalformedPreparedPqBatchesAndDupli
 	const ExistingPoolPageRetirementBatch validPool{pool, {retirement}};
 	expectFormatError([&] { store.prepareDerivedPqRetirements(std::span(&validPool, 1U), {}); },
 					  FormatError::FERR_INVALID_HEADER);
-	const ExistingPoolPageRetirementBatch duplicatePage{pool, {retirement, retirement}};
+	ExistingPoolPageRetirementBatch malformedRetirement{pool, {retirement}};
+	malformedRetirement.retirements.front().location.page_index = 0U;
 	expectFormatError(
-			[&] { store.prepareDerivedPqRetirements(std::span(&duplicatePage, 1U), LogSequenceNumber(3U)); },
+			[&] {
+				store.prepareDerivedPqRetirements(std::span(&malformedRetirement, 1U), LogSequenceNumber(3U));
+			},
 			FormatError::FERR_INVALID_STATE);
+	const ExistingPoolPageRetirementBatch duplicatePage{pool, {retirement, retirement}};
+	expectFormatError([&] { store.prepareDerivedPqRetirements(std::span(&duplicatePage, 1U), LogSequenceNumber(3U)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableVectorPageStoreTest, CancellationPreventsPreparedPqMaterializationAndRetirement) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const std::array<PqVectorMaterializationRecord, 1U> source{{pqRecord(1U, {1U, 2U})}};
+	std::array<VectorPqMaterializationPoolBatch, 0U> noPools{};
+	ThrowOnCancellationCheck cancellation;
+	EXPECT_THROW(static_cast<void>(
+				 store.preparePqNewPoolPages(17U, source, pqOptions(), noPools, LogSequenceNumber(2U), &cancellation)),
+			 std::runtime_error);
+
+	const VectorPqMaterializationResult materialized =
+			store.materializePq(17U, source, pqOptions(), LogSequenceNumber(2U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const PageLocation location = metadata->findPageLocation(snapshot, materialized.pages.front().page_id);
+	const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
+	EXPECT_TRUE(store.read(snapshot, materialized.pages.front().page_id).findVectorId(1U).has_value());
+	snapshot.release();
+	const ExistingPoolPageRetirementBatch retirementPool{
+			pool, {{location, 17U, PageOwnerKind::POK_VECTOR_PQ, LogSequenceNumber(2U)}}};
+	EXPECT_THROW(store.prepareDerivedPqRetirements(std::span(&retirementPool, 1U), LogSequenceNumber(3U), &cancellation),
+			 std::runtime_error);
+
+	const MetadataSnapshotPin afterCancellation = metadata->openSnapshot();
+	EXPECT_TRUE(store.read(afterCancellation, materialized.pages.front().page_id).findVectorId(1U).has_value());
 }
 
 TEST_F(RelocatableVectorPageStoreTest, RejectsPqAndRawRecordsThatCannotFitWithinOneFixedPage) {
@@ -559,6 +843,13 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsNonCanonicalOrUnboundedRawMaterial
 	VectorRawMaterializationOptions options = rawOptions();
 	expectFormatError([&] { static_cast<void>(store.materializeRaw(17, {}, options, LogSequenceNumber(2))); },
 					  FormatError::FERR_INVALID_HEADER);
+	const std::array<RawVectorMaterializationRecord, 1U> missingStableIdPrefix = {
+			RawVectorMaterializationRecord{1U, std::vector<std::byte>(sizeof(uint64_t) - 1U, std::byte{0x11})}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.materializeRaw(17U, missingStableIdPrefix, options, LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
 	std::vector<RawVectorMaterializationRecord> mismatched{valid};
 	LittleEndianCodec::writeU64(mismatched.front().bytes, 0, 2);
 	expectFormatError([&] { static_cast<void>(store.materializeRaw(17, mismatched, options, LogSequenceNumber(2))); },
@@ -619,6 +910,21 @@ TEST_F(RelocatableVectorPageStoreTest, ValidatesRawPreparationCapacityAndRetirem
 
 	const std::array<RetiredRawVectorPage, 0U> noPages{};
 	const std::array<uint64_t, 0U> noVectorIds{};
+	const std::array<DerivedVectorPqPage, 0U> noDerivedPqPages{};
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						store.retireDerivedPqPages(Generation(1U), noDerivedPqPages, LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	const std::array<DerivedVectorPqPage, 1U> malformedDerivedPqPages = {
+			DerivedVectorPqPage{PageLocation{}, 17U, LogSequenceNumber(2U)}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.retireDerivedPqPages(Generation(1U), malformedDerivedPqPages,
+																	LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
 	expectFormatError(
 			[&] {
 				static_cast<void>(store.retireRawPages(Generation(1U), noPages, noVectorIds, LogSequenceNumber(3U)));
@@ -639,6 +945,82 @@ TEST_F(RelocatableVectorPageStoreTest, ValidatesRawPreparationCapacityAndRetirem
 				static_cast<void>(store.releaseRetiredRawPool(SegmentId(71U), Generation(1U), LogSequenceNumber(3U)));
 			},
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableVectorPageStoreTest, PreparesTheFirstRawPageBeforePublishingItsCatalogAndDirectoryEntries) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const VectorPageHeader rawHeader =
+			header(VectorStorageKind::VSK_RAW, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+	const VectorPage rawPage = page(rawHeader, std::byte{0x71});
+	const CatalogSlotReservationRequest reservation{.segment_id = SegmentId(71U),
+												 .kind = SegmentKind::SGK_VECTOR_RAW_POOL,
+												 .owner_id = rawHeader.index_id,
+												 .segment_generation = Generation(1U),
+												 .state = SegmentState::SGS_SEALED,
+												 .require_absent = true};
+	PageLocation location{rawHeader.page_id, reservation.segment_id, 0U, Generation(1U), 0U};
+	bool prepared = false;
+	const std::optional<CatalogSlotReservations> published = metadata->reserveFirstFreeAndUpsertCatalogAndLocations(
+			std::span(&reservation, 1U), std::span(&location, 1U), {}, PhysicalSlotId(40U), PhysicalSlotId(40U),
+			LogSequenceNumber(2U), [&store, &rawPage, &location, &prepared](std::span<const CatalogEntry> entries) {
+				ASSERT_EQ(entries.size(), 1U);
+				store.prepareRawNewPool(entries.front(), rawPage, LogSequenceNumber(2U), location);
+				prepared = true;
+			});
+	ASSERT_TRUE(published.has_value());
+	EXPECT_TRUE(prepared);
+	EXPECT_EQ(location.page_index, RSS_PAGE_POOL_FIRST_DATA_FRAME);
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const CatalogEntry visiblePool = metadata->findCatalog(snapshot, reservation.segment_id);
+	EXPECT_EQ(visiblePool.segment_id, published->entries.front().segment_id);
+	EXPECT_EQ(visiblePool.physical_slot, published->entries.front().physical_slot);
+	EXPECT_EQ(visiblePool.kind, published->entries.front().kind);
+	EXPECT_EQ(visiblePool.owner_id, published->entries.front().owner_id);
+	EXPECT_EQ(visiblePool.generation, published->entries.front().generation);
+	EXPECT_EQ(visiblePool.state, published->entries.front().state);
+	EXPECT_EQ(visiblePool.committed_lsn, published->entries.front().committed_lsn);
+	EXPECT_EQ(metadata->findPageLocation(snapshot, rawHeader.page_id), location);
+	EXPECT_EQ(store.read(snapshot, rawHeader.page_id).read(0U),
+			  std::vector<std::byte>(rawHeader.record_bytes, std::byte{0x71}));
+	snapshot.release();
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	VectorPageStore reopenedStore(io, *reopened);
+	const MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
+	EXPECT_EQ(reopenedStore.read(reopenedSnapshot, rawHeader.page_id).header(), rawPage.header());
+}
+
+TEST_F(RelocatableVectorPageStoreTest, RejectsAnInvalidInitialRawPageLocationWithoutPublishingThePool) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const VectorPageHeader rawHeader =
+			header(VectorStorageKind::VSK_RAW, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+	const std::array<VectorPage, 1U> pages{{page(rawHeader, std::byte{0x72})}};
+	const CatalogSlotReservationRequest reservation{.segment_id = SegmentId(71U),
+												 .kind = SegmentKind::SGK_VECTOR_RAW_POOL,
+												 .owner_id = rawHeader.index_id,
+												 .segment_generation = Generation(1U),
+												 .state = SegmentState::SGS_SEALED,
+												 .require_absent = true};
+	std::array<PageLocation, 1U> locations{{
+			{rawHeader.page_id, reservation.segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 0U}}};
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(metadata->reserveFirstFreeAndUpsertCatalog(
+						std::span(&reservation, 1U), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
+						[&store, &pages, &locations](std::span<const CatalogEntry> entries) {
+							store.prepareRawNewPoolPages(entries.front(), pages, locations, LogSequenceNumber(2U));
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(metadata->findCatalog(snapshot, reservation.segment_id)); },
+					  FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableVectorPageStoreTest, RecoversRawVectorPageAndLocationPublicationAsOneGeneration) {
@@ -763,7 +1145,7 @@ TEST_F(RelocatableVectorPageStoreTest, RejectsMismatchedRequestsAndIncompatibleE
 	EXPECT_EQ(store.read(snapshot, rawHeader.page_id).header(), expectedRaw);
 }
 
-TEST_F(RelocatableVectorPageStoreTest, RecoversVectorPageEvacuationAtMetadataWalPublicationBoundaries) {
+TEST_F(RelocatableVectorPageStoreTest, RecoversVectorPageEvacuationAtMetadataPublicationBoundaries) {
 	const auto initialize = [&] {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 		VectorPageStore store(io, *metadata);

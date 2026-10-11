@@ -9,6 +9,7 @@
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/vector/VectorAdjacencyPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
 
@@ -93,11 +94,13 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static OfflineVectorAdjacencyPreparedGraph
 		buildGraph(VectorDistanceMetric metric, uint32_t dimensions, std::span<const CanonicalVectorRecord> records,
-						   const OfflineVectorAdjacencyRebuildOptions &options);
+						   const OfflineVectorAdjacencyRebuildOptions &options,
+						   const CancellationCheckpoint *cancellation = nullptr);
 		[[nodiscard]] static OfflineVectorAdjacencyRebuildResult
 		run(BTreePageStore &trees, VectorPageStore &vectors, VectorAdjacencyPageStore &adjacencies,
 			VectorManifestStore &manifests, RelocatableMetadataStore &metadata, uint64_t indexId,
-			std::span<const CanonicalVectorRecord> records, const OfflineVectorAdjacencyRebuildOptions &options);
+			std::span<const CanonicalVectorRecord> records, const OfflineVectorAdjacencyRebuildOptions &options,
+			const CancellationCheckpoint *cancellation = nullptr);
 	};
 
 } // namespace graph::storage

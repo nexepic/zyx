@@ -11,6 +11,7 @@
 #include <functional>
 
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 
 namespace {
 
@@ -54,7 +55,7 @@ namespace {
 		page.kind = kind;
 		page.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 		page.level = level;
-		page.page_id = allocator.allocatePageId();
+		page.page_id = allocator.allocateMetadataPageId();
 		page.generation = current.generation;
 		page.committed_lsn = current.checkpoint_lsn;
 		page.children[0] = child;
@@ -82,15 +83,22 @@ namespace {
 		return pages.readMetadataRadix(current.catalog_root).children[0];
 	}
 
+	PhysicalPageRef pageDirectoryDataRoot(MetadataPageFile &pages, const Superblock &current) {
+		if (!current.usesPageDirectoryBootstrap()) {
+			return current.page_directory_root;
+		}
+		return pages.readPageDirectoryBootstrap(current.page_directory_root).data_page_directory_root;
+	}
+
 	LocationLeafPage pageDirectoryLeaf(MetadataPageFile &pages, const Superblock &current) {
-		const MetadataRadixPage root = pages.readMetadataRadix(current.page_directory_root);
+		const MetadataRadixPage root = pages.readMetadataRadix(pageDirectoryDataRoot(pages, current));
 		EXPECT_EQ(root.level, 0U);
 		EXPECT_TRUE(root.children[0].isValid());
 		return pages.readLocationLeaf(root.children[0]);
 	}
 
 	PhysicalPageRef pageDirectoryLeafReference(MetadataPageFile &pages, const Superblock &current) {
-		return pages.readMetadataRadix(current.page_directory_root).children[0];
+		return pages.readMetadataRadix(pageDirectoryDataRoot(pages, current)).children[0];
 	}
 
 } // namespace
@@ -105,6 +113,106 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationRejectsFutureDir
 				pages.writeMetadataRadix(current.allocator_root, root);
 			},
 			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationResolvesBootstrapRootsLogically) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 1, 2)}, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	Superblock routed = snapshot.superblock();
+	snapshot.release();
+	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
+	routed.catalog_root = {};
+	routed.allocator_root = {};
+
+	MetadataPagePoolAllocator allocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	MetadataPageFile pages(io, routed);
+	MetadataWriteBatch batch(allocator, routed, LogSequenceNumber(4));
+	EXPECT_NO_THROW(cloneMetadataDirectoryRootsForEvacuation(pages, batch, routed));
+	EXPECT_FALSE(batch.metadataPageRoutes().empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, RoutedMetadataRelocationRejectsANoncurrentPageIdTarget) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	MetadataPageFile pages(io, current);
+	const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(current.page_directory_root);
+	const std::vector<MetadataPageRoute> routes =
+			MetadataPageRouteDirectory(pages).collectRoutesFromRouteBranch(current, bootstrap.metadata_page_directory_root);
+	ASSERT_GE(routes.size(), 2U);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(4U));
+
+	expectFormatError(
+			[&] { static_cast<void>(pages.relocateRoutedMetadataPage(routes[1].physical_reference, routes[0].page_id, batch)); },
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_TRUE(batch.metadataPageRoutes().empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAStaleBatchSuperblock) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 1U, 2U)}, LogSequenceNumber(2U)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	MetadataPageFile pages(io, current);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(4U));
+	Superblock stale = current;
+	stale.checkpoint_lsn = LogSequenceNumber(current.checkpoint_lsn.value() - 1U);
+
+	expectFormatError(
+			[&] { static_cast<void>(relocateRoutedMetadataPoolPages(pages, batch, stale, PhysicalSlotId{}, 0U)); },
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_TRUE(batch.metadataPageRoutes().empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationRejectsAnUnallocatedRouteTarget) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
+	for (MetadataSnapshotPin &snapshot: retained) {
+		snapshot.release();
+	}
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7U)));
+	const CatalogEntry catalog = entry(200U, 2U, 8U);
+	static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(8U)));
+	const ExtentLocation extent{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
+	static_cast<void>(store->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(9U)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	MetadataPageFile pages(io, current);
+	const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(current.page_directory_root);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	std::optional<MetadataPageRoute> sourceRoute;
+	uint32_t allocatedFrames = 0U;
+	for (const MetadataPageRoute &route:
+		 MetadataPageRouteDirectory(pages).collectRoutesFromRouteBranch(current, bootstrap.metadata_page_directory_root)) {
+		const MetadataPagePoolHeader header = allocator.poolHeader(route.physical_reference.physical_slot);
+		if (canRelocateRoutedMetadataPoolPages(pages, current, route.physical_reference.physical_slot,
+																				 header.allocated_frames)) {
+			sourceRoute = route;
+			allocatedFrames = header.allocated_frames;
+			break;
+		}
+	}
+	ASSERT_TRUE(sourceRoute.has_value());
+	const uint32_t missingRouteFrame =
+			1U << (sourceRoute->physical_reference.frame_index - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+	ASSERT_NE(allocatedFrames & missingRouteFrame, 0U);
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(canRelocateRoutedMetadataPoolPages(
+						pages, current, sourceRoute->physical_reference.physical_slot, allocatedFrames & ~missingRouteFrame));
+			},
+			FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationRejectsRootWithInternalKind) {
@@ -128,6 +236,20 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationRejectsRepeatedS
 				ASSERT_TRUE(root.children[0].isValid());
 				root.children[1] = root.children[0];
 				pages.writeMetadataRadix(current.allocator_root, root);
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationRejectsRepeatedLogicalPageId) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	expectDirectoryCloneFailure(
+			io, *store,
+			[](MetadataPageFile &pages, const Superblock &current) {
+				const MetadataRadixPage root = pages.readMetadataRadix(current.allocator_root);
+				ASSERT_TRUE(root.children[0].isValid());
+				AllocatorLeafPage leaf = pages.readAllocatorLeaf(root.children[0]);
+				leaf.page_id = root.page_id;
+				pages.writeAllocatorLeaf(root.children[0], leaf);
 			},
 			FormatError::FERR_INVALID_STATE);
 }
@@ -224,7 +346,7 @@ TEST_F(RelocatableMetadataStoreTest, MetadataDirectoryEvacuationClonesNestedRadi
 	internal.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 	internal.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
 	internal.level = 0U;
-	internal.page_id = allocator.allocatePageId();
+	internal.page_id = allocator.allocateMetadataPageId();
 	internal.generation = current.generation;
 	internal.committed_lsn = current.checkpoint_lsn;
 	internal.children[0] = root.children[0];

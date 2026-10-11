@@ -48,7 +48,7 @@ flowchart LR
     E --> F
 ```
 
-An ingest session owns one atomic write boundary on a native relocatable database: a snapshot-pinned logical transaction and its read-your-writes overlay. Legacy files are rejected by the normal Driver ABI open path and must first be migrated offline. A successful commit is durable before the session reports success, while the main database checkpoint may be deferred until `zyx_driver_db_save()` or clean close. Closing an active session rolls it back.
+An ingest session owns one atomic write boundary on a native relocatable database: a snapshot-pinned logical transaction and its read-your-writes overlay. The Driver ABI does not open legacy database formats. A successful commit atomically publishes a durable native single-file generation before the session reports success; it does not depend on a WAL sidecar. Closing an active session rolls it back.
 
 A write failure poisons the complete session. It cannot be committed afterward and must be rolled back or closed. Schema preparation errors happen before a writer is created and do not poison the session.
 

@@ -37,7 +37,8 @@ namespace graph::debug {
 		};
 
 		struct Collector {
-			std::atomic<bool> enabled{false};
+			std::atomic<bool> durationEnabled{false};
+			std::atomic<bool> valueEnabled{false};
 			std::array<Shard, kShardCount> shards;
 		};
 
@@ -60,11 +61,20 @@ namespace graph::debug {
 	}
 
 	void PerfTrace::setEnabled(bool enabled) {
-		gCollector.enabled.store(enabled, std::memory_order_relaxed);
+		gCollector.durationEnabled.store(enabled, std::memory_order_relaxed);
+		gCollector.valueEnabled.store(enabled, std::memory_order_relaxed);
 	}
 
 	bool PerfTrace::isEnabled() {
-		return gCollector.enabled.load(std::memory_order_relaxed);
+		return gCollector.durationEnabled.load(std::memory_order_relaxed);
+	}
+
+	void PerfTrace::setValueCollectionEnabled(const bool enabled) {
+		gCollector.valueEnabled.store(enabled, std::memory_order_relaxed);
+	}
+
+	bool PerfTrace::areValuesEnabled() {
+		return gCollector.valueEnabled.load(std::memory_order_relaxed);
 	}
 
 	void PerfTrace::addDuration(const std::string_view key, const uint64_t durationNs) {
@@ -92,7 +102,7 @@ namespace graph::debug {
 	}
 
 	void PerfTrace::addValue(const std::string_view key, const int64_t value) {
-		if (!isEnabled() || key.empty()) {
+		if (!areValuesEnabled() || key.empty()) {
 			return;
 		}
 

@@ -21,14 +21,10 @@
 #pragma once
 
 #include <gtest/gtest.h>
-#include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/query/expressions/ExpressionEvaluator.hpp"
 #include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/core/Entity.hpp"
-#include "graph/query/api/ResultValue.hpp"
 #include "graph/query/expressions/IsNullExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"

@@ -19,26 +19,21 @@
  **/
 
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
+#include <limits>
 
 namespace graph::query::expressions {
 
 EvaluationContext::EvaluationContext(const execution::Record &record)
-	: record_(record), dataManager_(nullptr) {}
+	: record_(record) {}
 
 EvaluationContext::EvaluationContext(const execution::Record &record,
-                                     storage::DataManager *dataManager)
-	: record_(record), dataManager_(dataManager) {}
-
-EvaluationContext::EvaluationContext(const execution::Record &record,
-                                     const std::unordered_map<std::string, PropertyValue> &parameters)
-	: record_(record), dataManager_(nullptr), parameters_(&parameters) {}
-
-EvaluationContext::EvaluationContext(const execution::Record &record,
-                                     storage::DataManager *dataManager,
-                                     const std::unordered_map<std::string, PropertyValue> &parameters)
-	: record_(record), dataManager_(dataManager), parameters_(&parameters) {}
+                                     const std::unordered_map<std::string, PropertyValue> &parameters,
+                                     const ScalarFunctionEvaluationLimits limits)
+	: record_(record), parameters_(&parameters), limits_(limits) {}
 
 std::optional<PropertyValue> EvaluationContext::resolveParameter(const std::string &name) const {
 	if (!parameters_) return std::nullopt;
@@ -124,6 +119,13 @@ bool EvaluationContext::toBoolean(const PropertyValue &value) {
 				// 0 → false, non-zero → true
 				return arg != 0;
 			} else if constexpr (std::is_same_v<TPlain, double>) {
+				if (!std::isfinite(arg)) {
+					throw TypeMismatchException(
+							"Cannot convert a non-finite DOUBLE to BOOLEAN",
+							PropertyType::BOOLEAN,
+							PropertyType::DOUBLE
+					);
+				}
 				// 0.0 → false, non-zero → true
 				return arg != 0.0;
 			} else if constexpr (std::is_same_v<TPlain, std::string>) {
@@ -160,14 +162,25 @@ int64_t EvaluationContext::toInteger(const PropertyValue &value) {
 				// integer → as-is
 				return arg;
 			} else if constexpr (std::is_same_v<TPlain, double>) {
-				// double → truncate
+				// A floating-point conversion outside the integer domain is undefined
+				// for a C++ cast. Reject it before conversion rather than exposing a
+				// platform-dependent integer to the query layer.
+				if (!std::isfinite(arg) || arg < static_cast<double>(std::numeric_limits<int64_t>::min()) ||
+					arg >= static_cast<double>(std::numeric_limits<int64_t>::max())) {
+					throw TypeMismatchException(
+							"Cannot convert a non-finite or out-of-range DOUBLE to INTEGER",
+							PropertyType::INTEGER,
+							PropertyType::DOUBLE
+					);
+				}
+				// double → truncate after the representable-range check above.
 				return static_cast<int64_t>(arg);
 			} else if constexpr (std::is_same_v<TPlain, std::string>) {
 				// string → parse as integer
 				// First try as decimal
 				int64_t result = 0;
 				auto [ptr, ec] = std::from_chars(arg.data(), arg.data() + arg.size(), result);
-				if (ec == std::errc()) {
+				if (ec == std::errc() && ptr == arg.data() + arg.size()) {
 					return result;
 				}
 				throw TypeMismatchException(
@@ -213,13 +226,21 @@ double EvaluationContext::toDouble(const PropertyValue &value) {
 				// integer → cast to double
 				return static_cast<double>(arg);
 			} else if constexpr (std::is_same_v<TPlain, double>) {
-				// double → as-is
+				if (!std::isfinite(arg)) {
+					throw TypeMismatchException(
+							"Cannot convert a non-finite DOUBLE to DOUBLE",
+							PropertyType::DOUBLE,
+							PropertyType::DOUBLE
+					);
+				}
+				// Finite double → as-is
 				return arg;
 			} else if constexpr (std::is_same_v<TPlain, std::string>) {
 				// string → parse as double
+				errno = 0;
 				char *end = nullptr;
 				double result = std::strtod(arg.c_str(), &end);
-				if (end == arg.c_str() + arg.size()) {
+				if (end == arg.c_str() + arg.size() && errno != ERANGE && std::isfinite(result)) {
 					return result;
 				}
 				throw TypeMismatchException(
@@ -257,6 +278,12 @@ std::string EvaluationContext::toString(const PropertyValue &value) {
 
 bool EvaluationContext::isNull(const PropertyValue &value) {
 	return std::holds_alternative<std::monostate>(value.getVariant());
+}
+
+void EvaluationContext::requireCollectionCapacity(const size_t nextSize, const char *const functionName) const {
+	if (limits_.maximum_collection_elements != 0U && nextSize > limits_.maximum_collection_elements) {
+		throw std::runtime_error(std::string(functionName) + "() exceeded the configured List bound");
+	}
 }
 
 void EvaluationContext::setVariable(const std::string &variableName, const PropertyValue &value) const {

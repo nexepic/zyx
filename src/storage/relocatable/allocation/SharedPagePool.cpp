@@ -121,7 +121,7 @@ namespace graph::storage {
 			LittleEndianCodec::writeU64(bytes, POOL_LSN_OFFSET, header.committed_lsn.value());
 			LittleEndianCodec::writeU32(bytes, POOL_HEADER_CRC_OFFSET, checksum);
 			LittleEndianCodec::writeU32(bytes, POOL_RESERVED0_OFFSET, 0);
-			LittleEndianCodec::writeU64(bytes, POOL_RESERVED1_OFFSET, 0);
+			LittleEndianCodec::writeU64(bytes, POOL_RESERVED1_OFFSET, header.control_sequence);
 			LittleEndianCodec::writeU64(bytes, POOL_RESERVED2_OFFSET, 0);
 		}
 
@@ -175,8 +175,7 @@ namespace graph::storage {
 									 RSS_SHARED_PAGE_POOL_VERSION) |
 				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, POOL_HEADER_BYTES_OFFSET) !=
 									 RSS_SHARED_PAGE_POOL_HEADER_BYTES) |
-				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, POOL_RESERVED0_OFFSET) != 0U) |
-				static_cast<uint8_t>(LittleEndianCodec::readU64(bytes, POOL_RESERVED1_OFFSET) != 0U) |
+					static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, POOL_RESERVED0_OFFSET) != 0U) |
 				static_cast<uint8_t>(LittleEndianCodec::readU64(bytes, POOL_RESERVED2_OFFSET) != 0U);
 		if (invalidStatic != 0U) {
 			throwSharedPagePoolError(FormatError::FERR_RESERVED_BITS,
@@ -187,6 +186,7 @@ namespace graph::storage {
 		header.allocated_frames = LittleEndianCodec::readU32(bytes, POOL_ALLOCATED_FRAMES_OFFSET);
 		header.generation = Generation(LittleEndianCodec::readU64(bytes, POOL_GENERATION_OFFSET));
 		header.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, POOL_LSN_OFFSET));
+		header.control_sequence = LittleEndianCodec::readU64(bytes, POOL_RESERVED1_OFFSET);
 		validatePoolHeader(header);
 		if (LittleEndianCodec::readU32(bytes, POOL_ALLOCATED_COUNT_OFFSET) !=
 			static_cast<uint32_t>(std::popcount(header.allocated_frames))) {

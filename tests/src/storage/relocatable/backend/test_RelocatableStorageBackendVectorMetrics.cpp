@@ -7,6 +7,8 @@
  **/
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -22,6 +24,23 @@
 using namespace graph::storage;
 
 namespace {
+
+	class ThrowAfterCheckpoint final : public CancellationCheckpoint {
+	public:
+		explicit ThrowAfterCheckpoint(size_t throwAfter) : throw_after_(throwAfter) {}
+
+		void check() const override {
+			++checks;
+			if (checks == throw_after_) {
+				throw std::runtime_error("test Vector cancellation checkpoint");
+			}
+		}
+
+		mutable size_t checks = 0U;
+
+	private:
+		size_t throw_after_ = 0U;
+	};
 
 	class RelocatableStorageBackendVectorMetricTest : public ::testing::Test {
 	protected:
@@ -72,6 +91,12 @@ namespace {
 			request.maximum_raw_vector_reads = 16U;
 			return request;
 		}
+
+		[[nodiscard]] std::vector<char> databaseBytes() const {
+			std::ifstream input(data_path_, std::ios::binary);
+			EXPECT_TRUE(input.is_open());
+			return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+		}
 	};
 
 } // namespace
@@ -118,6 +143,56 @@ TEST_F(RelocatableStorageBackendVectorMetricTest, RanksExactCosineByAngleRatherT
 	backend->close();
 }
 
+TEST_F(RelocatableStorageBackendVectorMetricTest, CancelledTrainingLeavesThePriorDerivedGenerationUnchanged) {
+	auto backend = openBackend();
+	const std::vector<uint64_t> nodes = backend->createLogicalNodes(
+			{{{"Embedding"}, {{"value", vectorValue(1.0, 0.0)}}},
+			 { {"Embedding"}, {{"value", vectorValue(0.0, 1.0)}}},
+			 { {"Embedding"}, {{"value", vectorValue(1.0, 1.0)}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	static_cast<void>(backend->createLogicalNodeVectorIndex({"cancelled_training", "Embedding", "value", 2U, "l2"}));
+	const std::vector<char> before = databaseBytes();
+
+	ThrowAfterCheckpoint cancellation(8U);
+	EXPECT_THROW(static_cast<void>(backend->trainLogicalVector({"cancelled_training", 16U, 16U, &cancellation})),
+			 std::runtime_error);
+	EXPECT_EQ(databaseBytes(), before);
+
+	auto snapshot = backend->openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const LogicalGraphVectorSearchResult exact = snapshot->searchLogicalVector(exactRequest("cancelled_training"));
+	EXPECT_EQ(exact.hits.size(), nodes.size());
+	snapshot.reset();
+	EXPECT_TRUE(backend->trainLogicalVector({"cancelled_training", 16U, 16U}).trained);
+	backend->close();
+}
+
+TEST_F(RelocatableStorageBackendVectorMetricTest, ExactSearchCancellationLeavesThePinnedGenerationReadable) {
+	auto backend = openBackend();
+	const std::vector<uint64_t> nodes = backend->createLogicalNodes(
+			{{{"Embedding"}, {{"value", vectorValue(1.0, 0.0)}}},
+			 {{"Embedding"}, {{"value", vectorValue(0.0, 1.0)}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend->createLogicalNodeVectorIndex({"embedding_cancel", "Embedding", "value", 2U, "l2"}));
+
+	auto snapshot = backend->openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	LogicalGraphVectorSearchRequest request = exactRequest("embedding_cancel");
+	ThrowAfterCheckpoint cancellation(4U);
+	request.cancellation = &cancellation;
+	EXPECT_THROW(static_cast<void>(snapshot->searchLogicalVector(request)), std::runtime_error);
+	EXPECT_EQ(cancellation.checks, 4U);
+
+	// A cancelled read never publishes a partial result or mutates the pinned
+	// generation; the same snapshot remains readable after removing the guard.
+	request.cancellation = nullptr;
+	const LogicalGraphVectorSearchResult result = snapshot->searchLogicalVector(request);
+	ASSERT_EQ(result.hits.size(), nodes.size());
+	EXPECT_EQ(result.hits.front().node_id, nodes.front());
+	snapshot.reset();
+	backend->close();
+}
+
 TEST_F(RelocatableStorageBackendVectorMetricTest, RanksTrainedInnerProductByDotProduct) {
 	auto backend = openBackend();
 	const std::vector<uint64_t> nodes = backend->createLogicalNodes(
@@ -141,6 +216,112 @@ TEST_F(RelocatableStorageBackendVectorMetricTest, RanksTrainedInnerProductByDotP
 	EXPECT_EQ(result.hits.front().node_id, nodes.back());
 	snapshot.reset();
 	backend->close();
+}
+
+TEST_F(RelocatableStorageBackendVectorMetricTest, TrainsAndQueriesAHighDimensionalPqIndex) {
+	auto backend = openBackend();
+	const auto vector = [](const size_t dimensions, const size_t hotCoordinate) {
+		std::vector<graph::PropertyValue> values;
+		values.reserve(dimensions);
+		for (size_t coordinate = 0U; coordinate < dimensions; ++coordinate) {
+			values.emplace_back(coordinate == hotCoordinate ? 1.0 : 0.0);
+		}
+		return graph::PropertyValue(std::move(values));
+	};
+	constexpr size_t dimensions = 24U;
+	const std::vector<uint64_t> nodes = backend->createLogicalNodes(
+			{{{"Embedding"}, {{"value", vector(dimensions, 0U)}}},
+			 {{"Embedding"}, {{"value", vector(dimensions, 1U)}}},
+			 {{"Embedding"}, {{"value", vector(dimensions, 2U)}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	static_cast<void>(backend->createLogicalNodeVectorIndex(
+			{"high_dimensional_embedding", "Embedding", "value", static_cast<uint32_t>(dimensions), "l2"}));
+
+	const LogicalGraphVectorTrainingResult trained =
+			backend->trainLogicalVector({"high_dimensional_embedding", 16U, 16U});
+	ASSERT_TRUE(trained.trained);
+	EXPECT_FALSE(trained.reused_existing_generation);
+	EXPECT_EQ(trained.vector_count, nodes.size());
+
+	auto snapshot = backend->openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	LogicalGraphVectorSearchRequest request;
+	request.index_name = "high_dimensional_embedding";
+	request.query_vector.assign(dimensions, 0.0F);
+	request.query_vector.front() = 1.0F;
+	request.top_k = 1U;
+	request.mode = LogicalGraphVectorSearchMode::LGVSM_AUTO;
+	request.maximum_mapping_entries = 16U;
+	request.maximum_raw_vector_reads = 16U;
+	request.candidate_search_budget = 3U;
+	request.candidate_refinement_budget = 3U;
+	const LogicalGraphVectorSearchResult result = snapshot->searchLogicalVector(request);
+	ASSERT_EQ(result.hits.size(), 1U);
+	EXPECT_TRUE(result.stats.used_pq);
+	EXPECT_EQ(result.hits.front().node_id, nodes.front());
+	snapshot.reset();
+
+	// A dimension that is not divisible by the preferred subspace count remains
+	// valid: training falls back to one subspace instead of rejecting a legal
+	// Vector schema or publishing a malformed codebook.
+	constexpr size_t primeDimensions = 17U;
+	const std::vector<uint64_t> primeNodes = backend->createLogicalNodes(
+			{{{"PrimeEmbedding"}, {{"value", vector(primeDimensions, 0U)}}},
+			 {{"PrimeEmbedding"}, {{"value", vector(primeDimensions, 1U)}}}});
+	ASSERT_EQ(primeNodes.size(), 2U);
+	static_cast<void>(backend->createLogicalNodeVectorIndex(
+			{"prime_dimensional_embedding", "PrimeEmbedding", "value", static_cast<uint32_t>(primeDimensions), "l2"}));
+	EXPECT_TRUE(backend->trainLogicalVector({"prime_dimensional_embedding", 16U, 16U}).trained);
+
+	snapshot = backend->openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	request.index_name = "prime_dimensional_embedding";
+	request.query_vector.assign(primeDimensions, 0.0F);
+	request.query_vector.front() = 1.0F;
+	request.top_k = 1U;
+	request.candidate_search_budget = 2U;
+	request.candidate_refinement_budget = 2U;
+	const LogicalGraphVectorSearchResult primeResult = snapshot->searchLogicalVector(request);
+	ASSERT_EQ(primeResult.hits.size(), 1U);
+	EXPECT_TRUE(primeResult.stats.used_pq);
+	EXPECT_EQ(primeResult.hits.front().node_id, primeNodes.front());
+	snapshot.reset();
+	backend->close();
+}
+
+TEST_F(RelocatableStorageBackendVectorMetricTest, ReadsTrainedAdjacencyInStrictReadOnlyModeWithoutChangingTheFile) {
+	auto writer = openBackend();
+	const std::vector<uint64_t> nodes = writer->createLogicalNodes(
+			{{{"Embedding"}, {{"value", vectorValue(1.0, 0.0)}}},
+			 {{"Embedding"}, {{"value", vectorValue(0.0, 1.0)}}},
+			 {{"Embedding"}, {{"value", vectorValue(2.0, 0.0)}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	static_cast<void>(writer->createLogicalNodeVectorIndex({"embedding_read_only", "Embedding", "value", 2U, "l2"}));
+	ASSERT_TRUE(writer->trainLogicalVector({"embedding_read_only", 16U, 16U}).trained);
+	writer->close();
+	const std::vector<char> before = databaseBytes();
+	ASSERT_FALSE(before.empty());
+
+	RelocatableStorageBackendOptions readOnlyOptions = options();
+	readOnlyOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+	readOnlyOptions.verify_integrity_on_open = true;
+	RelocatableStorageBackend reader(std::move(readOnlyOptions));
+	ASSERT_NO_THROW(reader.open());
+	auto snapshot = reader.openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	LogicalGraphVectorSearchRequest request = exactRequest("embedding_read_only");
+	request.top_k = 1U;
+	request.mode = LogicalGraphVectorSearchMode::LGVSM_AUTO;
+	request.candidate_search_budget = 3U;
+	request.candidate_refinement_budget = 3U;
+	const LogicalGraphVectorSearchResult result = snapshot->searchLogicalVector(request);
+	ASSERT_EQ(result.hits.size(), 1U);
+	EXPECT_TRUE(result.stats.used_pq);
+	EXPECT_EQ(result.hits.front().node_id, nodes.front());
+	snapshot.reset();
+	reader.close();
+
+	EXPECT_EQ(databaseBytes(), before);
 }
 
 TEST_F(RelocatableStorageBackendVectorMetricTest, KeepsCosinePqLookupIntermediateNormsInDoublePrecision) {

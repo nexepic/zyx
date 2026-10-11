@@ -21,7 +21,7 @@ Methods that cannot return a `Result` throw `std::exception` (or its subclasses)
 |--------|-----------------|
 | `Database::open()` | File I/O error, corrupt header |
 | `Database::openIfExists()` | File does not exist, corrupt header |
-| `Transaction::commit()` | WAL sync failure, storage flush failure |
+| `Transaction::commit()` | Native data write, Superblock publication, or storage sync failure |
 | `Transaction::rollback()` | Storage I/O error during undo |
 
 ```cpp
@@ -78,7 +78,7 @@ try {
 
     tx.commit();
 } catch (const std::exception& e) {
-    // Lifecycle error (WAL sync, storage failure, etc.)
+    // Lifecycle error (native publication or storage failure, etc.)
     std::cerr << "System error: " << e.what() << std::endl;
 }
 ```

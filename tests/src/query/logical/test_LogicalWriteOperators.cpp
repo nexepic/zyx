@@ -156,6 +156,17 @@ TEST_F(LogicalCreateEdgeTest, BasicConstruction) {
     EXPECT_EQ(ce.getEdgeType(), "KNOWS");
     EXPECT_EQ(ce.getSourceVar(), "n");
     EXPECT_EQ(ce.getTargetVar(), "m");
+	EXPECT_EQ(ce.getDirection(), "out");
+}
+
+TEST_F(LogicalCreateEdgeTest, PreservesIncomingDirectionAcrossClone) {
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	LogicalCreateEdge ce("r", "KNOWS", props, "left", "right", nullptr, "in");
+	EXPECT_EQ(ce.getDirection(), "in");
+	auto cloned = ce.clone();
+	auto *copy = dynamic_cast<LogicalCreateEdge *>(cloned.get());
+	ASSERT_NE(copy, nullptr);
+	EXPECT_EQ(copy->getDirection(), "in");
 }
 
 TEST_F(LogicalCreateEdgeTest, OutputVariablesNonEmptyVariable) {
@@ -297,6 +308,19 @@ TEST_F(LogicalDeleteTest, InvalidChildIndex) {
     EXPECT_THROW(del.detachChild(1), std::logic_error);
 }
 
+TEST_F(LogicalDeleteTest, ReplacesAndDetachesItsOnlyChild) {
+    LogicalDelete del({"n"}, false, std::make_unique<LogicalNodeScan>("original"));
+
+    std::unique_ptr<LogicalOperator> detached = del.detachChild(0);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(detached->getOutputVariables(), std::vector<std::string>({"original"}));
+    EXPECT_TRUE(del.getChildren().empty());
+
+    del.setChild(0, std::make_unique<LogicalNodeScan>("replacement"));
+    ASSERT_EQ(del.getChildren().size(), 1U);
+    EXPECT_EQ(del.getOutputVariables(), std::vector<std::string>({"replacement"}));
+}
+
 // =============================================================================
 // LogicalSet
 // =============================================================================
@@ -366,6 +390,28 @@ TEST_F(LogicalSetTest, Clone) {
     ASSERT_EQ(cs->getItems().size(), 2u);
     EXPECT_NE(cs->getItems()[0].expression, nullptr);
     EXPECT_EQ(cs->getItems()[1].expression, nullptr);
+}
+
+TEST_F(LogicalSetTest, TransfersAndClonesItsOptionalChild) {
+    std::vector<LogicalSetItem> items;
+    items.push_back({SetActionType::LSET_PROPERTY, "n", "age", makeLiteralExpr(25)});
+    LogicalSet set(std::move(items), std::make_unique<LogicalNodeScan>("n"));
+
+    ASSERT_EQ(set.getChildren().size(), 1U);
+    EXPECT_NE(set.getChildren().front(), nullptr);
+    auto cloned = set.clone();
+    const auto *clonedSet = dynamic_cast<const LogicalSet *>(cloned.get());
+    ASSERT_NE(clonedSet, nullptr);
+    ASSERT_EQ(clonedSet->getChildren().size(), 1U);
+    EXPECT_NE(clonedSet->getChildren().front(), nullptr);
+    EXPECT_NE(clonedSet->getItems().front().expression, nullptr);
+    EXPECT_NE(clonedSet->getItems().front().expression.get(), set.getItems().front().expression.get());
+
+    std::unique_ptr<LogicalOperator> child = set.detachChild(0U);
+    ASSERT_NE(child, nullptr);
+    EXPECT_TRUE(set.getChildren().empty());
+    set.setChild(0U, std::move(child));
+    ASSERT_EQ(set.getOutputVariables(), std::vector<std::string>{"n"});
 }
 
 TEST_F(LogicalSetTest, InvalidChildIndex) {
@@ -438,6 +484,26 @@ TEST_F(LogicalRemoveTest, Clone) {
     ASSERT_EQ(cr->getItems().size(), 2u);
     EXPECT_EQ(cr->getItems()[0].type, LogicalRemoveActionType::LREM_PROPERTY);
     EXPECT_EQ(cr->getItems()[1].type, LogicalRemoveActionType::LREM_LABEL);
+}
+
+TEST_F(LogicalRemoveTest, TransfersAndClonesItsOptionalChild) {
+    std::vector<LogicalRemoveItem> items;
+    items.push_back({LogicalRemoveActionType::LREM_PROPERTY, "n", "age"});
+    LogicalRemove remove(std::move(items), std::make_unique<LogicalNodeScan>("n"));
+
+    ASSERT_EQ(remove.getChildren().size(), 1U);
+    EXPECT_NE(remove.getChildren().front(), nullptr);
+    auto cloned = remove.clone();
+    const auto *clonedRemove = dynamic_cast<const LogicalRemove *>(cloned.get());
+    ASSERT_NE(clonedRemove, nullptr);
+    ASSERT_EQ(clonedRemove->getChildren().size(), 1U);
+    EXPECT_NE(clonedRemove->getChildren().front(), nullptr);
+
+    std::unique_ptr<LogicalOperator> child = remove.detachChild(0U);
+    ASSERT_NE(child, nullptr);
+    EXPECT_TRUE(remove.getChildren().empty());
+    remove.setChild(0U, std::move(child));
+    ASSERT_EQ(remove.getOutputVariables(), std::vector<std::string>{"n"});
 }
 
 TEST_F(LogicalRemoveTest, InvalidChildIndex) {
@@ -536,6 +602,20 @@ TEST_F(LogicalMergeNodeTest, InvalidChildIndex) {
     EXPECT_THROW(mn.detachChild(1), std::logic_error);
 }
 
+TEST_F(LogicalMergeNodeTest, ReplacesAndDetachesItsOnlyChild) {
+    std::unordered_map<std::string, graph::PropertyValue> matchProps;
+    LogicalMergeNode mn("n", {}, matchProps, {}, {}, std::make_unique<LogicalNodeScan>("original"));
+
+    std::unique_ptr<LogicalOperator> detached = mn.detachChild(0);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(detached->getOutputVariables(), std::vector<std::string>({"original"}));
+    EXPECT_TRUE(mn.getChildren().empty());
+
+    mn.setChild(0, std::make_unique<LogicalNodeScan>("replacement"));
+    ASSERT_EQ(mn.getChildren().size(), 1U);
+    EXPECT_EQ(mn.getOutputVariables(), std::vector<std::string>({"replacement", "n"}));
+}
+
 TEST_F(LogicalMergeNodeTest, ToString) {
     std::unordered_map<std::string, graph::PropertyValue> matchProps;
     LogicalMergeNode mn("n", {}, matchProps, {}, {});
@@ -623,6 +703,21 @@ TEST_F(LogicalMergeEdgeTest, InvalidChildIndex) {
 
     EXPECT_THROW(me.setChild(1, nullptr), std::out_of_range);
     EXPECT_THROW(me.detachChild(1), std::out_of_range);
+}
+
+TEST_F(LogicalMergeEdgeTest, ReplacesAndDetachesItsOnlyChild) {
+    std::unordered_map<std::string, graph::PropertyValue> matchProps;
+    LogicalMergeEdge me("n", "r", "m", "KNOWS", "OUT", matchProps, {}, {},
+                        std::make_unique<LogicalNodeScan>("original"));
+
+    std::unique_ptr<LogicalOperator> detached = me.detachChild(0);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(detached->getOutputVariables(), std::vector<std::string>({"original"}));
+    EXPECT_TRUE(me.getChildren().empty());
+
+    me.setChild(0, std::make_unique<LogicalNodeScan>("replacement"));
+    ASSERT_EQ(me.getChildren().size(), 1U);
+    EXPECT_EQ(me.getOutputVariables(), std::vector<std::string>({"replacement", "r"}));
 }
 
 TEST_F(LogicalMergeEdgeTest, ToString) {

@@ -52,8 +52,8 @@ namespace graph::storage {
 	void SuperblockFile::initializeNew(const Superblock &initial) {
 		const SuperblockPair::SlotBytes encoded = SuperblockCodec::encode(initial);
 		std::lock_guard lock(mutex_);
-		writeSlotLocked(0, encoded);
-		writeSlotLocked(1, encoded);
+		writeSlotLocked(0, encoded, initial.generation);
+		writeSlotLocked(1, encoded, initial.generation);
 
 		// Reserve the immutable bootstrap region before any physical slot is allocated.
 		const std::byte zero{};
@@ -84,16 +84,16 @@ namespace graph::storage {
 		}
 
 		// Ensure every candidate root written through this I/O instance is durable before it becomes reachable.
-		io_->sync();
+		io_->sync(StorageIOSyncKind::SIOSK_DATA_FENCE);
 		const uint8_t targetSlot = inactiveSlotLocked(slots);
 		if (failpoint == BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE) {
 			io_->writeAt(slotOffset(targetSlot), encoded.data(), TORN_HEADER_WRITE_BYTES);
-			io_->sync();
+			io_->sync(StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE);
 			throw BootstrapPublishInterrupted("injected crash during durable inactive relocatable superblock write");
 		}
 
-		writeSlotLocked(targetSlot, encoded);
-		io_->sync();
+		writeSlotLocked(targetSlot, encoded, candidate.generation);
+		io_->sync(StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE);
 		if (failpoint == BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE) {
 			throw BootstrapPublishInterrupted("injected crash after durable inactive relocatable superblock write");
 		}
@@ -115,7 +115,10 @@ namespace graph::storage {
 	SuperblockPair::Slots SuperblockFile::readSlotsLocked() const {
 		SuperblockPair::Slots slots{};
 		for (uint8_t slot = 0; slot < slots.size(); ++slot) {
-			const size_t bytesRead = io_->readAt(slotOffset(slot), slots[slot].data(), slots[slot].size());
+			// A Superblock is a self-authenticating control record. Read it outside
+			// this handle's page cache so a separately opened writer is observable
+			// before a stale transaction decides whether it can rebase.
+			const size_t bytesRead = io_->readAtSequential(slotOffset(slot), slots[slot].data(), slots[slot].size());
 			if (bytesRead != slots[slot].size()) {
 				throwSuperblockFileError(FormatError::FERR_BUFFER_TOO_SMALL,
 										 "relocatable superblock file bootstrap is truncated");
@@ -139,8 +142,12 @@ namespace graph::storage {
 		return first->generation < second->generation ? 0 : 1;
 	}
 
-	void SuperblockFile::writeSlotLocked(uint8_t slot, const SuperblockPair::SlotBytes &bytes) const {
-		io_->writeAt(slotOffset(slot), bytes.data(), bytes.size());
+	void SuperblockFile::writeSlotLocked(uint8_t slot, const SuperblockPair::SlotBytes &bytes,
+										   Generation generation) const {
+		// A control-record write invalidates cached views before the direct I/O.
+		// This prevents a failed short Superblock write from being replayed later
+		// as a complete dirty Buffer Pool page.
+		io_->writeControlRecord({slotOffset(slot), generation.value()}, 0U, bytes);
 	}
 
 } // namespace graph::storage

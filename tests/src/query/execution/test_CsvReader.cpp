@@ -221,3 +221,40 @@ TEST_F(CsvReaderTest, RejectsInvalidQuotedRecordsAndResourceBoundExhaustion) {
 																 .maximum_field_bytes = 8U});
 	EXPECT_THROW(static_cast<void>(columnReader.nextRow()), std::runtime_error);
 }
+
+TEST_F(CsvReaderTest, RejectsInvalidConstructionArgumentsBeforeOpeningTheFile) {
+	const auto path = createTempFile("value\n");
+	const CsvReaderLimits valid{.maximum_record_bytes = 16U, .maximum_columns = 2U, .maximum_field_bytes = 8U};
+
+	EXPECT_THROW(CsvReader(path, "", valid), std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, "123456789", valid), std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, "\"", valid), std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, "\n", valid), std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, ",", {.maximum_record_bytes = 0U, .maximum_columns = 2U,
+											 .maximum_field_bytes = 1U}),
+			 std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, ",", {.maximum_record_bytes = 2U, .maximum_columns = 0U,
+											 .maximum_field_bytes = 1U}),
+			 std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, ",", {.maximum_record_bytes = 2U, .maximum_columns = 2U,
+											 .maximum_field_bytes = 0U}),
+			 std::invalid_argument);
+	EXPECT_THROW(CsvReader(path, ",", {.maximum_record_bytes = 2U, .maximum_columns = 2U,
+											 .maximum_field_bytes = 3U}),
+			 std::invalid_argument);
+}
+
+TEST_F(CsvReaderTest, HandlesCrLfAndRejectsMalformedQuotedOrOversizedRecords) {
+	auto crlf = createTempFile("\"last\"\r\n");
+	CsvReader crlfReader(crlf);
+	EXPECT_EQ(crlfReader.nextRow(), (std::vector<std::string>{"last"}));
+
+	auto trailingData = createTempFile("\"quoted\"trailing\n");
+	CsvReader trailingDataReader(trailingData);
+	EXPECT_THROW(static_cast<void>(trailingDataReader.nextRow()), std::runtime_error);
+
+	auto oversizedRecord = createTempFile("12345\n");
+	CsvReader recordReader(oversizedRecord, ",", {.maximum_record_bytes = 4U, .maximum_columns = 2U,
+												  .maximum_field_bytes = 4U});
+	EXPECT_THROW(static_cast<void>(recordReader.nextRow()), std::runtime_error);
+}

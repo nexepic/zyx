@@ -14,7 +14,9 @@
 #include "graph/storage/relocatable/metadata/StateRecord.hpp"
 
 namespace graph::storage {
-
+	// State records hold native internal control-plane state. The caller supplies
+	// physical capacity policy; this store owns only authenticated record/page
+	// publication through the State Directory.
 	struct StateRecordStoreOptions {
 		PhysicalSlotId first_slot{};
 		PhysicalSlotId last_slot{};
@@ -27,8 +29,10 @@ namespace graph::storage {
 		[[nodiscard]] bool usesMetadataStore(const RelocatableMetadataStore &metadata) const {
 			return &metadata_ == &metadata && pages_.usesMetadataStore(metadata);
 		}
-
-		[[nodiscard]] StateLocation ensure(const StateRecord &record, const StateRecordStoreOptions &options);
+		// Inserts a new State record or atomically replaces the same durable State
+		// ID. Replacements keep a stable State location when the encoded payload
+		// fits the existing slot; otherwise they fail before publication.
+		[[nodiscard]] StateLocation upsert(const StateRecord &record, const StateRecordStoreOptions &options);
 		[[nodiscard]] StateRecord read(const MetadataSnapshotPin &snapshot, uint64_t stateId) const;
 
 	private:

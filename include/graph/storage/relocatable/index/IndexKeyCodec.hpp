@@ -36,6 +36,8 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encodeValue(const PropertyValue &value);
 		[[nodiscard]] static std::vector<std::byte> encodeComposite(std::span<const PropertyValue> values);
+		[[nodiscard]] static std::optional<std::vector<std::byte>>
+		tryEncodeComposite(std::span<const PropertyValue> values);
 		[[nodiscard]] static std::vector<std::byte> encodeEntryKey(const PropertyValue &value, uint64_t entityId);
 		[[nodiscard]] static std::vector<std::byte>
 		encodeCompositeEntryKey(std::span<const PropertyValue> values, uint64_t entityId);

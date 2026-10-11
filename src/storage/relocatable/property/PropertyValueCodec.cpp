@@ -113,6 +113,68 @@ namespace graph::storage {
 
 		void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth);
 
+		[[nodiscard]] size_t checkedAdd(size_t left, size_t right, const char *message) {
+			if (right > std::numeric_limits<size_t>::max() - left) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
+			}
+			return left + right;
+		}
+
+		[[nodiscard]] size_t encodedValueSize(const PropertyValue &value, uint32_t depth);
+
+		[[nodiscard]] size_t encodedPayloadSize(const PropertyValue &value, uint32_t depth) {
+			return std::visit(
+					[depth]<typename T>(const T &argument) -> size_t {
+						if constexpr (std::is_same_v<T, std::monostate>) {
+							return 0U;
+						} else if constexpr (std::is_same_v<T, bool>) {
+							return 1U;
+						} else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double>) {
+							return sizeof(uint64_t);
+						} else if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, PropertyValue::Bytes>) {
+							requireU32Size(argument.size(), "Property value payload is too large");
+							return checkedAdd(sizeof(uint32_t), argument.size(), "Property value payload size overflowed");
+						} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
+							requireU32Size(argument.size(), "Property list has too many elements");
+							size_t result = sizeof(uint32_t);
+							for (const PropertyValue &entry: argument) {
+								result = checkedAdd(result, encodedValueSize(entry, depth + 1U),
+														"Property list payload size overflowed");
+							}
+							return result;
+						} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
+							requireU32Size(argument.size(), "Property map has too many entries");
+							size_t result = sizeof(uint32_t);
+							for (const auto &[key, entry]: argument) {
+								requireU32Size(key.size(), "Property map key is too large");
+								result = checkedAdd(result, sizeof(uint32_t), "Property map payload size overflowed");
+								result = checkedAdd(result, key.size(), "Property map payload size overflowed");
+								result = checkedAdd(result, encodedValueSize(entry, depth + 1U),
+														"Property map payload size overflowed");
+							}
+							return result;
+						} else if constexpr (std::is_same_v<T, TemporalDate>) {
+							return sizeof(uint32_t);
+						} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+							return sizeof(uint64_t);
+						} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+							return sizeof(uint64_t) * 3U;
+						} else {
+							static_assert(std::is_same_v<T, void>, "Unhandled PropertyValue variant");
+						}
+					},
+					value.getVariant());
+		}
+
+		[[nodiscard]] size_t encodedValueSize(const PropertyValue &value, uint32_t depth) {
+			if (depth > MAX_NESTING_DEPTH) {
+				fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
+			}
+			const size_t payloadSize = encodedPayloadSize(value, depth);
+			requireU32Size(payloadSize, "Property value payload is too large");
+			return checkedAdd(6U, payloadSize, "Property value wire size overflowed");
+		}
+
 		void encodePayload(std::vector<std::byte> &payload, const PropertyValue &value, uint32_t depth) {
 			std::visit([&payload, depth]<typename T>(const T &argument) {
 				if constexpr (std::is_same_v<T, std::monostate>) {
@@ -240,6 +302,10 @@ namespace graph::storage {
 		}
 
 	} // namespace
+
+	size_t CanonicalPropertyValueCodec::encodedSize(const PropertyValue &value) {
+		return encodedValueSize(value, 0U);
+	}
 
 	void CanonicalPropertyValueCodec::append(std::vector<std::byte> &bytes, const PropertyValue &value) {
 		encodeValue(bytes, value, 0U);

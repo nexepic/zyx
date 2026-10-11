@@ -79,7 +79,7 @@ Latency/throughput benchmarks report four columns:
 
 Each benchmark also reports a **stage breakdown** (`[Stage avg ms/op]`) showing the average time spent in each query engine stage (parsing, planning, execution, etc.), sorted by cost.
 
-Storage benchmarks use a different output format: `Nodes | Edges | Props | DB(MB) | WAL(MB) | Total(MB) | Bytes/Node`, and export results to `/tmp/zyx_storage_profile.csv`.
+Storage benchmarks report the native database file only: `Nodes | Edges | Props | DB(MB) | Bytes/Node`, and export results to `/tmp/zyx_storage_profile.csv`.
 
 ## Benchmark Reference
 
@@ -145,9 +145,9 @@ Each scenario has a `single_thread` and `multi_thread` variant (using `hardware_
 |---------|---------------|
 | `concurrency.query.*` | NodeScan + Filter operator parallelization |
 | `concurrency.sort.*` | SortOperator parallelization on 10000 nodes |
-| `concurrency.batch_insert.*` | `FileStorage::save()` parallel preparation |
-| `concurrency.pq_train.*` | ProductQuantizer parallel subspace training (1000 × 128d) |
-| `concurrency.vector_search.*` | DiskANN re-ranking + PQ distance table parallelization (1000 × 768d) |
+| `concurrency.batch_insert.*` | Native logical write planning and single-file COW generation publication |
+| `concurrency.pq_train.*` | Native bounded PQ training (1000 × 128d) |
+| `concurrency.vector_search.*` | Native adjacency traversal, PQ scoring, and bounded refinement (1000 × 768d) |
 | `concurrency.read.*` | Snapshot isolation under concurrent reader threads via `std::thread` |
 
 ### Storage Benchmarks
@@ -170,6 +170,18 @@ Measure on-disk footprint after `db.save()`.
 3. **Use `PROFILE` and `EXPLAIN`** — Combine benchmark numbers with query plan analysis to understand *why* a query is fast or slow.
 4. **Check index hit rates** — A query may appear slow not because of the engine, but because an expected index is missing.
 5. **Compare across versions with identical setup** — Same compiler, same data distribution, same hardware. Anything else introduces confounding variables.
+
+## Regression Baseline Contract
+
+When using the graph-comparison runner's `--baseline-summary` p50 regression gate, pass the `summary.csv` from an
+earlier runner result. The runner reads its sibling `environment.json` and compares the dataset manifest, database set,
+scale/seed, profile, execution mode, warmup/iterations, thread contract, and platform field by field. A missing,
+non-object JSON, or any mismatch fails `baseline_environment_provenance`; Git commit is intentionally excluded because
+the purpose is to compare revisions under one frozen configuration.
+
+This proves only that the historical and current runs are comparable, not that production performance is approved. A
+release gate still records target hardware, frozen production-scale input, reviewed thresholds, Vector
+exactness/Recall/QPS/build/update/recovery results, and macOS/Linux/Windows acceptance evidence.
 
 ## Code Locations
 

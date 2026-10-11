@@ -67,7 +67,7 @@ namespace {
 
 	CatalogLeafPage leafPage(Generation generation, LogSequenceNumber lsn) {
 		CatalogLeafPage page;
-		page.page_id = PageId(100);
+		page.page_id = MetadataPageId(100);
 		page.minimum_segment_id = SegmentId(1);
 		page.maximum_segment_id = SegmentId(2);
 		page.generation = generation;
@@ -78,7 +78,7 @@ namespace {
 
 	AllocatorLeafPage freeSpaceLeaf(Generation generation, LogSequenceNumber lsn) {
 		AllocatorLeafPage page;
-		page.page_id = PageId(102);
+		page.page_id = MetadataPageId(102);
 		page.first_slot = PhysicalSlotId(1);
 		page.slot_count = 10;
 		page.generation = generation;
@@ -90,10 +90,20 @@ namespace {
 	LocationLeafPage locationLeaf(Generation generation, LogSequenceNumber lsn) {
 		LocationLeafPage page;
 		page.directory_type = MetadataDirectoryType::MDT_PAGE;
-		page.page_id = PageId(103);
+		page.page_id = MetadataPageId(103);
 		page.generation = generation;
 		page.committed_lsn = lsn;
 		page.entries = {{1, SegmentId(22), Generation(1), 1, 1}};
+		return page;
+	}
+
+	MetadataPageRouteLeafPage metadataRouteLeaf(Generation generation, LogSequenceNumber lsn) {
+		MetadataPageRouteLeafPage page;
+		page.page_id = MetadataPageId(104U);
+		page.generation = generation;
+		page.committed_lsn = lsn;
+		page.routes = {{MetadataPageId(1U), pageRef(2U, 1U, generation.value())},
+					   {MetadataPageId(7U), pageRef(2U, 2U, generation.value())}};
 		return page;
 	}
 
@@ -148,7 +158,7 @@ TEST_F(RelocatableMetadataPageFileTest, PersistsRootAndLeafBeforePublishingTheBo
 	CatalogRadixPage root;
 	root.kind = CatalogRadixPageKind::CRPK_ROOT;
 	root.level = 0;
-	root.page_id = PageId(101);
+	root.page_id = MetadataPageId(101);
 	root.generation = Generation(1);
 	root.committed_lsn = LogSequenceNumber(11);
 	root.children[0] = leafRef;
@@ -236,6 +246,70 @@ TEST_F(RelocatableMetadataPageFileTest, ValidatesAndForwardsDemandReadHintsBefor
 	EXPECT_EQ(io->bufferPoolStats().misses, prefetched.misses);
 }
 
+TEST_F(RelocatableMetadataPageFileTest, PersistsTypedMetadataRoutesWithoutUsingLocationLeaves) {
+	const Superblock current = superblock(2U, 2U);
+	MetadataPageFile pages(io, current);
+	const PhysicalPageRef routeReference = pageRef(1U, 1U, 2U);
+	const MetadataPageRouteLeafPage expected = metadataRouteLeaf(Generation(2U), LogSequenceNumber(2U));
+	pages.writeMetadataPageRouteLeaf(routeReference, expected);
+	io->sync();
+	EXPECT_EQ(pages.readMetadataPageRouteLeaf(routeReference).routes, expected.routes);
+	expectFormatError([&] { static_cast<void>(pages.readLocationLeaf(routeReference)); },
+					  FormatError::FERR_CHECKSUM_MISMATCH);
+
+	MetadataPageRouteLeafPage wrongGeneration = expected;
+	wrongGeneration.generation = Generation(1U);
+	expectFormatError([&] { pages.writeMetadataPageRouteLeaf(routeReference, wrongGeneration); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPageFileTest, AuthenticatesTypedRoutedPagesBeforeLocalRelocation) {
+	const Superblock current = superblock(1U, 1U);
+	MetadataPageFile pages(io, current);
+	const PhysicalPageRef catalogReference = pageRef(1U, 1U, 1U);
+	const PhysicalPageRef allocatorReference = pageRef(1U, 2U, 1U);
+	const PhysicalPageRef locationReference = pageRef(1U, 3U, 1U);
+	const PhysicalPageRef routeReference = pageRef(1U, 4U, 1U);
+	const CatalogLeafPage catalog = leafPage(Generation(1U), LogSequenceNumber(1U));
+	const AllocatorLeafPage allocator = freeSpaceLeaf(Generation(1U), LogSequenceNumber(1U));
+	const LocationLeafPage location = locationLeaf(Generation(1U), LogSequenceNumber(1U));
+
+	pages.writeCatalogLeaf(catalogReference, catalog);
+	pages.writeAllocatorLeaf(allocatorReference, allocator);
+	pages.writeLocationLeaf(locationReference, location);
+	pages.writeMetadataPageRouteLeaf(routeReference, metadataRouteLeaf(Generation(1U), LogSequenceNumber(1U)));
+	io->sync();
+
+	EXPECT_TRUE(pages.supportsRoutedMetadataPageRelocation(catalogReference, catalog.page_id, current));
+	EXPECT_TRUE(pages.supportsRoutedMetadataPageRelocation(allocatorReference, allocator.page_id, current));
+	EXPECT_TRUE(pages.supportsRoutedMetadataPageRelocation(locationReference, location.page_id, current));
+	expectFormatError(
+			[&] { static_cast<void>(pages.supportsRoutedMetadataPageRelocation(catalogReference, MetadataPageId(99U), current)); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { static_cast<void>(pages.supportsRoutedMetadataPageRelocation(routeReference, MetadataPageId(104U), current)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageFileTest, PersistsThePhysicalPageDirectoryBootstrapWithItsGeneration) {
+	const Superblock current = superblock(2U, 2U);
+	MetadataPageFile pages(io, current);
+	const PhysicalPageRef headerReference = pageRef(1U, 1U, 2U);
+	PageDirectoryBootstrap expected;
+	expected.generation = Generation(2U);
+	expected.committed_lsn = LogSequenceNumber(2U);
+	expected.data_page_directory_root = pageRef(2U, 1U, 2U);
+	expected.metadata_page_directory_root = pageRef(2U, 2U, 2U);
+	pages.writePageDirectoryBootstrap(headerReference, expected);
+	io->sync();
+	EXPECT_EQ(pages.readPageDirectoryBootstrap(headerReference), expected);
+
+	PageDirectoryBootstrap wrongGeneration = expected;
+	wrongGeneration.generation = Generation(1U);
+	expectFormatError([&] { pages.writePageDirectoryBootstrap(headerReference, wrongGeneration); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataPageFileTest, RejectsInvalidReferencesGenerationMismatchesAndTruncatedPages) {
 	const Superblock valid = superblock(1, 1);
 	EXPECT_THROW(static_cast<void>(MetadataPageFile(nullptr, valid)), std::invalid_argument);
@@ -265,7 +339,7 @@ TEST_F(RelocatableMetadataPageFileTest, RejectsInvalidReferencesGenerationMismat
 	CatalogRadixPage root;
 	root.kind = CatalogRadixPageKind::CRPK_ROOT;
 	root.level = 1;
-	root.page_id = PageId(1);
+	root.page_id = MetadataPageId(1);
 	root.generation = Generation(2);
 	root.committed_lsn = LogSequenceNumber(1);
 	expectFormatError([&] { pages.writeCatalogRadix(leafRef, root); }, FormatError::FERR_INVALID_STATE);

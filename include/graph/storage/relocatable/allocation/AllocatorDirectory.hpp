@@ -29,6 +29,9 @@ namespace graph::storage {
 		AllocatorDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator);
 
 		[[nodiscard]] bool isAllocated(const Superblock &superblock, PhysicalSlotId slot) const;
+		// Reads allocator state from a candidate batch, including its unpublished
+		// logical metadata routes.
+		[[nodiscard]] bool isAllocatedForMutation(const MetadataWriteBatch &batch, PhysicalSlotId slot) const;
 		[[nodiscard]] std::optional<PhysicalSlotId>
 		findFirstFree(const Superblock &superblock, PhysicalSlotId firstSlot, PhysicalSlotId lastSlot) const;
 
@@ -52,6 +55,9 @@ namespace graph::storage {
 
 		// Adds one slot transition to an unpublished multi-root COW batch.
 		void prepareSetAllocated(MetadataWriteBatch &batch, PhysicalSlotId slot, bool allocated);
+		// After all same-batch allocator mutations have converged, rewrites the
+		// final root with stable logical child identities for bootstrap publication.
+		void prepareLogicalRootChildren(MetadataWriteBatch &batch);
 		[[nodiscard]] std::optional<PhysicalSlotId>
 		prepareReserveFirstFree(MetadataWriteBatch &batch, PhysicalSlotId firstSlot, PhysicalSlotId lastSlot);
 

@@ -24,6 +24,7 @@
 
 namespace graph::storage {
 	class PropertyCollectionRootStore;
+	class StateRecordStore;
 
 	class BTreePageStore;
 
@@ -152,6 +153,7 @@ namespace graph::storage {
 		friend class BTreePageStore;
 		friend class TransactionBTreeOverlay;
 		friend class PropertyCollectionRootStore;
+		friend class StateRecordStore;
 		void prepareAppendPages(const CatalogEntry &pool, std::span<const SharedPagePoolPreparedAppend> pages,
 								std::span<PageLocation> locations, LogSequenceNumber checkpointLsn) const;
 		void prepareNewPoolPages(const CatalogEntry &pool, std::span<const SharedPagePoolPreparedAppend> pages,
@@ -163,6 +165,10 @@ namespace graph::storage {
 								  std::span<PageLocation> replacementLocations, std::span<PageLocation> appendLocations,
 								  LogSequenceNumber checkpointLsn,
 								  std::span<const SharedPagePoolPreparedRetirement> retirements = {}) const;
+		void prepareCrossPoolReplacementPages(const CatalogEntry &destinationPool,
+											  std::span<const SharedPagePoolPreparedCrossPoolReplacement> replacements,
+											  std::span<PageLocation> replacementLocations,
+											  LogSequenceNumber checkpointLsn) const;
 		struct OwnerFreeSpaceIndex {
 			struct PageInfo {
 				PageLocation location;
@@ -191,7 +197,8 @@ namespace graph::storage {
 		// caller can therefore complete a selection even if a concurrent
 		// publication invalidates that cache entry.
 		[[nodiscard]] PoolFreeSpaceIndex buildFreeSpaceIndex(const MetadataSnapshotPin &snapshot,
-														  SegmentId segmentId) const;
+															 SegmentId segmentId) const;
+		void cacheFreeSpaceIndexIfNotOlder(SegmentId segmentId, PoolFreeSpaceIndex rebuilt) const;
 		[[nodiscard]] std::optional<PageLocation> findBestFitLocation(const MetadataSnapshotPin &snapshot,
 																	  SegmentId segmentId,
 																	  uint32_t minimumContiguousFreeBytes,

@@ -49,7 +49,7 @@ namespace graph::storage {
 
 		[[nodiscard]] bool isKnownSegmentKind(uint16_t rawKind) {
 			return rawKind >= static_cast<uint16_t>(SegmentKind::SGK_ENTITY_PAGE_POOL) &&
-				   rawKind <= static_cast<uint16_t>(SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL);
+				   rawKind <= static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH);
 		}
 
 		[[nodiscard]] bool isKnownSegmentState(uint16_t rawState) {
@@ -236,9 +236,16 @@ namespace graph::storage {
 			throwCatalogPageError(FormatError::FERR_CHECKSUM_MISMATCH,
 								  "relocatable Catalog page payload checksum does not match");
 		}
+		const size_t usedPayloadBytes = static_cast<size_t>(entryCount) * RSS_CATALOG_ENTRY_BYTES;
+		if (std::ranges::any_of(payload.subspan(usedPayloadBytes), [](std::byte value) {
+				return value != std::byte{};
+			})) {
+			throwCatalogPageError(FormatError::FERR_RESERVED_BITS,
+								  "relocatable Catalog page has nonzero unused payload bytes");
+		}
 
 		CatalogLeafPage page;
-		page.page_id = PageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
+		page.page_id = MetadataPageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
 		page.minimum_segment_id = SegmentId(LittleEndianCodec::readU64(bytes, MINIMUM_SEGMENT_ID_OFFSET));
 		page.maximum_segment_id = SegmentId(LittleEndianCodec::readU64(bytes, MAXIMUM_SEGMENT_ID_OFFSET));
 		page.generation = Generation(LittleEndianCodec::readU64(bytes, GENERATION_OFFSET));
