@@ -10,6 +10,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
+#include <functional>
 #include <optional>
 #include <span>
 #include <utility>
@@ -19,6 +22,26 @@
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 
 namespace graph::storage {
+
+	// Called for each present selected entry before its variable-sized payload
+	// is read or decoded. Bytes include the token and canonical value encoding,
+	// not container capacity or decoded-object overhead. Throw to reject the
+	// read; the callback and its accounting remain owned by the caller.
+	using SelectedPropertyReadAdmission = std::function<void(size_t)>;
+
+	// Adapt incremental encoded-entry charges to an absolute source-batch total.
+	// Create one callback per read so released prior batches are not charged again.
+	[[nodiscard]] inline SelectedPropertyReadAdmission makeSelectedPropertyBatchAdmission(
+		const std::function<void(size_t)> &admission) {
+		if (!admission) return {};
+		return [admission, bytes = size_t{0U}](size_t next) mutable {
+			if (next > (std::numeric_limits<size_t>::max)() - bytes)
+				throw std::overflow_error("selected Property source batch byte count overflowed");
+			bytes += next;
+			admission(bytes);
+		};
+	}
+
 
 	constexpr uint32_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC = 0x4552595AU; // Little-endian bytes: ZYRE
 	constexpr uint16_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION = 2;
@@ -61,10 +84,15 @@ namespace graph::storage {
 
 	// The owner-keyed Property Directory is the sole durable identity. The codec
 	// records no redundant Property ID per Node or Edge collection root.
+	// Full decode validates the directory/tokens, then admits every encoded
+	// entry (token plus value) before constructing decoded Property payloads.
+	// The callback does not cover input bytes or directory/entry-slot capacity.
 	class EntityPropertyCollectionRootCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(const PropertyCollectionRoot &root);
-		[[nodiscard]] static PropertyCollectionRoot decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static PropertyCollectionRoot decode(std::span<const std::byte> bytes,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		// Decodes and validates only the fixed owner header. The returned root has
 		// no entries and is intended for storage-side ownership authentication.
 		[[nodiscard]] static PropertyCollectionRoot decodeOwner(std::span<const std::byte> bytes);
@@ -74,18 +102,22 @@ namespace graph::storage {
 		[[nodiscard]] static std::optional<PropertyCollectionRootEntry>
 		decodeSelected(std::span<const std::byte> bytes, uint32_t keyToken);
 		// Checks token presence without decoding the Property payload. This is used
-		// by cardinality-only operators such as COUNT(property).
-		[[nodiscard]] static bool containsToken(std::span<const std::byte> bytes, uint32_t keyToken);
+		// for key existence; requireNonNull also checks the value header for COUNT.
+		[[nodiscard]] static bool containsToken(std::span<const std::byte> bytes, uint32_t keyToken, bool requireNonNull = false);
 		// Decodes several strictly increasing Property tokens from one authenticated
 		// owner payload. The result is token-major and preserves one nullopt per
 		// absent token, so callers can share header and offset-directory validation.
 		[[nodiscard]] static std::vector<std::optional<PropertyCollectionRootEntry>>
-		decodeSelected(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens);
+		decodeSelected(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		// Validates the payload directory once and returns both its entry count and
 		// the requested values. Index candidate verification needs both facts; the
 		// combined contract avoids decoding the same offset directory twice.
 		[[nodiscard]] static std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
-		decodeSelectedAndCount(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens);
+		decodeSelectedAndCount(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		[[nodiscard]] static size_t entryCount(std::span<const std::byte> bytes);
 	};
 
@@ -95,11 +127,14 @@ namespace graph::storage {
 	class EntityPropertyLargeValuePayloadCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(std::span<const PropertyCollectionRootEntry> entries);
-		[[nodiscard]] static std::vector<PropertyCollectionRootEntry> decode(std::span<const std::byte> bytes);
+		[[nodiscard]] static std::vector<PropertyCollectionRootEntry> decode(std::span<const std::byte> bytes,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		// Validates the header and token/offset directory. The input may contain
 		// only the header plus directory; entry payload bytes are not required.
 		[[nodiscard]] static std::vector<EntityPropertyLargeValueEntryLocation>
-		decodeDirectory(std::span<const std::byte> headerAndDirectory);
+		decodeDirectory(std::span<const std::byte> headerAndDirectory,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		// Decodes one complete entry range returned by decodeDirectory.
 		[[nodiscard]] static PropertyCollectionRootEntry
 		decodeEntry(std::span<const std::byte> bytes, uint32_t expectedToken);
@@ -109,10 +144,14 @@ namespace graph::storage {
 		decodeSelected(std::span<const std::byte> bytes, uint32_t keyToken);
 		[[nodiscard]] static bool containsToken(std::span<const std::byte> bytes, uint32_t keyToken);
 		[[nodiscard]] static std::vector<std::optional<PropertyCollectionRootEntry>>
-		decodeSelected(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens);
+		decodeSelected(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		// LargeValue counterpart of the owner-keyed combined selected/count read.
 		[[nodiscard]] static std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
-		decodeSelectedAndCount(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens);
+		decodeSelectedAndCount(std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		[[nodiscard]] static size_t entryCount(std::span<const std::byte> bytes);
 		[[nodiscard]] static bool hasMagic(std::span<const std::byte> bytes);
 	};

@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -237,4 +238,35 @@ TEST(InitialBTreeBuilderTest, RejectsEveryPubliclyConstructibleMalformedPlanNode
 	InitialBTreePlan outOfRangeRightChild = source;
 	outOfRangeRightChild.nodes[outOfRangeRightChild.root_ordinal].children[1U] = outOfRangeRightChild.root_ordinal;
 	expectMalformedInternal(std::move(outOfRangeRightChild));
+}
+
+TEST(InitialBTreeBuilderTest, SizePlanningMatchesCanonicalPackedBoundariesAndMaterializesAllValues) {
+	constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
+			2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+	for (const auto layout: {BTreeLeafValueLayout::BLVL_U64, BTreeLeafValueLayout::BLVL_EMPTY}) {
+		std::vector<BTreePageEntry> source;
+		for (size_t i = 0U; i < 1800U; ++i) {
+			auto key = keyFor(i + 1U);
+			key.resize(8U + (i % 37U) * 13U, static_cast<std::byte>(i % 251U));
+			source.push_back({std::move(key), layout == BTreeLeafValueLayout::BLVL_EMPTY ? 0U :
+					(i % 3U == 0U ? std::numeric_limits<uint64_t>::max() : i + 1U)});
+		}
+		const auto plan = InitialBTreeBuilder::plan(83U, source, layout);
+		const auto pages = InitialBTreeBuilder::materialize(83U, plan, pageIdsFor(plan), generationsFor(plan), LogSequenceNumber(11U));
+		size_t consumed = 0U;
+		for (size_t leaf = 0U; leaf < plan.leaf_count; ++leaf) {
+			const auto actual = pages[leaf].entries();
+			ASSERT_FALSE(actual.empty());
+			ASSERT_LE(consumed + actual.size(), source.size());
+			EXPECT_TRUE(std::equal(actual.begin(), actual.end(), source.begin() + consumed));
+			EXPECT_LE(PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, actual, layout).size(), capacity);
+			consumed += actual.size();
+			if (consumed < source.size()) {
+				auto overfull = actual;
+				overfull.push_back(source[consumed]);
+				EXPECT_GT(PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, overfull, layout).size(), capacity);
+			}
+		}
+		EXPECT_EQ(consumed, source.size());
+	}
 }

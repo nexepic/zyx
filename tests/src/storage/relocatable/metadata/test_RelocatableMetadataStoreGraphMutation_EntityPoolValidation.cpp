@@ -9,6 +9,7 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 #include <array>
 #include <functional>
@@ -342,4 +343,38 @@ TEST_F(RelocatableMetadataStoreTest,
 						{}, LogSequenceNumber(3U), noOpGraphMaterializer, {}));
 			},
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreTest, WriterReadContextRestoresCallerScopeAfterMaterializationFailure) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	auto snapshot = store->openSnapshot();
+	const Superblock before = snapshot.superblock();
+	auto caller = snapshot.readContext();
+	MetadataPageReadContext::Scope callerScope(caller, *io);
+	CatalogSlotReservationRequest reservation;
+	reservation.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID);
+	reservation.kind = SegmentKind::SGK_ENTITY_PAGE_POOL;
+	reservation.owner_id = 17U;
+	reservation.segment_generation = Generation(1U);
+	reservation.state = SegmentState::SGS_SEALED;
+	reservation.require_absent = true;
+	const EntityPageNewPoolBatchRequest request{reservation, PageId(101U), PhysicalSlotId(40U),
+		PhysicalSlotId(40U), {}, {}, PageOwnerKind::POK_ENTITY_LABEL};
+	bool called = false;
+	EXPECT_THROW(static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+		noEntityReplacements, noEntityAppends, std::span(&request, 1U), noPropertyReplacements,
+		noPropertyBatches, noLargeValues, {}, LogSequenceNumber(2U),
+		[&](auto, auto, auto, auto, auto, auto) {
+			called = true;
+			auto *writerContext = MetadataPageReadContext::current(*io);
+			ASSERT_NE(writerContext, nullptr);
+			EXPECT_NE(writerContext, caller.get());
+			EXPECT_TRUE(writerContext->authenticates(before));
+			throw std::runtime_error("injected materializer failure");
+		}, {})), std::runtime_error);
+	EXPECT_TRUE(called);
+	EXPECT_EQ(MetadataPageReadContext::current(*io), caller.get());
+	auto unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock(), before);
+	EXPECT_FALSE(store->findPageLocationOptional(unchanged, PageId(101U)).has_value());
 }

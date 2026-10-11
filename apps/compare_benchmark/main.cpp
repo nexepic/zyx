@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -46,6 +47,7 @@ namespace {
 		std::string scale;
 		std::string profile = std::string(kProfileScan);
 		bool emitProfile = false;
+		bool emitCounters = false;
 		// Scale workloads stay enabled for the standalone benchmark; unit tests can
 		// disable them while retaining the small operational correctness checks.
 		bool includeLargeBatchWorkloads = true;
@@ -118,7 +120,7 @@ namespace {
 
 	void emitProfileEvent(const std::string &workload, const std::string &scale, const std::string &profile,
 						  int iteration, const std::string &phase, double totalTimeMs, uint64_t calls,
-						  int64_t totalValue = 0, uint64_t valueCalls = 0) {
+						  int64_t totalValue = 0, uint64_t valueCalls = 0, int64_t maximumValue = 0) {
 		std::cout << "{\"database\":\"" << kDatabase << "\",\"equivalent_mode\":\"" << kEquivalentMode
 				  << "\",\"event\":\"profile\",\"iteration\":" << iteration << ",\"phase\":\"" << jsonEscape(phase)
 				  << "\",\"profile\":\"" << jsonEscape(profile) << "\",\"scale\":\"" << jsonEscape(scale)
@@ -126,7 +128,7 @@ namespace {
 		if (valueCalls != 0) {
 			const double averageValue = static_cast<double>(totalValue) / static_cast<double>(valueCalls);
 			std::cout << ",\"value_total\":" << totalValue << ",\"value_calls\":" << valueCalls
-					  << ",\"value_avg\":" << averageValue;
+					  << ",\"value_avg\":" << averageValue << ",\"value_max\":" << maximumValue;
 		}
 		std::cout << ",\"workload\":\"" << jsonEscape(workload) << "\"}\n";
 	}
@@ -136,7 +138,7 @@ namespace {
 		for (const auto &[phase, entry]: snapshot) {
 			const double totalMs = static_cast<double>(entry.totalNs) / 1e6;
 			emitProfileEvent(workload, options.scale, options.profile, iteration, phase, totalMs, entry.calls,
-							 entry.totalValue, entry.valueCalls);
+							 entry.totalValue, entry.valueCalls, entry.maximumValue);
 		}
 	}
 
@@ -403,6 +405,7 @@ namespace {
 				{kProfileScan, "aggregation_count_by_group"},
 				{kProfileScan, "topk_property_sort"},
 				{kProfileIndexed, "point_lookup_indexed"},
+				{kProfileIndexed, "point_lookup_missing"},
 				{kProfileIndexed, "property_equality_indexed"},
 				{kProfileIndexed, "property_range_indexed"},
 				{kProfileRetrieval, "point_node_fetch_by_id"},
@@ -862,8 +865,9 @@ namespace {
 	template<typename Fn, typename ValidateFn>
 	auto measureOperation(const Options &options, const std::string &workload, int iteration, Fn &&operation,
 						  ValidateFn &&validate) {
-		if (options.emitProfile) { // ZYX_COV_EXCL_LINE: profile emission is integration-tested through benchmark runs.
-			graph::debug::PerfTrace::setEnabled(true);
+		if (options.emitProfile || options.emitCounters) {
+			graph::debug::PerfTrace::setEnabled(options.emitProfile);
+			graph::debug::PerfTrace::setValueCollectionEnabled(true);
 			graph::debug::PerfTrace::reset();
 		}
 
@@ -872,19 +876,23 @@ namespace {
 			auto value = operation();
 			const auto end = Clock::now();
 			graph::debug::PerfTrace::Snapshot snapshot;
-			if (options.emitProfile) { // ZYX_COV_EXCL_LINE: timing-only profile collection branch.
+			if (options.emitProfile || options.emitCounters) {
 				snapshot = graph::debug::PerfTrace::snapshotAndReset();
 				graph::debug::PerfTrace::setEnabled(false);
 			}
 			const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
 			validate(value);
 			emitSample(workload, options.scale, iteration, latencyMs);
-			if (options.emitProfile) { // ZYX_COV_EXCL_LINE: timing-only profile emission branch.
+			if constexpr (std::is_integral_v<decltype(value)>) {
+			std::cout << "{\"event\":\"result\",\"workload\":\"" << jsonEscape(workload)
+				<< "\",\"iteration\":" << iteration << ",\"value\":" << value << "}\n";
+			}
+			if (options.emitProfile || options.emitCounters) {
 				emitProfileSnapshot(options, workload, iteration, snapshot);
 			}
 			return value;
 		} catch (...) {
-			if (options.emitProfile) { // ZYX_COV_EXCL_LINE: error cleanup mirrors the profiled success path.
+			if (options.emitProfile || options.emitCounters) {
 				[[maybe_unused]] const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
 				graph::debug::PerfTrace::setEnabled(false);
 			}
@@ -1183,6 +1191,8 @@ namespace {
 				}
 			} else if (arg == "--emit-profile") {
 				options.emitProfile = true;
+			} else if (arg == "--emit-counters") {
+				options.emitCounters = true;
 			} else if (arg == "--execution-mode") {
 				options.executionMode = requireValue(arg);
 				if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeOpened &&
@@ -1293,6 +1303,10 @@ namespace {
 		} else if (options.profile == kProfileIndexed) {
 			runQueryWorkload(options, db, loaded, "point_lookup_indexed", [](zyx::Database &queryDb) {
 				return scalarInt(queryDb.execute("MATCH (u:User {id: 'user-000001'}) RETURN count(u)"));
+			});
+			runQueryWorkload(options, db, loaded, "point_lookup_missing", [](zyx::Database &queryDb) {
+				return requireExactCount("point_lookup_missing",
+					scalarInt(queryDb.execute("MATCH (u:User {id: 'missing-user'}) RETURN COUNT(u)")), 0);
 			});
 			runQueryWorkload(options, db, loaded, "property_equality_indexed", [](zyx::Database &queryDb) {
 				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)"));

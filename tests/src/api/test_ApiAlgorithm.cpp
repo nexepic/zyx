@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "ApiTestFixture.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace {
 
@@ -86,6 +87,116 @@ TEST_F(CppApiTest, AlgorithmShortestPath) {
 
 	auto emptyPath = db->getShortestPath(c, a);
 	EXPECT_TRUE(emptyPath.empty());
+}
+
+TEST_F(CppApiTest, PublicTraversalsReadEdgeTopologyWithoutDecodingUnrelatedProperties) {
+	const auto a = db->createNode("A");
+	const auto b = db->createNode("B");
+	const auto c = db->createNode("C");
+	const std::string payload(16U * 1024U, 'x');
+	static_cast<void>(db->createEdge(a, b, "NEXT", {{"payload", payload}}));
+	static_cast<void>(db->createEdge(a, b, "PARALLEL", {{"payload", payload}}));
+	static_cast<void>(db->createEdge(b, b, "LOOP", {{"payload", payload}}));
+	static_cast<void>(db->createEdge(b, c, "NEXT", {{"payload", payload}}));
+	db->save();
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	std::vector<int64_t> visited;
+	db->bfs(a, [&](const zyx::Node &node) {
+		visited.push_back(node.id);
+		return true;
+	});
+	const auto path = db->getShortestPath(a, c);
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+	EXPECT_EQ(visited, (std::vector<int64_t>{a, b, c}));
+	ASSERT_EQ(path.size(), 3U);
+	EXPECT_EQ(path[0].id, a);
+	EXPECT_EQ(path[1].id, b);
+	EXPECT_EQ(path[2].id, c);
+	EXPECT_EQ(path[1].labels, (std::vector<std::string>{"B"}));
+	ASSERT_TRUE(trace.contains("native_graph.read.adjacency_topology_scan_calls"));
+	EXPECT_GT(trace.at("native_graph.read.adjacency_topology_scan_calls").totalValue, 0);
+	EXPECT_FALSE(trace.contains("native_graph.read.property_full_decode"));
+}
+
+TEST_F(CppApiTest, ShortestPathDefersNodePropertiesAndScattersSortedPathBatches) {
+	const std::string payload(16U * 1024U, 'n');
+	const auto b = db->createNode("Middle", {{"payload", payload}, {"name", "B"}});
+	const auto c = db->createNode("End", {{"payload", payload}, {"name", "C"}});
+	const auto a = db->createNode("Start", {{"payload", payload}, {"name", "A"}});
+	const auto dead = db->createNode("Dead", {{"payload", payload}});
+	static_cast<void>(db->createEdge(a, dead, "FIRST"));
+	static_cast<void>(db->createEdge(a, b, "NEXT"));
+	static_cast<void>(db->createEdge(b, c, "NEXT"));
+	db->save();
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const auto path = db->getShortestPath(a, c);
+	const auto pathTrace = graph::debug::PerfTrace::snapshotAndReset();
+	const auto missing = db->getShortestPath(c, a);
+	const auto missingTrace = graph::debug::PerfTrace::snapshotAndReset();
+	const auto depthLimited = db->getShortestPath(a, c, 0);
+	const auto depthTrace = graph::debug::PerfTrace::snapshotAndReset();
+	const auto same = db->getShortestPath(b, b);
+	static_cast<void>(graph::debug::PerfTrace::snapshotAndReset());
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+	ASSERT_EQ(path.size(), 3U);
+	EXPECT_EQ(path[0].id, a);
+	EXPECT_EQ(path[1].id, b);
+	EXPECT_EQ(path[2].id, c);
+	EXPECT_EQ(path[0].label, "Start");
+	EXPECT_EQ(path[1].label, "Middle");
+	EXPECT_EQ(path[2].label, "End");
+	for (const auto &node: path) EXPECT_EQ(std::get<std::string>(node.properties.at("payload")), payload);
+	ASSERT_TRUE(pathTrace.contains("native_graph.read.property_full_decode"));
+	EXPECT_EQ(pathTrace.at("native_graph.read.property_full_decode").totalValue, 3);
+	ASSERT_TRUE(pathTrace.contains("native_graph.read.node_sorted_batch_entries"));
+	// This counter includes only fixed records absent from the snapshot session;
+	// search has already cached some path identities before complete batching.
+	EXPECT_GT(pathTrace.at("native_graph.read.node_sorted_batch_entries").totalValue, 0);
+	EXPECT_LE(pathTrace.at("native_graph.read.node_sorted_batch_entries").totalValue, 3);
+	EXPECT_TRUE(missing.empty());
+	EXPECT_TRUE(depthLimited.empty());
+	EXPECT_FALSE(missingTrace.contains("native_graph.read.property_full_decode"));
+	EXPECT_FALSE(depthTrace.contains("native_graph.read.property_full_decode"));
+	ASSERT_EQ(same.size(), 1U);
+	EXPECT_EQ(same.front().id, b);
+	EXPECT_EQ(same.front().label, "Middle");
+	EXPECT_EQ(std::get<std::string>(same.front().properties.at("payload")), payload);
+}
+
+TEST_F(CppApiTest, ShortestPathPreservesDescendingLogicalOrderAcrossMaterializationBatches) {
+	constexpr size_t count = 513U;
+	std::vector<zyx::Value> ordinals;
+	ordinals.reserve(count);
+	for (size_t row = 0U; row < count; ++row) ordinals.emplace_back(int64_t(row));
+	auto transaction = db->beginBulkTransaction();
+	const auto ids = transaction.createNodesColumnar("Path", count, {{"ordinal", ordinals}});
+	ASSERT_EQ(ids.size(), count);
+	std::vector<int64_t> sources;
+	std::vector<int64_t> targets;
+	for (size_t row = count - 1U; row > 0U; --row) {
+		sources.push_back(ids[row]);
+		targets.push_back(ids[row - 1U]);
+	}
+	ASSERT_EQ(transaction.createEdgesColumnar("NEXT", sources, targets).size(), count - 1U);
+	transaction.commit();
+	const auto path = db->getShortestPath(ids.back(), ids.front(), int(count));
+	ASSERT_EQ(path.size(), count);
+	for (size_t row = 0U; row < count; ++row) {
+		EXPECT_EQ(path[row].id, ids[count - 1U - row]);
+		EXPECT_EQ(path[row].label, "Path");
+		EXPECT_EQ(std::get<int64_t>(path[row].properties.at("ordinal")), int64_t(count - 1U - row));
+	}
 }
 
 TEST_F(CppApiTest, AlgorithmBFS) {

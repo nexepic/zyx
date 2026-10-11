@@ -7,6 +7,8 @@
  **/
 
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 #include <limits>
 #include <stdexcept>
@@ -143,11 +145,20 @@ namespace graph::storage {
 	}
 
 	CatalogLeafPage MetadataPageFile::readCatalogLeaf(PhysicalPageRef reference, BufferPoolReadHint hint) const {
-		CatalogLeafPage page = CatalogLeafPageCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<CatalogLeafPage>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.catalog");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.catalog", 1);
+		CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "relocatable Catalog leaf generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, page, page.entries.capacity() * sizeof(page.entries.front()));
 		return page;
 	}
 
@@ -194,7 +205,10 @@ namespace graph::storage {
 
 	MetadataRadixPage MetadataPageFile::readMetadataRadix(PhysicalPageRef reference, const Superblock &routeContext,
 																								  BufferPoolReadHint hint) const {
-		static_cast<void>(SuperblockCodec::encode(routeContext));
+		if (auto *context = MetadataPageReadContext::current(*io_);
+			context == nullptr || !context->authenticates(routeContext)) {
+			static_cast<void>(SuperblockCodec::encode(routeContext));
+		}
 		if (routeContext.data_region_offset != data_region_offset_) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 									   "logical metadata radix route context changes its data-region layout");
@@ -206,11 +220,20 @@ namespace graph::storage {
 
 	MetadataRadixPage MetadataPageFile::readMetadataRadixUnresolved(PhysicalPageRef reference,
 																	BufferPoolReadHint hint) const {
-		MetadataRadixPage page = MetadataRadixPageCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<MetadataRadixPage>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.radix");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.radix", 1);
+		MetadataRadixPage page = MetadataRadixPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "relocatable metadata radix generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, page);
 		return page;
 	}
 
@@ -345,10 +368,8 @@ namespace graph::storage {
 		return destination;
 	}
 
-	void MetadataPageFile::resolveLogicalRadixChildren(MetadataRadixPage &page, const Superblock &routeContext) const {
-		if (!page.logical_children_enabled) {
-			return;
-		}
+	void MetadataPageFile::resolveLogicalMetadataReferences(const Superblock &routeContext,
+			std::span<const MetadataPageId> ids, std::span<PhysicalPageRef> results) const {
 		if (!routeContext.usesPageDirectoryBootstrap() || !routeContext.page_directory_root.isValid()) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "logical metadata radix page has no physical bootstrap route context");
@@ -372,12 +393,64 @@ namespace graph::storage {
 			routeSuperblock.checkpoint_lsn = bootstrap.committed_lsn;
 		}
 		MetadataPageRouteDirectory routes(const_cast<MetadataPageFile &>(*this));
-		for (size_t index = 0; index < page.logical_children.size(); ++index) {
-			const MetadataPageId childId = page.logical_children[index];
-			if (!childId.isValid()) {
-				continue;
+		routes.findMany(routeSuperblock, bootstrap.metadata_page_directory_root, ids, results);
+	}
+
+	void MetadataPageFile::resolveMetadataRadixChildren(const MetadataRadixPage &page,
+			const Superblock &routeContext, std::span<const uint32_t> childIndices,
+			std::span<PhysicalPageRef> results) const {
+		if (auto *context = MetadataPageReadContext::current(*io_);
+			context == nullptr || !context->authenticates(routeContext)) {
+			static_cast<void>(SuperblockCodec::encode(routeContext));
+		}
+		if (routeContext.data_region_offset != data_region_offset_ ||
+			routeContext.database_id != superblock_.database_id ||
+			childIndices.size() != results.size() || childIndices.size() > RSS_CATALOG_RADIX_FANOUT) {
+			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+					"selected metadata radix resolution has an invalid context or result shape");
+		}
+		for (const uint32_t index : childIndices) {
+			if (index >= RSS_CATALOG_RADIX_FANOUT) {
+				throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+						"selected metadata radix child index is outside the page");
 			}
-			page.children[index] = routes.find(routeSuperblock, bootstrap.metadata_page_directory_root, childId);
+		}
+		if (childIndices.empty()) return;
+		debug::PerfTrace::addValue("native_graph.read.radix_requested_children", childIndices.size());
+		std::array<MetadataPageId, RSS_CATALOG_RADIX_FANOUT> ids{};
+		std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> references{};
+		size_t count = 0U;
+		if (page.logical_children_enabled) {
+			for (const uint32_t index : childIndices) {
+				if (page.logical_children[index].isValid()) ids[count++] = page.logical_children[index];
+			}
+			// Authenticate even an empty selected slot on a logical page. The full
+			// API also requires its bootstrap route to be valid in this case.
+			resolveLogicalMetadataReferences(routeContext, std::span(ids).first(count),
+					std::span(references).first(count));
+		}
+		debug::PerfTrace::addValue("native_graph.read.radix_resolved_children", count);
+		size_t resolved = 0U;
+		for (size_t position = 0U; position < childIndices.size(); ++position) {
+			const uint32_t index = childIndices[position];
+			results[position] = !page.logical_children_enabled ? page.children[index] :
+					(page.logical_children[index].isValid() ? references[resolved++] : PhysicalPageRef{});
+		}
+	}
+
+	void MetadataPageFile::resolveLogicalRadixChildren(MetadataRadixPage &page, const Superblock &routeContext) const {
+		if (!page.logical_children_enabled) return;
+		std::array<MetadataPageId, RSS_CATALOG_RADIX_FANOUT> childIds{};
+		std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> childReferences{};
+		size_t childCount = 0U;
+		for (const MetadataPageId childId : page.logical_children) {
+			if (childId.isValid()) childIds[childCount++] = childId;
+		}
+		resolveLogicalMetadataReferences(routeContext, std::span(childIds).first(childCount),
+				std::span(childReferences).first(childCount));
+		size_t resolvedIndex = 0U;
+		for (size_t index = 0; index < page.logical_children.size(); ++index) {
+			if (page.logical_children[index].isValid()) page.children[index] = childReferences[resolvedIndex++];
 		}
 		page.logical_children_resolved = true;
 	}
@@ -391,11 +464,20 @@ namespace graph::storage {
 	}
 
 	AllocatorLeafPage MetadataPageFile::readAllocatorLeaf(PhysicalPageRef reference, BufferPoolReadHint hint) const {
-		AllocatorLeafPage page = AllocatorLeafPageCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<AllocatorLeafPage>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.allocator");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.allocator", 1);
+		AllocatorLeafPage page = AllocatorLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "relocatable free-space leaf generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, page);
 		return page;
 	}
 
@@ -408,11 +490,20 @@ namespace graph::storage {
 	}
 
 	LocationLeafPage MetadataPageFile::readLocationLeaf(PhysicalPageRef reference, BufferPoolReadHint hint) const {
-		LocationLeafPage page = LocationLeafPageCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<LocationLeafPage>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.location");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.location", 1);
+		LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "relocatable location leaf generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, page, page.entries.capacity() * sizeof(page.entries.front()));
 		return page;
 	}
 
@@ -427,11 +518,20 @@ namespace graph::storage {
 
 	MetadataPageRouteLeafPage MetadataPageFile::readMetadataPageRouteLeaf(PhysicalPageRef reference,
 																		  BufferPoolReadHint hint) const {
-		MetadataPageRouteLeafPage page = MetadataPageRouteLeafCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<MetadataPageRouteLeafPage>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.route_leaf");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.route_leaf", 1);
+		MetadataPageRouteLeafPage page = MetadataPageRouteLeafCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "metadata PageId route leaf generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, page, page.routes.capacity() * sizeof(page.routes.front()));
 		return page;
 	}
 
@@ -446,11 +546,20 @@ namespace graph::storage {
 
 	PageDirectoryBootstrap MetadataPageFile::readPageDirectoryBootstrap(PhysicalPageRef reference,
 																		BufferPoolReadHint hint) const {
-		PageDirectoryBootstrap bootstrap = PageDirectoryBootstrapCodec::decode(readPage(reference, hint));
+		validateReadHint(hint);
+		auto *readContext = MetadataPageReadContext::current(*io_);
+		if (readContext != nullptr) {
+			if (auto cached = readContext->find<PageDirectoryBootstrap>(reference)) return std::move(*cached);
+		}
+		const auto bytes = readPage(reference, hint);
+		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.bootstrap");
+		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.bootstrap", 1);
+		PageDirectoryBootstrap bootstrap = PageDirectoryBootstrapCodec::decode(bytes);
 		if (bootstrap.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "Page Directory bootstrap generation does not match its physical reference");
 		}
+		if (readContext != nullptr) readContext->put(reference, bootstrap);
 		return bootstrap;
 	}
 
@@ -461,12 +570,14 @@ namespace graph::storage {
 
 	std::array<std::byte, RSS_PAGE_SIZE> MetadataPageFile::readPage(PhysicalPageRef reference,
 																	BufferPoolReadHint hint) const {
+		debug::ScopedPerfTimer acquisitionTimer("native_graph.read.metadata_acquisition");
 		validateReadHint(hint);
 		std::array<std::byte, RSS_PAGE_SIZE> bytes{};
 		const size_t bytesRead = io_->readAt(pageKey(reference), bytes.data(), bytes.size(), hint);
 		if (bytesRead != bytes.size()) {
 			throwMetadataPageError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable metadata page is truncated");
 		}
+		debug::PerfTrace::addValue("native_graph.read.metadata_pages_read", 1);
 		return bytes;
 	}
 

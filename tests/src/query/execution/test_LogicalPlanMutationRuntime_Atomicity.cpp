@@ -10,6 +10,41 @@
 
 namespace graph::query {
 
+	TEST(LogicalPlanMutationRuntimeTest, BackendReadControlsRejectGuardAndConstraintSourceGrowthBeforePublication) {
+		for (const std::string query: {
+			"CREATE (n:Guarded {name: 'new'}) RETURN n.name AS value",
+			"MATCH (n:Guarded {name: 'old'}) SET n.name = 'changed' RETURN n.name AS value",
+			"MATCH (n:Guarded {name: 'old'}) REMOVE n.name RETURN n",
+			"MATCH (n:Guarded {name: 'old'}) DELETE n",
+			"MERGE (n:Guarded {name: 'new'}) RETURN n.name AS value"}) {
+			SCOPED_TRACE(query);
+			for (bool memory: {false, true}) {
+				auto backend = std::make_shared<TestLogicalGraph>();
+				backend->addNode({"Guarded"}, {{"name", PropertyValue("old")}});
+				LogicalReadExecutionOptions options;
+				options.bounds.maximum_materialized_bytes = 4096U;
+				QueryEngine engine(backend, backend, options);
+				size_t resident = 0U;
+				QueryGuard guard(0, 1, [&] { return resident; });
+				QueryContext context; context.guard = &guard;
+				backend->read_control_hook = [&](const storage::LogicalGraphMutationReadControl &control) {
+					ASSERT_TRUE(control.checkpoint);
+					ASSERT_TRUE(control.property_admission);
+					if (memory) { resident = 2U * 1024U * 1024U; control.checkpoint(); }
+					else control.property_admission(4097U);
+				};
+				if (memory) EXPECT_THROW(static_cast<void>(engine.execute(query, context)), QueryMemoryExceededException);
+				else EXPECT_THROW(static_cast<void>(engine.execute(query, context)), std::runtime_error);
+				EXPECT_EQ(backend->read_control_calls, 1U);
+				EXPECT_EQ(backend->graph().mutation_batches, 0U);
+				EXPECT_EQ(backend->countNodesWithLabel("Guarded"), 1U);
+				backend->read_control_hook = {}; resident = 0U;
+				EXPECT_NO_THROW(static_cast<void>(engine.execute(query, context)));
+				EXPECT_EQ(backend->graph().mutation_batches, 1U);
+			}
+		}
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, ForeachFailureAfterStagingDoesNotPublishAnyMutation) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		QueryEngine engine(backend, backend);

@@ -73,12 +73,18 @@ namespace graph::storage {
 		return key;
 	}
 
-	std::vector<std::byte> AdjacencyKeyCodec::lowerBound(GlobalAdjacencyDirection direction, uint64_t nodeId) {
+	std::array<std::byte, RSS_GLOBAL_ADJACENCY_KEY_BYTES>
+	AdjacencyKeyCodec::lowerBoundFixed(GlobalAdjacencyDirection direction, uint64_t nodeId) {
 		validateDirectionAndNode(direction, nodeId);
-		std::vector<std::byte> bytes(RSS_GLOBAL_ADJACENCY_KEY_BYTES);
+		std::array<std::byte, RSS_GLOBAL_ADJACENCY_KEY_BYTES> bytes{};
 		bytes[0] = static_cast<std::byte>(direction);
 		writeBigEndianU64(bytes, 1U, nodeId);
 		return bytes;
+	}
+
+	std::vector<std::byte> AdjacencyKeyCodec::lowerBound(GlobalAdjacencyDirection direction, uint64_t nodeId) {
+		const auto bytes = lowerBoundFixed(direction, nodeId);
+		return {bytes.begin(), bytes.end()};
 	}
 
 	bool AdjacencyKeyCodec::matchesNodeDirection(std::span<const std::byte> bytes,

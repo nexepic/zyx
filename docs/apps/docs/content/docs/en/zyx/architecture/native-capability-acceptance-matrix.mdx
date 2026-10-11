@@ -23,6 +23,66 @@ projectOrder: 1
 | `HOLD_FOR_PORT` | The legacy tree still supplies behavior, tests, a public API, or a required consumer. | Never delete it. Port the behavior and test first. |
 | `UNSUPPORTED` | Not part of the supported public contract. | Record the decision and remove only after C0 proves there is no public consumer. |
 
+## Historical Capability Checkpoint (2026-09-24)
+
+The [new optimization plan](optimization) owns current performance work and percentages. The dated evidence below does not describe the current working tree or require redoing completed work.
+
+This matrix answers whether each public capability has a native owner and named
+contract evidence. It does not report the production-read optimization
+percentage, benchmark speedup, or release readiness. The current native
+correctness core has owners and minimum focused evidence for Stage 0-10, P0,
+and C0-C7, while final scale, fault, sanitizer, binding, coverage, and
+cross-platform gates remain open. The separate [Optimization Strategy](optimization)
+has been replaced by the new roadmap; the historical 34% no longer describes current performance work.
+
+The latest recorded macOS runtime evidence is a focused six-suite checkpoint of
+`306/306`, with the direct-edge result at that time `77/77`; both predate the
+latest read-only correlated-subquery complete-Entity change and the current
+lazy-`EntityRef` Vector procedure change. The direct-edge `78/78` result is also
+pre-Vector-change evidence. The last verified
+`QueryEngineLogicalBackendBoundaryTest.*` boundary suite passed `57/57` before
+the current Vector change, with `VectorProcedure*` at `8/8`; neither result
+validates the current uncommitted working tree. The focused `ShortestPath*` and
+Vector boundaries were last recorded at `3/3` and `8/8`, respectively. The earlier
+shape-aware projection/adapter checkpoint passed `15/15`; the current
+`LogicalGraphProjectionTest.*` run passes `14/14` after the one-pass staging
+change. These counts are not
+repository-wide totals and do not close any capability row by themselves.
+The latest full quick run predates the current uncommitted runtime changes;
+historical full-suite, coverage, and benchmark artifacts remain audit history
+until they are rerun on the current working tree. A capability row may therefore
+remain `IN_PROGRESS` after its native behavior has focused tests: the remaining
+contract, lifecycle, resource, recovery, performance, binding, or platform
+gates must still be recorded explicitly.
+
+A separate focused `ShortestPath*` boundary group passes 3/3 for the native
+`algo.shortestPath` procedure's final path-Node materialization through one
+bounded logical-snapshot batch. The native
+`gds.shortestPath.dijkstra.stream` path uses the same sorted batch helper and
+restores algorithm order after storage-order reads. The helper validates
+cardinality/identity and charges duplicate path positions to the materialized
+byte bound. BFS still uses topology/existence reads, and adapters without an
+existence probe keep the explicit complete-read fallback. This is a
+consumer-level optimization checkpoint only; it does not close the broader
+procedure Property-expression, GDS, overlay, maintenance, or cross-platform
+acceptance rows.
+
+The current Vector procedure implementation is a pending lazy-`EntityRef`
+checkpoint. It is intended to validate hits and apply filtering/projection on
+references, keep selected and complete Property caches distinct, and perform
+complete Node reads only for surviving final Node outputs. Surviving IDs are
+read in sorted bounded batches and restored to search-score order; scalar-only
+and Property-only outputs should avoid complete Node reads. The previous
+`VectorProcedure*` `8/8` result is pre-change evidence and must be rerun after
+compilation. Procedure Property-expression batching and the broader procedure
+acceptance row remain open.
+
+The shape-aware GDS projection evidence has the same boundary: the earlier
+projection/adapter run passed `15/15`, while the current
+`LogicalGraphProjectionTest.*` run passes `14/14` after one-pass Node-ID
+retention. Both are focused correctness evidence, not a capability-row close,
+current full-suite result, or performance approval.
+
 ## Acceptance Record Rules
 
 Every capability record must identify all of the following before a legacy source or test can be retired:
@@ -44,7 +104,7 @@ New Cypher clauses, functions, procedures, C++ API operations, Driver ABI operat
 | Cypher parsing, logical plans, read/mutation runtime, `EXPLAIN`/`PROFILE` | Cypher parser, logical operator tree, logical read/mutation runtimes, bounded Catalog-backed statistics provider | `tests/src/query/parser/cypher/`; `tests/src/query/execution/`; `test_QueryEngineLogicalBackend.cpp`; `RelocatableStorageBackendSchemaTest.ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes`; `RelocatableStorageBackendSchemaTest.ResolvesScalarNodeRangesThroughPinnedIndexes`; `RelocatableIndexKeyCodecTest`; `LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide`; `QueryEngineLogicalBackendBoundaryTest.UsesCatalogAdjacencyCardinalityToOrderCartesianTraversalInput`; `LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCanonicalConjunctiveRangeLookup`; `LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCompositeRangeLookupAndRetainsPredicateValidation`; `RelocatableStorageBackendTest.StreamedBulkEdgeCommitPublishesAndSurvivesReopen` | `IN_PROGRESS`: cacheable read plans reach logical optimization, whose native provider reads one snapshot/reopen-safe System Catalog cardinality pair per planning operation and emits a conservative Node-scan bound without a planner-time graph scan. A single-hop traversal uses `ceil(edge_count / node_count)` and a saturating global-Edge upper bound for adjacency cardinality; zero Nodes with an Edge, an unknown direction, or an invalid plan shape yields no estimate. Safe literal equalities joined by `AND` are combined into one scan; unique/node-key, scalar, and complete composite exact lookups run through snapshot-pinned native trees and revalidate every entry. Property-left literal lower and upper bounds joined by `AND` on one property are canonicalized into one interval while retaining the Filter; distinct properties, reversed operands, `NULL`, and pre-existing scan predicates remain unchanged. A literal equality prefix plus a distinct trailing range property selects only a same-order composite index; one-sided and open/closed intervals page from a snapshot-pinned encoded prefix, recompute complete keys, and return Node-ID order. No matching index safely falls back, an unknown property returns an empty answer, non-indexable input returns `nullopt`, and stale/malformed/bound-exceeding selected-tree state fails closed. For a Cartesian Join with two strictly different valid estimates, the smaller input is placed on the runtime-materialized right side; missing, invalid, or tied statistics leave the plan stable. Ordinary and streamed-bulk Edge publication update that pair atomically; partial records fail closed. Remaining pushdown, Vector calibration, benchmarks, coverage, and three-platform evidence remain. |
 | Schema indexes and constraints | `LogicalGraphSchema`, logical schema runtime, System Catalog, native B+Tree and support trees | `test_LogicalPlanSchemaRuntime.cpp`; relocatable schema suites | `IN_PROGRESS`: legacy index/config consumers and cross-platform/recovery gates remain. |
 | Native procedure registry and transaction modes | `NativeProcedureManifest`, `ProcedureRegistry`, `LogicalPlanProcedureRuntime` | `test_NativeProcedureRegistry.cpp`; `test_QueryEngineLogicalBackend.cpp`; `test_RelocatableStorageBackend_ProcedureTransactions.cpp`; `test_LogicalPlanMutationRuntime.cpp`; Vector base-rebuild/native-backend cancellation tests | `IN_PROGRESS`: explicit Vector overlay ownership, its bounded exact fallback, timeout-before-administration-side-effect rejection, cancellation of Vector training before its single atomic publication (including the exact prepared-but-not-published deadline boundary), cancellation of GDS projection without publishing a partial catalog entry, a shared positive result-row bound for administration/GDS output, manifest-cardinality-checked rejection of every autocommit-only procedure in explicit transactions, manifest-cardinality-checked timeout-before-backend-access for every native procedure, and independent `IN TRANSACTIONS` cancellation at the pre-publication boundary are covered. The full cross-procedure cancellation/failure and three-platform matrix remains. |
-| GDS projection catalog and procedures | `LogicalGraphProjection`, `LogicalProjectionCatalog`, strict projection codec | `tests/src/query/gds/`; `test_CypherGds.cpp`; `test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`: `test_CypherGds.cpp` runs project/drop/exists/list/schema, stale detection, projection signatures, selector/weight/orientation validation, and catalog errors through the native `QueryEngine`; `LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes` locks the complete column order and logical output type of all six catalog procedures. The projection builder uses bounded cursors that can report continuation for Nodes and outgoing adjacency; a continuation is rejected rather than silently truncating a supernode. Scale/performance and final public contract comparison remain. |
+| GDS projection catalog and procedures | `LogicalGraphProjection`, `LogicalProjectionCatalog`, strict projection codec | `tests/src/query/gds/`; `test_CypherGds.cpp`; `test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`: `test_CypherGds.cpp` runs project/drop/exists/list/schema, stale detection, projection signatures, selector/weight/orientation validation, and catalog errors through the native `QueryEngine`; `LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes` locks the complete column order and logical output type of all six catalog procedures. The projection builder uses bounded cursors that can report continuation for Nodes and outgoing adjacency; a continuation is rejected rather than silently truncating a supernode. The earlier native shape-aware resumable Node-scan projection/adapter run passes 15/15, and the current one-pass `LogicalGraphProjectionTest.*` suite passes 14/14. These are focused checks only; scale/performance and final public contract comparison remain. |
 | GDS algorithms, including Leiden | `LogicalGraphAlgorithms` over immutable logical projections | `test_LogicalGraphProjection.cpp`; `test_LogicalGdsProcedures.cpp`; `test_CypherGds.cpp`; `benchmarks/leiden/`. Fixed-seed randomized oracles independently check WCC, weighted Dijkstra, PageRank, and the direction-reversal invariance of weakly-undirected Betweenness and Closeness; Leiden checks determinism/modularity across two- and four-worker pools with automatic, serial, bounded, and over-subscribed concurrency caps. Its parallel degree scan is dispatched in batches between caller-thread checkpoints, so workers never invoke a non-thread-safe QueryGuard callback; `leidenModularity` shares complete fail-closed CSR validation with executable algorithms. `LogicalGdsProceduresTest.PreservesAlgorithmProcedureResultColumnOrderAndLogicalValueTypes` additionally locks column order and logical output types for all six stream procedures, including Dijkstra's logical Node. | `IN_PROGRESS`: the native Cypher contract suite now additionally covers public stream result/error behavior for PageRank, WCC, Betweenness, Closeness, Dijkstra, and Leiden. Broader parallel phases, additional adversarial/randomized properties, production baselines, and three-platform evidence remain. |
 | Vector query, training, rebuild, and recovery | Native Raw/PQ/adjacency/manifest stores and maintenance service | relocatable Vector suites; `test_CypherVector.cpp`; `test_RelocatableStorageBackend_ProcedureTransactions.cpp`; `zyx-vector-build-calibrate` / `zyx-vector-calibrate` smoke | `IN_PROGRESS`: explicit transactions own a pinned Vector generation; after a graph-overlay mutation they execute a bounded exact scan of the transaction's final Node view rather than mixing it with stale derived data. A configuration-time guard recursively checks the in-repository include closure rooted at the native core source set and both calibration apps, rejecting every path that reaches legacy Vector core/index/quantization; the macOS smoke proves their native single-file report pipeline. That smoke is not a production baseline; calibration, Recall/QPS, update/recovery, coverage, three-platform evidence, and legacy retirement remain. |
 | Core and public C++ transactions | `graph::Transaction`, `zyx::Transaction`, transaction-owned overlay and GDS catalog | `test_NativeTransaction.cpp`; `test_NativeDatabaseLifecycle.cpp`; `test_RelocatableStorageBackend_ProcedureTransactions.cpp` | `IN_PROGRESS`: an active transaction retains its native backend through wrapper destruction, and `Transaction::execute` rejects a QueryEngine from another Database before either foreign policy/catalog state or the local overlay can be combined. Complete public API behavior mapping and binding validation remain. |

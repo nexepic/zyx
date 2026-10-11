@@ -152,7 +152,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<EntityPropertyLargeValueEntryLocation>
-		decodeLargeValueDirectory(std::span<const std::byte> bytes) {
+		decodeLargeValueDirectory(std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *slotsAdmission = nullptr) {
 			if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
 				throwRootError(FormatError::FERR_BUFFER_TOO_SMALL,
 							   "Entity Property LargeValue payload directory is truncated");
@@ -172,7 +172,7 @@ namespace graph::storage {
 			}
 			const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET);
 			std::vector<EntityPropertyLargeValueEntryLocation> locations;
-			locations.reserve(entryCount);
+			if (slotsAdmission == nullptr) locations.reserve(entryCount);
 			size_t expectedOffset = directoryBytes;
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
@@ -188,13 +188,27 @@ namespace graph::storage {
 					throwRootError(FormatError::FERR_INVALID_HEADER,
 								   "Entity Property LargeValue payload directory is noncanonical");
 				}
-				locations.push_back({token, offset, end - offset});
+				if (slotsAdmission == nullptr) locations.push_back({token, offset, end - offset});
 				expectedOffset = end;
 				previousToken = token;
 			}
 			if (expectedOffset != payloadBytes) {
 				throwRootError(FormatError::FERR_INVALID_HEADER,
 							   "Entity Property LargeValue payload directory leaves trailing bytes");
+			}
+			if (slotsAdmission != nullptr) {
+				if (entryCount > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyLargeValueEntryLocation)) {
+					throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue directory slots overflowed");
+				}
+				(*slotsAdmission)(entryCount * sizeof(EntityPropertyLargeValueEntryLocation));
+				locations.reserve(entryCount);
+				(*slotsAdmission)(locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation));
+				for (uint32_t index = 0U; index < entryCount; ++index) {
+					const size_t base = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + static_cast<size_t>(index) * 8U;
+					const uint32_t offset = LittleEndianCodec::readU32(bytes, base + 4U);
+					const uint32_t end = index + 1U == entryCount ? payloadBytes : LittleEndianCodec::readU32(bytes, base + 12U);
+					locations.push_back({LittleEndianCodec::readU32(bytes, base), offset, end - offset});
+				}
 			}
 			return locations;
 		}
@@ -267,7 +281,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool containsTokenInEntries(const std::span<const std::byte> payload,
-																		 const uint32_t entryCount, const uint32_t keyToken) {
+																		 const uint32_t entryCount, const uint32_t keyToken, const bool requireNonNull) {
 			if (keyToken == 0U) {
 				throwRootError(FormatError::FERR_INVALID_HEADER,
 									"relocatable Property selection requires a nonzero token");
@@ -292,13 +306,38 @@ namespace graph::storage {
 			}
 			const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, lower);
 			static_cast<void>(end);
-			return LittleEndianCodec::readU32(payload, start) == keyToken;
+			if (LittleEndianCodec::readU32(payload, start) != keyToken) return false;
+			return !requireNonNull || !CanonicalPropertyValueCodec::isNullHeader(
+				payload.subspan(start + sizeof(uint32_t), end - start - sizeof(uint32_t)), end - start - sizeof(uint32_t));
 		}
 
-		void decodeEntries(PropertyCollectionRoot &root, std::span<const std::byte> payload, uint32_t entryCount) {
+		void decodeEntries(PropertyCollectionRoot &root, std::span<const std::byte> payload, uint32_t entryCount,
+				const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 			const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
 			validateOffsetDirectory(payload, directoryBytes, entryCount);
+			// Authenticate the entire token sequence before a resource rejection
+			// can hide a later malformed token. Admission is collection-wide and
+			// precedes reserve and all canonical variable-value decoding.
+			if (admission != nullptr || slotsAdmission != nullptr) {
+				uint32_t validatedToken = 0U;
+				for (uint32_t index = 0U; index < entryCount; ++index) {
+					const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
+					const uint32_t token = LittleEndianCodec::readU32(payload, start);
+					if (token == 0U || token <= validatedToken) throwRootError(FormatError::FERR_INVALID_HEADER,
+						"relocatable Property collection root tokens are not strictly ordered");
+					validatedToken = token;
+				}
+				for (uint32_t index = 0U; index < entryCount; ++index) {
+					const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
+					if (admission != nullptr) (*admission)(end - start);
+				}
+			}
+			if (entryCount > std::numeric_limits<size_t>::max() / sizeof(PropertyCollectionRootEntry)) {
+				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property root slot size overflowed");
+			}
+			if (slotsAdmission != nullptr) (*slotsAdmission)(entryCount * sizeof(PropertyCollectionRootEntry));
 			root.entries.reserve(entryCount);
+			if (slotsAdmission != nullptr) (*slotsAdmission)(root.entries.capacity() * sizeof(PropertyCollectionRootEntry));
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
 				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
@@ -348,8 +387,13 @@ namespace graph::storage {
 
 	[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
 	decodeSelectedEntriesValidated(const std::span<const std::byte> payload, const size_t directoryBytes,
-										 const uint32_t entryCount, const std::span<const uint32_t> requestedTokens) {
+										 const uint32_t entryCount, const std::span<const uint32_t> requestedTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr, const SelectedPropertyReadAdmission *slotsAdmission = nullptr) {
+		if (requestedTokens.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<PropertyCollectionRootEntry>))
+			throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "inline selected slots overflowed");
+		if (slotsAdmission) (*slotsAdmission)(requestedTokens.size() * sizeof(std::optional<PropertyCollectionRootEntry>));
 		std::vector<std::optional<PropertyCollectionRootEntry>> result(requestedTokens.size());
+		if (slotsAdmission) (*slotsAdmission)(result.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
 		uint32_t previousToken = 0U;
 		for (size_t requestedIndex = 0U; requestedIndex < requestedTokens.size(); ++requestedIndex) {
 			const uint32_t requestedToken = requestedTokens[requestedIndex];
@@ -383,6 +427,7 @@ namespace graph::storage {
 			if (token != requestedToken) {
 				continue;
 			}
+			if (admission != nullptr) (*admission)(end - start);
 			size_t offset = start + sizeof(uint32_t);
 			PropertyValue value = CanonicalPropertyValueCodec::decodeNext(payload, offset);
 			if (offset != end) {
@@ -396,13 +441,15 @@ namespace graph::storage {
 
 	[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
 	decodeSelectedEntries(const std::span<const std::byte> payload, const uint32_t entryCount,
-										 const std::span<const uint32_t> requestedTokens) {
+										 const std::span<const uint32_t> requestedTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr, const SelectedPropertyReadAdmission *slotsAdmission = nullptr) {
 		const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
 		validateOffsetDirectory(payload, directoryBytes, entryCount);
-		return decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, requestedTokens);
+		return decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, requestedTokens, admission, slotsAdmission);
 	}
 
-	PropertyCollectionRoot EntityPropertyCollectionRootCodec::decode(std::span<const std::byte> bytes) {
+	PropertyCollectionRoot EntityPropertyCollectionRootCodec::decode(std::span<const std::byte> bytes,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
 			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
 		}
@@ -432,7 +479,7 @@ namespace graph::storage {
 		root.owner_entity_id = LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET);
 		root.owner_entity_type = LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET);
 		decodeEntries(root, bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES),
-					  LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET));
+					  LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), admission, slotsAdmission);
 		validateOwnerAndEntries(root);
 		return root;
 	}
@@ -464,7 +511,7 @@ namespace graph::storage {
 	}
 
 	bool EntityPropertyCollectionRootCodec::containsToken(const std::span<const std::byte> bytes,
-																							 const uint32_t keyToken) {
+																							 const uint32_t keyToken, const bool requireNonNull) {
 			if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
 				throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
 			}
@@ -483,12 +530,13 @@ namespace graph::storage {
 		// owner just as selected/full decode does before trusting its directory.
 		static_cast<void>(decodeOwner(bytes));
 		const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
-		return containsTokenInEntries(payload, LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyToken);
+		return containsTokenInEntries(payload, LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyToken, requireNonNull);
 	}
 
 	std::vector<std::optional<PropertyCollectionRootEntry>>
 	EntityPropertyCollectionRootCodec::decodeSelected(const std::span<const std::byte> bytes,
-																			 const std::span<const uint32_t> keyTokens) {
+																			 const std::span<const uint32_t> keyTokens,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
 			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
 		}
@@ -508,12 +556,12 @@ namespace graph::storage {
 			throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root has an invalid owner");
 		}
 		return decodeSelectedEntries(bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES),
-																				 LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyTokens);
+																				 LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyTokens, admission, slotsAdmission);
 	}
 
 	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
 	EntityPropertyCollectionRootCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
-																					 const std::span<const uint32_t> keyTokens) {
+																					 const std::span<const uint32_t> keyTokens, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 				if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
 					throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
 				}
@@ -534,7 +582,7 @@ namespace graph::storage {
 				const std::span<const std::byte> payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
 				const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
 				validateOffsetDirectory(payload, directoryBytes, entryCount);
-				return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens)};
+				return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens, admission, slotsAdmission)};
 	}
 
 	size_t EntityPropertyCollectionRootCodec::entryCount(const std::span<const std::byte> bytes) {
@@ -561,24 +609,39 @@ namespace graph::storage {
 	}
 
 	std::vector<PropertyCollectionRootEntry>
-	EntityPropertyLargeValuePayloadCodec::decode(const std::span<const std::byte> bytes) {
-		const auto locations = decodeDirectory(bytes);
-		const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET);
-		if (bytes.size() != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes) {
-			throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload length is invalid");
-		}
+	EntityPropertyLargeValuePayloadCodec::decode(const std::span<const std::byte> bytes,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		std::vector<PropertyCollectionRootEntry> result;
+		{
+			const auto locations = decodeLargeValueDirectory(bytes, slotsAdmission);
+			const size_t directoryBytes = locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation);
+			const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET);
+			if (bytes.size() != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + payloadBytes) {
+				throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload length is invalid");
+			}
+			if (admission != nullptr) for (const auto &location: locations) (*admission)(location.length);
+			if (locations.size() > (std::numeric_limits<size_t>::max() - directoryBytes) / sizeof(PropertyCollectionRootEntry)) {
+				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property slot size overflowed");
+		}
+		if (slotsAdmission != nullptr) (*slotsAdmission)(directoryBytes + locations.size() * sizeof(PropertyCollectionRootEntry));
 		result.reserve(locations.size());
+		if (result.capacity() > (std::numeric_limits<size_t>::max() - directoryBytes) / sizeof(PropertyCollectionRootEntry)) {
+			throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue retained directory and Property slots overflowed");
+		}
+		if (slotsAdmission != nullptr) (*slotsAdmission)(directoryBytes + result.capacity() * sizeof(PropertyCollectionRootEntry));
 		for (const auto &location: locations) {
 			const size_t begin = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + location.offset;
 			result.push_back(decodeEntry(bytes.subspan(begin, location.length), location.key_token));
 		}
+		}
+		if (slotsAdmission != nullptr) (*slotsAdmission)(result.capacity() * sizeof(PropertyCollectionRootEntry));
 		return result;
 	}
 
 	std::vector<EntityPropertyLargeValueEntryLocation>
-	EntityPropertyLargeValuePayloadCodec::decodeDirectory(const std::span<const std::byte> bytes) {
-		return decodeLargeValueDirectory(bytes);
+	EntityPropertyLargeValuePayloadCodec::decodeDirectory(const std::span<const std::byte> bytes,
+		const SelectedPropertyReadAdmission *slotsAdmission) {
+		return decodeLargeValueDirectory(bytes, slotsAdmission);
 	}
 
 	PropertyCollectionRootEntry EntityPropertyLargeValuePayloadCodec::decodeEntry(
@@ -606,10 +669,29 @@ namespace graph::storage {
 
 	std::vector<std::optional<PropertyCollectionRootEntry>>
 	EntityPropertyLargeValuePayloadCodec::decodeSelected(const std::span<const std::byte> bytes,
-																				 const std::span<const uint32_t> keyTokens) {
-		const auto locations = decodeDirectory(bytes);
+																				 const std::span<const uint32_t> keyTokens,
+			const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
+		return decodeSelectedAndCount(bytes, keyTokens, admission, slotsAdmission).second;
+	}
+
+	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+	EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
+																					 const std::span<const uint32_t> keyTokens, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		std::vector<std::optional<PropertyCollectionRootEntry>> result;
+		size_t count = 0U;
+		{
+		const auto locations = decodeDirectory(bytes, slotsAdmission);
+		count = locations.size();
+		const size_t directoryBytes = locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation);
+		const auto admitResult = [&](size_t capacity) {
+			if (slotsAdmission == nullptr) return;
+			if (capacity > (std::numeric_limits<size_t>::max() - directoryBytes) / sizeof(std::optional<PropertyCollectionRootEntry>))
+				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue selected slots overflowed");
+			(*slotsAdmission)(directoryBytes + capacity * sizeof(std::optional<PropertyCollectionRootEntry>));
+		};
+		admitResult(keyTokens.size());
 		result.reserve(keyTokens.size());
+		admitResult(result.capacity());
 		for (const uint32_t keyToken: keyTokens) {
 			if (keyToken == 0U) {
 				throwRootError(FormatError::FERR_INVALID_HEADER,
@@ -622,16 +704,12 @@ namespace graph::storage {
 					continue;
 				}
 				const size_t begin = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset;
-				result.emplace_back(decodeEntry(bytes.subspan(begin, found->length), keyToken));
+				if (admission != nullptr) (*admission)(found->length);
+			result.emplace_back(decodeEntry(bytes.subspan(begin, found->length), keyToken));
 		}
-		return result;
-	}
-
-	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
-	EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
-																					 const std::span<const uint32_t> keyTokens) {
-		const auto locations = decodeDirectory(bytes);
-		return {locations.size(), decodeSelected(bytes, keyTokens)};
+		}
+		if (slotsAdmission != nullptr) (*slotsAdmission)(result.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
+		return {count, std::move(result)};
 	}
 
 	size_t EntityPropertyLargeValuePayloadCodec::entryCount(const std::span<const std::byte> bytes) {

@@ -386,8 +386,28 @@ namespace graph::storage {
 
 	NativeGraphMutationExecutionResult
 	NativeGraphMutationExecutor::execute(const LogicalGraphMutationBatch &batch,
-									 const NativeGraphMutationFenceValidator &expectedFence) const {
+									 const NativeGraphMutationFenceValidator &expectedFence, const LogicalGraphMutationReadControl &readControl) const {
 		debug::ScopedPerfTimer timer("native_graph.execute");
+		// Fold complete old/new memberships before updating estimates. In particular,
+		// removing and re-adding the same label must not underflow or double count.
+		using TokenCountKey = std::pair<SystemCatalogSchemaTokenKind, uint64_t>;
+		struct TokenCountDelta { uint64_t added = 0U; uint64_t removed = 0U; };
+		std::map<TokenCountKey, TokenCountDelta> tokenCountDeltas;
+		bool collectLabelCounts = false;
+		bool collectTypeCounts = false;
+		const auto accountToken = [&](SystemCatalogSchemaTokenKind kind, uint64_t token, bool erase) {
+			if (!(kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL ? collectLabelCounts : collectTypeCounts)) return;
+			auto &delta = tokenCountDeltas[{kind, token}];
+			auto &count = erase ? delta.removed : delta.added;
+			if (count == std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "token cardinality delta overflowed");
+			}
+			++count;
+		};
+		const auto accountLabels = [&](std::span<const uint64_t> labels, bool erase) {
+			for (uint64_t token : labels) accountToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, token, erase);
+		};
+		if (readControl.checkpoint) readControl.checkpoint();
 		validateShape(batch);
 		NativeGraphWriteTransaction transaction = writer_.beginTransaction();
 		if (expectedFence && !expectedFence(transaction.baseSuperblock())) {
@@ -409,9 +429,12 @@ namespace graph::storage {
 			transaction.adoptLogicalIdReservation(std::move(reservation));
 		}
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
+		NativeReadSession oldStateReads;
 		std::optional<SystemCatalogWriteSession> catalogSession;
 		if (system_catalog_ != nullptr) {
 			catalogSession.emplace(system_catalog_->beginWrite(transaction));
+			collectLabelCounts = system_catalog_->hasCompleteTokenCardinality(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL);
+			collectTypeCounts = system_catalog_->hasCompleteTokenCardinality(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE);
 		}
 		// Token resolution is snapshot-stable for the lifetime of this transaction.
 		// Cache both hits and misses so bulk validation and materialization do not
@@ -498,8 +521,10 @@ namespace graph::storage {
 			}
 			validatePropertyKeysAndTokens(request.properties, resolvePropertyKey);
 		}
-		std::unordered_map<uint64_t, PersistedNodeMutation> persistedNodes;
-		std::unordered_map<uint64_t, ResolvedProperties> persistedEdges;
+		// Read old states in logical-ID order so snapshot cursors can share page
+		// and directory descents across the transaction, independent of request order.
+		std::map<uint64_t, PersistedNodeMutation> persistedNodes;
+		std::map<uint64_t, ResolvedProperties> persistedEdges;
 		// Do not materialize a second full resolved-edge batch. Bulk edge ingest
 		// already owns the logical request list; only statement-local property
 		// replacements need an additional sparse override map.
@@ -640,7 +665,8 @@ namespace graph::storage {
 					const std::optional<uint64_t> token =
 							resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
 					return token.value_or(0U);
-				});
+				}, selectConstraintProperties(constraintDefinitions, resolvePropertyKey),
+				readControl.checkpoint, readControl.property_admission);
 		ConstraintMutationValidator validator(
 				constraintAdapter.makeAdapter(),
 				{options_.maximum_constraint_entity_scan, options_.maximum_constraint_support_collisions});
@@ -661,6 +687,7 @@ namespace graph::storage {
 			stageVectorSemanticDelta(nodeId, {}, nullptr, nodes[ordinal].labels,
 									 nodes[ordinal].properties.entries.empty() ? nullptr : &createdRoot);
 			scalar.stageNodeLabels(transaction, nodeId, nodes[ordinal].labels, false);
+			accountLabels(nodes[ordinal].labels, false);
 			if (!nodes[ordinal].properties.entries.empty()) {
 				PropertyCollectionRoot root = createdRoot;
 				transaction.replaceNodeProperty(root);
@@ -696,6 +723,7 @@ namespace graph::storage {
 							: transaction.createEdge(sourceNodeId, targetNodeId, typeToken);
 			result.created_edge_ids.push_back(edgeId);
 			scalar.stageEdgeType(transaction, edgeId, typeToken, false);
+			accountToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, typeToken, false);
 			if (!properties.entries.empty()) {
 				PropertyCollectionRoot root = edgeRoot(edgeId, properties.entries);
 				transaction.replaceEdgeProperty(root);
@@ -704,7 +732,7 @@ namespace graph::storage {
 			hasStagedWork = true;
 		}
 		for (const auto &[nodeId, mutation]: persistedNodes) {
-			const PageBackedGraphNode old = graph_.readNode(snapshot, nodeId);
+			const PageBackedGraphNode old = graph_.readNode(snapshot, nodeId, &oldStateReads);
 			const std::vector<uint64_t> newLabels = mutation.labels.value_or(old.label_token_ids);
 			const std::vector<PropertyCollectionRootEntry> newProperties =
 					mutation.properties.has_value() ? mutation.properties->entries : old.properties;
@@ -715,9 +743,11 @@ namespace graph::storage {
 			const PropertyCollectionRoot newRoot = nodeRoot(nodeId, newProperties);
 			stageVectorSemanticDelta(nodeId, old.label_token_ids, &oldRoot, newLabels, &newRoot);
 			scalar.stageNodeLabels(transaction, nodeId, old.label_token_ids, true);
+			accountLabels(old.label_token_ids, true);
 			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId, old.label_token_ids,
 								   oldRoot, true);
 			scalar.stageNodeLabels(transaction, nodeId, newLabels, false);
+			accountLabels(newLabels, false);
 			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId, newLabels, newRoot,
 								   false);
 			if (newLabels != old.label_token_ids) {
@@ -729,7 +759,7 @@ namespace graph::storage {
 			hasStagedWork = true;
 		}
 		for (const auto &[edgeId, properties]: persistedEdges) {
-			const PageBackedGraphEdge old = graph_.readEdge(snapshot, edgeId);
+			const PageBackedGraphEdge old = graph_.readEdge(snapshot, edgeId, &oldStateReads);
 			if (properties.entries == old.properties) {
 				continue;
 			}
@@ -741,41 +771,37 @@ namespace graph::storage {
 			hasStagedWork = true;
 		}
 
-		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
-			if (request.detach || !transaction.nodeHasIncidentEdges(request.node_id)) {
-				continue;
-			}
-			if (deletedEdges.size() == std::numeric_limits<size_t>::max()) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "native logical graph Node deletion overflowed its incident-Edge validation bound");
-			}
-			// One extra record is sufficient to prove that the caller omitted an
-			// incident Edge while preserving a finite validation scan.
-			const std::vector<uint64_t> incident =
-					transaction.collectIncidentEdgeIds(request.node_id, deletedEdges.size() + 1U);
-			if (std::ranges::any_of(incident,
-									[&deletedEdges](uint64_t edgeId) { return !deletedEdges.contains(edgeId); })) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native logical graph Node deletion has an incident Edge outside its batch delete set");
-			}
-		}
+		// All explicit and DETACH Edge removals are already staged. eraseNode()
+		// authenticates the remaining final topology and rejects incident Edges;
+		// enumerating it here again would repeat the same two adjacency scans.
 		std::vector<uint64_t> orderedErasedEdges(deletedEdges.begin(), deletedEdges.end());
 		std::ranges::sort(orderedErasedEdges);
 		for (const uint64_t edgeId: orderedErasedEdges) {
-			const PageBackedGraphEdge old = graph_.readEdge(snapshot, edgeId);
+			const PageBackedGraphEdge old = graph_.readEdge(snapshot, edgeId, &oldStateReads);
 			scalar.stageEdgeType(transaction, edgeId, old.type_id, true);
+			accountToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, old.type_id, true);
 			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {},
 								   edgeRoot(edgeId, old.properties), true);
 			hasStagedWork = true;
 		}
+		// Request shape and detach bounds have already been validated in caller order.
+		// Read immutable old state in ID order so directory/property cursors can
+		// reuse their current page, as they do for property replacements and Edges.
+		std::vector<uint64_t> orderedErasedNodes;
+		orderedErasedNodes.reserve(batch.node_deletes.size());
 		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
-			const PageBackedGraphNode old = graph_.readNode(snapshot, request.node_id);
-			const PropertyCollectionRoot oldRoot = nodeRoot(request.node_id, old.properties);
-			stageVectorSemanticDelta(request.node_id, old.label_token_ids, &oldRoot, {}, nullptr);
-			scalar.stageNodeLabels(transaction, request.node_id, old.label_token_ids, true);
-			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, request.node_id,
+			orderedErasedNodes.push_back(request.node_id);
+		}
+		std::ranges::sort(orderedErasedNodes);
+		for (const uint64_t nodeId: orderedErasedNodes) {
+			const PageBackedGraphNode old = graph_.readNode(snapshot, nodeId, &oldStateReads);
+			const PropertyCollectionRoot oldRoot = nodeRoot(nodeId, old.properties);
+			stageVectorSemanticDelta(nodeId, old.label_token_ids, &oldRoot, {}, nullptr);
+			scalar.stageNodeLabels(transaction, nodeId, old.label_token_ids, true);
+			accountLabels(old.label_token_ids, true);
+			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId,
 								   old.label_token_ids, oldRoot, true);
-			transaction.eraseNode(request.node_id);
+			transaction.eraseNode(nodeId);
 			hasStagedWork = true;
 		}
 
@@ -855,13 +881,27 @@ namespace graph::storage {
 			bootstrap.last_slot = PhysicalSlotId(std::numeric_limits<uint64_t>::max());
 			bootstrap.maximum_vectors = options_.maximum_vector_records;
 			bootstrap.maximum_pages = options_.maximum_vector_pages;
+			bootstrap.checkpoint = readControl.checkpoint;
 			transaction.stageVectorIndexBootstrap(indexes_, vector_pages_, vector_manifests_, *definition, records,
 												  bootstrap);
+		}
+		if (catalogSession.has_value()) {
+			for (const auto &[key, delta] : tokenCountDeltas) {
+				if (delta.added == delta.removed) continue;
+				const auto current = system_catalog_->readTokenCardinality(snapshot, key.first, key.second);
+				if (!current.has_value()) continue; // Historical unknown estimates remain unknown.
+				const uint64_t additions = delta.added > delta.removed ? delta.added - delta.removed : 0U;
+				const uint64_t removals = delta.removed > delta.added ? delta.removed - delta.added : 0U;
+				catalogSession->setTokenCardinality(key.first, key.second,
+						checkedCardinalityDelta(*current, additions, removals,
+								"native token cardinality counter overflowed or underflowed"));
+			}
 		}
 		if (catalogSession.has_value() && catalogSession->changed()) {
 			catalogSession->finish();
 			hasStagedWork = true;
 		}
+		if (readControl.checkpoint) readControl.checkpoint();
 		if (!hasStagedWork) {
 			if (batch.creation_identity_plan.has_value() && (!batch.creation_identity_plan->node_id_ranges.empty() ||
 															 !batch.creation_identity_plan->edge_id_ranges.empty())) {

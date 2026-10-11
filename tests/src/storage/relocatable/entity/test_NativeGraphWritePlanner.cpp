@@ -452,7 +452,13 @@ TEST_F(NativeGraphWritePlannerTest, MaintainsNativeScalarAndUniqueConstraintSupp
 
 	LogicalGraphMutationBatch duplicate;
 	duplicate.node_creates = {{{"Person"}, {{"email", PropertyValue("grace@example.test")}}}};
+	const auto generationBeforeFailure = metadata_->openSnapshot().superblock().generation;
 	EXPECT_THROW(static_cast<void>(executor.execute(duplicate)), std::runtime_error);
+	auto unchanged = metadata_->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, generationBeforeFailure);
+	EXPECT_EQ(scalar.find(unchanged, updatedScalarKey), std::optional<uint64_t>(nodeId));
+	EXPECT_EQ(support.find(unchanged, ConstraintSupportTree::entryKey(updatedCanonical, nodeId)),
+			  std::optional<uint64_t>(nodeId));
 }
 
 TEST_F(NativeGraphWritePlannerTest, PreservesCancelledCreationReservationsAndRejectsStaleNativeFences) {

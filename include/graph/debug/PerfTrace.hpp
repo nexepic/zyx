@@ -35,6 +35,8 @@ namespace graph::debug {
 			uint64_t calls = 0;
 			int64_t totalValue = 0;
 			uint64_t valueCalls = 0;
+			// Maximum single observed value; meaningful only when valueCalls is nonzero.
+			int64_t maximumValue = 0;
 		};
 
 		using Snapshot = std::unordered_map<std::string, Entry>;
@@ -48,6 +50,10 @@ namespace graph::debug {
 		static void addDuration(std::string_view key, uint64_t durationNs);
 		static void addDurationBatch(std::string_view key, uint64_t durationNs, uint64_t calls);
 		static void addValue(std::string_view key, int64_t value);
+		// Physical pin identities are deduplicated across threads until reset.
+		// Overflow is reported explicitly; diagnostics never reject a query.
+		static constexpr size_t MAXIMUM_DISTINCT_PAGE_PINS = 65536U;
+		static void addPagePin(const void *ioIdentity, uint64_t offset, uint64_t generation) noexcept;
 
 		static void reset();
 		[[nodiscard]] static Snapshot snapshotAndReset();

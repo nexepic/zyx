@@ -23,6 +23,7 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 using namespace graph::storage;
 
@@ -110,7 +111,16 @@ TEST_F(StorageIOTest, WriteAtReadAtRoundtrip_NativeFd) {
 	ASSERT_TRUE(io->hasPreadSupport());
 
 	const char data[] = "Hello StorageIO!";
+	const bool profileEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	io->writeAt(100, data, sizeof(data));
+	const auto writeTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(profileEnabled);
+	ASSERT_TRUE(writeTrace.contains("storage_io.completed_write_bytes"));
+	ASSERT_TRUE(writeTrace.contains("storage_io.completed_write_calls"));
+	EXPECT_EQ(writeTrace.at("storage_io.completed_write_bytes").totalValue, static_cast<int64_t>(sizeof(data)));
+	EXPECT_EQ(writeTrace.at("storage_io.completed_write_calls").totalValue, 1);
 
 	char buffer[sizeof(data)] = {};
 	size_t bytesRead = io->readAt(100, buffer, sizeof(buffer));
@@ -180,6 +190,31 @@ TEST_F(StorageIOTest, PositionedOperationsRejectUnaddressableRangesBeforeIo) {
 	EXPECT_THROW(static_cast<void>(io->readAt(unrepresentableOffset, &output, 1U)), std::invalid_argument);
 	EXPECT_THROW(io->writeAt(0U, &byte, std::numeric_limits<size_t>::max()), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(io->readAt(0U, &output, std::numeric_limits<size_t>::max())), std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, TypedPagePinsCountDistinctPhysicalIdentitiesOnlyAfterSuccessfulPin) {
+	auto io = createIO(true);
+	io->enableBufferPool(2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> bytes{};
+	io->writePages({0U, 3U}, bytes.data(), bytes.size());
+	using graph::debug::PerfTrace;
+	struct Cleanup { ~Cleanup() { PerfTrace::setEnabled(false); PerfTrace::reset(); } } cleanup;
+	PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(true); PerfTrace::reset();
+	{
+		auto first = io->pinTypedPage({0U, 3U});
+		ASSERT_TRUE(first.has_value());
+	}
+	{
+		auto repeated = io->pinTypedPage({0U, 3U});
+		ASSERT_TRUE(repeated.has_value());
+	}
+	EXPECT_EQ(io->readPages({0U, 3U}, bytes.data(), bytes.size()), bytes.size());
+	EXPECT_EQ(io->readAt(BufferPoolPageKey{RSS_BUFFER_POOL_PAGE_BYTES, 3U},
+		bytes.data(), RSS_BUFFER_POOL_PAGE_BYTES), RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_THROW(static_cast<void>(io->pinTypedPage({1U, 3U})), std::invalid_argument);
+	const auto snapshot = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins").totalValue, 2);
+	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins_incomplete").totalValue, 0);
 }
 
 TEST_F(StorageIOTest, TypedPageRangesRejectMalformedInputsAndRoundTripThroughTheCache) {
@@ -1155,4 +1190,26 @@ TEST_F(StorageIOTest, MultipleWriteReadRoundtrip_FstreamFallback) {
 	EXPECT_EQ(io->readAt(512, buf2, sizeof(buf2)), sizeof(data2));
 	EXPECT_EQ(std::memcmp(data1, buf1, sizeof(data1)), 0);
 	EXPECT_EQ(std::memcmp(data2, buf2, sizeof(data2)), 0);
+}
+
+TEST_F(StorageIOTest, SyncTraceSeparatesSuccessfulDurabilityFencesAndRejectsUnknownKind) {
+ auto io = createIO(true);
+ using graph::debug::PerfTrace;
+ struct Cleanup { ~Cleanup() { PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(false); PerfTrace::reset(); } } cleanup;
+ PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(true); PerfTrace::reset();
+ io->sync(StorageIOSyncKind::SIOSK_DATA_FENCE);
+ io->sync(StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE);
+ io->sync();
+ EXPECT_THROW(io->sync(static_cast<StorageIOSyncKind>(99)), std::invalid_argument);
+ const auto trace = PerfTrace::snapshotAndReset();
+ for (const auto *phase : {"storage_io.sync.data_fence", "storage_io.sync.superblock_fence", "storage_io.sync.general"}) {
+  EXPECT_EQ(trace.at(phase).totalValue, 1);
+  EXPECT_EQ(trace.at(phase).calls, 0U); // counter-only diagnostics remain untimed
+ }
+ PerfTrace::setEnabled(true);
+ io->sync(StorageIOSyncKind::SIOSK_DATA_FENCE);
+ const auto timed = PerfTrace::snapshotAndReset();
+ EXPECT_EQ(timed.at("storage_io.sync.data_fence").totalValue, 1);
+ EXPECT_EQ(timed.at("storage_io.sync.data_fence").calls, 1U);
+ EXPECT_GT(timed.at("storage_io.sync.data_fence").totalNs, 0U);
 }

@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/relocatable/index/BTreePage.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 using namespace graph::storage;
 
@@ -41,6 +42,42 @@ namespace {
 	}
 
 } // namespace
+
+TEST(RelocatableBTreePageCodecTest, ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata) {
+	auto header = leafHeader();
+	header.entry_count = 0;
+	PageOwnerHeader owner;
+	owner.page_id = header.page_id;
+	owner.owner_id = header.index_id;
+	owner.kind = PageOwnerKind::POK_INDEX;
+	owner.generation = header.generation;
+	owner.committed_lsn = LogSequenceNumber(5);
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	EXPECT_NO_THROW(BTreePage::validateNewPage(owner, header));
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+	EXPECT_FALSE(trace.contains("storage.checksum.bytes"));
+	for (const auto change : std::vector<std::function<void(PageOwnerHeader &)>>{
+		[](auto &v) { v.committed_lsn = {}; },
+		[](auto &v) { v.payload_bytes = 1; },
+		[](auto &v) { v.flags = UINT32_MAX; }}) {
+		auto invalid = owner;
+		change(invalid);
+		expectFormatError([&] { BTreePage::validateNewPage(invalid, header); }, FormatError::FERR_INVALID_HEADER);
+	}
+	auto invalid = header;
+	invalid.level = 1;
+	expectFormatError([&] { BTreePage::validateNewPage(owner, invalid); }, FormatError::FERR_INVALID_HEADER);
+	invalid = header;
+	invalid.index_id++;
+	expectFormatError([&] { BTreePage::validateNewPage(owner, invalid); }, FormatError::FERR_INVALID_STATE);
+	invalid = header;
+	invalid.entry_count = 1;
+	expectFormatError([&] { BTreePage::validateNewPage(owner, invalid); }, FormatError::FERR_INVALID_HEADER);
+}
 
 TEST(RelocatableBTreePageCodecTest, RoundTripsLeafAndInternalPageHeaders) {
 	const BTreePageHeader leaf = leafHeader();
@@ -711,4 +748,186 @@ TEST(RelocatableBTreePageCodecTest, FailsClosedForPageOwnershipAndSlottedRecordI
 	mismatchedOpenOwner.owner_id = 20;
 	expectFormatError([&] { static_cast<void>(BTreePage::open(mismatchedOpenOwner, valid.serialize())); },
 					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST(RelocatableBTreePageCodecTest, DecodedCompressedKeysRemainIndependentAcrossRestartGroups) {
+	std::vector<BTreePageEntry> expected;
+	for (uint8_t suffix = 0U; suffix < 19U; ++suffix) {
+		std::vector<std::byte> key(96U, std::byte{'p'});
+		key.push_back(static_cast<std::byte>(suffix));
+		expected.push_back({std::move(key), uint64_t{suffix} + 100U});
+	}
+	auto encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, expected);
+	auto first = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, encoded);
+	const auto second = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, encoded);
+	EXPECT_EQ(first, expected);
+	EXPECT_EQ(second, expected);
+	ASSERT_EQ(first.size(), expected.size());
+	ASSERT_FALSE(first.front().key.empty());
+	first.front().key.front() = std::byte{'x'};
+	std::vector<std::byte>().swap(encoded);
+	for (size_t index = 1U; index < first.size(); ++index) EXPECT_EQ(first[index], expected[index]);
+	EXPECT_EQ(second, expected);
+}
+
+TEST(RelocatableBTreePageCodecTest, EntriesValidateAndReturnOnePackedDecode) {
+	PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+		RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+	BTreePageHeader header;
+	header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+	const std::vector<BTreePageEntry> expected{{{std::byte{'a'}}, 1U}, {{std::byte{'b'}}, 2U}};
+	const auto page = BTreePage::createWithEntries(owner, header, expected);
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	std::vector<BTreePageEntry> actual;
+	EXPECT_NO_THROW(actual = page.entries());
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+	EXPECT_EQ(actual, expected);
+	ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+	EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 1);
+}
+
+TEST(RelocatableBTreePageCodecTest, RebindingPackedPagesDecodesOnceRegardlessOfEntryCount) {
+	for (const auto layout : {BTreeLeafValueLayout::BLVL_U64, BTreeLeafValueLayout::BLVL_EMPTY}) {
+		PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+			RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+		BTreePageHeader header;
+		header.index_id = owner.owner_id;
+		header.page_id = owner.page_id;
+		header.generation = owner.generation;
+		header.leaf_value_layout = layout;
+		std::vector<BTreePageEntry> expected;
+		for (unsigned index = 0; index < 128; ++index) {
+			expected.push_back({{std::byte{1}, static_cast<std::byte>(index)},
+				layout == BTreeLeafValueLayout::BLVL_EMPTY ? 0U : index + 1U});
+		}
+		const auto source = BTreePage::createWithEntries(owner, header, expected);
+		owner.generation = Generation(3);
+		owner.committed_lsn = LogSequenceNumber(10);
+		const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+		graph::debug::PerfTrace::reset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		const auto rebound = source.rebindOwner(owner);
+		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+		ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+		// One full source authentication and one final destination validation.
+		EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 2);
+		EXPECT_EQ(rebound.entries(), expected);
+		EXPECT_EQ(rebound.header().generation, owner.generation);
+		EXPECT_EQ(rebound.slottedPage().ownerCommittedLsn(), owner.committed_lsn);
+	}
+}
+
+TEST(RelocatableBTreePageCodecTest, MutationsReuseTheFullyAuthenticatedSourceDecode) {
+ PageOwnerHeader owner{PageId(51), 17U, PageOwnerKind::POK_INDEX, 0U,
+  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+ BTreePageHeader header;
+ header.index_id = owner.owner_id;
+ header.page_id = owner.page_id;
+ header.generation = owner.generation;
+ const std::vector<BTreePageEntry> initial{{{std::byte{'a'}}, 1U}, {{std::byte{'b'}}, 2U}};
+ auto page = BTreePage::createWithEntries(owner, header, initial);
+ const auto checkOneDecode = [&](const std::function<void()> &operation) {
+  const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+  graph::debug::PerfTrace::reset();
+  graph::debug::PerfTrace::setValueCollectionEnabled(true);
+  EXPECT_NO_THROW(operation());
+  const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+  graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+  ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+  EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 1);
+ };
+ checkOneDecode([&] { page.insert({{std::byte{'c'}}, 3U}); });
+ checkOneDecode([&] { page.erase(std::array{std::byte{'b'}}); });
+ const std::vector<BTreePageEntry> expected{{{std::byte{'a'}}, 1U}, {{std::byte{'c'}}, 3U}};
+ EXPECT_EQ(page.entries(), expected);
+ checkOneDecode([&] {
+  expectFormatError([&] { page.insert({{std::byte{'a'}}, 9U}); }, FormatError::FERR_INVALID_STATE);
+ });
+ EXPECT_EQ(page.entries(), expected);
+}
+
+TEST(RelocatableBTreePageCodecTest, PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints) {
+ for (const auto kind : {BTreeNodeKind::BPN_LEAF, BTreeNodeKind::BPN_INTERNAL}) {
+  for (const auto layout : {BTreeLeafValueLayout::BLVL_U64, BTreeLeafValueLayout::BLVL_EMPTY}) {
+   if (kind == BTreeNodeKind::BPN_INTERNAL && layout == BTreeLeafValueLayout::BLVL_EMPTY) continue;
+   for (const size_t prefix : {0U, 1U, 127U, 128U, 300U}) {
+    std::vector<BTreePageEntry> entries;
+    EXPECT_EQ(PackedBTreePageCodec::encodedSize(kind, entries, layout),
+              PackedBTreePageCodec::encode(kind, entries, layout).size());
+    const std::array<uint64_t, 6> values{1U, 127U, 128U, 16383U, 16384U, UINT64_MAX};
+    for (unsigned i = 0; i < 65; ++i) {
+     std::vector<std::byte> key(prefix, std::byte{'a'});
+     key.push_back(static_cast<std::byte>(i));
+     entries.push_back({std::move(key), layout == BTreeLeafValueLayout::BLVL_EMPTY ? 0U : values[i % values.size()]});
+     EXPECT_EQ(PackedBTreePageCodec::encodedSize(kind, entries, layout),
+               PackedBTreePageCodec::encode(kind, entries, layout).size());
+     const auto sizes = PackedBTreePageCodec::encodedBoundarySizes(kind, entries, layout);
+     ASSERT_EQ(sizes.prefixes.size(), entries.size() + 1U);
+     ASSERT_EQ(sizes.suffixes.size(), entries.size() + 1U);
+     for (size_t split = 0U; split <= entries.size(); ++split) {
+      const auto span = std::span<const BTreePageEntry>(entries);
+      EXPECT_EQ(sizes.prefixes[split], PackedBTreePageCodec::encode(kind, span.first(split), layout).size());
+      EXPECT_EQ(sizes.suffixes[split], PackedBTreePageCodec::encode(kind, span.subspan(split), layout).size());
+     }
+    }
+   }
+  }
+ }
+}
+
+TEST(RelocatableBTreePageCodecTest, PackedSizeRejectsTheSameInvalidEntriesAsEncoding) {
+ const auto reject = [](BTreeNodeKind kind, BTreeLeafValueLayout layout, const std::vector<BTreePageEntry> &entries) {
+  expectFormatError([&] { static_cast<void>(PackedBTreePageCodec::encodedSize(kind, entries, layout)); }, FormatError::FERR_INVALID_HEADER);
+  expectFormatError([&] { static_cast<void>(PackedBTreePageCodec::encodedBoundarySizes(kind, entries, layout)); }, FormatError::FERR_INVALID_HEADER);
+  expectFormatError([&] { static_cast<void>(PackedBTreePageCodec::encode(kind, entries, layout)); }, FormatError::FERR_INVALID_HEADER);
+ };
+ reject(BTreeNodeKind::BPN_LEAF, BTreeLeafValueLayout::BLVL_U64, {{{std::byte{'b'}}, 1U}, {{std::byte{'a'}}, 2U}});
+ reject(BTreeNodeKind::BPN_LEAF, BTreeLeafValueLayout::BLVL_U64, {{{std::byte{'a'}}, 1U}, {{std::byte{'a'}}, 2U}});
+ reject(BTreeNodeKind::BPN_LEAF, BTreeLeafValueLayout::BLVL_EMPTY, {{{std::byte{'a'}}, 1U}});
+ reject(BTreeNodeKind::BPN_INTERNAL, BTreeLeafValueLayout::BLVL_U64, {{{std::byte{'a'}}, 0U}});
+}
+
+TEST(RelocatableBTreePageCodecTest, BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads) {
+ const auto empty = PackedBTreePageCodec::encodedBoundarySizes(BTreeNodeKind::BPN_LEAF, {});
+ EXPECT_EQ(empty.prefixes, std::vector<size_t>{RSS_BTREE_PACKED_HEADER_BYTES});
+ EXPECT_EQ(empty.suffixes, empty.prefixes);
+ std::vector<BTreePageEntry> entries;
+ for (unsigned i = 0; i < 97U; ++i) {
+  std::vector<std::byte> key{static_cast<std::byte>(i / 17U)};
+  key.insert(key.end(), (i % 17U) * 19U, std::byte{'x'});
+  key.push_back(static_cast<std::byte>(i));
+  entries.push_back({std::move(key), i % 2U ? UINT64_MAX : 128U});
+ }
+ std::ranges::sort(entries, {}, &BTreePageEntry::key);
+ const auto sizes = PackedBTreePageCodec::encodedBoundarySizes(BTreeNodeKind::BPN_LEAF, entries);
+ const auto span = std::span<const BTreePageEntry>(entries);
+ for (size_t split = 0; split <= entries.size(); ++split) {
+  EXPECT_EQ(sizes.prefixes[split], PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, span.first(split)).size());
+  EXPECT_EQ(sizes.suffixes[split], PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, span.subspan(split)).size());
+ }
+}
+
+TEST(RelocatableBTreePageCodecTest, TransfersFullyValidatedEntriesWithIndependentOwnership) {
+ for (const auto layout : {BTreeLeafValueLayout::BLVL_U64, BTreeLeafValueLayout::BLVL_EMPTY}) {
+  PageOwnerHeader owner;
+  owner.page_id=PageId(61);owner.owner_id=17;owner.kind=PageOwnerKind::POK_INDEX;
+  owner.payload_bytes=RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;owner.generation=Generation(2);owner.committed_lsn=LogSequenceNumber(9);
+  BTreePageHeader header;header.index_id=owner.owner_id;header.page_id=owner.page_id;header.generation=owner.generation;header.leaf_value_layout=layout;
+  const std::vector<BTreePageEntry> expected{{{std::byte{'a'}},layout==BTreeLeafValueLayout::BLVL_EMPTY?0U:1U},{{std::byte{'b'}},layout==BTreeLeafValueLayout::BLVL_EMPTY?0U:2U}};
+  const auto original=BTreePage::createWithEntries(owner,header,expected).serialize();
+  std::vector<BTreePageEntry> decoded;
+  auto page=BTreePage::openDecoded(owner,original,decoded);
+  EXPECT_EQ(decoded,expected);EXPECT_EQ(page.serialize(),original);
+  page.insert({{std::byte{'c'}},layout==BTreeLeafValueLayout::BLVL_EMPTY?0U:3U});
+  EXPECT_EQ(decoded,expected);EXPECT_EQ(page.entries().size(),3U);
+  auto malformed=SlottedPage::open(owner,original);
+  malformed.erase({owner.page_id,1U,1U});
+  EXPECT_THROW(static_cast<void>(BTreePage::openDecoded(owner,malformed.serialize(),decoded)),FormatException);
+  EXPECT_EQ(decoded,expected);
+  EXPECT_THROW(static_cast<void>(BTreePage::openDecoded(owner,std::span(original).first(original.size()-1),decoded)),FormatException);
+  EXPECT_EQ(decoded,expected);
+ }
 }

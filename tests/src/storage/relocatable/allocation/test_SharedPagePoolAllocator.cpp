@@ -7,6 +7,7 @@
  **/
 
 #include <array>
+#include "benchmarks/graphdb-comparison/native-write-batch-cost/PoolPreparationRun.hpp"
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -422,13 +423,13 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesPrivateAppendAndMutat
 
 	const std::array replacementPayload = {std::byte{0x31}, std::byte{0x32}, std::byte{0x33}};
 	const SharedPagePoolPreparedReplacement replacement{
-				.expected_owner_lsn = LogSequenceNumber(2),
 				.owner = {.page_id = PageId(91),
 							  .owner_id = 99,
 							  .kind = PageOwnerKind::POK_INDEX,
 							  .payload_bytes = static_cast<uint32_t>(replacementPayload.size()),
 							  .generation = pool.generation,
 							  .committed_lsn = LogSequenceNumber(3)},
+				.expected_owner_lsn = LogSequenceNumber(2),
 				.payload = std::vector<std::byte>(replacementPayload.begin(), replacementPayload.end())};
 	const std::array mutationAppendPayload = {std::byte{0x41}};
 	const SharedPagePoolPreparedAppend mutationAppend{
@@ -446,10 +447,26 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesPrivateAppendAndMutat
 															.expected_owner_id = 99,
 															.expected_owner_kind = PageOwnerKind::POK_INDEX,
 															.expected_owner_lsn = pool.committed_lsn};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	SharedPagePoolAllocatorTestAccess::prepareMutationPages(
 			allocator, pool, std::span(&initialLocation, 1), std::span(&replacement, 1),
 			std::span(&mutationAppend, 1), std::span(&replacementLocation, 1), std::span(&mutationAppendLocation, 1),
 			LogSequenceNumber(3), std::span(&retirement, 1));
+	const auto mutationTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	for (const auto *counter: {"native_graph.write.cow.replacement_pages", "native_graph.write.cow.append_pages",
+		"native_graph.write.cow.retired_pages"}) {
+		ASSERT_TRUE(mutationTrace.contains(counter));
+		EXPECT_EQ(mutationTrace.at(counter).totalValue, 1);
+	}
+	ASSERT_TRUE(mutationTrace.contains("native_graph.write.cow.replacement_payload_bytes"));
+	ASSERT_TRUE(mutationTrace.contains("native_graph.write.cow.append_payload_bytes"));
+	EXPECT_EQ(mutationTrace.at("native_graph.write.cow.replacement_payload_bytes").totalValue,
+		static_cast<int64_t>(replacementPayload.size()));
+	EXPECT_EQ(mutationTrace.at("native_graph.write.cow.append_payload_bytes").totalValue,
+		static_cast<int64_t>(mutationAppendPayload.size()));
 	EXPECT_EQ(replacementLocation.page_index, 3U);
 	EXPECT_EQ(mutationAppendLocation.page_index, 4U);
 
@@ -1875,4 +1892,80 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsNonSharedPoolKindsIncludin
 																LogSequenceNumber(2)));
 			},
 			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces) {
+ auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+ SharedPagePoolAllocator allocator(io, *store);
+ const std::array payload{std::byte{0x51}, std::byte{0x52}};
+ auto sourceRequest = request(31, 91, payload); // pool 77, logical page owner 99
+ auto destinationRequest = request(32, 92);
+ destinationRequest.pool_owner_id = 88;
+ destinationRequest.page_owner_id = 123;
+ ASSERT_TRUE(allocator.allocateNewPoolPage(sourceRequest, PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2)));
+ ASSERT_TRUE(allocator.allocateNewPoolPage(destinationRequest, PhysicalSlotId(41), PhysicalSlotId(41), LogSequenceNumber(3)));
+ auto snapshot = store->openSnapshot();
+ const auto source = store->findCatalog(snapshot, SegmentId(31));
+ const auto destination = store->findCatalog(snapshot, SegmentId(32));
+ const auto location = store->findPageLocation(snapshot, PageId(91));
+ SharedPagePoolPreparedCrossPoolReplacement replacement{
+  .source_pool = source, .source_location = location, .expected_owner_lsn = LogSequenceNumber(2),
+  .owner = {.page_id = PageId(91), .owner_id = 99, .kind = PageOwnerKind::POK_INDEX,
+   .payload_bytes = static_cast<uint32_t>(payload.size()), .generation = destination.generation,
+   .committed_lsn = LogSequenceNumber(4)},
+  .payload = std::vector<std::byte>(payload.begin(), payload.end())};
+ PageLocation result;
+ auto forged = replacement;
+ forged.owner.owner_id = destination.owner_id;
+ expectFormatError([&] {
+  SharedPagePoolAllocatorTestAccess::prepareCrossPoolReplacementPages(
+   allocator, destination, std::span(&forged, 1), std::span(&result, 1), LogSequenceNumber(4));
+ }, FormatError::FERR_INVALID_STATE);
+ ASSERT_NO_THROW(SharedPagePoolAllocatorTestAccess::prepareCrossPoolReplacementPages(
+  allocator, destination, std::span(&replacement, 1), std::span(&result, 1), LogSequenceNumber(4)));
+ EXPECT_EQ(result.page_index, 2U); // rejected owner change consumed no frame
+ EXPECT_EQ(result.segment_id, destination.segment_id);
+ const auto offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+  destination.physical_slot) + static_cast<uint64_t>(result.page_index) * RSS_PAGE_SIZE;
+ std::array<std::byte, RSS_PAGE_SIZE> bytes{};
+ ASSERT_EQ(io->readAt({offset, destination.generation.value()}, bytes.data(), bytes.size()), bytes.size());
+ const auto owner = PageOwnerHeaderCodec::decode(std::span<const std::byte>(bytes).first(RSS_PAGE_OWNER_HEADER_BYTES));
+ EXPECT_EQ(owner.owner_id, sourceRequest.page_owner_id);
+ EXPECT_EQ(owner.page_id, sourceRequest.page_id);
+ EXPECT_EQ(owner.committed_lsn, LogSequenceNumber(4));
+ // Preparation does not replace the old snapshot's directory route or bytes.
+ EXPECT_EQ(allocator.read(snapshot, PageId(91)).payload, replacement.payload);
+ EXPECT_EQ(store->findPageLocation(snapshot, PageId(91)), location);
+}
+
+TEST(PoolPreparationRunPrototypeTest, CoalescesContiguousSuffixAndRejectsOverlappingOrOverflowingFragments) {
+ CatalogEntry pool; pool.segment_id = SegmentId(7U); pool.generation = Generation(2U);
+ benchmark::PoolPreparationRun run(pool, 1U);
+ run.append(pool, 1U, 2U); run.append(pool, 3U, 4U);
+ EXPECT_EQ(run.initialPrefix(), 1U); EXPECT_EQ(run.pageCount(), 6U);
+ EXPECT_THROW(run.append(pool, 3U, 1U), std::invalid_argument);
+ EXPECT_THROW(run.append(pool, 8U, 1U), std::invalid_argument);
+ EXPECT_THROW(run.append(pool, 7U, RSS_PAGE_POOL_DATA_FRAME_COUNT), std::invalid_argument);
+ EXPECT_EQ(run.pageCount(), 6U);
+ run.append(pool, 7U, RSS_PAGE_POOL_DATA_FRAME_COUNT - 7U);
+ EXPECT_EQ(run.pageCount(), RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U);
+}
+
+TEST(PoolPreparationRunPrototypeTest, RejectsEveryChangedCatalogIdentityWithoutAdvancing) {
+ CatalogEntry pool; benchmark::PoolPreparationRun run(pool, 0U);
+ for (int field = 0; field < 7; ++field) {
+  auto changed = pool;
+  switch (field) {
+   case 0: changed.segment_id = SegmentId(1U); break;
+   case 1: changed.physical_slot = PhysicalSlotId(1U); break;
+   case 2: changed.kind = SegmentKind::SGK_ENTITY_PAGE_POOL; break;
+   case 3: changed.owner_id = 1U; break;
+   case 4: changed.generation = Generation(1U); break;
+   case 5: changed.state = SegmentState::SGS_SEALED; break;
+   case 6: changed.committed_lsn = LogSequenceNumber(1U); break;
+  }
+  EXPECT_THROW(run.append(changed, 0U, 1U), std::invalid_argument);
+  EXPECT_EQ(run.pageCount(), 0U);
+ }
+ run.append(pool, 0U, 1U); EXPECT_EQ(run.pageCount(), 1U);
 }

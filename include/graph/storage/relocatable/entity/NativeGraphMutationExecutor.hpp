@@ -92,7 +92,8 @@ namespace graph::storage {
 
 		[[nodiscard]] NativeGraphMutationExecutionResult
 		execute(const LogicalGraphMutationBatch &batch,
-				const NativeGraphMutationFenceValidator &expectedFence = {}) const;
+				const NativeGraphMutationFenceValidator &expectedFence = {},
+				const LogicalGraphMutationReadControl &readControl = {}) const;
 
 	private:
 		NativeGraphWritePlanner &writer_;

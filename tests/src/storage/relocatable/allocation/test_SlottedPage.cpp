@@ -595,3 +595,20 @@ TEST(RelocatableSlottedPageTest, MatchesReferenceModelAcrossMixedOperationsAndRe
 		}
 	}
 }
+
+TEST(RelocatableSlottedPageTest, SlotReadAdmissionRejectsBeforeAllocationAndPreservesRetry) {
+	SlottedPage page = SlottedPage::create(PageId(17), Generation(3));
+	const std::vector<std::byte> input(1024U, std::byte{0x42U});
+	const auto reference = page.insert(input);
+	size_t requested = 0U;
+	EXPECT_THROW(static_cast<void>(page.read(reference, [&](size_t bytes) {
+		requested = bytes; throw std::length_error("slot budget");
+	})), std::length_error);
+	EXPECT_EQ(requested, input.size());
+	for (int retry = 0; retry < 2; ++retry) {
+		const auto output = page.read(reference, [&](size_t bytes) { requested = bytes; });
+		EXPECT_EQ(output, input);
+		EXPECT_EQ(requested, output.capacity());
+	}
+	EXPECT_GE(page.retainedBufferBytes(), input.size());
+}

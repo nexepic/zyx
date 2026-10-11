@@ -20,6 +20,8 @@
 #include <utility>
 #include <vector>
 
+#include "storage/relocatable/property/PropertyBatchOrder.hpp"
+
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -31,6 +33,22 @@
 namespace graph::storage {
 
 	namespace {
+
+		template<typename Result>
+		Result recordSelectedValues(Result result) {
+			if (debug::PerfTrace::areValuesEnabled()) {
+				int64_t count = 0;
+				if constexpr (requires { result.has_value(); }) {
+					count = result.has_value() ? 1 : 0;
+				} else {
+					for (const auto &entry : result) {
+						if (entry.has_value() && count < std::numeric_limits<int64_t>::max()) ++count;
+					}
+				}
+				debug::PerfTrace::addValue("native_graph.read.selected_values_decoded", count);
+			}
+			return result;
+		}
 
 		[[noreturn]] void throwRootStoreError(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -118,17 +136,39 @@ namespace graph::storage {
 			LargeValueManifest manifest;
 			std::vector<std::byte> header_and_directory;
 			std::vector<EntityPropertyLargeValueEntryLocation> locations;
+			LargeValueStore::RangeReadCache range_cache;
 		};
 
+		size_t checkedLargeValueBuffers(size_t retained, size_t additional) {
+			if (additional > std::numeric_limits<size_t>::max() - retained)
+				throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "selected LargeValue buffers overflowed");
+			return retained + additional;
+		}
+
+		[[nodiscard]] size_t manifestBufferBytes(const LargeValueManifest &manifest) {
+			return checkedLargeValueBuffers(manifest.media_type.capacity(),
+					checkedLargeValueBuffers(manifest.chunks.capacity() * sizeof(LargeValueChunk),
+							manifest.children.capacity() * sizeof(LargeValueManifestChild)));
+		}
+
 		[[nodiscard]] LargeValuePropertyDirectory readLargeValuePropertyDirectory(
-				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference) {
-			LargeValueManifest manifest = store.manifest(snapshot, reference);
+				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference,
+				const SelectedPropertyReadAdmission *bufferAdmission = nullptr) {
+			debug::PerfTrace::addValue("native_graph.read.property_large_value_directory_reads", 1);
+			LargeValueManifest manifest = store.manifest(snapshot, reference,
+					bufferAdmission ? *bufferAdmission : SelectedPropertyReadAdmission{});
+			const size_t manifestBytes = manifestBufferBytes(manifest);
+			const SelectedPropertyReadAdmission admitHeader = [&](size_t bytes) {
+				if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(manifestBytes, bytes));
+			};
 			if (manifest.logical_bytes < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
 				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"Entity Property LargeValue payload is truncated");
 			}
-			const std::vector<std::byte> header = store.readRangeFromManifest(
-					snapshot, manifest, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+			LargeValuePropertyDirectory result;
+			const std::vector<std::byte> header = store.readRangeFromManifestCached(
+					snapshot, manifest, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES, result.range_cache,
+				bufferAdmission ? admitHeader : SelectedPropertyReadAdmission{});
 			const uint32_t entryCount = LittleEndianCodec::readU32(header, 8U);
 			const uint64_t directoryBytes = static_cast<uint64_t>(entryCount) * sizeof(uint32_t) * 2U;
 			const uint64_t headerBytes = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes;
@@ -136,23 +176,38 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"Entity Property LargeValue directory exceeds its manifest");
 			}
-			LargeValuePropertyDirectory result;
-			result.header_and_directory = store.readRangeFromManifest(snapshot, manifest, 0U, headerBytes);
-			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory);
+			const SelectedPropertyReadAdmission admitDirectoryRead = [&](size_t bytes) {
+				if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(checkedLargeValueBuffers(manifestBytes, header.capacity()), bytes));
+			};
+			result.header_and_directory = store.readRangeFromManifestCached(snapshot, manifest, 0U, headerBytes, result.range_cache,
+				bufferAdmission ? admitDirectoryRead : SelectedPropertyReadAdmission{});
+			const SelectedPropertyReadAdmission admitLocations = [&](size_t bytes) {
+				if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(result.range_cache.retainedBytes(), checkedLargeValueBuffers(checkedLargeValueBuffers(checkedLargeValueBuffers(manifestBytes, header.capacity()), result.header_and_directory.capacity()), bytes)));
+			};
+			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory, bufferAdmission ? &admitLocations : nullptr);
 			const uint64_t payloadBytes = LittleEndianCodec::readU32(result.header_and_directory, 12U);
 			if (headerBytes + payloadBytes - directoryBytes != manifest.logical_bytes) {
 				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"Entity Property LargeValue manifest length disagrees with its payload header");
 			}
 			result.manifest = std::move(manifest);
+			if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(manifestBytes, checkedLargeValueBuffers(result.range_cache.retainedBytes(), checkedLargeValueBuffers(result.header_and_directory.capacity(), result.locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation)))));
 			return result;
 		}
 
 		[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>> readSelectedLargeValueProperties(
 				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference,
-				const LargeValuePropertyDirectory &directory, std::span<const uint32_t> keyTokens) {
+				LargeValuePropertyDirectory &directory, std::span<const uint32_t> keyTokens,
+				const SelectedPropertyReadAdmission *admission = nullptr, const SelectedPropertyReadAdmission *bufferAdmission = nullptr) {
 			std::vector<std::optional<PropertyCollectionRootEntry>> result;
+			const size_t directoryBytes = checkedLargeValueBuffers(manifestBufferBytes(directory.manifest), checkedLargeValueBuffers(directory.header_and_directory.capacity(), directory.locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation)));
+			const auto admit = [&](size_t bytes) { if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(directoryBytes, bytes)); };
+			if (keyTokens.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<PropertyCollectionRootEntry>))
+				throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "selected LargeValue result slots overflowed");
+			admit(checkedLargeValueBuffers(keyTokens.size() * sizeof(std::optional<PropertyCollectionRootEntry>), directory.range_cache.retainedBytes()));
 			result.reserve(keyTokens.size());
+			const size_t resultBytes = result.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>);
+			admit(checkedLargeValueBuffers(resultBytes, directory.range_cache.retainedBytes()));
 			for (const uint32_t token: keyTokens) {
 				const auto found = std::ranges::lower_bound(directory.locations, token, {},
 																	&EntityPropertyLargeValueEntryLocation::key_token);
@@ -160,11 +215,14 @@ namespace graph::storage {
 					result.emplace_back(std::nullopt);
 					continue;
 				}
+				if (admission != nullptr) (*admission)(found->length);
 				const uint64_t offset = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset;
-				const std::vector<std::byte> entry = store.readRangeFromManifest(
-						snapshot, directory.manifest, offset, found->length);
+				const std::vector<std::byte> entry = store.readRangeFromManifestCached(
+						snapshot, directory.manifest, offset, found->length, directory.range_cache,
+					bufferAdmission ? SelectedPropertyReadAdmission([&](size_t bytes) { admit(checkedLargeValueBuffers(resultBytes, bytes)); }) : SelectedPropertyReadAdmission{});
 				result.emplace_back(EntityPropertyLargeValuePayloadCodec::decodeEntry(entry, token));
 			}
+			admit(checkedLargeValueBuffers(resultBytes, directory.range_cache.retainedBytes()));
 			return result;
 		}
 
@@ -187,7 +245,7 @@ namespace graph::storage {
 	}
 
 	PropertyCollectionRoot PropertyCollectionRootStore::readEntity(const MetadataSnapshotPin &snapshot,
-																   const EntityPropertyKey &key) const {
+																   const EntityPropertyKey &key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property read requires a valid logical owner key");
@@ -195,12 +253,12 @@ namespace graph::storage {
 		const EntityPropertyLocation location = metadata_.findEntityPropertyLocation(snapshot, key);
 		const SlottedPage page = pages_.read(snapshot, location.page_id);
 		const std::vector<std::byte> bytes = page.read({location.page_id, location.slot_id, location.slot_generation});
-		return decodeEntityRoot(snapshot, key, location, page.pageId(), page.ownerKind(), bytes);
+		return decodeEntityRoot(snapshot, key, location, page.pageId(), page.ownerKind(), bytes, admission, slotsAdmission);
 	}
 
 	std::optional<PropertyCollectionRoot>
 	PropertyCollectionRootStore::readEntityOptional(const MetadataSnapshotPin &snapshot,
-													const EntityPropertyKey &key) const {
+													const EntityPropertyKey &key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property read requires a valid logical owner key");
@@ -213,7 +271,7 @@ namespace graph::storage {
 		const SlottedPage page = pages_.read(snapshot, location->page_id);
 		const std::vector<std::byte> bytes =
 				page.read({location->page_id, location->slot_id, location->slot_generation});
-		return decodeEntityRoot(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes);
+		return decodeEntityRoot(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes, admission, slotsAdmission);
 	}
 
 	std::optional<PropertyCollectionRootEntry>
@@ -244,7 +302,7 @@ namespace graph::storage {
 	}
 
 	std::optional<bool> PropertyCollectionRootStore::readEntityPropertyExists(const MetadataSnapshotPin &snapshot,
-																	 const EntityPropertyKey &key, const uint32_t keyToken) const {
+																	 const EntityPropertyKey &key, const uint32_t keyToken, const bool requireNonNull) const {
 		if (!key.isValid() || keyToken == 0U) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property presence read requires a valid owner key and nonzero token");
@@ -257,12 +315,12 @@ namespace graph::storage {
 		if (std::optional<SlottedPagePinnedRead> pinned = pages_.readPinned(snapshot, location->page_id);
 				pinned.has_value()) {
 			return decodeEntityPropertyExists(snapshot, key, *location, pinned->page.pageId(), pinned->page.ownerKind(),
-														pinned->page.read({location->page_id, location->slot_id, location->slot_generation}), keyToken);
+														pinned->page.read({location->page_id, location->slot_id, location->slot_generation}), keyToken, requireNonNull);
 		}
 		const SlottedPage page = pages_.read(snapshot, location->page_id);
 		const std::vector<std::byte> bytes =
 				page.read({location->page_id, location->slot_id, location->slot_generation});
-		return decodeEntityPropertyExists(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes, keyToken);
+		return decodeEntityPropertyExists(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes, keyToken, requireNonNull);
 	}
 
 	void PropertyCollectionRootStore::readEntityPropertiesOptionalSorted(
@@ -290,24 +348,7 @@ namespace graph::storage {
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
-		std::vector<size_t> present;
-		present.reserve(locations.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		// Directory order is not required to match Property-page allocation order.
-		// Grouping by PageId guarantees one typed page read per batch page while
-		// preserving results at the caller's logical-owner positions.
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			const EntityPropertyLocation &leftLocation = *locations[left];
-			const EntityPropertyLocation &rightLocation = *locations[right];
-			if (leftLocation.page_id != rightLocation.page_id) {
-				return leftLocation.page_id < rightLocation.page_id;
-			}
-			return leftLocation.slot_id < rightLocation.slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation);
 
 		std::optional<SlottedPagePinnedRead> pinned;
 		std::optional<SlottedPage> copied;
@@ -378,19 +419,7 @@ namespace graph::storage {
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
-		std::vector<size_t> present;
-		present.reserve(locations.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			const EntityPropertyLocation &leftLocation = *locations[left];
-			const EntityPropertyLocation &rightLocation = *locations[right];
-			return leftLocation.page_id != rightLocation.page_id ? leftLocation.page_id < rightLocation.page_id
-																											 : leftLocation.slot_id < rightLocation.slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation);
 
 		std::optional<SlottedPagePinnedRead> pinned;
 		std::optional<SlottedPage> copied;
@@ -425,9 +454,9 @@ namespace graph::storage {
 			const PageId pageId = pinned.has_value() ? pinned->page.pageId() : copied->pageId();
 			const PageOwnerKind ownerKind = pinned.has_value() ? pinned->page.ownerKind() : copied->ownerKind();
 			if (scalarSelection) {
-				const std::optional<PropertyCollectionRootEntry> selected =
+				std::optional<PropertyCollectionRootEntry> selected =
 						decodeSelectedEntityProperty(snapshot, keys[index], location, pageId, ownerKind, bytes, keyTokens.front());
-				results[index] = selected;
+				results[index] = std::move(selected);
 				continue;
 			}
 			std::vector<std::optional<PropertyCollectionRootEntry>> selected =
@@ -436,10 +465,54 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"multi-column Entity Property decoder returned an invalid result shape");
 			}
-			std::copy(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
+			std::move(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
 		}
 		debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_owners",
 									 static_cast<int64_t>(keys.size()));
+	}
+
+	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+	PropertyCollectionRootStore::decodeSelectedEntityPropertiesAndCount(
+		const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+		const EntityPropertyLocation &location, PageId pageId, PageOwnerKind ownerKind,
+		std::span<const std::byte> bytes, std::span<const uint32_t> keyTokens,
+		const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *transientBufferAdmission) const {
+		const uint8_t invalidLocation = static_cast<uint8_t>(location.key != key) |
+				static_cast<uint8_t>(location.page_id != pageId) |
+				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+		if (invalidLocation != 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"combined Entity Property location does not resolve to its Property page");
+		}
+		std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>> decoded;
+		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+			if (large_values_ == nullptr) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference requires a configured LargeValue store");
+			}
+			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			const EntityPropertyKey referenceKey =
+					entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+			if (referenceKey != key || reference.value.kind != LargeValueKind::LVK_BYTES ||
+					reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference has an invalid owner or content type");
+			}
+			LargeValuePropertyDirectory directory =
+					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value, transientBufferAdmission);
+			decoded = {directory.locations.size(),
+						readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens, admission, transientBufferAdmission)};
+		} else {
+			const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+			if (entityKeyForRoot(owner) != key) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property location resolves to another logical owner");
+			}
+			decoded = EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, keyTokens, admission, transientBufferAdmission);
+		}
+		if (transientBufferAdmission) (*transientBufferAdmission)(decoded.second.capacity() * sizeof(std::optional<PropertyCollectionRootEntry>));
+		decoded.second = recordSelectedValues(std::move(decoded.second));
+		return decoded;
 	}
 
 	void PropertyCollectionRootStore::readEntityPropertiesAndCountsOptionalSorted(
@@ -447,7 +520,7 @@ namespace graph::storage {
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
 			const std::span<std::optional<size_t>> counts,
-			const CancellationCheckpoint *cancellation) const {
+			const CancellationCheckpoint *cancellation, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *transientBufferAdmission) const {
 		if (!metadata_.ownsSnapshot(snapshot) || keyTokens.empty() ||
 			keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			results.size() != keys.size() * keyTokens.size() || counts.size() != keys.size()) {
@@ -476,22 +549,21 @@ namespace graph::storage {
 			return;
 		}
 
+		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
+			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property owner batch slots overflowed");
+		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		ownerBytes = locations.capacity() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
+		const SelectedPropertyReadAdmission admitTransient = [&](size_t bytes) {
+			if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(ownerBytes, bytes));
+		};
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
-		std::vector<size_t> present;
-		present.reserve(locations.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			} else {
-				counts[index] = size_t{0U};
-			}
-		}
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			const EntityPropertyLocation &lhs = *locations[left];
-			const EntityPropertyLocation &rhs = *locations[right];
-			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
-		});
+		for (size_t index = 0U; index < locations.size(); ++index)
+			if (!locations[index].has_value()) counts[index] = size_t{0U};
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation, transientBufferAdmission ? &admitTransient : nullptr);
+		ownerBytes = checkedLargeValueBuffers(ownerBytes, present.capacity() * sizeof(size_t));
 
 		std::optional<SlottedPagePinnedRead> pinned;
 		std::optional<SlottedPage> copied;
@@ -521,47 +593,20 @@ namespace graph::storage {
 			}
 			const PageId pageId = pinned.has_value() ? pinned->page.pageId() : copied->pageId();
 			const PageOwnerKind ownerKind = pinned.has_value() ? pinned->page.ownerKind() : copied->ownerKind();
-			const uint8_t invalidLocation = static_cast<uint8_t>(location.key != keys[index]) |
-					static_cast<uint8_t>(location.page_id != pageId) |
-					static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
-			if (invalidLocation != 0U) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-									"combined Entity Property location does not resolve to its Property page");
-			}
-			std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>> decoded;
-			if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
-				if (large_values_ == nullptr) {
-					throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property LargeValue reference requires a configured LargeValue store");
-				}
-				const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
-				const EntityPropertyKey referenceKey =
-						entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
-				if (referenceKey != keys[index] || reference.value.kind != LargeValueKind::LVK_BYTES ||
-						reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE) {
-					throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property LargeValue reference has an invalid owner or content type");
-				}
-				const LargeValuePropertyDirectory directory =
-						readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
-				decoded = {directory.locations.size(),
-							readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens)};
-			} else {
-				const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
-				if (entityKeyForRoot(owner) != keys[index]) {
-					throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property location resolves to another logical owner");
-				}
-				decoded = EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, keyTokens);
-			}
-			counts[index] = decoded.first;
+			auto decoded = decodeSelectedEntityPropertiesAndCount(snapshot, keys[index], location,
+				pageId, ownerKind, bytes, keyTokens, admission, transientBufferAdmission ? &admitTransient : nullptr);
 			std::vector<std::optional<PropertyCollectionRootEntry>> selected = std::move(decoded.second);
 			if (selected.size() != keyTokens.size()) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"combined Entity Property decoder returned an invalid result shape");
 			}
-			std::copy(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
+			if (cancellation != nullptr) cancellation->check();
+			counts[index] = decoded.first;
+			std::move(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
 		}
+		std::vector<std::optional<EntityPropertyLocation>>().swap(locations);
+		std::vector<size_t>().swap(present);
+		if (transientBufferAdmission) (*transientBufferAdmission)(0U);
 		debug::PerfTrace::addValue("native_graph.read.property_combined_batch_owners",
 								 static_cast<int64_t>(keys.size()));
 		// Preserve the established scalar/column diagnostics as compatibility
@@ -575,7 +620,7 @@ namespace graph::storage {
 	size_t PropertyCollectionRootStore::decodeEntityPropertyCount(
 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 			const EntityPropertyLocation &location, const PageId pageId, const PageOwnerKind ownerKind,
-			const std::span<const std::byte> bytes) const {
+			const std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *transientBufferAdmission) const {
 		const uint8_t invalidLocation = static_cast<uint8_t>(location.key != key) |
 				static_cast<uint8_t>(location.page_id != pageId) |
 				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
@@ -596,7 +641,13 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 										"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			return readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value).locations.size();
+			size_t count;
+			{
+				auto directory = readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value, transientBufferAdmission);
+				count = directory.locations.size();
+			}
+			if (transientBufferAdmission) (*transientBufferAdmission)(0U);
+			return count;
 		}
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
 		if (entityKeyForRoot(owner) != key) {
@@ -650,18 +701,7 @@ namespace graph::storage {
 
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
-		std::vector<size_t> present;
-		present.reserve(keys.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			const EntityPropertyLocation &lhs = *locations[left];
-			const EntityPropertyLocation &rhs = *locations[right];
-			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation);
 
 		std::optional<SlottedPagePinnedRead> pinned;
 		std::optional<SlottedPage> copied;
@@ -755,7 +795,7 @@ namespace graph::storage {
 																							 const EntityPropertyKey &key,
 																							 const EntityPropertyLocation &location,
 																							 const PageId pageId, const PageOwnerKind ownerKind,
-																							 const std::span<const std::byte> bytes) const {
+																							 const std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) const {
 		const uint8_t invalidLocation =
 				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId);
 		if (invalidLocation != 0U) {
@@ -784,17 +824,31 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			size_t payloadBytes = 0U;
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value, [&](size_t bytes) {
+				payloadBytes = bytes;
+				if (slotsAdmission != nullptr) (*slotsAdmission)(bytes);
+			});
 			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
 			}
 			root.owner_entity_id = reference.owner_entity_id;
 			root.owner_entity_type = reference.owner_entity_type;
-			root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload);
+			const SelectedPropertyReadAdmission combinedSlots = [&](size_t bytes) {
+				if (bytes > std::numeric_limits<size_t>::max() - payloadBytes) {
+					throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue payload and slots size overflowed");
+				}
+				if (slotsAdmission != nullptr) (*slotsAdmission)(payloadBytes + bytes);
+			};
+			root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload, admission, &combinedSlots);
 		} else {
-			root = EntityPropertyCollectionRootCodec::decode(bytes);
+			if ((admission != nullptr || slotsAdmission != nullptr) && entityKeyForRoot(EntityPropertyCollectionRootCodec::decodeOwner(bytes)) != key) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property Directory location resolves to another logical owner");
+			}
+			root = EntityPropertyCollectionRootCodec::decode(bytes, admission, slotsAdmission);
 		}
+		if (slotsAdmission != nullptr) (*slotsAdmission)(root.entries.capacity() * sizeof(PropertyCollectionRootEntry));
 		const EntityPropertyKey decodedKey = entityKeyForRoot(root);
 		if (decodedKey != key) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
@@ -834,9 +888,9 @@ namespace graph::storage {
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
 			const std::array<uint32_t, 1U> tokens{keyToken};
-			const LargeValuePropertyDirectory directory =
+			LargeValuePropertyDirectory directory =
 					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
-			return readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, tokens).front();
+			return recordSelectedValues(readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, tokens).front());
 		}
 
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
@@ -844,7 +898,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property Directory location resolves to another logical owner");
 		}
-		return EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyToken);
+		return recordSelectedValues(EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyToken));
 	}
 
 	bool PropertyCollectionRootStore::decodeEntityPropertyExists(const MetadataSnapshotPin &snapshot,
@@ -852,7 +906,7 @@ namespace graph::storage {
 																	 const EntityPropertyLocation &location, const PageId pageId,
 																	 const PageOwnerKind ownerKind,
 																	 const std::span<const std::byte> bytes,
-																	 const uint32_t keyToken) const {
+																	 const uint32_t keyToken, const bool requireNonNull) const {
 		const uint8_t invalidLocation =
 				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId) |
 				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
@@ -876,23 +930,37 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const auto locations = readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value).locations;
-			return std::ranges::binary_search(locations, keyToken, {},
-																&EntityPropertyLargeValueEntryLocation::key_token);
+			auto directory = readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
+			const auto found = std::ranges::lower_bound(directory.locations, keyToken, {},
+				&EntityPropertyLargeValueEntryLocation::key_token);
+			if (found == directory.locations.end() || found->key_token != keyToken) return false;
+			if (!requireNonNull) return true;
+			constexpr size_t prefixBytes = sizeof(uint32_t) + CanonicalPropertyValueCodec::HEADER_BYTES;
+			if (found->length < prefixBytes) {
+				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property value header is truncated");
+			}
+			const auto prefix = large_values_->readRangeFromManifestCached(snapshot, directory.manifest,
+				RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset, prefixBytes, directory.range_cache);
+			if (LittleEndianCodec::readU32(prefix, 0U) != keyToken) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER, "Entity Property value token disagrees with its directory");
+			}
+			return !CanonicalPropertyValueCodec::isNullHeader(std::span<const std::byte>(prefix).subspan(sizeof(uint32_t)),
+				found->length - sizeof(uint32_t));
 		}
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
 		if (entityKeyForRoot(owner) != key) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property Directory location resolves to another logical owner");
 		}
-		return EntityPropertyCollectionRootCodec::containsToken(bytes, keyToken);
+		return EntityPropertyCollectionRootCodec::containsToken(bytes, keyToken, requireNonNull);
 	}
 
 	std::vector<std::optional<PropertyCollectionRootEntry>>
 	PropertyCollectionRootStore::decodeSelectedEntityProperties(
 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
 			const EntityPropertyLocation &location, const PageId pageId, const PageOwnerKind ownerKind,
-			const std::span<const std::byte> bytes, const std::span<const uint32_t> keyTokens) const {
+			const std::span<const std::byte> bytes, const std::span<const uint32_t> keyTokens,
+			const SelectedPropertyReadAdmission *admission) const {
 		if (keyTokens.empty()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"multi-column Entity Property decoding requires selected tokens");
@@ -924,9 +992,9 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const LargeValuePropertyDirectory directory =
+			LargeValuePropertyDirectory directory =
 					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
-			return readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens);
+			return recordSelectedValues(readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens, admission));
 		}
 
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
@@ -934,7 +1002,7 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property Directory location resolves to another logical owner");
 		}
-		return EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyTokens);
+		return recordSelectedValues(EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyTokens, admission));
 	}
 
 	void PropertyCollectionRootScanCursor::validateSnapshot(const MetadataSnapshotPin &snapshot) const {
@@ -1006,22 +1074,41 @@ namespace graph::storage {
 
 	PropertyCollectionRoot PropertyCollectionRootScanCursor::readLocation(const MetadataSnapshotPin &snapshot,
 																		  const EntityPropertyKey &key,
-																		  const EntityPropertyLocation &location) {
+																		  const EntityPropertyLocation &location, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		validateSnapshot(snapshot);
 		if (cancellation_ != nullptr) {
 			cancellation_->check();
 		}
 		if (location.page_id != current_page_id_) {
+			if (slotsAdmission) (*slotsAdmission)(checkedLargeValueBuffers(
+					current_page_ ? current_page_->retainedBufferBytes() : 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES));
 			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
 			current_page_id_ = location.page_id;
+			debug::PerfTrace::addValue("native_graph.read.property_full_cursor_pages", 1);
 		}
-		const std::vector<std::byte> bytes =
-				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
-		return store_->decodeEntityRoot(snapshot, key, location, current_page_->pageId(), current_page_->ownerKind(), bytes);
+		const size_t pageBytes = current_page_->retainedBufferBytes();
+		const SelectedPropertyReadAdmission admitSlot = [&](size_t bytes) {
+			if (slotsAdmission) (*slotsAdmission)(checkedLargeValueBuffers(pageBytes, bytes));
+		};
+		PropertyCollectionRoot result;
+		{
+			const std::vector<std::byte> bytes = current_page_->read(
+					{location.page_id, location.slot_id, location.slot_generation},
+					slotsAdmission ? admitSlot : SelectedPropertyReadAdmission{});
+			const SelectedPropertyReadAdmission admitDecode = [&](size_t retained) {
+				admitSlot(checkedLargeValueBuffers(bytes.capacity(), retained));
+			};
+			result = store_->decodeEntityRoot(snapshot, key, location, current_page_->pageId(),
+					current_page_->ownerKind(), bytes, admission, slotsAdmission ? &admitDecode : nullptr);
+		}
+		// The retained cursor page belongs to the session; this callback reports read temporaries.
+		if (slotsAdmission) (*slotsAdmission)(result.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+		if (cancellation_ != nullptr) cancellation_->check();
+		return result;
 	}
 
 	PropertyCollectionRoot PropertyCollectionRootScanCursor::readEntity(const MetadataSnapshotPin &snapshot,
-																const EntityPropertyKey &key) {
+																const EntityPropertyKey &key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		validateSnapshot(snapshot);
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -1032,12 +1119,12 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property scan read requires a present Property root");
 		}
-		return readLocation(snapshot, key, *location);
+		return readLocation(snapshot, key, *location, admission, slotsAdmission);
 	}
 
 	std::optional<PropertyCollectionRoot>
 	PropertyCollectionRootScanCursor::readEntityOptional(const MetadataSnapshotPin &snapshot,
-																	 const EntityPropertyKey &key) {
+																	 const EntityPropertyKey &key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slotsAdmission) {
 		debug::ScopedPerfTimer timer("native_graph.read.property_optional_lookup");
 		validateSnapshot(snapshot);
 		if (!key.isValid()) {
@@ -1045,7 +1132,7 @@ namespace graph::storage {
 								"optional Entity Property scan read requires a valid logical owner key");
 		}
 		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
-		return location.has_value() ? std::optional(readLocation(snapshot, key, *location)) : std::nullopt;
+		return location.has_value() ? std::optional(readLocation(snapshot, key, *location, admission, slotsAdmission)) : std::nullopt;
 	}
 
 	std::optional<PropertyCollectionRootEntry>
@@ -1062,7 +1149,7 @@ namespace graph::storage {
 	}
 
 	bool PropertyCollectionRootScanCursor::readEntityPropertyExists(const MetadataSnapshotPin &snapshot,
-																	 const EntityPropertyKey &key, const uint32_t keyToken) {
+																	 const EntityPropertyKey &key, const uint32_t keyToken, const bool requireNonNull) {
 		validateSnapshot(snapshot);
 		if (!key.isValid() || keyToken == 0U) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -1072,14 +1159,14 @@ namespace graph::storage {
 		if (!location.has_value()) {
 			return false;
 		}
-		return readSelectedPresenceLocation(snapshot, key, *location, keyToken);
+		return readSelectedPresenceLocation(snapshot, key, *location, keyToken, requireNonNull);
 	}
 
 	void PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
-			const bool columnBatch) {
+			const bool columnBatch, const SelectedPropertyReadAdmission *admission) {
 			validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			results.size() != keys.size() * keyTokens.size()) {
@@ -1114,37 +1201,65 @@ namespace graph::storage {
 		// Directory results are owner ordered, but COW publication can place those
 		// owners on non-monotonic physical pages. Resolve the whole range first,
 		// then read each distinct page once and restore owner-major output order.
-		std::vector<size_t> present;
-		present.reserve(locations.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			if (locations[left]->page_id != locations[right]->page_id) {
-				return locations[left]->page_id < locations[right]->page_id;
-			}
-			return locations[left]->slot_id < locations[right]->slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation_);
 		size_t pagesRead = 0U;
 		PageId previousPage{};
-		bool havePage = false;
+		std::optional<SlottedPagePinnedRead> pinned;
+		SlottedPage *copied = nullptr;
+		bool tryPinned = true;
 		for (const size_t ownerIndex : present) {
+			validateSnapshot(snapshot);
+			if (cancellation_ != nullptr) cancellation_->check();
 			const EntityPropertyLocation &location = *locations[ownerIndex];
-			if (!havePage || previousPage != location.page_id) {
+			if (previousPage != location.page_id) {
 				previousPage = location.page_id;
-				havePage = true;
 				++pagesRead;
+				pinned.reset();
+				copied = nullptr;
+				if (current_page_.has_value() && current_page_id_ == location.page_id) {
+					copied = &*current_page_;
+				} else {
+					if (tryPinned)
+						pinned = store_->pages_.readPinned(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					if (!pinned.has_value()) {
+						// Disabled or saturated pools cannot lend an image. Avoid
+						// repeating a failed pin route for every remaining page.
+						tryPinned = false;
+						current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
+						current_page_id_ = location.page_id;
+						copied = &*current_page_;
+					}
+				}
 			}
-			const std::vector<std::optional<PropertyCollectionRootEntry>> decoded =
-					readSelectedLocation(snapshot, keys[ownerIndex], location, keyTokens);
+			std::vector<std::optional<PropertyCollectionRootEntry>> decoded;
+			if (pinned.has_value()) {
+				const auto bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
+						pinned->page.pageId(), pinned->page.ownerKind(), bytes, keyTokens, admission);
+				debug::PerfTrace::addValue("native_graph.read.property_selected_borrowed_owners", 1);
+			} else {
+				const auto bytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+				decoded = store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
+						copied->pageId(), copied->ownerKind(), bytes, keyTokens, admission);
+				debug::PerfTrace::addValue("native_graph.read.property_selected_slot_copy_bytes", static_cast<int64_t>(bytes.size()));
+			}
+			if (cancellation_ != nullptr) cancellation_->check();
 			if (decoded.size() != keyTokens.size()) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Property scan batch decoder changed its column cardinality");
 			}
-			std::copy(decoded.begin(), decoded.end(), results.begin() +
+			std::move(decoded.begin(), decoded.end(), results.begin() +
 											static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
+		}
+		// Keep the established one-page owned cursor cache across batches;
+		// never retain a buffer-pool pin beyond this read. Only the final page
+		// is copied, while borrowed slots were decoded directly above.
+		if (pinned.has_value()) {
+			auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload());
+			debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_copy_bytes",
+					static_cast<int64_t>(pinned->contents.payload().size()));
+			current_page_.emplace(std::move(retained));
+			current_page_id_ = previousPage;
 		}
 		if (columnBatch) {
 			debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_pages",
@@ -1163,7 +1278,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
-			const std::span<std::optional<size_t>> counts) {
+			const std::span<std::optional<size_t>> counts, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *transientBufferAdmission) {
 		validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
 			results.size() != keys.size() * keyTokens.size() || counts.size() != keys.size()) {
@@ -1184,7 +1299,24 @@ namespace graph::storage {
 			return;
 		}
 
+		// An owned image retained by an earlier unbudgeted read is optional.
+		// Release it before a budgeted batch so a warm session can use the same
+		// borrowed-page path and memory allowance as a cold session.
+		if (transientBufferAdmission != nullptr) {
+			current_page_.reset();
+			current_page_id_ = PageId{};
+		}
+
+		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
+			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property owner batch slots overflowed");
+		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		ownerBytes = locations.capacity() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
+		const SelectedPropertyReadAdmission admitTransient = [&](size_t bytes) {
+			if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(ownerBytes, bytes));
+		};
 		for (size_t index = 0U; index < keys.size(); ++index) {
 			if (!keys[index].isValid()) {
 				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -1195,30 +1327,29 @@ namespace graph::storage {
 				counts[index] = size_t{0U};
 			}
 		}
-		std::vector<size_t> present;
-		present.reserve(keys.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			return locations[left]->page_id != locations[right]->page_id
-					? locations[left]->page_id < locations[right]->page_id
-					: locations[left]->slot_id < locations[right]->slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation_, transientBufferAdmission ? &admitTransient : nullptr);
+		ownerBytes = checkedLargeValueBuffers(ownerBytes, present.capacity() * sizeof(size_t));
 		std::optional<SlottedPagePinnedRead> pinned;
-		std::optional<SlottedPage> copied;
+		SlottedPage *copied = nullptr;
 		PageId currentPage{};
 		for (const size_t ownerIndex: present) {
 			const EntityPropertyLocation &location = *locations[ownerIndex];
 			if (location.page_id != currentPage) {
 				pinned.reset();
-				copied.reset();
+				copied = nullptr;
 				currentPage = location.page_id;
-				pinned = store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
-				if (!pinned.has_value()) {
-					copied.emplace(store_->pages_.read(snapshot, currentPage));
+				if (currentPage == current_page_id_) {
+					copied = &*current_page_;
+				} else {
+					debug::PerfTrace::addValue("native_graph.read.property_combined_page_acquisition", 1);
+					pinned = store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					if (!pinned.has_value()) {
+						admitTransient(checkedLargeValueBuffers(
+								current_page_ ? current_page_->retainedBufferBytes() : 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES));
+						current_page_.emplace(store_->pages_.read(snapshot, currentPage));
+						current_page_id_ = currentPage;
+						copied = &*current_page_;
+					}
 				}
 			}
 			std::vector<std::byte> copiedBytes;
@@ -1230,23 +1361,56 @@ namespace graph::storage {
 				pageId = pinned->page.pageId();
 				ownerKind = pinned->page.ownerKind();
 			} else {
-				copiedBytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+				const size_t copiedPageBytes = copied->retainedBufferBytes();
+				const SelectedPropertyReadAdmission admitSlot = [&](size_t retained) {
+					admitTransient(checkedLargeValueBuffers(copiedPageBytes, retained));
+				};
+				copiedBytes = copied->read({location.page_id, location.slot_id, location.slot_generation},
+						transientBufferAdmission ? admitSlot : SelectedPropertyReadAdmission{});
 				bytes = copiedBytes;
 				pageId = copied->pageId();
 				ownerKind = copied->ownerKind();
 			}
-			counts[ownerIndex] = store_->decodeEntityPropertyCount(snapshot, keys[ownerIndex], location,
-					pageId, ownerKind, bytes);
-			const std::vector<std::optional<PropertyCollectionRootEntry>> selected =
-					store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
-					pageId, ownerKind, bytes, keyTokens);
+			debug::PerfTrace::addValue("native_graph.read.property_selected_column_decode", 1);
+			debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
+			const SelectedPropertyReadAdmission admitDecode = [&](size_t retained) {
+				admitTransient(checkedLargeValueBuffers(
+						checkedLargeValueBuffers(copied ? copied->retainedBufferBytes() : 0U, copiedBytes.capacity()), retained));
+			};
+			auto decoded = store_->decodeSelectedEntityPropertiesAndCount(snapshot, keys[ownerIndex], location,
+				pageId, ownerKind, bytes, keyTokens, admission, transientBufferAdmission ? &admitDecode : nullptr);
+			const size_t count = decoded.first;
+			auto selected = std::move(decoded.second);
 			if (selected.size() != keyTokens.size()) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Property scan combined decoder changed its column cardinality");
 			}
-			std::copy(selected.begin(), selected.end(), results.begin() +
+			if (cancellation_ != nullptr) cancellation_->check();
+			counts[ownerIndex] = count;
+			std::move(selected.begin(), selected.end(), results.begin() +
 									static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
 		}
+		// A budgeted batch must not copy a borrowed page solely to populate an
+		// optional session cache. The buffer pool already owns the authenticated
+		// image and can lend it again on the next call without a retained pin.
+		if (pinned.has_value() && transientBufferAdmission == nullptr) {
+			try {
+				// Retain only an owned image across calls, so the session does not keep a pool pin.
+				admitTransient(checkedLargeValueBuffers(current_page_ ? current_page_->retainedBufferBytes() : 0U,
+						pinned->contents.payload().size()));
+				current_page_.emplace(SlottedPage::open(pinned->contents.owner, pinned->contents.payload()));
+				current_page_id_ = currentPage;
+				pinned.reset();
+				admitTransient(current_page_->retainedBufferBytes());
+			} catch (...) {
+				std::fill(results.begin(), results.end(), std::nullopt);
+				std::fill(counts.begin(), counts.end(), std::nullopt);
+				throw;
+			}
+		}
+		std::vector<std::optional<EntityPropertyLocation>>().swap(locations);
+		std::vector<size_t>().swap(present);
+		if (transientBufferAdmission) (*transientBufferAdmission)(0U);
 		debug::PerfTrace::addValue("native_graph.read.property_combined_batch_owners",
 								 static_cast<int64_t>(keys.size()));
 		// Preserve the established selected-batch metric for callers and tests
@@ -1259,7 +1423,7 @@ namespace graph::storage {
 
 	void PropertyCollectionRootScanCursor::readEntityPropertyCountsSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
-			const std::span<std::optional<size_t>> results) {
+			const std::span<std::optional<size_t>> results, const SelectedPropertyReadAdmission *transientBufferAdmission) {
 		validateSnapshot(snapshot);
 		if (keys.size() != results.size()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -1278,7 +1442,16 @@ namespace graph::storage {
 			return;
 		}
 
+		if (keys.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<EntityPropertyLocation>))
+			throwRootStoreError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property count owner slots overflowed");
+		size_t ownerBytes = keys.size() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		ownerBytes = locations.capacity() * sizeof(std::optional<EntityPropertyLocation>);
+		if (transientBufferAdmission) (*transientBufferAdmission)(ownerBytes);
+		const SelectedPropertyReadAdmission admitTransient = [&](size_t bytes) {
+			if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(ownerBytes, bytes));
+		};
 		for (size_t index = 0U; index < keys.size(); ++index) {
 			if (cancellation_ != nullptr) {
 				cancellation_->check();
@@ -1289,28 +1462,42 @@ namespace graph::storage {
 			}
 		}
 
-		std::vector<size_t> present;
-		present.reserve(keys.size());
-		for (size_t index = 0U; index < locations.size(); ++index) {
-			if (locations[index].has_value()) {
-				present.push_back(index);
-			}
-		}
-		// Physical placement may not follow owner order after COW relocation;
-		// group by page so each distinct Property page is authenticated once.
-		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
-			const EntityPropertyLocation &lhs = *locations[left];
-			const EntityPropertyLocation &rhs = *locations[right];
-			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
-		});
+		std::vector<size_t> present = detail::propertyPageOrder(locations, cancellation_, transientBufferAdmission ? &admitTransient : nullptr);
+		ownerBytes = checkedLargeValueBuffers(ownerBytes, present.capacity() * sizeof(size_t));
 
+		std::optional<SlottedPagePinnedRead> borrowed;
+		PageId borrowedPage{};
+		if (transientBufferAdmission != nullptr) {
+			current_page_.reset();
+			current_page_id_ = PageId{};
+		}
 		PageId currentPage = current_page_id_;
 		for (const size_t index : present) {
 			if (cancellation_ != nullptr) {
 				cancellation_->check();
 			}
 			const EntityPropertyLocation &location = *locations[index];
+			if (transientBufferAdmission != nullptr) {
+				if (location.page_id != borrowedPage) {
+					borrowed.reset();
+					borrowedPage = location.page_id;
+					borrowed = store_->pages_.readPinned(snapshot, borrowedPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					if (borrowed.has_value()) {
+						debug::PerfTrace::addValue("native_graph.read.property_count_batch_pages", 1);
+					}
+				}
+				if (borrowed.has_value()) {
+					const auto bytes = borrowed->page.read({location.page_id, location.slot_id, location.slot_generation});
+					results[index] = store_->decodeEntityPropertyCount(snapshot, keys[index], location,
+							borrowed->page.pageId(), borrowed->page.ownerKind(), bytes, &admitTransient);
+					continue;
+				}
+			}
+
 			if (location.page_id != currentPage) {
+				if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(ownerBytes,
+						checkedLargeValueBuffers(current_page_ ? current_page_->retainedBufferBytes() : 0U,
+								RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)));
 				currentPage = location.page_id;
 				// Keep an owned transient image in the cursor after the authenticated
 				// pin is released. This preserves the one-page cursor locality without
@@ -1326,16 +1513,28 @@ namespace graph::storage {
 				current_page_id_ = currentPage;
 				debug::PerfTrace::addValue("native_graph.read.property_count_batch_pages", 1);
 			}
-			const std::vector<std::byte> bytes =
-					current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+			const size_t pageBytes = current_page_->retainedBufferBytes();
+			const auto admitSlot = [&](size_t bytes) {
+				if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(
+						checkedLargeValueBuffers(ownerBytes, pageBytes), bytes));
+			};
+			const std::vector<std::byte> bytes = current_page_->read(
+					{location.page_id, location.slot_id, location.slot_generation},
+					transientBufferAdmission ? SelectedPropertyReadAdmission(admitSlot) : SelectedPropertyReadAdmission{});
+			const SelectedPropertyReadAdmission admitDecode = [&](size_t decoded) {
+				admitSlot(checkedLargeValueBuffers(bytes.capacity(), decoded));
+			};
 			results[index] = store_->decodeEntityPropertyCount(
-					snapshot, keys[index], location, current_page_->pageId(), current_page_->ownerKind(), bytes);
+					snapshot, keys[index], location, current_page_->pageId(), current_page_->ownerKind(), bytes, transientBufferAdmission ? &admitDecode : nullptr);
 		}
 		for (std::optional<size_t> &result : results) {
 			if (!result.has_value()) {
 				result = size_t{0U};
 			}
 		}
+		std::vector<std::optional<EntityPropertyLocation>>().swap(locations);
+		std::vector<size_t>().swap(present);
+		if (transientBufferAdmission) (*transientBufferAdmission)(0U);
 		debug::PerfTrace::addValue("native_graph.read.property_count_batch_owners",
 								 static_cast<int64_t>(keys.size()));
 	}
@@ -1355,14 +1554,16 @@ namespace graph::storage {
 		}
 		const std::vector<std::byte> bytes =
 				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
-		return store_->decodeSelectedEntityProperty(snapshot, key, location, current_page_->pageId(),
+		auto result = store_->decodeSelectedEntityProperty(snapshot, key, location, current_page_->pageId(),
 																																												 current_page_->ownerKind(), bytes, keyToken);
+		if (cancellation_ != nullptr) cancellation_->check();
+		return result;
 	}
 
 	bool PropertyCollectionRootScanCursor::readSelectedPresenceLocation(const MetadataSnapshotPin &snapshot,
 																	 const EntityPropertyKey &key,
 																	 const EntityPropertyLocation &location,
-																	 const uint32_t keyToken) {
+																	 const uint32_t keyToken, const bool requireNonNull) {
 		validateSnapshot(snapshot);
 		if (cancellation_ != nullptr) {
 			cancellation_->check();
@@ -1374,13 +1575,14 @@ namespace graph::storage {
 		const std::vector<std::byte> bytes =
 				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
 		return store_->decodeEntityPropertyExists(snapshot, key, location, current_page_->pageId(),
-																																												 current_page_->ownerKind(), bytes, keyToken);
+																																												 current_page_->ownerKind(), bytes, keyToken, requireNonNull);
 	}
 
 	std::vector<std::optional<PropertyCollectionRootEntry>>
 	PropertyCollectionRootScanCursor::readSelectedLocation(
 			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
-			const EntityPropertyLocation &location, const std::span<const uint32_t> keyTokens) {
+			const EntityPropertyLocation &location, const std::span<const uint32_t> keyTokens,
+			const SelectedPropertyReadAdmission *admission) {
 		validateSnapshot(snapshot);
 		if (cancellation_ != nullptr) {
 			cancellation_->check();
@@ -1395,8 +1597,10 @@ namespace graph::storage {
 		}
 		const std::vector<std::byte> bytes =
 				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
-		return store_->decodeSelectedEntityProperties(snapshot, key, location, current_page_->pageId(),
-																																												 current_page_->ownerKind(), bytes, keyTokens);
+		auto result = store_->decodeSelectedEntityProperties(snapshot, key, location, current_page_->pageId(),
+																																												 current_page_->ownerKind(), bytes, keyTokens, admission);
+		if (cancellation_ != nullptr) cancellation_->check();
+		return result;
 	}
 
 	EntityPropertyRootMutationPlan
@@ -1874,6 +2078,7 @@ namespace graph::storage {
 	void PropertyCollectionRootStore::preparePlannedEntityRootReplacement(
 			const EntityPropertyRootMutationPlan &plan,
 			NativeGraphPropertyPageReplacementMaterialization &materialization, LogSequenceNumber checkpointLsn) const {
+		debug::ScopedPerfTimer preparationTimer("native_graph.mutation.prepare.property_replacement");
 		const bool existingPagePlan = plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
 		// ZYX_COV_EXCL_NEXT: a source-bearing new-page plan is a relocation only when both private planner fields
 		// exist.
@@ -2065,9 +2270,20 @@ namespace graph::storage {
 		materialization.replacement = replacementLocations.front();
 	}
 
+	void PropertyCollectionRootStore::preparePlannedLargeValues(
+			std::span<const NativeGraphLargeValueMutation> mutations,
+			std::span<LargeValueMaterializationResult> materializations, LogSequenceNumber checkpointLsn) const {
+		debug::ScopedPerfTimer preparationTimer("native_graph.mutation.prepare.large_value");
+		if (mutations.empty() && materializations.empty()) return;
+		if (large_values_ == nullptr)
+			throwRootStoreError(FormatError::FERR_INVALID_STATE, "LargeValue batch preparation requires a store");
+		large_values_->prepareNativeGraphMaterializations(mutations, materializations, checkpointLsn);
+	}
+
 	void PropertyCollectionRootStore::preparePlannedLargeValue(const NativeGraphLargeValueMutation &mutation,
 															   LargeValueMaterializationResult &materialization,
 															   LogSequenceNumber checkpointLsn) const {
+		debug::ScopedPerfTimer preparationTimer("native_graph.mutation.prepare.large_value");
 		if (large_values_ == nullptr) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"native Entity Property LargeValue preparation requires a configured LargeValue store");
@@ -2079,6 +2295,7 @@ namespace graph::storage {
 			std::span<const EntityPropertyRootMutationPlan> plans,
 			std::span<const std::vector<size_t>> pagePlanOrdinals,
 			NativeGraphPropertyPageBatchMaterialization &materialization, LogSequenceNumber checkpointLsn) const {
+		debug::ScopedPerfTimer preparationTimer("native_graph.mutation.prepare.property_batch");
 		const size_t maximumBytes =
 				RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
 		const bool validBatchKind =

@@ -1,0 +1,151 @@
+---
+title: Native Architecture Remaining Work Roadmap
+description: Current status, remaining gates, and execution order for the native ZYX architecture.
+category: Storage Format
+categoryOrder: 3
+order: 12
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+
+# Native Architecture Remaining Work Roadmap
+
+This page is the English status and navigation mirror for the detailed [Chinese
+roadmap](/zh/docs/zyx/architecture/native-remaining-work-roadmap). The normative
+format and durability design remain in the [native single-file storage
+plan](native-single-file-storage-plan); the production-read optimization ledger
+remains in [Optimization Strategy](optimization); public capability retirement is
+tracked by the [Native Capability Acceptance Matrix](native-capability-acceptance-matrix).
+
+## Status Snapshot (2026-09-24)
+
+The repository tracks three independent completion dimensions. They must not be
+collapsed into one percentage:
+
+| Dimension | Status | Meaning |
+| --- | --- | --- |
+| Native correctness core (Stage 0-10, P0, C0-C7) | Native owners and minimum focused evidence exist; release gates remain open | Native owners, format, persistence/recovery boundaries, public behavior, and minimum correctness evidence exist. This is not a claim that every capability row is closed or that the product is release-ready: scale, exhaustive fault matrices, sanitizers, bindings, coverage, and platform evidence remain release gates. |
+| Production-read optimization (Optimization Strategy Stage 0-9) | About 34%; Stage 1 implemented, Stages 2-8 partial, Stage 9 deferred (not started) | This measures consumer adoption of read shapes, bounded batches, typed cursors, Property columns, topology cursors, and snapshot-local caching. It is not a storage-migration, correctness, coverage, or performance percentage. |
+| Current macOS validation | Historical six-suite runtime/executor checkpoint: 306/306; historical direct-edge result: 77/77; pre-Vector-change direct-edge result: 78/78; last verified logical-backend boundary: 57/57; last verified ShortestPath boundary: 3/3; last verified Vector procedure boundary: 8/8; shape-aware projection/adapter checkpoint: 15/15; projection suite: 14/14; full quick run is historical | The six-suite `306/306` checkpoint is `LogicalGraphReadExecutorTest.*:LogicalPlanDirectEdgeRuntimeTest.*:LogicalPlanPatternExpressionRuntimeTest.*:LogicalPlanReadRuntimeTest.*:LogicalPlanUnionRuntimeTest.*:LogicalPlanVarLengthRuntimeTest.*` and predates the latest read-only correlated-subquery complete-Entity change and the current lazy-`EntityRef` Vector procedure change. The direct-edge `78/78` result is also pre-Vector-change evidence. The last verified `QueryEngineLogicalBackendBoundaryTest.*` boundary suite passed `57/57` before the current Vector change, with `VectorProcedure*` at `8/8`; neither result validates the current working tree. The historical checkpoint includes complete-Entity prefetch for the four core operators, the compiled mixed-expression selector for Filter, Project, Aggregate, and Sort, bounded cross-row NamedPath reference batching, the deferred-EntityRef Sort-key regression, and the earlier read-only correlated-subquery imported-Property regression. The separate `ShortestPath*` boundary group previously passed 3/3 for native `algo.shortestPath` final-path Node batch materialization. The independent projection/adapter run passed 15/15 before the latest one-pass projection staging change; the projection suite passed 14/14 on its named binary. These are focused evidence, not a full-suite result. The current lazy Vector implementation still requires compilation and focused reruns. The preceding 305/305, 304/304, 298/298, 297/297, and 296/296 runs are historical focused evidence. The latest full quick run is `native-20260923T211232-90355` and cannot validate the current worktree. |
+
+## Current Functional Scope
+
+- Preserve all graph capabilities, including Cypher, GDS, Leiden, Vector,
+  Driver ABI, and language bindings. Optimization must not remove public behavior.
+- Keep the single-file native format and its fail-closed corruption, recovery,
+  relocation, snapshot, and reclamation contracts. Do not restore the retired
+  Segment-chain or legacy physical-executor implementation for compatibility.
+- Finish the consumer audit for Stages 2-8. Existing reusable APIs are
+  foundations, not proof that every query, procedure, GDS, overlay, index
+  verification, maintenance, or write-batch consumer uses them.
+- The current procedure checkpoint is deliberately narrow: native
+  `algo.shortestPath` and `gds.shortestPath.dijkstra.stream` batch final
+  path-Node materialization through the logical snapshot, while adapters
+  without an existence probe retain the explicit complete-read fallback. The
+  shared helper restores logical path order after sorted storage reads and
+  accounts for duplicate path positions under the materialized-byte bound. This
+  does not close the remaining procedure Property-expression, GDS, overlay,
+  maintenance, or lifecycle audit. The last verified `ShortestPath*` boundary
+  is `3/3`; the existing GDS procedure contract suite covers Dijkstra behavior.
+  The previous Vector procedure boundary was `8/8` before the current lazy-
+  `EntityRef` change and must be rerun.
+- The current GDS projection checkpoint is deliberately narrow as well:
+  `LogicalGraphProjection::build()` requests a shape-aware resumable Node scan
+  that reads identity and labels only when a label filter is present. Native
+  page-backed adapters honor selected-column and complete-property shapes; the
+  generic fallback keeps complete-scan semantics. Its earlier focused
+  projection/adapter run passes 15/15 tests, while the current projection suite
+  passes 14/14 after one-pass staging. Neither result closes the GDS capability
+  row or Stage 2/3 because broader consumer, scale, and lifecycle gates remain.
+- The current `LogicalPlanReadRuntime.cpp` change introduces
+  `selectBatchableExpressions(...)` for Filter, Project, Aggregate, and Sort. It
+  is compiled and covered by the focused checkpoint; the remaining work is to
+  audit the other Stage 6 consumers and preserve the complete-expression fallback.
+  The direct Filter contract (rejected rows, duplicate rows, `NULL`, and
+  visitor early-stop) now has focused evidence; the remaining open work is the
+  other complete-Entity consumers and lifecycle coverage. The native
+  `algo.shortestPath` procedure and `gds.shortestPath.dijkstra.stream` now share
+  bounded final path-Node materialization through `readNodesShapedSorted(...)`;
+  the helper restores logical path order after sorted storage reads and counts
+  duplicate path positions under the byte bound. The last verified
+  `ShortestPath*` boundary is `3/3`; the previous Vector procedure boundary was
+  `8/8` before the current lazy-`EntityRef` change, and the existing GDS procedure
+  contract suite covers Dijkstra behavior; procedure Property-expression
+  batching and other procedure paths remain open.
+- The current Vector procedure implementation is a pending lazy-`EntityRef`
+  checkpoint: validation, filtering, projection, `SKIP`, and `LIMIT` operate on
+  references; selected and complete Property caches are distinct; complete Node
+  reads happen only for surviving final Node outputs; sorted bounded reads are
+  scattered back to score order and repeated references reuse one payload.
+  Scalar-only and Property-only outputs should avoid complete Node reads. The
+  previous `VectorProcedure*` `8/8` result predates this change and must be rerun
+  after compilation; cross-row Property-expression batching for procedures
+  remains open.
+
+### Progress authority correction (2026-09-24)
+
+The repository intentionally reports three different states:
+
+1. **Native correctness core**: the native storage owner and minimum focused
+   correctness evidence exist. This can be described as a completed functional
+   work package even while release gates remain open.
+2. **Capability acceptance**: the public contract still needs its lifecycle,
+   recovery, resource, binding, performance, coverage, or platform evidence.
+   The acceptance matrix may therefore keep a row `IN_PROGRESS` after the
+   corresponding native core exists.
+3. **Production-read optimization**: logical-plan, procedure, GDS, overlay,
+   maintenance, and index-verification consumers have adopted the shared shape
+   and bounded-batch contract. This is the separate approximately 34% ledger.
+
+These states are not additive and must not be converted into one percentage.
+The current working tree also contains uncommitted runtime changes: focused
+results above are valid only for the commands and source revisions named in the
+snapshot, while the most recent unfiltered quick run remains historical. A
+stage or capability must not be marked complete merely because a focused test
+count increased.
+
+## Priority Order
+
+1. Complete the current macOS functional optimization batch and its focused
+   correctness tests. The direct Filter complete-Entity predicate contract has
+   focused evidence, grouped Aggregate has a focused complete-Entity regression,
+   deferred-EntityRef Sort has a focused regression, and read-only correlated
+   subquery imports have a focused regression; next cover the remaining complex
+   JOIN/OPTIONAL MATCH/UNION payloads. Cover both the safe
+   selected-expression subset and the complete-entity/path fallback, including
+   ordering, duplicates, `NULL`, byte bounds, cancellation, and strict early-stop.
+   The GDS projection shape-aware scan now has an independent 15/15
+   projection/adapter regression and a current 14/14 projection-suite result;
+   keep its broader consumer, scale, and lifecycle gates separate from those
+   focused test results. The last verified ShortestPath 3/3 and pre-change Vector
+   procedure 8/8 checkpoints are likewise bounded consumer evidence; the Vector
+   change must be rebuilt and rerun, and procedure Property-expression batching
+   remains open.
+2. Continue the Stage 6 consumer audit, then close the remaining Stage 2-8
+   lifecycle, structural-counter, and error-path evidence without adding
+   benchmark-specific branches.
+3. Keep necessary unit tests with each behavior change. Do not block functional
+   migration on a global coverage sprint; comprehensive line, branch, function,
+   and region coverage belongs after the final source set is stable.
+4. Run a current unfiltered macOS quick suite after a coherent batch of runtime
+   changes. Treat older full-suite, coverage, and benchmark artifacts as history.
+5. Only after functional migration and legacy cleanup are stable, run the frozen
+   no-diagnostic Release benchmark, scale matrix, three-platform validation,
+   sanitizer checks, binding checks, and final coverage gates.
+
+## Evidence Rules
+
+- A focused test count is evidence only for the compiled worktree and paths it
+  exercises. Never add historical counts to the latest count.
+- A benchmark result is diagnostic until its dataset manifest, seed, hardware,
+  compiler, execution mode, warmup, iterations, runner identity, and diagnostic
+  state are frozen. It cannot close an optimization stage by itself.
+- A progress percentage changes only after a roadmap-level stage audit. It must
+  never be inferred from a coverage percentage, a test count, or one workload's
+  latency.
+
+The detailed Chinese roadmap retains dated audit history and the complete
+Stage 0-10, P0, and C0-C7 work-package table. Keep both language pages aligned
+when the status snapshot, execution order, or evidence boundary changes.

@@ -26,7 +26,7 @@ namespace graph::query::execution {
 		explicit LogicalPlanSchemaRuntime(storage::LogicalGraphSchemaBackend &backend) : backend_(backend) {}
 
 		[[nodiscard]] QueryResult execute(const logical::LogicalOperator &root, size_t maximumIndexes,
-													  const QueryContext &context) const;
+													  const QueryContext &context, size_t maximumPropertySourceBytes = 0U) const;
 
 	private:
 		storage::LogicalGraphSchemaBackend &backend_;

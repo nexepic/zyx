@@ -7,6 +7,8 @@
  */
 
 #include <memory>
+#include <chrono>
+#include <thread>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -16,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/LogicalPlanSchemaRuntime.hpp"
 #include "graph/query/logical/operators/LogicalCreateConstraint.hpp"
 #include "graph/query/logical/operators/LogicalCreateIndex.hpp"
@@ -34,6 +37,25 @@ namespace graph::query::execution {
 
 		class SchemaBackend final : public storage::LogicalGraphReadBackend, public storage::LogicalGraphSchemaBackend {
 		public:
+			std::function<void()> construction_hook;
+			storage::LogicalGraphIndexDefinition createLogicalNodeIndexWithCheckpoint(
+				const storage::LogicalGraphNodeIndexCreateRequest &request, const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) override {
+				if (construction_hook) construction_hook();
+				if (checkpoint) checkpoint();
+				return createLogicalNodeIndex(request);
+			}
+			storage::LogicalGraphIndexDefinition createLogicalNodeVectorIndexWithCheckpoint(
+				const storage::LogicalGraphNodeVectorIndexCreateRequest &request, const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) override {
+				if (construction_hook) construction_hook();
+				if (checkpoint) checkpoint();
+				return createLogicalNodeVectorIndex(request);
+			}
+			storage::LogicalGraphConstraintDefinition createLogicalConstraintWithCheckpoint(
+				const storage::LogicalGraphConstraintCreateRequest &request, const std::function<void()> &checkpoint, const std::function<void(size_t)> &propertyAdmission) override {
+				if (construction_hook) construction_hook();
+				if (checkpoint) checkpoint();
+				return createLogicalConstraint(request);
+			}
 			[[nodiscard]] std::unique_ptr<storage::LogicalGraphReadSnapshot>
 			openLogicalGraphReadSnapshot() const override {
 				throw std::logic_error("schema test does not execute graph reads");
@@ -41,6 +63,7 @@ namespace graph::query::execution {
 
 			[[nodiscard]] storage::LogicalGraphIndexDefinition
 			createLogicalNodeIndex(const storage::LogicalGraphNodeIndexCreateRequest &request) override {
+				++calls;
 				create_requests.push_back(request);
 				storage::LogicalGraphIndexDefinition definition;
 				definition.index_id = next_id++;
@@ -68,6 +91,7 @@ namespace graph::query::execution {
 
 			[[nodiscard]] storage::LogicalGraphIndexDefinition
 			createLogicalNodeVectorIndex(const storage::LogicalGraphNodeVectorIndexCreateRequest &request) override {
+				++calls;
 				vector_create_requests.push_back(request);
 				storage::LogicalGraphIndexDefinition definition;
 				definition.index_id = next_id++;
@@ -85,12 +109,14 @@ namespace graph::query::execution {
 			}
 
 			[[nodiscard]] bool dropLogicalIndexByName(std::string_view name) override {
+				++calls;
 				dropped_name = std::string(name);
 				return drop_by_name_result;
 			}
 
 			[[nodiscard]] bool dropLogicalNodeIndexBySchema(std::string_view label,
-															std::string_view propertyKey) override {
+														std::string_view propertyKey) override {
+				++calls;
 				dropped_label = std::string(label);
 				dropped_property = std::string(propertyKey);
 				return drop_by_schema_result;
@@ -98,6 +124,7 @@ namespace graph::query::execution {
 
 			[[nodiscard]] std::vector<storage::LogicalGraphIndexDefinition>
 			listLogicalIndexes(size_t maximumIndexes) const override {
+				++calls;
 				if (maximumIndexes < definitions.size()) {
 					throw std::runtime_error("test schema list bound is too small");
 				}
@@ -106,6 +133,7 @@ namespace graph::query::execution {
 
 			[[nodiscard]] storage::LogicalGraphConstraintDefinition
 			createLogicalConstraint(const storage::LogicalGraphConstraintCreateRequest &request) override {
+				++calls;
 				constraint_create_requests.push_back(request);
 				storage::LogicalGraphConstraintDefinition definition;
 				definition.constraint_id = next_constraint_id++;
@@ -123,12 +151,14 @@ namespace graph::query::execution {
 			}
 
 			[[nodiscard]] bool dropLogicalConstraintByName(std::string_view name) override {
+				++calls;
 				dropped_constraint_name = std::string(name);
 				return drop_constraint_result;
 			}
 
 			[[nodiscard]] std::vector<storage::LogicalGraphConstraintDefinition>
 			listLogicalConstraints(size_t maximumConstraints) const override {
+				++calls;
 				if (maximumConstraints < constraint_definitions.size()) {
 					throw std::runtime_error("test constraint list bound is too small");
 				}
@@ -136,6 +166,7 @@ namespace graph::query::execution {
 			}
 
 			uint64_t next_id = 1U;
+			mutable size_t calls = 0U;
 			uint64_t next_constraint_id = 1U;
 			bool drop_by_name_result = true;
 			bool drop_by_schema_result = true;
@@ -155,6 +186,59 @@ namespace graph::query::execution {
 		};
 
 	} // namespace
+
+	TEST(LogicalPlanSchemaRuntimeTest, CreationForwardsGuardIntoBackendConstructionBeforePublication) {
+		logical::LogicalCreateIndex scalar("name", "Person", "name");
+		logical::LogicalCreateVectorIndex vector("embedding", "Person", "embedding", 3, "l2");
+		logical::LogicalCreateConstraint constraint("required", "node", "not_null", "Person", {"name"}, "");
+		for (const logical::LogicalOperator *operation: std::vector<const logical::LogicalOperator *>{&scalar, &vector, &constraint}) {
+			SchemaBackend backend;
+			LogicalPlanSchemaRuntime runtime(backend);
+			size_t resident = 0U;
+			QueryGuard guard(0, 1, [&] { return resident; });
+			QueryContext context; context.guard = &guard;
+			backend.construction_hook = [&] { resident = 2U * 1024U * 1024U; };
+			EXPECT_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)), QueryMemoryExceededException);
+			EXPECT_EQ(backend.calls, 0U);
+			EXPECT_TRUE(backend.definitions.empty());
+			EXPECT_TRUE(backend.constraint_definitions.empty());
+			backend.construction_hook = {}; resident = 0U;
+			EXPECT_NO_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)));
+			EXPECT_EQ(backend.calls, 1U);
+		}
+	}
+
+	TEST(LogicalPlanSchemaRuntimeTest, EntryChecksExpiredAndMemoryGuardsBeforeEverySchemaBackendOperation) {
+		std::vector<std::unique_ptr<logical::LogicalOperator>> operations;
+		operations.push_back(std::make_unique<logical::LogicalCreateIndex>("name", "Person", "name"));
+		operations.push_back(std::make_unique<logical::LogicalCreateVectorIndex>("embedding", "Person", "embedding", 3, "l2"));
+		operations.push_back(std::make_unique<logical::LogicalCreateConstraint>("required", "node", "not_null", "Person", std::vector<std::string>{"name"}, ""));
+		operations.push_back(std::make_unique<logical::LogicalDropIndex>("name", "", ""));
+		operations.push_back(std::make_unique<logical::LogicalDropIndex>("", "Person", "name"));
+		operations.push_back(std::make_unique<logical::LogicalDropConstraint>("required", false));
+		operations.push_back(std::make_unique<logical::LogicalShowIndexes>());
+		operations.push_back(std::make_unique<logical::LogicalShowConstraints>());
+		for (const auto &operation: operations) {
+			SCOPED_TRACE(operation->toString());
+			SchemaBackend backend;
+			LogicalPlanSchemaRuntime runtime(backend);
+			QueryGuard expired(1, 0);
+			std::this_thread::sleep_for(std::chrono::milliseconds(3));
+			QueryContext context; context.guard = &expired;
+			EXPECT_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)), QueryTimeoutException);
+			EXPECT_EQ(backend.calls, 0U);
+			size_t resident = 0U;
+			QueryGuard memory(0, 1, [&] { return resident; });
+			context.guard = &memory; resident = 2U * 1024U * 1024U;
+			EXPECT_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)), QueryMemoryExceededException);
+			EXPECT_EQ(backend.calls, 0U);
+			resident = 0U;
+			for (size_t retry = 0U; retry < 2U; ++retry) {
+				EXPECT_NO_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)));
+				EXPECT_EQ(backend.calls, retry + 1U);
+			}
+		}
+	}
 
 	TEST(LogicalPlanSchemaRuntimeTest, CreatesIndexesAndReturnsTheLegacyCompatibleStatusRow) {
 		SchemaBackend backend;

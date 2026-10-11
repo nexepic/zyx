@@ -26,6 +26,28 @@ namespace graph::query::logical {
  */
 class LogicalCallProcedure : public LogicalOperator {
 public:
+	class ArgumentView {
+	public:
+		[[nodiscard]] size_t size() const { return parameter_names_ == nullptr ? args_->size() : parameter_names_->size(); }
+		[[nodiscard]] bool empty() const { return size() == 0U; }
+		[[nodiscard]] const graph::PropertyValue &operator[](const size_t index) const {
+			if (parameter_names_ == nullptr) return args_->at(index);
+			const auto found = parameters_->find(parameter_names_->at(index));
+			if (found == parameters_->end()) throw std::logic_error("validated procedure argument disappeared");
+			return found->second;
+		}
+		[[nodiscard]] const graph::PropertyValue &front() const { return (*this)[0U]; }
+
+	private:
+		friend class LogicalCallProcedure;
+		ArgumentView(const std::vector<graph::PropertyValue> &args, const std::vector<std::string> &parameterNames,
+				const std::unordered_map<std::string, graph::PropertyValue> &parameters)
+			: args_(&args), parameter_names_(parameterNames.empty() ? nullptr : &parameterNames), parameters_(&parameters) {}
+		const std::vector<graph::PropertyValue> *args_;
+		const std::vector<std::string> *parameter_names_;
+		const std::unordered_map<std::string, graph::PropertyValue> *parameters_;
+	};
+
 	LogicalCallProcedure(std::string procedureName, std::vector<graph::PropertyValue> args)
 		: procedureName_(std::move(procedureName)), args_(std::move(args)) {}
 
@@ -70,6 +92,17 @@ public:
 	[[nodiscard]] const std::vector<graph::PropertyValue> &getArgs() const { return args_; }
 	[[nodiscard]] const std::vector<std::string> &getParameterNames() const { return parameter_names_; }
 	[[nodiscard]] bool hasBoundArguments() const { return !parameter_names_.empty(); }
+
+	[[nodiscard]] ArgumentView resolveArgumentView(
+			const std::unordered_map<std::string, graph::PropertyValue> &parameters) const {
+		for (const std::string &parameterName: parameter_names_) {
+			if (parameterName.empty()) throw std::logic_error("logical procedure call has an empty parameter name");
+			if (!parameters.contains(parameterName)) {
+				throw std::runtime_error("logical procedure call could not resolve a bound argument");
+			}
+		}
+		return ArgumentView(args_, parameter_names_, parameters);
+	}
 
 	[[nodiscard]] std::vector<graph::PropertyValue>
 	resolveArguments(const std::unordered_map<std::string, graph::PropertyValue> &parameters) const {

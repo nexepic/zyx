@@ -99,6 +99,14 @@ namespace graph::storage {
 	// probes raw bytes without first materializing the complete page.
 	class PackedBTreePageCodec final {
 	public:
+		[[nodiscard]] static size_t encodedSize(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
+			BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+		// Exact sizes of entries.first(i) and entries.subspan(i), including
+		// independently aligned restart tables. Validates all entries once.
+		struct BoundarySizes { std::vector<size_t> prefixes; std::vector<size_t> suffixes; };
+		[[nodiscard]] static BoundarySizes encodedBoundarySizes(BTreeNodeKind kind,
+			std::span<const BTreePageEntry> entries,
+			BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		[[nodiscard]] static std::vector<std::byte>
 		encode(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
@@ -118,12 +126,17 @@ namespace graph::storage {
 	// slot one is the complete packed B+Tree payload.
 	class BTreePage final {
 	public:
+		// Same complete identity/layout validation as create, without page bytes.
+		static void validateNewPage(const PageOwnerHeader &owner, const BTreePageHeader &header);
 		[[nodiscard]] static BTreePage create(const PageOwnerHeader &owner, const BTreePageHeader &header);
 		// Initial and bulk index construction already has an ordered complete page.
 		// Encode that payload once instead of repeatedly rebuilding the packed slot.
 		[[nodiscard]] static BTreePage createWithEntries(const PageOwnerHeader &owner, BTreePageHeader header,
 														 std::span<const BTreePageEntry> entries);
 		[[nodiscard]] static BTreePage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
+		// Returns the same complete canonical validation to an owning read cursor.
+		[[nodiscard]] static BTreePage openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+			std::vector<BTreePageEntry> &decodedEntries);
 		BTreePage(const BTreePage &) = delete;
 		BTreePage &operator=(const BTreePage &) = delete;
 		BTreePage(BTreePage &&other) noexcept;

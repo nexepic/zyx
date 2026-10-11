@@ -240,6 +240,7 @@ def _environment(
         "python": platform.python_version(),
         "system": platform.system(),
         "zyx_compare_bench": os.environ.get("ZYX_COMPARE_BENCH", "/usr/local/bin/zyx-compare-bench"),
+        "zyx_emit_profile": os.environ.get("ZYX_COMPARE_EMIT_PROFILE", "1") == "1",
     }
     environment.update(_git_metadata())
     return environment

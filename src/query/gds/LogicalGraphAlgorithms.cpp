@@ -11,12 +11,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <map>
 #include <numeric>
-#include <queue>
 #include <random>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -28,6 +29,7 @@ namespace graph::query::gds {
 		struct ValidatedCsr {
 			std::shared_ptr<const LogicalProjectionCsr> csr;
 			std::unordered_map<uint64_t, size_t> node_to_index;
+			size_t node_to_index_bytes = 0U;
 		};
 
 		// Checkpoints run on the calling thread because QueryGuard and other
@@ -47,7 +49,8 @@ namespace graph::query::gds {
 			used += amount;
 		}
 
-		[[nodiscard]] ValidatedCsr requireWellFormedCsr(const LogicalGraphProjection &projection) {
+		[[nodiscard]] ValidatedCsr requireWellFormedCsr(const LogicalGraphProjection &projection,
+				const LogicalGraphAlgorithmCheckpoint &check) {
 			std::shared_ptr<const LogicalProjectionCsr> csr = projection.csr();
 			if (!csr || csr->offsets.size() != csr->node_ids.size() + 1U || csr->offsets.front() != 0U ||
 				csr->offsets.back() != csr->edgeCount() || csr->weights.size() != csr->edgeCount() ||
@@ -58,6 +61,7 @@ namespace graph::query::gds {
 			result.node_to_index.reserve(result.csr->node_ids.size());
 			uint64_t previous = 0U;
 			for (size_t index = 0U; index < result.csr->node_ids.size(); ++index) {
+				checkpoint(check);
 				const uint64_t nodeId = result.csr->node_ids[index];
 				if (nodeId == 0U || nodeId <= previous ||
 					result.csr->offsets[index] > result.csr->offsets[index + 1U] ||
@@ -70,6 +74,7 @@ namespace graph::query::gds {
 				previous = nodeId;
 			}
 			for (size_t edge = 0U; edge < result.csr->edgeCount(); ++edge) {
+				checkpoint(check);
 				if (!result.node_to_index.contains(result.csr->target_node_ids[edge]) || !std::isfinite(result.csr->weights[edge]) ||
 					result.csr->weights[edge] < 0.0 || result.csr->synthetic_reverse[edge] > uint8_t{1U}) {
 					throw std::runtime_error("logical graph algorithm received malformed CSR edge data");
@@ -79,15 +84,31 @@ namespace graph::query::gds {
 		}
 
 		[[nodiscard]] ValidatedCsr requireValidCsr(const LogicalGraphProjection &projection,
-				const LogicalGraphAlgorithmBounds &bounds) {
+				const LogicalGraphAlgorithmBounds &bounds, const char *materializedBoundError,
+				const LogicalGraphAlgorithmCheckpoint &check) {
 			if (bounds.maximum_nodes == 0U || bounds.maximum_edges == 0U || bounds.maximum_iterations == 0U ||
 				bounds.maximum_work_units == 0U) {
 				throw std::invalid_argument("logical graph algorithms require positive resource bounds");
 			}
-			ValidatedCsr result = requireWellFormedCsr(projection);
-			if (result.csr->node_ids.size() > bounds.maximum_nodes || result.csr->edgeCount() > bounds.maximum_edges) {
+			// Reject oversized projections before materializing their CSR cache or
+			// allocating the per-Node routing hash table used by every algorithm.
+			const size_t nodeCount = projection.nodeCount();
+			const size_t edgeCount = projection.edgeCount();
+			if (nodeCount > bounds.maximum_nodes || edgeCount > bounds.maximum_edges) {
 				throw std::runtime_error("logical graph algorithm received an invalid projection CSR");
 			}
+			constexpr size_t nodeIndexBytesPerEntry =
+					sizeof(std::pair<const uint64_t, size_t>) + 3U * sizeof(void *);
+			if (nodeCount > std::numeric_limits<size_t>::max() / nodeIndexBytesPerEntry) {
+				throw std::runtime_error("logical graph algorithm work estimate overflowed its bound");
+			}
+			const size_t nodeIndexBytes = nodeCount * nodeIndexBytesPerEntry;
+			if (bounds.maximum_materialized_bytes != 0U && nodeIndexBytes > bounds.maximum_materialized_bytes) {
+				throw std::runtime_error(materializedBoundError);
+			}
+			checkpoint(check);
+			ValidatedCsr result = requireWellFormedCsr(projection, check);
+			result.node_to_index_bytes = nodeIndexBytes;
 			return result;
 		}
 
@@ -103,6 +124,14 @@ namespace graph::query::gds {
 				throw std::runtime_error("logical graph algorithm work estimate overflowed its bound");
 			}
 			return left + right;
+		}
+
+		void requireMaterializedBytes(const size_t bytes, const LogicalGraphAlgorithmBounds &bounds,
+								  const char *algorithm) {
+			if (bounds.maximum_materialized_bytes != 0U && bytes > bounds.maximum_materialized_bytes) {
+				throw std::runtime_error(std::string("logical ") + algorithm +
+						" exceeded its materialized byte bound");
+			}
 		}
 
 		[[nodiscard]] std::vector<std::vector<size_t>>
@@ -163,7 +192,8 @@ namespace graph::query::gds {
 	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::pageRank(const LogicalGraphProjection &projection,
 			const LogicalPageRankOptions options, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical PageRank exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
 		if (nodeCount == 0U) {
 			return {};
@@ -174,6 +204,11 @@ namespace graph::query::gds {
 			throw std::invalid_argument("logical PageRank options are invalid or exceed their bounds");
 		}
 		static_cast<void>(checkedMultiply(nodeCount, options.maximum_iterations, bounds.maximum_work_units));
+		const size_t bytesPerNode = sizeof(double) * 2U + sizeof(LogicalGdsNodeScore);
+		requireMaterializedBytes(checkedAdd(view.node_to_index_bytes,
+				checkedMultiply(nodeCount, bytesPerNode, std::numeric_limits<size_t>::max()),
+				std::numeric_limits<size_t>::max()),
+				bounds, "PageRank");
 		std::vector<double> scores(nodeCount, 1.0 / static_cast<double>(nodeCount));
 		std::vector<double> next(nodeCount, 0.0);
 		const double teleport = (1.0 - options.damping_factor) / static_cast<double>(nodeCount);
@@ -220,7 +255,8 @@ namespace graph::query::gds {
 	std::vector<LogicalGdsNodeComponent> LogicalGraphAlgorithms::weaklyConnectedComponents(
 			const LogicalGraphProjection &projection, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical WCC exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
 		if (nodeCount == 0U) {
 			return {};
@@ -228,6 +264,11 @@ namespace graph::query::gds {
 		if (view.csr->edgeCount() > bounds.maximum_work_units) {
 			throw std::runtime_error("logical WCC exceeds its configured work bound");
 		}
+		const size_t bytesPerNode = sizeof(size_t) + sizeof(LogicalGdsNodeComponent);
+		requireMaterializedBytes(checkedAdd(view.node_to_index_bytes,
+				checkedMultiply(nodeCount, bytesPerNode, std::numeric_limits<size_t>::max()),
+				std::numeric_limits<size_t>::max()),
+				bounds, "WCC");
 		std::vector<size_t> parent(nodeCount);
 		std::iota(parent.begin(), parent.end(), 0U);
 		const auto find = [&parent](size_t node) {
@@ -267,11 +308,22 @@ namespace graph::query::gds {
 	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::betweennessCentrality(
 			const LogicalGraphProjection &projection, const LogicalBetweennessOptions options,
 			const LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical Betweenness exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
 		if (nodeCount == 0U) {
 			return {};
 		}
+		const size_t maximumSize = std::numeric_limits<size_t>::max();
+		const size_t perNodeBytes = checkedAdd(sizeof(size_t) + sizeof(std::vector<size_t>),
+				checkedAdd(sizeof(double) * 3U + sizeof(size_t) * 3U,
+						sizeof(LogicalGdsNodeScore), maximumSize), maximumSize);
+		// Both adjacency and predecessor vectors can retain capacity above their
+		// logical degree. Reserve a 2x growth margin for each undirected arc set.
+		const size_t stateBytes = checkedAdd(view.node_to_index_bytes,
+				checkedAdd(checkedMultiply(nodeCount, perNodeBytes, maximumSize),
+						checkedMultiply(view.csr->edgeCount(), sizeof(size_t) * 8U, maximumSize), maximumSize), maximumSize);
+		requireMaterializedBytes(stateBytes, bounds, "Betweenness");
 		std::vector<size_t> sources(nodeCount);
 		std::iota(sources.begin(), sources.end(), 0U);
 		if (options.sampling_size != 0U && options.sampling_size < nodeCount) {
@@ -357,7 +409,8 @@ namespace graph::query::gds {
 	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::closenessCentrality(
 			const LogicalGraphProjection &projection, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical Closeness exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
 		if (nodeCount == 0U) {
 			return {};
@@ -367,6 +420,13 @@ namespace graph::query::gds {
 		const size_t traversalEstimate = checkedMultiply(nodeCount, perSourceEstimate, bounds.maximum_work_units);
 		static_cast<void>(checkedAdd(checkedMultiply(view.csr->edgeCount(), 2U, bounds.maximum_work_units),
 				traversalEstimate, bounds.maximum_work_units));
+		const size_t maximumSize = std::numeric_limits<size_t>::max();
+		const size_t perNodeBytes = checkedAdd(sizeof(std::vector<size_t>),
+				checkedAdd(sizeof(size_t) * 4U, sizeof(LogicalGdsNodeScore) * 2U, maximumSize), maximumSize);
+		const size_t stateBytes = checkedAdd(view.node_to_index_bytes,
+				checkedAdd(checkedMultiply(nodeCount, perNodeBytes, maximumSize),
+						checkedMultiply(view.csr->edgeCount(), sizeof(size_t) * 4U, maximumSize), maximumSize), maximumSize);
+		requireMaterializedBytes(stateBytes, bounds, "Closeness");
 		size_t usedWork = 0U;
 		const std::vector<std::vector<size_t>> adjacency = buildUndirectedAdjacency(view, usedWork, bounds, check);
 		std::vector<size_t> distance(nodeCount, nodeCount);
@@ -411,7 +471,8 @@ namespace graph::query::gds {
 			const LogicalGraphProjection &projection, const LogicalLeidenOptions options,
 			const LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check,
 			concurrent::ThreadPool *threadPool) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical Leiden exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
 		if (nodeCount == 0U) {
 			return {};
@@ -421,6 +482,17 @@ namespace graph::query::gds {
 			!std::isfinite(options.refinement_threshold) || options.refinement_threshold < 0.0) {
 			throw std::invalid_argument("logical Leiden options are invalid or exceed their bounds");
 		}
+		// Leiden's level-local maps and refinement partitions coexist with both
+		// the current and contracted weighted adjacency. Admit a conservative
+		// envelope before building any of those retained structures.
+		constexpr size_t LEIDEN_NODE_STATE_ESTIMATE_BYTES = 512U;
+		constexpr size_t LEIDEN_EDGE_STATE_ESTIMATE_BYTES = 512U;
+		const size_t maximumSize = std::numeric_limits<size_t>::max();
+		const size_t estimatedBytes = checkedAdd(
+				checkedMultiply(nodeCount, LEIDEN_NODE_STATE_ESTIMATE_BYTES, maximumSize),
+				checkedMultiply(view.csr->edgeCount(), LEIDEN_EDGE_STATE_ESTIMATE_BYTES, maximumSize), maximumSize);
+		requireMaterializedBytes(checkedAdd(view.node_to_index_bytes, estimatedBytes,
+				std::numeric_limits<size_t>::max()), bounds, "Leiden");
 		size_t usedWork = 0U;
 		using WeightedAdjacency = std::vector<std::vector<std::pair<size_t, double>>>;
 		const auto denseLabels = [](std::vector<size_t> &labels) {
@@ -651,7 +723,7 @@ namespace graph::query::gds {
 		if (!std::isfinite(resolution) || resolution <= 0.0) {
 			throw std::invalid_argument("logical Leiden modularity requires a positive finite resolution");
 		}
-		const ValidatedCsr view = requireWellFormedCsr(projection);
+		const ValidatedCsr view = requireWellFormedCsr(projection, {});
 		const std::shared_ptr<const LogicalProjectionCsr> &csr = view.csr;
 		std::unordered_map<uint64_t, uint64_t> communityByNode;
 		communityByNode.reserve(communities.size());
@@ -706,7 +778,8 @@ namespace graph::query::gds {
 	LogicalGdsWeightedPath LogicalGraphAlgorithms::dijkstra(const LogicalGraphProjection &projection,
 			const uint64_t sourceNodeId, const uint64_t targetNodeId, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
-		const ValidatedCsr view = requireValidCsr(projection, bounds);
+		const ValidatedCsr view = requireValidCsr(projection, bounds,
+				"logical Dijkstra exceeded its materialized state byte bound", check);
 		const auto source = view.node_to_index.find(sourceNodeId);
 		const auto target = view.node_to_index.find(targetNodeId);
 		if (source == view.node_to_index.end() || target == view.node_to_index.end()) {
@@ -716,19 +789,63 @@ namespace graph::query::gds {
 			throw std::runtime_error("logical Dijkstra exceeds its configured work bound");
 		}
 		const size_t nodeCount = view.csr->node_ids.size();
+		const size_t baseStateBytes = checkedAdd(view.node_to_index_bytes,
+				checkedMultiply(nodeCount, sizeof(double) + sizeof(size_t) + sizeof(double),
+						std::numeric_limits<size_t>::max()), std::numeric_limits<size_t>::max());
+		if (bounds.maximum_materialized_bytes != 0U && baseStateBytes > bounds.maximum_materialized_bytes) {
+			throw std::runtime_error("logical Dijkstra exceeded its materialized state byte bound");
+		}
 		const double infinity = std::numeric_limits<double>::infinity();
 		std::vector<double> distance(nodeCount, infinity);
 		std::vector<size_t> parent(nodeCount, nodeCount);
 		std::vector<double> parentWeight(nodeCount, 0.0);
 		using QueueEntry = std::pair<double, size_t>;
-		std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> frontier;
+		std::vector<QueueEntry> frontier;
+		size_t admittedFrontierCapacity = 0U;
+		const auto admitFrontierCapacity = [&](const size_t required) {
+			if (required <= frontier.capacity()) return;
+			const size_t targetCapacity = std::max(required,
+					frontier.capacity() == 0U ? 1U
+											: checkedMultiply(frontier.capacity(), 2U, std::numeric_limits<size_t>::max()));
+			if (bounds.maximum_materialized_bytes != 0U) {
+				const size_t queueBytes = checkedMultiply(targetCapacity, sizeof(QueueEntry),
+						std::numeric_limits<size_t>::max());
+				if (queueBytes > bounds.maximum_materialized_bytes - baseStateBytes) {
+					throw std::runtime_error("logical Dijkstra exceeded its materialized state byte bound");
+				}
+			}
+			frontier.reserve(targetCapacity);
+			admittedFrontierCapacity = frontier.capacity();
+			if (bounds.maximum_materialized_bytes != 0U &&
+					checkedMultiply(admittedFrontierCapacity, sizeof(QueueEntry), std::numeric_limits<size_t>::max()) >
+						bounds.maximum_materialized_bytes - baseStateBytes) {
+				throw std::runtime_error("logical Dijkstra exceeded its materialized state byte bound");
+			}
+		};
+		const auto admitResultCapacity = [&](const size_t required, const size_t currentCapacity) {
+			if (required <= currentCapacity || bounds.maximum_materialized_bytes == 0U) return;
+			const size_t targetCapacity = std::max(required,
+					currentCapacity == 0U ? 1U
+										: checkedMultiply(currentCapacity, 2U, std::numeric_limits<size_t>::max()));
+			const size_t queueBytes = checkedMultiply(admittedFrontierCapacity, sizeof(QueueEntry),
+					std::numeric_limits<size_t>::max());
+			const size_t resultBytes = checkedMultiply(targetCapacity, sizeof(uint64_t) + sizeof(double),
+					std::numeric_limits<size_t>::max());
+			if (queueBytes > bounds.maximum_materialized_bytes - baseStateBytes ||
+					resultBytes > bounds.maximum_materialized_bytes - baseStateBytes - queueBytes) {
+				throw std::runtime_error("logical Dijkstra exceeded its materialized result byte bound");
+			}
+		};
 		distance[source->second] = 0.0;
-		frontier.push({0.0, source->second});
+		admitFrontierCapacity(1U);
+		frontier.push_back({0.0, source->second});
+		std::push_heap(frontier.begin(), frontier.end(), std::greater<>{});
 		size_t usedWork = 0U;
 		while (!frontier.empty()) {
 			checkpoint(check);
-			const auto [currentDistance, current] = frontier.top();
-			frontier.pop();
+			std::pop_heap(frontier.begin(), frontier.end(), std::greater<>{});
+			const auto [currentDistance, current] = frontier.back();
+			frontier.pop_back();
 			if (currentDistance != distance[current]) {
 				continue;
 			}
@@ -749,7 +866,10 @@ namespace graph::query::gds {
 					distance[next] = candidate;
 					parent[next] = current;
 					parentWeight[next] = view.csr->weights[edge];
-					frontier.push({candidate, next});
+					admitFrontierCapacity(checkedAdd(frontier.size(), 1U,
+							std::numeric_limits<size_t>::max()));
+					frontier.push_back({candidate, next});
+					std::push_heap(frontier.begin(), frontier.end(), std::greater<>{});
 				}
 				consumeWork(usedWork, 1U, bounds);
 			}
@@ -759,7 +879,32 @@ namespace graph::query::gds {
 		}
 		LogicalGdsWeightedPath result;
 		result.total_weight = distance[target->second];
+		size_t resultCapacity = 0U;
 		for (size_t current = target->second;; current = parent[current]) {
+			const size_t nextSize = checkedAdd(result.node_ids.size(), 1U, bounds.maximum_nodes);
+			if (nextSize > resultCapacity) {
+				const size_t nextCapacity = std::max(nextSize,
+						resultCapacity == 0U ? 1U
+										: checkedMultiply(resultCapacity, 2U, std::numeric_limits<size_t>::max()));
+				admitResultCapacity(nextSize, resultCapacity);
+				result.node_ids.reserve(nextCapacity);
+				result.step_weights.reserve(nextCapacity);
+				resultCapacity = std::min(result.node_ids.capacity(), result.step_weights.capacity());
+				if (bounds.maximum_materialized_bytes != 0U) {
+					const size_t queueBytes = checkedMultiply(admittedFrontierCapacity, sizeof(QueueEntry),
+							std::numeric_limits<size_t>::max());
+					const size_t actualResultBytes = checkedAdd(
+							checkedMultiply(result.node_ids.capacity(), sizeof(uint64_t),
+									std::numeric_limits<size_t>::max()),
+							checkedMultiply(result.step_weights.capacity(), sizeof(double),
+									std::numeric_limits<size_t>::max()),
+							std::numeric_limits<size_t>::max());
+					if (queueBytes > bounds.maximum_materialized_bytes - baseStateBytes ||
+							actualResultBytes > bounds.maximum_materialized_bytes - baseStateBytes - queueBytes) {
+						throw std::runtime_error("logical Dijkstra exceeded its materialized result byte bound");
+					}
+				}
+			}
 			result.node_ids.push_back(view.csr->node_ids[current]);
 			result.step_weights.push_back(current == source->second ? 0.0 : parentWeight[current]);
 			if (current == source->second) {

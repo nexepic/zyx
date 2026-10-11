@@ -28,6 +28,28 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
+		void validatePinnedEntityContents(const MetadataSnapshotPin &snapshot, PageId pageId,
+				const SharedPagePoolPinnedView &contents) {
+			const uint8_t invalid =
+					static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
+					static_cast<uint8_t>(contents.pool.owner_id == 0U) |
+					static_cast<uint8_t>(contents.pool.state != SegmentState::SGS_SEALED) |
+					static_cast<uint8_t>(contents.location.page_id != pageId) |
+					static_cast<uint8_t>(contents.location.segment_id != contents.pool.segment_id) |
+					static_cast<uint8_t>(contents.location.generation != contents.pool.generation) |
+					static_cast<uint8_t>(contents.owner.page_id != pageId) |
+					static_cast<uint8_t>(contents.owner.owner_id != contents.pool.owner_id) |
+					static_cast<uint8_t>(contents.owner.kind != PageOwnerKind::POK_ENTITY) |
+					static_cast<uint8_t>((contents.owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) != 0U) |
+					static_cast<uint8_t>(contents.owner.payload_bytes != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
+					static_cast<uint8_t>(contents.owner.generation != contents.location.generation) |
+					static_cast<uint8_t>(contents.owner.committed_lsn > snapshot.superblock().checkpoint_lsn);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable pinned Entity page disagrees with its pool, owner, or metadata snapshot");
+			}
+		}
+
 		[[nodiscard]] uint64_t elapsedNanoseconds(const std::chrono::steady_clock::time_point start) {
 			return static_cast<uint64_t>(
 					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count());
@@ -228,10 +250,28 @@ namespace graph::storage {
 	}
 
 	std::vector<std::optional<NodeEntityRecord>> EntityPageStore::readNodesSorted(
-			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds) const {
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		if (!metadata_.ownsSnapshot(snapshot)) {
 			fail(FormatError::FERR_INVALID_STATE, "relocatable sorted Node read requires this store's active snapshot");
 		}
+		uint64_t previousId = 0U;
+		for (const uint64_t nodeId: nodeIds) {
+			if (nodeId == 0U || nodeId <= previousId) {
+				fail(FormatError::FERR_INVALID_HEADER,
+						 "relocatable sorted Node read requires strictly increasing nonzero IDs");
+			}
+			previousId = nodeId;
+		}
+		const auto admit = [&](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "sorted Node buffer admission size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes);
+			return bytes;
+		};
+		admit(0U, nodeIds.size(), sizeof(std::optional<NodeEntityRecord>));
 		std::vector<std::optional<NodeEntityRecord>> result(nodeIds.size());
 		if (nodeIds.empty()) {
 			return result;
@@ -244,18 +284,17 @@ namespace graph::storage {
 			// One ordered multi-lookup opens one Entity-directory range cursor.
 			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_directory_range_calls", 1);
 		}
-		uint64_t previousId = 0U;
-		for (const uint64_t nodeId: nodeIds) {
-			if (nodeId == 0U || nodeId <= previousId) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable sorted Node read requires strictly increasing nonzero IDs");
-			}
-			previousId = nodeId;
-		}
+		const size_t resultBytes = admit(0U, result.capacity(), sizeof(std::optional<NodeEntityRecord>));
+		admit(resultBytes, nodeIds.size(), sizeof(std::optional<EntityPageLocation>));
 		std::vector<std::optional<EntityPageLocation>> locations(nodeIds.size());
+		const size_t locationBytes = admit(resultBytes, locations.capacity(), sizeof(std::optional<EntityPageLocation>));
 		metadata_.findNodePageLocationsSorted(snapshot, nodeIds, locations);
 		std::vector<size_t> present;
-		present.reserve(locations.size());
+		size_t presentCount = 0U;
+		for (const auto &location: locations) if (location.has_value()) ++presentCount;
+		admit(locationBytes, presentCount, sizeof(size_t));
+		present.reserve(presentCount);
+		admit(locationBytes, present.capacity(), sizeof(size_t));
 		for (size_t index = 0U; index < locations.size(); ++index) {
 			if (locations[index].has_value()) {
 				present.push_back(index);
@@ -271,13 +310,13 @@ namespace graph::storage {
 			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
 		});
 		std::optional<ReadPage> current;
-		PageId currentPage;
+		PageId currentPage{};
 		size_t pinnedPages = 0U;
 		for (const size_t index: present) {
 			const EntityPageLocation &location = *locations[index];
 			if (!current.has_value() || location.page_id != currentPage) {
 				current.emplace(loadReadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_NODE,
-															 BufferPoolReadHint::BPRH_SEQUENTIAL));
+														 BufferPoolReadHint::BPRH_SEQUENTIAL));
 				currentPage = location.page_id;
 				++pinnedPages;
 			}
@@ -287,6 +326,10 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_entity_page_pins",
 					static_cast<int64_t>(pinnedPages));
 		}
+		current.reset();
+		std::vector<size_t>().swap(present);
+		std::vector<std::optional<EntityPageLocation>>().swap(locations);
+		admit(0U, result.capacity(), sizeof(std::optional<NodeEntityRecord>));
 		return result;
 	}
 
@@ -299,10 +342,28 @@ namespace graph::storage {
 	}
 
 	std::vector<std::optional<EdgeEntityRecord>> EntityPageStore::readEdgesSorted(
-			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds) const {
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
+			const std::function<void(size_t)> &retainedBufferAdmission) const {
 		if (!metadata_.ownsSnapshot(snapshot)) {
 			fail(FormatError::FERR_INVALID_STATE, "relocatable sorted Edge read requires this store's active snapshot");
 		}
+		uint64_t previousId = 0U;
+		for (const uint64_t edgeId: edgeIds) {
+			if (edgeId == 0U || edgeId <= previousId) {
+				fail(FormatError::FERR_INVALID_HEADER,
+						 "relocatable sorted Edge read requires strictly increasing nonzero IDs");
+			}
+			previousId = edgeId;
+		}
+		const auto admit = [&](size_t base, size_t count, size_t width) {
+			if (width != 0U && count > (std::numeric_limits<size_t>::max() - base) / width) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "sorted Edge buffer admission size overflowed");
+			}
+			const size_t bytes = base + count * width;
+			if (retainedBufferAdmission) retainedBufferAdmission(bytes);
+			return bytes;
+		};
+		admit(0U, edgeIds.size(), sizeof(std::optional<EdgeEntityRecord>));
 		std::vector<std::optional<EdgeEntityRecord>> result(edgeIds.size());
 		if (edgeIds.empty()) {
 			return result;
@@ -315,18 +376,17 @@ namespace graph::storage {
 			// One ordered multi-lookup opens one Entity-directory range cursor.
 			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_directory_range_calls", 1);
 		}
-		uint64_t previousId = 0U;
-		for (const uint64_t edgeId: edgeIds) {
-			if (edgeId == 0U || edgeId <= previousId) {
-				fail(FormatError::FERR_INVALID_HEADER,
-						 "relocatable sorted Edge read requires strictly increasing nonzero IDs");
-			}
-			previousId = edgeId;
-		}
+		const size_t resultBytes = admit(0U, result.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+		admit(resultBytes, edgeIds.size(), sizeof(std::optional<EntityPageLocation>));
 		std::vector<std::optional<EntityPageLocation>> locations(edgeIds.size());
+		const size_t locationBytes = admit(resultBytes, locations.capacity(), sizeof(std::optional<EntityPageLocation>));
 		metadata_.findEdgePageLocationsSorted(snapshot, edgeIds, locations);
 		std::vector<size_t> present;
-		present.reserve(locations.size());
+		size_t presentCount = 0U;
+		for (const auto &location: locations) if (location.has_value()) ++presentCount;
+		admit(locationBytes, presentCount, sizeof(size_t));
+		present.reserve(presentCount);
+		admit(locationBytes, present.capacity(), sizeof(size_t));
 		for (size_t index = 0U; index < locations.size(); ++index) {
 			if (locations[index].has_value()) {
 				present.push_back(index);
@@ -358,6 +418,10 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_entity_page_pins",
 					static_cast<int64_t>(pinnedPages));
 		}
+		current.reset();
+		std::vector<size_t>().swap(present);
+		std::vector<std::optional<EntityPageLocation>>().swap(locations);
+		admit(0U, result.capacity(), sizeof(std::optional<EdgeEntityRecord>));
 		return result;
 	}
 
@@ -425,43 +489,34 @@ namespace graph::storage {
 		NativeReadSession localSession;
 		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
 		activeSession.bind(snapshot);
-		std::vector<CatalogEntry> uncachedPools;
-		const std::vector<CatalogEntry> *entityPools = activeSession.entityPagePools();
-		if (entityPools == nullptr) {
-			if (tracingValues) {
-				debug::PerfTrace::addValue("native_graph.read.entity_pool_catalog_scan", 1);
-			}
-			uncachedPools = metadata_.findCurrentEntityPagePools(snapshot);
-			activeSession.putEntityPagePools(uncachedPools);
-			entityPools = activeSession.entityPagePools();
-			if (entityPools == nullptr) {
-				entityPools = &uncachedPools;
-			}
-		} else if (tracingValues) {
-			debug::PerfTrace::addValue("native_graph.read.entity_pool_cache_hit", 1);
-		}
 		size_t visited = 0U;
-		return metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
-			const auto pool = std::ranges::lower_bound(*entityPools, location.segment_id, {}, &CatalogEntry::segment_id);
-			if (pool == entityPools->end() || pool->segment_id != location.segment_id) {
-				return true;
+		std::optional<ReadPage> currentPage;
+		PageId currentPageId;
+		return metadata_.visitNodePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
+			if (visited == maximumRecords) {
+				return false;
 			}
-			std::optional<ReadPage> loaded = loadPhysicalScanReadPage(snapshot, *pool, location);
-			if (!loaded.has_value() || loaded->page.header().record_kind != EntityPageRecordKind::EPRK_NODE) {
-				return true;
+			if (entry.entity_id == 0U || !entry.page_id.isValid() || entry.slot_generation == 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable native Node scan contains an invalid typed Entity Map entry");
 			}
-			if (tracingValues) {
+			const bool newPage = !currentPage.has_value() || currentPageId != entry.page_id;
+			ReadPage &loaded = loadScanReadPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_NODE,
+													 currentPage, currentPageId);
+			if (newPage && tracingValues) {
 				debug::PerfTrace::addValue("native_graph.read.node_page_scan.pages", 1);
 			}
-			return loaded->page.visitNodesUntil(
-				maximumRecords - visited,
-				[&](const uint64_t nodeId, uint16_t, uint32_t, const NodeEntityRecord &record) {
-					++visited;
-					if (tracingValues) {
-						debug::PerfTrace::addValue("native_graph.read.node_page_scan.records", 1);
-					}
-					return visitor(nodeId, record);
-				});
+			const std::optional<NodeEntityRecord> record =
+					loaded.page.findNode(entry.slot_id, entry.slot_generation, entry.entity_id);
+			if (!record.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable native Node scan could not resolve its typed Entity Map slot");
+			}
+			++visited;
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.node_page_scan.records", 1);
+			}
+			return visitor(entry.entity_id, *record) && visited < maximumRecords;
 		});
 	}
 
@@ -482,61 +537,46 @@ namespace graph::storage {
 		NativeReadSession localSession;
 		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
 		activeSession.bind(snapshot);
-		std::vector<CatalogEntry> uncachedPools;
-		const std::vector<CatalogEntry> *entityPools = activeSession.entityPagePools();
-		if (entityPools == nullptr) {
-			if (tracingValues) {
-				debug::PerfTrace::addValue("native_graph.read.entity_pool_catalog_scan", 1);
-			}
-			uncachedPools = metadata_.findCurrentEntityPagePools(snapshot);
-			activeSession.putEntityPagePools(uncachedPools);
-			entityPools = activeSession.entityPagePools();
-			if (entityPools == nullptr) {
-				entityPools = &uncachedPools;
-			}
-		} else if (tracingValues) {
-			debug::PerfTrace::addValue("native_graph.read.entity_pool_cache_hit", 1);
-		}
 		size_t visited = 0U;
-		const bool exhausted = metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
-			const auto pool = std::ranges::lower_bound(*entityPools, location.segment_id, {}, &CatalogEntry::segment_id);
-			if (pool == entityPools->end() || pool->segment_id != location.segment_id) {
-				return true;
+		std::optional<ReadPage> currentPage;
+		PageId currentPageId;
+		const bool exhausted = metadata_.visitEdgePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
+			if (visited == maximumRecords) {
+				return false;
 			}
-			const auto pageStart = tracing ? std::chrono::steady_clock::now()
-												 : std::chrono::steady_clock::time_point{};
-			std::optional<ReadPage> loaded = loadPhysicalScanReadPage(snapshot, *pool, location);
-			if (!loaded.has_value() || loaded->page.header().record_kind != EntityPageRecordKind::EPRK_EDGE) {
-				return true;
+			if (entry.entity_id == 0U || !entry.page_id.isValid() || entry.slot_generation == 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable native Edge scan contains an invalid typed Entity Map entry");
 			}
-			if (tracingValues) {
+			const bool newPage = !currentPage.has_value() || currentPageId != entry.page_id;
+			ReadPage &loaded = loadScanReadPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_EDGE,
+													 currentPage, currentPageId);
+			if (tracingValues && newPage) {
+				// Count each typed Entity page once; loadScanReadPage keeps it resident
+				// while consecutive Entity Map entries refer to the same page.
 				debug::PerfTrace::addValue("native_graph.read.edge_page_scan.pages", 1);
 			}
-			uint64_t pageVisitorNanoseconds = 0U;
-			const bool continueScan = loaded->page.visitEdgesUntil(
-				maximumRecords - visited,
-				[&](const uint64_t edgeId, uint16_t, uint32_t, const EdgeEntityRecord &record) {
-					++visited;
-					if (tracingValues) {
-						debug::PerfTrace::addValue("native_graph.read.edge_page_scan.records", 1);
-					}
-					const auto visitorStart = tracing ? std::chrono::steady_clock::now()
-													 : std::chrono::steady_clock::time_point{};
-					const bool keepGoing = visitor(edgeId, record);
-					if (tracing) {
-						const uint64_t elapsedVisitor = elapsedNanoseconds(visitorStart);
-						visitorNanoseconds += elapsedVisitor;
-						pageVisitorNanoseconds += elapsedVisitor;
-						++records;
-					}
-					return keepGoing;
-				});
-			if (tracing) {
-				const uint64_t elapsedPage = elapsedNanoseconds(pageStart);
-				entityRecordNanoseconds +=
-						elapsedPage >= pageVisitorNanoseconds ? elapsedPage - pageVisitorNanoseconds : 0U;
+			const auto recordStart = tracing ? std::chrono::steady_clock::now()
+														 : std::chrono::steady_clock::time_point{};
+			const std::optional<EdgeEntityRecord> record =
+					loaded.page.findEdge(entry.slot_id, entry.slot_generation, entry.entity_id);
+			if (!record.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable native Edge scan could not resolve its typed Entity Map slot");
 			}
-			return continueScan;
+			++visited;
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.edge_page_scan.records", 1);
+			}
+			const auto visitorStart = tracing ? std::chrono::steady_clock::now()
+														 : std::chrono::steady_clock::time_point{};
+			const bool keepGoing = visitor(entry.entity_id, *record);
+			if (tracing) {
+				entityRecordNanoseconds += elapsedNanoseconds(recordStart);
+				visitorNanoseconds += elapsedNanoseconds(visitorStart);
+				++records;
+			}
+			return keepGoing && visited < maximumRecords;
 		});
 		if (tracing) {
 			debug::PerfTrace::addDurationBatch("native_graph.read.edge_entity_record", entityRecordNanoseconds, records);
@@ -1017,11 +1057,12 @@ namespace graph::storage {
 				 metadata_.findCurrentPropertyPagePools(snapshot, propertyOptions->page_owner_id)) {
 				const size_t physicalFree = allocator_.availableFrameCount(pool);
 				const size_t replacementFrames = replacementFramesByPool[pool.segment_id.value()];
-				if (replacementFrames > physicalFree) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native Entity Property plan exceeds the selected pool's COW frame capacity");
-				}
-				capacities.push_back({pool, physicalFree - replacementFrames});
+				// The metadata writer can move COW replacements from an exhausted
+				// source pool into a fresh compatible pool. Reserve existing frames
+				// conservatively for those replacements; only surplus frames may
+				// serve new logical Property pages. Do not reject a legal relocation
+				// here or underflow when replacement demand exceeds free capacity.
+				capacities.push_back({pool, physicalFree > replacementFrames ? physicalFree - replacementFrames : 0U});
 			}
 			std::ranges::sort(capacities, [](const PropertyPoolCapacity &left,
 												 const PropertyPoolCapacity &right) {
@@ -1220,6 +1261,8 @@ namespace graph::storage {
 			request.page_id = append.request.page_id;
 			EntityPageLocation mapping;
 			if (nodeKind) {
+				std::vector<IdentifiedNodeEntityRecord> records;
+				records.reserve(std::min<size_t>(append.node_insertions.size(), page.header().slot_capacity));
 				for (const EntityPageNodeInsertion &insertion: append.node_insertions) {
 					validateRecord(insertion.record);
 					if (insertion.node_id == 0U || !insertedIds.insert(insertion.node_id).second) {
@@ -1230,12 +1273,19 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Node append reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.node_id, insertion.record);
-					mapping = mappingFor(insertion.node_id, append.request.page_id, page, slot);
+					if (records.size() == page.header().slot_capacity) fail(FormatError::FERR_INVALID_STATE, "Entity append batch exceeds page capacity");
+					records.push_back({insertion.node_id, insertion.record});
+				}
+				const auto slots = page.insertNodes(records);
+				for (size_t i = 0U; i < records.size(); ++i) {
+					const uint16_t slot = slots[i];
+					mapping = mappingFor(records[i].entity_id, append.request.page_id, page, slot);
 					request.inserted_nodes.push_back(mapping);
 				}
 				std::ranges::sort(request.inserted_nodes, {}, &EntityPageLocation::entity_id);
 			} else {
+				std::vector<IdentifiedEdgeEntityRecord> records;
+				records.reserve(std::min<size_t>(append.edge_insertions.size(), page.header().slot_capacity));
 				for (const EntityPageEdgeInsertion &insertion: append.edge_insertions) {
 					validateRecord(insertion.record);
 					if (insertion.edge_id == 0U || !insertedIds.insert(insertion.edge_id).second) {
@@ -1246,8 +1296,13 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Edge append reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.edge_id, insertion.record);
-					mapping = mappingFor(insertion.edge_id, append.request.page_id, page, slot);
+					if (records.size() == page.header().slot_capacity) fail(FormatError::FERR_INVALID_STATE, "Entity append batch exceeds page capacity");
+					records.push_back({insertion.edge_id, insertion.record});
+				}
+				const auto slots = page.insertEdges(records);
+				for (size_t i = 0U; i < records.size(); ++i) {
+					const uint16_t slot = slots[i];
+					mapping = mappingFor(records[i].entity_id, append.request.page_id, page, slot);
 					request.inserted_edges.push_back(mapping);
 				}
 				std::ranges::sort(request.inserted_edges, {}, &EntityPageLocation::entity_id);
@@ -1292,6 +1347,8 @@ namespace graph::storage {
 			request.last_slot = newPool.request.last_slot;
 			EntityPageLocation mapping;
 			if (nodeKind) {
+				std::vector<IdentifiedNodeEntityRecord> records;
+				records.reserve(std::min<size_t>(newPool.node_insertions.size(), page.header().slot_capacity));
 				for (const EntityPageNodeInsertion &insertion: newPool.node_insertions) {
 					validateRecord(insertion.record);
 					if (insertion.node_id == 0U || !insertedIds.insert(insertion.node_id).second) {
@@ -1302,12 +1359,19 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page new-pool Node batch reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.node_id, insertion.record);
-					mapping = mappingFor(insertion.node_id, newPool.request.page_id, page, slot);
+					if (records.size() == page.header().slot_capacity) fail(FormatError::FERR_INVALID_STATE, "Entity append batch exceeds page capacity");
+					records.push_back({insertion.node_id, insertion.record});
+				}
+				const auto slots = page.insertNodes(records);
+				for (size_t i = 0U; i < records.size(); ++i) {
+					const uint16_t slot = slots[i];
+					mapping = mappingFor(records[i].entity_id, newPool.request.page_id, page, slot);
 					request.inserted_nodes.push_back(mapping);
 				}
 				std::ranges::sort(request.inserted_nodes, {}, &EntityPageLocation::entity_id);
 			} else {
+				std::vector<IdentifiedEdgeEntityRecord> records;
+				records.reserve(std::min<size_t>(newPool.edge_insertions.size(), page.header().slot_capacity));
 				for (const EntityPageEdgeInsertion &insertion: newPool.edge_insertions) {
 					validateRecord(insertion.record);
 					if (insertion.edge_id == 0U || !insertedIds.insert(insertion.edge_id).second) {
@@ -1318,8 +1382,13 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page new-pool Edge batch reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.edge_id, insertion.record);
-					mapping = mappingFor(insertion.edge_id, newPool.request.page_id, page, slot);
+					if (records.size() == page.header().slot_capacity) fail(FormatError::FERR_INVALID_STATE, "Entity append batch exceeds page capacity");
+					records.push_back({insertion.edge_id, insertion.record});
+				}
+				const auto slots = page.insertEdges(records);
+				for (size_t i = 0U; i < records.size(); ++i) {
+					const uint16_t slot = slots[i];
+					mapping = mappingFor(records[i].entity_id, newPool.request.page_id, page, slot);
 					request.inserted_edges.push_back(mapping);
 				}
 				std::ranges::sort(request.inserted_edges, {}, &EntityPageLocation::entity_id);
@@ -1598,10 +1667,8 @@ namespace graph::storage {
 							fail(FormatError::FERR_INVALID_STATE,
 								 "relocatable Entity page batch metadata materialization count is inconsistent");
 						}
-						for (size_t ordinal = 0U; ordinal < materializedLargeValues.size(); ++ordinal) {
-							propertyRoots->preparePlannedLargeValue(largeValueMutations[ordinal],
-																	materializedLargeValues[ordinal], checkpointLsn);
-						}
+						if (!materializedLargeValues.empty())
+							propertyRoots->preparePlannedLargeValues(largeValueMutations, materializedLargeValues, checkpointLsn);
 						struct PoolWork {
 							CatalogEntry pool;
 							bool destination_is_new_pool = false;
@@ -2265,24 +2332,7 @@ namespace graph::storage {
 					 "relocatable Entity page read view has an invalid Page ID or record kind");
 		}
 		if (std::optional<SharedPagePoolPinnedView> contents = allocator_.readPinned(snapshot, pageId, hint)) {
-			const uint8_t invalid =
-					static_cast<uint8_t>(contents->pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
-					static_cast<uint8_t>(contents->pool.owner_id == 0U) |
-					static_cast<uint8_t>(contents->pool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(contents->location.page_id != pageId) |
-					static_cast<uint8_t>(contents->location.segment_id != contents->pool.segment_id) |
-					static_cast<uint8_t>(contents->location.generation != contents->pool.generation) |
-					static_cast<uint8_t>(contents->owner.page_id != pageId) |
-					static_cast<uint8_t>(contents->owner.owner_id != contents->pool.owner_id) |
-					static_cast<uint8_t>(contents->owner.kind != PageOwnerKind::POK_ENTITY) |
-					static_cast<uint8_t>((contents->owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) != 0U) |
-					static_cast<uint8_t>(contents->owner.payload_bytes != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-					static_cast<uint8_t>(contents->owner.generation != contents->location.generation) |
-					static_cast<uint8_t>(contents->owner.committed_lsn > snapshot.superblock().checkpoint_lsn);
-			if (invalid != 0U) {
-				fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable pinned Entity page disagrees with its pool, owner, or metadata snapshot");
-			}
+			validatePinnedEntityContents(snapshot, pageId, *contents);
 			ReadPage result(std::move(*contents));
 			if (result.page.header().record_kind != expectedKind) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -2291,57 +2341,6 @@ namespace graph::storage {
 			return result;
 		}
 		return ReadPage(loadPage(snapshot, pageId, expectedKind, hint));
-	}
-
-	std::optional<EntityPageStore::ReadPage>
-	EntityPageStore::loadPhysicalScanReadPage(const MetadataSnapshotPin &snapshot,
-															 const CatalogEntry &pool,
-															 const PageLocation &location) const {
-		if (!location.page_id.isValid() || !location.segment_id.isValid() || !location.generation.isValid()) {
-			fail(FormatError::FERR_INVALID_HEADER,
-				 "relocatable physical Entity scan requires a complete current Page Directory location");
-		}
-		const auto validate = [&snapshot, &location](const auto &contents) {
-			const bool supportedOwner = contents.owner.kind == PageOwnerKind::POK_ENTITY ||
-										contents.owner.kind == PageOwnerKind::POK_ENTITY_LABEL;
-			const uint8_t invalid =
-					static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
-					static_cast<uint8_t>(contents.pool.owner_id == 0U) |
-					static_cast<uint8_t>(contents.pool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(contents.location != location) |
-					static_cast<uint8_t>(contents.location.segment_id != contents.pool.segment_id) |
-					static_cast<uint8_t>(contents.location.generation != contents.pool.generation) |
-					static_cast<uint8_t>(contents.owner.page_id != location.page_id) |
-					static_cast<uint8_t>(contents.owner.owner_id != contents.pool.owner_id) |
-					static_cast<uint8_t>(!supportedOwner) |
-					static_cast<uint8_t>((contents.owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) != 0U) |
-					static_cast<uint8_t>(contents.owner.payload_bytes != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-					static_cast<uint8_t>(contents.owner.generation != contents.location.generation) |
-					static_cast<uint8_t>(contents.owner.committed_lsn > snapshot.superblock().checkpoint_lsn) |
-					static_cast<uint8_t>(contents.owner.kind == PageOwnerKind::POK_ENTITY &&
-									 location.free_bytes != 0U);
-			if (invalid != 0U) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable physical Entity scan found a page that disagrees with its pool, owner, or snapshot");
-			}
-		};
-
-		if (std::optional<SharedPagePoolPinnedView> contents =
-					allocator_.readPinnedKnownLocation(snapshot, pool, location, BufferPoolReadHint::BPRH_SEQUENTIAL)) {
-			validate(*contents);
-			if (contents->owner.kind == PageOwnerKind::POK_ENTITY_LABEL) {
-				return std::nullopt;
-			}
-			return ReadPage(std::move(*contents));
-		}
-		SharedPagePoolContents contents =
-				allocator_.readKnownLocation(snapshot, pool, location, BufferPoolReadHint::BPRH_SEQUENTIAL);
-		validate(contents);
-		if (contents.owner.kind == PageOwnerKind::POK_ENTITY_LABEL) {
-			return std::nullopt;
-		}
-		EntityPage page = EntityPage::open(contents.owner, contents.payload);
-		return ReadPage(LoadedPage(std::move(contents), std::move(page)));
 	}
 
 	EntityPageStore::LoadedPage &EntityPageStore::loadScanPage(const MetadataSnapshotPin &snapshot, PageId pageId,
@@ -2361,7 +2360,30 @@ namespace graph::storage {
 																											std::optional<ReadPage> &currentPage,
 																											PageId &currentPageId) const {
 		if (!currentPage.has_value() || currentPageId != pageId) {
-			currentPage.emplace(loadReadPage(snapshot, pageId, expectedKind, BufferPoolReadHint::BPRH_SEQUENTIAL));
+			// The previous pinned page authenticates this Catalog entry under the
+			// same scan snapshot. Retain no additional cache; a pool change falls
+			// back to normal resolution. Every page keeps its own fresh location,
+			// allocated-slot, envelope, owner, checksum and typed-slot validation.
+			currentPage.emplace([&]() -> ReadPage {
+				if (currentPage.has_value() && currentPage->pinned_contents.has_value()) {
+					const CatalogEntry &pool = currentPage->pinned_contents->pool;
+					const PageLocation location = metadata_.findPageLocation(snapshot, pageId);
+					if (location.segment_id == pool.segment_id && location.generation == pool.generation) {
+						if (auto contents = allocator_.readPinnedKnownLocation(
+								snapshot, pool, location, BufferPoolReadHint::BPRH_SEQUENTIAL)) {
+							validatePinnedEntityContents(snapshot, pageId, *contents);
+							ReadPage result(std::move(*contents));
+							if (result.page.header().record_kind != expectedKind) {
+								fail(FormatError::FERR_INVALID_STATE,
+										"relocatable Entity Map resolves to a pinned page with another fixed-record kind");
+							}
+							debug::PerfTrace::addValue("native_graph.read.entity_scan_catalog_cache_hits", 1);
+							return result;
+						}
+					}
+				}
+				return loadReadPage(snapshot, pageId, expectedKind, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			}());
 			currentPageId = pageId;
 		}
 		return *currentPage;

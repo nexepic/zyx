@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-09",
+  "recorded_utc": "2026-10-09T05:44:28.302969+00:00",
+  "kind": "memory read-layout probe; NOT a database benchmark",
+  "platform": "macOS-15.5-arm64-arm-64bit",
+  "architecture": "arm64",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)\nTarget: arm64-apple-darwin24.5.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+  "command": "clang++ -std=c++20 -O3 -DNDEBUG -Wall -Wextra -Werror benchmarks/architecture-design/adjacency_layout_probe.cpp -o /tmp/zyx-adjacency-layout-probe",
+  "seed": 42,
+  "edge_count": 1048576,
+  "degrees": [
+    4,
+    32,
+    512
+  ],
+  "warmups": 2,
+  "samples_per_case": 7,
+  "query_nodes": "min(4096, node_count), shuffled; repeats bring each sample to 1048576 visits",
+  "edge_record_bytes": 64,
+  "cover_record_bytes": 24,
+  "variants": 3,
+  "cases": 18,
+  "result_validation": "equal checksums for all variants in each layout/degree; raw sample medians checked",
+  "limitations": [
+    "No B+Tree seek, disk I/O, writes, reverse index, transaction, durability, or allocator measured",
+    "Arrays and linked records share a prebuilt graph; lookup starts at precomputed heads/ranges",
+    "Query repetition warms the selected working set; visited distinct edges vary by degree",
+    "No CPU affinity, clock locking, isolated host, or statistical cross-process confidence bound",
+    "Probe covering records are 24-byte AoS, not the proposed grouped 16-byte SoA adjacency codec"
+  ],
+  "files": {
+    "adjacency_layout_probe.cpp": "c5172f8b9e1a0900964675ae184868c3df7ba8d519b22399f21056667e87100f",
+    "adjacency-layout-results.csv": "d0a4153a471384c43c0e9d513f720f7b5a74385f9ce0ec70daadef01d9178b37"
+  }
+}

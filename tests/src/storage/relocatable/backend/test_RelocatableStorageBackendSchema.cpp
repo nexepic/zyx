@@ -1125,7 +1125,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesDurableQueryMemoryPolicyToThe
 	// range() materializes its rows during execution, after QueryGuard captures
 	// the query baseline. This verifies a durable per-query memory policy rather
 	// than rejecting the database process's preexisting resident set.
-	const std::string query = "UNWIND range(0, 262144) AS value RETURN value";
+	// Keep the successful run below the independent 64 MiB execution materialization limit.
+	const std::string query = "UNWIND range(0, 65536) AS value RETURN value";
 	EXPECT_THROW(static_cast<void>(engine.execute(query)), graph::query::QueryMemoryExceededException);
 
 	static_cast<void>(engine.execute("CALL dbms.setConfig('query.max_memory_mb', 0)"));
@@ -1611,12 +1612,12 @@ TEST_F(RelocatableStorageBackendSchemaTest, ReusesTheSnapshotReadSessionForScala
 	ASSERT_TRUE(trace.contains("native_graph.read.range_index_label_token_resolution"));
 	ASSERT_TRUE(trace.contains("native_graph.read.range_index_property_token_resolution"));
 	ASSERT_TRUE(trace.contains("native_graph.read.range_index_definition_read"));
-	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
 	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_batch_owners"));
 	EXPECT_EQ(trace.at("native_graph.read.range_index_label_token_resolution").totalValue, 1);
 	EXPECT_EQ(trace.at("native_graph.read.range_index_property_token_resolution").totalValue, 1);
 	EXPECT_EQ(trace.at("native_graph.read.range_index_definition_read").totalValue, 1);
-	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 2);
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 2);
 	// The first range lookup fills the snapshot-owned selected-property cache;
 	// the repeated lookup reuses those values and performs no second owner batch.
 	EXPECT_EQ(trace.at("native_graph.read.property_selected_batch_owners").totalValue, 2);
@@ -1709,8 +1710,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeCandidateStreamStopsBefor
 	EXPECT_FALSE(*stopped);
 	EXPECT_EQ(callbackCount, 1U);
 	EXPECT_EQ(callbackEntries, graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
-	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
-	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 1);
 	// Early termination must not validate a second Property batch or read the
 	// remaining index leaves after the first bounded batch was accepted.
 	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_batch_owners"));
@@ -1846,6 +1847,57 @@ TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeCandidateStreamConsumesMu
 	EXPECT_TRUE(*completed);
 	EXPECT_EQ(callbackCount, 3U);
 	EXPECT_EQ(callbackEntries, requests.size());
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ExactCandidateStreamDescendsIndexRootOnceAcrossBatches) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		requests.push_back({{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	size_t callbackCount = 0U;
+	size_t candidateCount = 0U;
+	const auto completed = snapshot->visitNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}, requests.size(), 1U,
+			[&](const graph::storage::IndexCandidateBatch &batch) {
+				++callbackCount;
+				candidateCount += batch.candidates.size();
+				EXPECT_TRUE(batch.exact_match_verified);
+				EXPECT_TRUE(batch.predicates_verified);
+				EXPECT_EQ(batch.verified_property_columns.size(), 1U);
+				if (batch.verified_property_columns.size() != 1U) {
+					return false;
+				}
+				EXPECT_EQ(batch.candidates.size(), batch.verified_property_columns.front().values.size());
+				EXPECT_TRUE(std::ranges::is_sorted(batch.candidates, {}, &graph::storage::EntityRef::entity_id));
+				return true;
+			});
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(completed.has_value());
+	EXPECT_TRUE(*completed);
+	EXPECT_GT(callbackCount, 1U);
+	EXPECT_EQ(candidateCount, nodes.size());
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_batches"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_batches").totalValue,
+			static_cast<int64_t>(callbackCount));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_emitted_rows"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_emitted_rows").totalValue,
+			static_cast<int64_t>(nodes.size()));
 	snapshot.reset();
 	backend.close();
 }
@@ -2472,8 +2524,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, CompositeRangeCandidateStreamStopsAt
 	EXPECT_FALSE(*completed);
 	EXPECT_EQ(callbackCount, 1U);
 	EXPECT_EQ(callbackEntries, graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
-	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
-	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 1);
 	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_column_batch_owners"));
 	EXPECT_EQ(trace.at("native_graph.read.property_selected_column_batch_owners").totalValue,
 			static_cast<int64_t>(graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES));
@@ -2545,12 +2597,12 @@ TEST_F(RelocatableStorageBackendSchemaTest, ReusesTheSnapshotReadSessionForCompo
 	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_label_token_resolution"));
 	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_property_token_resolution"));
 	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_definition_read"));
-	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_root_descent"));
 	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_column_batch_owners"));
 	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_label_token_resolution").totalValue, 1);
 	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_property_token_resolution").totalValue, 2);
 	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_definition_read").totalValue, 1);
-	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 2);
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_root_descent").totalValue, 2);
 	// Both composite indexed fields are read once for the first lookup and then
 	// served from the same snapshot-owned cache on the repeated lookup.
 	EXPECT_EQ(trace.at("native_graph.read.property_selected_column_batch_owners").totalValue,

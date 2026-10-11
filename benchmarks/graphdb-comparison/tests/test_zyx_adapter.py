@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import json
 import sys
+import subprocess
+import pytest
 from pathlib import Path
 
 from runner.adapters.zyx import ZyxAdapter
@@ -47,6 +49,26 @@ def _successful_fake(path: Path, args_path: Path | None = None, emit_profile: bo
 
 def _read_invocations(path: Path) -> list[list[str]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_zyx_adapter_disables_diagnostics_for_release_measurement(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-no-profile.py"
+    args_path = tmp_path / "args.txt"
+    _successful_fake(binary, args_path)
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    monkeypatch.setenv("ZYX_COMPARE_EMIT_PROFILE", "0")
+    adapter = ZyxAdapter("zyx", tmp_path / "dataset", "smoke", profile="indexed")
+    results = adapter.run_all(warmup=0, iterations=1)
+    assert all(result.status == "ok" for result in results)
+    assert len(_read_invocations(args_path)) == 4
+    assert all("--emit-profile" not in args for args in _read_invocations(args_path))
+    assert adapter.profile_events == []
+
+
+def test_zyx_adapter_rejects_ambiguous_diagnostic_setting(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ZYX_COMPARE_EMIT_PROFILE", "false")
+    with pytest.raises(ValueError, match="ZYX_COMPARE_EMIT_PROFILE"):
+        ZyxAdapter("zyx", tmp_path / "dataset", "smoke")
 
 
 def test_zyx_adapter_uses_env_binary_and_parses_samples(tmp_path: Path, monkeypatch):
@@ -486,6 +508,19 @@ def test_zyx_adapter_returns_failed_result_on_timeout(tmp_path: Path, monkeypatc
     monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
     monkeypatch.setenv("ZYX_COMPARE_TIMEOUT_SECONDS", "0.5")
     adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    def run_with_timeout(command, **kwargs):
+        assert kwargs["timeout"] == 0.5
+        workload = command[command.index("--workload") + 1]
+        if workload != "load_nodes_edges":
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+        sample = {"event": "sample", "database": "zyx", "workload": workload,
+                  "scale": "smoke", "iteration": 0, "latency_ms": 1.0,
+                  "status": "ok", "equivalent_mode": "api"}
+        return subprocess.CompletedProcess(command, 0, json.dumps(sample) + "\n", "")
+
+    # Exercise timeout handling independently of Python startup and machine load.
+    monkeypatch.setattr("runner.adapters.zyx.subprocess.run", run_with_timeout)
 
     results = adapter.run_all(warmup=0, iterations=1)
 

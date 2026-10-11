@@ -252,6 +252,11 @@ namespace graph::storage {
 		// pinning the graph transaction, then publishes each complete batch in one
 		// metadata COW generation. It intentionally does not expose physical write
 		// placement through the public storage boundary.
+		// Builds missing global label/type member trees in one native publication.
+		// Existing definitions/roots are reused; no implicit rebuild on reopen.
+		void rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint = {});
+		[[nodiscard]] std::vector<uint64_t> ensureLogicalMembershipIndexes(
+				const std::function<void()> &checkpoint = {});
 		[[nodiscard]] std::vector<uint64_t>
 		createLogicalNodes(const std::vector<LogicalGraphNodeCreateRequest> &requests) override;
 		[[nodiscard]] std::vector<uint64_t>
@@ -263,6 +268,10 @@ namespace graph::storage {
 		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatch(
 				const LogicalGraphMutationBatch &batch,
 				std::optional<LogicalGraphMutationFence> expectedFence = std::nullopt) override;
+		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithReadControl(
+			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+			const LogicalGraphMutationReadControl &control) override;
+
 		// Internal logical-transaction bridge: return durable IDs before exposing a
 		// provisional result, so the executor can later adopt the same ranges.
 		[[nodiscard]] NativeGraphLogicalIdReservation reserveLogicalGraphCreationIds(uint64_t nodeCount,
@@ -335,6 +344,11 @@ namespace graph::storage {
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
 		[[nodiscard]] std::optional<LogicalGraphCardinalityStatistics>
 		readLogicalGraphCardinalityStatistics() const override;
+		[[nodiscard]] std::optional<uint64_t>
+		estimateLogicalNodeCardinality(std::span<const std::string> labels) const override;
+		[[nodiscard]] LogicalGraphPlanningStatistics readLogicalPlanningStatistics(
+			std::span<const std::vector<std::string>> labels) const override;
+
 		[[nodiscard]] std::unique_ptr<LogicalGraphVectorSearchSnapshot>
 		openLogicalGraphVectorSearchSnapshot() const override;
 		// Exact bounded refinement is the semantic baseline. Derived PQ/adjacency
@@ -410,6 +424,19 @@ namespace graph::storage {
 																		size_t maximumDefinitions) const;
 		[[nodiscard]] LogicalGraphIndexDefinition
 		createLogicalNodeIndex(const LogicalGraphNodeIndexCreateRequest &request) override;
+		[[nodiscard]] LogicalGraphIndexDefinition createLogicalNodeIndexWithCheckpoint(
+			const LogicalGraphNodeIndexCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) override;
+		[[nodiscard]] std::vector<LogicalGraphIndexDefinition> createLogicalNodeIndexesWithCheckpoint(
+			std::span<const LogicalGraphNodeIndexCreateRequest> requests, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) override;
+		[[nodiscard]] LogicalGraphIndexDefinition createLogicalNodeVectorIndexWithCheckpoint(
+			const LogicalGraphNodeVectorIndexCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) override;
+		[[nodiscard]] LogicalGraphConstraintDefinition createLogicalConstraintWithCheckpoint(
+			const LogicalGraphConstraintCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) override;
+
 		[[nodiscard]] std::vector<LogicalGraphIndexDefinition>
 		createLogicalNodeIndexes(std::span<const LogicalGraphNodeIndexCreateRequest> requests) override;
 		[[nodiscard]] LogicalGraphIndexDefinition
@@ -484,6 +511,10 @@ namespace graph::storage {
 																	 uint64_t tokenId) const override;
 		[[nodiscard]] std::string resolveRelationshipTypeToken(const MetadataSnapshotPin &snapshot,
 																			uint64_t tokenId) const override;
+		[[nodiscard]] std::string resolveRelationshipTypeTokenWithNameAdmission(const MetadataSnapshotPin &snapshot,
+			uint64_t tokenId, const std::function<void(size_t)> &admission) const override;
+		[[nodiscard]] std::string resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
+			uint32_t tokenId, const std::function<void(size_t)> &admission) const override;
 		[[nodiscard]] std::string resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																				  uint32_t tokenId) const override;
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyToken(const MetadataSnapshotPin &snapshot,
@@ -511,6 +542,13 @@ namespace graph::storage {
 		// The native exact lookup validates a support-tree candidate against the
 		// same snapshot-pinned Entity pages and System Catalog that created it.
 		// It deliberately never falls back to the retired fixed-record path.
+		[[nodiscard]] std::optional<bool> visitNativeEdgeTypeCandidates(
+				const MetadataSnapshotPin &snapshot, uint64_t typeToken, size_t maximumRecords,
+				const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session) const;
+		[[nodiscard]] std::optional<bool> visitNativeNodeLabelCandidates(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				size_t maximumRecords, const std::function<bool(const EntityRef &, bool)> &visitor,
+				NativeReadSession *session) const;
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByExactProperties(
 				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,

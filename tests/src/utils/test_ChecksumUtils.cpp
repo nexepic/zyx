@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include "graph/utils/ChecksumUtils.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 class ChecksumUtilsTest : public ::testing::Test {
 protected:
@@ -143,4 +144,31 @@ TEST_F(ChecksumUtilsTest, CrcFunctionsEquivalence) {
 
 	// Both methods should produce the same result when starting from 0
 	EXPECT_EQ(directCrc, updateCrc);
+}
+
+TEST_F(ChecksumUtilsTest, TraceIncludesIncrementalWorkAndPreservesChainedCrc) {
+	using graph::debug::PerfTrace;
+	struct RestoreTrace {
+		bool enabled = PerfTrace::isEnabled();
+		bool values = PerfTrace::areValuesEnabled();
+		~RestoreTrace() { PerfTrace::setEnabled(enabled); PerfTrace::setValueCollectionEnabled(values); PerfTrace::reset(); }
+	} restore;
+	const std::string first = "1234", second = "56789";
+	PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(false); PerfTrace::reset();
+	const auto seed = graph::utils::calculateCrc(first.data(), first.size());
+	EXPECT_EQ(graph::utils::updateCrc(seed, second.data(), second.size()), 0xcbf43926U);
+	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
+	PerfTrace::setEnabled(true); PerfTrace::setValueCollectionEnabled(true);
+	const auto tracedSeed = graph::utils::calculateCrc(first.data(), first.size());
+	EXPECT_EQ(graph::utils::updateCrc(tracedSeed, second.data(), second.size()), 0xcbf43926U);
+	EXPECT_EQ(graph::utils::updateCrc(tracedSeed, nullptr, 0U), 0U);
+	const auto trace = PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(trace.contains("storage.checksum.bytes"));
+	EXPECT_EQ(trace.at("storage.checksum.bytes").totalValue, 9);
+	EXPECT_EQ(trace.at("storage.checksum.bytes").valueCalls, 3U);
+	ASSERT_TRUE(trace.contains("storage.checksum.incremental_bytes"));
+	EXPECT_EQ(trace.at("storage.checksum.incremental_bytes").totalValue, 5);
+	EXPECT_EQ(trace.at("storage.checksum.incremental_bytes").valueCalls, 2U);
+	ASSERT_TRUE(trace.contains("storage.checksum.crc"));
+	EXPECT_EQ(trace.at("storage.checksum.crc").calls, 3U);
 }

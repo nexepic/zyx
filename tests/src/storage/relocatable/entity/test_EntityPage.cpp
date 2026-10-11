@@ -534,3 +534,36 @@ TEST(RelocatableEntityPageTest, RejectsAReusedSlotWhoseGenerationIsExhausted) {
 	const std::array<IdentifiedEdgeEntityRecord, 1U> batch{IdentifiedEdgeEntityRecord{2001U, edge()}};
 	expectFormatError([&] { static_cast<void>(exhaustedEdge.insertEdges(batch)); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
+
+TEST(RelocatableEntityPageTest, NodeBatchMatchesScalarBytesAndRejectsInvalidInputAtomically) {
+ auto batch = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+ auto scalar = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+ const auto first = scalar.insert(700U, node());
+ scalar.erase(first);
+ const auto batchFirst = batch.insert(700U, node());
+ batch.erase(batchFirst);
+ std::vector<IdentifiedNodeEntityRecord> records{{701U,node()},{702U,node()},{703U,node()}};
+ const auto slots = batch.insertNodes(records);
+ for (size_t i = 0; i < records.size(); ++i) {
+  EXPECT_EQ(slots[i], scalar.insert(records[i].entity_id, records[i].record));
+  EXPECT_EQ(batch.findNode(slots[i], batch.slotGeneration(slots[i])), records[i].record);
+ }
+ EXPECT_EQ(batch.slotGeneration(slots[0]), 2U);
+ EXPECT_EQ(batch.serialize(), scalar.serialize());
+ const auto before = batch.serialize();
+ const std::array<IdentifiedNodeEntityRecord,2> duplicate{{{710U,node()},{710U,node()}}};
+ EXPECT_THROW(static_cast<void>(batch.insertNodes(duplicate)), FormatException);
+ EXPECT_EQ(batch.serialize(), before);
+ auto invalid = records; invalid[0].entity_id = 710U; invalid[1].entity_id = 0U;
+ EXPECT_THROW(static_cast<void>(batch.insertNodes(invalid)), FormatException);
+ EXPECT_EQ(batch.serialize(), before);
+ invalid[1].entity_id = 711U; invalid[1].record.inline_label_count = 255U;
+ EXPECT_THROW(static_cast<void>(batch.insertNodes(invalid)), FormatException);
+ EXPECT_EQ(batch.serialize(), before);
+ std::vector<IdentifiedNodeEntityRecord> overCapacity(batch.header().slot_capacity+1U, {799U,node()});
+ EXPECT_THROW(static_cast<void>(batch.insertNodes(overCapacity)), FormatException);
+ EXPECT_EQ(batch.serialize(), before);
+ EXPECT_TRUE(batch.insertNodes({}).empty());
+ auto edges = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
+ EXPECT_THROW(static_cast<void>(edges.insertNodes({})), FormatException);
+}

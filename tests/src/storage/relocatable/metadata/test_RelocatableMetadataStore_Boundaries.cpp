@@ -367,9 +367,9 @@ TEST_F(RelocatableMetadataStoreTest, PublishesTypedDirectoryErasuresWithoutRequi
 	static_cast<void>(store->upsertVectorLocations(std::span(&vector, 1), {}, LogSequenceNumber(3)));
 	const VectorManifestLocation manifest{17, PageId(92), Generation(1)};
 	static_cast<void>(store->upsertVectorManifests(std::span(&manifest, 1), {}, LogSequenceNumber(4)));
-	const std::array erasedVectorIds = {101ULL};
+	const std::array<uint64_t, 1> erasedVectorIds = {101};
 	static_cast<void>(store->upsertVectorLocations({}, erasedVectorIds, LogSequenceNumber(5)));
-	const std::array erasedIndexIds = {17ULL};
+	const std::array<uint64_t, 1> erasedIndexIds = {17};
 	static_cast<void>(store->upsertVectorManifests({}, erasedIndexIds, LogSequenceNumber(6)));
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	EXPECT_FALSE(store->findVectorLocationOptional(snapshot, vector.vector_id).has_value());

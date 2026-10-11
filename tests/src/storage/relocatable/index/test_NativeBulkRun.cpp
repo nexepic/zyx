@@ -18,6 +18,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include "graph/debug/PerfTrace.hpp"
 
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp"
@@ -152,7 +153,18 @@ protected:
 TEST(NativeBulkRunFragmentCodecTest, RoundTripsStrictlySortedEntriesWithIndependentRecordChecksums) {
 	const NativeBulkRunFragment expected = fragment();
 	const std::vector<std::byte> encoded = NativeBulkRunFragmentCodec::encode(expected);
+	const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	EXPECT_EQ(NativeBulkRunFragmentCodec::decode(encoded), expected);
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+	ASSERT_TRUE(trace.contains("native_graph.write.scratch.decoded_fragment_bytes"));
+	ASSERT_TRUE(trace.contains("native_graph.write.scratch.decoded_fragment_records"));
+	EXPECT_EQ(trace.at("native_graph.write.scratch.decoded_fragment_bytes").totalValue,
+		static_cast<int64_t>(encoded.size()));
+	EXPECT_EQ(trace.at("native_graph.write.scratch.decoded_fragment_records").totalValue,
+		static_cast<int64_t>(expected.entries.size()));
 }
 
 TEST(NativeBulkRunValueObjectTest, ValidatesFragmentAndManifestIdentitiesAcrossBothManifestLevels) {

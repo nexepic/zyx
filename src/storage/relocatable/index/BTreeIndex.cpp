@@ -65,12 +65,12 @@ namespace graph::storage {
 	BTreeIndex::RangeCursor::RangeCursor(RangeCursor &&) noexcept = default;
 	BTreeIndex::RangeCursor &BTreeIndex::RangeCursor::operator=(RangeCursor &&) noexcept = default;
 
-	std::optional<BTreePageEntry> BTreeIndex::RangeCursor::next() {
+	std::optional<BTreePageEntry> BTreeIndex::RangeCursor::next(const std::function<void(size_t)> &boundaryKeyAdmission) {
 		if (state_ == nullptr || state_->index == nullptr || state_->snapshot == nullptr) {
 			throwBTreeIndexError(FormatError::FERR_INVALID_STATE,
 								 "relocatable B+Tree range cursor has no snapshot-bound state");
 		}
-		return state_->index->nextRangeCursor(*state_);
+		return state_->index->nextRangeCursor(*state_, boundaryKeyAdmission);
 	}
 
 	BTreeIndex::BTreeIndex(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
@@ -88,12 +88,15 @@ namespace graph::storage {
 		}
 	}
 
-	std::optional<BTreePage> BTreeIndex::resolveRoot(const MetadataSnapshotPin &snapshot) const {
+	std::optional<BTreePage> BTreeIndex::resolveRoot(const MetadataSnapshotPin &snapshot,
+			std::vector<BTreePageEntry> *decodedEntries) const {
 		const std::optional<IndexRootLocation> root = metadata_.findIndexRootOptional(snapshot, index_id_);
 		if (!root.has_value()) {
 			return std::nullopt;
 		}
-		BTreePage page = pages_.read(snapshot, root->root_page_id);
+		BTreePage page = decodedEntries != nullptr
+			? pages_.readDecoded(snapshot, root->root_page_id, *decodedEntries)
+			: pages_.read(snapshot, root->root_page_id);
 		const BTreePageHeader header = page.header();
 		const uint8_t invalid = static_cast<uint8_t>(header.index_id != index_id_) |
 								static_cast<uint8_t>(header.page_id != root->root_page_id) |
@@ -114,21 +117,39 @@ namespace graph::storage {
 	BTreePage BTreeIndex::descendToLeaf(const MetadataSnapshotPin &snapshot, BTreePage page,
 											std::optional<std::span<const std::byte>> key,
 											BufferPoolReadHint leafReadHint, const CancellationCheckpoint *cancellation,
-											std::vector<TraversalStep> *traversal) const {
+											std::vector<TraversalStep> *traversal,
+			std::vector<BTreePageEntry> *leafEntries, LeafRoute *leafRoute,
+			std::vector<BTreePageEntry> *decodedRootEntries) const {
+		auto leaf = descendToLeafFromRoot(snapshot, page, key, leafReadHint, cancellation, traversal, leafEntries, leafRoute, decodedRootEntries);
+		return leaf.has_value() ? std::move(*leaf) : std::move(page);
+	}
+
+	std::optional<BTreePage> BTreeIndex::descendToLeafFromRoot(const MetadataSnapshotPin &snapshot, const BTreePage &root,
+											std::optional<std::span<const std::byte>> key,
+											BufferPoolReadHint leafReadHint, const CancellationCheckpoint *cancellation,
+											std::vector<TraversalStep> *traversal,
+			std::vector<BTreePageEntry> *leafEntries, LeafRoute *leafRoute,
+			std::vector<BTreePageEntry> *decodedRootEntries) const {
+		const BTreePage *page = &root;
+		std::optional<std::vector<BTreePageEntry>> decodedEntries;
+		if (decodedRootEntries != nullptr) decodedEntries.emplace(std::move(*decodedRootEntries));
+		std::optional<BTreePage> ownedPage;
 		std::optional<std::vector<std::byte>> lowerInclusive;
 		std::optional<std::vector<std::byte>> upperExclusive;
 		for (;;) {
 			if (cancellation != nullptr) {
 				cancellation->check();
 			}
-			validateIndexPage(page, index_id_);
-			const BTreePageHeader header = page.header();
+			validateIndexPage(*page, index_id_);
+			const BTreePageHeader header = page->header();
+			auto entries = decodedEntries.has_value() ? std::move(*decodedEntries) : page->entries();
+			decodedEntries.reset();
 			if (header.kind == BTreeNodeKind::BPN_LEAF) {
 				if (header.leaf_value_layout != leaf_value_layout_) {
 					throwBTreeIndexError(FormatError::FERR_INVALID_STATE,
 									 "relocatable B+Tree leaf layout disagrees with its index identity");
 				}
-				for (const BTreePageEntry &entry: page.entries()) {
+				for (const BTreePageEntry &entry: entries) {
 					const uint8_t outsideRange =
 							static_cast<uint8_t>(lowerInclusive.has_value() && lessKey(entry.key, *lowerInclusive)) |
 							static_cast<uint8_t>(upperExclusive.has_value() && !lessKey(entry.key, *upperExclusive));
@@ -137,9 +158,11 @@ namespace graph::storage {
 											 "relocatable B+Tree leaf key violates its separator range");
 					}
 				}
-				return page;
+				if (leafEntries != nullptr) *leafEntries = std::move(entries);
+				if (leafRoute != nullptr)
+					*leafRoute = {header.page_id, std::move(lowerInclusive), std::move(upperExclusive)};
+				return ownedPage;
 			}
-			const std::vector<BTreePageEntry> entries = page.entries();
 			for (const BTreePageEntry &entry: entries) {
 				const uint8_t outsideRange =
 						static_cast<uint8_t>(lowerInclusive.has_value() && lessKey(entry.key, *lowerInclusive)) |
@@ -167,16 +190,19 @@ namespace graph::storage {
 			}
 			if (traversal != nullptr) {
 				traversal->push_back({header.page_id, header.level, childIndex, parentLowerInclusive,
-										 parentUpperExclusive, header, entries});
+										 parentUpperExclusive, header, std::move(entries)});
 			}
 			const BufferPoolReadHint childHint = header.level == 1U ? leafReadHint : BufferPoolReadHint::BPRH_NORMAL;
-			BTreePage child = pages_.read(snapshot, childId, childHint);
+			std::vector<BTreePageEntry> childEntries;
+			BTreePage child = pages_.readDecoded(snapshot, childId, childEntries, childHint);
 			validateIndexPage(child, index_id_);
 			if (child.header().level + 1U != header.level) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable B+Tree child level does not descend by one");
 			}
-			page = std::move(child);
+			decodedEntries.emplace(std::move(childEntries));
+			ownedPage.emplace(std::move(child));
+			page = &*ownedPage;
 		}
 	}
 
@@ -219,14 +245,14 @@ namespace graph::storage {
 				if (cancellation != nullptr) {
 					cancellation->check();
 				}
-				const BTreePage internal = pages_.read(snapshot, nextPageId, BufferPoolReadHint::BPRH_NORMAL);
+				std::vector<BTreePageEntry> entries;
+				const BTreePage internal = pages_.readDecoded(snapshot, nextPageId, entries, BufferPoolReadHint::BPRH_NORMAL);
 				validateIndexPage(internal, index_id_);
 				const BTreePageHeader internalHeader = internal.header();
 				if (internalHeader.kind != BTreeNodeKind::BPN_INTERNAL || internalHeader.level != expectedLevel) {
 					throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable B+Tree routed successor has an invalid internal level");
 				}
-				const std::vector<BTreePageEntry> entries = internal.entries();
 				for (const BTreePageEntry &entry: entries) {
 					const uint8_t outsideRange =
 							static_cast<uint8_t>(lower.has_value() && lessKey(entry.key, *lower)) |
@@ -237,9 +263,9 @@ namespace graph::storage {
 					}
 				}
 				traversal.push_back({internalHeader.page_id, internalHeader.level, 0U, lower, upper,
-										 internalHeader, entries});
-				if (!entries.empty()) {
-					upper = entries.front().key;
+										 internalHeader, std::move(entries)});
+				if (!traversal.back().entries.empty()) {
+					upper = traversal.back().entries.front().key;
 				}
 				nextPageId = internalHeader.leftmost_child;
 				--expectedLevel;
@@ -256,9 +282,11 @@ namespace graph::storage {
 		if (!root.has_value()) {
 			return std::nullopt;
 		}
-		const BTreePage leaf =
-				descendToLeaf(snapshot, std::move(*root), key, BufferPoolReadHint::BPRH_NORMAL, nullptr);
-		const std::vector<BTreePageEntry> entries = leaf.entries();
+		std::vector<BTreePageEntry> entries;
+		// Reuse the entries authenticated during descent, including separator
+		// bounds and leaf layout, rather than decoding the same leaf again.
+		static_cast<void>(descendToLeaf(snapshot, std::move(*root), key, BufferPoolReadHint::BPRH_NORMAL,
+				nullptr, nullptr, &entries));
 		const auto position = std::lower_bound(entries.begin(), entries.end(), key,
 											   [](const BTreePageEntry &entry, std::span<const std::byte> candidate) {
 												   return lessKey(entry.key, candidate);
@@ -267,6 +295,38 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		return position->value_or_child;
+	}
+
+	std::vector<std::optional<uint64_t>> BTreeIndex::findSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const std::vector<std::byte>> keys) const {
+		for (size_t position = 1U; position < keys.size(); ++position) {
+			if (!lessKey(keys[position - 1U], keys[position]))
+				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
+						"relocatable B+Tree exact batch keys must be strictly increasing");
+		}
+		std::vector<std::optional<uint64_t>> result(keys.size());
+		if (keys.empty()) return result;
+		const auto root = resolveRoot(snapshot);
+		if (!root.has_value()) return result;
+		LeafRoute route;
+		std::vector<BTreePageEntry> entries;
+		bool haveLeaf = false;
+		for (size_t position = 0U; position < keys.size(); ++position) {
+			const auto &key = keys[position];
+			if (!haveLeaf || (route.lower_inclusive && lessKey(key, *route.lower_inclusive)) ||
+				(route.upper_exclusive && !lessKey(key, *route.upper_exclusive))) {
+				static_cast<void>(descendToLeafFromRoot(snapshot, *root, key, BufferPoolReadHint::BPRH_NORMAL,
+						nullptr, nullptr, &entries, &route));
+				haveLeaf = true;
+			}
+			const auto found = std::lower_bound(entries.begin(), entries.end(), key,
+					[](const BTreePageEntry &entry, std::span<const std::byte> candidate) {
+						return lessKey(entry.key, candidate);
+					});
+			if (found != entries.end() && std::ranges::equal(found->key, key))
+				result[position] = found->value_or_child;
+		}
+		return result;
 	}
 
 	std::vector<BTreePageEntry> BTreeIndex::scan(const MetadataSnapshotPin &snapshot,
@@ -281,7 +341,9 @@ namespace graph::storage {
 		if (maximumEntries == 0U) {
 			return result;
 		}
-		std::optional<BTreePage> root = resolveRoot(snapshot);
+		debug::PerfTrace::addValue("native_graph.read.root_descents", 1);
+		std::vector<BTreePageEntry> rootEntries;
+		std::optional<BTreePage> root = resolveRoot(snapshot, &rootEntries);
 		if (!root.has_value()) {
 			return result;
 		}
@@ -289,8 +351,9 @@ namespace graph::storage {
 		// tree membership. The descent stack proves the expected successor leaf
 		// without rereading the root or unrelated routing pages on every hop.
 		std::vector<TraversalStep> traversal;
+		std::vector<BTreePageEntry> entries;
 		BTreePage leaf = descendToLeaf(snapshot, std::move(*root), lowerBound, initialLeafReadHint, cancellation,
-									  &traversal);
+									  &traversal, &entries, nullptr, &rootEntries);
 		std::set<PageId> visited;
 		std::optional<std::vector<std::byte>> previousLeafLastKey;
 		for (;;) {
@@ -302,7 +365,6 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 									 "relocatable B+Tree leaf sibling chain contains a cycle");
 			}
-			const std::vector<BTreePageEntry> entries = leaf.entries();
 			if (!entries.empty()) {
 				if (previousLeafLastKey.has_value() && !lessKey(*previousLeafLastKey, entries.front().key)) {
 					throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
@@ -326,12 +388,13 @@ namespace graph::storage {
 				if (cancellation != nullptr) {
 					cancellation->check();
 				}
-				result.push_back(*position);
+				result.push_back(std::move(*position));
 			}
 			if (result.size() == maximumEntries || !header.right_sibling.isValid()) {
 				return result;
 			}
-			BTreePage sibling = pages_.read(snapshot, header.right_sibling, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			std::vector<BTreePageEntry> siblingEntries;
+			BTreePage sibling = pages_.readDecoded(snapshot, header.right_sibling, siblingEntries, BufferPoolReadHint::BPRH_SEQUENTIAL);
 			validateIndexPage(sibling, index_id_);
 			const BTreePageHeader siblingHeader = sibling.header();
 			const uint8_t invalidSibling = static_cast<uint8_t>(siblingHeader.kind != BTreeNodeKind::BPN_LEAF) |
@@ -342,7 +405,6 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree leaf sibling link is not reciprocal");
 			}
-			const std::vector<BTreePageEntry> siblingEntries = sibling.entries();
 			if (siblingEntries.empty()) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree linked non-root leaf is empty");
@@ -364,6 +426,7 @@ namespace graph::storage {
 				}
 			}
 			leaf = std::move(sibling);
+			entries = std::move(siblingEntries);
 		}
 	}
 
@@ -391,14 +454,15 @@ namespace graph::storage {
 		// This cursor is the single root-to-leaf descent for a logical range.
 		// Successor leaves use the retained routed path instead of restarting.
 		debug::PerfTrace::addValue("native_btree.read.range_cursor_root_descent", 1);
-		std::optional<BTreePage> root = resolveRoot(snapshot);
+		debug::PerfTrace::addValue("native_graph.read.root_descents", 1);
+		std::vector<BTreePageEntry> rootEntries;
+		std::optional<BTreePage> root = resolveRoot(snapshot, &rootEntries);
 		if (!root.has_value()) {
 			state->exhausted = true;
 			return RangeCursor(std::move(state));
 		}
 		state->leaf.emplace(descendToLeaf(snapshot, std::move(*root), lowerBound, initialLeafReadHint, cancellation,
-														 &state->traversal));
-		state->entries = state->leaf->entries();
+														 &state->traversal, &state->entries, nullptr, &rootEntries));
 		if (lowerBound.has_value()) {
 			state->entry_index = excludeLowerBound
 								 ? static_cast<size_t>(std::upper_bound(
@@ -415,13 +479,19 @@ namespace graph::storage {
 		return RangeCursor(std::move(state));
 	}
 
-	std::optional<BTreePageEntry> BTreeIndex::nextRangeCursor(RangeCursor::State &state) const {
+	std::optional<BTreePageEntry> BTreeIndex::nextRangeCursor(RangeCursor::State &state,
+		const std::function<void(size_t)> &boundaryKeyAdmission) const {
 		if (state.exhausted) {
+			if (boundaryKeyAdmission) boundaryKeyAdmission(0U);
 			return std::nullopt;
 		}
 		for (;;) {
 			if (state.cancellation != nullptr) {
 				state.cancellation->check();
+			}
+			if (boundaryKeyAdmission) {
+				boundaryKeyAdmission(state.previous_leaf_last_key.has_value()
+						? state.previous_leaf_last_key->capacity() : 0U);
 			}
 			if (state.emitted == state.maximum_entries) {
 				if (state.entry_index < state.entries.size()) {
@@ -458,8 +528,18 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 			if (state.entry_index < state.entries.size()) {
+				// Only the final key of a leaf participates in sibling validation.
+				// Admit and copy before mutating the emission position, so budget
+				// rejection or allocation failure cannot consume an entry.
+				if (state.entry_index + 1U == state.entries.size() &&
+					state.leaf->header().right_sibling.isValid()) {
+					const auto &key = state.entries[state.entry_index].key;
+					if (boundaryKeyAdmission) boundaryKeyAdmission(key.size());
+					std::vector<std::byte> boundaryKey(key);
+					if (boundaryKeyAdmission) boundaryKeyAdmission(boundaryKey.capacity());
+					state.previous_leaf_last_key.emplace(std::move(boundaryKey));
+				}
 				BTreePageEntry result = std::move(state.entries[state.entry_index++]);
-				state.previous_leaf_last_key = result.key;
 				++state.emitted;
 				return result;
 			}
@@ -469,7 +549,8 @@ namespace graph::storage {
 			}
 
 			const BTreePageHeader header = state.leaf->header();
-			BTreePage sibling = pages_.read(*state.snapshot, header.right_sibling,
+			std::vector<BTreePageEntry> siblingEntries;
+			BTreePage sibling = pages_.readDecoded(*state.snapshot, header.right_sibling, siblingEntries,
 																	 BufferPoolReadHint::BPRH_SEQUENTIAL);
 			validateIndexPage(sibling, index_id_);
 			const BTreePageHeader siblingHeader = sibling.header();
@@ -481,7 +562,6 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree leaf sibling link is not reciprocal");
 			}
-			std::vector<BTreePageEntry> siblingEntries = sibling.entries();
 			if (siblingEntries.empty()) {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable B+Tree linked non-root leaf is empty");
@@ -508,9 +588,11 @@ namespace graph::storage {
 													 "relocatable B+Tree sibling key violates its routed separator range");
 				}
 			}
+			state.previous_leaf_last_key.reset();
 			state.leaf.emplace(std::move(sibling));
 			state.entries = std::move(siblingEntries);
 			state.entry_index = 0U;
+			if (boundaryKeyAdmission) boundaryKeyAdmission(0U);
 		}
 	}
 

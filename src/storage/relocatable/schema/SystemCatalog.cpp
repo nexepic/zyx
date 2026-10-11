@@ -437,21 +437,48 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::string> findReverseName(const SystemCatalog &catalog,
 																 const MetadataSnapshotPin &snapshot,
 																 std::span<const std::byte> prefix,
-																 uint64_t expectedValue) {
-			const std::vector<BTreePageEntry> entries =
-					BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, catalog.pageStore(), catalog.metadataStore())
-							.scan(snapshot, prefix, 2U);
-			if (entries.empty() || !startsWith(entries.front().key, prefix)) {
-				return std::nullopt;
+																 uint64_t expectedValue, const std::function<void(size_t)> &nameAdmission = {}) {
+			std::optional<BTreePageEntry> entry;
+			{
+				BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, catalog.pageStore(), catalog.metadataStore());
+				auto cursor = index.openRangeCursor(snapshot, prefix, 2U);
+				bool boundaryCharged = false;
+				const auto admitBoundary = [&](size_t bytes) {
+					if (!nameAdmission) return;
+					const size_t retained = entry ? entry->key.capacity() : 0U;
+					if (bytes > std::numeric_limits<size_t>::max() - retained)
+						throw std::overflow_error("System Catalog cursor boundary size overflow");
+					const size_t total = retained + bytes;
+					// Cursor resets do not allocate. Notify a zero only when it
+					// releases a previously accepted charge, not before any copy.
+					if (total == 0U && !boundaryCharged) return;
+					nameAdmission(total);
+					boundaryCharged = total != 0U;
+				};
+				entry = cursor.next(admitBoundary);
+				if (!entry || !startsWith(entry->key, prefix)) return std::nullopt;
+				if (nameAdmission) nameAdmission(entry->key.capacity());
+				auto successor = cursor.next(admitBoundary);
+				if (entry->value_or_child != expectedValue || entry->key.size() == prefix.size() ||
+					(successor && startsWith(successor->key, prefix))) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "System Catalog reverse mapping is malformed, ambiguous, or mismatched");
+				}
 			}
-			if (entries.front().value_or_child != expectedValue || entries.front().key.size() == prefix.size() ||
-				(entries.size() == 2U && startsWith(entries[1].key, prefix))) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog reverse mapping is malformed, ambiguous, or mismatched");
-			}
-			const std::string name(reinterpret_cast<const char *>(entries.front().key.data() + prefix.size()),
-								   entries.front().key.size() - prefix.size());
-			validateName(name);
+			// Release cursor pages and the ambiguity probe before allocating the name.
+			const size_t nameSize = entry->key.size() - prefix.size();
+			validateName(std::string_view(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize));
+			const auto admitName = [&](size_t bytes) {
+				if (!nameAdmission) return;
+				if (bytes > std::numeric_limits<size_t>::max() - entry->key.capacity())
+					throw std::overflow_error("System Catalog reverse name buffer size overflow");
+				nameAdmission(entry->key.capacity() + bytes);
+			};
+			admitName(std::max(nameSize, std::string{}.capacity()));
+			std::string name(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize);
+			admitName(name.capacity());
+			entry.reset();
+			if (nameAdmission) nameAdmission(name.capacity());
 			return name;
 		}
 
@@ -505,6 +532,23 @@ namespace graph::storage {
 
 	uint64_t SystemCatalogGraphCardinalityCodec::decodeCount(uint64_t encoded) {
 		return ::graph::storage::decodeGraphCardinalityCount(encoded);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenCardinalityCodec::countKey(SystemCatalogSchemaTokenKind kind,
+			uint64_t token) {
+		SystemCatalogTokenKeyCodec::validateSchemaKind(kind);
+		if (token == 0U && kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL) {
+			fail(FormatError::FERR_INVALID_HEADER, "label cardinality requires a nonzero Token");
+		}
+		std::vector<std::byte> key{static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY),
+			kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL ? std::byte{3U} : std::byte{4U}};
+		appendBigEndianU64(key, token);
+		return key;
+	}
+
+	std::vector<std::byte> SystemCatalogTokenCardinalityCodec::completeKey(SystemCatalogSchemaTokenKind kind) {
+		SystemCatalogTokenKeyCodec::validateSchemaKind(kind);
+		return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY), kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL ? std::byte{5U} : std::byte{6U}};
 	}
 
 	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalog &catalog,
@@ -766,6 +810,22 @@ namespace graph::storage {
 		staged_graph_statistics_ = statistics;
 	}
 
+	void SystemCatalogWriteSession::setTokenCardinality(SystemCatalogSchemaTokenKind kind, uint64_t token,
+			uint64_t count) {
+		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
+			throw std::logic_error("System Catalog write session is not active");
+		}
+		stageUpsert(SystemCatalogTokenCardinalityCodec::countKey(kind, token),
+				SystemCatalogGraphCardinalityCodec::encodeCount(count));
+	}
+
+	void SystemCatalogWriteSession::markTokenCardinalityComplete(SystemCatalogSchemaTokenKind kind) {
+		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
+			throw std::logic_error("System Catalog write session is not active");
+		}
+		stageUpsert(SystemCatalogTokenCardinalityCodec::completeKey(kind), 1U);
+	}
+
 	void SystemCatalogWriteSession::dropIndexDefinition(const IndexDefinition &definition) {
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
@@ -857,10 +917,18 @@ namespace graph::storage {
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
-		verifyBootstrap(*this, snapshot);
 		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
-		const std::optional<uint64_t> nodes = index.find(snapshot, SystemCatalogGraphCardinalityCodec::nodeCountKey());
-		const std::optional<uint64_t> edges = index.find(snapshot, SystemCatalogGraphCardinalityCodec::edgeCountKey());
+		// Persisted namespaces put bootstrap before the ordered Node/Edge keys.
+		// Exact sorted probes reuse authenticated pages without scanning gaps.
+		const std::vector<std::vector<std::byte>> keys{
+			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+			SystemCatalogGraphCardinalityCodec::edgeCountKey()};
+		const auto values = index.findSorted(snapshot, keys);
+		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE) {
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		}
+		const auto &nodes = values[1];
+		const auto &edges = values[2];
 		if (nodes.has_value() != edges.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog graph cardinality record is incomplete");
 		}
@@ -871,8 +939,87 @@ namespace graph::storage {
 												SystemCatalogGraphCardinalityCodec::decodeCount(*edges)};
 	}
 
+	bool SystemCatalog::hasCompleteTokenCardinality(const MetadataSnapshotPin &snapshot,
+			SystemCatalogSchemaTokenKind kind) const {
+		const auto key = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+		if (!hasRoot(*this, snapshot)) return false;
+		verifyBootstrap(*this, snapshot);
+		const auto complete = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+		if (!complete.has_value()) return false;
+		if (*complete != 1U) fail(FormatError::FERR_INVALID_STATE, "unsupported token cardinality completeness record");
+		return true;
+	}
+
+	std::optional<uint64_t> SystemCatalog::readTokenCardinality(const MetadataSnapshotPin &snapshot,
+			SystemCatalogSchemaTokenKind kind, uint64_t token) const {
+		const auto key = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+		if (!hasRoot(*this, snapshot)) return std::nullopt;
+		// The count namespace precedes its completeness marker in the persisted
+		// codec. Read all three exact keys through one authenticated tree probe.
+		const std::vector<std::vector<std::byte>> keys{bootstrapKey(), key, completeKey};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		if (!values[2]) return std::nullopt;
+		if (*values[2] != 1U)
+			fail(FormatError::FERR_INVALID_STATE, "unsupported token cardinality completeness record");
+		return values[1] ? SystemCatalogGraphCardinalityCodec::decodeCount(*values[1]) : 0U;
+	}
+
+	std::vector<std::optional<uint64_t>> SystemCatalog::readTokenCardinalities(
+		const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
+		std::span<const uint64_t> tokens) const {
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+		std::vector<std::vector<std::byte>> keys{bootstrapKey()};
+		for (size_t i = 0U; i < tokens.size(); ++i) {
+			if (i && tokens[i - 1U] >= tokens[i])
+				fail(FormatError::FERR_INVALID_STATE, "token count batch requires strictly increasing tokens");
+			keys.push_back(SystemCatalogTokenCardinalityCodec::countKey(kind, tokens[i]));
+		}
+		keys.push_back(completeKey);
+		std::vector<std::optional<uint64_t>> result(tokens.size());
+		if (tokens.empty() || !hasRoot(*this, snapshot)) return result;
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		if (!values.front() || *values.front() != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		if (!values.back()) return result;
+		if (*values.back() != 1U)
+			fail(FormatError::FERR_INVALID_STATE, "unsupported token cardinality completeness record");
+		for (size_t i = 0U; i < tokens.size(); ++i)
+			result[i] = values[i + 1U] ? SystemCatalogGraphCardinalityCodec::decodeCount(*values[i + 1U]) : 0U;
+		return result;
+	}
+
+	std::optional<std::pair<NativeGraphCardinalityStatistics, uint64_t>>
+	SystemCatalog::readTokenCardinalityEstimate(const MetadataSnapshotPin &snapshot,
+			SystemCatalogSchemaTokenKind kind, uint64_t token) const {
+		const auto countKey = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+		if (!hasRoot(*this, snapshot)) return std::nullopt;
+		// These five persisted keys are ordered by namespace. Reuse one
+		// authenticated exact probe rather than decoding the same leaf for
+		// each statistic; completeness still gates interpretation of counts.
+		const std::vector<std::vector<std::byte>> keys{
+			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+			SystemCatalogGraphCardinalityCodec::edgeCountKey(), countKey, completeKey};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		if (!values[4]) return std::nullopt;
+		if (*values[4] != 1U)
+			fail(FormatError::FERR_INVALID_STATE, "unsupported token cardinality completeness record");
+		if (values[1].has_value() != values[2].has_value())
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog graph cardinality record is incomplete");
+		if (!values[1]) return std::nullopt;
+		return std::pair{NativeGraphCardinalityStatistics{
+				SystemCatalogGraphCardinalityCodec::decodeCount(*values[1]),
+				SystemCatalogGraphCardinalityCodec::decodeCount(*values[2])},
+				values[3] ? SystemCatalogGraphCardinalityCodec::decodeCount(*values[3]) : 0U};
+	}
+
 	std::optional<std::string> SystemCatalog::findPropertyName(const MetadataSnapshotPin &snapshot,
-															   uint32_t token) const {
+															   uint32_t token, const std::function<void(size_t)> &nameAdmission) const {
 		if (token == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog Property-key lookup requires a nonzero Token");
 		}
@@ -880,12 +1027,22 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::optional<std::string> name = findReverseName(*this, snapshot, propertyTokenPrefix(token), token);
+		auto name = findReverseName(*this, snapshot, propertyTokenPrefix(token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
 		}
-		const std::optional<uint64_t> forward =
-				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, propertyNameKey(*name));
+		std::optional<uint64_t> forward;
+		{
+			if (name->capacity() > std::numeric_limits<size_t>::max() - 1U ||
+				name->size() > std::numeric_limits<size_t>::max() - name->capacity() - 1U) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property name admission size overflowed");
+			}
+			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 1U);
+			const auto key = propertyNameKey(*name);
+			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
+			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+		}
+		if (nameAdmission) nameAdmission(name->capacity());
 		if (!forward.has_value() || *forward != token) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "System Catalog Property-key reverse mapping has no matching forward mapping");
@@ -901,26 +1058,60 @@ namespace graph::storage {
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
-		verifyBootstrap(*this, snapshot);
-		const std::optional<uint64_t> value =
-				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, schemaNameKey(kind, name));
+		const std::vector<std::vector<std::byte>> keys{bootstrapKey(), schemaNameKey(kind, name)};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		const auto &value = values[1];
 		if (!value.has_value()) {
 			return std::nullopt;
 		}
 		if (*value == 0U) {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog schema mapping has an invalid Token");
 		}
-		const std::optional<SystemCatalogSchemaToken> reverse = findSchemaToken(snapshot, kind, *value);
-		if (!reverse.has_value() || reverse->name != name) {
+		// The forward mapping is already authenticated in this pinned snapshot.
+		// Validate reverse uniqueness/value/name directly, without calling the
+		// public reverse lookup that rereads bootstrap and this same forward key.
+		const auto reverse = findReverseName(*this, snapshot, schemaTokenPrefix(kind, *value), *value);
+		if (!reverse.has_value() || *reverse != name) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "System Catalog schema forward mapping has no matching reverse mapping");
 		}
 		return *value;
 	}
 
+	std::vector<std::optional<uint64_t>> SystemCatalog::findSchemaTokens(
+		const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
+		std::span<const std::string> names) const {
+		validateSchemaKind(kind);
+		std::vector<std::vector<std::byte>> keys{bootstrapKey()};
+		for (const auto &name : names) {
+			auto key = schemaNameKey(kind, name);
+			if (!std::lexicographical_compare(keys.back().begin(), keys.back().end(), key.begin(), key.end()))
+				fail(FormatError::FERR_INVALID_STATE, "schema name batch requires strictly increasing keys");
+			keys.push_back(std::move(key));
+		}
+		std::vector<std::optional<uint64_t>> result(names.size());
+		if (names.empty() || !hasRoot(*this, snapshot)) return result;
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		if (!values.front() || *values.front() != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
+		for (size_t i = 0U; i < names.size(); ++i) {
+			const auto value = values[i + 1U];
+			if (!value) continue;
+			if (*value == 0U)
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog schema mapping has an invalid Token");
+			const auto reverse = findReverseName(*this, snapshot, schemaTokenPrefix(kind, *value), *value);
+			if (!reverse || *reverse != names[i])
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog schema forward mapping has no matching reverse mapping");
+			result[i] = value;
+		}
+		return result;
+	}
+
 	std::optional<SystemCatalogSchemaToken> SystemCatalog::findSchemaToken(const MetadataSnapshotPin &snapshot,
 																		   SystemCatalogSchemaTokenKind kind,
-																		   uint64_t token) const {
+																		   uint64_t token, const std::function<void(size_t)> &nameAdmission) const {
 		validateSchemaKind(kind);
 		if (token == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog schema lookup requires a nonzero Token");
@@ -929,17 +1120,27 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::optional<std::string> name = findReverseName(*this, snapshot, schemaTokenPrefix(kind, token), token);
+		auto name = findReverseName(*this, snapshot, schemaTokenPrefix(kind, token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
 		}
-		const std::optional<uint64_t> forward =
-				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, schemaNameKey(kind, *name));
+		std::optional<uint64_t> forward;
+		{
+			if (name->capacity() > std::numeric_limits<size_t>::max() - 2U ||
+				name->size() > std::numeric_limits<size_t>::max() - name->capacity() - 2U) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "schema name admission size overflowed");
+			}
+			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 2U);
+			const auto key = schemaNameKey(kind, *name);
+			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
+			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+		}
+		if (nameAdmission) nameAdmission(name->capacity());
 		if (!forward.has_value() || *forward != token) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "System Catalog schema reverse mapping has no matching forward mapping");
 		}
-		return SystemCatalogSchemaToken{token, kind, *name};
+		return SystemCatalogSchemaToken{token, kind, std::move(*name)};
 	}
 
 	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
@@ -1039,9 +1240,10 @@ namespace graph::storage {
 		}
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
-		const std::vector<BTreePageEntry> entries = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-															.scan(snapshot, prefix, maximumDefinitions + 1U);
+		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
+		const std::vector<BTreePageEntry> entries = index.scan(snapshot, prefix, maximumDefinitions + 1U);
 		std::vector<IndexDefinition> result;
+		uint64_t previousId = 0U;
 		for (const BTreePageEntry &entry: entries) {
 			if (!startsWith(entry.key, prefix)) {
 				break;
@@ -1051,10 +1253,37 @@ namespace graph::storage {
 			}
 			const IndexDefinition definition = decodeIndexDefinition(entry.key);
 			if (entry.value_or_child != definition.index_id ||
-				!findIndexDefinitionById(snapshot, definition.index_id).has_value()) {
+				definition.index_id <= previousId) {
 				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition is not self-consistent");
 			}
+			previousId = definition.index_id;
 			result.push_back(definition);
+		}
+		// Validate every name/semantic direction with generic batched exact
+		// probes. The immutable root and authenticated same-leaf entries can be
+		// reused without dropping any definition or direction integrity check.
+		if (result.size() > std::numeric_limits<size_t>::max() / 2U)
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "System Catalog Index direction batch overflowed");
+		std::vector<std::pair<std::vector<std::byte>, uint64_t>> directions;
+		directions.reserve(result.size() * 2U);
+		for (const auto &definition : result) {
+			directions.emplace_back(namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name), definition.index_id);
+			directions.emplace_back(indexSemanticKey(definition), definition.index_id);
+		}
+		std::ranges::sort(directions, [](const auto &left, const auto &right) {
+			return std::lexicographical_compare(left.first.begin(), left.first.end(), right.first.begin(), right.first.end());
+		});
+		std::vector<std::vector<std::byte>> keys;
+		keys.reserve(directions.size());
+		for (auto &direction : directions) {
+			if (!keys.empty() && keys.back() == direction.first)
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions are duplicated");
+			keys.push_back(std::move(direction.first));
+		}
+		const auto values = index.findSorted(snapshot, keys);
+		for (size_t position = 0U; position < values.size(); ++position) {
+			if (!values[position] || *values[position] != directions[position].second)
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions do not agree");
 		}
 		return result;
 	}

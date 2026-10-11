@@ -29,6 +29,20 @@ namespace graph::query::gds {
 			std::optional<LogicalProjectionWeight> weight;
 		};
 
+		class ProjectionArgumentView {
+		public:
+			explicit ProjectionArgumentView(
+					const std::span<const std::reference_wrapper<const PropertyValue>> arguments)
+				: arguments_(arguments) {}
+			[[nodiscard]] size_t size() const { return arguments_.size(); }
+		[[nodiscard]] bool empty() const { return arguments_.empty(); }
+		[[nodiscard]] const PropertyValue &operator[](const size_t index) const { return arguments_[index].get(); }
+		[[nodiscard]] const PropertyValue &front() const { return arguments_.front().get(); }
+
+		private:
+			std::span<const std::reference_wrapper<const PropertyValue>> arguments_;
+		};
+
 		[[nodiscard]] std::string requireText(const PropertyValue &value, const std::string_view context,
 				const LogicalProjectionSpecCodecBounds &bounds, const bool allowEmpty = false) {
 			if (value.getType() != PropertyType::STRING) {
@@ -376,30 +390,43 @@ namespace graph::query::gds {
 
 	LogicalGraphProjectionSpec LogicalProjectionSpecCodec::decodeGraphProjectArguments(
 			const std::vector<PropertyValue> &arguments, const LogicalProjectionSpecCodecBounds bounds) {
-		if (bounds.maximum_arguments < 4U || bounds.maximum_map_entries == 0U || bounds.maximum_list_entries == 0U ||
-			bounds.maximum_text_bytes == 0U || arguments.empty() || arguments.size() > bounds.maximum_arguments) {
+		std::vector<std::reference_wrapper<const PropertyValue>> references;
+		references.reserve(std::min(arguments.size(), bounds.maximum_arguments));
+		if (arguments.size() > bounds.maximum_arguments) {
 			throw std::invalid_argument("gds.graph.project codec received invalid argument bounds");
 		}
-		const std::string name = requireText(arguments.front(), "gds.graph.project name", bounds);
-		if (arguments.size() == 2U && arguments[1].getType() == PropertyType::MAP) {
-			return decodeConfigSignature(name, arguments[1].getMap(), bounds);
+		for (const PropertyValue &argument: arguments) references.emplace_back(argument);
+		return decodeGraphProjectArguments(std::span<const std::reference_wrapper<const PropertyValue>>(references), bounds);
+	}
+
+	LogicalGraphProjectionSpec LogicalProjectionSpecCodec::decodeGraphProjectArguments(
+			const std::span<const std::reference_wrapper<const PropertyValue>> arguments,
+			const LogicalProjectionSpecCodecBounds bounds) {
+		const ProjectionArgumentView view(arguments);
+		if (bounds.maximum_arguments < 4U || bounds.maximum_map_entries == 0U || bounds.maximum_list_entries == 0U ||
+			bounds.maximum_text_bytes == 0U || view.empty() || view.size() > bounds.maximum_arguments) {
+			throw std::invalid_argument("gds.graph.project codec received invalid argument bounds");
 		}
-		if (arguments.size() < 3U || arguments.size() > 4U) {
+		const std::string name = requireText(view.front(), "gds.graph.project name", bounds);
+		if (view.size() == 2U && view[1].getType() == PropertyType::MAP) {
+			return decodeConfigSignature(name, view[1].getMap(), bounds);
+		}
+		if (view.size() < 3U || view.size() > 4U) {
 			throw std::invalid_argument("gds.graph.project expects (name, configMap), (name, nodeProjection, relationshipProjection[, configMap]), or (name, nodeLabel, relationshipType[, weightProperty])");
 		}
 
 		LogicalGraphProjectionSpec result;
 		result.name = name;
-		if (arguments[1].getType() == PropertyType::STRING && arguments[2].getType() == PropertyType::STRING &&
-			(arguments.size() == 3U || arguments[3].getType() == PropertyType::STRING)) {
-			const std::string nodeLabel = requireText(arguments[1], "gds.graph.project nodeLabel", bounds, true);
-			const std::string relationshipType = requireText(arguments[2], "gds.graph.project relationshipType", bounds, true);
+		if (view[1].getType() == PropertyType::STRING && view[2].getType() == PropertyType::STRING &&
+			(view.size() == 3U || view[3].getType() == PropertyType::STRING)) {
+			const std::string nodeLabel = requireText(view[1], "gds.graph.project nodeLabel", bounds, true);
+			const std::string relationshipType = requireText(view[2], "gds.graph.project relationshipType", bounds, true);
 			result.node_labels = isAllToken(nodeLabel) ? std::vector<std::string>{} : std::vector<std::string>{nodeLabel};
 			LogicalRelationshipProjection relationship;
 			relationship.type = isAllToken(relationshipType) ? "" : relationshipType;
-			if (arguments.size() == 4U) {
+			if (view.size() == 4U) {
 				relationship.weight.kind = LogicalProjectionWeightKind::LPWK_PROPERTY;
-				relationship.weight.property_name = requireText(arguments[3], "gds.graph.project weightProperty", bounds, true);
+				relationship.weight.property_name = requireText(view[3], "gds.graph.project weightProperty", bounds, true);
 				if (relationship.weight.property_name.empty()) {
 					relationship.weight = {};
 				}
@@ -408,12 +435,12 @@ namespace graph::query::gds {
 			return result;
 		}
 
-		const ProjectionDefaults defaults = arguments.size() == 4U
-				? decodeDefaults(arguments[3], "gds.graph.project config", bounds)
+		const ProjectionDefaults defaults = view.size() == 4U
+				? decodeDefaults(view[3], "gds.graph.project config", bounds)
 				: ProjectionDefaults{};
 		result.default_orientation = defaults.orientation;
-		result.node_labels = decodeNodeProjection(arguments[1], bounds);
-		result.relationships = decodeRelationships(arguments[2], defaults.orientation, bounds);
+		result.node_labels = decodeNodeProjection(view[1], bounds);
+		result.relationships = decodeRelationships(view[2], defaults.orientation, bounds);
 		if (result.relationships.empty()) {
 			result.relationships.push_back({.orientation = defaults.orientation});
 		}

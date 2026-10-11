@@ -1338,3 +1338,77 @@ TEST_F(RelocatableStorageBackendTest, LogicalTransactionRejectsInvalidCreatedEnt
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, MixedSelectedColumnsPreserveInlineLargeValueAndReopenedResults) {
+	materializeNativeDatabase();
+	auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	const auto reopenOptions = options;
+	RelocatableStorageBackend backend(std::move(options)); backend.open();
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0}, std::byte{255}, std::byte{17}});
+	const PropertyValue list(std::vector<PropertyValue>{PropertyValue(7), PropertyValue(), PropertyValue("nested")});
+	const PropertyValue map(PropertyValue::MapType{{"items", list}, {"binary", bytes}});
+	std::vector<LogicalGraphWriteProperty> small = {
+		{"integer", PropertyValue(7)}, {"real", PropertyValue(7.5)}, {"flag", PropertyValue(true)},
+		{"text", PropertyValue("short")}, {"nil", PropertyValue()}, {"binary", bytes}, {"list", list}, {"map", map}};
+	auto large = small;
+	large.push_back({"padding", PropertyValue(std::string(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 257U, 'p'))});
+	const auto ids = backend.createLogicalNodes({{{"Inline"}, small}, {{"Large"}, large}});
+	ASSERT_EQ(ids.size(), 2U);
+	const std::array<std::string_view, 9> keys{"map", "integer", "text", "absent", "list", "binary", "nil", "real", "flag"};
+	const std::array<PropertyValue, 9> expected{map, PropertyValue(7), PropertyValue("short"), PropertyValue(),
+		list, bytes, PropertyValue(), PropertyValue(7.5), PropertyValue(true)};
+	std::vector<std::vector<PropertyValue>> retained;
+	const auto check = [&](RelocatableStorageBackend &store) {
+		auto snapshot = store.openLogicalGraphReadSnapshot();
+		ASSERT_NE(snapshot, nullptr);
+		auto columns = snapshot->readNodePropertyColumnsSorted(ids, keys);
+		ASSERT_EQ(columns.size(), keys.size());
+		for (size_t column = 0U; column < keys.size(); ++column) {
+			ASSERT_EQ(columns[column].size(), ids.size());
+			EXPECT_EQ(columns[column][0], expected[column]);
+			EXPECT_EQ(columns[column][1], expected[column]);
+		}
+		const auto repeated = snapshot->readNodePropertyColumnsSorted(ids, keys);
+		EXPECT_EQ(columns, repeated);
+		columns[0][0] = PropertyValue("caller changed its result");
+		EXPECT_EQ(repeated[0][0], map);
+		EXPECT_EQ(snapshot->readNodePropertyColumnsSorted(ids, keys), repeated);
+		retained = repeated;
+	};
+	check(backend);
+	backend.close();
+	EXPECT_EQ(retained[0][0], map);
+	RelocatableStorageBackend reopened(reopenOptions); reopened.open();
+	check(reopened);
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, GrowingPropertyRootCanRelocateFromAFullPinnedPool) {
+ materializeNativeDatabase();
+ auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+ const auto reopenOptions=options;
+ RelocatableStorageBackend backend(std::move(options));backend.open();
+ const PropertyValue original(std::string(1800U,'o'));
+ std::vector<LogicalGraphNodeCreateRequest> nodes;
+ for(size_t i=0;i<2U*RSS_PAGE_POOL_DATA_FRAME_COUNT+2U;++i)
+  nodes.push_back({{"RootGrowth"},{{"payload",original}}});
+ const auto ids=backend.createLogicalNodes(nodes);
+ ASSERT_EQ(ids.size(),nodes.size());
+ auto before=backend.openLogicalGraphReadSnapshot();
+ const std::array<uint64_t,2U> selected{ids[0],ids[1]};
+ const std::array<std::string_view,1U> keys{"payload"};
+ const PropertyValue replacement(std::string(3500U,'r'));
+ ASSERT_NO_THROW(backend.replaceLogicalNodeProperties({{ids[0],{{"payload",replacement}}}}));
+ auto after=backend.openLogicalGraphReadSnapshot();
+ const auto oldValues=before->readNodePropertyColumnsSorted(selected,keys);
+ const auto newValues=after->readNodePropertyColumnsSorted(selected,keys);
+ ASSERT_EQ(oldValues.size(),1U);ASSERT_EQ(newValues.size(),1U);
+ EXPECT_EQ(oldValues[0],(std::vector<PropertyValue>{original,original}));
+ EXPECT_EQ(newValues[0],(std::vector<PropertyValue>{replacement,original}));
+ before.reset();after.reset();backend.close();
+ RelocatableStorageBackend reopened(reopenOptions);reopened.open();
+ auto persisted=reopened.openLogicalGraphReadSnapshot();
+ EXPECT_EQ(persisted->readNodePropertyColumnsSorted(selected,keys)[0],(std::vector<PropertyValue>{replacement,original}));
+ persisted.reset();EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));reopened.close();
+}

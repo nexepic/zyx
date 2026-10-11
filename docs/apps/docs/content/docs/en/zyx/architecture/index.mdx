@@ -1,0 +1,26 @@
+---
+title: Architecture
+description: Current ZYX architecture and reading order.
+category: Overview
+categoryOrder: 1
+order: 1
+project: zyx
+projectLabel: ZYX
+projectDescription: High-performance embedded graph database engine
+projectOrder: 1
+---
+# Architecture
+
+Read from the public boundary toward storage:
+
+1. [Overview](overview).
+2. [Query engine](query-engine) and [single-file storage specification](native-single-file-storage-plan).
+3. [Cache management](cache) and [architecture/performance implementation plan](optimization).
+4. [Benchmarks](benchmarks) and [capability acceptance matrix](native-capability-acceptance-matrix).
+
+Subsequent work follows only the [architecture/performance plan](optimization): retain COW, separate A1–A7 architecture from O1–O8 optimization, and accept S0–S6 deliverables. The [storage specification](native-single-file-storage-plan) retains current format/correctness boundaries. Historical Stage/P/C ledgers are audit evidence, not implementation instructions.
+
+## Documentation scope
+
+- Describe the current implementation accurately.
+- Prefer boundaries, responsibilities and data flow to copied implementation code.

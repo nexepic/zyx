@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include "graph/debug/PerfTrace.hpp"
+
 #include "graph/storage/relocatable/index/InitialBTreeBuilder.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 
@@ -203,16 +205,19 @@ namespace graph::storage {
 																	   std::span<const BTreePageEntry> entries) {
 			std::optional<size_t> selected;
 			uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
+			constexpr size_t maximumPackedBytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES -
+				RSS_SLOTTED_PAGE_HEADER_BYTES - 2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+			const auto sizes = PackedBTreePageCodec::encodedBoundarySizes(
+				BTreeNodeKind::BPN_LEAF, entries, source.leaf_value_layout);
 			for (size_t candidate = 1; candidate < entries.size(); ++candidate) {
 				try {
-					BTreePage left =
-							makeLeafPage(source, indexPageOwner(indexId, PageId(1), source.generation, leftOwnerLsn),
-										 leftSibling, PageId(2), entries.subspan(0, candidate));
-					BTreePage right =
-							makeLeafPage(source, indexPageOwner(indexId, PageId(2), source.generation, rightOwnerLsn),
-										 PageId(1), rightSibling, entries.subspan(candidate));
-					const uint64_t leftBytes = left.slottedPage().stats().live_bytes;
-					const uint64_t rightBytes = right.slottedPage().stats().live_bytes;
+					const auto left = sizes.prefixes[candidate];
+					const auto right = sizes.suffixes[candidate];
+					if (left > maximumPackedBytes || right > maximumPackedBytes) continue;
+					// Both pages have the same fixed header and two slots. Their
+					// live-byte skew is exactly the packed-payload size difference.
+					const uint64_t leftBytes = left;
+					const uint64_t rightBytes = right;
 					const uint64_t skew = leftBytes > rightBytes ? leftBytes - rightBytes : rightBytes - leftBytes;
 					if (!selected.has_value() || skew < smallestSkew) {
 						selected = candidate;
@@ -225,6 +230,14 @@ namespace graph::storage {
 					}
 				}
 			}
+			if (selected) {
+				static_cast<void>(makeLeafPage(source,
+					indexPageOwner(indexId, PageId(1), source.generation, leftOwnerLsn),
+					leftSibling, PageId(2), entries.first(*selected)));
+				static_cast<void>(makeLeafPage(source,
+					indexPageOwner(indexId, PageId(2), source.generation, rightOwnerLsn),
+					PageId(1), rightSibling, entries.subspan(*selected)));
+			}
 			return selected;
 		}
 
@@ -235,34 +248,48 @@ namespace graph::storage {
 				// separator into an already-full internal page.
 				return std::nullopt;
 			}
+			// Validate the common owner/header once; final chosen pages retain
+			// complete packed validation. Candidate payloads need exact sizes only.
+			static_cast<void>(makeInternalPage(source,
+				indexPageOwner(indexId, PageId(1), source.generation, leftOwnerLsn), {}));
+			BTreePageHeader emptyRightHeader = source;
+			emptyRightHeader.left_sibling = {};
+			emptyRightHeader.right_sibling = {};
+			static_cast<void>(makeInternalPage(emptyRightHeader,
+				indexPageOwner(indexId, PageId(2), source.generation, rightOwnerLsn), {}));
 			std::optional<size_t> selected;
 			uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
+			constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
+				2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+			const auto sizes = PackedBTreePageCodec::encodedBoundarySizes(
+				BTreeNodeKind::BPN_INTERNAL, entries, source.leaf_value_layout);
 			for (size_t promoted = 0; promoted < entries.size(); ++promoted) {
-				try {
-					BTreePage left = makeInternalPage(
-							source, indexPageOwner(indexId, PageId(1), source.generation, leftOwnerLsn),
-							entries.subspan(0, promoted));
-					BTreePageHeader rightHeader = source;
-					rightHeader.page_id = PageId(2);
-					rightHeader.left_sibling = {};
-					rightHeader.right_sibling = {};
-					rightHeader.leftmost_child = PageId(entries[promoted].value_or_child);
-					BTreePage right = makeInternalPage(
-							rightHeader, indexPageOwner(indexId, PageId(2), source.generation, rightOwnerLsn),
-							entries.subspan(promoted + 1U));
-					const uint64_t leftBytes = left.slottedPage().stats().live_bytes;
-					const uint64_t rightBytes = right.slottedPage().stats().live_bytes;
-					const uint64_t skew = leftBytes > rightBytes ? leftBytes - rightBytes : rightBytes - leftBytes;
-					if (!selected.has_value() || skew < smallestSkew) {
-						selected = promoted;
-						smallestSkew = skew;
-					}
-				} catch (const FormatException &error) {
-					if (error.error() != FormatError::FERR_INVALID_STATE) { // ZYX_COV_EXCL_LINE: preview pages are
-						// locally constructed from validated entries and can only run out of capacity.
-						throw;
-					}
+				BTreePageHeader rightHeader = source;
+				rightHeader.page_id = PageId(2);
+				rightHeader.left_sibling = {};
+				rightHeader.right_sibling = {};
+				rightHeader.leftmost_child = PageId(entries[promoted].value_or_child);
+				rightHeader.entry_count = 0;
+				static_cast<void>(BTreePageHeaderCodec::encode(rightHeader));
+				const size_t leftBytes = sizes.prefixes[promoted];
+				const size_t rightBytes = sizes.suffixes[promoted + 1U];
+				if (leftBytes > capacity || rightBytes > capacity) continue;
+				const uint64_t skew = leftBytes > rightBytes ? leftBytes - rightBytes : rightBytes - leftBytes;
+				if (!selected || skew < smallestSkew) {
+					selected = promoted;
+					smallestSkew = skew;
 				}
+			}
+			if (selected) {
+				static_cast<void>(makeInternalPage(source,
+					indexPageOwner(indexId, PageId(1), source.generation, leftOwnerLsn), entries.first(*selected)));
+				BTreePageHeader rightHeader = source;
+				rightHeader.page_id = PageId(2);
+				rightHeader.left_sibling = {};
+				rightHeader.right_sibling = {};
+				rightHeader.leftmost_child = PageId(entries[*selected].value_or_child);
+				static_cast<void>(makeInternalPage(rightHeader,
+					indexPageOwner(indexId, PageId(2), source.generation, rightOwnerLsn), entries.subspan(*selected + 1U)));
 			}
 			return selected;
 		}
@@ -370,6 +397,7 @@ namespace graph::storage {
 				return;
 			}
 			if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_ERASE) {
+				leaf_append_size_.reset();
 				erase(operation.key);
 				return;
 			}
@@ -474,10 +502,20 @@ namespace graph::storage {
 					if (store_.hasReplacementFrameCapacity(sourcePool, request.expected_replacements.size())) {
 						continue;
 					}
-							const std::optional<SegmentId> destination =
-									store_.selectAppendPool(snapshot_, reservedDestinationFrames,
-											 request.expected_replacements.size(), sourcePool.owner_id);
+					const std::optional<SegmentId> destination =
+							store_.selectAppendPool(snapshot_, reservedDestinationFrames,
+											   request.expected_replacements.size(), sourcePool.owner_id);
 					if (!destination.has_value() || *destination == request.segment_id) {
+						// Prefer an available destination before paying for reconciliation.
+						// Before a complete-tree rebuild, release only source versions
+						// invisible to every active snapshot and retry local capacity.
+						// Deferred graph-wide admission keeps its own reclamation boundary.
+						if (rebuild_on_frame_exhaustion_) {
+							store_.reclaimRetiredFrames(request.segment_id);
+							if (store_.hasReplacementFrameCapacity(sourcePool, request.expected_replacements.size())) {
+								continue;
+							}
+						}
 						continue;
 					}
 					request.replacement_segment_id = *destination;
@@ -1028,8 +1066,32 @@ namespace graph::storage {
 			return empty || encodedNodeOccupancy(materializePreview(node)) < RSS_BTREE_MIN_NODE_OCCUPIED_BYTES;
 		}
 
+		[[nodiscard]] size_t validatedLeafOccupancy(const OverlayMutationNode &node) const {
+			const auto referenceId = [&](const std::optional<OverlayPageReference> &reference) {
+				if (!reference) return PageId{};
+				if (reference->is_virtual) static_cast<void>(virtual_nodes_.at(reference->virtual_ordinal));
+				return preview(*reference);
+			};
+			BTreePageHeader header = node.header;
+			header.level = 0;
+			header.entry_count = 0;
+			header.leftmost_child = {};
+			header.left_sibling = referenceId(node.left_sibling);
+			header.right_sibling = referenceId(node.right_sibling);
+			// Keep owner/header/reference validation, without materializing
+			// and decoding a packed copy of every growing leaf prefix.
+			BTreePage::validateNewPage(indexPageOwner(index_id_, header.page_id,
+				header.generation, LogSequenceNumber(1U)), header);
+			constexpr size_t overhead = RSS_SLOTTED_PAGE_HEADER_BYTES +
+				2U * RSS_SLOTTED_PAGE_SLOT_BYTES + RSS_BTREE_PAGE_HEADER_BYTES;
+			return overhead + PackedBTreePageCodec::encodedSize(header.kind, node.leaf_entries,
+				header.leaf_value_layout);
+		}
 		[[nodiscard]] bool fits(const OverlayMutationNode &node) const {
 			try {
+				if (node.header.kind == BTreeNodeKind::BPN_LEAF) {
+					return validatedLeafOccupancy(node) <= RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+				}
 				static_cast<void>(materializePreview(node));
 				return true;
 			} catch (const FormatException &) {
@@ -1047,13 +1109,14 @@ namespace graph::storage {
 				if (node.header.kind == BTreeNodeKind::BPN_LEAF) {
 					return path;
 				}
-				OverlayPageReference next = childAt(node, 0U);
-				for (size_t ordinal = 0U; ordinal < node.internal_entries.size(); ++ordinal) {
-					if (lessKey(key, node.internal_entries[ordinal].key)) {
-						break;
-					}
-					next = node.internal_entries[ordinal].right_child;
-				}
+				// Separators are authenticated and remain ordered in the overlay.
+				// Equality follows the right child, matching the persisted router.
+				const auto upper = std::upper_bound(node.internal_entries.begin(), node.internal_entries.end(), key,
+					[](std::span<const std::byte> value, const OverlayInternalEntry &entry) {
+						return lessKey(value, entry.key);
+					});
+				const OverlayPageReference next = childAt(node,
+					static_cast<size_t>(upper - node.internal_entries.begin()));
 				current = next;
 				--expectedLevel;
 			}
@@ -1062,20 +1125,51 @@ namespace graph::storage {
 		void upsert(std::span<const std::byte> key, uint64_t value) {
 			std::vector<OverlayPageReference> path = pathFor(key);
 			OverlayMutationNode &leaf = nodeFor(path.back());
-			bool replaced = false;
-			for (BTreePageEntry &entry: leaf.leaf_entries) {
-				if (std::ranges::equal(entry.key, key)) {
-					entry.value_or_child = value;
-					replaced = true;
-					break;
+			// Authenticated leaves and every overlay mutation preserve key order.
+			// Locate once instead of scanning then sorting the complete leaf after
+			// each insertion; ordered bulk appends therefore avoid full-leaf sorts.
+			const auto position = std::lower_bound(leaf.leaf_entries.begin(), leaf.leaf_entries.end(), key,
+				[](const BTreePageEntry &entry, std::span<const std::byte> value) {
+					return lessKey(entry.key, value);
+				});
+			const bool append = position == leaf.leaf_entries.end();
+			std::optional<size_t> appendedSize;
+			BTreePageEntry next{std::vector<std::byte>(key.begin(), key.end()), value};
+			if (append && leaf_append_size_ && leaf_append_size_->page == path.back() &&
+				leaf_append_size_->count == leaf.leaf_entries.size()) {
+				static_assert(RSS_BTREE_PACKED_RESTART_INTERVAL > 1U);
+				size_t increment;
+				if (leaf.leaf_entries.size() % RSS_BTREE_PACKED_RESTART_INTERVAL == 0U) {
+					increment = PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF,
+						std::span<const BTreePageEntry>(&next, 1U), leaf_value_layout_) - RSS_BTREE_PACKED_HEADER_BYTES;
+				} else {
+					// The last/new pair has the exact non-restart prefix cost. Its
+					// restart table is identical to the singleton's and cancels out.
+					const std::array pair{leaf.leaf_entries.back(), next};
+					increment = PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF, pair, leaf_value_layout_) -
+						PackedBTreePageCodec::encodedSize(BTreeNodeKind::BPN_LEAF,
+							std::span<const BTreePageEntry>(&pair[0], 1U), leaf_value_layout_);
 				}
+				if (increment > std::numeric_limits<size_t>::max() - leaf_append_size_->bytes) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, "B+Tree append size overflowed");
+				}
+				appendedSize = leaf_append_size_->bytes + increment;
+				debug::PerfTrace::addValue("native_btree.plan.cached_leaf_append_size", 1);
 			}
-			if (!replaced) {
-				leaf.leaf_entries.push_back({std::vector<std::byte>(key.begin(), key.end()), value});
-				std::ranges::sort(leaf.leaf_entries, {}, &BTreePageEntry::key);
+			leaf_append_size_.reset();
+			if (position != leaf.leaf_entries.end() && std::ranges::equal(position->key, key)) {
+				position->value_or_child = value;
+			} else {
+				leaf.leaf_entries.insert(position, std::move(next));
 			}
 			leaf.dirty = true;
-			if (fits(leaf)) {
+			constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
+				2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+			const bool fitsNow = appendedSize ? *appendedSize <= capacity : fits(leaf);
+			if (fitsNow) {
+				const size_t bytes = appendedSize ? *appendedSize : PackedBTreePageCodec::encodedSize(
+					BTreeNodeKind::BPN_LEAF, leaf.leaf_entries, leaf_value_layout_);
+				leaf_append_size_ = LeafAppendSize{path.back(), leaf.leaf_entries.size(), bytes};
 				return;
 			}
 			splitLeaf(path);
@@ -1214,7 +1308,17 @@ namespace graph::storage {
 					parent.dirty = true;
 				}
 			}
-			rebalanceAfterErase(path);
+			// Removing a key shifts packed-prefix restart positions. The remaining
+			// entries can therefore occupy more bytes despite a smaller count.
+			// Split an overflowing leaf before occupancy-based erase rebalancing
+			// attempts to materialize it; insertion and deletion share the same
+			// byte-capacity and parent/sibling publication rules.
+			const size_t leafOccupancy = validatedLeafOccupancy(leaf);
+			if (leafOccupancy > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+				splitLeaf(path);
+				return;
+			}
+			rebalanceAfterErase(path, leafOccupancy);
 		}
 
 		void retire(const OverlayPageReference &reference) {
@@ -1223,7 +1327,7 @@ namespace graph::storage {
 			node.dirty = false;
 		}
 
-		void rebalanceAfterErase(std::vector<OverlayPageReference> &path) {
+		void rebalanceAfterErase(std::vector<OverlayPageReference> &path, size_t initialLeafOccupancy) {
 			size_t pathIndex = path.size() - 1U;
 			for (;;) {
 				const OverlayPageReference currentRef = path[pathIndex];
@@ -1237,7 +1341,12 @@ namespace graph::storage {
 					}
 					return;
 				}
-				if (!underfull(current)) {
+				// Reuse the exact authenticated size already computed after erase.
+				// Later ancestors and modified siblings retain their normal checks.
+				const bool currentUnderfull = pathIndex == path.size() - 1U
+					? current.leaf_entries.empty() || initialLeafOccupancy < RSS_BTREE_MIN_NODE_OCCUPIED_BYTES
+					: underfull(current);
+				if (!currentUnderfull) {
 					return;
 				}
 				OverlayMutationNode &parent = nodeFor(path[pathIndex - 1U]);
@@ -1462,6 +1571,14 @@ namespace graph::storage {
 		// this map, so it must be constructed before root_.
 		std::map<uint64_t, ExistingOverlayMutationNode> existing_nodes_;
 		OverlayPageReference root_;
+		struct LeafAppendSize {
+			OverlayPageReference page;
+			size_t count;
+			size_t bytes;
+		};
+		// Transaction-local, last-leaf only. Erases/non-appends and splits
+		// invalidate it; no persisted bytes or cross-snapshot proof is cached.
+		std::optional<LeafAppendSize> leaf_append_size_;
 		std::vector<OverlayMutationNode> virtual_nodes_;
 	};
 
@@ -1600,6 +1717,19 @@ namespace graph::storage {
 		owner.generation = raw.pageGeneration();
 		owner.committed_lsn = raw.ownerCommittedLsn();
 		return BTreePage::open(owner, raw.serialize());
+	}
+
+	BTreePage BTreePageStore::readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
+			std::vector<BTreePageEntry> &decodedEntries, BufferPoolReadHint hint) const {
+		const SlottedPage raw = pages_.read(snapshot, pageId, hint);
+		PageOwnerHeader owner;
+		owner.page_id = raw.pageId();
+		owner.owner_id = raw.ownerId();
+		owner.kind = raw.ownerKind();
+		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		owner.generation = raw.pageGeneration();
+		owner.committed_lsn = raw.ownerCommittedLsn();
+		return BTreePage::openDecoded(owner, raw.serialize(), decodedEntries);
 	}
 
 	BTreeRootLeafMutationPlan BTreePageStore::planRootLeafUpsert(const MetadataSnapshotPin &snapshot, uint64_t indexId,
@@ -2708,11 +2838,48 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable scalar Index transaction overlay requires a live snapshot, Index ID, and operations");
 		}
-		auto overlay = std::make_shared<TransactionBTreeOverlay>(*this, metadata_, snapshot, indexId,
-																				 rebuildOnFrameExhaustion, forceFreshRebuild, leafValueLayout);
-		for (const BTreeScalarIndexOperation &operation: operations) {
-			overlay->apply(operation);
+		std::shared_ptr<TransactionBTreeOverlay> overlay;
+		{
+			debug::ScopedPerfTimer timer("native_graph.write.btree.plan.initialize");
+			overlay = std::make_shared<TransactionBTreeOverlay>(*this, metadata_, snapshot, indexId,
+					rebuildOnFrameExhaustion, forceFreshRebuild, leafValueLayout);
 		}
+		{
+			debug::ScopedPerfTimer timer("native_graph.write.btree.plan.apply");
+			// Different-key UPSERTs commute, but same-key statement order and
+			// ERASE/unknown-operation barriers must remain observable. Reorder
+			// only contiguous UPSERT runs through a bounded-by-input pointer view:
+			// no key copies, no changes to the caller's operation stream.
+			std::vector<const BTreeScalarIndexOperation *> ordered;
+			for (size_t begin = 0U; begin < operations.size();) {
+				if (operations[begin].kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
+					overlay->apply(operations[begin++]);
+					continue;
+				}
+				size_t end = begin + 1U;
+				bool alreadyOrdered = true;
+				while (end < operations.size() && operations[end].kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
+					if (lessKey(operations[end].key, operations[end - 1U].key)) alreadyOrdered = false;
+					++end;
+				}
+				if (alreadyOrdered) {
+					for (size_t i = begin; i < end; ++i) overlay->apply(operations[i]);
+				} else {
+					ordered.clear();
+					ordered.reserve(end - begin);
+					for (size_t i = begin; i < end; ++i) ordered.push_back(&operations[i]);
+					std::ranges::sort(ordered, [](const auto *left, const auto *right) {
+						if (lessKey(left->key, right->key)) return true;
+						if (lessKey(right->key, left->key)) return false;
+						return left < right; // same span: preserve equal-key statement order
+					});
+					debug::PerfTrace::addValue("native_btree.plan.ordered_upsert_run_entries", ordered.size());
+					for (const auto *operation : ordered) overlay->apply(*operation);
+				}
+				begin = end;
+			}
+		}
+		debug::ScopedPerfTimer timer("native_graph.write.btree.plan.build");
 		return overlay->buildPlan();
 	}
 

@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/index/BTreePage.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -238,7 +239,11 @@ namespace graph::storage {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree key lengths exceed the stream");
 			}
-			std::vector<std::byte> key(previous.begin(), previous.begin() + static_cast<size_t>(shared));
+			// Reserve the complete reconstructed key once. Growing a shared-prefix
+			// vector during suffix insertion otherwise retains nearly double capacity.
+			std::vector<std::byte> key;
+			key.reserve(static_cast<size_t>(shared + suffixBytes));
+			key.insert(key.end(), previous.begin(), previous.begin() + static_cast<size_t>(shared));
 			key.insert(key.end(), stream.begin() + static_cast<std::ptrdiff_t>(offset),
 					   stream.begin() + static_cast<std::ptrdiff_t>(offset + suffixBytes));
 			offset += static_cast<size_t>(suffixBytes);
@@ -357,6 +362,95 @@ namespace graph::storage {
 				LittleEndianCodec::readU64(bytes, ENTRY_VALUE_OFFSET)};
 	}
 
+	size_t PackedBTreePageCodec::encodedSize(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
+			BTreeLeafValueLayout leafValueLayout) {
+		validateValueLayout(kind, leafValueLayout);
+		const bool includesValue = storesValue(kind, leafValueLayout);
+		if (entries.size() > std::numeric_limits<uint32_t>::max()) {
+			throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW, "packed B+Tree entry count overflows");
+		}
+		const auto varintBytes = [](uint64_t value) {
+			size_t bytes = 1;
+			while (value >= 0x80U) { value >>= 7U; ++bytes; }
+			return bytes;
+		};
+		const uint64_t restarts = (static_cast<uint64_t>(entries.size()) + RSS_BTREE_PACKED_RESTART_INTERVAL - 1U) /
+			RSS_BTREE_PACKED_RESTART_INTERVAL;
+		uint64_t total = RSS_BTREE_PACKED_HEADER_BYTES + restarts * sizeof(uint32_t);
+		for (size_t index = 0; index < entries.size(); ++index) {
+			const auto &entry = entries[index];
+			if (index && !lessKey(entries[index - 1].key, entry.key)) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER, "packed B+Tree keys are not strictly ordered");
+			}
+			if ((kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) ||
+				(!includesValue && entry.value_or_child != 0U)) {
+				throwBTreePageError(FormatError::FERR_INVALID_HEADER, "packed B+Tree entry value is invalid");
+			}
+			const size_t shared = index % RSS_BTREE_PACKED_RESTART_INTERVAL == 0U ? 0U :
+				commonPrefix(entries[index - 1].key, entry.key);
+			const size_t suffix = entry.key.size() - shared;
+			// Bound before adding a potentially enormous key size.
+			if (suffix > std::numeric_limits<uint32_t>::max()) {
+				throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW, "packed B+Tree payload is too large");
+			}
+			total += varintBytes(shared) + varintBytes(suffix) + suffix +
+				(includesValue ? varintBytes(entry.value_or_child) : 0U);
+			if (total > std::numeric_limits<uint32_t>::max()) {
+				throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW, "packed B+Tree payload is too large");
+			}
+		}
+		return static_cast<size_t>(total);
+	}
+
+	PackedBTreePageCodec::BoundarySizes PackedBTreePageCodec::encodedBoundarySizes(
+		BTreeNodeKind kind, std::span<const BTreePageEntry> entries, BTreeLeafValueLayout leafValueLayout) {
+		// Authenticate order, values and layout before deriving any boundary.
+		static_cast<void>(encodedSize(kind, entries, leafValueLayout));
+		BoundarySizes result{std::vector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES),
+			std::vector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES)};
+		const bool includesValue = storesValue(kind, leafValueLayout);
+		const auto varintBytes = [](uint64_t value) {
+			uint64_t bytes = 1U;
+			while (value >= 0x80U) { value >>= 7U; ++bytes; }
+			return bytes;
+		};
+		const auto entryBytes = [&](size_t i, bool restart) {
+			const auto &entry = entries[i];
+			const size_t shared = restart || i == 0U ? 0U : commonPrefix(entries[i - 1U].key, entry.key);
+			const size_t suffix = entry.key.size() - shared;
+			return varintBytes(shared) + varintBytes(suffix) + suffix +
+				(includesValue ? varintBytes(entry.value_or_child) : 0U);
+		};
+		const auto payloadBytes = [](uint64_t stream, size_t count) {
+			const uint64_t restarts = (static_cast<uint64_t>(count) + RSS_BTREE_PACKED_RESTART_INTERVAL - 1U) /
+				RSS_BTREE_PACKED_RESTART_INTERVAL;
+			const uint64_t bytes = RSS_BTREE_PACKED_HEADER_BYTES + restarts * sizeof(uint32_t) + stream;
+			if (bytes > std::numeric_limits<uint32_t>::max()) {
+				throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW, "packed B+Tree boundary payload is too large");
+			}
+			return static_cast<size_t>(bytes);
+		};
+		uint64_t prefixStream = 0U;
+		for (size_t i = 0U; i < entries.size(); ++i) {
+			prefixStream += entryBytes(i, i % RSS_BTREE_PACKED_RESTART_INTERVAL == 0U);
+			result.prefixes[i + 1U] = payloadBytes(prefixStream, i + 1U);
+		}
+		// A suffix starting at i restarts at i, i+R, ... . Track normal and
+		// restart costs by residue so every candidate is exact in linear work.
+		std::array<uint64_t, RSS_BTREE_PACKED_RESTART_INTERVAL> normalByResidue{}, restartByResidue{};
+		uint64_t normalSuffix = 0U;
+		for (size_t i = entries.size(); i-- > 0U;) {
+			const size_t residue = i % RSS_BTREE_PACKED_RESTART_INTERVAL;
+			const uint64_t normal = entryBytes(i, false);
+			normalSuffix += normal;
+			normalByResidue[residue] += normal;
+			restartByResidue[residue] += entryBytes(i, true);
+			result.suffixes[i] = payloadBytes(normalSuffix - normalByResidue[residue] + restartByResidue[residue],
+				entries.size() - i);
+		}
+		return result;
+	}
+
 	std::vector<std::byte> PackedBTreePageCodec::encode(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
 														BTreeLeafValueLayout leafValueLayout) {
 		validateValueLayout(kind, leafValueLayout);
@@ -429,6 +523,7 @@ namespace graph::storage {
 
 	std::vector<BTreePageEntry> PackedBTreePageCodec::decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 															 BTreeLeafValueLayout leafValueLayout) {
+		debug::PerfTrace::addValue("native_btree.read.packed_page_decodes", 1);
 		validateValueLayout(kind, leafValueLayout);
 		const bool includesValue = storesValue(kind, leafValueLayout);
 		const PackedHeader header = decodePackedHeader(bytes);
@@ -444,7 +539,7 @@ namespace graph::storage {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed B+Tree restart offset does not point to an entry");
 			}
-			const auto entry = decodeOne(stream, offset, previous, restart, includesValue);
+			auto entry = decodeOne(stream, offset, previous, restart, includesValue);
 			if (!entry.has_value()) {
 				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"relocatable packed B+Tree entry stream ended early");
@@ -457,7 +552,7 @@ namespace graph::storage {
 				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 									"relocatable packed internal B+Tree entry has an invalid child Page ID");
 			}
-			entries.push_back(*entry);
+			entries.push_back(std::move(*entry));
 		}
 		if (offset != stream.size()) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
@@ -538,7 +633,7 @@ namespace graph::storage {
 		return *this;
 	}
 
-	BTreePage BTreePage::create(const PageOwnerHeader &owner, const BTreePageHeader &header) {
+	void BTreePage::validateNewPage(const PageOwnerHeader &owner, const BTreePageHeader &header) {
 		const uint8_t invalidOwner = static_cast<uint8_t>(owner.kind != PageOwnerKind::POK_INDEX) |
 									 static_cast<uint8_t>(owner.owner_id != header.index_id) |
 									 static_cast<uint8_t>(owner.page_id != header.page_id) |
@@ -551,6 +646,12 @@ namespace graph::storage {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable new B+Tree page cannot declare entries before they are materialized");
 		}
+		SlottedPage::validateOwner(owner);
+		validateHeader(header);
+	}
+
+	BTreePage BTreePage::create(const PageOwnerHeader &owner, const BTreePageHeader &header) {
+		validateNewPage(owner, header);
 		SlottedPage page = SlottedPage::create(owner);
 		static_cast<void>(page.insert(BTreePageHeaderCodec::encode(header)));
 		const std::vector<BTreePageEntry> emptyEntries;
@@ -580,6 +681,14 @@ namespace graph::storage {
 	BTreePage BTreePage::open(const PageOwnerHeader &owner, std::span<const std::byte> bytes) {
 		BTreePage page(SlottedPage::open(owner, bytes));
 		page.validateLayout();
+		return page;
+	}
+
+	BTreePage BTreePage::openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+			std::vector<BTreePageEntry> &decodedEntries) {
+		BTreePage page(SlottedPage::open(owner, bytes));
+		auto validated = page.packedEntries();
+		decodedEntries = std::move(validated);
 		return page;
 	}
 
@@ -643,7 +752,8 @@ namespace graph::storage {
 	}
 
 	std::vector<BTreePageEntry> BTreePage::entries() const {
-		validateLayout();
+		// packedEntries performs the same complete validation as validateLayout.
+		// Return that validated decode instead of decoding once more.
 		return packedEntries();
 	}
 
@@ -667,11 +777,10 @@ namespace graph::storage {
 		BTreePageHeader rebound = current;
 		rebound.generation = owner.generation;
 		rebound.entry_count = 0;
-		BTreePage result = BTreePage::create(owner, rebound);
-		for (BTreePageEntry entry: entries()) {
-			result.insert(std::move(entry));
-		}
-		return result;
+		// The immutable source is decoded and authenticated once. Repacking the
+		// complete ordered page avoids repeatedly decoding every growing prefix.
+		const auto validatedEntries = entries();
+		return BTreePage::createWithEntries(owner, rebound, validatedEntries);
 	}
 
 	void BTreePage::writeHeader(BTreePageHeader updated) {
@@ -680,9 +789,14 @@ namespace graph::storage {
 	}
 
 	void BTreePage::insert(BTreePageEntry entry) {
-		validateLayout();
-		const auto existing = find(entry.key);
-		if (existing.has_value()) {
+		// packedEntries authenticates the entire source, including ordering.
+		// Reuse that decode for duplicate detection and the mutation itself.
+		std::vector<BTreePageEntry> entries = packedEntries();
+		const auto insertion = std::lower_bound(entries.begin(), entries.end(), entry.key,
+				[](const BTreePageEntry &candidate, const std::vector<std::byte> &key) {
+					return lessKey(candidate.key, key);
+				});
+		if (insertion != entries.end() && sameKey(insertion->key, entry.key)) {
 			throwBTreePageError(FormatError::FERR_INVALID_STATE,
 								"relocatable B+Tree page rejects duplicate separator keys");
 		}
@@ -691,11 +805,6 @@ namespace graph::storage {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable internal B+Tree entry requires a stable child Page ID");
 		}
-		std::vector<BTreePageEntry> entries = packedEntries();
-		const auto insertion = std::lower_bound(entries.begin(), entries.end(), entry.key,
-												[](const BTreePageEntry &candidate, const std::vector<std::byte> &key) {
-													return lessKey(candidate.key, key);
-												});
 		entries.insert(insertion, std::move(entry));
 		writePackedEntries(entries);
 		++updated.entry_count;
@@ -703,7 +812,6 @@ namespace graph::storage {
 	}
 
 	void BTreePage::erase(std::span<const std::byte> key) {
-		validateLayout();
 		std::vector<BTreePageEntry> entries = packedEntries();
 		const auto iterator =
 				std::lower_bound(entries.begin(), entries.end(), key,

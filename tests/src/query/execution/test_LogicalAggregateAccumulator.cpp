@@ -23,6 +23,7 @@
 #include <string>
 
 #include "graph/query/execution/LogicalAggregateAccumulator.hpp"
+#include "query/execution/BudgetMemoryResource.hpp"
 
 using namespace graph;
 using namespace graph::query::execution;
@@ -784,4 +785,251 @@ TEST(LogicalAggregateAccumulatorTest, PreservesSingleValuePopulationAndExactCont
 		continuous->update(PropertyValue(value));
 	}
 	EXPECT_EQ(continuous->getResult(), PropertyValue(int64_t(2)));
+}
+
+TEST(LogicalAggregateAccumulatorTest, TakesOwnedPayloadResultsAndSupportsReuse) {
+	const PropertyValue large(std::string(8192U, 'z'));
+	const PropertyValue small(std::string(4096U, 'a'));
+	for (const auto function: {AggregateFunctionType::AGG_MIN, AggregateFunctionType::AGG_MAX,
+			AggregateFunctionType::AGG_COLLECT}) {
+		for (const bool distinct: {false, true}) {
+			auto accumulator = createAccumulator(function, distinct);
+			accumulator->update(large);
+			accumulator->update(small);
+			accumulator->update(large);
+			accumulator->update(PropertyValue());
+			PropertyValue expected;
+			if (function == AggregateFunctionType::AGG_MIN) expected = small;
+			else if (function == AggregateFunctionType::AGG_MAX) expected = large;
+			else expected = PropertyValue(distinct ? std::vector<PropertyValue>{large, small} :
+					std::vector<PropertyValue>{large, small, large});
+			EXPECT_EQ(accumulator->getResult(), expected);
+			PropertyValue transferred = accumulator->takeResult();
+			EXPECT_EQ(transferred, expected);
+			EXPECT_EQ(accumulator->retainedBytes(), 0U);
+			const auto empty = accumulator->takeResult();
+			if (function == AggregateFunctionType::AGG_COLLECT) EXPECT_TRUE(empty.getList().empty());
+			else EXPECT_EQ(empty, PropertyValue());
+			accumulator->update(small);
+			const auto fresh = accumulator->takeResult();
+			EXPECT_EQ(fresh, function == AggregateFunctionType::AGG_COLLECT ?
+					PropertyValue(std::vector<PropertyValue>{small}) : small);
+			accumulator.reset();
+			EXPECT_EQ(transferred, expected);
+		}
+	}
+}
+
+TEST(LogicalAggregateAccumulatorBaseTest, DestructiveFinalizationResetsScalarState) {
+	auto accumulator = createAccumulator(AggregateFunctionType::AGG_COUNT);
+	accumulator->updateRow();
+	accumulator->updateRow();
+	EXPECT_EQ(accumulator->takeResult(), PropertyValue(2));
+	EXPECT_EQ(accumulator->getResult(), PropertyValue(0));
+	accumulator->updateRow();
+	EXPECT_EQ(accumulator->takeResult(), PropertyValue(1));
+}
+
+TEST(LogicalAggregateAccumulatorTest, DestructivePercentilesMatchSnapshotsReleaseCapacityAndSupportReuse) {
+	for (const bool continuous : {false, true}) {
+		for (const double percentile : {0.0, 0.25, 0.5, 1.0}) {
+			auto accumulator = createAccumulator(continuous ? AggregateFunctionType::AGG_PERCENTILE_CONT :
+				AggregateFunctionType::AGG_PERCENTILE_DISC, false, percentile);
+			EXPECT_EQ(accumulator->takeResult(), PropertyValue());
+			for (const auto &value : {PropertyValue(9), PropertyValue(1), PropertyValue(), PropertyValue(5.0), PropertyValue(5)})
+				accumulator->update(value);
+			const auto snapshot = accumulator->getResult();
+			const auto retained = accumulator->retainedBytes();
+			ASSERT_GT(retained, 0U);
+			EXPECT_EQ(accumulator->getResult(), snapshot);
+			EXPECT_EQ(accumulator->retainedBytes(), retained);
+			auto clone = accumulator->clone();
+			const auto taken = accumulator->takeResult();
+			EXPECT_EQ(taken, snapshot); EXPECT_EQ(taken.getType(), snapshot.getType());
+			EXPECT_EQ(accumulator->retainedBytes(), 0U);
+			EXPECT_EQ(accumulator->takeResult(), PropertyValue());
+			EXPECT_EQ(clone->takeResult(), snapshot); EXPECT_EQ(clone->retainedBytes(), 0U);
+			accumulator->update(PropertyValue(7));
+			EXPECT_EQ(accumulator->takeResult(), PropertyValue(7));
+			EXPECT_EQ(accumulator->retainedBytes(), 0U);
+		}
+	}
+}
+
+TEST(LogicalAggregateAccumulatorTest, PercentileArrayGrowthUsesSharedAdmissionAndPreservesStateOnRejection) {
+	for (const auto function : {AggregateFunctionType::AGG_PERCENTILE_DISC, AggregateFunctionType::AGG_PERCENTILE_CONT}) {
+		MaterializedByteBudget budget(4096U);
+		detail::BudgetMemoryResource memory(budget);
+		MaterializedByteReservation downstream(&budget); downstream.set(3072U);
+		auto accumulator = createAccumulator(function, false, 0.25, &memory);
+		size_t accepted = 0U;
+		for (; accepted < 256U; ++accepted) {
+			try { accumulator->update(PropertyValue(static_cast<int64_t>(accepted))); }
+			catch (const std::runtime_error &) { break; }
+		}
+		ASSERT_GT(accepted, 1U); ASSERT_LT(accepted, 256U);
+		const auto snapshot = accumulator->getResult();
+		const auto charged = budget.used();
+		EXPECT_GT(charged, downstream.bytes());
+		EXPECT_GT(accumulator->retainedBytes(), 0U);
+		EXPECT_EQ(accumulator->retainedBytesForAdmission(), 0U);
+		EXPECT_THROW(accumulator->update(PropertyValue(10000)), std::runtime_error);
+		EXPECT_EQ(accumulator->getResult(), snapshot); EXPECT_EQ(budget.used(), charged);
+		auto clone = accumulator->clone();
+		EXPECT_EQ(clone->retainedBytesForAdmission(), clone->retainedBytes());
+		downstream.reset();
+		EXPECT_NO_THROW(accumulator->update(PropertyValue(10000)));
+		const auto updated = accumulator->getResult();
+		EXPECT_EQ(clone->takeResult(), snapshot);
+		EXPECT_EQ(accumulator->takeResult(), updated); EXPECT_EQ(budget.used(), 0U);
+		accumulator->update(PropertyValue(7));
+		EXPECT_EQ(accumulator->takeResult(), PropertyValue(7)); EXPECT_EQ(budget.used(), 0U);
+	}
+}
+
+TEST(LogicalAggregateAccumulatorTest, PayloadAdmissionRejectsBeforeMutatingCollectMinAndMax) {
+	PropertyValue::MapType map; map.max_load_factor(4.0F);
+	for (int i = 0; i < 32; ++i) map.emplace(std::to_string(i), PropertyValue(std::string(256U, 'x')));
+	const PropertyValue nested(std::move(map));
+	for (const auto function : {AggregateFunctionType::AGG_COLLECT, AggregateFunctionType::AGG_MIN, AggregateFunctionType::AGG_MAX}) {
+		auto accumulator = createAccumulator(function);
+		const auto before = accumulator->getResult();
+		size_t admitted = 0U;
+		EXPECT_THROW(accumulator->updateAdmitted(nested, [&](size_t bytes) {
+			admitted = bytes; if (bytes > 512U) throw std::runtime_error("test allowance");
+		}), std::runtime_error);
+		EXPECT_GT(admitted, 512U); EXPECT_EQ(accumulator->getResult(), before);
+		accumulator->updateAdmitted(nested, [](size_t) {});
+		const auto result = accumulator->takeResult();
+		EXPECT_EQ(function == AggregateFunctionType::AGG_COLLECT ? result.getList().front() : result, nested);
+		EXPECT_EQ(accumulator->retainedBytes(), 0U);
+	}
+}
+
+TEST(LogicalAggregateAccumulatorTest, AdmittedExtremaReplacementPreservesExistingValueOnRejection) {
+	for (const auto function : {AggregateFunctionType::AGG_MIN, AggregateFunctionType::AGG_MAX}) {
+		auto accumulator = createAccumulator(function);
+		const PropertyValue seed(std::string(128U, 'm'));
+		accumulator->updateAdmitted(seed, [](size_t) {});
+		const PropertyValue winner(std::string(1024U, function == AggregateFunctionType::AGG_MIN ? 'a' : 'z'));
+		EXPECT_THROW(accumulator->updateAdmitted(winner, [](size_t bytes) {
+			if (bytes > 512U) throw std::runtime_error("test allowance");
+		}), std::runtime_error);
+		EXPECT_EQ(accumulator->getResult(), seed);
+		const PropertyValue loser(std::string(1024U, function == AggregateFunctionType::AGG_MIN ? 'z' : 'a'));
+		EXPECT_NO_THROW(accumulator->updateAdmitted(loser, [](size_t) { throw std::runtime_error("unused admission"); }));
+		EXPECT_EQ(accumulator->getResult(), seed);
+		accumulator->updateAdmitted(winner, [](size_t) {});
+		EXPECT_EQ(accumulator->takeResult(), winner);
+	}
+}
+
+TEST(LogicalAggregateAccumulatorTest, CollectCancellationDuringNestedCopyPreservesExistingState) {
+	auto accumulator = createAccumulator(AggregateFunctionType::AGG_COLLECT);
+	accumulator->updateAdmitted(PropertyValue(7), [](size_t) {});
+	const auto before = accumulator->getResult();
+	std::vector<PropertyValue> values;
+	for (int i = 0; i < 64; ++i) values.emplace_back(std::string(256U, 'x'));
+	const PropertyValue nested(std::move(values));
+	size_t positiveCalls = 0U;
+	EXPECT_THROW(accumulator->updateAdmitted(nested, [&](size_t bytes) {
+		if (bytes != 0U && ++positiveCalls == 3U) throw std::runtime_error("test cancellation");
+	}), std::runtime_error);
+	EXPECT_EQ(positiveCalls, 3U);
+	EXPECT_EQ(accumulator->getResult(), before);
+	accumulator->updateAdmitted(nested, [](size_t) {});
+	const auto result = accumulator->takeResult();
+	ASSERT_EQ(result.getList().size(), 2U);
+	EXPECT_EQ(result.getList()[0], PropertyValue(7));
+	EXPECT_EQ(result.getList()[1], nested);
+	EXPECT_EQ(accumulator->retainedBytes(), 0U);
+}
+
+TEST_F(CollectDistinctAccumulatorTest, AdmissionRejectionAndCancellationPermitRetry) {
+	CollectDistinctAccumulator accumulator;
+	accumulator.update(PropertyValue(7));
+	const PropertyValue nested(std::vector<PropertyValue>(64U, PropertyValue(std::string(256U, 'x'))));
+	const auto before = accumulator.getResult();
+	EXPECT_THROW(accumulator.updateAdmitted(nested, [](size_t bytes) {
+		if (bytes > 512U) throw std::runtime_error("allowance");
+	}), std::runtime_error);
+	EXPECT_EQ(accumulator.getResult(), before);
+	size_t calls = 0U;
+	EXPECT_THROW(accumulator.updateAdmitted(nested, [&](size_t bytes) {
+		if (bytes && ++calls == 3U) throw std::runtime_error("cancel");
+	}), std::runtime_error);
+	EXPECT_EQ(accumulator.getResult(), before);
+	accumulator.updateAdmitted(nested, [](size_t) {});
+	EXPECT_NO_THROW(accumulator.updateAdmitted(nested, [](size_t) { throw std::runtime_error("duplicate copied"); }));
+	EXPECT_NO_THROW(accumulator.updateAdmitted(PropertyValue(), [](size_t) { throw std::runtime_error("null copied"); }));
+	const auto result = accumulator.takeResult();
+	ASSERT_EQ(result.getList().size(), 2U);
+	EXPECT_EQ(result.getList()[0], PropertyValue(7));
+	EXPECT_EQ(result.getList()[1], nested);
+	EXPECT_EQ(accumulator.retainedBytes(), 0U);
+	accumulator.updateAdmitted(nested, [](size_t) {});
+	ASSERT_EQ(accumulator.getResult().getList().size(), 1U);
+}
+
+TEST_F(CollectDistinctAccumulatorTest, StringAdmissionChargesBothRetainedCopiesAndSkipsDuplicates) {
+	CollectDistinctAccumulator accumulator;
+	const PropertyValue value(std::string(4096U, 's'));
+	size_t peak = 0U;
+	EXPECT_THROW(accumulator.updateAdmitted(value, [&](size_t bytes) {
+		peak = bytes;
+		if (bytes > 4096U) throw std::runtime_error("allowance");
+	}), std::runtime_error);
+	EXPECT_GE(peak, 8192U);
+	EXPECT_TRUE(accumulator.getResult().getList().empty());
+	accumulator.updateAdmitted(value, [](size_t) {});
+	EXPECT_NO_THROW(accumulator.updateAdmitted(value, [](size_t) { throw std::runtime_error("duplicate copied"); }));
+	accumulator.updateAdmitted(PropertyValue(1), [](size_t) {});
+	accumulator.updateAdmitted(PropertyValue(1.0), [](size_t) {});
+	accumulator.updateAdmitted(PropertyValue("1"), [](size_t) {});
+	const auto result = accumulator.takeResult();
+	ASSERT_EQ(result.getList().size(), 4U);
+	EXPECT_EQ(result.getList()[0], value);
+	EXPECT_EQ(result.getList()[1], PropertyValue(1));
+	EXPECT_EQ(result.getList()[2], PropertyValue(1.0));
+	EXPECT_EQ(result.getList()[3], PropertyValue("1"));
+}
+
+TEST_F(CreateAccumulatorTest, ObjectAdmissionRunsBeforeCreationAndPropagatesRejection) {
+	for (const auto function : {AggregateFunctionType::AGG_COUNT, AggregateFunctionType::AGG_SUM,
+		AggregateFunctionType::AGG_AVG, AggregateFunctionType::AGG_MIN, AggregateFunctionType::AGG_MAX,
+		AggregateFunctionType::AGG_COLLECT, AggregateFunctionType::AGG_STDEV, AggregateFunctionType::AGG_STDEVP,
+		AggregateFunctionType::AGG_PERCENTILE_DISC, AggregateFunctionType::AGG_PERCENTILE_CONT}) {
+		for (const bool distinct : {false, true}) {
+			size_t calls = 0U;
+			EXPECT_THROW(static_cast<void>(createAccumulator(function, distinct, 0.5, nullptr, [&](size_t bytes) {
+				++calls; EXPECT_GE(bytes, sizeof(AggregateAccumulator));
+				throw std::runtime_error("object budget");
+			})), std::runtime_error);
+			EXPECT_EQ(calls, 1U);
+			auto accumulator = createAccumulator(function, distinct, 0.5, nullptr, [](size_t) {});
+			ASSERT_NE(accumulator, nullptr);
+			EXPECT_NO_THROW(accumulator->update(PropertyValue(7)));
+		}
+	}
+}
+
+TEST_F(CollectDistinctAccumulatorTest, RetainedAccountingIncludesBothSparseMapBucketArrays) {
+	PropertyValue::MapType sparse;
+	sparse.reserve(1024U);
+	sparse.emplace("one", PropertyValue(7));
+	const size_t bucketBytes = sparse.bucket_count() * sizeof(void *);
+	const PropertyValue value(std::move(sparse));
+	CollectDistinctAccumulator accumulator;
+	accumulator.updateAdmitted(value, [](size_t) {});
+	EXPECT_GE(accumulator.retainedBytes(), 2U * bucketBytes);
+	const size_t retained = accumulator.retainedBytes();
+	accumulator.updateAdmitted(value, [](size_t) { throw std::runtime_error("duplicate allocation"); });
+	EXPECT_EQ(accumulator.retainedBytes(), retained);
+	auto clone = accumulator.clone();
+	EXPECT_EQ(clone->getResult(), accumulator.getResult());
+	EXPECT_GE(clone->retainedBytes(), graph::query::execution::detail::retainedPropertyValueBytes(clone->getResult().getList()[0]));
+	const auto result = accumulator.takeResult();
+	ASSERT_EQ(result.getList().size(), 1U);
+	EXPECT_EQ(result.getList()[0], value);
+	EXPECT_EQ(accumulator.retainedBytes(), 0U);
 }

@@ -1,0 +1,134 @@
+{
+  "date": "2026-10-09",
+  "production_code_changed": false,
+  "full_unit_suite_run": false,
+  "docker_environment_created": false,
+  "checks": {
+    "probe_compile": "PASS: clang++ C++20 O3 -Wall -Wextra -Werror",
+    "probe_execution": "PASS: 18 cases, equal checksums per layout/degree, 126 raw measured samples",
+    "mdx_compile": "PASS: English and Chinese compile with installed @mdx-js/mdx 3.1.1",
+    "bilingual_structure": "PASS: 33 matching numbered sections",
+    "documentation_links": "PASS after regenerating the existing content collection; initial stale generated collection lacked the two new pages",
+    "whitespace": "PASS: git diff --check plus explicit new-file check",
+    "cleanup": "Temporary probe executable removed; only source and small result records retained"
+  },
+  "design_delivery_progress": {
+    "requirements": 100,
+    "research_and_layout_validation": 100,
+    "architecture_specification": 100,
+    "implementation_and_acceptance_plan": 100
+  },
+  "implementation_progress": {
+    "G0": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G1": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G2": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G3": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G4": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G5": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G6": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    },
+    "G7": {
+      "accepted_items": 0,
+      "total_items": 5,
+      "percent": 0
+    }
+  },
+  "not_established": [
+    "End-to-end candidate engine latency or throughput",
+    "Write amplification of an implemented candidate",
+    "Candidate crash durability or concurrency correctness",
+    "Linux/Windows runtime validation",
+    "Performance parity with Kuzu or original architecture"
+  ],
+  "architecture_benefit_review": {
+    "status": "complete",
+    "recommendation": "Preserve the current core; prioritize local directory resolution, exact-index contract, type counts, and covering adjacency.",
+    "whole_engine_rewrite": "not approved as the default implementation plan",
+    "new_production_changes": false,
+    "new_benchmark_run": false
+  },
+  "preimplementation_review": {
+    "status": "complete",
+    "first_tranche": "Directory resolution and verified-result reuse with existing contracts preserved",
+    "deferred": "No-refetch index-only, fast type counts without settled corruption semantics, covering adjacency without codec/lifecycle design",
+    "production_code_changed": false,
+    "unit_tests_run": false
+  },
+  "current_implementation_plan_review": {
+    "status": "complete",
+    "entry": "docs/apps/docs/content/docs/zh/zyx/architecture/targeted-read-optimization-plan.mdx",
+    "english_entry": "docs/apps/docs/content/docs/en/zyx/architecture/targeted-read-optimization-plan.mdx",
+    "checks": {
+      "mdx_compile": "PASS: both locales for current plan, research alternative, and historical optimization document",
+      "bilingual_structure": "PASS: 15 matching numbered sections in current plan",
+      "documentation_links": "PASS after content collection regeneration",
+      "source_and_evidence_paths": "PASS: explicitly referenced paths exist"
+    },
+    "scope": "Directory selected-path resolution and verified-result reuse; preserve existing format and correctness contracts",
+    "implementation_progress": {
+      "L0": {
+        "accepted_items": 0,
+        "total_items": 5,
+        "percent": 0
+      },
+      "L1": {
+        "accepted_items": 0,
+        "total_items": 5,
+        "percent": 0
+      },
+      "L2": {
+        "accepted_items": 0,
+        "total_items": 5,
+        "percent": 0
+      },
+      "L3": {
+        "accepted_items": 0,
+        "total_items": 5,
+        "percent": 0
+      }
+    },
+    "prior_G0_G7_ledger": "Research alternative only, not the current implementation roadmap",
+    "production_code_changed": false,
+    "unit_tests_run": false,
+    "benchmark_run": false
+  },
+  "current_implementation_acceptance": {
+    "scope": "Initial targeted-read plan L0-L3",
+    "progress": {
+      "L0": 100,
+      "L1": 100,
+      "L2": 100,
+      "L3": 100
+    },
+    "evidence": "benchmarks/graphdb-comparison/results/20261009-targeted-read/progress.json",
+    "tests": "118 targeted tests passed; full suite not run",
+    "performance_version_caveat": "See final-state-provenance.json for the final invalid-context guard added after normal-hit timing."
+  }
+}

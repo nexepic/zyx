@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 
 using namespace graph::storage;
@@ -265,4 +266,99 @@ TEST_F(BTreeIndexScanCacheTest, RangeCursorChecksCancellationBeforeOpeningStorag
 	const BufferPoolStats after = io_->bufferPoolStats();
 	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes);
 	EXPECT_EQ(after.misses, before.misses);
+}
+
+TEST_F(BTreeIndexScanCacheTest, RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease) {
+	auto cursor = index_->openRangeCursor(snapshot_, std::nullopt, 4U);
+	const auto reject = [](size_t bytes) {
+		if (bytes != 0U) throw std::length_error("boundary key rejected");
+	};
+	for (size_t retry = 0U; retry < 2U; ++retry) {
+		EXPECT_THROW(static_cast<void>(cursor.next(reject)), std::length_error);
+	}
+	size_t retained = 0U;
+	const auto admit = [&](size_t bytes) { retained = bytes; };
+	for (const auto text: {"a", "b", "c", "d"}) {
+		const auto entry = cursor.next(admit);
+		ASSERT_TRUE(entry.has_value());
+		EXPECT_EQ(entry->key, key(text));
+		if (std::string_view(text) == "d") EXPECT_EQ(retained, 0U);
+		else EXPECT_GE(retained, entry->key.size());
+	}
+	EXPECT_FALSE(cursor.next(admit).has_value());
+	EXPECT_EQ(retained, 0U);
+}
+
+TEST_F(BTreeIndexScanCacheTest, ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees) {
+	for (bool stream: {false, true}) {
+		const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+		graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+		std::vector<BTreePageEntry> actual;
+		EXPECT_NO_THROW({
+			if (stream) {
+				auto cursor = index_->openRangeCursor(snapshot_, std::nullopt, 4U);
+				while (auto entry = cursor.next()) actual.push_back(std::move(*entry));
+			} else {
+				actual = index_->scan(snapshot_, std::nullopt, 4U);
+			}
+		});
+		const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+		ASSERT_EQ(actual.size(), 4U);
+		for (size_t index = 0U; index < actual.size(); ++index) EXPECT_EQ(actual[index].key, key(std::string(1U, char('a' + index))));
+		ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+		// Three internal pages plus four leaves each authenticate and transfer
+		// their canonical entries once; route/range checks still cover every entry.
+		EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 7);
+		EXPECT_EQ(trace.at("native_graph.read.root_descents").totalValue, 1);
+	}
+}
+
+TEST_F(BTreeIndexScanCacheTest, PointLookupReusesAuthenticatedLeafEntries) {
+ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ const auto found = index_->find(snapshot_, key("c"));
+ const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+ graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+ ASSERT_EQ(found, std::optional<uint64_t>(static_cast<uint64_t>('c')));
+ ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+ // Root open plus root entries; the child routing page and leaf each
+ // authenticate once and transfer their decoded entries.
+ EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 4);
+ EXPECT_FALSE(index_->find(snapshot_, key("cc")).has_value());
+}
+
+TEST_F(BTreeIndexScanCacheTest, SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys) {
+ const std::array keys{key("a"), key("aa"), key("ab"), key("b"), key("bb"), key("c"), key("cc"), key("d"), key("dd")};
+ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ const auto found = index_->findSorted(snapshot_, keys);
+ const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+ graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+ ASSERT_EQ(found.size(), keys.size());
+ for (size_t position = 0; position < keys.size(); ++position)
+  EXPECT_EQ(found[position], index_->find(snapshot_, keys[position]));
+ EXPECT_EQ(found[0], static_cast<uint64_t>('a')); EXPECT_FALSE(found[1]); EXPECT_FALSE(found[2]);
+ EXPECT_EQ(found[3], static_cast<uint64_t>('b')); EXPECT_FALSE(found[4]);
+ EXPECT_EQ(found[5], static_cast<uint64_t>('c')); EXPECT_FALSE(found[6]);
+ EXPECT_EQ(found[7], static_cast<uint64_t>('d')); EXPECT_FALSE(found[8]);
+ ASSERT_TRUE(trace.contains("native_btree.read.packed_page_decodes"));
+ // One root open plus four descents: borrowed root entries and one
+ // complete decode for each owned child routing page and leaf.
+ EXPECT_EQ(trace.at("native_btree.read.packed_page_decodes").totalValue, 13);
+}
+
+TEST_F(BTreeIndexScanCacheTest, SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots) {
+ const auto before = io_->bufferPoolStats();
+ const std::array repeated{key("a"), key("a")};
+ const std::array reversed{key("b"), key("a")};
+ EXPECT_THROW(static_cast<void>(index_->findSorted(snapshot_, repeated)), FormatException);
+ EXPECT_THROW(static_cast<void>(index_->findSorted(snapshot_, reversed)), FormatException);
+ EXPECT_TRUE(index_->findSorted(snapshot_, {}).empty());
+ EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+ EXPECT_EQ(io_->bufferPoolStats().hits, before.hits);
+ const std::array keys{key("a"), key("b")};
+ BTreeIndex missing(18, *pages_, *metadata_);
+ const auto absent = missing.findSorted(snapshot_, keys);
+ ASSERT_EQ(absent.size(), 2U); EXPECT_FALSE(absent[0]); EXPECT_FALSE(absent[1]);
 }

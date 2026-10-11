@@ -371,6 +371,14 @@ TEST_F(RelocatableEntityLabelSetStoreTest, SharesLabelPageAndMovesOnlyTheGrowing
 	EXPECT_EQ(currentB.label_overflow, nodeB.current_overflow);
 	EXPECT_EQ(labelsStore.readNodeLabels(current, currentA), maximum);
 	EXPECT_EQ(labelsStore.readNodeLabels(current, currentB), nodeBLabels);
+	const std::array batchRecords{currentA, currentB, currentA};
+	for (int retry = 0; retry < 2; ++retry) {
+		EXPECT_EQ(labelsStore.readNodeLabelsSorted(current, batchRecords),
+			(std::vector<std::vector<uint64_t>>{maximum, nodeBLabels, maximum}));
+	}
+	io->enableBufferPool(64U * RSS_PAGE_SIZE);
+	EXPECT_EQ(labelsStore.readNodeLabelsSorted(current, batchRecords),
+		(std::vector<std::vector<uint64_t>>{maximum, nodeBLabels, maximum}));
 }
 
 TEST_F(RelocatableEntityLabelSetStoreTest, SharedLabelPageRemainsResidentAcrossNodePointReads) {
@@ -657,6 +665,11 @@ TEST_F(RelocatableEntityLabelSetStoreTest, RejectsStaleForeignAndNoncanonicalLab
 			FormatError::FERR_INVALID_HEADER);
 	EXPECT_EQ(entities.readNode(current, 1001U), persisted);
 	EXPECT_EQ(labelsStore.readNodeLabels(current, persisted), overflow);
+	EXPECT_TRUE(labelsStore.containsNodeLabel(current, persisted, overflow.front()));
+	EXPECT_TRUE(labelsStore.containsNodeLabel(current, persisted, overflow.back()));
+	EXPECT_FALSE(labelsStore.containsNodeLabel(current, persisted, 99999U));
+	NodeEntityRecord staleNode = persisted; staleNode.label_overflow = stale;
+	EXPECT_THROW(static_cast<void>(labelsStore.containsNodeLabel(current, staleNode, overflow.front())), FormatException);
 	current.release();
 }
 

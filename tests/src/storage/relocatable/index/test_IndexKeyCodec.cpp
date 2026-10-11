@@ -126,3 +126,12 @@ TEST(RelocatableIndexKeyCodecTest, RejectsUnsupportedOrNonCanonicalInputs) {
 			[&] { static_cast<void>(IndexKeyCodec::tryEncodeComposite(std::array<PropertyValue, 0>{})); },
 			FormatError::FERR_INVALID_HEADER);
 }
+
+TEST(RelocatableIndexKeyCodecTest, DecodesOnlyCanonicalIntegerEntryValues) {
+ for (int64_t value : {std::numeric_limits<int64_t>::min(), int64_t(-1), int64_t(0), int64_t(42), std::numeric_limits<int64_t>::max()}) {
+  EXPECT_EQ(IndexKeyCodec::decodeIntegerEntryValue(IndexKeyCodec::encodeEntryKey(PropertyValue(value), 7U)), value);
+ }
+ EXPECT_THROW(static_cast<void>(IndexKeyCodec::decodeIntegerEntryValue({})), FormatException);
+ EXPECT_THROW(static_cast<void>(IndexKeyCodec::decodeIntegerEntryValue(IndexKeyCodec::encodeValue(PropertyValue(int64_t(42))))), FormatException);
+ EXPECT_THROW(static_cast<void>(IndexKeyCodec::decodeIntegerEntryValue(IndexKeyCodec::encodeEntryKey(PropertyValue(42.0), 7U))), FormatException);
+}

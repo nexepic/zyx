@@ -1,0 +1,55 @@
+{
+  "status": "superseded; historical evidence only; not an implementation entry",
+  "files": [
+    {
+      "original": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/zh/optimization.mdx",
+      "sha256": "7c48ef68c55bb54359b6fe7d0dd36ff25b91ca157e7e7b11933e3851423b3999"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/zh/zyx/architecture/targeted-read-optimization-plan.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/zh/targeted-read-optimization-plan.mdx",
+      "sha256": "1b9ad9ccf86a9e51d4f6c9ab398085b7677608bfed59df70643dc01fe1210e23"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/zh/zyx/architecture/single-file-next-generation-design.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/zh/single-file-next-generation-design.mdx",
+      "sha256": "92749dc71a28cd303317de0577528cb7e46b4cd99524a34a4528beb32a09bccd"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/zh/zyx/architecture/native-remaining-work-roadmap.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/zh/native-remaining-work-roadmap.mdx",
+      "sha256": "abf63e542aec62f69c76b7f3b2edd56465ea43eb45aaa5878aa787ac5e65b364"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/en/optimization.mdx",
+      "sha256": "6a0dcaa77c000dfa68a1ecfb2deebb40b89064da622c0d61a310b18e2222f8d1"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/en/zyx/architecture/targeted-read-optimization-plan.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/en/targeted-read-optimization-plan.mdx",
+      "sha256": "05d535943b7feadf0ee5fbe0a7920a4fe2de68a34b4293ef30e04569fa90f553"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/en/zyx/architecture/single-file-next-generation-design.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/en/single-file-next-generation-design.mdx",
+      "sha256": "ac8e2e57d9bf9bf6a1078149acc35289778cf81b46eafea67ebfc144af98a011"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/en/zyx/architecture/native-remaining-work-roadmap.mdx",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/en/native-remaining-work-roadmap.mdx",
+      "sha256": "0d6a12b497ced1c5a69b6528ce3a9b98cb2f07f7fa2a92bf7a3764e6968d630f"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx#section-23",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/zh/native-single-file-storage-plan-section23.md",
+      "sha256": "37af31db303b6059f198059e3dd26d21ba3d624f656a31cedf6d0d8e804f8e21"
+    },
+    {
+      "original": "docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx#section-23",
+      "archive": "benchmarks/architecture-design/archive/20261009-superseded-plans/en/native-single-file-storage-plan-section23.md",
+      "sha256": "90cdb0b1165ec6d3e6558b5a48657fe9d3aab702d90fdbaa2cc8bf9f5fcfadd3"
+    }
+  ]
+}

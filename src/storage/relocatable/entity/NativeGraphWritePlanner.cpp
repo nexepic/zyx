@@ -884,6 +884,7 @@ namespace graph::storage {
 			BTreePageStore &mappingTrees, VectorPageStore &rawPages, VectorManifestStore &manifests,
 			const IndexDefinition &definition, std::span<const NativeGraphVectorBootstrapRecord> records,
 			NativeGraphVectorBootstrapOptions options) {
+		if (options.checkpoint) options.checkpoint();
 		requireActive("stage a Vector Index bootstrap");
 		static_cast<void>(IndexDefinitionCodec::encode(definition));
 		const uint8_t invalidInput = static_cast<uint8_t>(definition.kind != IndexDefinitionKind::IDK_VECTOR) |
@@ -918,6 +919,7 @@ namespace graph::storage {
 		std::vector<const NativeGraphVectorBootstrapRecord *> ordered;
 		ordered.reserve(records.size());
 		for (const NativeGraphVectorBootstrapRecord &record: records) {
+			if (ordered.size() % 256U == 0U && options.checkpoint) options.checkpoint();
 			if (record.node_id == 0U || record.encoded_bfloat16.size() != expectedEncodedBytes) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native graph Vector bootstrap record has an invalid Node identity or BF16 width");
@@ -989,6 +991,7 @@ namespace graph::storage {
 		staged.records.reserve(ordered.size());
 		const uint64_t firstVectorId = next_vector_id_;
 		for (size_t ordinal = 0U; ordinal < ordered.size(); ++ordinal) {
+			if (ordinal % 256U == 0U && options.checkpoint) options.checkpoint();
 			const NativeGraphVectorBootstrapRecord &record = *ordered[ordinal];
 			const uint64_t vectorId = firstVectorId + static_cast<uint64_t>(ordinal);
 			nodeMappingEntries.push_back({VectorSemanticCodec::nodeMappingKey(record.node_id), vectorId});
@@ -998,6 +1001,7 @@ namespace graph::storage {
 		}
 		const BTreeInitialTreeMutationPlan nodeMappingPlan =
 				mappingTrees.planInitialTreeMutation(snapshot_, definition.index_id, nodeMappingEntries);
+		if (options.checkpoint) options.checkpoint();
 		const BTreeInitialTreeMutationPlan vectorNodeMappingPlan =
 				mappingTrees.planInitialTreeMutation(snapshot_, mappingIndexId, vectorNodeMappingEntries);
 		const auto planPageCount = [](const BTreeInitialTreeMutationPlan &plan) {
@@ -1026,6 +1030,8 @@ namespace graph::storage {
 				 "native graph Vector bootstrap exceeds its configured typed-page work bound");
 		}
 
+		// All cancellation checks precede mutation of this transaction's staged roots.
+		if (options.checkpoint) options.checkpoint();
 		stageScalarIndexCreate(mappingTrees, nodeMappingPlan);
 		stageScalarIndexCreate(mappingTrees, vectorNodeMappingPlan);
 		staged.mutation = {definition.index_id,

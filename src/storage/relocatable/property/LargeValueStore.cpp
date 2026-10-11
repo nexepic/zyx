@@ -7,6 +7,8 @@
  **/
 
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "storage/relocatable/property/PoolPreparationBatch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -65,6 +67,12 @@ namespace graph::storage {
 		};
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
+
+		[[nodiscard]] size_t checkedReadBufferSum(size_t first, size_t second) {
+			if (second > std::numeric_limits<size_t>::max() - first)
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue read buffers overflowed");
+			return first + second;
+		}
 
 		[[nodiscard]] bool isLargeValueKind(LargeValueKind kind) {
 			return kind == LargeValueKind::LVK_BYTES || kind == LargeValueKind::LVK_UTF8_TEXT;
@@ -719,8 +727,8 @@ namespace graph::storage {
 	LargeValueStore::LargeValueStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
 									 SharedPagePoolOpenMode openMode) :
 		allocator_(io, metadata, openMode), metadata_(metadata),
-		content_index_pages_(std::make_unique<SlottedPagePool>(std::move(io), metadata, openMode)),
-		content_index_(std::make_unique<BTreePageStore>(*content_index_pages_, metadata)) {}
+		content_index_pages_(std::make_unique<SlottedPagePool>(io, metadata, openMode)),
+		content_index_(std::make_unique<BTreePageStore>(*content_index_pages_, metadata)), io_(std::move(io)) {}
 
 	LargeValueStore::~LargeValueStore() = default;
 
@@ -1228,7 +1236,7 @@ namespace graph::storage {
 
 	void LargeValueStore::prepareNativeGraphMaterialization(const NativeGraphLargeValueMutation &mutation,
 															LargeValueMaterializationResult &materialization,
-															LogSequenceNumber checkpointLsn) {
+															LogSequenceNumber checkpointLsn, const PoolPreparationWriter &writer) {
 		// RelocatableMetadataStore creates this exact plan under its writer lock,
 		// validates it both before and after this callback, and retains ownership of
 		// the allocation identity. This encoder only fills allocator-owned frame
@@ -1284,7 +1292,9 @@ namespace graph::storage {
 					chunkPageOrdinal = 0U;
 				}
 			}
-			if (pool.is_new_pool) {
+			if (writer) {
+				writer(pool.pool, pool.is_new_pool, pool.prepared_prefix_count, prepared, pool.locations);
+			} else if (pool.is_new_pool) {
 				allocator_.prepareNewPoolPages(pool.pool, prepared, pool.locations, checkpointLsn,
 											   pool.prepared_prefix_count);
 			} else {
@@ -1318,7 +1328,9 @@ namespace graph::storage {
 				prepared.push_back({owner, page.serialize(), 0U});
 				++manifestOrdinal;
 			}
-			if (pool.is_new_pool) {
+			if (writer) {
+				writer(pool.pool, pool.is_new_pool, pool.prepared_prefix_count, prepared, pool.locations);
+			} else if (pool.is_new_pool) {
 				allocator_.prepareNewPoolPages(pool.pool, prepared, pool.locations, checkpointLsn,
 											   pool.prepared_prefix_count);
 			} else {
@@ -1332,18 +1344,68 @@ namespace graph::storage {
 		materialization.manifest_location = materialization.manifest_pools.front().locations.front();
 	}
 
+	void LargeValueStore::prepareNativeGraphMaterializations(
+			std::span<const NativeGraphLargeValueMutation> mutations,
+			std::span<LargeValueMaterializationResult> materializations, LogSequenceNumber checkpointLsn) {
+		if (mutations.size() != materializations.size())
+			fail(FormatError::FERR_INVALID_STATE, "LargeValue batch preparation shape mismatch");
+		std::optional<detail::PoolPreparationBatch> data, manifests;
+		const auto flush = [&](auto &pending) {
+			if (!pending) return;
+			pending->flush([&](const CatalogEntry &pool, auto pages, auto locations, size_t prefix) {
+				allocator_.prepareNewPoolPages(pool, pages, locations, checkpointLsn, prefix);
+			});
+			pending.reset();
+		};
+		const PoolPreparationWriter writer = [&](const CatalogEntry &pool, bool isNew, size_t prefix,
+				std::span<const SharedPagePoolPreparedAppend> pages, std::span<PageLocation> locations) {
+			if (pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
+				pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL)
+				fail(FormatError::FERR_INVALID_STATE, "LargeValue batch preparation has wrong pool kind");
+			auto &pending = pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL ? data : manifests;
+			if (!isNew) {
+				flush(pending);
+				if (prefix != 0U) fail(FormatError::FERR_INVALID_STATE, "existing LargeValue pool has a fresh prefix");
+				allocator_.prepareAppendPages(pool, pages, locations, checkpointLsn);
+				return;
+			}
+			if (pending && pending->segmentId() != pool.segment_id) flush(pending);
+			if (!pending) pending.emplace(pool, prefix);
+			pending->append(pool, prefix, pages, locations);
+		};
+		for (size_t i = 0; i < mutations.size(); ++i)
+			prepareNativeGraphMaterialization(mutations[i], materializations[i], checkpointLsn, writer);
+		flush(data); flush(manifests);
+		// The encoder records logical manifest IDs before pool writes. Scatter the
+		// final physical locations only after every buffered pool was prepared.
+		for (auto &materialization : materializations)
+			materialization.manifest_location = materialization.manifest_pools.front().locations.front();
+	}
+
 	LargeValueManifest LargeValueStore::manifest(const MetadataSnapshotPin &snapshot,
-												 const LargeValueRef &reference) const {
-		return readManifest(snapshot, reference);
+												 const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission) const {
+		return readManifest(snapshot, reference, bufferAdmission);
 	}
 
 	std::vector<std::byte> LargeValueStore::read(const MetadataSnapshotPin &snapshot,
-												 const LargeValueRef &reference) const {
-		const LargeValueManifest immutableManifest = readManifest(snapshot, reference);
-		std::vector<std::byte> bytes = readRange(snapshot, reference, 0U, immutableManifest.logical_bytes);
-		if (utils::Sha256::digest(bytes) != immutableManifest.content_hash) {
-			fail(FormatError::FERR_CHECKSUM_MISMATCH, "LargeValue full-content SHA-256 does not match its manifest");
+												 const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission) const {
+		std::vector<std::byte> bytes;
+		{
+			const LargeValueManifest immutableManifest = readManifest(snapshot, reference, bufferAdmission);
+			const size_t manifestBytes = checkedReadBufferSum(immutableManifest.media_type.capacity(),
+					checkedReadBufferSum(immutableManifest.chunks.capacity() * sizeof(LargeValueChunk),
+							immutableManifest.children.capacity() * sizeof(LargeValueManifestChild)));
+			const auto admitRead = [&](size_t retained) {
+				if (bufferAdmission) bufferAdmission(checkedReadBufferSum(manifestBytes, retained));
+			};
+			// Reuse the authenticated root and account for it until content verification completes.
+			bytes = readRangeFromManifest(snapshot, immutableManifest, 0U, immutableManifest.logical_bytes,
+					bufferAdmission ? std::function<void(size_t)>(admitRead) : std::function<void(size_t)>{});
+			if (utils::Sha256::digest(bytes) != immutableManifest.content_hash) {
+				fail(FormatError::FERR_CHECKSUM_MISMATCH, "LargeValue full-content SHA-256 does not match its manifest");
+			}
 		}
+		if (bufferAdmission) bufferAdmission(bytes.capacity());
 		return bytes;
 	}
 
@@ -1356,21 +1418,49 @@ namespace graph::storage {
 
 	std::vector<std::byte> LargeValueStore::readRangeFromManifest(const MetadataSnapshotPin &snapshot,
 																  const LargeValueManifest &immutableManifest,
-																  const uint64_t offset, const uint64_t length) const {
+																  const uint64_t offset, const uint64_t length, const std::function<void(size_t)> &bufferAdmission) const {
+		return readRangeFromManifestImpl(snapshot, immutableManifest, offset, length, bufferAdmission, nullptr);
+	}
+
+	std::vector<std::byte> LargeValueStore::readRangeFromManifestCached(const MetadataSnapshotPin &snapshot,
+		const LargeValueManifest &manifest, uint64_t offset, uint64_t length, RangeReadCache &cache,
+		const std::function<void(size_t)> &bufferAdmission) const {
+		try { return readRangeFromManifestImpl(snapshot, manifest, offset, length, bufferAdmission, &cache); }
+		catch (...) { cache.clear(); throw; }
+	}
+
+	std::vector<std::byte> LargeValueStore::readRangeFromManifestImpl(const MetadataSnapshotPin &snapshot,
+		const LargeValueManifest &immutableManifest, uint64_t offset, uint64_t length,
+		const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache) const {
+		if (!metadata_.ownsSnapshot(snapshot)) {
+			fail(FormatError::FERR_INVALID_STATE, "LargeValue ranged read requires this store's active snapshot");
+		}
 		if (!immutableManifest.isRoot()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 					"LargeValue ranged read requires a directory-routed manifest root");
 		}
 		validateRange(immutableManifest.logical_bytes, offset, length);
+		if (cache && (!cache->valid_ || cache->store_ != this || cache->io_.lock() != io_ ||
+			cache->snapshot_ != snapshot.superblock() || cache->mutation_epoch_ != io_->dataMutationEpoch() ||
+			cache->value_id_ != immutableManifest.value_id || cache->generation_ != immutableManifest.generation ||
+			io_->dataMutationEpoch() == std::numeric_limits<uint64_t>::max())) cache->clear();
+		const auto admit = [&](size_t bytes) {
+			if (bufferAdmission) bufferAdmission(checkedReadBufferSum(bytes, cache ? cache->retainedBytes() : 0U));
+		};
+		if (length > std::numeric_limits<size_t>::max()) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue ranged read exceeds addressable buffer size");
+		}
 		std::vector<std::byte> result;
+		admit(static_cast<size_t>(length));
 		result.reserve(static_cast<size_t>(length));
+		admit(result.capacity());
 		if (length == 0U) {
 			return result;
 		}
 		const uint64_t end = offset + length;
 		bool firstDataPage = true;
 		const auto readNode = [this, &snapshot, &immutableManifest, offset, end, &result,
-								   &firstDataPage](const auto &self, const LargeValueManifest &node) -> void {
+								   &firstDataPage, &bufferAdmission, &admit, cache](const auto &self, const LargeValueManifest &node, size_t retainedChildren) -> void {
 			if (node.isLeaf()) {
 				const auto first =
 						std::lower_bound(node.chunks.begin(), node.chunks.end(), offset,
@@ -1381,8 +1471,31 @@ namespace graph::storage {
 					const uint64_t chunkEnd = chunk->uncompressed_offset + chunk->uncompressed_bytes;
 					const BufferPoolReadHint firstPageHint = firstDataPage ? BufferPoolReadHint::BPRH_NORMAL
 																				 : BufferPoolReadHint::BPRH_SEQUENTIAL;
-					const std::vector<std::byte> rawChunk =
-							readRawChunk(snapshot, immutableManifest, *chunk, firstPageHint);
+					std::vector<std::byte> ownedChunk;
+					std::span<const std::byte> rawChunk;
+					if (cache && cache->valid_ && cache->chunk_ == *chunk &&
+						cache->mutation_epoch_ == io_->dataMutationEpoch() &&
+						cache->raw_.size() == chunk->uncompressed_bytes) {
+						admit(checkedReadBufferSum(result.capacity(), retainedChildren));
+						rawChunk = cache->raw_;
+						debug::PerfTrace::addValue("native_graph.read.large_value_range_chunk_reuse", 1);
+					} else {
+						// Drop the old buffer before decoding its replacement. Admission
+						// therefore charges one raw chunk, not two retained chunks.
+						if (cache) cache->clear();
+						const uint64_t epoch = io_->dataMutationEpoch();
+						ownedChunk = readRawChunk(snapshot, immutableManifest, *chunk, firstPageHint, [&](size_t bytes) {
+							admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
+						});
+						if (cache && ownedChunk.capacity() <= RSS_LARGE_VALUE_EXTENT_128K_BYTES &&
+							epoch == io_->dataMutationEpoch() && epoch != std::numeric_limits<uint64_t>::max()) {
+							cache->store_ = this; cache->io_ = io_; cache->snapshot_ = snapshot.superblock();
+							cache->mutation_epoch_ = epoch; cache->value_id_ = immutableManifest.value_id;
+							cache->generation_ = immutableManifest.generation; cache->chunk_ = *chunk;
+							cache->raw_ = std::move(ownedChunk); cache->valid_ = true;
+							rawChunk = cache->raw_;
+						} else rawChunk = ownedChunk;
+					}
 					firstDataPage = false;
 					const uint64_t copyBegin =
 							std::max(offset, chunk->uncompressed_offset) - chunk->uncompressed_offset;
@@ -1399,20 +1512,28 @@ namespace graph::storage {
 			for (auto childRange = first; childRange != node.children.end() && childRange->uncompressed_offset < end;
 				 ++childRange) {
 				const LargeValueManifest child = readManifestNode(snapshot, immutableManifest, childRange->page_id,
-																				BufferPoolReadHint::BPRH_SEQUENTIAL);
+																				BufferPoolReadHint::BPRH_SEQUENTIAL, [&](size_t bytes) {
+					admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
+				});
 				validateManifestChild(node, *childRange, child);
-				self(self, child);
+				const size_t childBytes = checkedReadBufferSum(child.media_type.capacity(),
+						child.chunks.capacity() * sizeof(LargeValueChunk) +
+						child.children.capacity() * sizeof(LargeValueManifestChild));
+				self(self, child, checkedReadBufferSum(retainedChildren, childBytes));
 			}
 		};
-		readNode(readNode, immutableManifest);
+		readNode(readNode, immutableManifest, 0U);
 		if (result.size() != length) { // ZYX_COV_EXCL_LINE: manifest validation makes the covered ranges contiguous.
 			fail(FormatError::FERR_INVALID_STATE, "LargeValue chunk coverage did not satisfy the requested range");
 		}
+		admit(result.capacity());
 		return result;
 	}
 
-	LargeValueManifest LargeValueStore::manifest(const MetadataSnapshotPin &snapshot, LargeValueId valueId) const {
+	LargeValueManifest LargeValueStore::manifest(const MetadataSnapshotPin &snapshot, LargeValueId valueId,
+			const std::function<void(size_t)> &bufferAdmission) const {
 		const LargeValueManifestLocation route = metadata_.findLargeValueManifest(snapshot, valueId);
+		if (bufferAdmission) bufferAdmission(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
 		const SharedPagePoolContents contents = allocator_.read(snapshot, route.manifest_page_id);
 		const uint8_t invalid = static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) |
 								static_cast<uint8_t>(contents.pool.owner_id !=
@@ -1426,7 +1547,9 @@ namespace graph::storage {
 				 "LargeValue manifest directory route disagrees with its physical page pool");
 		}
 		const LargeValueManifest immutableManifest =
-				LargeValueManifestPage::open(contents.owner, contents.payload).manifest();
+				LargeValueManifestPage::decodeManifest(contents.owner, contents.payload, [&](size_t bytes) {
+					if (bufferAdmission) bufferAdmission(checkedReadBufferSum(contents.payload.capacity(), bytes));
+				});
 		const uint8_t invalidManifest =
 				static_cast<uint8_t>(immutableManifest.value_id != valueId) |
 				static_cast<uint8_t>(immutableManifest.page_id != route.manifest_page_id) |
@@ -1439,9 +1562,10 @@ namespace graph::storage {
 
 	LargeValueManifest LargeValueStore::readManifestNode(const MetadataSnapshotPin &snapshot,
 																		  const LargeValueManifest &root, PageId pageId,
-																		  BufferPoolReadHint hint) const {
+																		  BufferPoolReadHint hint, const std::function<void(size_t)> &bufferAdmission) const {
 		// manifestTree inserts the directory-routed root into its observed set before
 		// reaching here, so this private helper receives only a valid non-root child.
+		if (bufferAdmission) bufferAdmission(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
 		const SharedPagePoolContents contents = allocator_.read(snapshot, pageId, hint);
 		const uint8_t invalid = static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) |
 								static_cast<uint8_t>(contents.pool.owner_id !=
@@ -1453,7 +1577,10 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "LargeValue Manifest node route disagrees with its physical page pool");
 		}
-		const LargeValueManifest node = LargeValueManifestPage::open(contents.owner, contents.payload).manifest();
+		const LargeValueManifest node = LargeValueManifestPage::decodeManifest(contents.owner, contents.payload,
+				[&](size_t bytes) {
+					if (bufferAdmission) bufferAdmission(checkedReadBufferSum(contents.payload.capacity(), bytes));
+				});
 		const uint8_t invalidNode = static_cast<uint8_t>(node.page_id != pageId) |
 									static_cast<uint8_t>(node.node_kind == LargeValueManifestNodeKind::LVMNK_ROOT) |
 									static_cast<uint8_t>(node.reference() != root.reference());
@@ -1493,8 +1620,8 @@ namespace graph::storage {
 	}
 
 	LargeValueManifest LargeValueStore::readManifest(const MetadataSnapshotPin &snapshot,
-													 const LargeValueRef &reference) const {
-		const LargeValueManifest immutableManifest = manifest(snapshot, reference.value_id);
+													 const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission) const {
+		const LargeValueManifest immutableManifest = manifest(snapshot, reference.value_id, bufferAdmission);
 		if (immutableManifest.reference() != reference) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "LargeValue manifest does not match the requested immutable reference");
@@ -1505,7 +1632,7 @@ namespace graph::storage {
 	std::vector<std::byte> LargeValueStore::readRawChunk(const MetadataSnapshotPin &snapshot,
 																		 const LargeValueManifest &manifest,
 																		 const LargeValueChunk &chunk,
-																		 BufferPoolReadHint firstPageHint) const {
+																		 BufferPoolReadHint firstPageHint, const std::function<void(size_t)> &bufferAdmission) const {
 		if constexpr (sizeof(size_t) < sizeof(uint32_t)) {
 			if (chunk.stored_bytes > std::numeric_limits<size_t>::max()) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -1513,11 +1640,14 @@ namespace graph::storage {
 			}
 		}
 		std::vector<std::byte> bytes;
+		if (bufferAdmission) bufferAdmission(chunk.stored_bytes);
 		bytes.reserve(chunk.stored_bytes);
+		if (bufferAdmission) bufferAdmission(bytes.capacity());
 		for (uint16_t ordinal = 0U; ordinal < chunk.data_page_count; ++ordinal) {
 			const PageId pageId(chunk.first_data_page_id.value() + ordinal);
 			const BufferPoolReadHint pageHint =
 					ordinal == 0U ? firstPageHint : BufferPoolReadHint::BPRH_SEQUENTIAL;
+			if (bufferAdmission) bufferAdmission(checkedReadBufferSum(bytes.capacity(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES));
 			const SharedPagePoolContents contents = allocator_.read(snapshot, pageId, pageHint);
 			const uint8_t invalid =
 					static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL) |
@@ -1529,7 +1659,11 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue data-page route disagrees with its immutable manifest");
 			}
-			const LargeValueDataPage data = LargeValueDataFrame::open(contents.owner, contents.payload).page();
+			const LargeValueDataPage data = LargeValueDataFrame::decodePage(contents.owner, contents.payload,
+					[&](size_t retained) {
+						if (bufferAdmission) bufferAdmission(checkedReadBufferSum(
+								checkedReadBufferSum(bytes.capacity(), contents.payload.capacity()), retained));
+					});
 			const uint8_t invalidData = static_cast<uint8_t>(data.value_id != manifest.value_id) |
 										static_cast<uint8_t>(data.page_id != pageId) |
 										static_cast<uint8_t>(data.generation != manifest.generation) |
@@ -1549,13 +1683,26 @@ namespace graph::storage {
 			fail(FormatError::FERR_CHECKSUM_MISMATCH,
 				 "LargeValue stored chunk is truncated or fails its integrity checksum");
 		}
-		std::vector<std::byte> raw = decompressPayload(bytes, chunk.codec, chunk.uncompressed_bytes);
+		std::vector<std::byte> raw;
+		if (chunk.codec == LargeValueCodec::LVC_RAW) {
+			// RAW already owns the uncompressed bytes; transfer instead of cloning.
+			raw = std::move(bytes);
+			if (bufferAdmission) bufferAdmission(raw.capacity());
+		} else {
+			if (chunk.uncompressed_bytes > std::numeric_limits<size_t>::max() - bytes.capacity()) fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue decompression buffers overflowed");
+			if (bufferAdmission) bufferAdmission(bytes.capacity() + chunk.uncompressed_bytes);
+			raw = decompressPayload(bytes, chunk.codec, chunk.uncompressed_bytes);
+			if (raw.capacity() > std::numeric_limits<size_t>::max() - bytes.capacity()) fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue retained decompression buffers overflowed");
+			if (bufferAdmission) bufferAdmission(bytes.capacity() + raw.capacity());
+		}
 		const uint8_t invalidUncompressedChecksum = static_cast<uint8_t>(raw.size() != chunk.uncompressed_bytes) |
 													static_cast<uint8_t>(checksum(raw) != chunk.uncompressed_crc);
 		if (invalidUncompressedChecksum != 0U) {
 			fail(FormatError::FERR_CHECKSUM_MISMATCH,
 				 "LargeValue uncompressed chunk is truncated or fails its integrity checksum");
 		}
+		if (bufferAdmission) bufferAdmission(raw.capacity());
+		debug::PerfTrace::addValue("native_graph.read.large_value_chunks_read", 1);
 		return raw;
 	}
 

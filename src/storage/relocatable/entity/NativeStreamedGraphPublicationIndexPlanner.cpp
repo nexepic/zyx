@@ -23,7 +23,8 @@ namespace graph::storage {
 			SystemCatalog &catalog, BTreePageStore &adjacencyPages, LargeValueStore *largeValueStore,
 			RelocatableMetadataStore &metadata, const NativeStreamedGraphPrivatePreparation &prepared,
 			const NativeStreamedGraphPublicationIndexPlanningOptions &options,
-			const NativeGraphDeferredIndexPlanningContext &planning, LogSequenceNumber checkpointLsn) {
+			const NativeGraphDeferredIndexPlanningContext &planning, LogSequenceNumber checkpointLsn,
+			const NativeStreamedGraphDeferredPublication *publication) {
 		if (!catalog.usesMetadataStore(metadata) || !adjacencyPages.usesMetadataStore(metadata) ||
 			!planning.current_snapshot.isValid() || !checkpointLsn.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER,
@@ -31,9 +32,18 @@ namespace graph::storage {
 		}
 
 		NativeGraphDeferredIndexPlans result;
+		OrderedBTreeEntrySource tokenCountUpdates;
+		auto membership = NativeStreamedGraphMembershipIndexPlanner::plan(
+				catalog, adjacencyPages, metadata, publication, options.membership, planning.current_snapshot,
+				checkpointLsn, &tokenCountUpdates);
+		auto finalCatalogEntries = prepared.catalog_tokens.final_catalog_entries;
+		if (tokenCountUpdates)
+			finalCatalogEntries = NativeBulkEdgeCatalogTokenMaterializer::overlayEntries(std::move(finalCatalogEntries),
+																						 tokenCountUpdates);
 		if (std::optional<NativeGraphDeferredIndexPlan> catalogPlan = NativeStreamedGraphCatalogIndexPlanner::plan(
-					catalog, metadata, prepared.catalog_tokens.final_catalog_entries,
-					prepared.catalog_tokens.catalog_changed, options.catalog, planning.current_snapshot, checkpointLsn);
+					catalog, metadata, finalCatalogEntries,
+					prepared.catalog_tokens.catalog_changed || static_cast<bool>(tokenCountUpdates), options.catalog,
+					planning.current_snapshot, checkpointLsn);
 			catalogPlan.has_value()) {
 			result.plans.push_back(std::move(*catalogPlan));
 		}
@@ -52,9 +62,12 @@ namespace graph::storage {
 				 "native streamed Edge index bundle has a foreign optional LargeValue store");
 		}
 
+		for (auto &plan: membership.plans)
+			result.plans.push_back(std::move(plan));
+
 		std::ranges::sort(result.plans, {},
 						  [](const NativeGraphDeferredIndexPlan &plan) { return plan.mutation.index_id; });
-		// Catalog, global-adjacency, and LargeValue planners each own a distinct fixed Index ID.
+		// Catalog, adjacency, content and logical member definitions own distinct Index IDs.
 		return result;
 	}
 

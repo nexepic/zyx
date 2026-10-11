@@ -19,6 +19,7 @@
 namespace graph::storage {
 
 	class MetadataPagePoolAllocator;
+	class MetadataPageReadContext;
 	class RelocatableMetadataStore;
 	struct MetadataSnapshotRegistryState;
 
@@ -37,14 +38,17 @@ namespace graph::storage {
 
 		[[nodiscard]] bool isValid() const { return state_ != nullptr; }
 		[[nodiscard]] const Superblock &superblock() const { return superblock_; }
+		[[nodiscard]] const std::shared_ptr<MetadataPageReadContext> &readContext() const { return read_context_; }
 		void release();
 
 	private:
 		friend class MetadataSnapshotRegistry;
-		MetadataSnapshotPin(std::shared_ptr<MetadataSnapshotRegistryState> state, Superblock superblock);
+		MetadataSnapshotPin(std::shared_ptr<MetadataSnapshotRegistryState> state, Superblock superblock,
+				std::shared_ptr<MetadataPageReadContext> readContext) noexcept;
 
 		std::shared_ptr<MetadataSnapshotRegistryState> state_;
 		Superblock superblock_;
+		std::shared_ptr<MetadataPageReadContext> read_context_;
 	};
 
 	class MetadataWriteGuard final {

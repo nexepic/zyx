@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -213,6 +214,7 @@ namespace graph::storage {
 				LittleEndianCodec::readU32(bytes, NODE_LABEL_OVERFLOW_GENERATION_OFFSET);
 		record.inline_label_count = std::to_integer<uint8_t>(bytes[NODE_INLINE_LABEL_COUNT_OFFSET]);
 		validateNodeRecord(record);
+		debug::PerfTrace::addValue("native_graph.read.records_decoded", 1);
 		return record;
 	}
 
@@ -236,6 +238,7 @@ namespace graph::storage {
 		record.target_node_id = LittleEndianCodec::readU64(bytes, EDGE_TARGET_OFFSET);
 		record.type_id = LittleEndianCodec::readU64(bytes, EDGE_TYPE_OFFSET);
 		validateEdgeRecord(record);
+		debug::PerfTrace::addValue("native_graph.read.records_decoded", 1);
 		return record;
 	}
 
@@ -646,10 +649,11 @@ namespace graph::storage {
 		throwEntityPageError(FormatError::FERR_INVALID_STATE, "relocatable Entity page has no free fixed-record slot");
 	}
 
-	std::vector<uint16_t> EntityPage::insertEdges(std::span<const IdentifiedEdgeEntityRecord> records) {
-		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
+	template<typename IdentifiedRecord, typename Codec>
+	std::vector<uint16_t> EntityPage::insertRecords(std::span<const IdentifiedRecord> records, EntityPageRecordKind kind) {
+		if (header_.record_kind != kind) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
-							 "relocatable Entity page does not store Edge records");
+							 "relocatable Entity page has a different record kind");
 		}
 		validateLayout();
 		if (records.empty()) {
@@ -660,29 +664,29 @@ namespace graph::storage {
 							 "relocatable Entity page has insufficient fixed-record slots for a batch");
 		}
 
-		std::vector<EdgeEntityRecordCodec::Bytes> encoded;
+		std::vector<typename Codec::Bytes> encoded;
 		std::vector<uint16_t> slots;
 		encoded.reserve(records.size());
 		slots.reserve(records.size());
 		for (size_t index = 0U; index < records.size(); ++index) {
-			const IdentifiedEdgeEntityRecord &record = records[index];
+			const IdentifiedRecord &record = records[index];
 			if (record.entity_id == 0U) {
 				throwEntityPageError(FormatError::FERR_INVALID_HEADER,
-									 "relocatable Entity page batch requires nonzero Edge IDs");
+									 "relocatable Entity page batch requires nonzero Entity IDs");
 			}
 			for (size_t previous = 0U; previous < index; ++previous) {
 				if (records[previous].entity_id == record.entity_id) {
 					throwEntityPageError(FormatError::FERR_INVALID_HEADER,
-										 "relocatable Entity page batch contains duplicate Edge IDs");
+										 "relocatable Entity page batch contains duplicate Entity IDs");
 				}
 			}
 			for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
 				if (isLive(slot) && entityId(slot) == record.entity_id) {
 					throwEntityPageError(FormatError::FERR_INVALID_STATE,
-										 "relocatable Entity page already stores a batched Edge ID");
+										 "relocatable Entity page already stores a batched Entity ID");
 				}
 			}
-			encoded.push_back(EdgeEntityRecordCodec::encode(record.record));
+			encoded.push_back(Codec::encode(record.record));
 		}
 		for (uint16_t slot = 0U; slot < header_.slot_capacity && slots.size() < records.size(); ++slot) {
 			if (isLive(slot)) {
@@ -710,6 +714,14 @@ namespace graph::storage {
 		refreshChecksums();
 		validateLayout();
 		return slots;
+	}
+
+	std::vector<uint16_t> EntityPage::insertNodes(std::span<const IdentifiedNodeEntityRecord> records) {
+		return insertRecords<IdentifiedNodeEntityRecord, NodeEntityRecordCodec>(records, EntityPageRecordKind::EPRK_NODE);
+	}
+
+	std::vector<uint16_t> EntityPage::insertEdges(std::span<const IdentifiedEdgeEntityRecord> records) {
+		return insertRecords<IdentifiedEdgeEntityRecord, EdgeEntityRecordCodec>(records, EntityPageRecordKind::EPRK_EDGE);
 	}
 
 	std::optional<NodeEntityRecord> EntityPage::findNode(uint16_t slot) const {

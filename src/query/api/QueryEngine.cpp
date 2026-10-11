@@ -33,6 +33,8 @@
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
 
 namespace graph::query {
 
@@ -47,9 +49,18 @@ namespace graph::query {
 
 		class BackendLogicalStatisticsProvider final : public optimization::LogicalStatisticsProvider {
 		public:
-			explicit BackendLogicalStatisticsProvider(const storage::LogicalGraphStatisticsBackend &backend) {
+			explicit BackendLogicalStatisticsProvider(const storage::LogicalGraphStatisticsBackend &backend,
+				const logical::LogicalOperator &root, bool allowAnchors) : backend_(backend) {
 				try {
-					statistics_ = backend.readLogicalGraphCardinalityStatistics();
+					std::vector<std::vector<std::string>> labels;
+					collectJoinLabels(root, false, 0U, labels);
+					if (allowAnchors) collectAnchorLabels(root, 0U, labels);
+					auto batch = backend.readLogicalPlanningStatistics(labels);
+					statistics_ = batch.graph;
+					if (batch.node_counts.size() == labels.size()) {
+						for (size_t i = 0U; i < labels.size(); ++i)
+							label_estimates_.emplace_back(std::move(labels[i]), batch.node_counts[i]);
+					}
 				} catch (...) {
 					// Statistics are optional: a malformed or unavailable record must not
 					// trigger a planning-time graph scan.
@@ -59,6 +70,31 @@ namespace graph::query {
 
 			[[nodiscard]] std::optional<optimization::LogicalCardinalityEstimate>
 			estimate(const logical::LogicalOperator &root) const noexcept override {
+				return estimateCardinality(root, false);
+			}
+			[[nodiscard]] std::optional<optimization::LogicalCardinalityEstimate>
+			estimateJoinInput(const logical::LogicalOperator &root) const noexcept override {
+				return estimateCardinality(root, true);
+			}
+			[[nodiscard]] std::optional<uint64_t>
+			estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+				try {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					if (!statistics_ || !scan || scan->getLabels().size() > 1U ||
+						!scan->getPropertyPredicates().empty() || !scan->getParameterPropertyPredicates().empty() ||
+						!scan->getRangePredicates().empty() || scan->getCompositeEquality() ||
+						(scan->getPreferredScanHint() != logical::LogicalScanHint::LSH_FULL &&
+						 scan->getPreferredScanHint() != logical::LogicalScanHint::LSH_LABEL) ||
+						(statistics_->node_count == 0U && statistics_->edge_count != 0U)) return std::nullopt;
+					if (scan->getLabels().empty()) return statistics_->node_count;
+					if (scan->getLabels().front().empty()) return std::nullopt;
+					const auto count = estimateLabels(scan->getLabels());
+					return count && *count <= statistics_->node_count ? count : std::nullopt;
+				} catch (...) { return std::nullopt; }
+			}
+		private:
+			[[nodiscard]] std::optional<optimization::LogicalCardinalityEstimate>
+			estimateCardinality(const logical::LogicalOperator &root, bool refineLabels) const noexcept {
 				try {
 					if (!statistics_.has_value()) {
 						return std::nullopt;
@@ -68,10 +104,25 @@ namespace graph::query {
 					std::vector<const logical::LogicalTraversal *> traversals;
 					for (size_t depth = 0U; depth < 64U; ++depth) {
 						if (current->getType() == logical::LogicalOpType::LOP_NODE_SCAN) {
-							// Labels and property predicates can only reduce a Node scan. No
-							// label histogram exists yet, so keep its lower bound conservative.
+							// Labels and property predicates can only reduce a Node scan.
+							// Optional label statistics refine costs; bounds remain conservative.
 							optimization::LogicalCardinalityEstimate estimate{
 									0U, statistics.node_count, statistics.node_count};
+							const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(current);
+							// Catalog label counts bound a constrained scan, but do not
+							// estimate its property selectivity. Keep JOIN order when unknown.
+							if (refineLabels && scan != nullptr &&
+								(!scan->getPropertyPredicates().empty() || !scan->getParameterPropertyPredicates().empty() ||
+								 !scan->getRangePredicates().empty() || scan->getCompositeEquality())) return std::nullopt;
+							if (refineLabels && scan != nullptr && !scan->getLabels().empty()) {
+								try {
+									const auto labeled = estimateLabels(scan->getLabels());
+									if (labeled && *labeled <= statistics.node_count) estimate.expected_rows = *labeled;
+								} catch (...) {
+									// Optional detailed statistics must retain the global fallback.
+								}
+							}
+
 							if (statistics.node_count == 0U && statistics.edge_count != 0U) {
 								// A published graph cannot expose an Edge without a Node. Do not
 								// turn a malformed Catalog record into an optimizer decision.
@@ -139,6 +190,51 @@ namespace graph::query {
 				return left * right;
 			}
 
+			static void collectJoinLabels(const logical::LogicalOperator &root, bool insideJoin, size_t depth,
+				std::vector<std::vector<std::string>> &labels) {
+				if (depth >= 64U || labels.size() >= 64U) return;
+				insideJoin = insideJoin || root.getType() == logical::LogicalOpType::LOP_JOIN;
+				if (insideJoin) {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					if (scan && !scan->getLabels().empty() &&
+						std::find(labels.begin(), labels.end(), scan->getLabels()) == labels.end())
+						labels.push_back(scan->getLabels());
+				}
+				for (const auto *child : root.getChildren())
+					if (child) collectJoinLabels(*child, insideJoin, depth + 1U, labels);
+			}
+
+			static void collectAnchorLabels(const logical::LogicalOperator &root, size_t depth,
+				std::vector<std::vector<std::string>> &labels) {
+				if (depth >= 64U || labels.size() >= 64U) return;
+				if (const auto *project = dynamic_cast<const logical::LogicalProject *>(&root)) {
+					const auto children = project->getChildren();
+					const auto *traversal = children.size() == 1U ? dynamic_cast<const logical::LogicalTraversal *>(children.front()) : nullptr;
+					const auto inputs = traversal ? traversal->getChildren() : std::vector<logical::LogicalOperator *>{};
+					const auto *scan = inputs.size() == 1U ? dynamic_cast<const logical::LogicalNodeScan *>(inputs.front()) : nullptr;
+					if (scan && (!scan->getLabels().empty() || traversal->getDirection() == "both") &&
+						traversal->getTargetProperties().empty() && traversal->getTargetLabels().size() == 1U &&
+						!traversal->getTargetLabels().front().empty()) {
+						for (const auto &set : {scan->getLabels(), traversal->getTargetLabels()})
+							if (!set.empty() && labels.size() < 64U && std::find(labels.begin(), labels.end(), set) == labels.end()) labels.push_back(set);
+					}
+				}
+				for (const auto *child : root.getChildren()) if (child) collectAnchorLabels(*child, depth + 1U, labels);
+			}
+
+			[[nodiscard]] std::optional<uint64_t> estimateLabels(const std::vector<std::string> &labels) const {
+				for (const auto &entry : label_estimates_) {
+					if (entry.first == labels) return entry.second;
+				}
+				const auto estimate = backend_.estimateLogicalNodeCardinality(labels);
+				// Rewrites can revisit the same scan. Keep a small planning-local memo;
+				// it dies with this provider and cannot outlive a catalog publication.
+				if (label_estimates_.size() < 64U) label_estimates_.emplace_back(labels, estimate);
+				return estimate;
+			}
+
+			mutable std::vector<std::pair<std::vector<std::string>, std::optional<uint64_t>>> label_estimates_;
+			const storage::LogicalGraphStatisticsBackend &backend_;
 			std::optional<storage::LogicalGraphCardinalityStatistics> statistics_;
 		};
 
@@ -405,12 +501,14 @@ namespace graph::query {
 
 		if (plan.root) {
 			if (plan.optimizable) {
-				optimization::LogicalPlanOptimizer optimizer;
+				optimization::LogicalOptimizerOptions optimizerOptions;
+				optimizerOptions.allow_read_traversal_anchor = !plan.mutatesData && !plan.mutatesSchema;
+				optimization::LogicalPlanOptimizer optimizer(optimizerOptions);
 				const auto statisticsBackend =
 						std::dynamic_pointer_cast<storage::LogicalGraphStatisticsBackend>(logicalBackend_);
 				std::optional<BackendLogicalStatisticsProvider> statistics;
 				if (statisticsBackend) {
-					statistics.emplace(*statisticsBackend);
+					statistics.emplace(*statisticsBackend, *plan.root, optimizerOptions.allow_read_traversal_anchor);
 				}
 				plan.root = optimizer.optimize(std::move(plan.root),
 						statistics.has_value() ? std::addressof(*statistics) : nullptr).root;
@@ -476,7 +574,8 @@ namespace graph::query {
 						throw std::runtime_error("logical backend does not support schema mutations");
 					}
 					execution::LogicalPlanSchemaRuntime runtime(*logicalSchemaBackend_);
-					return runtime.execute(executionRoot, logicalReadOptions_.bounds.maximum_rows, logicalContext);
+					return runtime.execute(executionRoot, logicalReadOptions_.bounds.maximum_rows, logicalContext,
+						logicalReadOptions_.bounds.maximum_materialized_bytes);
 				}
 				// Legacy planning marks some procedures as data mutations. Dispatch
 				// them before the mutation runtime so unsupported procedures fail at

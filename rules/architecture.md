@@ -6,6 +6,8 @@ This document describes the current native production path. The authoritative so
 
 Legacy `FileStorage`, `DataManager`, segment-chain, external-WAL, physical-executor, and old Vector trees have been physically retired from the source tree. Their documentation is historical migration material only; do not use those names or designs for new production code.
 
+Subsequent architecture/performance implementation follows `docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx` and its English counterpart exclusively (A1–A7, O1–O8, S0–S6). Retain COW. Current descriptions here are not a prohibition on the explicitly gated future physical IR/property/adjacency designs. Old Stage/P/C records are historical, not current progress.
+
 ## Layered Architecture
 
 ```mermaid

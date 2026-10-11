@@ -23,6 +23,7 @@
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSkip.hpp"
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
 
 namespace graph::query::optimization {
 	namespace {
@@ -995,6 +996,207 @@ namespace graph::query::optimization {
 						static_cast<void>(ignored);
 					},
 					std::logic_error);
+		}
+
+		TEST(LogicalPlanOptimizerTest, PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter) {
+			using namespace expressions;
+			const auto equality = [](const char *variable, int64_t value) {
+				return std::make_unique<BinaryOpExpression>(std::make_unique<VariableReferenceExpression>(variable, "rank"),
+					BinaryOperatorType::BOP_EQUAL, std::make_unique<LiteralExpression>(value));
+			};
+			auto predicate = std::make_shared<BinaryOpExpression>(equality("a", 1), BinaryOperatorType::BOP_AND, equality("b", 2));
+			auto root = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalJoin>(
+				std::make_unique<logical::LogicalNodeScan>("a"), std::make_unique<logical::LogicalNodeScan>("b")), predicate);
+			auto result = LogicalPlanOptimizer{}.optimize(std::move(root));
+			const auto *filter = dynamic_cast<const logical::LogicalFilter *>(result.root.get());
+			ASSERT_NE(filter, nullptr); EXPECT_EQ(filter->getPredicate(), predicate);
+			const auto *join = dynamic_cast<const logical::LogicalJoin *>(filter->getChildren().front());
+			ASSERT_NE(join, nullptr);
+			for (const auto *child : join->getChildren()) {
+				const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(child);
+				ASSERT_NE(scan, nullptr); ASSERT_EQ(scan->getPropertyPredicates().size(), 1U);
+				EXPECT_EQ(scan->getPropertyPredicates().front().second, PropertyValue(scan->getVariable() == "a" ? 1 : 2));
+			}
+			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(result.root->clone()).rewrite_count, 0U);
+		}
+
+		TEST(LogicalPlanOptimizerTest, JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction) {
+			using namespace expressions;
+			for (int mode : {0, 1, 2}) {
+				auto literal = mode == 1 ? std::make_unique<LiteralExpression>(PropertyValue{}) : std::make_unique<LiteralExpression>(int64_t{2});
+				auto predicate = std::make_shared<BinaryOpExpression>(std::make_unique<VariableReferenceExpression>("a", "rank"),
+					mode == 2 ? BinaryOperatorType::BOP_GREATER : BinaryOperatorType::BOP_EQUAL, std::move(literal));
+				auto root = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalJoin>(
+					std::make_unique<logical::LogicalNodeScan>("a"), std::make_unique<logical::LogicalNodeScan>(mode == 0 ? "a" : "b")), predicate);
+				auto result = LogicalPlanOptimizer{}.optimize(std::move(root));
+				EXPECT_EQ(result.rewrite_count, 0U);
+			}
+		}
+
+		TEST(LogicalPlanOptimizerTest, JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged) {
+			using namespace expressions;
+			for (int mode : {0, 1, 2}) {
+				auto equality = std::make_unique<BinaryOpExpression>(std::make_unique<VariableReferenceExpression>("a", "rank"),
+					BinaryOperatorType::BOP_EQUAL, std::make_unique<LiteralExpression>(int64_t{1}));
+				std::unique_ptr<Expression> other;
+				if (mode == 1) other = std::make_unique<LiteralExpression>(true);
+				else other = std::make_unique<BinaryOpExpression>(std::make_unique<VariableReferenceExpression>(mode == 2 ? "foreign" : "b", "rank"),
+					BinaryOperatorType::BOP_EQUAL, std::make_unique<LiteralExpression>(int64_t{2}));
+				auto predicate = std::make_shared<BinaryOpExpression>(std::move(equality),
+					mode == 0 ? BinaryOperatorType::BOP_OR : BinaryOperatorType::BOP_AND, std::move(other));
+				auto root = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalJoin>(
+					std::make_unique<logical::LogicalNodeScan>("a"), std::make_unique<logical::LogicalNodeScan>("b")), predicate);
+				EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(root)).rewrite_count, 0U);
+			}
+		}
+
+		TEST(LogicalPlanOptimizerTest, JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					const uint64_t rows = scan && scan->getVariable() == "single" ? 1U : 50U;
+					return LogicalCardinalityEstimate{0U, rows, rows};
+				}
+			} statistics;
+			for (const std::string variable : {"large", "single"}) {
+				auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>(variable, "rank"),
+					expressions::BinaryOperatorType::BOP_EQUAL, std::make_unique<expressions::LiteralExpression>(int64_t{2}));
+				auto root = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalJoin>(
+					std::make_unique<logical::LogicalNodeScan>("large"), std::make_unique<logical::LogicalNodeScan>("single")), predicate);
+				auto result = LogicalPlanOptimizer{}.optimize(std::move(root), &statistics);
+				EXPECT_EQ(result.rewrite_count, variable == "large" ? 0U : 1U);
+			}
+		}
+
+		TEST(LogicalPlanOptimizerTest, ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				mutable bool saw_predicate = false;
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					if (!scan) return std::nullopt;
+					if (!scan->getPropertyPredicates().empty()) {
+						saw_predicate = true;
+						return std::nullopt;
+					}
+					const uint64_t rows = scan->getVariable() == "small" ? 2U : 50U;
+					return LogicalCardinalityEstimate{0U, rows, rows};
+				}
+			} statistics;
+			auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+				std::make_unique<expressions::VariableReferenceExpression>("large", "rank"),
+				expressions::BinaryOperatorType::BOP_EQUAL, std::make_unique<expressions::LiteralExpression>(int64_t{2}));
+			auto root = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalJoin>(
+				std::make_unique<logical::LogicalNodeScan>("small"), std::make_unique<logical::LogicalNodeScan>("large")), predicate);
+			auto result = LogicalPlanOptimizer{}.optimize(std::move(root), &statistics);
+			EXPECT_TRUE(statistics.saw_predicate);
+			const auto *join = dynamic_cast<const logical::LogicalJoin *>(result.root->getChildren().front());
+			ASSERT_NE(join, nullptr);
+			const auto *right = dynamic_cast<const logical::LogicalNodeScan *>(join->getRight());
+			ASSERT_NE(right, nullptr);
+			EXPECT_EQ(right->getVariable(), "large");
+			ASSERT_EQ(right->getPropertyPredicates().size(), 1U);
+			EXPECT_EQ(result.rewrite_count, 1U);
+		}
+
+		TEST(LogicalPlanOptimizerTest, ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &) const noexcept override { return std::nullopt; }
+				std::optional<uint64_t> estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					return scan ? std::optional<uint64_t>(scan->getVariable() == "a" ? 50U : 2U) : std::nullopt;
+				}
+			} statistics;
+			for (const std::string direction : {"out", "in", "both"}) {
+				auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Common"}),
+					"a", "edge", "b", "LINK", direction, std::vector<std::string>{"Rare"},
+					std::vector<std::pair<std::string, PropertyValue>>{}, std::unordered_map<std::string, PropertyValue>{{"weight", PropertyValue(7)}});
+				std::vector<logical::LogicalProjectItem> items;
+				for (const auto *name : {"a", "edge", "b"}) items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>(name), name);
+				auto root = std::make_unique<logical::LogicalProject>(std::move(traversal), std::move(items));
+				const auto columns = root->getOutputVariables();
+				EXPECT_EQ(LogicalPlanOptimizer{}.optimize(root->clone(), &statistics).rewrite_count, 0U);
+				LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+				auto result = LogicalPlanOptimizer(options).optimize(std::move(root), &statistics);
+				EXPECT_EQ(result.rewrite_count, 1U); EXPECT_EQ(result.root->getOutputVariables(), columns);
+				const auto *reversed = dynamic_cast<const logical::LogicalTraversal *>(result.root->getChildren().front());
+				ASSERT_NE(reversed, nullptr);
+				EXPECT_EQ(reversed->getSourceVar(), "b"); EXPECT_EQ(reversed->getTargetVar(), "a");
+				EXPECT_EQ(reversed->getDirection(), direction == "out" ? "in" : direction == "in" ? "out" : "both");
+				EXPECT_EQ(reversed->getTargetLabels(), std::vector<std::string>{"Common"});
+				EXPECT_EQ(reversed->getEdgeType(), "LINK"); EXPECT_EQ(reversed->getEdgeProperties().at("weight"), PropertyValue(7));
+				EXPECT_EQ(LogicalPlanOptimizer(options).optimize(result.root->clone(), &statistics).rewrite_count, 0U);
+			}
+		}
+
+		TEST(LogicalPlanOptimizerTest, KeepsUnsupportedOrUncostedAnchorsOnOriginalPath) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				bool unavailable = false;
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &) const noexcept override { return std::nullopt; }
+				std::optional<uint64_t> estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					if (unavailable || !scan) return std::nullopt;
+					return scan->getVariable() == "a" ? 50U : 1U;
+				}
+			} statistics;
+			for (int mode = 0; mode < 5; ++mode) {
+				auto scan = std::make_unique<logical::LogicalNodeScan>("a");
+				if (mode == 0) scan->setPropertyPredicates({{"rank", PropertyValue(1)}});
+				std::vector<std::pair<std::string, PropertyValue>> properties;
+				if (mode == 1) properties.emplace_back("rank", PropertyValue(1));
+				auto traversal = std::make_unique<logical::LogicalTraversal>(std::move(scan), "a", mode == 2 ? "a" : "e", "b", "LINK",
+					mode == 3 ? "invalid" : "out", std::vector<std::string>{"Rare"}, properties);
+				std::vector<logical::LogicalProjectItem> items;
+				items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b"), "b");
+				auto root = std::make_unique<logical::LogicalProject>(std::move(traversal), std::move(items));
+				statistics.unavailable = mode == 4;
+				LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+				EXPECT_EQ(LogicalPlanOptimizer(options).optimize(std::move(root), &statistics).rewrite_count, 0U);
+			}
+		}
+
+		TEST(LogicalPlanOptimizerTest, KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &) const noexcept override { return std::nullopt; }
+				std::optional<uint64_t> estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					if (!scan) return std::nullopt;
+					if (scan->getLabels().empty()) return 100U;
+					return scan->getVariable() == "a" ? 50U : 1U;
+				}
+			} statistics;
+			auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a", std::vector<std::string>{"Subset"}),
+				"a", "e", "b", "LINK", "out", std::vector<std::string>{"Rare"});
+			std::vector<logical::LogicalProjectItem> items;
+			items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b"), "b");
+			auto root = std::make_unique<logical::LogicalProject>(std::move(traversal), std::move(items));
+			LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+			EXPECT_EQ(LogicalPlanOptimizer(options).optimize(std::move(root), &statistics).rewrite_count, 0U);
+		}
+
+		TEST(LogicalPlanOptimizerTest, RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor) {
+			class Statistics final : public LogicalStatisticsProvider {
+			public:
+				std::optional<LogicalCardinalityEstimate> estimate(const logical::LogicalOperator &) const noexcept override { return std::nullopt; }
+				std::optional<uint64_t> estimateAnchorScan(const logical::LogicalOperator &root) const noexcept override {
+					const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(&root);
+					return scan ? std::optional<uint64_t>(scan->getVariable() == "a" ? 50U : 2U) : std::nullopt;
+				}
+			} statistics;
+			for (const std::string direction : {"out", "in", "both"}) {
+				auto traversal = std::make_unique<logical::LogicalTraversal>(std::make_unique<logical::LogicalNodeScan>("a"),
+					"a", "e", "b", "LINK", direction, std::vector<std::string>{"Rare"});
+				std::vector<logical::LogicalProjectItem> items;
+				items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("b"), "b");
+				auto root = std::make_unique<logical::LogicalProject>(std::move(traversal), std::move(items));
+				LogicalOptimizerOptions options; options.allow_read_traversal_anchor = true;
+				EXPECT_EQ(LogicalPlanOptimizer(options).optimize(std::move(root), &statistics).rewrite_count, direction == "both" ? 1U : 0U);
+			}
 		}
 
 	} // namespace

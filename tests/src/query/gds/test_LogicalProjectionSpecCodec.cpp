@@ -72,6 +72,27 @@ namespace graph::query::gds {
 		EXPECT_EQ(native.relationships.front().weight.property_name, "score");
 	}
 
+	TEST(LogicalProjectionSpecCodecTest, DecodesNonOwningArgumentReferencesWithoutChangingSemantics) {
+		const std::vector<PropertyValue> arguments{
+				PropertyValue("reference_view"),
+				map({{"nodeLabels", list({PropertyValue("Person")})},
+						{"relationships", map({{"KNOWS", map({{"weightProperty", PropertyValue("cost")}})}})}})};
+		std::vector<std::reference_wrapper<const PropertyValue>> references;
+		references.reserve(arguments.size());
+		for (const PropertyValue &argument: arguments) references.emplace_back(argument);
+
+		const LogicalGraphProjectionSpec owned = LogicalProjectionSpecCodec::decodeGraphProjectArguments(arguments);
+		const LogicalGraphProjectionSpec viewed = LogicalProjectionSpecCodec::decodeGraphProjectArguments(
+				std::span<const std::reference_wrapper<const PropertyValue>>(references));
+		EXPECT_EQ(viewed.name, owned.name);
+		EXPECT_EQ(viewed.node_labels, owned.node_labels);
+		ASSERT_EQ(viewed.relationships.size(), owned.relationships.size());
+		EXPECT_EQ(viewed.relationships.front().type, owned.relationships.front().type);
+		EXPECT_EQ(viewed.relationships.front().weight.kind, owned.relationships.front().weight.kind);
+		EXPECT_EQ(viewed.relationships.front().weight.property_name,
+				owned.relationships.front().weight.property_name);
+	}
+
 	TEST(LogicalProjectionSpecCodecTest, RejectsAmbiguousUnknownAndUnboundedInputsBeforeProjectionBuild) {
 		const auto decode = [](std::vector<PropertyValue> arguments) {
 			return LogicalProjectionSpecCodec::decodeGraphProjectArguments(arguments);

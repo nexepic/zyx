@@ -1073,3 +1073,53 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeJoinsCompatibleRowsAndSkips
 	EXPECT_EQ(runtime.execute(empty, runtimeBounds(), [](const LogicalPlanReadRow &) { return true; }).rows_emitted,
 			  0U);
 }
+
+TEST(LogicalGraphReadExecutorTest, RejectsTopologyTypesBeforeReadingTargetLabels) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	const auto labelReads = std::make_shared<size_t>(0U);
+	const auto fullScans = std::make_shared<size_t>(0U);
+	data.node_label_batch_read_count = labelReads;
+	data.edge_record_scan_count = fullScans;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "UNMATCHED";
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = expansion;
+	request.bounds = bounds();
+	size_t rows = 0U;
+	const auto stats = executor.execute(request, [&](const LogicalGraphReadRow &) { ++rows; return true; });
+	EXPECT_EQ(rows, 0U);
+	EXPECT_EQ(stats.edges_scanned, 2U);
+	EXPECT_EQ(*labelReads, 0U);
+	EXPECT_EQ(*fullScans, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, RejectsRelationshipTypesBeforeSelectedEdgePropertyColumns) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	const auto columns = std::make_shared<size_t>(0U);
+	data.edge_property_column_read_count = columns;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "UNMATCHED";
+	expansion.edge_filter.property_predicates = {predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2))};
+	request.expansion = expansion;
+	request.bounds = bounds();
+	for (int retry = 0; retry < 2; ++retry) {
+		size_t rows = 0U;
+		const auto stats = executor.execute(request, [&](const LogicalGraphReadRow &) { ++rows; return true; });
+		EXPECT_EQ(rows, 0U);
+		EXPECT_EQ(stats.edges_scanned, 2U);
+		EXPECT_EQ(*columns, 0U);
+	}
+}

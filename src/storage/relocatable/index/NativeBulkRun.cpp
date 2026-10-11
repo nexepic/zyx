@@ -377,6 +377,7 @@ namespace graph::storage {
 	}
 
 	NativeBulkRunFragment NativeBulkRunFragmentCodec::decode(std::span<const std::byte> bytes) {
+		debug::ScopedPerfTimer timer("native_graph.write.scratch.fragment_decode");
 		if (bytes.size() < RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
 			fail(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable native bulk-run header is truncated");
 		}
@@ -432,6 +433,10 @@ namespace graph::storage {
 		if (result.entries.size() != recordCount) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable native bulk-run record count does not match");
 		}
+		debug::PerfTrace::addValue("native_graph.write.scratch.decoded_fragment_bytes",
+			static_cast<int64_t>(bytes.size()));
+		debug::PerfTrace::addValue("native_graph.write.scratch.decoded_fragment_records",
+			static_cast<int64_t>(result.entries.size()));
 		return result;
 	}
 

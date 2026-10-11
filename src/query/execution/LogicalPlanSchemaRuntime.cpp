@@ -93,18 +93,29 @@ namespace graph::query::execution {
 	} // namespace
 
 	QueryResult LogicalPlanSchemaRuntime::execute(const logical::LogicalOperator &root, size_t maximumIndexes,
-																			 const QueryContext &context) const {
+																			 const QueryContext &context, size_t maximumPropertySourceBytes) const {
 		if (maximumIndexes == 0U) {
 			throw std::invalid_argument("logical schema runtime requires a positive Index result bound");
 		}
-		context.checkGuard();
+		context.checkGuardNow();
+		std::function<void()> checkpoint;
+		if (context.guard) checkpoint = [&context] { context.checkGuardNow(); };
+		std::function<void(size_t)> propertyAdmission;
+		if (maximumPropertySourceBytes != 0U || context.guard) {
+			propertyAdmission = [&context, maximumPropertySourceBytes](size_t bytes) {
+				context.checkGuardNow();
+				if (maximumPropertySourceBytes != 0U && bytes > maximumPropertySourceBytes)
+					throw std::runtime_error("logical schema Property source batch exceeded its byte bound");
+			};
+		}
 		if (root.getType() == logical::LogicalOpType::LOP_CREATE_INDEX) {
 			const auto &create = dynamic_cast<const logical::LogicalCreateIndex &>(root);
 			if (create.getLabel().empty() || create.getPropertyKeys().empty()) {
 				throw std::logic_error("logical CREATE INDEX has an incomplete node Property schema");
 			}
-			const storage::LogicalGraphIndexDefinition definition = backend_.createLogicalNodeIndex(
-					{create.getIndexName(), create.getLabel(), create.getPropertyKeys()});
+			const storage::LogicalGraphIndexDefinition definition = backend_.createLogicalNodeIndexWithCheckpoint(
+					{create.getIndexName(), create.getLabel(), create.getPropertyKeys()},
+					checkpoint, propertyAdmission);
 			if (definition.index_id == 0U || definition.name.empty()) {
 				throw std::logic_error("logical CREATE INDEX backend returned an invalid durable definition");
 			}
@@ -121,9 +132,10 @@ namespace graph::query::execution {
 				create.getMetric().empty()) {
 				throw std::logic_error("logical CREATE VECTOR INDEX has an incomplete or invalid vector schema");
 			}
-			const storage::LogicalGraphIndexDefinition definition = backend_.createLogicalNodeVectorIndex(
+			const storage::LogicalGraphIndexDefinition definition = backend_.createLogicalNodeVectorIndexWithCheckpoint(
 					{create.getIndexName(), create.getLabel(), create.getProperty(),
-					 static_cast<uint32_t>(create.getDimension()), create.getMetric()});
+					 static_cast<uint32_t>(create.getDimension()), create.getMetric()},
+					checkpoint, propertyAdmission);
 			if (definition.index_id == 0U || definition.name.empty() ||
 				definition.kind != storage::LogicalGraphIndexKind::LGIK_VECTOR) {
 				throw std::logic_error("logical CREATE VECTOR INDEX backend returned an invalid durable definition");
@@ -166,10 +178,11 @@ namespace graph::query::execution {
 			if (create.getName().empty() || create.getLabel().empty() || create.getProperties().empty()) {
 				throw std::logic_error("logical CREATE CONSTRAINT has an incomplete schema");
 			}
-			const storage::LogicalGraphConstraintDefinition definition = backend_.createLogicalConstraint(
+			const storage::LogicalGraphConstraintDefinition definition = backend_.createLogicalConstraintWithCheckpoint(
 					{create.getName(), constraintEntityKind(create.getEntityType()),
 					 constraintKind(create.getConstraintType()), create.getLabel(), create.getProperties(),
-					 constraintPropertyType(create.getOptions())});
+					 constraintPropertyType(create.getOptions())},
+					checkpoint, propertyAdmission);
 			if (definition.constraint_id == 0U || definition.name.empty()) {
 				throw std::logic_error("logical CREATE CONSTRAINT backend returned an invalid durable definition");
 			}

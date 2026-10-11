@@ -36,6 +36,7 @@ namespace graph::query {
 
 		// Main data ingestion point
 		void addRow(Row row) { rows_.push_back(std::move(row)); }
+		void reserveRows(size_t capacity) { rows_.reserve(capacity); }
 
 		void setColumns(std::vector<std::string> cols) { columns_ = std::move(cols); }
 

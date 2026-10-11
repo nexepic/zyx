@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <exception>
 #include <fstream>
@@ -17,6 +18,7 @@
 #include <mutex>
 #include <span>
 #include <system_error>
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 
@@ -201,8 +203,19 @@ namespace graph::storage {
 	}
 
 	void StorageIO::recordWrite(size_t bytes) noexcept {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		saturatingAdd(write_bytes_, bytes);
 		saturatingAdd(write_calls_, 1U);
+		if (debug::PerfTrace::areValuesEnabled()) {
+			// Diagnostics must not turn an already completed write into failure.
+			try {
+				debug::PerfTrace::addValue("storage_io.completed_write_bytes",
+					static_cast<int64_t>(std::min<uint64_t>(bytes, std::numeric_limits<int64_t>::max())));
+				debug::PerfTrace::addValue("storage_io.completed_write_calls", 1);
+			} catch (...) {
+				// The authoritative saturating I/O counters above remain available.
+			}
+		}
 	}
 
 	void StorageIO::requireTypedPageKey(BufferPoolPageKey key, size_t size, const char *operation) {
@@ -227,6 +240,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writeAt(uint64_t offset, const void *buf, size_t size) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (!buf || size == 0)
 			return;
 		requireWritable("writeAt");
@@ -241,6 +255,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writeAt(BufferPoolPageKey key, const void *buf, size_t size) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (buf == nullptr) {
 			throw std::invalid_argument("StorageIO::writeAt typed page buffer is null");
 		}
@@ -257,6 +272,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writePages(BufferPoolPageKey firstKey, const void *buf, size_t size) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (buf == nullptr) {
 			throw std::invalid_argument("StorageIO::writePages typed page buffer is null");
 		}
@@ -284,6 +300,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writePagesThrough(BufferPoolPageKey firstKey, const void *buf, size_t size) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (buf == nullptr) {
 			throw std::invalid_argument("StorageIO::writePagesThrough typed page buffer is null");
 		}
@@ -299,6 +316,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> bytes) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (bytes.empty() || byteOffset > RSS_BUFFER_POOL_PAGE_BYTES ||
 			bytes.size() > RSS_BUFFER_POOL_PAGE_BYTES - byteOffset) {
 			throw std::invalid_argument("StorageIO::writeControlRecord range is outside one native page");
@@ -321,6 +339,8 @@ namespace graph::storage {
 	}
 
 	void StorageIO::writeAtUncached(uint64_t offset, const void *buf, size_t size) {
+		// Also invalidate on a failed partial native write.
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (!buf || size == 0U) {
 			return;
 		}
@@ -493,6 +513,7 @@ namespace graph::storage {
 	uint64_t StorageIO::fileSize() const { return fileSizeUncached(); }
 
 	void StorageIO::truncate(uint64_t size) {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		requireWritable("truncate");
 		const uint64_t currentSize = fileSizeUncached();
 		if (size > currentSize) {
@@ -532,6 +553,8 @@ namespace graph::storage {
 	}
 
 	uint64_t StorageIO::fileSizeUncached() const {
+		debug::ScopedPerfTimer sizeTimer("storage_io.file_size");
+		debug::PerfTrace::addValue("storage_io.file_size_calls", 1);
 		file_handle_t nativeHandle = writeFd_ != INVALID_FILE_HANDLE ? writeFd_ : readFd_;
 		if (nativeHandle != INVALID_FILE_HANDLE) {
 			uint64_t size = 0;
@@ -561,6 +584,10 @@ namespace graph::storage {
 			kind != StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE) {
 			throw std::invalid_argument("StorageIO::sync requires a known sync kind");
 		}
+		const char *phase = kind == StorageIOSyncKind::SIOSK_DATA_FENCE ? "storage_io.sync.data_fence" :
+			kind == StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE ? "storage_io.sync.superblock_fence" : "storage_io.sync.general";
+		const bool timed = debug::PerfTrace::isEnabled();
+		const auto started = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->flush();
 		}
@@ -570,6 +597,14 @@ namespace graph::storage {
 			saturatingAdd(data_sync_calls_, 1U);
 		} else if (kind == StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE) {
 			saturatingAdd(superblock_sync_calls_, 1U);
+		}
+		// Observability must not fail an already completed durability fence.
+		try {
+			debug::PerfTrace::addValue(phase, 1);
+			if (timed) debug::PerfTrace::addDuration(phase, static_cast<uint64_t>(
+				std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count()));
+		} catch (...) {
+			// Authoritative saturating sync counters remain available.
 		}
 	}
 
@@ -666,6 +701,7 @@ namespace graph::storage {
 	}
 
 	void StorageIO::discardBufferPoolForExternalRebase() {
+		saturatingAdd(data_mutation_epoch_, 1U);
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->discardForExternalRebase();
 		}

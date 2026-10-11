@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -303,6 +304,36 @@ namespace graph::storage {
 
 	} // namespace
 
+	bool CanonicalPropertyValueCodec::isNullHeader(std::span<const std::byte> header, const size_t encodedBytes) {
+		if (header.size() < HEADER_BYTES || encodedBytes < HEADER_BYTES) {
+			fail(FormatError::FERR_BUFFER_TOO_SMALL, "Property value header is truncated");
+		}
+		ByteReader reader{header.first(HEADER_BYTES)};
+		const auto kind = static_cast<PropertyValueWireKind>(reader.readU8());
+		if (reader.readU8() != 0U) fail(FormatError::FERR_RESERVED_BITS, "Property value has nonzero flags");
+		const uint32_t payloadBytes = reader.readU32();
+		if (kind < PropertyValueWireKind::PVW_NULL || kind > PropertyValueWireKind::PVW_BYTES ||
+			payloadBytes != encodedBytes - HEADER_BYTES || (kind == PropertyValueWireKind::PVW_NULL && payloadBytes != 0U)) {
+			fail(FormatError::FERR_INVALID_HEADER, "Property value header is invalid");
+		}
+		bool validSize = false;
+		switch (kind) {
+			case PropertyValueWireKind::PVW_NULL: validSize = payloadBytes == 0U; break;
+			case PropertyValueWireKind::PVW_BOOLEAN: validSize = payloadBytes == 1U; break;
+			case PropertyValueWireKind::PVW_INTEGER:
+			case PropertyValueWireKind::PVW_DOUBLE:
+			case PropertyValueWireKind::PVW_DATETIME: validSize = payloadBytes == 8U; break;
+			case PropertyValueWireKind::PVW_DATE: validSize = payloadBytes == 4U; break;
+			case PropertyValueWireKind::PVW_DURATION: validSize = payloadBytes == 24U; break;
+			case PropertyValueWireKind::PVW_STRING:
+			case PropertyValueWireKind::PVW_LIST:
+			case PropertyValueWireKind::PVW_MAP:
+			case PropertyValueWireKind::PVW_BYTES: validSize = payloadBytes >= 4U; break;
+		}
+		if (!validSize) fail(FormatError::FERR_INVALID_HEADER, "Property value header has an invalid type length");
+		return kind == PropertyValueWireKind::PVW_NULL;
+	}
+
 	size_t CanonicalPropertyValueCodec::encodedSize(const PropertyValue &value) {
 		return encodedValueSize(value, 0U);
 	}
@@ -316,6 +347,11 @@ namespace graph::storage {
 		ByteReader reader{bytes.subspan(offset)};
 		PropertyValue value = decodeValue(reader, 0U);
 		offset += reader.offset;
+		// Count consumed canonical bytes once at the outer value boundary.
+		// This is decode work, not heap capacity or process RSS.
+		debug::PerfTrace::addValue("native_graph.read.materialized_bytes",
+			reader.offset > static_cast<size_t>(std::numeric_limits<int64_t>::max())
+				? std::numeric_limits<int64_t>::max() : static_cast<int64_t>(reader.offset));
 		return value;
 	}
 

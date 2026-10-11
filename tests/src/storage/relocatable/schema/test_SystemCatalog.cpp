@@ -6,6 +6,8 @@
  * Licensed under the Apache License, Version 2.0.
  */
 
+#include <algorithm>
+#include <stdexcept>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -39,13 +41,6 @@ using graph::PropertyValue;
 
 namespace {
 
-	Superblock initialSuperblock() {
-		Superblock result;
-		result.database_id = DatabaseId(0x5A5958434154414CULL);
-		result.generation = Generation(1U);
-		result.checkpoint_lsn = LogSequenceNumber(1U);
-		return result;
-	}
 
 	NativeGraphWritePlannerOptions plannerOptions() {
 		NativeGraphWritePlannerOptions options;
@@ -205,59 +200,7 @@ namespace {
 
 } // namespace
 
-class SystemCatalogTest : public ::testing::Test {
-protected:
-	std::filesystem::path path_;
-	std::shared_ptr<std::fstream> file_;
-	std::shared_ptr<StorageIO> io_;
-	std::unique_ptr<RelocatableMetadataStore> metadata_;
-	std::unique_ptr<EntityPageStore> entities_;
-	std::unique_ptr<SlottedPagePool> slotted_pages_;
-	std::unique_ptr<EntityLabelSetStore> labels_;
-	std::unique_ptr<PropertyCollectionRootStore> properties_;
-
-	void SetUp() override {
-		const auto uuid = boost::uuids::random_generator()();
-		path_ = std::filesystem::temp_directory_path() / ("system_catalog_" + to_string(uuid));
-		file_ = std::make_shared<std::fstream>(path_,
-											   std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
-		ASSERT_TRUE(file_->is_open());
-		io_ = std::make_shared<StorageIO>(file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
-		metadata_ = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
-		entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
-		slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
-		labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
-		properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
-	}
-
-	void TearDown() override {
-		properties_.reset();
-		labels_.reset();
-		slotted_pages_.reset();
-		entities_.reset();
-		metadata_.reset();
-		io_.reset();
-		if (file_ && file_->is_open()) {
-			file_->close();
-		}
-		file_.reset();
-		std::error_code error;
-		std::filesystem::remove(path_, error);
-	}
-
-	void reopenNativeStores() {
-		properties_.reset();
-		labels_.reset();
-		slotted_pages_.reset();
-		entities_.reset();
-		metadata_.reset();
-		metadata_ = RelocatableMetadataStore::open(io_);
-		entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
-		slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
-		labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
-		properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
-	}
-};
+#include "storage/relocatable/schema/SystemCatalogTestFixture.hpp"
 
 TEST(SystemCatalogIdRangeTest, AcceptsOnlyPersistedDefinitionIdRanges) {
 	EXPECT_FALSE(isSystemCatalogIndexDefinitionId(RSS_SYSTEM_CATALOG_INDEX_ID_FIRST - 1U));
@@ -1611,6 +1554,7 @@ TEST_F(SystemCatalogTest, FailsClosedWhenIndexNameDirectionTargetsAnotherDefinit
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, first.index_id)), FormatException);
 	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionByName(snapshot, first.name)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException);
 	snapshot.release();
 }
 
@@ -1644,6 +1588,7 @@ TEST_F(SystemCatalogTest, FailsClosedWhenIndexSemanticDirectionTargetsAnotherDef
 				 snapshot, first.entity_kind, first.kind, first.label_token_id, first.property_names,
 				 first.vector_dimensions, first.vector_metric)),
 			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException);
 	snapshot.release();
 }
 
@@ -1766,6 +1711,7 @@ TEST_F(SystemCatalogTest, FailsClosedWhenIndexSemanticDirectionIsMissing) {
 
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, index.index_id)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException);
 	snapshot.release();
 }
 
@@ -1940,4 +1886,90 @@ TEST_F(SystemCatalogTest, DropsOnlyTheRequestedCanonicalDefinitionDirections) {
 			  std::optional<ConstraintDefinition>(secondConstraint));
 	EXPECT_EQ(catalog.readConstraintDefinitions(snapshot, 4U), std::vector<ConstraintDefinition>{secondConstraint});
 	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	auto transaction = planner.beginTransaction();
+	auto session = catalog.beginWrite(transaction);
+	const std::string name(128U, 't');
+	const auto token = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
+	const auto propertyToken = session.ensurePropertyToken(name);
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+	auto snapshot = metadata_->openSnapshot();
+	size_t bytes = 0U;
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE,
+		token, [&](size_t next) { bytes = next; throw std::runtime_error("name allocation rejected"); })), std::runtime_error);
+	EXPECT_GE(bytes, name.size());
+	size_t peak = 0U;
+	std::vector<size_t> admissions;
+	const auto found = catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, token,
+		[&](size_t next) { bytes = next; peak = std::max(peak, next); admissions.push_back(next); });
+	ASSERT_TRUE(found.has_value());
+	EXPECT_EQ(found->name, name);
+	ASSERT_GE(admissions.size(), 3U);
+	EXPECT_GE(peak, SystemCatalogTokenKeyCodec::schemaTokenKey(
+		SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, token, name).size() + name.size());
+	EXPECT_EQ(bytes, found->name.capacity());
+	EXPECT_GE(peak, found->name.capacity() + name.size() + 2U);
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyName(snapshot, propertyToken,
+		[](size_t) { throw std::runtime_error("Property name rejected"); })), std::runtime_error);
+	for (int retry = 0; retry < 2; ++retry) {
+		peak = 0U;
+		const auto propertyName = catalog.findPropertyName(snapshot, propertyToken,
+			[&](size_t next) { bytes = next; peak = std::max(peak, next); });
+		ASSERT_TRUE(propertyName.has_value());
+		EXPECT_EQ(*propertyName, name);
+		EXPECT_EQ(bytes, propertyName->capacity());
+		EXPECT_GE(peak, propertyName->capacity() + name.size() + 1U);
+	}
+	size_t missingCalls = 0U;
+	EXPECT_FALSE(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, token + 1U,
+		[&](size_t) { ++missingCalls; }).has_value());
+	EXPECT_EQ(missingCalls, 0U);
+}
+
+TEST_F(SystemCatalogTest, BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots) {
+ BTreePageStore indexes(*slotted_pages_, *metadata_); SystemCatalog catalog(indexes, *metadata_);
+ NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+ const auto kind = SystemCatalogSchemaTokenKind::SCSTK_LABEL;
+ uint64_t token;
+ { auto tx = planner.beginTransaction(); auto session = catalog.beginWrite(tx);
+   token = session.ensureSchemaToken(kind, "Person"); session.finish(); ASSERT_TRUE(tx.commit().committed()); }
+ auto old = metadata_->openSnapshot();
+ const auto reverse = SystemCatalogTokenKeyCodec::schemaTokenKey(kind, token, "Person");
+ const auto ambiguous = SystemCatalogTokenKeyCodec::schemaTokenKey(kind, token, "Other");
+ EXPECT_EQ(catalog.findSchemaToken(old, kind, "Person"), token);
+ { auto tx = planner.beginTransaction();
+   tx.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, ambiguous, token);
+   ASSERT_TRUE(tx.commit().committed()); }
+ { auto corrupt = metadata_->openSnapshot();
+   EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(corrupt, kind, "Person")), FormatException); }
+ { auto tx = planner.beginTransaction();
+   tx.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, ambiguous);
+   tx.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, reverse, token + 1U);
+   ASSERT_TRUE(tx.commit().committed()); }
+ { auto corrupt = metadata_->openSnapshot();
+   EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(corrupt, kind, "Person")), FormatException); }
+ { auto tx = planner.beginTransaction();
+   tx.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, reverse);
+   ASSERT_TRUE(tx.commit().committed()); }
+ { auto missing = metadata_->openSnapshot();
+   EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(missing, kind, "Person")), FormatException); }
+ { auto tx = planner.beginTransaction();
+   tx.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, ambiguous, token);
+   ASSERT_TRUE(tx.commit().committed()); }
+ { auto mismatched = metadata_->openSnapshot();
+   EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(mismatched, kind, "Person")), FormatException); }
+ { auto tx = planner.beginTransaction();
+   tx.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID,
+                            SystemCatalogTokenKeyCodec::schemaNameKey(kind, "Person"), 0U);
+   ASSERT_TRUE(tx.commit().committed()); }
+ { auto zero = metadata_->openSnapshot();
+   EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(zero, kind, "Person")), FormatException); }
+ EXPECT_EQ(catalog.findSchemaToken(old, kind, "Person"), token);
+ old.release();
 }

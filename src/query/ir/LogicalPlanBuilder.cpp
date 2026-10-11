@@ -166,13 +166,13 @@ std::unique_ptr<LogicalOperator> buildSimpleProjection(
 }
 
 /**
- * @brief Append Sort, Skip, Limit to the plan (for aggregate path).
+ * @brief Append Sort, Skip, Limit after an aggregate projection or a retained star scope.
  */
 std::unique_ptr<LogicalOperator> appendSortSkipLimit(
 	const ProjectionBody& body,
 	std::unique_ptr<LogicalOperator> input)
 {
-	// Sort AFTER Aggregate (sort expressions reference output aliases)
+	// Sort in the current output scope; aggregate expressions resolve to aliases.
 	if (!body.orderBy.empty()) {
 		std::vector<LogicalSortItem> sortItems;
 		for (const auto& si : body.orderBy) {
@@ -226,14 +226,8 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildReturn(
 		graph::query::PipelineValidator::ValidationMode::ALLOW_EMPTY);
 
 	if (body.returnStar) {
-		// RETURN * — no projection/aggregation
-		if (body.skip.has_value()) {
-			input = std::make_unique<LogicalSkip>(std::move(input), body.skip.value());
-		}
-		if (body.limit.has_value()) {
-			input = std::make_unique<LogicalLimit>(std::move(input), body.limit.value());
-		}
-		return input;
+		// Star retains the input scope, so sort expressions can read it directly.
+		return appendSortSkipLimit(body, std::move(input));
 	}
 
 	if (body.hasAggregates) {
@@ -265,21 +259,9 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildWith(
 		throw std::runtime_error("WITH clause must follow a MATCH or CREATE clause.");
 	}
 
-	const auto& body = clause.body;
-
-	if (!body.returnStar) {
-		if (body.hasAggregates) {
-			input = buildAggregateProjection(body, std::move(input));
-		} else if (!body.items.empty()) {
-			// Non-aggregate WITH: just project
-			std::vector<LogicalProjectItem> projItems;
-			for (const auto& item : body.items) {
-				projItems.emplace_back(item.expression, item.alias);
-			}
-			input = std::make_unique<LogicalProject>(
-				std::move(input), std::move(projItems), body.distinct);
-		}
-	}
+	// WITH uses the same analyzed projection, ordering, and pagination body as
+	// RETURN. Building only Project/Aggregate silently discarded its window.
+	input = buildReturn(clause.body, std::move(input));
 
 	// Handle WHERE clause in WITH
 	if (clause.where) {

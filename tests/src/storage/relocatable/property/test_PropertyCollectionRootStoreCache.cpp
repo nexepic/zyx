@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 #include "graph/storage/relocatable/entity/NativeReadSession.hpp"
@@ -441,4 +442,258 @@ TEST_F(PropertyCollectionRootStoreCacheTest, CursorPropagatesCancellationBeforeD
 	PropertyCollectionRootScanCursor cursor = properties_->openScanCursor(snapshot_, &cancellation);
 	EXPECT_THROW(static_cast<void>(cursor.readEntityOptional(snapshot_, first_key_)), std::runtime_error);
 	EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, 0U);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CursorAdmissionRejectsAndCanRetryWithoutStaleOutput) {
+	const std::array<EntityPropertyKey, 3U> keys{first_key_, second_key_,
+		{EntityPropertyOwnerKind::EPOK_NODE, 1003U}};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 6U> values;
+	auto cursor = properties_->openScanCursor(snapshot_);
+	size_t calls = 0U;
+	const SelectedPropertyReadAdmission reject = [&](size_t) {
+		if (++calls == 2U) throw std::runtime_error("selected batch budget exhausted");
+	};
+	EXPECT_THROW(cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true, &reject), std::runtime_error);
+	EXPECT_EQ(calls, 2U);
+	size_t accepted = 0U;
+	const SelectedPropertyReadAdmission accept = [&](size_t bytes) { accepted += bytes; };
+	cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true, &accept);
+	ASSERT_TRUE(values[0].has_value());
+	ASSERT_TRUE(values[3].has_value());
+	EXPECT_EQ(*values[0], first_root_.entries.front());
+	EXPECT_EQ(*values[3], second_root_.entries.front());
+	for (size_t index: {1U, 2U, 4U, 5U}) EXPECT_FALSE(values[index].has_value());
+	EXPECT_GT(accepted, 0U);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor) {
+	auto cursor = properties_->openScanCursor(snapshot_);
+	for (bool useCursor : {false, true}) {
+		SCOPED_TRACE(useCursor);
+		size_t calls = 0U;
+		size_t requested = 0U;
+		const SelectedPropertyReadAdmission reject = [&](size_t bytes) {
+			++calls;
+			requested = bytes;
+			throw std::length_error("full Property decode allowance exhausted");
+		};
+		const auto read = [&](const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slots = nullptr) {
+			return useCursor ? cursor.readEntity(snapshot_, first_key_, admission, slots)
+						 : properties_->readEntity(snapshot_, first_key_, admission, slots);
+		};
+		EXPECT_THROW(static_cast<void>(read(&reject)), std::length_error);
+		EXPECT_EQ(calls, 1U);
+		EXPECT_GT(requested, std::string("first shared Property root").size());
+		const SelectedPropertyReadAdmission accept = [&](size_t bytes) {
+			++calls;
+			EXPECT_EQ(bytes, requested);
+		};
+		EXPECT_EQ(read(&accept), first_root_);
+		EXPECT_EQ(calls, 2U);
+		const EntityPropertyKey missing{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+		const auto optional = [&](EntityPropertyKey key, const SelectedPropertyReadAdmission *admission, const SelectedPropertyReadAdmission *slots = nullptr) {
+			return useCursor ? cursor.readEntityOptional(snapshot_, key, admission, slots)
+						 : properties_->readEntityOptional(snapshot_, key, admission, slots);
+		};
+		EXPECT_FALSE(optional(missing, &reject));
+		EXPECT_EQ(calls, 2U);
+		EXPECT_THROW(static_cast<void>(optional(first_key_, &reject)), std::length_error);
+		EXPECT_EQ(optional(first_key_, &accept), std::optional(first_root_));
+		EXPECT_EQ(calls, 4U);
+		size_t slotCalls = 0U, retainedSlots = 0U;
+		const SelectedPropertyReadAdmission rejectSlots = [&](size_t bytes) {
+			++slotCalls; retainedSlots = bytes; throw std::length_error("root slots rejected");
+		};
+		EXPECT_FALSE(optional(missing, nullptr, &rejectSlots));
+		EXPECT_EQ(slotCalls, 0U);
+		EXPECT_THROW(static_cast<void>(optional(first_key_, nullptr, &rejectSlots)), std::length_error);
+		EXPECT_EQ(slotCalls, 1U);
+		EXPECT_EQ(retainedSlots, useCursor
+				? RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + EntityPropertyCollectionRootCodec::encode(first_root_).size()
+				: first_root_.entries.size() * sizeof(PropertyCollectionRootEntry));
+		EXPECT_THROW(static_cast<void>(read(nullptr, &rejectSlots)), std::length_error);
+		EXPECT_EQ(slotCalls, 2U);
+		const SelectedPropertyReadAdmission acceptSlots = [&](size_t bytes) { retainedSlots = bytes; };
+		for (int retry = 0; retry < 2; ++retry) {
+			const auto required = read(nullptr, &acceptSlots);
+			EXPECT_EQ(required, first_root_);
+			EXPECT_EQ(retainedSlots, required.entries.capacity() * sizeof(PropertyCollectionRootEntry));
+			const auto output = optional(first_key_, nullptr, &acceptSlots);
+			ASSERT_TRUE(output);
+			EXPECT_EQ(*output, first_root_);
+			EXPECT_EQ(retainedSlots, output->entries.capacity() * sizeof(PropertyCollectionRootEntry));
+		}
+	}
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry) {
+	class Switch final : public CancellationCheckpoint {
+	public:
+		bool cancelled = false;
+		void check() const override { if (cancelled) throw std::runtime_error("cancelled during decode"); }
+	} cancellation;
+	const std::array<EntityPropertyKey, 1U> keys{first_key_};
+	const std::array<uint32_t, 1U> tokens{3U};
+	const SelectedPropertyReadAdmission cancel = [&](size_t) { cancellation.cancelled = true; };
+	for (const int mode: {0, 1, 2}) {
+		const bool combined = mode != 0;
+		cancellation.cancelled = false;
+		auto cursor = properties_->openScanCursor(snapshot_, &cancellation);
+		std::array<std::optional<PropertyCollectionRootEntry>, 1U> values{second_root_.entries.front()};
+		std::array<std::optional<size_t>, 1U> counts{999U};
+		const auto read = [&](const SelectedPropertyReadAdmission *admission) {
+			if (mode == 2) properties_->readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts, &cancellation, admission);
+			else if (combined) cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts, admission);
+			else cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true, admission);
+		};
+		EXPECT_THROW(read(&cancel), std::runtime_error);
+		EXPECT_FALSE(values[0].has_value());
+		if (combined) EXPECT_FALSE(counts[0].has_value());
+		cancellation.cancelled = false;
+		read(nullptr);
+		ASSERT_TRUE(values[0].has_value());
+		EXPECT_EQ(*values[0], first_root_.entries.front());
+		if (combined) EXPECT_EQ(counts[0], first_root_.entries.size());
+	}
+	cancellation.cancelled = false;
+	auto cursor = properties_->openScanCursor(snapshot_, &cancellation);
+	EXPECT_THROW(static_cast<void>(cursor.readEntity(snapshot_, first_key_, &cancel)), std::runtime_error);
+	cancellation.cancelled = false;
+	EXPECT_EQ(cursor.readEntity(snapshot_, first_key_).entries, first_root_.entries);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor) {
+	auto cursor = properties_->openScanCursor(snapshot_);
+	const std::array keys{first_key_};
+	std::array<std::optional<size_t>, 1U> counts{999U};
+	size_t requested = 0U;
+	const SelectedPropertyReadAdmission rejectLocations = [&](size_t bytes) {
+		requested = bytes; throw std::length_error("count owner locations rejected");
+	};
+	EXPECT_THROW(cursor.readEntityPropertyCountsSorted(snapshot_, keys, counts, &rejectLocations), std::length_error);
+	EXPECT_FALSE(counts[0]);
+	EXPECT_EQ(requested, sizeof(std::optional<EntityPropertyLocation>));
+	const SelectedPropertyReadAdmission rejectOrder = [&](size_t bytes) {
+		if (bytes > sizeof(std::optional<EntityPropertyLocation>)) throw std::length_error("count owner order rejected");
+	};
+	EXPECT_THROW(cursor.readEntityPropertyCountsSorted(snapshot_, keys, counts, &rejectOrder), std::length_error);
+	EXPECT_FALSE(counts[0]);
+	for (int retry = 0; retry < 2; ++retry) {
+		size_t retained = 0U, peak = 0U;
+		const SelectedPropertyReadAdmission accept = [&](size_t bytes) { retained = bytes; peak = std::max(peak, bytes); };
+		EXPECT_NO_THROW(cursor.readEntityPropertyCountsSorted(snapshot_, keys, counts, &accept));
+		EXPECT_EQ(counts[0], first_root_.entries.size());
+		EXPECT_GE(peak, sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t));
+		EXPECT_EQ(retained, 0U);
+	}
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage) {
+	NativeReadSession session;
+	auto &cursor = session.propertyCursor(*properties_, snapshot_);
+	EXPECT_TRUE(cursor.readEntityPropertyOptional(snapshot_, first_key_, 3U));
+	const auto before = io_->bufferPoolStats();
+	const bool enabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const std::array keys{first_key_, second_key_};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 4U> values;
+	std::array<std::optional<size_t>, 2U> counts;
+	for (int retry = 0; retry < 2; ++retry) {
+		cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts);
+		EXPECT_EQ(values[0], first_root_.entries.front());
+		EXPECT_EQ(values[3], second_root_.entries.front());
+		EXPECT_FALSE(values[1]);
+		EXPECT_FALSE(values[2]);
+		EXPECT_EQ(counts[0], first_root_.entries.size());
+		EXPECT_EQ(counts[1], second_root_.entries.size());
+		const auto after = io_->bufferPoolStats();
+		EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes);
+		EXPECT_EQ(after.misses, before.misses);
+
+	}
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesEnabled);
+	graph::debug::PerfTrace::setEnabled(enabled);
+	EXPECT_FALSE(trace.contains("native_graph.read.property_combined_page_acquisition"));
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CombinedPinnedReadRetainsOwnedImageForSubsequentCalls) {
+	auto cursor = properties_->openScanCursor(snapshot_);
+	const std::array keys{first_key_, second_key_};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 4U> values;
+	std::array<std::optional<size_t>, 2U> counts;
+	const SelectedPropertyReadAdmission reject = [](size_t bytes) {
+		if (bytes >= RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) throw std::length_error("retained image budget");
+	};
+	// Borrowing the pool image must not require a full-page cache copy.
+	for (int retry = 0; retry < 2; ++retry) {
+		EXPECT_NO_THROW(cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts,
+				nullptr, &reject));
+		EXPECT_EQ(values[0], first_root_.entries.front());
+		EXPECT_EQ(values[3], second_root_.entries.front());
+		EXPECT_EQ(counts[0], first_root_.entries.size());
+		EXPECT_EQ(counts[1], second_root_.entries.size());
+	}
+	cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts);
+	const auto before = io_->bufferPoolStats();
+	const bool enabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	for (int retry = 0; retry < 2; ++retry) {
+		cursor.readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts);
+		EXPECT_EQ(values[0], first_root_.entries.front());
+		EXPECT_EQ(values[3], second_root_.entries.front());
+		EXPECT_EQ(counts[0], first_root_.entries.size());
+		EXPECT_EQ(counts[1], second_root_.entries.size());
+		EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+	}
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesEnabled);
+	graph::debug::PerfTrace::setEnabled(enabled);
+	EXPECT_FALSE(trace.contains("native_graph.read.property_combined_page_acquisition"));
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry) {
+ auto cursor = properties_->openScanCursor(snapshot_);
+ const std::array keys{first_key_, second_key_};
+ const std::array<uint32_t, 2> tokens{3U, 5U};
+ std::array<std::optional<PropertyCollectionRootEntry>, 4> values;
+ const bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+ graph::debug::PerfTrace::reset(); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true);
+ const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+ graph::debug::PerfTrace::setValueCollectionEnabled(enabled);
+ EXPECT_EQ(values[0], first_root_.entries[0]); EXPECT_EQ(values[3], second_root_.entries[0]);
+ EXPECT_FALSE(values[1]); EXPECT_FALSE(values[2]);
+ ASSERT_TRUE(trace.contains("native_graph.read.property_selected_borrowed_owners"));
+ EXPECT_EQ(trace.at("native_graph.read.property_selected_borrowed_owners").totalValue, 2);
+ EXPECT_FALSE(trace.contains("native_graph.read.property_selected_slot_copy_bytes"));
+ EXPECT_FALSE(trace.contains("native_graph.read.shared_page_known_location_copy"));
+ ASSERT_TRUE(trace.contains("native_graph.read.property_selected_last_page_cache_copy_bytes"));
+ EXPECT_GT(trace.at("native_graph.read.property_selected_last_page_cache_copy_bytes").totalValue, 0);
+ const auto before = io_->bufferPoolStats();
+ cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true);
+ EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+ EXPECT_EQ(values[0], first_root_.entries[0]); EXPECT_EQ(values[3], second_root_.entries[0]);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission) {
+ io_->disableBufferPool();
+ auto cursor = properties_->openScanCursor(snapshot_);
+ const std::array keys{first_key_, second_key_};
+ const std::array<uint32_t, 2> tokens{3U, 5U};
+ std::array<std::optional<PropertyCollectionRootEntry>, 4> values;
+ const SelectedPropertyReadAdmission reject = [](size_t) { throw std::length_error("selected output budget"); };
+ EXPECT_THROW(cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true, &reject), std::length_error);
+ EXPECT_NO_THROW(cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true));
+ EXPECT_EQ(values[0], first_root_.entries[0]); EXPECT_EQ(values[3], second_root_.entries[0]);
+ EXPECT_FALSE(values[1]); EXPECT_FALSE(values[2]);
 }

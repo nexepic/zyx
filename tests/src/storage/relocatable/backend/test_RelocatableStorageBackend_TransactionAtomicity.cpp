@@ -36,7 +36,9 @@ TEST_F(RelocatableStorageBackendTest, OrdinaryGraphMutationsPublishSnapshotPinne
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
 	RelocatableStorageBackend backend(std::move(options));
 	backend.open();
-	EXPECT_EQ(backend.readLogicalGraphCardinalityStatistics(), std::nullopt);
+	// initializeNew publishes complete statistics before exposing the new file.
+	EXPECT_EQ(backend.readLogicalGraphCardinalityStatistics(),
+			  std::optional<LogicalGraphCardinalityStatistics>({0U, 0U}));
 
 	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"Stats"}, {}}, {{"Stats"}, {}}});
 	ASSERT_EQ(nodes.size(), 2U);

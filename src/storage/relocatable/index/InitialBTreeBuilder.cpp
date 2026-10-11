@@ -56,17 +56,35 @@ namespace graph::storage {
 			return BTreePage::create(owner, header);
 		}
 
-		[[nodiscard]] bool canInsert(BTreePage &page, const BTreePageEntry &entry) {
-			try {
-				page.insert(entry);
-				return true;
-			} catch (const FormatException &error) {
-				if (error.error() != FormatError::FERR_INVALID_STATE) {
-					throw;
+		// The planner only appends ordered entries. Derive the exact next encoded
+		// size from the last/new pair, with a singleton at each restart boundary.
+		// No temporary packed pages or repeated scans of growing prefixes.
+		class AppendSizer {
+		public:
+			void reset() { bytes_ = RSS_BTREE_PACKED_HEADER_BYTES; }
+			[[nodiscard]] bool appendFits(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
+												 BTreeLeafValueLayout layout) {
+				static_assert(RSS_BTREE_PACKED_RESTART_INTERVAL > 1U);
+				const size_t ordinal = entries.size() - 1U;
+				size_t increment;
+				if (ordinal % RSS_BTREE_PACKED_RESTART_INTERVAL == 0U) {
+					increment = PackedBTreePageCodec::encodedSize(kind, entries.last(1U), layout) - RSS_BTREE_PACKED_HEADER_BYTES;
+				} else {
+					const auto pair = entries.last(2U);
+					increment = PackedBTreePageCodec::encodedSize(kind, pair, layout) -
+						PackedBTreePageCodec::encodedSize(kind, pair.first(1U), layout);
 				}
-				return false;
+				if (increment > std::numeric_limits<size_t>::max() - bytes_) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable initial B+Tree append size overflowed");
+				}
+				bytes_ += increment;
+				constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
+						2U * RSS_SLOTTED_PAGE_SLOT_BYTES - RSS_BTREE_PAGE_HEADER_BYTES;
+				return bytes_ <= capacity;
 			}
-		}
+		private:
+			size_t bytes_ = RSS_BTREE_PACKED_HEADER_BYTES;
+		};
 
 		void appendNode(InitialBTreePlan &plan, InitialBTreePlanNode node) { plan.nodes.push_back(std::move(node)); }
 
@@ -132,8 +150,9 @@ namespace graph::storage {
 		}
 		InitialBTreePlan result;
 		result.leaf_value_layout = leafValueLayout;
-		BTreePage leaf = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0U, leafValueLayout);
+		static_cast<void>(measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0U, leafValueLayout));
 		InitialBTreePlanNode node;
+		AppendSizer leafSizer;
 		std::vector<size_t> levelNodes;
 		for (const BTreePageEntry &entry: entries) {
 			const bool invalidValue = leafValueLayout == BTreeLeafValueLayout::BLVL_U64 ? entry.value_or_child == 0U
@@ -143,7 +162,9 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable initial B+Tree entries have an invalid leaf value, key, or order");
 			}
-			if (!canInsert(leaf, entry)) {
+			node.leaf_entries.push_back(entry);
+			if (!leafSizer.appendFits(BTreeNodeKind::BPN_LEAF, node.leaf_entries, leafValueLayout)) {
+				node.leaf_entries.pop_back();
 				if (node.leaf_entries.empty()) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable initial B+Tree entry cannot fit in an empty leaf");
@@ -151,13 +172,14 @@ namespace graph::storage {
 				node.first_key = node.leaf_entries.front().key;
 				appendNode(result, std::move(node));
 				levelNodes.push_back(result.nodes.size() - 1U);
-				leaf = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0U, leafValueLayout);
 				node = {};
-				// The fresh measurement page has the same validated layout as the
-				// page that rejected this entry only after it contained prior entries.
-				leaf.insert(entry);
+				leafSizer.reset();
+				node.leaf_entries.push_back(entry);
+				if (!leafSizer.appendFits(BTreeNodeKind::BPN_LEAF, node.leaf_entries, leafValueLayout)) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "relocatable initial B+Tree entry cannot fit in an empty leaf");
+				}
 			}
-			node.leaf_entries.push_back(entry);
 		}
 		node.first_key = node.leaf_entries.front().key;
 		appendNode(result, std::move(node));
@@ -168,8 +190,9 @@ namespace graph::storage {
 		while (levelNodes.size() > 1U) {
 			++level;
 			std::vector<size_t> nextLevel;
-			BTreePage parent =
-					measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level, BTreeLeafValueLayout::BLVL_U64);
+			static_cast<void>(measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level, BTreeLeafValueLayout::BLVL_U64));
+			std::vector<BTreePageEntry> separators;
+			AppendSizer parentSizer;
 			InitialBTreePlanNode parentNode;
 			parentNode.level = level;
 			for (const size_t childOrdinal: levelNodes) {
@@ -182,10 +205,12 @@ namespace graph::storage {
 				}
 				// Use the maximum varint width during planning. Metadata-assigned
 				// logical Page IDs are not guaranteed to fit in the one-byte test ID.
-				if (!canInsert(parent, {childFirstKey, std::numeric_limits<uint64_t>::max()})) {
+				separators.push_back({childFirstKey, std::numeric_limits<uint64_t>::max()});
+				if (!parentSizer.appendFits(BTreeNodeKind::BPN_INTERNAL, separators, BTreeLeafValueLayout::BLVL_U64)) {
 					appendNode(result, std::move(parentNode));
 					nextLevel.push_back(result.nodes.size() - 1U);
-					parent = measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level, BTreeLeafValueLayout::BLVL_U64);
+					separators.clear();
+					parentSizer.reset();
 					parentNode = {};
 					parentNode.level = level;
 					parentNode.first_key = childFirstKey;

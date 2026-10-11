@@ -39,6 +39,8 @@ namespace graph::storage {
 		// Validation is performed in bounded selected-column batches rather than
 		// reopening one complete Entity for every sorted support-tree entry.
 		size_t validation_batch_entries = 256U;
+		std::function<void()> checkpoint{};
+		std::function<void(size_t)> property_admission{};
 	};
 
 	// Builds a bounded, rewindable native support-tree plan without publishing

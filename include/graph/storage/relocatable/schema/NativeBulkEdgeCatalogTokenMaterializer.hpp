@@ -54,6 +54,7 @@ namespace graph::storage {
 
 	class NativeBulkEdgeCatalogTokenMaterializer final {
 	public:
+		[[nodiscard]] static OrderedBTreeEntrySource overlayEntries(OrderedBTreeEntrySource existing, OrderedBTreeEntrySource updates);
 		[[nodiscard]] static NativeBulkEdgeCatalogTokenMaterialization
 		prepare(SystemCatalog &catalog, const MetadataSnapshotPin &snapshot,
 				const OrderedBTreeEntrySource &sorted_token_entries,

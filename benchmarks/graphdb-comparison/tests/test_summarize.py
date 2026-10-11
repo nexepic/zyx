@@ -398,3 +398,42 @@ def test_build_quality_gate_report_rejects_baseline_with_mismatched_provenance()
 
     failed_gate_names = {gate["name"] for gate in report["gates"] if gate["status"] == "failed"}
     assert "baseline_environment_provenance" in failed_gate_names
+
+
+def test_quality_gates_allow_explicit_uninstrumented_measurement_only():
+    from runner.stats import summarize_samples
+    rows = summarize_samples([Sample("zyx", "load_nodes_edges", "smoke", 0, 10.0, equivalent_mode="api")])
+    environment = {"benchmark_schema_version": 1, "databases": ["zyx"],
+                   "execution_mode": "warm", "git_commit": "abc123", "git_dirty": False,
+                   "iterations": 1, "profile": "scan", "required_workloads": ["load_nodes_edges"],
+                   "scale": "smoke", "seed": 42, "warmup": 0, "zyx_emit_profile": False}
+    report = build_quality_gate_report(rows, environment, [])
+    assert report["status"] == "passed"
+    assert next(g for g in report["gates"] if g["name"] == "zyx_profile_coverage")["status"] == "skipped"
+    for setting in (True, "false", None):
+        environment["zyx_emit_profile"] = setting
+        report = build_quality_gate_report(rows, environment, [])
+        assert next(g for g in report["gates"] if g["name"] == "zyx_profile_coverage")["status"] == "failed"
+    environment["zyx_emit_profile"] = False
+    environment["iterations"] = 2
+    report = build_quality_gate_report(rows, environment, [])
+    assert next(g for g in report["gates"] if g["name"] == "expected_sample_counts")["status"] == "failed"
+
+
+def test_baseline_provenance_rejects_mixed_diagnostic_modes():
+    from runner.stats import summarize_samples
+    rows = summarize_samples([Sample("zyx", "load_nodes_edges", "smoke", 0, 10.0, equivalent_mode="api")])
+    environment = {"benchmark_schema_version": 1, "databases": ["zyx"],
+                   "dataset_manifest": {}, "execution_mode": "warm", "iterations": 1,
+                   "measurement_semantics": {}, "platform": "test", "profile": "scan",
+                   "required_workloads": ["load_nodes_edges"], "scale": "smoke", "seed": 42,
+                   "system": "test", "thread_contract": "default", "threads": None, "warmup": 0,
+                   "git_commit": "test", "git_dirty": False, "zyx_emit_profile": False}
+    for setting, expected in ((False, "passed"), (True, "failed"), ("false", "failed")):
+        baseline = dict(environment, zyx_emit_profile=setting)
+        report = build_quality_gate_report(rows, environment, [], rows, baseline)
+        gate = next(g for g in report["gates"] if g["name"] == "baseline_environment_provenance")
+        assert gate["status"] == expected
+    baseline = environment.copy(); baseline.pop("zyx_emit_profile")
+    report = build_quality_gate_report(rows, environment, [], rows, baseline)
+    assert next(g for g in report["gates"] if g["name"] == "baseline_environment_provenance")["status"] == "failed"

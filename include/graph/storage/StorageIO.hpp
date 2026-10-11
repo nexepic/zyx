@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include "PwriteHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
@@ -303,6 +304,8 @@ namespace graph::storage {
 		// or device-level write amplification. They are transient and relaxed-atomic
 		// so concurrent positioned I/O can be calibrated without serialization.
 		[[nodiscard]] StorageIOStats stats() const;
+		// Monotonic cache invalidation identity; diagnostic resets never reset it.
+		[[nodiscard]] uint64_t dataMutationEpoch() const { return data_mutation_epoch_.load(std::memory_order_relaxed); }
 		void resetStats();
 
 	private:
@@ -344,6 +347,7 @@ namespace graph::storage {
 		std::atomic<uint64_t> reserved_bytes_{0U};
 		mutable std::atomic<uint64_t> read_calls_{0U};
 		std::atomic<uint64_t> write_calls_{0U};
+		std::atomic<uint64_t> data_mutation_epoch_{0U};
 		std::atomic<uint64_t> reserve_calls_{0U};
 		std::atomic<uint64_t> sync_calls_{0U};
 		std::atomic<uint64_t> data_sync_calls_{0U};

@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -122,6 +123,35 @@ namespace graph::storage {
 		createLogicalNodeIndexes(std::span<const LogicalGraphNodeIndexCreateRequest> requests) = 0;
 		[[nodiscard]] virtual LogicalGraphIndexDefinition
 		createLogicalNodeVectorIndex(const LogicalGraphNodeVectorIndexCreateRequest &request) = 0;
+		// Legacy backends check entry only. Native implementations also check during
+		// construction and before publication; never check after a durable commit.
+		// Native propertyAdmission reports the absolute encoded selected-source bytes
+		// of one bounded read batch before payload copies. Legacy defaults do not
+		// implement this source admission; they retain their existing creation path.
+		[[nodiscard]] virtual LogicalGraphIndexDefinition createLogicalNodeIndexWithCheckpoint(
+			const LogicalGraphNodeIndexCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) {
+			if (checkpoint) checkpoint();
+			return createLogicalNodeIndex(request);
+		}
+		[[nodiscard]] virtual std::vector<LogicalGraphIndexDefinition> createLogicalNodeIndexesWithCheckpoint(
+			std::span<const LogicalGraphNodeIndexCreateRequest> requests, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) {
+			if (checkpoint) checkpoint();
+			return createLogicalNodeIndexes(requests);
+		}
+		[[nodiscard]] virtual LogicalGraphIndexDefinition createLogicalNodeVectorIndexWithCheckpoint(
+			const LogicalGraphNodeVectorIndexCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) {
+			if (checkpoint) checkpoint();
+			return createLogicalNodeVectorIndex(request);
+		}
+		[[nodiscard]] virtual LogicalGraphConstraintDefinition createLogicalConstraintWithCheckpoint(
+			const LogicalGraphConstraintCreateRequest &request, const std::function<void()> &checkpoint,
+			const std::function<void(size_t)> &propertyAdmission = {}) {
+			if (checkpoint) checkpoint();
+			return createLogicalConstraint(request);
+		}
 		[[nodiscard]] virtual bool dropLogicalIndexByName(std::string_view name) = 0;
 		[[nodiscard]] virtual bool dropLogicalNodeIndexBySchema(std::string_view label,
 																		 std::string_view propertyKey) = 0;

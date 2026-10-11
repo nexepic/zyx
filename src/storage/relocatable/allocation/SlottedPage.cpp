@@ -256,6 +256,10 @@ namespace graph::storage {
 		return page;
 	}
 
+	void SlottedPage::validateOwner(const PageOwnerHeader &owner) {
+		validateSlottedPageOwner(owner);
+	}
+
 	SlottedPage SlottedPage::create(const PageOwnerHeader &owner) {
 		validateSlottedPageOwner(owner);
 		SlottedPage page = create(owner.page_id, owner.generation);
@@ -463,9 +467,20 @@ namespace graph::storage {
 		return insertLocked(value);
 	}
 
-	std::vector<std::byte> SlottedPage::read(const SlottedSlotReference &reference) const {
+	size_t SlottedPage::retainedBufferBytes() const {
 		std::scoped_lock lock(latch_);
-		return readLocked(reference);
+		return bytes_.capacity();
+	}
+
+	std::vector<std::byte> SlottedPage::read(const SlottedSlotReference &reference,
+			const std::function<void(size_t)> &bufferAdmission) const {
+		std::scoped_lock lock(latch_);
+		validateReferenceLocked(reference);
+		const Slot slot = readSlotLocked(reference.slot_id);
+		if (bufferAdmission) bufferAdmission(slot.value_bytes);
+		auto result = readLocked(reference);
+		if (bufferAdmission) bufferAdmission(result.capacity());
+		return result;
 	}
 
 	void SlottedPage::overwrite(const SlottedSlotReference &reference, std::span<const std::byte> value) {

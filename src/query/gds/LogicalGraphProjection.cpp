@@ -14,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -30,6 +31,7 @@ namespace graph::query::gds {
 		// correctness across pages, while this cap prevents a supernode from
 		// becoming an unbounded projection staging buffer.
 		constexpr size_t MAXIMUM_ADJACENCY_BATCH = 256U;
+		constexpr size_t MAXIMUM_WEIGHT_COLUMN_BATCH = 256U;
 
 		[[nodiscard]] bool containsLabel(const storage::LogicalGraphNode &node,
 												const std::unordered_set<std::string_view> &labels) {
@@ -68,12 +70,6 @@ namespace graph::query::gds {
 					return std::tie(left.target_node_id, left.relationship_id, left.synthetic_reverse) <
 						   std::tie(right.target_node_id, right.relationship_id, right.synthetic_reverse);
 				});
-			}
-		}
-
-		void checkBuildCheckpoint(const LogicalProjectionBuildCheckpoint &checkpoint) {
-			if (checkpoint) {
-				checkpoint();
 			}
 		}
 
@@ -122,7 +118,15 @@ namespace graph::query::gds {
 	LogicalGraphProjection LogicalGraphProjection::build(const storage::LogicalGraphReadSnapshot &snapshot,
 			const LogicalGraphProjectionSpec &spec, const LogicalProjectionBuildBounds bounds,
 			const LogicalProjectionBuildCheckpoint &checkpoint) {
-		checkBuildCheckpoint(checkpoint);
+		const auto buildFence = snapshot.mutationFence();
+		const auto checkBuild = [&] {
+			if (checkpoint) checkpoint();
+			const auto currentFence = snapshot.mutationFence();
+			if (buildFence && currentFence != buildFence) {
+				throw std::runtime_error("logical projection snapshot changed during construction");
+			}
+		};
+		checkBuild();
 		if (spec.name.empty()) {
 			throw std::invalid_argument("logical projection name must not be empty");
 		}
@@ -174,23 +178,29 @@ namespace graph::query::gds {
 
 		// Consume the Node cursor page by page. A physical page may be smaller than
 		// the logical projection bound, so rejecting `may_have_more` from the first
-		// call would incorrectly truncate valid multi-page projections. The total
-		// record and metadata budgets remain enforced across the complete cursor.
-		std::vector<storage::LogicalGraphNode> scannedNodes;
-		scannedNodes.reserve(bounds.maximum_nodes);
+		// call would incorrectly truncate valid multi-page projections. Keep only
+		// selected logical IDs: retaining every scanned Node object until adjacency
+		// construction would duplicate transient labels/metadata and require a
+		// second full pass over the scan results.
+		size_t scannedNodeCount = 0U;
+		uint64_t previousNodeId = 0U;
 		uint64_t afterNodeId = 0U;
 		size_t metadataPagesVisited = 0U;
 		for (;;) {
-			if (scannedNodes.size() == bounds.maximum_nodes) {
+			if (scannedNodeCount == bounds.maximum_nodes) {
 				throw std::runtime_error("logical projection exceeded its bounded Node scan");
 			}
-			const size_t remainingNodes = bounds.maximum_nodes - scannedNodes.size();
+			const size_t remainingNodes = bounds.maximum_nodes - scannedNodeCount;
 			const size_t remainingMetadata = bounds.maximum_metadata_pages - metadataPagesVisited;
 			if (remainingMetadata == 0U) {
 				throw std::runtime_error("logical projection exceeded its bounded metadata scan");
 			}
-			const storage::LogicalGraphNodePage page =
-					snapshot.scanNodesAfter(afterNodeId, remainingNodes, remainingMetadata);
+			// Projection construction needs only identity and (when requested) labels
+			// at this stage. Keep the scan shape narrow so native readers do not open
+			// every Node's Property root before adjacency filtering begins.
+			const storage::LogicalGraphNodePage page = snapshot.scanNodesAfter(
+					afterNodeId, remainingNodes, remainingMetadata,
+					storage::EntityReadShape{.include_labels = !labelFilter.empty()});
 			if (page.nodes.size() > remainingNodes || page.metadata_pages_visited > remainingMetadata) {
 				throw std::runtime_error("logical projection exceeded its bounded Node scan");
 			}
@@ -198,10 +208,15 @@ namespace graph::query::gds {
 				throw std::runtime_error("logical projection returned an empty nonterminal Node page");
 			}
 			for (const storage::LogicalGraphNode &node: page.nodes) {
-				if (node.node_id == 0U || (!scannedNodes.empty() && node.node_id <= scannedNodes.back().node_id)) {
+				checkBuild();
+				if (node.node_id == 0U || node.node_id <= previousNodeId) {
 					throw std::runtime_error("logical projection snapshot returned unordered Nodes");
 				}
-				scannedNodes.push_back(node);
+				previousNodeId = node.node_id;
+				++scannedNodeCount;
+				if (containsLabel(node, labelFilter)) {
+					projection.node_ids_.push_back(node.node_id);
+				}
 			}
 			if (page.metadata_pages_visited > std::numeric_limits<size_t>::max() - metadataPagesVisited) {
 				throw std::overflow_error("logical projection metadata-page count overflowed");
@@ -216,18 +231,7 @@ namespace graph::query::gds {
 			afterNodeId = page.nodes.back().node_id;
 		}
 		std::unordered_set<uint64_t> selectedNodes;
-		selectedNodes.reserve(scannedNodes.size());
-		uint64_t previousNodeId = 0U;
-		for (const storage::LogicalGraphNode &node: scannedNodes) {
-			checkBuildCheckpoint(checkpoint);
-			if (node.node_id == 0U || node.node_id <= previousNodeId) {
-				throw std::runtime_error("logical projection snapshot returned unordered or invalid Nodes");
-			}
-			previousNodeId = node.node_id;
-			if (containsLabel(node, labelFilter)) {
-				projection.node_ids_.push_back(node.node_id);
-			}
-		}
+		selectedNodes.reserve(projection.node_ids_.size());
 		selectedNodes.insert(projection.node_ids_.begin(), projection.node_ids_.end());
 
 		// Keep topology reads separate from Property reads.  Unweighted projections
@@ -238,9 +242,7 @@ namespace graph::query::gds {
 			const LogicalRelationshipProjection *relationship = nullptr;
 			double weight = 1.0;
 		};
-		std::vector<PendingRelationship> pending;
-		pending.reserve(projection.node_ids_.size());
-		std::map<std::string, std::vector<size_t>> weightColumns;
+		std::map<std::string, size_t> weightColumnBytes;
 		for (const uint64_t nodeId: projection.node_ids_) {
 			// A physical adjacency page may be smaller than the logical per-Node
 			// budget. Consume its continuation until the bounded budget is exhausted;
@@ -254,16 +256,20 @@ namespace graph::query::gds {
 				if (remaining == 0U) {
 					throw std::runtime_error("logical projection exceeded its bounded adjacency scan");
 				}
+				const size_t pageRecords = std::min(remaining, MAXIMUM_ADJACENCY_BATCH);
 				const storage::LogicalGraphAdjacencyTopologyPage page = snapshot.scanAdjacentEdgeTopologies(
 						nodeId, storage::LogicalGraphReadDirection::LGRD_OUTGOING, continuation,
-						std::min(remaining, MAXIMUM_ADJACENCY_BATCH));
-				if (page.edges.size() > remaining || (page.edges.empty() && page.continuation.has_value()) ||
+						pageRecords);
+				if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
 						(continuation.has_value() &&
 							(page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))) {
 					throw std::runtime_error("logical projection returned an invalid adjacency continuation");
 				}
+				std::vector<PendingRelationship> pending;
+				pending.reserve(page.edges.size());
+				std::map<std::string, std::vector<size_t>> weightColumns;
 				for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
-				checkBuildCheckpoint(checkpoint);
+				checkBuild();
 				if (edge.edge_id == 0U || edge.edge_id <= previousEdgeId || edge.source_node_id == 0U ||
 					edge.target_node_id == 0U ||
 					edge.source_node_id != nodeId) {
@@ -293,6 +299,65 @@ namespace graph::query::gds {
 					throw std::logic_error("logical projection has an unknown weight kind");
 				}
 			}
+				for (auto &[key, indexes]: weightColumns) {
+					std::ranges::sort(indexes, [&pending](const size_t left, const size_t right) {
+						return pending[left].topology.edge_id < pending[right].topology.edge_id;
+					});
+					size_t &columnBytes = weightColumnBytes[key];
+					for (size_t offset = 0U; offset < indexes.size(); offset += MAXIMUM_WEIGHT_COLUMN_BATCH) {
+						checkBuild();
+						const size_t count = std::min(MAXIMUM_WEIGHT_COLUMN_BATCH, indexes.size() - offset);
+						std::vector<uint64_t> edgeIds;
+						edgeIds.reserve(count);
+						for (size_t position = 0U; position < count; ++position) {
+							edgeIds.push_back(pending[indexes[offset + position]].topology.edge_id);
+						}
+						std::vector<std::vector<PropertyValue>> columns;
+						if (snapshot.supportsPropertyReadAdmission()) {
+							const std::string_view keyView = key;
+							const size_t remainingPropertyBytes = bounds.maximum_property_bytes -
+									std::min(columnBytes, bounds.maximum_property_bytes);
+							size_t admittedSourceBytes = 0U;
+							const auto admitSourceBytes = [&](const size_t bytes) {
+								checkBuild();
+								if (admittedSourceBytes > remainingPropertyBytes ||
+										bytes > remainingPropertyBytes - admittedSourceBytes) {
+									throw std::runtime_error(
+											"logical projection weight column exceeded its byte bound");
+								}
+								admittedSourceBytes += bytes;
+							};
+							columns = snapshot.readEdgePropertyColumnsSortedWithAdmission(
+									edgeIds, std::span<const std::string_view>(&keyView, 1U), admitSourceBytes);
+						} else {
+							columns.push_back(snapshot.readEdgePropertiesSorted(edgeIds, key));
+						}
+						checkBuild();
+						if (columns.size() != 1U) {
+							throw std::runtime_error("logical projection weight column changed column cardinality");
+						}
+						const std::vector<PropertyValue> &values = columns.front();
+						if (values.size() != count) {
+							throw std::runtime_error("logical projection weight column changed cardinality");
+						}
+						const size_t batchBytes = checkedPropertyColumnBytes(values, "logical projection weight column");
+						if (batchBytes > bounds.maximum_property_bytes -
+								std::min(columnBytes, bounds.maximum_property_bytes)) {
+							throw std::runtime_error("logical projection weight column exceeded its byte bound");
+						}
+						columnBytes += batchBytes;
+						for (size_t position = 0U; position < count; ++position) {
+							PendingRelationship &relationship = pending[indexes[offset + position]];
+							relationship.weight = resolveWeightValue(values[position], relationship.relationship->weight);
+						}
+					}
+				}
+				for (const PendingRelationship &relationship: pending) {
+					const auto &edge = relationship.topology;
+					storage::LogicalGraphEdge logicalEdge{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type};
+					LogicalGraphProjection::addRelationship(projection, logicalEdge, *relationship.relationship,
+							relationship.weight);
+				}
 				scannedEdges += page.edges.size();
 				if (!page.continuation.has_value()) {
 					break;
@@ -306,42 +371,9 @@ namespace graph::query::gds {
 				continuation = page.continuation;
 			}
 		}
-		for (auto &[key, indexes]: weightColumns) {
-			std::vector<uint64_t> edgeIds;
-			edgeIds.reserve(indexes.size());
-			for (const size_t index: indexes) {
-				edgeIds.push_back(pending[index].topology.edge_id);
-			}
-			std::ranges::sort(edgeIds);
-			edgeIds.erase(std::ranges::unique(edgeIds).begin(), edgeIds.end());
-			const std::vector<PropertyValue> values = snapshot.readEdgePropertiesSorted(edgeIds, key);
-			if (values.size() != edgeIds.size()) {
-				throw std::runtime_error("logical projection weight column changed cardinality");
-			}
-			if (checkedPropertyColumnBytes(values, "logical projection weight column") > bounds.maximum_property_bytes) {
-				throw std::runtime_error("logical projection weight column exceeded its byte bound");
-			}
-			std::unordered_map<uint64_t, PropertyValue> byEdge;
-			byEdge.reserve(edgeIds.size());
-			for (size_t index = 0U; index < edgeIds.size(); ++index) {
-				byEdge.emplace(edgeIds[index], values[index]);
-			}
-			for (const size_t index: indexes) {
-				const auto found = byEdge.find(pending[index].topology.edge_id);
-				if (found == byEdge.end()) {
-					throw std::runtime_error("logical projection weight column lost an Edge");
-				}
-				pending[index].weight = resolveWeightValue(found->second, pending[index].relationship->weight);
-			}
-		}
-		for (const PendingRelationship &relationship: pending) {
-			const auto &edge = relationship.topology;
-			storage::LogicalGraphEdge logicalEdge{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type};
-			LogicalGraphProjection::addRelationship(projection, logicalEdge, *relationship.relationship,
-					relationship.weight);
-		}
 		sortAdjacency(projection.outgoing_);
 		sortAdjacency(projection.incoming_);
+		checkBuild();
 		return projection;
 	}
 

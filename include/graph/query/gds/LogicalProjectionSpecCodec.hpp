@@ -9,6 +9,8 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+#include <span>
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
@@ -30,6 +32,9 @@ namespace graph::query::gds {
 	public:
 		[[nodiscard]] static LogicalGraphProjectionSpec decodeGraphProjectArguments(
 				const std::vector<PropertyValue> &arguments,
+				LogicalProjectionSpecCodecBounds bounds = {});
+		[[nodiscard]] static LogicalGraphProjectionSpec decodeGraphProjectArguments(
+				std::span<const std::reference_wrapper<const PropertyValue>> arguments,
 				LogicalProjectionSpecCodecBounds bounds = {});
 
 	private:

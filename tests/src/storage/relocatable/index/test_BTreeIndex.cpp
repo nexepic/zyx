@@ -350,6 +350,28 @@ TEST_F(RelocatableBTreeIndexTest, StreamsBoundedOrderedSourcesFromIndependentCur
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 
+	// Boundary-key admission must not charge every row or consume a rejected
+	// leaf-ending entry. Reusing this cursor preserves exact continuation.
+	auto range = index.openRangeCursor(snapshot, std::nullopt, 4U);
+	size_t admissions = 0U;
+	const auto reject = [&](size_t bytes) {
+		if (bytes == 0U) return; // Release reports do not request an allocation.
+		++admissions; throw std::runtime_error("boundary budget");
+	};
+	EXPECT_EQ(range.next(reject)->key, key("a"));
+	EXPECT_EQ(admissions, 0U);
+	EXPECT_THROW(static_cast<void>(range.next(reject)), std::runtime_error);
+	EXPECT_EQ(admissions, 1U);
+	size_t retained = 0U;
+	const auto admit = [&](size_t bytes) { retained = bytes; };
+	EXPECT_EQ(range.next(admit)->key, key("c"));
+	EXPECT_GE(retained, 1U);
+	EXPECT_EQ(range.next(admit)->key, key("m"));
+	EXPECT_EQ(retained, 0U);
+	EXPECT_EQ(range.next(reject)->key, key("z"));
+	EXPECT_EQ(admissions, 1U);
+	EXPECT_FALSE(range.next(admit).has_value());
+
 	const OrderedBTreeEntrySource source = index.orderedSource(snapshot, 4U, 1U);
 	const auto readAll = [](const OrderedBTreeEntrySource &entrySource) {
 		OrderedBTreeEntryCursor cursor = entrySource();
@@ -463,6 +485,7 @@ TEST_F(RelocatableBTreeIndexTest, RejectsMissingChildrenAndBrokenLeafLinks) {
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("m"))); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("m") })); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(index.scan(snapshot, std::nullopt, 8)); },
 					  FormatError::FERR_INVALID_STATE);
 }
@@ -514,6 +537,16 @@ TEST_F(RelocatableBTreeIndexTest, DescendsMultipleInternalLevelsWithinSeparatorR
 	EXPECT_EQ(index.scan(snapshot, std::nullopt, 8U),
 			  (std::vector<BTreePageEntry>{{key("a"), 1U}, {key("g"), 7U}, {key("m"), 13U}, {key("z"), 26U}}));
 
+	for (size_t retry = 0U; retry < 2U; ++retry) {
+		auto cursor = index.openRangeCursor(snapshot, std::nullopt, 8U);
+		for (const auto &expected: std::vector<BTreePageEntry>{{key("a"), 1U}, {key("g"), 7U}, {key("m"), 13U}, {key("z"), 26U}}) {
+			const auto entry = cursor.next();
+			ASSERT_TRUE(entry.has_value());
+			EXPECT_EQ(*entry, expected);
+		}
+		EXPECT_FALSE(cursor.next().has_value());
+	}
+
 	// Moving from the left internal subtree to the right one must remain
 	// cancellable while the routed successor descends to its first leaf.
 	ThrowAfterCheckpoint routedSuccessorCancellation(11U);
@@ -539,6 +572,7 @@ TEST_F(RelocatableBTreeIndexTest, RejectsAChildOwnedByAnotherIndex) {
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("a"))); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("a") })); }, FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableBTreeIndexTest, RejectsAChildAtTheWrongLevel) {
@@ -556,6 +590,7 @@ TEST_F(RelocatableBTreeIndexTest, RejectsAChildAtTheWrongLevel) {
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("a"))); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("a") })); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableBTreeIndexTest, RejectsRootLeafSiblingLinks) {
@@ -714,6 +749,7 @@ TEST_F(RelocatableBTreeIndexTest, RejectsLeafKeysOutsideTheirSeparatorRange) {
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("m"))); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("m") })); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableBTreeIndexTest, RejectsALeftLeafKeyAtItsExclusiveUpperSeparator) {
@@ -732,6 +768,7 @@ TEST_F(RelocatableBTreeIndexTest, RejectsALeftLeafKeyAtItsExclusiveUpperSeparato
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("a"))); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("a") })); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableBTreeIndexTest, RejectsAnInternalSeparatorOutsideItsParentRange) {
@@ -749,4 +786,5 @@ TEST_F(RelocatableBTreeIndexTest, RejectsAnInternalSeparatorOutsideItsParentRang
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.find(snapshot, key("a"))); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(index.findSorted(snapshot, std::array{key("a") })); }, FormatError::FERR_INVALID_HEADER);
 }

@@ -80,6 +80,10 @@ namespace graph::storage {
 		[[nodiscard]] PhysicalPageRef prepareInitialBootstrapMigration(MetadataWriteBatch &batch);
 		[[nodiscard]] PhysicalPageRef find(const Superblock &superblock, PhysicalPageRef root,
 														  MetadataPageId pageId) const;
+		// Resolve one radix page's children without restarting the physical route
+		// tree for each identity. Results preserve input order, including duplicates.
+		void findMany(const Superblock &superblock, PhysicalPageRef root,
+					  std::span<const MetadataPageId> pageIds, std::span<PhysicalPageRef> results) const;
 
 	private:
 		MetadataPageFile &pages_;

@@ -11,6 +11,7 @@
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/core/TemporalTypes.hpp"
 #include "graph/query/execution/TypedScalarValue.hpp"
+#include "graph/query/execution/RetainedPropertyBytes.hpp"
 
 namespace graph::query::execution {
 
@@ -88,6 +89,22 @@ namespace graph::query::execution {
 			return fallback_.insert(value).second;
 		}
 
+		[[nodiscard]] bool contains(const PropertyValue &value) const {
+			switch (value.getType()) {
+				case PropertyType::NULL_TYPE: return hasNull_;
+				case PropertyType::BOOLEAN: return seenBools_[std::get<bool>(value.getVariant()) ? 1U : 0U];
+				case PropertyType::INTEGER: return integers_.contains(std::get<int64_t>(value.getVariant()));
+				case PropertyType::DOUBLE: return doubles_.contains(std::get<double>(value.getVariant()));
+				case PropertyType::STRING: return strings_.contains(std::get<std::string>(value.getVariant()));
+				case PropertyType::DATE: return dates_.contains(std::get<TemporalDate>(value.getVariant()).epochDays);
+				case PropertyType::DATETIME: return dateTimes_.contains(std::get<TemporalDateTime>(value.getVariant()).epochMillis);
+				default: return fallback_.contains(value);
+			}
+		}
+
+		// Transfer an already guarded copy of a fallback value without copying its payload again.
+		bool insertFallbackOwned(PropertyValue value) { return fallback_.insert(std::move(value)).second; }
+
 		[[nodiscard]] size_t size() const {
 			return (hasNull_ ? size_t{1} : size_t{0}) + (seenBools_[0] ? size_t{1} : size_t{0}) +
 			       (seenBools_[1] ? size_t{1} : size_t{0}) + integers_.size() + doubles_.size() +
@@ -118,10 +135,10 @@ namespace graph::query::execution {
 			add(multiply(dates_.size(), sizeof(int32_t)));
 			add(multiply(dateTimes_.size(), sizeof(int64_t)));
 		for (const auto &value: strings_) {
-			add(value.size());
+			add(std::max(value.size(), detail::dynamicStringBufferBytes(value)));
 		}
 		for (const auto &value: fallback_) {
-			add(property_utils::getPropertyValueSize(value));
+			add(detail::retainedPropertyValueBytes(value));
 		}
 		return total;
 		}

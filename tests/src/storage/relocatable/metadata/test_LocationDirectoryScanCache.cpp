@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
@@ -188,6 +189,9 @@ TEST_F(LocationDirectoryScanCacheTest, RangeCursorRetainsRouteAndSupportsSparseM
 	batch.publish(bootstrap);
 	const Superblock published = batch.candidate();
 
+	using graph::debug::PerfTrace;
+	struct Cleanup { ~Cleanup() { PerfTrace::setEnabled(false); PerfTrace::reset(); } } cleanup;
+	PerfTrace::setEnabled(false); PerfTrace::setValueCollectionEnabled(true); PerfTrace::reset();
 	LocationDirectoryRangeCursor cursor = directory.openRangeCursor(
 			published, MetadataDirectoryType::MDT_NODE_ENTITY, 1U, std::numeric_limits<uint64_t>::max());
 	EXPECT_EQ(cursor.metadataPagesRead(), 0U);
@@ -206,6 +210,10 @@ TEST_F(LocationDirectoryScanCacheTest, RangeCursorRetainsRouteAndSupportsSparseM
 	EXPECT_EQ(moved.metadataPagesRead(), 7U);
 	EXPECT_FALSE(moved.next().has_value());
 	EXPECT_TRUE(moved.exhausted());
+	const auto trace = PerfTrace::snapshotAndReset();
+	EXPECT_EQ(trace.at("native_graph.read.directory_range_calls").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.root_descents").totalValue, 1);
+	EXPECT_GE(trace.at("native_graph.read.metadata_pages_read").totalValue, 7);
 }
 
 TEST_F(LocationDirectoryScanCacheTest, RangeCursorChecksCancellationBeforeStorageIo) {

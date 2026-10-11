@@ -142,15 +142,17 @@ namespace graph::storage {
 												  const MetadataPublishOptions &publishOptions = {});
 		// Maintenance reads an immutable Manifest by logical identity before it
 		// decides whether every associated frame is still reachable.
-		[[nodiscard]] LargeValueManifest manifest(const MetadataSnapshotPin &snapshot, LargeValueId valueId) const;
+		[[nodiscard]] LargeValueManifest manifest(const MetadataSnapshotPin &snapshot, LargeValueId valueId,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		[[nodiscard]] LargeValueManifest manifest(const MetadataSnapshotPin &snapshot,
-												  const LargeValueRef &reference) const;
+												  const LargeValueRef &reference,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		// Resolves and validates every node reachable from a directory-routed root.
 		// Maintenance uses this rather than assuming all chunks reside in the root.
 		[[nodiscard]] std::vector<LargeValueManifest> manifestTree(const MetadataSnapshotPin &snapshot,
 																   const LargeValueManifest &root) const;
 		[[nodiscard]] std::vector<std::byte> read(const MetadataSnapshotPin &snapshot,
-												  const LargeValueRef &reference) const;
+												  const LargeValueRef &reference, const std::function<void(size_t)> &bufferAdmission = {}) const;
 		// Reads only chunk pages that overlap [offset, offset + length). A zero
 		// length range is valid and still authenticates the manifest reference.
 		[[nodiscard]] std::vector<std::byte> readRange(const MetadataSnapshotPin &snapshot,
@@ -160,7 +162,33 @@ namespace graph::storage {
 		// use this to avoid reopening the same immutable manifest for every token.
 		[[nodiscard]] std::vector<std::byte> readRangeFromManifest(const MetadataSnapshotPin &snapshot,
 																   const LargeValueManifest &manifest, uint64_t offset,
-																   uint64_t length) const;
+																   uint64_t length, const std::function<void(size_t)> &bufferAdmission = {}) const;
+		// Caller-local reuse for adjacent ranges. Retains at most one format-sized
+		// authenticated raw chunk, never pins or a second persistent truth.
+		class RangeReadCache final {
+		public:
+			RangeReadCache() = default;
+			RangeReadCache(const RangeReadCache &) = delete;
+			RangeReadCache &operator=(const RangeReadCache &) = delete;
+			RangeReadCache(RangeReadCache &&) noexcept = default;
+			RangeReadCache &operator=(RangeReadCache &&) noexcept = default;
+			[[nodiscard]] size_t retainedBytes() const { return raw_.capacity(); }
+			void clear() { valid_ = false; std::vector<std::byte>().swap(raw_); }
+		private:
+			friend class LargeValueStore;
+			bool valid_ = false;
+			const LargeValueStore *store_ = nullptr;
+			std::weak_ptr<StorageIO> io_;
+			Superblock snapshot_{};
+			uint64_t mutation_epoch_ = 0U;
+			LargeValueId value_id_{};
+			Generation generation_{};
+			LargeValueChunk chunk_{};
+			std::vector<std::byte> raw_;
+		};
+		[[nodiscard]] std::vector<std::byte> readRangeFromManifestCached(const MetadataSnapshotPin &snapshot,
+			const LargeValueManifest &manifest, uint64_t offset, uint64_t length, RangeReadCache &cache,
+			const std::function<void(size_t)> &bufferAdmission = {}) const;
 		// Removes complete unreachable values: all data pages and the one manifest
 		// page are marked retired, their Page Directory entries disappear, and the
 		// matching LargeValue Manifest Directory entries are erased atomically.
@@ -205,9 +233,14 @@ namespace graph::storage {
 		// before invoking its typed Property-store preparer. The allocator fills the
 		// prepared frame locations in this result; the transaction revalidates every
 		// identity field before publication.
+		using PoolPreparationWriter = std::function<void(const CatalogEntry &, bool, size_t,
+				std::span<const SharedPagePoolPreparedAppend>, std::span<PageLocation>)>;
 		void prepareNativeGraphMaterialization(const NativeGraphLargeValueMutation &mutation,
 											   LargeValueMaterializationResult &materialization,
-											   LogSequenceNumber checkpointLsn);
+											   LogSequenceNumber checkpointLsn,
+											   const PoolPreparationWriter &writer = {});
+		void prepareNativeGraphMaterializations(std::span<const NativeGraphLargeValueMutation> mutations,
+				std::span<LargeValueMaterializationResult> materializations, LogSequenceNumber checkpointLsn);
 		[[nodiscard]] SharedPagePoolAllocation evacuateManifestExpected(MetadataSnapshotPin &snapshot,
 																		const LargeValueManifestLocation &expected,
 																		SegmentId destinationSegmentId,
@@ -219,20 +252,27 @@ namespace graph::storage {
 																	LogSequenceNumber checkpointLsn,
 																	const MetadataPublishOptions &publishOptions);
 		[[nodiscard]] LargeValueManifest readManifest(const MetadataSnapshotPin &snapshot,
-													  const LargeValueRef &reference) const;
+													  const LargeValueRef &reference,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		[[nodiscard]] LargeValueManifest readManifestNode(const MetadataSnapshotPin &snapshot,
 												  const LargeValueManifest &root, PageId pageId,
-												  BufferPoolReadHint hint) const;
+												  BufferPoolReadHint hint,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		[[nodiscard]] std::vector<std::byte> readRawChunk(const MetadataSnapshotPin &snapshot,
 												  const LargeValueManifest &manifest,
-												  const LargeValueChunk &chunk, BufferPoolReadHint firstPageHint) const;
+												  const LargeValueChunk &chunk, BufferPoolReadHint firstPageHint,
+				const std::function<void(size_t)> &bufferAdmission = {}) const;
 		void prepareRetirements(std::span<const ExistingPoolPageRetirementBatch> batches,
 								LogSequenceNumber checkpointLsn) const;
 
+		[[nodiscard]] std::vector<std::byte> readRangeFromManifestImpl(const MetadataSnapshotPin &snapshot,
+			const LargeValueManifest &manifest, uint64_t offset, uint64_t length,
+			const std::function<void(size_t)> &bufferAdmission, RangeReadCache *cache) const;
 		SharedPagePoolAllocator allocator_;
 		RelocatableMetadataStore &metadata_;
 		std::unique_ptr<SlottedPagePool> content_index_pages_;
 		std::unique_ptr<BTreePageStore> content_index_;
+		std::shared_ptr<StorageIO> io_;
 	};
 
 } // namespace graph::storage

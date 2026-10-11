@@ -28,6 +28,10 @@ namespace graph::query::execution {
 			}
 		}
 
+		[[nodiscard]] static size_t requiredStorageBytes(size_t size) {
+			return checkedWordCount(size) * sizeof(uint64_t);
+		}
+
 		[[nodiscard]] size_t size() const noexcept { return size_; }
 		[[nodiscard]] size_t storageBytes() const noexcept { return words_.size() * sizeof(uint64_t); }
 		[[nodiscard]] bool includes(size_t index) const {

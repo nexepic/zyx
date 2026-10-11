@@ -44,7 +44,11 @@ namespace graph::storage {
 			RangeCursor(RangeCursor &&) noexcept;
 			RangeCursor &operator=(RangeCursor &&) noexcept;
 
-			[[nodiscard]] std::optional<BTreePageEntry> next();
+			// Admits the owned separator key used to validate the next leaf.
+			// Reports retained capacity and zero when released, as well as admission
+			// before a new copy. Rejection before emission permits retry.
+			// Decoded leaf entries and cursor pages are separate buffers.
+			[[nodiscard]] std::optional<BTreePageEntry> next(const std::function<void(size_t)> &boundaryKeyAdmission = {});
 
 		private:
 			struct State;
@@ -59,6 +63,10 @@ namespace graph::storage {
 
 		[[nodiscard]] std::optional<uint64_t> find(const MetadataSnapshotPin &snapshot,
 												   std::span<const std::byte> key) const;
+		// Exact probes for strictly increasing keys. Reuse a decoded leaf only
+		// within its authenticated separator bounds; never scan unrelated gaps.
+		[[nodiscard]] std::vector<std::optional<uint64_t>> findSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const std::vector<std::byte>> keys) const;
 		[[nodiscard]] std::vector<BTreePageEntry> scan(const MetadataSnapshotPin &snapshot,
 																	   std::optional<std::span<const std::byte>> lowerBound,
 																	   size_t maximumEntries,
@@ -98,16 +106,28 @@ namespace graph::storage {
 			std::optional<std::vector<std::byte>> upper_exclusive;
 		};
 
-		[[nodiscard]] std::optional<BTreePage> resolveRoot(const MetadataSnapshotPin &snapshot) const;
+		[[nodiscard]] std::optional<BTreePage> resolveRoot(const MetadataSnapshotPin &snapshot,
+			std::vector<BTreePageEntry> *decodedEntries = nullptr) const;
 		[[nodiscard]] BTreePage descendToLeaf(const MetadataSnapshotPin &snapshot, BTreePage page,
 											  std::optional<std::span<const std::byte>> key,
 											  BufferPoolReadHint leafReadHint,
 											  const CancellationCheckpoint *cancellation,
-											  std::vector<TraversalStep> *traversal = nullptr) const;
+											  std::vector<TraversalStep> *traversal = nullptr,
+				std::vector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
+			std::vector<BTreePageEntry> *decodedRootEntries = nullptr) const;
+		// Borrow the immutable root across exact probes. An empty return means
+		// the root itself is the leaf; all descent validation is shared with scans.
+		[[nodiscard]] std::optional<BTreePage> descendToLeafFromRoot(
+				const MetadataSnapshotPin &snapshot, const BTreePage &root,
+				std::optional<std::span<const std::byte>> key, BufferPoolReadHint leafReadHint,
+				const CancellationCheckpoint *cancellation, std::vector<TraversalStep> *traversal = nullptr,
+				std::vector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
+			std::vector<BTreePageEntry> *decodedRootEntries = nullptr) const;
 		[[nodiscard]] LeafRoute advanceToExpectedSiblingLeaf(const MetadataSnapshotPin &snapshot,
 																 std::vector<TraversalStep> &traversal,
 																					 const CancellationCheckpoint *cancellation) const;
-		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state) const;
+		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state,
+				const std::function<void(size_t)> &boundaryKeyAdmission) const;
 
 		uint64_t index_id_ = 0;
 		BTreePageStore &pages_;

@@ -7,6 +7,8 @@
  **/
 
 #include <array>
+#include <algorithm>
+#include <stdexcept>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -181,4 +183,29 @@ TEST(RelocatableEntityLabelSetTest, RejectsOversizedDecodedRecordFromDerivedCapa
 	reseal(oversized);
 	expectFormatError([&] { static_cast<void>(EntityLabelSetCodec::decode(oversized)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableEntityLabelSetTest, AdmitsChecksumAndResultBeforeAllocationAndRetries) {
+	const std::array<uint64_t, 4U> labels{3U, 7U, 11U, 17U};
+	const auto bytes = EntityLabelSetCodec::encode(labels);
+	size_t requested = 0U;
+	EXPECT_THROW(static_cast<void>(EntityLabelSetCodec::decode(bytes, [&](size_t count) {
+		requested = count; throw std::length_error("checksum budget");
+	})), std::length_error);
+	EXPECT_EQ(requested, bytes.size());
+	bool checksumReleased = false;
+	EXPECT_THROW(static_cast<void>(EntityLabelSetCodec::decode(bytes, [&](size_t count) {
+		if (count == 0U) checksumReleased = true;
+		else if (checksumReleased) { requested = count; throw std::length_error("result budget"); }
+	})), std::length_error);
+	EXPECT_EQ(requested, labels.size() * sizeof(uint64_t));
+	for (int retry = 0; retry < 2; ++retry) {
+		size_t retained = 0U, peak = 0U;
+		const auto result = EntityLabelSetCodec::decode(bytes, [&](size_t count) {
+			retained = count; peak = std::max(peak, count);
+		});
+		EXPECT_EQ(result, (std::vector<uint64_t>(labels.begin(), labels.end())));
+		EXPECT_EQ(retained, result.capacity() * sizeof(uint64_t));
+		EXPECT_GE(peak, bytes.size());
+	}
 }

@@ -98,11 +98,18 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<uint64_t> read(const MetadataSnapshotPin &snapshot,
-												 const EntityLabelOverflowReference &reference) const;
+												 const EntityLabelOverflowReference &reference,
+			const std::function<void(size_t)> &bufferAdmission = {}) const;
 		[[nodiscard]] std::vector<uint64_t> readNodeLabels(const MetadataSnapshotPin &snapshot,
-																																					 const NodeEntityRecord &node) const;
+																																					 const NodeEntityRecord &node,
+			const std::function<void(size_t)> &bufferAdmission = {}) const;
+		// Validates the complete label set; inline membership needs no label vector.
+		[[nodiscard]] bool containsNodeLabel(const MetadataSnapshotPin &snapshot,
+				const NodeEntityRecord &node, uint64_t labelToken,
+			const std::function<void(size_t)> &bufferAdmission = {}) const;
 		[[nodiscard]] std::vector<std::vector<uint64_t>> readNodeLabelsSorted(
-				const MetadataSnapshotPin &snapshot, std::span<const NodeEntityRecord> nodes) const;
+				const MetadataSnapshotPin &snapshot, std::span<const NodeEntityRecord> nodes,
+			const std::function<void(size_t)> &resultBufferAdmission = {}) const;
 		[[nodiscard]] EntityLabelSetMutationPlan planNodeLabels(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 																std::span<const uint64_t> labels,
 																const EntityLabelSetWritePlan &plan,
