@@ -78,6 +78,8 @@ Historical evidence does not describe a future working tree. S0 must verify prov
 
 Every design deliverable includes current call paths, target interfaces/ownership, data/snapshot identities, failure states, byte layouts/versions where applicable, recovery/reclamation states, replacement boundaries, module tests, benefit hypotheses and falsification conditions. The following contracts are mandatory; exact ABI/codecs, block sizes and cost parameters must be settled in S1 decision records, not guessed during coding.
 
+This page specifies implementation direction and design admission, not a proven final architecture. S1 must record concrete decisions, evidence or explicit follow-up experiments for the questions below. Unresolved correctness and core-interface questions must close before the corresponding production implementation. Preserve directory layers with distinct responsibilities and bounded costs; reducing layer count is not itself a refactoring objective.
+
 ### A1: Bound execution representation and physical plans
 
 Keep the frontend and logical IR. Add execution binding/physical planning after them. Resolve names to slots; property tokens/descriptors have explicit schema epochs and plan-cache invalidation. Use typed kernels for known types and semantically equivalent fallbacks for dynamic/mixed values.
@@ -85,6 +87,10 @@ Keep the frontend and logical IR. Add execution binding/physical planning after 
 Execution batches carry typed columns, presence/null information, selection vectors, EntityRefs and variable-payload owners. Define borrowing, batch reuse, page pins, ordering and multiplicity. Physical plans select access paths, join/aggregate/sort algorithms, pipelines and blocking materialization. Start with non-JIT scan/filter/project/aggregate; then migrate join, sort, unwind, procedures/subqueries and mutation read sides. These paths must not silently fall back to unaccounted old row objects.
 
 Create owning QueryResult/Driver ABI values at the output boundary. Enumerate transitional adapters and their removal conditions; do not retain two independently maintained query semantics. Preserve NULL, numeric/type behavior, optional matches, paths, correlated subqueries, cancellation and public error behavior.
+
+**Graph intermediate-result contract:** typed batches alone do not establish efficient graph execution. S1.1 must decide how to represent shared parent bindings, child-result groups and multiplicity, which operators consume grouped/factorized results, and where flat expansion is required. Define DISTINCT, aggregation, OPTIONAL, correlated subqueries, paths, final output and ownership; never treat correlated branches as independent Cartesian products. The first implementation may use flat batches, but must specify concrete adapters and extension boundaries rather than making fully expanded rows the only operator contract. Representative branching/multi-hop prototypes decide actual factorization adoption; copying all Kuzu join algorithms is not required, and this issue does not explain the entire gap in scans without joins.
+
+**Execution-state contract:** distinguish immutable physical plans, query-shared state, task-local cursors/batches/aggregation state, and blocking-operator merge state in A1. Assign cancellation, errors, snapshot pins, budgets and output ordering explicitly. Initial execution may be single-threaded, but task state must not be an implicit singleton or inseparable operator state. O7 selects parallel implementation and scheduling granularity, not the initial state separation. S1.1 delivers state/lifetime tables and interface boundaries without requiring an early thread pool or scheduling framework.
 
 ### A2: Property patch contract
 
@@ -105,6 +111,10 @@ A2 may initially use the current layout. A request containing one field does not
 5. Each logical property has one unambiguous authoritative version per snapshot. If column chunks and sparse extensions coexist, the group descriptor determines ownership; extensions are not a second full copy. Layout transitions and retirement share a recoverable protocol.
 6. Preserve snapshot/owner/generation checks. Define old-version reachability for group splits, slot reuse, large-value replacement, failed publication, relocation and whole-group deletion. Start with few encodings. Thresholds derive from general space/access costs, not benchmark names or special sizes.
 
+S1.3 must provide access-path/cost tables for single-entity single-field reads, complete entities, cross-entity narrow scans, single-field changes and deletion/reclamation. Identify directories/descriptors/data pages traversed and pages copied by COW. Account separately for routing, field enumeration, presence/type, allocation and index metadata. Express cost growth with entity count, actual property count, distinct fields and page size, then verify page/byte counts experimentally. Do not count only value payloads or hide scan gains behind an expensive new membership directory.
+
+Admission must also cover randomly interleaved entity shapes, insertion order unrelated to labels, many singleton fields, sustained type changes and sparse groups after deletion. Define metadata growth bounds, split/re-encoding triggers and worst-case foreground work. Compare complete-entity retrieval and local-update costs against the current layout. Retain the current layout when no candidate is acceptable; a columnar label does not establish superiority.
+
 **Admission sequence:** establish a current-row-layout control, implement a complete lifecycle prototype, then decide on adoption. Before reusing old prototype readers, finish graph routing, index maintenance, unreachable child/root/LargeValue retirement, reopen and failed-publication recovery. A laboratory carrier is not a production engine.
 
 Required cases: single/multi-field range scans, random single-field/full-entity reads, neighbor property gathering; sparse/dense fields, mixed types, multiple labels, wide entities and large values; set/remove/type changes, ingestion, deletion, long snapshots and sustained updates. Measure end-to-end latency, read/write bytes, peak memory and steady-state space. Resolve material point-read/update regressions or explicitly establish product tradeoffs; average scan improvements cannot hide them.
@@ -117,6 +127,8 @@ Logical batches provide EdgeId, NeighborId, TypeId and required visibility infor
 
 First specify when authenticated adjacency fields can be trusted directly, checks performed at load/publication/integrity scan, missing-membership detection, and corruption/wrong-generation/inconsistency errors. Do not remove primary-record rechecks before proving the replacement contract; a checksum alone does not establish index/entity consistency.
 
+S1.4 delivers a fault model and validation-responsibility table separating page byte/format/identity checks, transactional atomic maintenance and cross-structure integrity checks, with guarantees and detection times. Cover torn writes, wrong owner/generation, inconsistent covered fields and missing membership; do not promise that local reads detect every global inconsistency. If atomic maintenance establishes consistency and queries trust covered fields within valid snapshots, specify prerequisites and integrity-scan duties. Changes to detection timing relative to current per-entry rechecks must appear in public contracts, specifications and fault tests. Preserve current behavior until the replacement is admitted.
+
 Compare two candidates behind one interface: covering entries in shared Packed B+Trees, and multi-node segmented adjacency blocks organized by direction/type. Both require shared space for low-degree nodes, supernodes, online changes, atomic bidirectional maintenance, relocation and reclamation. Avoid per-node roots/dedicated tail pages. Do not add public endpoint/type mutation solely for tests when current APIs do not support it.
 
 Prefer the smaller covering-tree change if it meets goals. Adopt segments only when benefits justify maintenance/write amplification. Include topology-only traversal, typed expansion, multiple hops, random insertion/deletion, skewed degrees, self-loops/parallel edges and long-term space, not just sequential loading. Existing key-only files retain semantics until the format changes.
@@ -127,11 +139,17 @@ Derive the promised isolation level from public contracts/tests; do not automati
 
 Disjoint changes should not fail solely because graph roots changed. Detect overlapping writes, constraint conflicts and node deletion versus edge creation. After validation, rebuild candidates against current roots and publish atomically. A serialized publication gate is acceptable; stale page pointers must never overwrite newer versions. Define ID leases, retries, overlays, indeterminate commits and resource release. Do not merely delete the global fence.
 
+S1.5 must specify the promised isolation level, allowed/forbidden concurrent outcomes, conflict keys, validation timing, retry boundaries and validation cost. Do not relax production fences before these decisions or silently weaken existing guarantees. Distinguish logical read/write conflicts from physical page sharing: disjoint entities/fields can occupy one COW page. Define rebuilding/merging against the latest version or conservative rejection, never overwriting another transaction's changes. Validate two-transaction interleavings for uniqueness, endpoint deletion, write skew, range reads and disjoint writes sharing a page.
+
 ### A6: Resource ownership and single-file spill
 
 Unify query/batch/operator budgets, pins, variable payloads and cancellation. Account for actual container capacities and held resources, not just row counts. Over-budget execution uses a supported spill path or fails explicitly; never truncate results or swallow corruption errors.
 
-Implement sorted runs/merge first, then partitionable aggregation/hash operations. List unsupported spilling operators and their errors. Reuse allocation infrastructure, but existing bulk scratch does not prove query spill. Specify durable scratch registration/ownership, release, crash cleanup, read-only file behavior, disk exhaustion and shared handles. Read-only execution cannot secretly write spill data into the database; without writable file scratch it uses bounded memory and fails clearly when necessary.
+Add database/process-level resource coordination: assign accounting for concurrent queries, caches, transaction-private pages, maintenance and optional code caches without double-counting or omitting shared resources. S1.6 specifies total limits, sub-budget acquisition/release, ordering of waiting/eviction/spill/failure under pressure, cancellation cleanup and prevention of resource-wait deadlocks. Individually bounded queries must not permit unbounded aggregate memory. Limits govern accounted allocations; report RSS and external-runtime overhead separately.
+
+Implement sorted runs/merge first, then partitionable aggregation/hash operations. List unsupported spilling operators and their errors. Reuse allocation infrastructure, but existing bulk scratch does not prove query spill. Specify durable scratch registration/ownership, release, crash cleanup, disk exhaustion and shared handles.
+
+Distinguish logically read-only transactions from physically read-only files. A logically read-only transaction cannot mutate user graph data; allocating query scratch in a writable file requires an explicit internal permission/lifecycle protocol and cannot bypass the user-mutation prohibition. Physically read-only files cannot hold new scratch. Under strict single-file constraints, fail explicitly when a query exceeds memory and has no supported path. Temporary pages are outside ordinary user-data roots; define separate reachability, active-query pins and safe reclamation identities so unrelated long snapshots do not unnecessarily retain them. Scratch allocation/release and user commits must not lose each other's allocator updates. Crash cleanup may reclaim temporary data, never user data or pages with active owners.
 
 Budget foreground work, reclamation and compaction separately. When long snapshots prevent reuse, expose backlog and apply limits instead of growing indefinitely or reclaiming referenced pages.
 
@@ -140,6 +158,8 @@ Budget foreground work, reclamation and compaction separately. When long snapsho
 Specify each new root/page type/descriptor, codec field/width/endianness, version, reachability, atomic maintenance, retirement and integrity walker. Reuse namespaces/shared allocator and prefixed cross-platform enums. Test explicit old-format rejection. Do not copy version numbers from archives into code.
 
 Record implemented, pending-validation, rejected and replaced decisions. A3/A4 currently establish goals, not finalized codecs. On adoption update both this page and affected storage-specification sections, removing conflicting future-policy restrictions while retaining historical evidence.
+
+Retain the current development policy of rejecting old files after a format change; it is not a permanent compatibility promise. S1.7 must define the trigger for stable-format commitments, envelope/Superblock/local-codec compatibility matrices and rejection of unsupported combinations. Before a stable release, establish migration strategy, original-file protection, capacity requirements, validation and failure recovery. This round delivers that release prerequisite and version boundaries, not an implicit migration-tool implementation or a release date. Deferring migration now must not leave future evolution without explicit ownership.
 
 ## 4. Optimization work packages O1–O8
 
@@ -158,7 +178,7 @@ Reuse verification of the same immutable page version without removing first-use
 
 ## 5. Phases, dependencies and fixed progress
 
-S0 → S1 → S2 → S3 → S4 → S5 → S6. Designs may cover all modules in advance; implementation follows dependencies. A2 may precede S3 layout changes. Minimal A6 lifecycle support needed by earlier modules can be implemented early but remains counted under S5 once only. User questions about progress must not cause unfinished work to be skipped.
+The acceptance sequence is S0 → S1 → S2 → S3 → S4 → S5 → S6; dependency-led implementation does not require every cross-module experiment to wait for full completion of the preceding phase. S1 settles core contracts. S2 first connects a minimal end-to-end path through field reads, typed batches, filtering, aggregation and owning output, validating snapshots, pins, cancellation and budgets. Bounded A3/A4 prototypes may then use that same execution path to expose interface issues before all remaining operators migrate; prototypes do not authorize production switching. A2 interfaces and required A6 lifecycle support may start early. Count each deliverable once in its original phase, preserve the denominator of 34, and never skip unfinished work because the user asks about progress.
 
 | Phase | Fixed deliverables | Accepted/total | Progress |
 |---|---|---:|---:|
@@ -183,6 +203,8 @@ S0 freezes the current dirty tree: source manifest/hash, Release compiler/option
 
 Interleave control/current/Kuzu on the same host. Formal warm measurements default to at least 3 independent processes per case, 3 warmups and 10 samples each. Restore writes from the same isolated baseline and verify outcomes; explicitly fix whether restore/open is timed. Separate cold, fresh-open and warm; restarting a process does not flush OS cache. Separate profiled diagnostics from uninstrumented timing and do not sum nested timers. During iteration run affected cases, expand relevant matrices at phase boundaries, and run integrated performance comparisons at S6. Integrated benchmarks are not the full unit suite.
 
+These sample counts are a starting scale, not a guarantee of P95 precision. S0 preregisters within/across-process aggregation, control-noise assessment, tail estimation and stopping conditions/time budgets for targeted follow-ups. Samples within one process are not independent process runs. Report per-process results and uncertainty rather than hiding process variation in a pooled summary. Near-threshold protected results or unstable tails require additional independent rounds/sustained sampling only for affected cases. If the budget expires without clarity, retain an inconclusive result; never sample repeatedly until a pass appears.
+
 ### 6.2 Representative matrix
 
 Include hit/miss point reads, random selected/full entities, sparse/dense label/type filtering, single/multiple hops and supernodes, DISTINCT/real group-by/sort/Top-K, parameterized queries, dynamic fields, wide rows/large values, small/bulk/mixed writes, long snapshots, deletion/compaction, above-budget queries and sustained updates. Hold out combinations of scale, degree, property sparsity/type and selectivity from tuning. A3/A4 controls use the same improved executor/carrier so A1 benefits are not attributed to layout.
@@ -195,17 +217,22 @@ Verify actual IDs, values, types, NULL/missing behavior, required order and mult
 - S0 preregisters primary goals, protected workloads and resource limits; do not change success criteria after results. Default expectation: at least 10% P50 improvement in the primary bottleneck case, repeatable across processes; protected P50/P95 must not show a stable regression above 5% and beyond control noise. Borderline/noisy results are inconclusive and need targeted repetition. These are decision thresholds, not universal performance promises.
 - Do not increase memory limits. Report process RSS, query memory, read/write bytes and steady-state file size separately. Stable resource growth above 5% requires attribution and an explicit admission decision. A3/A4 must not trade uncontrolled writes/space/point-read regressions for scans. Exceeding protected thresholds requires a concrete tradeoff and user agreement, not silent relaxation.
 - Lower CPU/allocation counts with uncertain end-to-end benefit must be reported as such, not claimed as speedups. Reject unhelpful complexity and preserve controls. Correctness fixes are not required to deliver a 10% speedup.
+- Classify performance changes versus foundational contract/interface changes in advance. The default 10% target applies to primary performance experiments, not every foundational commit. Admit foundations by explicit dependent capabilities, semantic/lifetime tests, complexity and protected-workload cost, recording which later task validates the benefit. Never relabel a failed performance experiment as infrastructure to evade admission, or accept unnecessary lasting complexity solely because it barely crosses a threshold.
 - Kuzu parity or better is the objective on equivalent core workloads/resources, not a promise for all workloads. S6 reports remaining gaps; checklist completion does not automatically establish the performance objective.
 
 ### 6.4 Necessary module tests
 
 A1: expression types/NULL/overflow, multiplicity, ORDER BY, optional/path, subqueries, mutation read sides, cancellation, budgets and result ownership. A2/A3: final state, old snapshots, indexes/constraints, large-value reuse, deletion/slot reuse, reopen, failed publication and retirement. A4: directions, self-loops, parallel edges, types, continuation, overlays and inconsistent/corrupt indexes. A5: disjoint/overlapping writes, uniqueness, endpoint deletion, promised isolation, retries and indeterminate commits. A6: low budgets, spill, disk-full, cancellation, exceptions, read-only and post-crash cleanup.
 
+Add focused cases for changed contracts: A1 grouped/flat equivalence once grouping is adopted, task-local state isolation and merge/cancellation; A3 heterogeneous/singleton fields and enumeration metadata cost; A4 each inconsistency's promised detection stage; A5 disjoint writes sharing a page and allowed/forbidden interleavings; A6 aggregate concurrent budgets, logically read-only scratch in writable files, physically read-only rejection, and scratch/user-commit interleaving. Do not create placeholder tests for unimplemented optional algorithms.
+
 Discover actual GoogleTest names and use explicit filters. In `scripts/run_tests.sh`, `--file` limits rendered detail, not test execution; never accidentally run the full suite by supplying only `--file`. Run corresponding fault tests for format/write changes. Documentation-only changes need links/MDX validation only. Do not remove assertions or change expectations to hide source defects.
 
 ## 7. Evidence and cleanup
 
 Create a separate dated evidence directory under `benchmarks/architecture-design/results/` when implementation starts; do not overwrite historical measurements. Each item records task ID, before/after source identity, hypothesis, call paths, scope, test commands/results, raw samples, correctness, metrics/noise, adoption/rejection rationale and cleanup manifest. This page is the sole progress source; do not maintain another manual percentage ledger.
+
+That results directory is Git-ignored and stores local raw evidence, not the sole copy of formal decisions. Create S1 design and phase admission/rejection records as needed in non-ignored `benchmarks/architecture-design/decisions/<decision-id>/en.md` and `zh.md`. Retain task IDs, contracts, tradeoffs, compact metrics/uncertainty, source/binary hashes, data seeds/manifests, reproduction commands, raw-evidence locations and digest hashes; keep reproduction scripts in version-controlled source directories. Decision records do not maintain a second progress ledger. Preparing files for version control does not authorize commit/push.
 
 Clean intermediate databases, CSVs, logs, build copies and processes by ownership manifest. Retain necessary samples, manifests, reproducible scripts and limited controls. Docker is not the default; if later explicitly used, clean only task-owned containers/volumes/images, never global prune. Do not delete user databases, existing caches or other tasks' environments.
 
@@ -225,6 +252,8 @@ These identify owners, not instructions to rewrite entire files:
 
 ## 9. External references and limits
 
+- [Kuzu vectors/result sets](https://kuzudb.github.io/docs/developer-guide/database-internal/vector/) and the [Kuzu design paper](https://www.cidrdb.org/cidr2023/papers/p48-jin.pdf): A1 grouped/factorized representations and materialization boundaries, not a requirement to copy every join algorithm.
+- [Morsel-Driven Parallelism](https://ir.cwi.nl/pub/22547): A1 execution-state separation and O7 scheduling research, not an early parallel-framework requirement.
 - [Kuzu NodeGroup design](https://github.com/kuzudb/kuzu/issues/1474) and [columnar/list processing research](https://arxiv.org/abs/2103.02284): establish relevance to graph engines, not proof that ZYX dynamic properties, COW updates or point reads are solved.
 - [Kuzu performance debugging](https://kuzudb.github.io/docs/developer-guide/performance-debugging/): compare plans/operators without mixing timing boundaries.
 - [PostgreSQL JIT admission](https://www.postgresql.org/docs/17/jit-decision.html) and [LLVM ORC](https://llvm.org/docs/ORCv2.html): O8 compilation/integration references, not a requirement to implement LLVM this round.
