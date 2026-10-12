@@ -892,6 +892,15 @@ def build_quality_gate_report(
                 or field not in baseline_environment
                 or environment[field] != baseline_environment[field]
             ]
+            # Historical runs retained only counts. Never compare their timing
+            # with runs that also allocate owning output observations.
+            current_observation = environment.get("result_observation", "counts_only")
+            baseline_observation = baseline_environment.get("result_observation", "counts_only")
+            valid_observations = {"counts_only", "full_rows_retained_inside_timing_serialized_afterward"}
+            if (not isinstance(current_observation, str) or not isinstance(baseline_observation, str)
+                    or current_observation not in valid_observations or baseline_observation not in valid_observations
+                    or current_observation != baseline_observation):
+                mismatched.append("result_observation")
             if "zyx" in databases:
                 # Older runners always enabled diagnostics; missing flags retain that contract.
                 current_diagnostics = environment.get("zyx_emit_profile", True)

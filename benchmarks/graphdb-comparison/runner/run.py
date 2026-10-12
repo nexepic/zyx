@@ -174,9 +174,12 @@ def _cleanup_adapter_artifacts(adapter: BenchmarkAdapter) -> list[str]:
 
 
 def _git_metadata() -> dict[str, object]:
-    repo_root = Path(__file__).resolve().parents[3]
+    repo_root = next((parent for parent in Path(__file__).resolve().parents
+                      if (parent / ".git").exists()), None)
 
     def run_git(*args: str) -> str | None:
+        if repo_root is None:
+            return None
         try:
             completed = subprocess.run(
                 ["git", *args],
@@ -301,6 +304,7 @@ def run_benchmark(
     max_regression_ratio: float = 1.10,
     keep_db_artifacts: bool = False,
     threads: int | None = None,
+    observe_result_rows: bool = False,
 ) -> Path:
     if scale not in SCALES:
         raise ValueError(f"unsupported scale: {scale}")
@@ -325,10 +329,16 @@ def run_benchmark(
 
     graph = generate_graph(SCALES[scale], seed=seed)
     manifest = write_dataset(graph, dataset_dir)
+    # Adapters consume CSVs. Keeping the generated Python graph alive adds a
+    # second, unrelated in-memory dataset throughout native engine measurement.
+    del graph
     environment = _environment(
         databases, scale, seed, warmup, iterations, profile, execution_mode, keep_db_artifacts, threads
     )
     environment["dataset_manifest"] = manifest
+    environment["result_observation"] = (
+        "full_rows_retained_inside_timing_serialized_afterward" if observe_result_rows else "counts_only"
+    )
     if baseline_summary is not None:
         environment["baseline_summary"] = str(baseline_summary)
         environment["max_regression_ratio"] = max_regression_ratio
@@ -341,6 +351,7 @@ def run_benchmark(
         for database in databases:
             try:
                 adapter = _adapter_for(database, dataset_dir, scale, profile, threads)
+                adapter.emit_result_rows = observe_result_rows
             except Exception as exc:
                 failure = FailureEvent(
                     database=database,
@@ -357,6 +368,8 @@ def run_benchmark(
             try:
                 results = adapter.run_all(warmup=warmup, iterations=iterations, execution_mode=execution_mode)
                 _write_profile_events(result_dir, getattr(adapter, "profile_events", []))
+                for observation in getattr(adapter, "result_events", []):
+                    _write_jsonl(raw_handle, {**observation, "database": database})
             except Exception as exc:
                 failure = FailureEvent(
                     database=database,

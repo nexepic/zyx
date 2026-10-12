@@ -36,9 +36,11 @@ class ZyxAdapter(BenchmarkAdapter):
             raise ValueError("ZYX_COMPARE_EMIT_PROFILE must be 0 or 1")
         self.emit_profile = profile_setting == "1"
         self.profile_events: list[ProfileEvent] = []
+        self.result_events: list[dict[str, Any]] = []
 
     def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm") -> list[WorkloadResult]:
         self.profile_events = []
+        self.result_events = []
 
         if warmup < 0:
             return [self._failed_result("run_all", "warmup must be >= 0")]
@@ -89,6 +91,8 @@ class ZyxAdapter(BenchmarkAdapter):
             command.extend(["--threads", str(self.threads)])
         if self.emit_profile:
             command.append("--emit-profile")
+        if self.emit_result_rows:
+            command.append("--emit-result-rows")
 
         try:
             # COSEC: an argument vector bypasses shell parsing, so paths and workload names cannot inject commands.
@@ -235,6 +239,17 @@ class ZyxAdapter(BenchmarkAdapter):
                 malformed.append(f"{location}: sample metadata or latency violates the ZYX benchmark contract")
                 return
             result.samples.append(sample)
+        elif event_type == "result":
+            iteration = event.get("iteration")
+            value = event.get("value")
+            if type(iteration) is not int or iteration < 0 or type(value) is not int or value < 0:
+                malformed.append(f"{location}: invalid result event")
+                return
+            if "rows" in event and (not isinstance(event["rows"], list)
+                                    or any(not isinstance(row, list) for row in event["rows"])):
+                malformed.append(f"{location}: invalid result rows")
+                return
+            self.result_events.append(event.copy())
         elif event_type == "profile":
             try:
                 profile_event = ProfileEvent(

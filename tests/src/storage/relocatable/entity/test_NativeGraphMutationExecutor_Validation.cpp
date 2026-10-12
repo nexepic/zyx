@@ -758,11 +758,15 @@ TEST_F(NativeGraphMutationExecutorValidationTest,
 	allocateUniqueConstraintSupportRoot(indexes, constraintId);
 
 	NativeGraphMutationTokenResolvers constraintTokens = tokens();
-	constraintTokens.property_key_token = [](const MetadataSnapshotPin &, std::string_view name) {
-		return name == "email" ? std::optional<uint32_t>(19U) : std::nullopt;
+	constraintTokens.property_key_token = [](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+		if (name == "email") return 19U;
+		if (name == "note") return 20U;
+		return std::nullopt;
 	};
-	constraintTokens.property_key_name = [](const MetadataSnapshotPin &, uint32_t token) {
-		return token == 19U ? std::optional<std::string>("email") : std::nullopt;
+	constraintTokens.property_key_name = [](const MetadataSnapshotPin &, uint32_t token) -> std::optional<std::string> {
+		if (token == 19U) return "email";
+		if (token == 20U) return "note";
+		return std::nullopt;
 	};
 	ConstraintDefinition unique;
 	unique.constraint_id = constraintId;
@@ -790,6 +794,20 @@ TEST_F(NativeGraphMutationExecutorValidationTest,
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_EQ(support.find(snapshot, ConstraintSupportTree::entryKey(initialKey, nodeId)), std::optional<uint64_t>(nodeId));
 	snapshot.release();
+
+	const auto beforeUnrelated = metadata_->openSnapshot();
+	const auto originalSupportRoot = metadata_->findIndexRootOptional(beforeUnrelated, constraintId);
+	LogicalGraphMutationBatch unrelated;
+	unrelated.property_replacements = {
+		{{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, nodeId},
+		 {{"email", PropertyValue("ada@example.test")}, {"note", PropertyValue("unrelated field")}}}};
+	ASSERT_TRUE(executor.execute(unrelated).committed());
+	{
+		auto afterUnrelated = metadata_->openSnapshot();
+		EXPECT_EQ(metadata_->findIndexRootOptional(afterUnrelated, constraintId), originalSupportRoot);
+		EXPECT_EQ(graph.readNode(beforeUnrelated, nodeId).properties.size(), 1U);
+		EXPECT_EQ(graph.readNode(afterUnrelated, nodeId).properties.size(), 2U);
+	}
 
 	LogicalGraphMutationBatch update;
 	update.property_replacements = {
@@ -1443,4 +1461,35 @@ TEST_F(NativeGraphMutationExecutorValidationTest,
 	EXPECT_EQ(graph.readNode(old, first), oldFirst);
 	EXPECT_EQ(graph.readNode(old, last), oldLast);
 	EXPECT_NO_THROW(static_cast<void>(graph.readEdge(old, edge)));
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, CancelsPropertyResolutionBeforeCopyingOrResolvingLaterFields) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	bool cancelled = false;
+	size_t resolutions = 0U;
+	auto resolvers = tokens();
+	resolvers.property_key_token = [&](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+		++resolutions;
+		if (name != "age") throw std::logic_error("Unexpected resolution after cancellation");
+		cancelled = true;
+		return 17U;
+	};
+	NativeGraphMutationExecutor executor(
+		planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, std::move(resolvers),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	LogicalGraphMutationBatch batch;
+	batch.node_creates = {{{"Person"}, {{"zz", PropertyValue(int64_t(2))}, {"age", PropertyValue(int64_t(1))}}}};
+	auto before = metadata_->openSnapshot();
+	const auto generation = before.superblock().generation;
+	LogicalGraphMutationReadControl control;
+	control.checkpoint = [&] { if (cancelled) throw std::runtime_error("Property resolution cancelled"); };
+	EXPECT_THROW(static_cast<void>(executor.execute(batch, {}, control)), std::runtime_error);
+	EXPECT_EQ(resolutions, 1U);
+	auto after = metadata_->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, generation);
+	EXPECT_EQ(batch.node_creates.front().properties.front().key, "zz");
+	EXPECT_EQ(batch.node_creates.front().properties.back().value, PropertyValue(int64_t(1)));
 }

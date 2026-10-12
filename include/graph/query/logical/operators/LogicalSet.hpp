@@ -26,7 +26,8 @@ namespace graph::query::logical {
 enum class SetActionType {
 	LSET_PROPERTY,   ///< SET n.prop = expr
 	LSET_LABEL,      ///< SET n:Label
-	LSET_MAP_MERGE   ///< SET n += {map}
+	LSET_MAP_MERGE,  ///< SET n += {map}
+	LSET_MAP_REPLACE ///< SET n = {map}
 };
 
 /**

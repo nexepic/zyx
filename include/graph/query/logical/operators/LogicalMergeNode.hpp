@@ -10,6 +10,7 @@
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/logical/operators/LogicalSet.hpp"
 
 #include <memory>
 #include <stdexcept>
@@ -27,6 +28,7 @@ struct MergeSetAction {
 	std::string variable;
 	std::string key;
 	std::shared_ptr<graph::query::expressions::Expression> expression;
+	SetActionType type = SetActionType::LSET_PROPERTY;
 };
 
 /**
@@ -73,7 +75,7 @@ public:
 			std::vector<MergeSetAction> dst;
 			dst.reserve(src.size());
 			for (const auto &a : src) {
-				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr});
+				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr, a.type});
 			}
 			return dst;
 		};

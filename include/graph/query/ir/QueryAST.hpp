@@ -129,7 +129,7 @@ struct PatternPartAST {
 // Set/Remove item AST types
 // =============================================================================
 
-enum class SetItemType { SIT_PROPERTY, SIT_LABEL, SIT_MAP_MERGE };
+enum class SetItemType { SIT_PROPERTY, SIT_LABEL, SIT_MAP_MERGE, SIT_MAP_REPLACE };
 
 struct SetItemAST {
 	SetItemType type;

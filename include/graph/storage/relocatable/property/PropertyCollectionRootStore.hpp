@@ -134,6 +134,16 @@ namespace graph::storage {
 		// bounds. It never materializes the Property value collection.
 		[[nodiscard]] std::optional<size_t> readEntityPropertyCount(const MetadataSnapshotPin &snapshot,
 																												const EntityPropertyKey &key) const;
+		// Enumerates authenticated field tokens without decoding values. Missing
+		// property roots produce an empty list. Admissions cover output capacity
+		// and transient LargeValue directory buffers separately.
+		// Token admission reports absolute requested capacity and actual capacity;
+		// transient admission reports its absolute retained buffers independently.
+		[[nodiscard]] std::vector<uint32_t> readEntityPropertyTokens(
+				const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+				const SelectedPropertyReadAdmission &tokenAdmission,
+				const SelectedPropertyReadAdmission &transientAdmission,
+				const CancellationCheckpoint *cancellation = nullptr) const;
 		// Resolves strictly ordered owners in one directory merge and reads each
 		// distinct Property page at most once. Missing owners report zero, matching
 		// the point-count contract; malformed locations still fail closed.

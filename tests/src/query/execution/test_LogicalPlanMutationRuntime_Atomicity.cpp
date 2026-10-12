@@ -7,8 +7,597 @@
  **/
 
 #include "query/execution/LogicalPlanMutationRuntimeTestFixture.hpp"
+#include "graph/query/logical/operators/LogicalMergeNode.hpp"
+#include "graph/query/logical/operators/LogicalMergeEdge.hpp"
 
 namespace graph::query {
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchChainPreservesFieldsAndRetriesWithoutDoubleApplication) {
+		for (const bool conflict : {false, true}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"name", PropertyValue("Ada")}, {"keep", PropertyValue(9)}});
+			backend->setShapedPropertyAdmission(true);
+			if (conflict) backend->rejectNextMutation();
+			QueryEngine engine(backend, backend);
+			EXPECT_NO_THROW(static_cast<void>(engine.execute(
+				"MATCH (n:Seed) SET n.rank = n.rank + 1 SET n.rank = n.rank + 1 REMOVE n.name SET n:Updated RETURN n.rank")));
+			const auto &node = backend->graph().nodes.at(id);
+			EXPECT_EQ(node.properties.at("rank"), PropertyValue(3));
+			EXPECT_EQ(node.properties.at("keep"), PropertyValue(9));
+			EXPECT_FALSE(node.properties.contains("name"));
+			EXPECT_EQ(backend->countNodesWithLabel("Updated"), 1U);
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+			EXPECT_EQ(backend->read_control_calls, conflict ? 2U : 1U);
+			EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchChainRestoringOriginalValueDoesNotPublish) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		EXPECT_NO_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) SET n.rank = 2 SET n.rank = 1 RETURN n.rank")));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchMapMergeRemovesNullAndPreservesUnspecifiedFields) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"name", PropertyValue("Ada")}, {"keep", PropertyValue(9)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		EXPECT_NO_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) SET n += {rank: 4, name: null} RETURN n")));
+		const auto &properties = backend->graph().nodes.at(id).properties;
+		EXPECT_EQ(properties.at("rank"), PropertyValue(4));
+		EXPECT_EQ(properties.at("keep"), PropertyValue(9));
+		EXPECT_FALSE(properties.contains("name"));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchControlFailureDoesNotPublishCompanionLabels) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		backend->read_control_hook = [](const storage::LogicalGraphMutationReadControl &control) {
+			ASSERT_TRUE(control.property_admission);
+			throw std::runtime_error("test mutation control rejected publication");
+		};
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) SET n.rank = 2 SET n:Updated RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("Updated"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, EdgePropertyPatchPreservesOtherFieldsAndReturnsFinalValue) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto source = backend->addNode({"Source"}, {});
+		const auto target = backend->addNode({"Target"}, {});
+		const auto edge = backend->addEdge(source, target, "LINK", {{"weight", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		const auto result = engine.execute("MATCH (:Source)-[r:LINK]->(:Target) SET r.weight = 5 RETURN r.weight AS weight");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("weight").asPrimitive(), PropertyValue(5));
+		EXPECT_EQ(backend->graph().edges.at(edge).properties.at("weight"), PropertyValue(5));
+		EXPECT_EQ(backend->graph().edges.at(edge).properties.at("keep"), PropertyValue(9));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchCompleteMapReplacementClearsUnspecifiedFields) {
+		for (const bool patches : {false, true}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+			backend->setShapedPropertyAdmission(patches);
+			QueryEngine engine(backend, backend);
+			const auto result = engine.execute("MATCH (n:Seed) SET n = {rank: 'changed', removed: null} RETURN n.rank AS rank");
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue("changed"));
+			const auto &properties = backend->graph().nodes.at(id).properties;
+			ASSERT_EQ(properties.size(), 1U);
+			EXPECT_EQ(properties.at("rank"), PropertyValue("changed"));
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+			if (patches) EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchEmptyMapReplacementRemovesAllFields) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"name", PropertyValue("Ada")}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed) SET n = {} RETURN n"));
+		EXPECT_TRUE(backend->graph().nodes.at(id).properties.empty());
+		EXPECT_EQ(backend->countNodesWithLabel("Seed"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchSourceAdmissionFailurePrecedesBackendPublication) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		backend->setShapedAdmissionHook([](size_t bytes) {
+			EXPECT_GT(bytes, 0U);
+			throw std::runtime_error("test rejected patch source before copying");
+		});
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) SET n.rank = 2 SET n:Updated RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("Updated"), 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CompleteMapReplacementWorksAcrossCreateMergeAndForeachChains) {
+		for (const std::string query : {
+			"CREATE (n:Seed {old: 1}) SET n = {rank: 3} RETURN n",
+			"MERGE (n:Seed {old: 1}) SET n = {rank: 3} RETURN n",
+			"MATCH (n:Seed) FOREACH (value IN [3] | SET n = {rank: value}) RETURN n"}) {
+			SCOPED_TRACE(query);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			if (query.starts_with("MATCH")) static_cast<void>(backend->addNode({"Seed"}, {{"old", PropertyValue(1)}}));
+			QueryEngine engine(backend, backend);
+			static_cast<void>(engine.execute(query));
+			ASSERT_EQ(backend->graph().nodes.size(), 1U);
+			const auto &properties = backend->graph().nodes.begin()->second.properties;
+			ASSERT_EQ(properties.size(), 1U);
+			EXPECT_EQ(properties.at("rank"), PropertyValue(3));
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CompleteMapReplacementRejectsScalarBeforePublishingEarlierChanges) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) SET n.rank = 2 SET n = 3 RETURN n")), std::logic_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MapMergeEvaluatesCompleteCaseExpressionBeforeApplyingFields) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed) SET n += CASE WHEN false THEN {rank: 2} ELSE {rank: 3} END RETURN n"));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(3));
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MapMergeEvaluatesFieldReferencesAgainstTheSameInputState) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed) SET n += {rank: 2, previous: n.rank} RETURN n"));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(2));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("previous"), PropertyValue(1));
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeMapActionsRetainTypesAndExpressionsWhenCloned) {
+		const auto expression = std::make_shared<expressions::LiteralExpression>(PropertyValue(1));
+		const std::vector<logical::MergeSetAction> actions{
+			{"n", "", expression, logical::SetActionType::LSET_MAP_MERGE},
+			{"n", "", expression, logical::SetActionType::LSET_MAP_REPLACE}};
+		logical::LogicalMergeNode node("n", {}, {}, actions, actions);
+		const auto clonedNode = node.clone();
+		const auto *nodePlan = dynamic_cast<const logical::LogicalMergeNode *>(clonedNode.get());
+		ASSERT_NE(nodePlan, nullptr);
+		logical::LogicalMergeEdge edge("source", "n", "target", "LINK", "out", {}, actions, actions);
+		const auto clonedEdge = edge.clone();
+		const auto *edgePlan = dynamic_cast<const logical::LogicalMergeEdge *>(clonedEdge.get());
+		ASSERT_NE(edgePlan, nullptr);
+		for (const auto *copied : {&nodePlan->getOnCreateItems(), &nodePlan->getOnMatchItems(),
+			&edgePlan->getOnCreateActions(), &edgePlan->getOnMatchActions()}) {
+			ASSERT_EQ(copied->size(), actions.size());
+			for (size_t index = 0U; index < actions.size(); ++index) {
+				EXPECT_EQ((*copied)[index].type, actions[index].type);
+				EXPECT_EQ((*copied)[index].variable, actions[index].variable);
+				EXPECT_EQ((*copied)[index].key, actions[index].key);
+				ASSERT_NE((*copied)[index].expression, nullptr);
+				EXPECT_NE((*copied)[index].expression.get(), expression.get());
+			}
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeOnCreateAndOnMatchKeepMapReplacementDistinctFromMerge) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MERGE (n:Seed {identity: 1}) ON CREATE SET n += {rank: 2, previous: n.identity} RETURN n"));
+		ASSERT_EQ(backend->graph().nodes.size(), 1U);
+		const auto id = backend->graph().nodes.begin()->first;
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("previous"), PropertyValue(1));
+		static_cast<void>(engine.execute("MERGE (n:Seed {identity: 1}) ON MATCH SET n = {identity: 1, rank: 3, discarded: null} RETURN n"));
+		const auto &properties = backend->graph().nodes.at(id).properties;
+		ASSERT_EQ(properties.size(), 2U);
+		EXPECT_EQ(properties.at("rank"), PropertyValue(3));
+		EXPECT_FALSE(properties.contains("previous"));
+		EXPECT_FALSE(properties.contains("discarded"));
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeMapActionFailureDoesNotPublishCreatedOrMatchedState) {
+		for (const bool existing : {false, true}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			if (existing) static_cast<void>(backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}, {"rank", PropertyValue(9)}}));
+			QueryEngine engine(backend, backend);
+			EXPECT_THROW(static_cast<void>(engine.execute(
+				"MERGE (n:Seed {identity: 1}) ON CREATE SET n += 3 ON MATCH SET n = 4 RETURN n")), std::logic_error);
+			EXPECT_EQ(backend->graph().nodes.size(), existing ? 1U : 0U);
+			if (existing) EXPECT_EQ(backend->graph().nodes.begin()->second.properties.at("rank"), PropertyValue(9));
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CompleteMapReplacementRejectsEntryGrowthBeforePublication) {
+		for (const std::string query : {
+			"MATCH (n:Seed) SET n = {a: 1, b: 2} RETURN n.a AS value",
+			"CREATE (n:Seed) SET n = {a: 1, b: 2} RETURN n.a AS value",
+			"MERGE (n:Seed {identity: 1}) ON MATCH SET n = {a: 1, b: 2} RETURN n.a AS value",
+			"MERGE (n:Other) ON CREATE SET n = {a: 1, b: 2} RETURN n.a AS value"}) {
+			SCOPED_TRACE(query);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}});
+			backend->setShapedPropertyAdmission(true);
+			LogicalReadExecutionOptions options;
+			options.bounds.maximum_property_entries = 1U;
+			QueryEngine engine(backend, backend, options);
+			EXPECT_THROW(static_cast<void>(engine.execute(query)), std::runtime_error);
+			ASSERT_EQ(backend->graph().nodes.size(), 1U);
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("identity"), PropertyValue(1));
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CompleteMapReplacementCountsOnlyPersistedFieldsAtEntryLimit) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_property_entries = 1U;
+		QueryEngine engine(backend, backend, options);
+		const auto result = engine.execute("MATCH (n:Seed) SET n = {rank: 2, absent: null} RETURN n.rank AS rank");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(2));
+		ASSERT_EQ(backend->graph().nodes.at(id).properties.size(), 1U);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(2));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyGrowthRejectsScalarAndMapWritesAcrossMutationChains) {
+		for (const std::string query : {
+			"MATCH (n:Seed) SET n.extra = 2 RETURN n.extra",
+			"MATCH (n:Seed) SET n += {extra: 2} RETURN n.extra",
+			"CREATE (n:Other {identity: 1}) SET n.extra = 2 RETURN n.extra",
+			"CREATE (n:Other {identity: 1}) SET n += {extra: 2} RETURN n.extra",
+			"MERGE (n:Seed {identity: 1}) ON MATCH SET n.extra = 2 RETURN n.extra",
+			"MERGE (n:Seed {identity: 1}) ON MATCH SET n += {extra: 2} RETURN n.extra",
+			"MERGE (n:Other {identity: 1}) ON CREATE SET n += {extra: 2} RETURN n.extra",
+			"MERGE (n:Seed {identity: 1}) SET n.extra = 2 RETURN n.extra",
+			"MERGE (n:Seed {identity: 1}) SET n += {extra: 2} RETURN n.extra",
+			"MATCH (n:Seed) FOREACH (value IN [2] | SET n.extra = value) RETURN n"}) {
+			SCOPED_TRACE(query);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}});
+			backend->setShapedPropertyAdmission(true);
+			LogicalReadExecutionOptions options;
+			options.bounds.maximum_property_entries = 1U;
+			QueryEngine engine(backend, backend, options);
+			EXPECT_THROW(static_cast<void>(engine.execute(query)), std::runtime_error);
+			ASSERT_EQ(backend->graph().nodes.size(), 1U);
+			ASSERT_EQ(backend->graph().nodes.at(id).properties.size(), 1U);
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("identity"), PropertyValue(1));
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MapMergeRemovalMakesRoomWithoutDependingOnFieldOrder) {
+		for (const std::string map : {"{identity: null, extra: 2}", "{extra: 2, identity: null}"}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}});
+			backend->setShapedPropertyAdmission(true);
+			LogicalReadExecutionOptions options;
+			options.bounds.maximum_property_entries = 1U;
+			QueryEngine engine(backend, backend, options);
+			static_cast<void>(engine.execute("MATCH (n:Seed) SET n += " + map + " RETURN n.extra"));
+			ASSERT_EQ(backend->graph().nodes.at(id).properties.size(), 1U);
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("extra"), PropertyValue(2));
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePersistedNodeUsesPropertyPatchesAndRebuildsAfterConflict) {
+		for (const bool conflict : {false, true}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}, {"rank", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+			backend->setShapedPropertyAdmission(true);
+			if (conflict) backend->rejectNextMutation();
+			QueryEngine engine(backend, backend);
+			const auto result = engine.execute("MERGE (n:Seed {identity: 1}) ON MATCH SET n += {rank: n.rank + 1} SET n:Updated RETURN n.rank AS rank");
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(2));
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("keep"), PropertyValue(9));
+			EXPECT_EQ(backend->countNodesWithLabel("Updated"), 1U);
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+			EXPECT_EQ(backend->read_control_calls, conflict ? 2U : 1U);
+			EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePropertyPatchRestoringOriginalValueSkipsPublication) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}, {"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		const auto result = engine.execute("MERGE (n:Seed {identity: 1}) ON MATCH SET n.rank = 2 SET n.rank = 1 RETURN n.rank AS rank");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(1));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePropertyPatchAdmissionFailureCannotPublishLabelChanges) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"identity", PropertyValue(1)}, {"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		backend->setShapedAdmissionHook([](size_t) { throw std::runtime_error("test MERGE source admission failure"); });
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MERGE (n:Seed {identity: 1}) ON MATCH SET n.rank = 2 SET n:Updated RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("Updated"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePersistedEdgeUsesPatchForCompleteMapReplacement) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto source = backend->addNode({"Source"}, {});
+		const auto target = backend->addNode({"Target"}, {});
+		const auto edge = backend->addEdge(source, target, "LINK", {{"weight", PropertyValue(1)}, {"old", PropertyValue(9)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		const auto result = engine.execute("MATCH (a:Source), (b:Target) MERGE (a)-[r:LINK]->(b) ON MATCH SET r = {weight: 3} RETURN r.weight AS weight");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("weight").asPrimitive(), PropertyValue(3));
+		ASSERT_EQ(backend->graph().edges.at(edge).properties.size(), 1U);
+		EXPECT_EQ(backend->graph().edges.at(edge).properties.at("weight"), PropertyValue(3));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateChainPublishesNewNodesAndPersistedPropertyPatchesTogether) {
+		for (const bool conflict : {false, true}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+			backend->setShapedPropertyAdmission(true);
+			if (conflict) backend->rejectNextMutation();
+			QueryEngine engine(backend, backend);
+			const auto result = engine.execute("MATCH (n:Seed) CREATE (m:Created {name: 'new'}) SET n.rank = n.rank + 1 RETURN m, n.rank AS rank");
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(2));
+			EXPECT_TRUE(result.getRows().front().at("m").isLogicalNode());
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("keep"), PropertyValue(9));
+			EXPECT_EQ(backend->countNodesWithLabel("Created"), 1U);
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+			EXPECT_EQ(backend->read_control_calls, conflict ? 2U : 1U);
+			EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, ForeachCollapsesOrderedPersistedChangesIntoOnePropertyPatch) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		const auto result = engine.execute("MATCH (n:Seed) FOREACH (value IN [1, 2] | SET n.rank = n.rank + value) RETURN n.rank AS rank");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("rank").asPrimitive(), PropertyValue(4));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(4));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("keep"), PropertyValue(9));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateChainPatchAdmissionFailureRejectsCompanionCreations) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		backend->setShapedAdmissionHook([](size_t) { throw std::runtime_error("test CREATE patch source admission failure"); });
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) CREATE (:Created) SET n.rank = 2 RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("Created"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, ForeachCreateReadsPreviousIterationPropertyChangesBeforeCurrentSet) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed) FOREACH (value IN [1, 2] | CREATE (:Observed {seen: n.rank}) SET n.rank = n.rank + 1) RETURN n"));
+		std::vector<int64_t> seen;
+		for (const auto &[nodeId, node] : backend->graph().nodes) {
+			if (nodeId != id) seen.push_back(std::get<int64_t>(node.properties.at("seen").getVariant()));
+		}
+		std::sort(seen.begin(), seen.end());
+		EXPECT_EQ(seen, (std::vector<int64_t>{1, 2}));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(3));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, ForeachFailureAfterCrossEntityReadsDoesNotPublishStagedValues) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed) FOREACH (value IN [1, 0] | CREATE (:Observed {seen: n.rank, quotient: 1 / value}) SET n.rank = n.rank + 1) RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.size(), 1U);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, ForeachUpdatesAllAliasesBeforeCreatingDependentEntities) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed), (alias:Seed) FOREACH (value IN [1, 2] | SET n.rank = n.rank + 1 CREATE (:Observed {seen: alias.rank})) RETURN n"));
+		std::vector<int64_t> seen;
+		for (const auto &[nodeId, node] : backend->graph().nodes) {
+			if (nodeId != id) seen.push_back(std::get<int64_t>(node.properties.at("seen").getVariant()));
+		}
+		std::sort(seen.begin(), seen.end());
+		EXPECT_EQ(seen, (std::vector<int64_t>{2, 3}));
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(3));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, ForeachCreatedEntitiesReadTheirFinalStagedPropertiesWithinEachIteration) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("FOREACH (value IN [1, 2] | CREATE (n:Created {rank: 1}) SET n += {rank: n.rank + value, previous: n.rank} CREATE (:Observed {seen: n.rank}))"));
+		std::vector<int64_t> ranks, seen;
+		for (const auto &[_, node] : backend->graph().nodes) {
+			if (node.properties.contains("rank")) {
+				ranks.push_back(std::get<int64_t>(node.properties.at("rank").getVariant()));
+				EXPECT_EQ(node.properties.at("previous"), PropertyValue(1));
+			} else seen.push_back(std::get<int64_t>(node.properties.at("seen").getVariant()));
+		}
+		std::sort(ranks.begin(), ranks.end());
+		std::sort(seen.begin(), seen.end());
+		EXPECT_EQ(ranks, (std::vector<int64_t>{2, 3}));
+		EXPECT_EQ(seen, ranks);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InitialCreatePropertiesRespectEntryBoundsForNodesAndRelationships) {
+		for (const std::string query : {
+			"CREATE (:Created {a: 1, b: 2})",
+			"CREATE (a)-[:LINK {a: 1, b: 2}]->(b)",
+			"UNWIND [1] AS value CREATE (:Created {a: 1, b: value})",
+			"UNWIND [1] AS value CREATE (a)-[:LINK {a: 1, b: value}]->(b)"}) {
+			SCOPED_TRACE(query);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			LogicalReadExecutionOptions options;
+			options.bounds.maximum_property_entries = 1U;
+			QueryEngine engine(backend, backend, options);
+			EXPECT_THROW(static_cast<void>(engine.execute(query)), std::runtime_error);
+			EXPECT_TRUE(backend->graph().nodes.empty());
+			EXPECT_TRUE(backend->graph().edges.empty());
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+			EXPECT_EQ(backend->read_control_calls, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeIdentityEntryAdmissionPrecedesDynamicExpressionEvaluation) {
+		registerCountingMergeResultExpression();
+		for (const std::string query : {
+			"MERGE (:Created {a: 1, b: 2})",
+			"MERGE (:Created {a: 1, b: testMergeResultCounter()})",
+			"MERGE (a)-[:LINK {a: 1, b: 2}]->(b)",
+			"MERGE (a)-[:LINK {a: 1, b: testMergeResultCounter()}]->(b)"}) {
+			SCOPED_TRACE(query);
+			mergeResultExpressionCalls.store(0, std::memory_order_relaxed);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			LogicalReadExecutionOptions options;
+			options.bounds.maximum_property_entries = 1U;
+			QueryEngine engine(backend, backend, options);
+			EXPECT_THROW(static_cast<void>(engine.execute(query)), std::runtime_error);
+			EXPECT_EQ(mergeResultExpressionCalls.load(std::memory_order_relaxed), 0);
+			EXPECT_TRUE(backend->graph().nodes.empty());
+			EXPECT_TRUE(backend->graph().edges.empty());
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+			EXPECT_EQ(backend->read_control_calls, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeIdentityEntryAdmissionAllowsItsExactBoundary) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_property_entries = 1U;
+		QueryEngine engine(backend, backend, options);
+		const auto result = engine.execute("UNWIND [3] AS value MERGE (n:Created {identity: value}) RETURN n.identity AS identity");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("identity").asPrimitive(), PropertyValue(3));
+		EXPECT_EQ(backend->graph().nodes.size(), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePropertyChangesSynchronizeAliasesBeforeLaterAssignments) {
+		for (const std::string query : {
+			"MATCH (n:Seed), (alias:Seed) MERGE (n) ON MATCH SET n.rank = 2, n.copied = alias.rank RETURN n.copied AS copied",
+			"MATCH (n:Seed), (alias:Seed) MERGE (n) SET n.rank = 2 SET n.copied = alias.rank RETURN n.copied AS copied"}) {
+			SCOPED_TRACE(query);
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+			backend->setShapedPropertyAdmission(true);
+			QueryEngine engine(backend, backend);
+			const auto result = engine.execute(query);
+			ASSERT_EQ(result.rowCount(), 1U);
+			EXPECT_EQ(result.getRows().front().at("copied").asPrimitive(), PropertyValue(2));
+			EXPECT_EQ(backend->graph().nodes.at(id).properties.at("copied"), PropertyValue(2));
+			EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePropertyRemovalIsVisibleThroughAliasesInLaterAssignments) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}, {"keep", PropertyValue(9)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		const auto result = engine.execute("MATCH (n:Seed), (alias:Seed) MERGE (n) REMOVE n.rank SET n.copied = alias.rank RETURN n.copied AS copied");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("copied").asPrimitive().getType(), PropertyType::NULL_TYPE);
+		const auto &properties = backend->graph().nodes.at(id).properties;
+		EXPECT_FALSE(properties.contains("rank"));
+		EXPECT_FALSE(properties.contains("copied"));
+		EXPECT_EQ(properties.at("keep"), PropertyValue(9));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeAliasExpressionFailureCannotPublishEarlierRemoval) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"rank", PropertyValue(1)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		EXPECT_THROW(static_cast<void>(engine.execute("MATCH (n:Seed), (alias:Seed) MERGE (n) REMOVE n.rank SET n.copied = CASE WHEN alias.rank IS NULL THEN 1 / 0 ELSE 1 END RETURN n")), std::runtime_error);
+		EXPECT_EQ(backend->graph().nodes.at(id).properties.at("rank"), PropertyValue(1));
+		EXPECT_FALSE(backend->graph().nodes.at(id).properties.contains("copied"));
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->read_control_calls, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, PropertyPatchLookupHandlesUnorderedFieldsAndMixedChanges) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const auto id = backend->addNode({"Seed"}, {{"z", PropertyValue(1)}, {"m", PropertyValue(2)}, {"a", PropertyValue(3)}});
+		backend->setShapedPropertyAdmission(true);
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute("MATCH (n:Seed) SET n.m = 7, n.b = 8 REMOVE n.z RETURN n"));
+		const auto &properties = backend->graph().nodes.at(id).properties;
+		ASSERT_EQ(properties.size(), 3U);
+		EXPECT_EQ(properties.at("a"), PropertyValue(3));
+		EXPECT_EQ(properties.at("b"), PropertyValue(8));
+		EXPECT_EQ(properties.at("m"), PropertyValue(7));
+		EXPECT_FALSE(properties.contains("z"));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+		EXPECT_GT(backend->readMetrics().shaped_property_admission_reads, 0U);
+	}
 
 	TEST(LogicalPlanMutationRuntimeTest, BackendReadControlsRejectGuardAndConstraintSourceGrowthBeforePublication) {
 		for (const std::string query: {
@@ -20,7 +609,7 @@ namespace graph::query {
 			SCOPED_TRACE(query);
 			for (bool memory: {false, true}) {
 				auto backend = std::make_shared<TestLogicalGraph>();
-				backend->addNode({"Guarded"}, {{"name", PropertyValue("old")}});
+				static_cast<void>(backend->addNode({"Guarded"}, {{"name", PropertyValue("old")}}));
 				LogicalReadExecutionOptions options;
 				options.bounds.maximum_materialized_bytes = 4096U;
 				QueryEngine engine(backend, backend, options);

@@ -48,6 +48,10 @@ namespace {
 		std::string profile = std::string(kProfileScan);
 		bool emitProfile = false;
 		bool emitCounters = false;
+		bool emitResultRows = false;
+		// Serial benchmark execution retains only this operation's owning output.
+		// Row retention is opt-in and is a separate measurement contract.
+		mutable std::optional<std::vector<std::vector<zyx::Value>>> resultRows;
 		// Scale workloads stay enabled for the standalone benchmark; unit tests can
 		// disable them while retaining the small operational correctness checks.
 		bool includeLargeBatchWorkloads = true;
@@ -862,6 +866,32 @@ namespace {
 		return loaded;
 	}
 
+	std::string resultRowsJson(const std::vector<std::vector<zyx::Value>> &rows) {
+		std::ostringstream output;
+		output << '[';
+		bool firstRow = true;
+		for (const auto &row : rows) {
+			if (!firstRow) output << ',';
+			firstRow = false;
+			output << '[';
+			bool firstValue = true;
+			for (const auto &cell : row) {
+				if (!firstValue) output << ',';
+				firstValue = false;
+				if (const auto *text = std::get_if<std::string>(&cell)) {
+					output << '\"' << jsonEscape(*text) << '\"';
+				} else if (const auto *number = std::get_if<int64_t>(&cell)) {
+					output << *number;
+				} else {
+					throw std::runtime_error("benchmark semantic rows require string or integer cells");
+				}
+			}
+			output << ']';
+		}
+		output << ']';
+		return output.str();
+	}
+
 	template<typename Fn, typename ValidateFn>
 	auto measureOperation(const Options &options, const std::string &workload, int iteration, Fn &&operation,
 						  ValidateFn &&validate) {
@@ -871,6 +901,7 @@ namespace {
 			graph::debug::PerfTrace::reset();
 		}
 
+		options.resultRows.reset();
 		const auto start = Clock::now();
 		try {
 			auto value = operation();
@@ -882,16 +913,21 @@ namespace {
 			}
 			const auto latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
 			validate(value);
+			const auto rowsJson = options.resultRows.has_value() ? resultRowsJson(*options.resultRows) : std::string{};
 			emitSample(workload, options.scale, iteration, latencyMs);
 			if constexpr (std::is_integral_v<decltype(value)>) {
-			std::cout << "{\"event\":\"result\",\"workload\":\"" << jsonEscape(workload)
-				<< "\",\"iteration\":" << iteration << ",\"value\":" << value << "}\n";
+					std::cout << "{\"event\":\"result\",\"workload\":\"" << jsonEscape(workload)
+					<< "\",\"iteration\":" << iteration << ",\"value\":" << value;
+				if (options.resultRows.has_value()) std::cout << ",\"rows\":" << rowsJson;
+				std::cout << "}\n";
+				options.resultRows.reset();
 			}
 			if (options.emitProfile || options.emitCounters) {
 				emitProfileSnapshot(options, workload, iteration, snapshot);
 			}
 			return value;
 		} catch (...) {
+			options.resultRows.reset();
 			if (options.emitProfile || options.emitCounters) {
 				[[maybe_unused]] const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
 				graph::debug::PerfTrace::setEnabled(false);
@@ -1097,15 +1133,23 @@ namespace {
 	}
 
 	template<typename Fn>
-	int64_t rowCount(Fn &&operation) {
+	int64_t rowCount(Fn &&operation,
+			std::optional<std::vector<std::vector<zyx::Value>>> *observedRows = nullptr) {
 		auto result = operation();
 		if constexpr (std::is_convertible_v<decltype(result), zyx::Result>) {
 			if (!result.isSuccess()) {
 				throw std::runtime_error(result.getError());
 			}
 			int64_t count = 0;
+			if (observedRows != nullptr) observedRows->emplace();
 			while (result.hasNext()) {
 				result.next();
+				if (observedRows != nullptr) {
+					std::vector<zyx::Value> row;
+					row.reserve(static_cast<size_t>(result.getColumnCount()));
+					for (int column = 0; column < result.getColumnCount(); ++column) row.push_back(result.get(column));
+					(*observedRows)->push_back(std::move(row));
+				}
 				++count;
 			}
 			return count;
@@ -1193,6 +1237,8 @@ namespace {
 				options.emitProfile = true;
 			} else if (arg == "--emit-counters") {
 				options.emitCounters = true;
+			} else if (arg == "--emit-result-rows") {
+				options.emitResultRows = true;
 			} else if (arg == "--execution-mode") {
 				options.executionMode = requireValue(arg);
 				if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeOpened &&
@@ -1294,11 +1340,13 @@ namespace {
 			runQueryWorkload(options, db, loaded, "aggregation_group_by", [](zyx::Database &queryDb) {
 				return scalarInt(queryDb.execute("MATCH (u:User) RETURN count(DISTINCT u.country)"));
 			});
-			runQueryWorkload(options, db, loaded, "aggregation_count_by_group", [](zyx::Database &queryDb) {
-				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.country, count(*)"); });
+			runQueryWorkload(options, db, loaded, "aggregation_count_by_group", [&options](zyx::Database &queryDb) {
+				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.country, count(*)"); },
+						options.emitResultRows ? &options.resultRows : nullptr);
 			});
-			runQueryWorkload(options, db, loaded, "topk_property_sort", [](zyx::Database &queryDb) {
-				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100"); });
+			runQueryWorkload(options, db, loaded, "topk_property_sort", [&options](zyx::Database &queryDb) {
+				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100"); },
+						options.emitResultRows ? &options.resultRows : nullptr);
 			});
 		} else if (options.profile == kProfileIndexed) {
 			runQueryWorkload(options, db, loaded, "point_lookup_indexed", [](zyx::Database &queryDb) {

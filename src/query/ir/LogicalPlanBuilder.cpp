@@ -705,6 +705,9 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildSet(
 			case SetItemType::SIT_MAP_MERGE:
 				logType = SetActionType::LSET_MAP_MERGE;
 				break;
+			case SetItemType::SIT_MAP_REPLACE:
+				logType = SetActionType::LSET_MAP_REPLACE;
+				break;
 			default:
 				logType = SetActionType::LSET_PROPERTY;
 				break;
@@ -771,7 +774,14 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 		std::vector<MergeSetAction> actions;
 		actions.reserve(items.size());
 		for (const auto& item : items) {
-			actions.push_back({item.variable, item.key, item.expression});
+			SetActionType type = SetActionType::LSET_PROPERTY;
+			switch (item.type) {
+				case SetItemType::SIT_PROPERTY: break;
+				case SetItemType::SIT_LABEL: type = SetActionType::LSET_LABEL; break;
+				case SetItemType::SIT_MAP_MERGE: type = SetActionType::LSET_MAP_MERGE; break;
+				case SetItemType::SIT_MAP_REPLACE: type = SetActionType::LSET_MAP_REPLACE; break;
+			}
+			actions.push_back({item.variable, item.key, item.expression, type});
 		}
 		return actions;
 	};

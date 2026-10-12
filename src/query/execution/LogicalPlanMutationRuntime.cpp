@@ -7,6 +7,7 @@
  */
 
 #include "graph/query/execution/LogicalPlanMutationRuntime.hpp"
+#include "BudgetMemoryResource.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +24,7 @@
 #include <vector>
 
 #include "graph/core/Types.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryPlan.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionUtils.hpp"
@@ -72,6 +74,69 @@ namespace graph::query::execution {
 		using storage::LogicalGraphWriteProperty;
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 
+		void assignBoundedProperty(PropertyMap &properties, const std::string &key, const PropertyValue &value, size_t maximumEntries) {
+			if (!properties.contains(key) && properties.size() >= maximumEntries)
+				throw std::runtime_error("logical SET exceeded its Property bound");
+			properties.insert_or_assign(key, value);
+		}
+
+		bool mergePropertyMap(PropertyMap &properties, const PropertyValue &value, const QueryContext &context, size_t maximumEntries) {
+			if (value.getType() != PropertyType::MAP) throw std::logic_error("logical SET map merge requires a map value");
+			size_t finalEntries = properties.size();
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (key.empty()) throw std::logic_error("logical SET map merge has an empty Property key");
+				if (field.getType() == PropertyType::NULL_TYPE && properties.contains(key)) --finalEntries;
+			}
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (field.getType() != PropertyType::NULL_TYPE && !properties.contains(key)) {
+					if (finalEntries >= maximumEntries) throw std::runtime_error("logical SET map merge exceeded its Property bound");
+					++finalEntries;
+				}
+			}
+			if (finalEntries > maximumEntries) throw std::runtime_error("logical SET map merge exceeded its Property bound");
+			bool changed = false;
+			// Remove first so a within-bound map never needs extra Property slots.
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (field.getType() == PropertyType::NULL_TYPE) changed = properties.erase(key) != 0U || changed;
+			}
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (field.getType() == PropertyType::NULL_TYPE) continue;
+				const auto found = properties.find(key);
+				if (found == properties.end() || found->second != field) {
+					assignBoundedProperty(properties, key, field, maximumEntries); changed = true;
+				}
+			}
+			return changed;
+		}
+
+		bool replacePropertyMap(PropertyMap &properties, const PropertyValue &value, const QueryContext &context, size_t maximumEntries) {
+			if (value.getType() != PropertyType::MAP)
+				throw std::logic_error("logical SET map replacement requires a map value");
+			size_t entries = 0U;
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (key.empty()) throw std::logic_error("logical SET map replacement has an empty Property key");
+				if (field.getType() != PropertyType::NULL_TYPE) {
+					if (entries == maximumEntries) throw std::runtime_error("logical SET map replacement exceeded its Property bound");
+					++entries;
+				}
+			}
+			PropertyMap replacement;
+			replacement.reserve(entries);
+			for (const auto &[key, field] : value.getMap()) {
+				context.checkGuard();
+				if (key.empty()) throw std::logic_error("logical SET map replacement has an empty Property key");
+				if (field.getType() != PropertyType::NULL_TYPE) replacement.emplace(key, field);
+			}
+			if (replacement == properties) return false;
+			properties = std::move(replacement);
+			return true;
+		}
+
 		[[nodiscard]] storage::EntityReadShape completeNodeReadShape() {
 			return {.include_labels = true, .include_type = false, .all_properties = true};
 		}
@@ -86,7 +151,9 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] std::vector<LogicalGraphWriteProperty>
-		toLogicalProperties(const std::unordered_map<std::string, PropertyValue> &properties) {
+		toLogicalProperties(const std::unordered_map<std::string, PropertyValue> &properties, size_t maximumEntries) {
+			if (properties.size() > maximumEntries)
+				throw std::runtime_error("logical CREATE literal Properties exceeded their entry bound");
 			std::vector<std::pair<std::string, PropertyValue>> ordered;
 			ordered.reserve(properties.size());
 			for (const auto &[key, value]: properties) {
@@ -138,6 +205,7 @@ namespace graph::query::execution {
 							throw std::logic_error(std::string(context) + " has an invalid SET label assignment");
 						}
 						break;
+					case logical::SetActionType::LSET_MAP_REPLACE:
 					case logical::SetActionType::LSET_MAP_MERGE:
 						if (item.variable.empty() || !item.expression) {
 							throw std::logic_error(std::string(context) + " has an invalid SET map-merge assignment");
@@ -646,6 +714,9 @@ namespace graph::query::execution {
 
 		using MutableGraphEntities = std::map<std::pair<uint8_t, uint64_t>, MutableGraphEntity>;
 
+		[[nodiscard]] storage::LogicalGraphPropertyPatchRequest finalPropertyPatch(
+			const MutableGraphEntity &entity, const QueryContext &context, size_t maximumScratchBytes);
+
 		[[nodiscard]] MutableGraphEntity &mutableEntityForValue(MutableGraphEntities &entities,
 																const LogicalPlanReadValue &value) {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
@@ -726,7 +797,7 @@ namespace graph::query::execution {
 						} else {
 							const auto existing = properties.find(item.key);
 							if (existing == properties.end() || existing->second != value) {
-								properties.insert_or_assign(item.key, value);
+								assignBoundedProperty(properties, item.key, value, bounds.maximum_property_entries);
 								entity.properties_changed = true;
 							}
 						}
@@ -742,30 +813,20 @@ namespace graph::query::execution {
 							entity.labels_changed = true;
 						}
 						break;
+					case logical::SetActionType::LSET_MAP_REPLACE: {
+						PropertyMap &properties = mutableEntityProperties(entity, snapshot, bounds);
+						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
+						const PropertyValue value = evaluateCreatePropertyExpression(*item.expression, context, row, snapshot, bounds, propertyCache);
+						entity.properties_changed = replacePropertyMap(properties, value, context, bounds.maximum_property_entries) || entity.properties_changed;
+						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
+						break;
+					}
 					case logical::SetActionType::LSET_MAP_MERGE: {
 						PropertyMap &properties = mutableEntityProperties(entity, snapshot, bounds);
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						const PropertyValue value = evaluateCreatePropertyExpression(*item.expression, context, row,
 																					 snapshot, bounds, propertyCache);
-						if (value.getType() != PropertyType::MAP) {
-							throw std::logic_error("logical SET map-merge assignment requires a map value");
-						}
-						for (const auto &[key, mergedValue]: value.getMap()) {
-							if (key.empty()) {
-								throw std::logic_error("logical SET map-merge assignment has an empty Property key");
-							}
-							if (mergedValue.getType() == PropertyType::NULL_TYPE) {
-								if (properties.erase(key) != 0U) {
-									entity.properties_changed = true;
-								}
-							} else {
-								const auto existing = properties.find(key);
-								if (existing == properties.end() || existing->second != mergedValue) {
-									properties.insert_or_assign(key, mergedValue);
-									entity.properties_changed = true;
-								}
-							}
-						}
+						entity.properties_changed = mergePropertyMap(properties, value, context, bounds.maximum_property_entries) || entity.properties_changed;
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						break;
 					}
@@ -913,6 +974,9 @@ namespace graph::query::execution {
 														const LogicalPlanReadRow &row,
 														storage::LogicalGraphReadSnapshot &snapshot,
 														std::unordered_map<std::string, PropertyMap> &propertyCache) {
+				if (properties.size() > bounds.maximum_property_entries ||
+					propertyExpressions.size() > bounds.maximum_property_entries - properties.size())
+					throw std::runtime_error("logical CREATE expression Properties exceeded their entry bound");
 				std::vector<std::pair<std::string, std::shared_ptr<expressions::Expression>>> ordered;
 				ordered.reserve(propertyExpressions.size());
 				for (const auto &[key, expression]: propertyExpressions) {
@@ -954,30 +1018,13 @@ namespace graph::query::execution {
 						if (found != properties.end() && found->second == value) {
 							return false;
 						}
-						properties.insert_or_assign(item.key, value);
+						assignBoundedProperty(properties, item.key, value, bounds.maximum_property_entries);
 						return true;
 					}
-					case logical::SetActionType::LSET_MAP_MERGE: {
-						if (value.getType() != PropertyType::MAP) {
-							throw std::logic_error("logical CREATE/SET map merge requires a map value");
-						}
-						bool changed = false;
-						for (const auto &[key, mergedValue]: value.getMap()) {
-							if (key.empty()) {
-								throw std::logic_error("logical CREATE/SET map merge has an empty Property key");
-							}
-							if (mergedValue.getType() == PropertyType::NULL_TYPE) {
-								changed = properties.erase(key) != 0U || changed;
-								continue;
-							}
-							const auto found = properties.find(key);
-							if (found == properties.end() || found->second != mergedValue) {
-								properties.insert_or_assign(key, mergedValue);
-								changed = true;
-							}
-						}
-						return changed;
-					}
+					case logical::SetActionType::LSET_MAP_REPLACE:
+						return replacePropertyMap(properties, value, context, bounds.maximum_property_entries);
+					case logical::SetActionType::LSET_MAP_MERGE:
+						return mergePropertyMap(properties, value, context, bounds.maximum_property_entries);
 					case logical::SetActionType::LSET_LABEL:
 						throw std::logic_error(
 								"logical CREATE/SET label assignment must not evaluate a Property expression");
@@ -1038,6 +1085,15 @@ namespace graph::query::execution {
 							entityReferencesForRow(source);
 					entities.reserve(entities.size() + createsPerInputRow);
 					std::unordered_map<std::string, PropertyMap> propertyCache = source.property_cache;
+					// A repeated FOREACH input still carries its snapshot cache. Restore
+					// all staged bindings before CREATE or expressions read another entity.
+					for (const auto &[variable, reference] : entities) {
+						context.checkGuard();
+						if (reference.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) continue;
+						const auto staged = persistedEntities.find({static_cast<uint8_t>(reference.entity_kind), reference.value});
+						if (staged != persistedEntities.end() && staged->second.properties)
+							propertyCache.insert_or_assign(variable, *staged->second.properties);
+					}
 
 					const auto resolveNode = [&entities](const std::string &variable) {
 						const auto found = entities.find(variable);
@@ -1066,7 +1122,7 @@ namespace graph::query::execution {
 							}
 							LogicalGraphNodeCreateRequest request;
 							request.labels = node->getLabels();
-							request.properties = toLogicalProperties(node->getProperties());
+							request.properties = toLogicalProperties(node->getProperties(), bounds.maximum_property_entries);
 							appendExpressionProperties(node->getPropertyExprs(), request.properties, source, *snapshot,
 													   propertyCache);
 							const LogicalGraphMutationEntityReference reference =
@@ -1101,7 +1157,7 @@ namespace graph::query::execution {
 							request.source = direction == "in" ? targetReference : sourceReference;
 							request.target = direction == "in" ? sourceReference : targetReference;
 							request.type = edge->getEdgeType();
-							request.properties = toLogicalProperties(edge->getProperties());
+							request.properties = toLogicalProperties(edge->getProperties(), bounds.maximum_property_entries);
 							appendExpressionProperties(edge->getPropertyExprs(), request.properties, source, *snapshot,
 													   propertyCache);
 							const LogicalGraphMutationEntityReference reference{
@@ -1364,10 +1420,11 @@ namespace graph::query::execution {
 								throw std::logic_error("logical CREATE/SET persisted entity binding is inconsistent");
 							}
 							PropertyMap &properties = mutableEntityProperties(mutableEntity, *snapshot, bounds);
+							synchronizeEntityPropertyCache(source, mutableEntity, properties, propertyCache);
 							mutableEntity.properties_changed =
 									applyPropertySet(properties, item, source, *snapshot, propertyCache) ||
 									mutableEntity.properties_changed;
-							propertyCache.insert_or_assign(item.variable, properties);
+							synchronizeEntityPropertyCache(source, mutableEntity, properties, propertyCache);
 						}
 					}
 					if (retainOutputRow) {
@@ -1523,6 +1580,8 @@ namespace graph::query::execution {
 					}
 				}
 
+				std::vector<storage::LogicalGraphPropertyPatchRequest> propertyPatches;
+				size_t patchEntryLimit = 0U;
 				for (const auto &[_, entity]: persistedEntities) {
 					const LogicalGraphMutationEntityReference reference{
 							entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
@@ -1533,7 +1592,17 @@ namespace graph::query::execution {
 						continue;
 					}
 					if (entity.properties_changed) {
-						batch.property_replacements.push_back({reference, sortedProperties(*entity.properties)});
+						if (snapshot->supportsShapedPropertyReadAdmission()) {
+							auto patch = finalPropertyPatch(entity, context, bounds.maximum_materialized_bytes);
+							if (!patch.sets.empty() || !patch.removals.empty()) {
+								for (const size_t count : {entity.direct_properties.size(), patch.sets.size(), patch.removals.size()}) {
+									if (count > (std::numeric_limits<size_t>::max)() - patchEntryLimit)
+										throw std::overflow_error("logical CREATE/SET Property patch entry count overflowed");
+									patchEntryLimit += count;
+									}
+								propertyPatches.push_back(std::move(patch));
+							}
+						} else batch.property_replacements.push_back({reference, sortedProperties(*entity.properties)});
 					}
 					if (entity.labels_changed) {
 						batch.node_label_replacements.push_back({reference, entity.labels});
@@ -1562,8 +1631,18 @@ namespace graph::query::execution {
 					// immediately before its durable publication so an expired query never
 					// makes the current mutation batch visible.
 					context.checkGuardNow();
-					const storage::LogicalGraphMutationBatchResult result =
-							executeMutationWithReadControl(writeBackend, batch, fence, bounds, context);
+					storage::LogicalGraphMutationBatchResult result;
+					if (!propertyPatches.empty()) {
+						storage::LogicalGraphMutationReadControl control;
+						control.checkpoint = [&context] { context.checkGuardNow(); };
+						control.property_admission = [&context, &bounds](size_t bytes) {
+							context.checkGuardNow();
+							if (bytes > bounds.maximum_materialized_bytes)
+								throw std::runtime_error("logical CREATE/SET Property patch source exceeded its byte bound");
+						};
+						result = writeBackend.executeLogicalGraphMutationBatchWithPropertyPatches(
+							*snapshot, batch, propertyPatches, patchEntryLimit, *fence, control);
+					} else result = executeMutationWithReadControl(writeBackend, batch, fence, bounds, context);
 					return buildCreateSetResult(projection, implicitColumns, projectionRows, *snapshot, batch, result,
 												persistedEntities, bounds, context, exportedProjection,
 												&prepublicationCache, false, resultSort, resultSkip, resultLimit);
@@ -2314,6 +2393,8 @@ namespace graph::query::execution {
 			const QueryContext &context;
 			const LogicalPlanReadRuntime &reader;
 			LogicalGraphMutationBatch batch;
+			std::vector<storage::LogicalGraphPropertyPatchRequest> property_patches;
+			size_t patch_entry_limit = 0U;
 			MutableGraphEntities modified_entities;
 			std::vector<PropertyMap> created_node_properties;
 			std::vector<PropertyMap> created_edge_properties;
@@ -2341,6 +2422,9 @@ namespace graph::query::execution {
 				const std::unordered_map<std::string, PropertyValue> &literalProperties,
 				const std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> &expressionProperties,
 				MergeRuntimeRow &row, MergeExecutionState &state) {
+			if (literalProperties.size() > state.bounds.maximum_property_entries ||
+				expressionProperties.size() > state.bounds.maximum_property_entries - literalProperties.size())
+				throw std::runtime_error("logical MERGE identity Properties exceeded their entry bound");
 			PropertyMap result = mergeProperties(literalProperties);
 			for (const auto &[key, expression]: expressionProperties) {
 				state.context.checkGuard();
@@ -2419,6 +2503,16 @@ namespace graph::query::execution {
 			return found;
 		}
 
+		void synchronizeMergePropertyAliases(MergeRuntimeRow &row, const std::string &variable,
+			const PropertyMap &properties, const QueryContext &context) {
+			const auto target = row.entities.find(variable);
+			if (target == row.entities.end()) throw std::logic_error("logical MERGE lost its Property target reference");
+			for (const auto &[alias, reference] : row.entities) {
+				context.checkGuard();
+				if (reference == target->second) row.row.property_cache.insert_or_assign(alias, properties);
+			}
+		}
+
 		[[nodiscard]] bool applyMergeActions(PropertyMap &properties,
 											 const std::vector<logical::MergeSetAction> &actions,
 											 const std::string &targetVariable, MergeRuntimeRow &row,
@@ -2432,22 +2526,29 @@ namespace graph::query::execution {
 			bool changed = false;
 			for (const logical::MergeSetAction &action: actions) {
 				state.context.checkGuard();
-				if (action.variable != targetVariable || action.key.empty() || !action.expression) {
+				if (action.variable != targetVariable || !action.expression ||
+					(action.type == logical::SetActionType::LSET_PROPERTY && action.key.empty()) ||
+					(action.type != logical::SetActionType::LSET_PROPERTY && action.type != logical::SetActionType::LSET_MAP_MERGE &&
+					 action.type != logical::SetActionType::LSET_MAP_REPLACE)) {
 					throw std::logic_error("logical MERGE has an unsupported ON CREATE or ON MATCH assignment");
 				}
 				const PropertyValue value =
 						evaluateCreatePropertyExpression(*action.expression, state.context, row.row, state.snapshot,
 														 state.bounds, row.row.property_cache);
-				if (value.getType() == PropertyType::NULL_TYPE) {
+				if (action.type == logical::SetActionType::LSET_MAP_REPLACE) {
+					changed = replacePropertyMap(properties, value, state.context, state.bounds.maximum_property_entries) || changed;
+				} else if (action.type == logical::SetActionType::LSET_MAP_MERGE) {
+					changed = mergePropertyMap(properties, value, state.context, state.bounds.maximum_property_entries) || changed;
+				} else if (value.getType() == PropertyType::NULL_TYPE) {
 					changed = properties.erase(action.key) != 0U || changed;
 				} else {
 					const auto existing = properties.find(action.key);
 					if (existing == properties.end() || existing->second != value) {
-						properties.insert_or_assign(action.key, value);
+						assignBoundedProperty(properties, action.key, value, state.bounds.maximum_property_entries);
 						changed = true;
 					}
 				}
-				row.row.property_cache.insert_or_assign(targetVariable, properties);
+				synchronizeMergePropertyAliases(row, targetVariable, properties, state.context);
 			}
 			return changed;
 		}
@@ -2825,6 +2926,37 @@ namespace graph::query::execution {
 					entity.properties_changed;
 		}
 
+		[[nodiscard]] storage::LogicalGraphPropertyPatchRequest finalPropertyPatch(
+			const MutableGraphEntity &entity, const QueryContext &context, size_t maximumScratchBytes) {
+			storage::LogicalGraphPropertyPatchRequest patch{{entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id}, {}, {}};
+			// This owner accounts the continuous borrowed lookup descriptors.
+			// Output patch payloads remain owned by the caller's mutation batch.
+			MaterializedByteBudget scratchBudget(maximumScratchBytes);
+			detail::BudgetMemoryResource scratchResource(scratchBudget);
+			using OriginalProperty = std::pair<std::string_view, const PropertyValue *>;
+			std::pmr::vector<OriginalProperty> original{&scratchResource};
+			original.reserve(entity.direct_properties.size());
+			for (const auto &property : entity.direct_properties) {
+				context.checkGuard();
+				original.emplace_back(property.key, &property.value);
+				if (!entity.properties->contains(property.key)) patch.removals.push_back(property.key);
+			}
+			std::sort(original.begin(), original.end(), [&](const auto &left, const auto &right) {
+				context.checkGuard(); return left.first < right.first;
+			});
+			for (const auto &[key, value] : *entity.properties) {
+				context.checkGuard();
+				const auto before = std::lower_bound(original.begin(), original.end(), std::string_view(key),
+					[&](const auto &property, std::string_view candidate) {
+						context.checkGuard(); return property.first < candidate;
+					});
+				if (before == original.end() || before->first != key || *before->second != value) patch.sets.push_back({key, value});
+			}
+			std::ranges::sort(patch.sets, {}, &storage::LogicalGraphWriteProperty::key);
+			std::ranges::sort(patch.removals);
+			return patch;
+		}
+
 		[[nodiscard]] MergeRuntimeRow makeMergeRow(LogicalPlanReadRow row) {
 			MergeRuntimeRow result;
 			result.row = std::move(row);
@@ -2897,10 +3029,22 @@ namespace graph::query::execution {
 					if (!entity.properties.has_value()) {
 						throw std::logic_error("logical MERGE lost a staged Property collection");
 					}
-					LogicalGraphPropertyMutationRequest replacement;
-					replacement.entity = {entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
-					replacement.properties = sortedProperties(*entity.properties);
-					state.batch.property_replacements.push_back(std::move(replacement));
+					if (state.snapshot.supportsShapedPropertyReadAdmission()) {
+						auto patch = finalPropertyPatch(entity, state.context, state.bounds.maximum_materialized_bytes);
+						if (!patch.sets.empty() || !patch.removals.empty()) {
+							for (const size_t count : {entity.direct_properties.size(), patch.sets.size(), patch.removals.size()}) {
+								if (count > (std::numeric_limits<size_t>::max)() - state.patch_entry_limit)
+									throw std::overflow_error("logical MERGE Property patch entry count overflowed");
+								state.patch_entry_limit += count;
+							}
+							state.property_patches.push_back(std::move(patch));
+						}
+					} else {
+						LogicalGraphPropertyMutationRequest replacement;
+						replacement.entity = {entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
+						replacement.properties = sortedProperties(*entity.properties);
+						state.batch.property_replacements.push_back(std::move(replacement));
+					}
 				}
 				if (entity.labels_changed) {
 					if (entity.kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
@@ -2983,6 +3127,7 @@ namespace graph::query::execution {
 							throw std::logic_error("logical MERGE SET could not resolve its entity variable");
 						}
 						if (item.type == logical::SetActionType::LSET_PROPERTY ||
+							item.type == logical::SetActionType::LSET_MAP_REPLACE ||
 							item.type == logical::SetActionType::LSET_MAP_MERGE) {
 							if (!item.expression ||
 								(item.type == logical::SetActionType::LSET_PROPERTY && item.key.empty())) {
@@ -3000,30 +3145,18 @@ namespace graph::query::execution {
 									changed = properties.erase(item.key) != 0U;
 								} else if (const auto existing = properties.find(item.key);
 										   existing == properties.end() || existing->second != value) {
-									properties.insert_or_assign(item.key, value);
+									assignBoundedProperty(properties, item.key, value, state.bounds.maximum_property_entries);
 									changed = true;
 								}
+							} else if (item.type == logical::SetActionType::LSET_MAP_REPLACE) {
+								changed = replacePropertyMap(properties, value, state.context, state.bounds.maximum_property_entries);
 							} else {
-								if (value.getType() != PropertyType::MAP) {
-									throw std::logic_error("logical MERGE SET map merge requires a Map value");
-								}
-								for (const auto &[key, replacement]: value.getMap()) {
-									if (key.empty()) {
-										throw std::logic_error("logical MERGE SET map merge has an empty Property key");
-									}
-									if (replacement.getType() == PropertyType::NULL_TYPE) {
-										changed = properties.erase(key) != 0U || changed;
-									} else if (const auto existing = properties.find(key);
-											   existing == properties.end() || existing->second != replacement) {
-										properties.insert_or_assign(key, replacement);
-										changed = true;
-									}
-								}
+								changed = mergePropertyMap(properties, value, state.context, state.bounds.maximum_property_entries);
 							}
 							if (persisted != nullptr) {
 								persisted->properties_changed = persisted->properties_changed || changed;
 							}
-							row.row.property_cache.insert_or_assign(item.variable, properties);
+							synchronizeMergePropertyAliases(row, item.variable, properties, state.context);
 							continue;
 						}
 						if (item.type != logical::SetActionType::LSET_LABEL || item.key.empty() ||
@@ -3078,7 +3211,7 @@ namespace graph::query::execution {
 						if (persisted != nullptr) {
 							persisted->properties_changed = persisted->properties_changed || changed;
 						}
-						row.row.property_cache.insert_or_assign(item.variable, properties);
+						synchronizeMergePropertyAliases(row, item.variable, properties, state.context);
 						continue;
 					}
 					if (item.type != logical::LogicalRemoveActionType::LREM_LABEL ||
@@ -3774,6 +3907,9 @@ namespace graph::query::execution {
 				requireCompleteReadForMutation(stats, bounds, "logical SET/REMOVE chain");
 
 				storage::LogicalGraphMutationBatch batch;
+				std::vector<storage::LogicalGraphPropertyPatchRequest> patches;
+				const bool usePatches = snapshot->supportsShapedPropertyReadAdmission();
+				size_t patchEntryLimit = 0U;
 				for (const auto &[_, entity]: entities) {
 					const LogicalGraphMutationEntityReference reference{
 							entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
@@ -3782,7 +3918,19 @@ namespace graph::query::execution {
 							throw std::logic_error(
 									"logical SET/REMOVE chain lost its staged complete Property collection");
 						}
-						batch.property_replacements.push_back({reference, sortedProperties(*entity.properties)});
+						if (usePatches) {
+							auto patch = finalPropertyPatch(entity, context, bounds.maximum_materialized_bytes);
+							if (!patch.sets.empty() || !patch.removals.empty()) {
+								for (size_t entries : {entity.direct_properties.size(), patch.sets.size(), patch.removals.size()}) {
+									if (entries > (std::numeric_limits<size_t>::max)() - patchEntryLimit)
+										throw std::overflow_error("logical Property patch entry count overflowed");
+									patchEntryLimit += entries;
+								}
+								debug::PerfTrace::addValue("logical_plan.mutation.patch_sets", static_cast<int64_t>(patch.sets.size()));
+								debug::PerfTrace::addValue("logical_plan.mutation.patch_removals", static_cast<int64_t>(patch.removals.size()));
+								patches.push_back(std::move(patch));
+							}
+						} else batch.property_replacements.push_back({reference, sortedProperties(*entity.properties)});
 					}
 					if (entity.labels_changed) {
 						batch.node_label_replacements.push_back({reference, entity.labels});
@@ -3803,12 +3951,22 @@ namespace graph::query::execution {
 				// before publication and reused after it. This keeps deterministic
 				// result failures outside the mutation's atomicity boundary.
 				QueryResult preparedResult = buildResult();
-				if (batch.property_replacements.empty() && batch.node_label_replacements.empty()) {
+				if (patches.empty() && batch.property_replacements.empty() && batch.node_label_replacements.empty()) {
 					return preparedResult;
 				}
 				try {
 					context.checkGuardNow();
-					static_cast<void>(executeMutationWithReadControl(write_backend_, batch, fence, bounds, context));
+					if (!patches.empty()) {
+						storage::LogicalGraphMutationReadControl control;
+						control.checkpoint = [&context] { context.checkGuardNow(); };
+						control.property_admission = [&context, &bounds](size_t bytes) {
+							context.checkGuardNow();
+							if (bytes > bounds.maximum_materialized_bytes)
+								throw std::runtime_error("logical Property patch source exceeded its byte bound");
+						};
+						static_cast<void>(write_backend_.executeLogicalGraphMutationBatchWithPropertyPatches(
+							*snapshot, batch, patches, patchEntryLimit, *fence, control));
+					} else static_cast<void>(executeMutationWithReadControl(write_backend_, batch, fence, bounds, context));
 					return preparedResult;
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// Re-read and reapply the ordered chain against the new graph generation.
@@ -3937,10 +4095,20 @@ namespace graph::query::execution {
 						preflightMergeResultExpressions(*mergePipeline, rows, state);
 				try {
 					context.checkGuardNow();
-					const storage::LogicalGraphMutationBatchResult result =
-							mergeBatchHasMutations(state.batch)
-									? executeMutationWithReadControl(write_backend_, state.batch, fence, bounds, context)
-									: storage::LogicalGraphMutationBatchResult{};
+					storage::LogicalGraphMutationBatchResult result;
+					if (!state.property_patches.empty()) {
+						storage::LogicalGraphMutationReadControl control;
+						control.checkpoint = [&context] { context.checkGuardNow(); };
+						control.property_admission = [&context, &bounds](size_t bytes) {
+							context.checkGuardNow();
+							if (bytes > bounds.maximum_materialized_bytes)
+								throw std::runtime_error("logical MERGE Property patch source exceeded its byte bound");
+						};
+						result = write_backend_.executeLogicalGraphMutationBatchWithPropertyPatches(
+							*snapshot, state.batch, state.property_patches, state.patch_entry_limit, *fence, control);
+					} else if (mergeBatchHasMutations(state.batch)) {
+						result = executeMutationWithReadControl(write_backend_, state.batch, fence, bounds, context);
+					}
 					return buildMergeResult(*mergePipeline,
 											visibleMutationOutputColumns(*mergePipeline->mutation_chain.merge_root),
 											rows, state, result, prepublicationCache);

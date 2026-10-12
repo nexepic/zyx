@@ -58,7 +58,7 @@ namespace graph::query {
 			return PropertyValue(mergeResultExpressionCalls.fetch_add(1, std::memory_order_relaxed));
 		}
 
-		void registerCountingMergeResultExpression() {
+		[[maybe_unused]] void registerCountingMergeResultExpression() {
 			expressions::FunctionRegistry::getInstance().registerFunction(
 					std::make_unique<expressions::LambdaScalarFunction>(
 							expressions::FunctionSignature{"testMergeResultCounter", 0U, 0U},
@@ -92,6 +92,9 @@ namespace graph::query {
 		};
 
 		struct TestReadMetrics {
+			bool shaped_property_admission = false;
+			size_t shaped_property_admission_reads = 0U;
+			std::function<void(size_t)> shaped_admission_hook;
 			size_t full_edge_reads = 0U;
 			size_t topology_page_reads = 0U;
 			size_t selected_edge_property_column_reads = 0U;
@@ -215,6 +218,50 @@ namespace graph::query {
 			}
 
 			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return property_admission_; }
+
+			[[nodiscard]] bool supportsShapedPropertyReadAdmission() const override {
+				return read_metrics_->shaped_property_admission;
+			}
+
+			[[nodiscard]] std::vector<storage::LogicalGraphNode>
+			readNodesShapedSortedWithAdmission(std::span<const uint64_t> ids, const storage::EntityReadShape &shape,
+				const std::function<void(size_t)> &admission) const override {
+				if (!supportsShapedPropertyReadAdmission()) throw std::logic_error("test shaped admission is disabled");
+				++read_metrics_->shaped_property_admission_reads;
+				size_t bytes = 0U;
+				for (const auto id : ids) {
+					for (const auto &[key, value] : graph_.nodes.at(id).properties) {
+						static_cast<void>(key);
+						const size_t amount = sizeof(uint32_t) + property_utils::getPropertyValueSize(value);
+						if (amount > (std::numeric_limits<size_t>::max)() - bytes)
+							throw std::overflow_error("test shaped admission bytes overflowed");
+						bytes += amount;
+					}
+				}
+				if (read_metrics_->shaped_admission_hook) read_metrics_->shaped_admission_hook(bytes);
+				admission(bytes);
+				return readNodesShapedSorted(ids, shape);
+			}
+
+			[[nodiscard]] std::vector<storage::LogicalGraphEdge>
+			readEdgesShapedSortedWithAdmission(std::span<const uint64_t> ids, const storage::EntityReadShape &shape,
+				const std::function<void(size_t)> &admission) const override {
+				if (!supportsShapedPropertyReadAdmission()) throw std::logic_error("test shaped admission is disabled");
+				++read_metrics_->shaped_property_admission_reads;
+				size_t bytes = 0U;
+				for (const auto id : ids) {
+					for (const auto &[key, value] : graph_.edges.at(id).properties) {
+						static_cast<void>(key);
+						const size_t amount = sizeof(uint32_t) + property_utils::getPropertyValueSize(value);
+						if (amount > (std::numeric_limits<size_t>::max)() - bytes)
+							throw std::overflow_error("test shaped admission bytes overflowed");
+						bytes += amount;
+					}
+				}
+				if (read_metrics_->shaped_admission_hook) read_metrics_->shaped_admission_hook(bytes);
+				admission(bytes);
+				return readEdgesShapedSorted(ids, shape);
+			}
 
 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
 			readEdgePropertyColumnsSortedWithAdmission(std::span<const uint64_t> edgeIds,
@@ -579,6 +626,8 @@ namespace graph::query {
 			void setTopologyMode(TestTopologyMode mode) { topology_mode_ = mode; }
 			void setPropertyColumnMode(TestPropertyColumnMode mode) { property_column_mode_ = mode; }
 			void setPropertyAdmission(bool enabled) { property_admission_ = enabled; }
+			void setShapedPropertyAdmission(bool enabled) { read_metrics_->shaped_property_admission = enabled; }
+			void setShapedAdmissionHook(std::function<void(size_t)> hook) { read_metrics_->shaped_admission_hook = std::move(hook); }
 			void resetReadMetrics() { *read_metrics_ = {}; }
 			[[nodiscard]] const TestReadMetrics &readMetrics() const { return *read_metrics_; }
 			void setDelayAfterMutationBatch(std::chrono::milliseconds delay) {

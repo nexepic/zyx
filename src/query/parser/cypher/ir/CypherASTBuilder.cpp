@@ -636,33 +636,16 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 		else if (item->PLUS()) {
 			std::string varName = AstExtractor::extractVariable(item->variable());
 
-			// Find mapLiteral by traversing the parse tree
-			CypherParser::MapLiteralContext* mapLit = nullptr;
-			std::function<void(antlr4::tree::ParseTree*)> findMap = [&](antlr4::tree::ParseTree* tree) {
-				if (!tree || mapLit) return; // ZYX_COV_EXCL_LINE: recursive traversal guard; parser supplies non-null descendants and stops after first map.
-				if (auto* m = dynamic_cast<CypherParser::MapLiteralContext*>(tree)) {
-					mapLit = m;
-					return;
-				}
-				for (size_t i = 0; i < tree->children.size(); ++i) {
-					findMap(tree->children[i]);
-				}
-			};
-			findMap(item->expression());
-
-			if (mapLit) {
-				auto keys = mapLit->propertyKeyName();
-				auto exprs = mapLit->expression();
-				for (size_t i = 0; i < keys.size(); ++i) {
-					auto expressionAST = ExpressionBuilder::buildExpression(exprs[i]);
-					auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
-					items.push_back({SetItemType::SIT_PROPERTY, varName, keys[i]->getText(), exprShared});
-				}
-			} else {
-				auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
-				auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
-				items.push_back({SetItemType::SIT_MAP_MERGE, varName, "", exprShared});
-			}
+			// Preserve the complete expression and evaluate it before applying fields.
+			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
+			auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			items.push_back({SetItemType::SIT_MAP_MERGE, varName, "", exprShared});
+		}
+		else if (item->EQ()) {
+			const std::string varName = AstExtractor::extractVariable(item->variable());
+			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
+			auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			items.push_back({SetItemType::SIT_MAP_REPLACE, varName, "", exprShared});
 		}
 		// Case 3: Label Assignment (n:Label)
 		else {

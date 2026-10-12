@@ -14,6 +14,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Edge.hpp"
+#include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
+#include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
@@ -265,4 +267,200 @@ TEST_F(NativeScalarIndexMutationPlannerTest,
 	EXPECT_THROW(static_cast<void>(oversizedTransaction.commit()), FormatException);
 	EXPECT_EQ(oversizedTransaction.state(), NativeGraphWriteTransactionState::NGWTS_ACTIVE);
 	oversizedTransaction.rollback();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, PropertyDeltaSkipsUnchangedCanonicalKeysAndRejectsInvalidOwners) {
+	allocateEmptyIndexRoot(*btree_pages_, 18U, 72U, 102U, 41U, 2U);
+	IndexDefinition definition;
+	definition.index_id = 18U;
+	definition.name = "score";
+	definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+	definition.property_names = {"score"};
+	NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {definition},
+		[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 17U; });
+	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	auto transaction = graph.beginTransaction();
+	const PropertyCollectionRoot before{1U, Node::typeId, {{17U, PropertyValue(42)}, {18U, PropertyValue("old")}}};
+	const PropertyCollectionRoot after{1U, Node::typeId, {{17U, PropertyValue(42)}, {18U, PropertyValue("new")}}};
+	scalar.stagePropertyDelta(transaction, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, before, {}, after);
+	EXPECT_THROW(static_cast<void>(transaction.commit()), FormatException);
+	auto invalid = after;
+	invalid.owner_entity_id = 2U;
+	EXPECT_THROW(scalar.stagePropertyDelta(transaction, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, before, {}, invalid), FormatException);
+	EXPECT_THROW(scalar.stagePropertyDelta(transaction, IndexDefinitionEntityKind::IDEK_NODE, 1U,
+		std::array<uint64_t, 2U>{2U, 1U}, before, {}, after), FormatException);
+	transaction.rollback();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, PropertyDeltaMaintainsPartialMembershipAndPinnedOldIndex) {
+	allocateEmptyIndexRoot(*btree_pages_, 18U, 72U, 102U, 41U, 2U);
+	IndexDefinition definition;
+	definition.index_id = 18U;
+	definition.name = "score";
+	definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+	definition.label_token_id = 7U;
+	definition.property_names = {"score"};
+	NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {definition},
+		[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 17U; });
+	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const std::array<uint64_t, 1U> labels{7U};
+	const PropertyCollectionRoot before{1U, Node::typeId, {{17U, PropertyValue(42)}}};
+	const PropertyCollectionRoot after{1U, Node::typeId, {{17U, PropertyValue(43)}}};
+	{
+		auto seed = graph.beginTransaction();
+		scalar.stageProperties(seed, IndexDefinitionEntityKind::IDEK_NODE, 1U, labels, before, false);
+		ASSERT_TRUE(seed.commit().committed());
+	}
+	auto oldSnapshot = metadata_->openSnapshot();
+	{
+		auto update = graph.beginTransaction();
+		scalar.stagePropertyDelta(update, IndexDefinitionEntityKind::IDEK_NODE, 1U, labels, before, labels, after);
+		ASSERT_TRUE(update.commit().committed());
+	}
+	BTreeIndex index(18U, *btree_pages_, *metadata_);
+	const auto oldKey = IndexKeyCodec::encodeEntryKey(PropertyValue(42), 1U);
+	const auto newKey = IndexKeyCodec::encodeEntryKey(PropertyValue(43), 1U);
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(index.find(oldSnapshot, oldKey), std::optional<uint64_t>(1U));
+	EXPECT_FALSE(index.find(current, oldKey));
+	EXPECT_EQ(index.find(current, newKey), std::optional<uint64_t>(1U));
+	current.release();
+	oldSnapshot.release();
+	{
+		auto remove = graph.beginTransaction();
+		scalar.stagePropertyDelta(remove, IndexDefinitionEntityKind::IDEK_NODE, 1U, labels, after, {}, after);
+		ASSERT_TRUE(remove.commit().committed());
+	}
+	current = metadata_->openSnapshot();
+	EXPECT_FALSE(index.find(current, newKey));
+	current.release();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, ExecutorPreservesUnchangedPropertyAndLabelIndexRoots) {
+	allocateEmptyIndexRoot(*btree_pages_, 17U, 71U, 101U, 40U, 2U);
+	allocateEmptyIndexRoot(*btree_pages_, 18U, 72U, 102U, 41U, 4U);
+	IndexDefinition definition;
+	definition.index_id = 18U;
+	definition.name = "score";
+	definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+	definition.property_names = {"score"};
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphMutationTokenResolvers tokens;
+	tokens.schema_token = [](const MetadataSnapshotPin &, SystemCatalogSchemaTokenKind, std::string_view name)
+		-> std::optional<uint64_t> { return name == "Person" ? std::optional<uint64_t>(7U) : std::nullopt; };
+	tokens.property_key_token = [](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+		if (name == "score") return 17U;
+		if (name == "other") return 18U;
+		return std::nullopt;
+	};
+	tokens.property_key_name = [](const MetadataSnapshotPin &, uint32_t token) -> std::optional<std::string> {
+		if (token == 17U) return "score";
+		if (token == 18U) return "other";
+		return std::nullopt;
+	};
+	NativeGraphMutationExecutorOptions options{8U, 8U, 64U, 8U, 64U, 8U, 8U, 16U, 4U};
+	NativeGraphMutationExecutor executor(writer, graph, *btree_pages_, *vector_pages_, *vector_manifests_, *metadata_,
+		tokens, [definition](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{nodeLabelDefinition(), definition}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, options);
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {{"score", PropertyValue(42)}, {"other", PropertyValue("old")}}}};
+	const auto created = executor.execute(create);
+	ASSERT_TRUE(created.committed());
+	const auto id = created.result.created_node_ids.front();
+	auto oldSnapshot = metadata_->openSnapshot();
+	const auto oldPropertyRoot = metadata_->findIndexRootOptional(oldSnapshot, 18U);
+	const auto oldLabelRoot = metadata_->findIndexRootOptional(oldSnapshot, 17U);
+	LogicalGraphMutationBatch update;
+	update.property_replacements = {{{LogicalGraphMutationEntityKind::LGMK_NODE,
+		LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id}, {{"score", PropertyValue(42)}, {"other", PropertyValue("new")}}}};
+	ASSERT_TRUE(executor.execute(update).committed());
+	auto current = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findIndexRootOptional(current, 18U), oldPropertyRoot);
+	EXPECT_EQ(metadata_->findIndexRootOptional(current, 17U), oldLabelRoot);
+	EXPECT_EQ(graph.readNode(oldSnapshot, id).properties.back().value, PropertyValue("old"));
+	EXPECT_EQ(graph.readNode(current, id).properties.back().value, PropertyValue("new"));
+	current.release();
+	oldSnapshot.release();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, NodeCompositeDeltaHandlesTypeChangesAndMissingFields) {
+	allocateEmptyIndexRoot(*btree_pages_, 18U, 72U, 102U, 41U, 2U);
+	IndexDefinition definition;
+	definition.index_id = 18U;
+	definition.name = "node_pair";
+	definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	definition.kind = IndexDefinitionKind::IDK_COMPOSITE;
+	definition.property_names = {"first", "second"};
+	NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {definition},
+		[](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+			return name == "first" ? 17U : 18U;
+		});
+	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const PropertyCollectionRoot before{1U, Node::typeId, {{17U, PropertyValue(42)}, {18U, PropertyValue(7)}}};
+	const PropertyCollectionRoot after{1U, Node::typeId, {{17U, PropertyValue("42")}, {18U, PropertyValue(7)}}};
+	const PropertyCollectionRoot missing{1U, Node::typeId, {{17U, PropertyValue("42")}}};
+	{
+		auto seed = graph.beginTransaction();
+		scalar.stageProperties(seed, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, before, false);
+		ASSERT_TRUE(seed.commit().committed());
+	}
+	{
+		auto update = graph.beginTransaction();
+		EXPECT_THROW(scalar.stagePropertyDelta(update, IndexDefinitionEntityKind::IDEK_NODE, 1U,
+			std::array<uint64_t, 2U>{7U, 1U}, before, {}, after), FormatException);
+		scalar.stagePropertyDelta(update, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, before, {}, after);
+		ASSERT_TRUE(update.commit().committed());
+	}
+	BTreeIndex index(18U, *btree_pages_, *metadata_);
+	const auto oldKey = IndexKeyCodec::tryEncodeCompositeEntryKey(std::vector<PropertyValue>{PropertyValue(42), PropertyValue(7)}, 1U);
+	const auto newKey = IndexKeyCodec::tryEncodeCompositeEntryKey(std::vector<PropertyValue>{PropertyValue("42"), PropertyValue(7)}, 1U);
+	ASSERT_TRUE(oldKey);
+	ASSERT_TRUE(newKey);
+	auto current = metadata_->openSnapshot();
+	EXPECT_FALSE(index.find(current, *oldKey));
+	EXPECT_EQ(index.find(current, *newKey), std::optional<uint64_t>(1U));
+	current.release();
+	{
+		auto remove = graph.beginTransaction();
+		scalar.stagePropertyDelta(remove, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, after, {}, missing);
+		ASSERT_TRUE(remove.commit().committed());
+	}
+	current = metadata_->openSnapshot();
+	EXPECT_FALSE(index.find(current, *newKey));
+	current.release();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, EdgePropertyDeltaRemovesAnIndexedField) {
+	allocateEmptyIndexRoot(*btree_pages_, 18U, 72U, 102U, 41U, 2U);
+	IndexDefinition definition;
+	definition.index_id = 18U;
+	definition.name = "edge_score";
+	definition.entity_kind = IndexDefinitionEntityKind::IDEK_EDGE;
+	definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+	definition.property_names = {"score"};
+	NativeScalarIndexMutationPlanner scalar(*metadata_, *btree_pages_, {definition},
+		[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return 17U; });
+	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const PropertyCollectionRoot before{1U, Edge::typeId, {{17U, PropertyValue(42)}}};
+	const PropertyCollectionRoot after{1U, Edge::typeId, {}};
+	{
+		auto seed = graph.beginTransaction();
+		scalar.stageProperties(seed, IndexDefinitionEntityKind::IDEK_EDGE, 1U, {}, before, false);
+		ASSERT_TRUE(seed.commit().committed());
+	}
+	{
+		auto remove = graph.beginTransaction();
+		EXPECT_THROW(scalar.stagePropertyDelta(remove, IndexDefinitionEntityKind::IDEK_EDGE, 1U,
+			std::array<uint64_t, 1U>{7U}, before, {}, after), FormatException);
+		scalar.stagePropertyDelta(remove, IndexDefinitionEntityKind::IDEK_EDGE, 1U, {}, before, {}, after);
+		ASSERT_TRUE(remove.commit().committed());
+	}
+	BTreeIndex index(18U, *btree_pages_, *metadata_);
+	auto current = metadata_->openSnapshot();
+	EXPECT_FALSE(index.find(current, IndexKeyCodec::encodeEntryKey(PropertyValue(42), 1U)));
+	current.release();
 }

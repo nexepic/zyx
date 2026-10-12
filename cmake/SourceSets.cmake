@@ -177,6 +177,7 @@ set(ZYX_NATIVE_QUERY_SOURCES
 
 set(ZYX_NATIVE_STORAGE_SOURCES
     "${ZYX_SOURCE_ROOT}/storage/LogicalGraphTransactionOverlay.cpp"
+    "${ZYX_SOURCE_ROOT}/storage/LogicalGraphPropertyPatch.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageBackendFactory.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageFormat.cpp"
     "${ZYX_SOURCE_ROOT}/storage/StorageIO.cpp"
@@ -396,6 +397,15 @@ set(ZYX_HOLD_FOR_PORT_QUERY_TEST_SOURCES
 # retired storage and physical-operator tests must not make discarded
 # implementation details part of the native binary through a broad glob.
 set(ZYX_NATIVE_TEST_SOURCES
+    "${PROJECT_SOURCE_DIR}/tests/src/apps/test_CompareBenchmarkObservation.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundSlotRegistry.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundProjectionReferences.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveColumnFilter.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeColumnPredicates.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveNumericColumns.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_FixedWidthBatch.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_FixedWidthColumn.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/test_main.cpp"
     "${PROJECT_SOURCE_DIR}/tests/integration/test_BugVerification.cpp"
     "${PROJECT_SOURCE_DIR}/tests/integration/test_IntegrationAggregateProjection.cpp"
@@ -552,6 +562,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/test_QueryGuard.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphReadContract.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlay.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphPropertyPatch.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlayExactCandidates.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlayVector.cpp"
 	"${PROJECT_SOURCE_DIR}/tests/src/storage/test_CancellationCheckpoint.cpp"

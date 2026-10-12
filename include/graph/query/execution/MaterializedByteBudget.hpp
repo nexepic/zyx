@@ -10,6 +10,12 @@
 #include <utility>
 
 namespace graph::query::execution {
+	// Optional execution kernels may decline admission without swallowing an
+	// allocator failure, cancellation, or an unrelated semantic exception.
+	class MaterializedByteLimitExceeded final : public std::runtime_error {
+	public:
+		MaterializedByteLimitExceeded() : std::runtime_error("shared materialization exceeded its byte bound") {}
+	};
 
 	// Counts the sizes supplied by owners, not allocator capacity or RSS. Owners
 	// must keep this object alive until all their reservations have been released.
@@ -27,7 +33,7 @@ namespace graph::query::execution {
 		friend class MaterializedByteReservation;
 		void replace(size_t previousBytes, size_t nextBytes) {
 			if (nextBytes > previousBytes && nextBytes - previousBytes > available()) {
-				throw std::runtime_error("shared materialization exceeded its byte bound");
+				throw MaterializedByteLimitExceeded();
 			}
 			used_bytes_ = used_bytes_ - previousBytes + nextBytes;
 		}
