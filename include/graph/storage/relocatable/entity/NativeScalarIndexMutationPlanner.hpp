@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -57,6 +58,11 @@ namespace graph::storage {
 		void stageProperties(NativeGraphWriteTransaction &transaction, IndexDefinitionEntityKind ownerKind,
 							 uint64_t ownerId, std::span<const uint64_t> nodeLabels, const PropertyCollectionRoot &root,
 							 bool erase) const;
+		// Compare canonical derived keys, including partial-index membership. Only
+		// changed entries are staged; complete roots remain authoritative inputs.
+		void stagePropertyDelta(NativeGraphWriteTransaction &transaction, IndexDefinitionEntityKind ownerKind,
+			uint64_t ownerId, std::span<const uint64_t> oldLabels, const PropertyCollectionRoot &oldRoot,
+			std::span<const uint64_t> newLabels, const PropertyCollectionRoot &newRoot) const;
 		// UNIQUE and NODE KEY validation supplies canonical Property bytes rather
 		// than a lossy hash. The support-tree codec adds its bounded digest and
 		// EntityId suffix while preserving collision verification at read time.
@@ -71,6 +77,10 @@ namespace graph::storage {
 		[[nodiscard]] bool hasPublishedRoot(const MetadataSnapshotPin &snapshot, uint64_t indexId) const;
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																 std::string_view name) const;
+
+		[[nodiscard]] std::optional<std::vector<std::byte>> propertyEntryKey(const MetadataSnapshotPin &snapshot,
+			const IndexDefinition &definition, uint64_t ownerId, std::span<const uint64_t> nodeLabels,
+			const PropertyCollectionRoot &root) const;
 
 		RelocatableMetadataStore &metadata_;
 		BTreePageStore &indexes_;

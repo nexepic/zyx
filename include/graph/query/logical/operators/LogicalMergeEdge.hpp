@@ -72,7 +72,7 @@ public:
 			std::vector<MergeSetAction> dst;
 			dst.reserve(src.size());
 			for (const auto &a : src) {
-				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr});
+				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr, a.type});
 			}
 			return dst;
 		};

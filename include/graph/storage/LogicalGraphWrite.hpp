@@ -118,6 +118,15 @@ namespace graph::storage {
 		bool operator==(const LogicalGraphPropertyMutationRequest &) const = default;
 	};
 
+	// A patch preserves unspecified fields. NULL assignment is normalized into
+	// removals by the caller; set/remove keys must be disjoint and unique.
+	struct LogicalGraphPropertyPatchRequest {
+		LogicalGraphMutationEntityReference entity;
+		std::vector<LogicalGraphWriteProperty> sets;
+		std::vector<std::string> removals;
+		bool operator==(const LogicalGraphPropertyPatchRequest &) const = default;
+	};
+
 	struct LogicalGraphNodeLabelMutationRequest {
 		LogicalGraphMutationEntityReference node;
 		std::vector<std::string> labels;
@@ -210,6 +219,23 @@ namespace graph::storage {
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult
 		executeLogicalGraphMutationBatch(const LogicalGraphMutationBatch &batch,
 										 std::optional<LogicalGraphMutationFence> expectedFence = std::nullopt) = 0;
+		// Transitional old-layout adapter. Persisted targets only; the supplied
+		// snapshot/fence owns all reads and the resulting batch publishes once.
+		// The entry bound covers cumulative input operations plus source fields,
+		// not an entity schema limit or decoded allocation capacity.
+		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphPropertyPatches(
+			LogicalGraphReadSnapshot &snapshot, std::span<const LogicalGraphPropertyPatchRequest> patches,
+			size_t maximumPropertyEntries, const LogicalGraphMutationFence &expectedFence,
+			const LogicalGraphMutationReadControl &control = {});
+
+		// Companion mutations and normalized patches share one publication.
+		// Created ordinals resolve only within companionBatch and patch its initial
+		// creation fields. Complete replacement and patch targets must be disjoint.
+		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithPropertyPatches(
+			LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+			const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control = {});
+
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithReadControl(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 			const LogicalGraphMutationReadControl &control) {

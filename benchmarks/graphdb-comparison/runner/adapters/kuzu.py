@@ -200,11 +200,11 @@ class KuzuAdapter(BenchmarkAdapter):
 
     def aggregation_count_by_group(self) -> int:
         self._ensure_loaded()
-        return self._row_count("MATCH (u:User) RETURN u.country, COUNT(*)")
+        return self._row_count("MATCH (u:User) RETURN u.country, COUNT(*)", observe=self.emit_result_rows)
 
     def topk_property_sort(self) -> int:
         self._ensure_loaded()
-        return self._row_count("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100")
+        return self._row_count("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100", observe=self.emit_result_rows)
 
     def property_equality_indexed(self) -> int:
         self._require_secondary_property_indexes()
@@ -449,17 +449,23 @@ class KuzuAdapter(BenchmarkAdapter):
         self._drain_result(result)
         return int(value)
 
-    def _row_count(self, query: str) -> int:
+    def _row_count(self, query: str, observe: bool = False) -> int:
         result = self._execute(query)
         has_next = getattr(result, "has_next", None)
         get_next = getattr(result, "get_next", None)
         if callable(has_next) and callable(get_next):
             count = 0
+            rows = [] if observe else None
             while has_next():
-                get_next()
+                row = get_next()
+                if rows is not None:
+                    rows.append(list(row))
                 count += 1
             self._drain_result(result)
+            self.observed_rows = rows
             return count
+        if observe:
+            raise TypeError("semantic observation requires a row cursor; counts are insufficient")
         for dataframe_method in ("get_as_df", "to_df"):
             to_dataframe = getattr(result, dataframe_method, None)
             if callable(to_dataframe):

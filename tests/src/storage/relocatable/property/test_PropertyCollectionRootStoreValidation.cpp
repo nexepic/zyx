@@ -425,11 +425,11 @@ TEST_F(PropertyCollectionRootStoreValidationTest, MaterializedBytesDistinguishSe
 	const auto selectedTrace = PerfTrace::snapshotAndReset();
 	EXPECT_EQ(selectedTrace.at("native_graph.read.selected_values_decoded").totalValue, 1);
 	EXPECT_EQ(selectedTrace.at("native_graph.read.materialized_bytes").totalValue,
-		CanonicalPropertyValueCodec::encodedSize(original.entries.back().value));
+		static_cast<int64_t>(CanonicalPropertyValueCodec::encodedSize(original.entries.back().value)));
 	ASSERT_TRUE(properties_->readEntityOptional(snapshot, key).has_value());
 	EXPECT_EQ(PerfTrace::snapshotAndReset().at("native_graph.read.materialized_bytes").totalValue,
-		CanonicalPropertyValueCodec::encodedSize(original.entries.front().value) +
-		CanonicalPropertyValueCodec::encodedSize(original.entries.back().value));
+		static_cast<int64_t>(CanonicalPropertyValueCodec::encodedSize(original.entries.front().value) +
+		CanonicalPropertyValueCodec::encodedSize(original.entries.back().value)));
 	EXPECT_FALSE(properties_->readEntityPropertyOptional(snapshot, key, 5U).has_value());
 	const auto missingTrace = PerfTrace::snapshotAndReset();
 	EXPECT_FALSE(missingTrace.contains("native_graph.read.materialized_bytes"));
@@ -1737,4 +1737,38 @@ TEST_F(PropertyCollectionRootStoreValidationTest, SelectedCountCursorAdmitsFallb
 		EXPECT_EQ(counts[0], source.entries.size());
 		EXPECT_GE(peak, ownerBytes + RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + encoded.size());
 	}
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission) {
+	LargeValueStore largeValues(io_, *metadata_);
+	PropertyCollectionRootStore withLargeValues(*pages_, largeValues, *metadata_);
+	const EntityPropertyKey inlineKey{EntityPropertyOwnerKind::EPOK_NODE, 1001U};
+	static_cast<void>(publishPropertyPayload(inlineKey,
+		EntityPropertyCollectionRootCodec::encode(root(1002U, 7U, "wrong owner")), PhysicalSlotId(41U)));
+	const EntityPropertyKey referenceKey{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	static_cast<void>(publishPropertyPayload(referenceKey,
+		EntityPropertyLargeValueReferenceCodec::encode(largeValueRecord(1004U)), PhysicalSlotId(42U)));
+	const EntityPropertyKey mediaKey{EntityPropertyOwnerKind::EPOK_NODE, 1005U};
+	auto media = largeValueRecord(mediaKey.entity_id);
+	media.value.media_type = "application/octet-stream";
+	static_cast<void>(publishPropertyPayload(mediaKey,
+		EntityPropertyLargeValueReferenceCodec::encode(media), PhysicalSlotId(43U)));
+	const EntityPropertyKey corruptKey{EntityPropertyOwnerKind::EPOK_NODE, 1006U};
+	auto corrupt = EntityPropertyCollectionRootCodec::encode(root(corruptKey.entity_id, 7U, "invalid token"));
+	const size_t header = RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES;
+	const auto offset = LittleEndianCodec::readU32(corrupt, header);
+	LittleEndianCodec::writeU32(corrupt, header + offset, 0U);
+	static_cast<void>(publishPropertyPayload(corruptKey, corrupt, PhysicalSlotId(44U)));
+	auto snapshot = metadata_->openSnapshot();
+	const auto generation = snapshot.superblock().generation;
+	size_t admissions = 0U;
+	const SelectedPropertyReadAdmission admit = [&](size_t) { ++admissions; };
+	for (const auto key : {inlineKey, referenceKey, mediaKey}) {
+		expectFormatError([&] { static_cast<void>(withLargeValues.readEntityPropertyTokens(snapshot, key, admit, admit)); },
+			FormatError::FERR_INVALID_STATE);
+	}
+	expectFormatError([&] { static_cast<void>(withLargeValues.readEntityPropertyTokens(snapshot, corruptKey, admit, admit)); },
+		FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(admissions, 0U);
+	EXPECT_EQ(metadata_->openSnapshot().superblock().generation, generation);
 }

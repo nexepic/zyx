@@ -190,13 +190,23 @@ public:
 		validateNumericAggregateInput(value, "sum()");
 		PropertyType type = value.getType();
 		if (type == PropertyType::INTEGER) {
-			sumInt_ += std::get<int64_t>(value.getVariant());
-			hasInt_ = true;
+			updateInteger(std::get<int64_t>(value.getVariant()));
 		} else {
-			sumDouble_ += std::get<double>(value.getVariant());
-			hasDouble_ = true;
+			updateDouble(std::get<double>(value.getVariant()));
 		}
 	}
+
+	void updateInteger(int64_t input) {
+		// Check before addition, including when a floating sibling has already
+		// contributed. Failed updates leave both partial sums unchanged.
+		if ((input > 0 && sumInt_ > std::numeric_limits<int64_t>::max() - input) ||
+			(input < 0 && sumInt_ < std::numeric_limits<int64_t>::min() - input)) {
+			throw std::overflow_error("sum() integer accumulation overflowed");
+		}
+		sumInt_ += input;
+		hasInt_ = true;
+	}
+	void updateDouble(double input) { sumDouble_ += input; hasDouble_ = true; }
 
 	[[nodiscard]] PropertyValue getResult() const override {
 		if (hasDouble_) {
@@ -245,13 +255,13 @@ public:
 		validateNumericAggregateInput(value, "avg()");
 		PropertyType type = value.getType();
 		if (type == PropertyType::INTEGER) {
-			sum_ += static_cast<double>(std::get<int64_t>(value.getVariant()));
-			count_++;
+			updateInteger(std::get<int64_t>(value.getVariant()));
 		} else {
-			sum_ += std::get<double>(value.getVariant());
-			count_++;
+			updateDouble(std::get<double>(value.getVariant()));
 		}
 	}
+	void updateInteger(int64_t input) { updateDouble(static_cast<double>(input)); }
+	void updateDouble(double input) { sum_ += input; ++count_; }
 
 	[[nodiscard]] PropertyValue getResult() const override {
 		if (count_ == 0) {
@@ -283,6 +293,16 @@ private:
  */
 class MinAccumulator : public AggregateAccumulator {
 public:
+	void updateInteger(int64_t input) {
+		if (hasValue_ && minValue_.getType() == PropertyType::INTEGER) {
+			if (input < std::get<int64_t>(minValue_.getVariant())) minValue_ = PropertyValue(input);
+		} else update(PropertyValue(input));
+	}
+	void updateDouble(double input) {
+		if (hasValue_ && minValue_.getType() == PropertyType::DOUBLE) {
+			if (input < std::get<double>(minValue_.getVariant())) minValue_ = PropertyValue(input);
+		} else update(PropertyValue(input));
+	}
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
 		if (value.getType() == PropertyType::NULL_TYPE) {
@@ -346,6 +366,16 @@ private:
  */
 class MaxAccumulator : public AggregateAccumulator {
 public:
+	void updateInteger(int64_t input) {
+		if (hasValue_ && maxValue_.getType() == PropertyType::INTEGER) {
+			if (input > std::get<int64_t>(maxValue_.getVariant())) maxValue_ = PropertyValue(input);
+		} else update(PropertyValue(input));
+	}
+	void updateDouble(double input) {
+		if (hasValue_ && maxValue_.getType() == PropertyType::DOUBLE) {
+			if (input > std::get<double>(maxValue_.getVariant())) maxValue_ = PropertyValue(input);
+		} else update(PropertyValue(input));
+	}
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
 		if (value.getType() == PropertyType::NULL_TYPE) {
@@ -574,13 +604,13 @@ public:
 			return;
 		}
 		validateNumericAggregateInput(value, "stdev()");
-		PropertyType type = value.getType();
-		double x = 0.0;
-		if (type == PropertyType::INTEGER) {
-			x = static_cast<double>(std::get<int64_t>(value.getVariant()));
-		} else {
-			x = std::get<double>(value.getVariant());
-		}
+		if (const auto *integer = std::get_if<int64_t>(&value.getVariant())) updateInteger(*integer);
+		else updateDouble(std::get<double>(value.getVariant()));
+	}
+
+	void updateInteger(int64_t value) { updateDouble(static_cast<double>(value)); }
+
+	void updateDouble(double x) {
 		n_++;
 		double delta = x - mean_;
 		mean_ += delta / static_cast<double>(n_);

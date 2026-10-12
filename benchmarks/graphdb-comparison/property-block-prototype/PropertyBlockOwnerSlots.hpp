@@ -12,6 +12,16 @@ public:
  explicit PropertyBlockOwnerSlots(uint64_t block,uint32_t type):block_(block),type_(type) {
   require(block!=0,"invalid owner slot block");
  }
+ uint64_t blockId() const { return block_; }
+ uint32_t ownerType() const { return type_; }
+ size_t activeOwnerCount() const {
+  size_t count=0;for(const auto &slot:slots_)if(slot.owner)++count;return count;
+ }
+ std::vector<uint64_t> activeOwnersSorted() const {
+  std::vector<uint64_t> owners;owners.reserve(activeOwnerCount());
+  for(const auto &slot:slots_)if(slot.owner)owners.push_back(slot.owner);
+  std::ranges::sort(owners);return owners;
+ }
  Route insert(uint64_t owner) {
   require(owner!=0,"invalid owner slot identity");
   for(const auto &slot:slots_) require(slot.owner!=owner,"duplicate owner slot identity");

@@ -225,6 +225,26 @@ namespace graph::storage {
 		return resolved;
 	}
 
+	std::vector<uint32_t> PageBackedGraphReadAdapter::readEntityPropertyTokens(
+		const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+		const SelectedPropertyReadAdmission &tokenAdmission,
+		const SelectedPropertyReadAdmission &transientAdmission, NativeReadSession *session, const CancellationCheckpoint *cancellation) const {
+		if (cancellation) cancellation->check();
+		if (!key.isValid() || !tokenAdmission || !transientAdmission)
+			throwAdapterError(FormatError::FERR_INVALID_HEADER, "property token read requires valid owner and admissions");
+		NativeReadSession localSession;
+		auto &active = session == nullptr ? localSession : *session;
+		active.bind(snapshot);
+		if (key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE) {
+			static_cast<void>(readNodeRecord(snapshot, key.entity_id, &active));
+		} else {
+			const std::array<uint64_t, 1U> ids{key.entity_id};
+			static_cast<void>(readEdgeTopologiesSorted(snapshot, ids, &active));
+		}
+		if (cancellation) cancellation->check();
+		return properties_.readEntityPropertyTokens(snapshot, key, tokenAdmission, transientAdmission, cancellation);
+	}
+
 	std::vector<PropertyCollectionRootEntry> PageBackedGraphReadAdapter::readNodeProperties(
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		NativeReadSession localSession;

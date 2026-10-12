@@ -156,6 +156,14 @@ namespace graph::storage {
 		readNodeProperties(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 																	 NativeReadSession *session = nullptr,
 				const SelectedPropertyReadAdmission *admission = nullptr) const;
+		// Token enumeration authenticates the Node or Edge before opening its
+		// property directory and never decodes PropertyValue payloads.
+		[[nodiscard]] std::vector<uint32_t> readEntityPropertyTokens(
+				const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+				const SelectedPropertyReadAdmission &tokenAdmission,
+				const SelectedPropertyReadAdmission &transientAdmission,
+				NativeReadSession *session = nullptr,
+				const CancellationCheckpoint *cancellation = nullptr) const;
 		// Reads complete Node Property roots in logical-ID order through one
 		// snapshot-bound Property Directory cursor. Missing roots produce empty
 		// vectors while malformed locations still fail closed.

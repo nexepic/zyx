@@ -395,12 +395,14 @@ namespace graph::storage {
 											: LogicalGraphMutationEntityKind::LGMK_EDGE;
 							EntityFinalState current{adapter_.read_persisted_entity(kind, candidateId),
 													 persistedReferenceKind(kind), candidateId};
+							const auto candidateKey = current.entity.kind == kind && current.entity.stable_id == candidateId
+								? keyFor(current, definition) : std::nullopt;
 							if (current.entity.kind != kind || current.entity.stable_id != candidateId ||
-								!keyFor(current, definition).has_value()) {
+								!candidateKey.has_value()) {
 								failFormat(FormatError::FERR_INVALID_STATE,
 										   "relocatable uniqueness validation found a stale support-tree entry");
 							}
-							if (*keyFor(current, definition) != *transition.new_key)
+							if (*candidateKey != *transition.new_key)
 								continue;
 						}
 						throw std::runtime_error("Constraint violation: '" + definition.name + "' has a duplicate key");

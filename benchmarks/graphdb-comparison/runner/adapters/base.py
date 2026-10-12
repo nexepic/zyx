@@ -162,6 +162,9 @@ class BenchmarkAdapter:
         self.scale = scale
         self.profile = profile
         self.threads = threads
+        self.result_events: list[dict[str, object]] = []
+        self.emit_result_rows = False
+        self.observed_rows: list[list[object]] | None = None
 
     def setup(self) -> None:
         return None
@@ -378,6 +381,7 @@ class BenchmarkAdapter:
                     self.validate(workload, int(actual))
             samples: list[Sample] = []
             for iteration in range(iterations):
+                self.observed_rows = None
                 start = time.perf_counter()
                 actual = operation()
                 latency_ms = (time.perf_counter() - start) * 1000.0
@@ -385,6 +389,12 @@ class BenchmarkAdapter:
                     if actual is None:
                         raise ValueError(f"{workload} returned None")
                     self.validate(workload, int(actual))
+                    observation = {"event": "result", "workload": workload,
+                                   "iteration": iteration, "value": int(actual)}
+                    if self.observed_rows is not None:
+                        observation["rows"] = self.observed_rows
+                    self.result_events.append(observation)
+                    self.observed_rows = None
                 samples.append(self._sample(workload, iteration, latency_ms))
             return WorkloadResult(self.database, workload, self.scale, "ok", samples=samples)
         except UnsupportedWorkload as exc:
@@ -499,6 +509,7 @@ class BenchmarkAdapter:
         iterations: int,
         execution_mode: str = WARM_EXECUTION_MODE,
     ) -> list[WorkloadResult]:
+        self.result_events = []
         if execution_mode not in EXECUTION_MODES:
             return [
                 WorkloadResult(
@@ -511,20 +522,22 @@ class BenchmarkAdapter:
             ]
 
         workloads = PROFILE_WORKLOADS[self.profile]
-        load_result = self.run_workload("load_nodes_edges", warmup, iterations, adapter_factory=self._new_adapter)
+        include_load = "load_nodes_edges" in workloads
+        load_results = [self.run_workload("load_nodes_edges", warmup, iterations, adapter_factory=self._new_adapter)] if include_load else []
+        query_workloads = [workload for workload in workloads if workload != "load_nodes_edges"]
         if execution_mode == COLDISH_EXECUTION_MODE:
             query_results = [
                 self.run_workload(
                     workload, warmup, iterations, adapter_factory=self._new_adapter, execution_mode=execution_mode
                 )
-                for workload in workloads[1:]
+                for workload in query_workloads
             ]
-            return [load_result] + query_results
+            return load_results + query_results
 
         shared_adapter_loaded = False
         query_results: list[WorkloadResult] = []
         try:
-            for workload in workloads[1:]:
+            for workload in query_workloads:
                 if isolate_mutating_workload(execution_mode, workload):
                     query_results.append(
                         self.run_workload(
@@ -546,7 +559,7 @@ class BenchmarkAdapter:
                     shared_adapter_loaded = True
 
                 query_results.append(self.run_workload(workload, warmup, iterations, execution_mode=execution_mode))
-            return [load_result] + query_results
+            return load_results + query_results
         finally:
             if shared_adapter_loaded:
                 self.teardown()

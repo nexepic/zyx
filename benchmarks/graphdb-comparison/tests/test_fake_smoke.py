@@ -845,7 +845,8 @@ def test_run_benchmark_result_dirs_do_not_collide(tmp_path: Path):
     assert second.exists()
 
 
-def test_run_benchmark_records_missing_adapter_failures(tmp_path: Path):
+def test_run_benchmark_records_missing_adapter_failures(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(tmp_path / "missing-native-benchmark"))
     result_dir = run_benchmark(
         databases=["zyx"],
         scale="smoke",

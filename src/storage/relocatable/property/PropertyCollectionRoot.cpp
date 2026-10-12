@@ -152,7 +152,9 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<EntityPropertyLargeValueEntryLocation>
-		decodeLargeValueDirectory(std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *slotsAdmission = nullptr) {
+		decodeLargeValueDirectory(std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *slotsAdmission = nullptr,
+			const CancellationCheckpoint *cancellation = nullptr) {
+			if (cancellation) cancellation->check();
 			if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
 				throwRootError(FormatError::FERR_BUFFER_TOO_SMALL,
 							   "Entity Property LargeValue payload directory is truncated");
@@ -176,6 +178,7 @@ namespace graph::storage {
 			size_t expectedOffset = directoryBytes;
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
+				if (cancellation) cancellation->check();
 				const size_t directoryOffset = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
 						static_cast<size_t>(index) * sizeof(uint32_t) * 2U;
 				const uint32_t token = LittleEndianCodec::readU32(bytes, directoryOffset + 0U);
@@ -201,9 +204,12 @@ namespace graph::storage {
 					throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue directory slots overflowed");
 				}
 				(*slotsAdmission)(entryCount * sizeof(EntityPropertyLargeValueEntryLocation));
+				if (cancellation) cancellation->check();
 				locations.reserve(entryCount);
 				(*slotsAdmission)(locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation));
+				if (cancellation) cancellation->check();
 				for (uint32_t index = 0U; index < entryCount; ++index) {
+					if (cancellation) cancellation->check();
 					const size_t base = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + static_cast<size_t>(index) * 8U;
 					const uint32_t offset = LittleEndianCodec::readU32(bytes, base + 4U);
 					const uint32_t end = index + 1U == entryCount ? payloadBytes : LittleEndianCodec::readU32(bytes, base + 12U);
@@ -261,10 +267,11 @@ namespace graph::storage {
 		}
 
 		void validateOffsetDirectory(const std::span<const std::byte> payload, const size_t directoryBytes,
-																 const uint32_t entryCount) {
+																 const uint32_t entryCount, const CancellationCheckpoint *cancellation = nullptr) {
 			size_t expectedStart = directoryBytes;
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
+				if (cancellation) cancellation->check();
 				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
 				const uint32_t token = LittleEndianCodec::readU32(payload, start);
 				if (start != expectedStart || token == 0U || token <= previousToken) {
@@ -585,6 +592,30 @@ namespace graph::storage {
 				return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens, admission, slotsAdmission)};
 	}
 
+	std::vector<uint32_t> EntityPropertyCollectionRootCodec::decodeTokens(
+		const std::span<const std::byte> bytes, const SelectedPropertyReadAdmission *slotsAdmission, const CancellationCheckpoint *cancellation) {
+		if (cancellation) cancellation->check();
+		static_cast<void>(decodeOwner(bytes));
+		const uint32_t count = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
+		const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+		const size_t directoryBytes = offsetDirectoryBytes(payload, count);
+		validateOffsetDirectory(payload, directoryBytes, count, cancellation);
+		// offsetDirectoryBytes has already checked count * sizeof(uint32_t).
+		if (slotsAdmission != nullptr) (*slotsAdmission)(directoryBytes);
+		if (cancellation) cancellation->check();
+		std::vector<uint32_t> tokens;
+		tokens.reserve(count);
+		if (slotsAdmission != nullptr) (*slotsAdmission)(tokens.capacity() * sizeof(uint32_t));
+		if (cancellation) cancellation->check();
+		for (uint32_t index = 0U; index < count; ++index) {
+			if (cancellation) cancellation->check();
+			const auto [start, end] = entryBounds(payload, directoryBytes, count, index);
+			static_cast<void>(end);
+			tokens.push_back(LittleEndianCodec::readU32(payload, start));
+		}
+		return tokens;
+	}
+
 	size_t EntityPropertyCollectionRootCodec::entryCount(const std::span<const std::byte> bytes) {
 		static_cast<void>(decodeOwner(bytes));
 		const uint32_t entryCount = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
@@ -640,8 +671,8 @@ namespace graph::storage {
 
 	std::vector<EntityPropertyLargeValueEntryLocation>
 	EntityPropertyLargeValuePayloadCodec::decodeDirectory(const std::span<const std::byte> bytes,
-		const SelectedPropertyReadAdmission *slotsAdmission) {
-		return decodeLargeValueDirectory(bytes, slotsAdmission);
+		const SelectedPropertyReadAdmission *slotsAdmission, const CancellationCheckpoint *cancellation) {
+		return decodeLargeValueDirectory(bytes, slotsAdmission, cancellation);
 	}
 
 	PropertyCollectionRootEntry EntityPropertyLargeValuePayloadCodec::decodeEntry(

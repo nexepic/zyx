@@ -637,6 +637,7 @@ namespace graph::storage::transaction_overlay_test {
 		[[nodiscard]] LogicalGraphTransactionState state() const override { return state_; }
 		[[nodiscard]] bool isReadOnly() const override { return read_only_; }
 		void setIncompletePreview(bool enabled) { incomplete_preview_ = enabled; }
+		void setRejectCreatedPropertyOverrides(bool enabled) { reject_created_property_overrides_ = enabled; }
 		void setMismatchedStageResult(bool enabled) { mismatched_stage_result_ = enabled; }
 		void setDuplicateNodeIds(bool enabled) { duplicate_node_ids_ = enabled; }
 		void setDuplicateEdgeIds(bool enabled) { duplicate_edge_ids_ = enabled; }
@@ -659,6 +660,15 @@ namespace graph::storage::transaction_overlay_test {
 		[[nodiscard]] LogicalGraphMutationBatchResult
 		previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
 			requireActive();
+			if (reject_created_property_overrides_) {
+				for (const auto &request : batch.property_replacements) {
+					if ((request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE &&
+						 !batch.node_creates.at(static_cast<size_t>(request.entity.value)).properties.empty()) ||
+						(request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE &&
+						 !batch.edge_creates.at(static_cast<size_t>(request.entity.value)).properties.empty()))
+						throw std::invalid_argument("Created properties must be folded into creation requests");
+				}
+			}
 			if (read_only_) {
 				throw std::logic_error("read-only test transaction cannot preview writes");
 			}
@@ -721,6 +731,7 @@ namespace graph::storage::transaction_overlay_test {
 		size_t staged_node_count_ = 0U;
 		size_t staged_edge_count_ = 0U;
 		bool incomplete_preview_ = false;
+		bool reject_created_property_overrides_ = false;
 		bool mismatched_stage_result_ = false;
 		bool duplicate_node_ids_ = false;
 		bool duplicate_edge_ids_ = false;

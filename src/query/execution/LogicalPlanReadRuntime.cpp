@@ -10,6 +10,9 @@
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
 #include "query/execution/GuardedIdGather.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
+#include "query/execution/BoundProjectionReferences.hpp"
+#include "query/execution/BoundNodeColumnPredicates.hpp"
+#include "query/execution/PrimitiveNumericColumns.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
 #include "graph/query/execution/GuardedPropertyCopy.hpp"
@@ -87,6 +90,12 @@ namespace graph::query::execution {
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 		using InternalVisitor = std::function<bool(LogicalPlanReadRow)>;
 		using ChargedRowVisitor = std::function<bool(LogicalPlanReadRow, MaterializedByteReservation)>;
+		struct NodeColumnReceiver {
+			std::span<const std::string_view> keys;
+			std::function<bool(std::span<const std::string>,
+				std::span<const std::vector<PropertyValue>>, const SelectionVector &,
+				std::span<const size_t>)> consume;
+		};
 		[[nodiscard]] constexpr bool supportsChargedRowHandoff(logical::LogicalOpType type) {
 			return type == logical::LogicalOpType::LOP_SORT || type == logical::LogicalOpType::LOP_FILTER ||
 				   type == logical::LogicalOpType::LOP_PROJECT || type == logical::LogicalOpType::LOP_LIMIT ||
@@ -123,12 +132,12 @@ namespace graph::query::execution {
 			std::vector<std::vector<PropertyValue>> columns;
 		};
 
-		struct ExecutionState {
+		// Query owners outlive every task and all borrowed batch views.
+		// Shared caches and budgets are currently confined to one execution thread.
+		struct ExecutionSharedState {
 			storage::LogicalGraphReadSnapshot &snapshot;
 			const LogicalPlanReadRuntimeBounds &bounds;
-			LogicalPlanReadRuntimeStats stats;
 			const QueryContext *context = nullptr;
-			const LogicalPlanReadRow *injected_row = nullptr;
 			// Public row callbacks and mutation planning retain fully materialized
 			// entities. Only the result pipeline owns the deferred-row contract.
 			bool allow_deferred_entity_refs = false;
@@ -152,7 +161,20 @@ namespace graph::query::execution {
 			// boundary more than once (for example, a repeated path or projection).
 			std::pmr::unordered_map<uint64_t, storage::LogicalGraphEdge> edge_cache{&entity_cache_memory};
 			size_t materialized_cache_bytes = 0U;
+		};
+
+		struct ExecutionTaskState {
+			LogicalPlanReadRuntimeStats stats;
+			const LogicalPlanReadRow *injected_row = nullptr;
 			const ScopedPropertyColumns *property_columns = nullptr;
+		};
+
+		// A task borrows query resources; scoped input/column views never become
+		// query-global state. Parallel scheduling requires shared work admission
+		// and explicit statistics merging before multiple tasks can run together.
+		struct ExecutionState {
+			ExecutionSharedState &shared;
+			ExecutionTaskState task;
 		};
 
 		using ExecutionFinalizer = std::function<void(ExecutionState &, bool)>;
@@ -349,7 +371,7 @@ namespace graph::query::execution {
 		}
 
 		void enforceMaterializedRowBound(const LogicalPlanReadRow &row, const ExecutionState &state) {
-			if (logicalReadRowBytes(row, state.context) > state.bounds.maximum_materialized_bytes) {
+			if (logicalReadRowBytes(row, state.shared.context) > state.shared.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan row exceeded its materialized byte bound");
 			}
 		}
@@ -407,9 +429,9 @@ namespace graph::query::execution {
 			for (const auto &[name, value]: row) {
 				bytes = checkedSizeAdd(bytes, name.size(), "logical-plan result row size overflowed");
 				bytes = checkedSizeAdd(bytes, sizeof(value), "logical-plan result row size overflowed");
-				bytes = checkedSizeAdd(bytes, resultValueBytes(value, state.context), "logical-plan result row size overflowed");
+				bytes = checkedSizeAdd(bytes, resultValueBytes(value, state.shared.context), "logical-plan result row size overflowed");
 			}
-			if (bytes > state.bounds.maximum_materialized_bytes) {
+			if (bytes > state.shared.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 			}
 			return bytes;
@@ -429,8 +451,8 @@ namespace graph::query::execution {
 		void appendMaterializedResultRow(QueryResult &result, QueryResult::Row &&row, ExecutionState &state,
 			MaterializedByteReservation &&rowReservation) {
 			const size_t rowBytes = materializedResultRowBytes(row, state);
-			const size_t previousBytes = state.final_result_bytes;
-			state.final_result_reservation.absorb(std::move(rowReservation));
+			const size_t previousBytes = state.shared.final_result_bytes;
+			state.shared.final_result_reservation.absorb(std::move(rowReservation));
 			size_t nextBytes = checkedSizeAdd(previousBytes, rowBytes, "logical-plan result retention size overflowed");
 			const size_t currentCapacity = result.getRows().capacity();
 			if (result.getRows().size() == currentCapacity) {
@@ -445,11 +467,11 @@ namespace graph::query::execution {
 																   "logical-plan result row capacity overflowed");
 				const size_t transientBytes =
 						checkedSizeAdd(nextBytes, requestedGrowthBytes, "logical-plan result growth peak overflowed");
-				state.final_result_reservation.set(transientBytes);
+				state.shared.final_result_reservation.set(transientBytes);
 				try {
 					result.reserveRows(requestedCapacity);
 				} catch (...) {
-					state.final_result_reservation.set(previousBytes);
+					state.shared.final_result_reservation.set(previousBytes);
 					throw;
 				}
 				const size_t oldCapacityBytes = checkedSizeMul(currentCapacity, sizeof(QueryResult::Row),
@@ -460,17 +482,17 @@ namespace graph::query::execution {
 				nextBytes = checkedSizeAdd(
 						checkedSizeAdd(retainedPayloadBytes, rowBytes, "logical-plan result retention size overflowed"),
 						actualCapacityBytes, "logical-plan result retention size overflowed");
-				state.final_result_reservation.set(nextBytes);
+				state.shared.final_result_reservation.set(nextBytes);
 			} else {
-				state.final_result_reservation.set(nextBytes);
+				state.shared.final_result_reservation.set(nextBytes);
 			}
 			try {
 				result.addRow(std::move(row));
 			} catch (...) {
-				state.final_result_reservation.set(previousBytes);
+				state.shared.final_result_reservation.set(previousBytes);
 				throw;
 			}
-			state.final_result_bytes = nextBytes;
+			state.shared.final_result_bytes = nextBytes;
 		}
 
 		[[nodiscard]] size_t propertyColumnBytes(const std::vector<std::vector<PropertyValue>> &columns,
@@ -491,7 +513,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] PropertyValue copyReservedPropertyValue(const PropertyValue &source,
 				ExecutionState &state, MaterializedByteReservation &reservation) {
-			const auto checkpoint = [&] { if (state.context != nullptr) state.context->checkGuardNow(); };
+			const auto checkpoint = [&] { if (state.shared.context != nullptr) state.shared.context->checkGuardNow(); };
 			const size_t previous = reservation.bytes();
 			constexpr const char *message = "logical-plan copied Property payload size overflowed";
 			reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(source, checkpoint), message));
@@ -523,15 +545,15 @@ namespace graph::query::execution {
 		}
 
 		void checkGuard(const ExecutionState &state) {
-			if (state.context != nullptr) {
-				state.context->checkGuard();
+			if (state.shared.context != nullptr) {
+				state.shared.context->checkGuard();
 			}
 		}
 
 		// Copy/accounting helpers already bound work between checkpoints. Do not
 		// apply the per-row guard sampling interval a second time at that boundary.
 		void checkGuardNow(const ExecutionState &state) {
-			if (state.context != nullptr) state.context->checkGuardNow();
+			if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 		}
 
 		void validateNode(const storage::LogicalGraphNode &node, ExecutionState &state);
@@ -542,63 +564,63 @@ namespace graph::query::execution {
 							   size_t maximumRecords) {
 			if (cache.contains(id) || cache.size() >= maximumRecords ||
 				bytes > MAXIMUM_MATERIALIZED_CACHE_BYTES -
-								std::min(state.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES)) {
+								std::min(state.shared.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES)) {
 				return;
 			}
-			const size_t previousBytes = state.materialized_cache_bytes;
-			const size_t previousReservedBytes = state.materialized_cache_reservation.bytes();
+			const size_t previousBytes = state.shared.materialized_cache_bytes;
+			const size_t previousReservedBytes = state.shared.materialized_cache_reservation.bytes();
 			using CachedRecord = typename Cache::mapped_type;
-			state.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
+			state.shared.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
 				"logical-plan Entity cache payload size overflowed"));
 			try {
 				CachedRecord retained = [&]() -> CachedRecord {
 					if constexpr (std::is_lvalue_reference_v<Record>) {
 						return detail::copyLogicalEntityGuarded(record, [&] {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						});
 					} else {
 						return std::forward<Record>(record);
 					}
 				}();
 				if constexpr (std::is_same_v<CachedRecord, storage::LogicalGraphNode>)
-					bytes = logicalNodeCacheBytes(retained, state.context);
+					bytes = logicalNodeCacheBytes(retained, state.shared.context);
 				else
-					bytes = logicalEdgeCacheBytes(retained, state.context);
+					bytes = logicalEdgeCacheBytes(retained, state.shared.context);
 				const size_t retainedBytes = checkedSizeAdd(previousBytes, bytes,
 					"logical-plan Entity cache size overflowed");
 				if (retainedBytes > MAXIMUM_MATERIALIZED_CACHE_BYTES)
 					throw std::runtime_error("logical-plan Entity cache exceeded its byte bound");
-				state.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
+				state.shared.materialized_cache_reservation.set(checkedSizeAdd(previousReservedBytes, bytes - sizeof(CachedRecord),
 					"logical-plan Entity cache payload size overflowed"));
 				if (!cache.emplace(id, std::move(retained)).second) {
-					state.materialized_cache_reservation.set(previousReservedBytes);
+					state.shared.materialized_cache_reservation.set(previousReservedBytes);
 					return;
 				}
-				state.materialized_cache_bytes = retainedBytes;
+				state.shared.materialized_cache_bytes = retainedBytes;
 			} catch (...) {
-				state.materialized_cache_reservation.set(previousReservedBytes);
+				state.shared.materialized_cache_reservation.set(previousReservedBytes);
 				throw;
 			}
 		}
 
 		void cacheNodeRecord(ExecutionState &state, const storage::LogicalGraphNode &node) {
-			cacheEntityRecord(state, state.node_cache, node.node_id, node, logicalNodeCacheBytes(node, state.context),
-							  state.bounds.maximum_node_records);
+			cacheEntityRecord(state, state.shared.node_cache, node.node_id, node, logicalNodeCacheBytes(node, state.shared.context),
+							  state.shared.bounds.maximum_node_records);
 		}
 		void cacheNodeRecord(ExecutionState &state, storage::LogicalGraphNode &&node) {
 			const uint64_t id = node.node_id;
-			const size_t bytes = logicalNodeCacheBytes(node, state.context);
-			cacheEntityRecord(state, state.node_cache, id, std::move(node), bytes, state.bounds.maximum_node_records);
+			const size_t bytes = logicalNodeCacheBytes(node, state.shared.context);
+			cacheEntityRecord(state, state.shared.node_cache, id, std::move(node), bytes, state.shared.bounds.maximum_node_records);
 		}
 
 		void cacheEdgeRecord(ExecutionState &state, const storage::LogicalGraphEdge &edge) {
-			cacheEntityRecord(state, state.edge_cache, edge.edge_id, edge, logicalEdgeCacheBytes(edge, state.context),
-							  state.bounds.maximum_edge_records);
+			cacheEntityRecord(state, state.shared.edge_cache, edge.edge_id, edge, logicalEdgeCacheBytes(edge, state.shared.context),
+							  state.shared.bounds.maximum_edge_records);
 		}
 		void cacheEdgeRecord(ExecutionState &state, storage::LogicalGraphEdge &&edge) {
 			const uint64_t id = edge.edge_id;
-			const size_t bytes = logicalEdgeCacheBytes(edge, state.context);
-			cacheEntityRecord(state, state.edge_cache, id, std::move(edge), bytes, state.bounds.maximum_edge_records);
+			const size_t bytes = logicalEdgeCacheBytes(edge, state.shared.context);
+			cacheEntityRecord(state, state.shared.edge_cache, id, std::move(edge), bytes, state.shared.bounds.maximum_edge_records);
 		}
 
 		// Borrow complete cache records while preparing an independently owned output.
@@ -606,38 +628,38 @@ namespace graph::query::execution {
 		// before invoking downstream visitors.
 		[[nodiscard]] const storage::LogicalGraphNode &readNodeCachedBorrowed(ExecutionState &state, uint64_t nodeId,
 				std::optional<storage::LogicalGraphNode> &uncached, MaterializedByteReservation &uncachedBytes) {
-			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) return cached->second;
+			if (const auto cached = state.shared.node_cache.find(nodeId); cached != state.shared.node_cache.end()) return cached->second;
 			storage::LogicalGraphNode node;
-			if (state.snapshot.supportsShapedPropertyReadAdmission()) {
+			if (state.shared.snapshot.supportsShapedPropertyReadAdmission()) {
 				uncachedBytes.set(sizeof(storage::LogicalGraphNode));
 				const std::array<uint64_t, 1U> ids{nodeId};
-				auto records = state.snapshot.readNodesShapedSortedWithAdmission(ids, completeNodeReadShape(), [&](size_t bytes) {
+				auto records = state.shared.snapshot.readNodesShapedSortedWithAdmission(ids, completeNodeReadShape(), [&](size_t bytes) {
 					checkGuardNow(state);
 					uncachedBytes.set(checkedSizeAdd(uncachedBytes.bytes(), bytes, "logical-plan target source size overflowed"));
 				});
 				if (records.size() != 1U) throw std::runtime_error("logical graph backend changed typed Node batch cardinality");
 				node = std::move(records.front());
 			} else {
-				node = state.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
+				node = state.shared.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
 			}
 			validateNode(node, state);
 			if (node.node_id != nodeId) throw std::runtime_error("logical graph shaped Node read changed logical identity");
 			// Cache admission owns the moved payload; no clone is constructed here.
 			uncachedBytes.reset();
 			cacheNodeRecord(state, std::move(node));
-			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) return cached->second;
-			uncachedBytes.set(logicalNodeCacheBytes(node, state.context));
+			if (const auto cached = state.shared.node_cache.find(nodeId); cached != state.shared.node_cache.end()) return cached->second;
+			uncachedBytes.set(logicalNodeCacheBytes(node, state.shared.context));
 			uncached.emplace(std::move(node));
 			return *uncached;
 		}
 
 		[[nodiscard]] storage::LogicalGraphNode readNodeCached(ExecutionState &state, uint64_t nodeId) {
-			if (const auto cached = state.node_cache.find(nodeId); cached != state.node_cache.end()) {
+			if (const auto cached = state.shared.node_cache.find(nodeId); cached != state.shared.node_cache.end()) {
 				return detail::copyLogicalEntityGuarded(cached->second, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				});
 			}
-			storage::LogicalGraphNode node = state.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
+			storage::LogicalGraphNode node = state.shared.snapshot.readNodeShaped(nodeId, completeNodeReadShape());
 			validateNode(node, state);
 			if (node.node_id != nodeId) {
 				throw std::runtime_error("logical graph shaped Node read changed logical identity");
@@ -647,12 +669,12 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] storage::LogicalGraphEdge readEdgeCached(ExecutionState &state, uint64_t edgeId) {
-			if (const auto cached = state.edge_cache.find(edgeId); cached != state.edge_cache.end()) {
+			if (const auto cached = state.shared.edge_cache.find(edgeId); cached != state.shared.edge_cache.end()) {
 				return detail::copyLogicalEntityGuarded(cached->second, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				});
 			}
-			storage::LogicalGraphEdge edge = state.snapshot.readEdgeShaped(edgeId, completeEdgeReadShape());
+			storage::LogicalGraphEdge edge = state.shared.snapshot.readEdgeShaped(edgeId, completeEdgeReadShape());
 			validateEdge(edge);
 			if (edge.edge_id != edgeId) {
 				throw std::runtime_error("logical graph shaped Edge read changed logical identity");
@@ -968,17 +990,17 @@ namespace graph::query::execution {
 		}
 
 		void validateNode(const storage::LogicalGraphNode &node, ExecutionState &state) {
-			if (state.context != nullptr) state.context->checkGuardNow();
+			if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			if (node.node_id == 0U) {
 				throw std::runtime_error("logical graph backend returned an invalid Node");
 			}
-			detail::BudgetMemoryResource labelMemory(state.materialized_budget);
+			detail::BudgetMemoryResource labelMemory(state.shared.materialized_budget);
 			std::pmr::unordered_set<std::string_view> labels(&labelMemory);
 			labels.reserve(node.labels.size());
 			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
 				if (--labelsUntilGuard == 0U) {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					labelsUntilGuard = 256U;
 				}
 				if (label.empty() || !labels.insert(label).second) {
@@ -989,7 +1011,7 @@ namespace graph::query::execution {
 
 		void validateNodeIdentity(ExecutionState &state, uint64_t nodeId) {
 			checkGuard(state);
-			const auto node = state.snapshot.readNodeShaped(nodeId, {});
+			const auto node = state.shared.snapshot.readNodeShaped(nodeId, {});
 			validateNode(node, state);
 			if (node.node_id != nodeId) {
 				throw std::runtime_error("logical graph endpoint identity changed during validation");
@@ -1036,8 +1058,8 @@ namespace graph::query::execution {
 				throw std::runtime_error(std::string(context) +
 										 " topology disagrees with its materialized relationship");
 			}
-			if (reference.type_token != 0U && state.snapshot.supportsNativeRelationshipTypeTokens(edge.type)) {
-				const std::optional<uint64_t> resolved = state.snapshot.findRelationshipTypeToken(edge.type);
+			if (reference.type_token != 0U && state.shared.snapshot.supportsNativeRelationshipTypeTokens(edge.type)) {
+				const std::optional<uint64_t> resolved = state.shared.snapshot.findRelationshipTypeToken(edge.type);
 				if (!resolved.has_value() || *resolved != reference.type_token) {
 					throw std::runtime_error(std::string(context) +
 											 " relationship type disagrees with its materialized relationship");
@@ -1104,16 +1126,16 @@ namespace graph::query::execution {
 		readNodesShapedSortedBudgeted(ExecutionState &state, std::span<const uint64_t> ids,
 									  const storage::EntityReadShape &shape,
 									  MaterializedByteReservation *retainedSource = nullptr) {
-			MaterializedByteReservation temporarySource(&state.materialized_budget);
+			MaterializedByteReservation temporarySource(&state.shared.materialized_budget);
 			MaterializedByteReservation &sourceBytes = retainedSource == nullptr ? temporarySource : *retainedSource;
 			if (retainedSource != nullptr) {
 				sourceBytes.set(checkedSizeMul(ids.size(), sizeof(storage::LogicalGraphNode),
 											   "logical-plan shaped Node source frame size overflowed"));
 			}
-			if (!state.snapshot.supportsShapedPropertyReadAdmission()) {
-				return state.snapshot.readNodesShapedSorted(ids, shape);
+			if (!state.shared.snapshot.supportsShapedPropertyReadAdmission()) {
+				return state.shared.snapshot.readNodesShapedSorted(ids, shape);
 			}
-			return state.snapshot.readNodesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
+			return state.shared.snapshot.readNodesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
 				checkGuard(state);
 				sourceBytes.set(
 						checkedSizeAdd(sourceBytes.bytes(), bytes, "logical-plan shaped Node source size overflowed"));
@@ -1124,16 +1146,16 @@ namespace graph::query::execution {
 		readEdgesShapedSortedBudgeted(ExecutionState &state, std::span<const uint64_t> ids,
 									  const storage::EntityReadShape &shape,
 									  MaterializedByteReservation *retainedSource = nullptr) {
-			MaterializedByteReservation temporarySource(&state.materialized_budget);
+			MaterializedByteReservation temporarySource(&state.shared.materialized_budget);
 			MaterializedByteReservation &sourceBytes = retainedSource == nullptr ? temporarySource : *retainedSource;
 			if (retainedSource != nullptr) {
 				sourceBytes.set(checkedSizeMul(ids.size(), sizeof(storage::LogicalGraphEdge),
 											   "logical-plan shaped Edge source frame size overflowed"));
 			}
-			if (!state.snapshot.supportsShapedPropertyReadAdmission()) {
-				return state.snapshot.readEdgesShapedSorted(ids, shape);
+			if (!state.shared.snapshot.supportsShapedPropertyReadAdmission()) {
+				return state.shared.snapshot.readEdgesShapedSorted(ids, shape);
 			}
-			return state.snapshot.readEdgesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
+			return state.shared.snapshot.readEdgesShapedSortedWithAdmission(ids, shape, [&](size_t bytes) {
 				checkGuard(state);
 				sourceBytes.set(
 						checkedSizeAdd(sourceBytes.bytes(), bytes, "logical-plan shaped Edge source size overflowed"));
@@ -1178,29 +1200,29 @@ namespace graph::query::execution {
 								  const bool collectResults = true,
 								  MaterializedByteReservation *resultBytes = nullptr) {
 			std::vector<uint64_t> missingIds;
-			MaterializedByteReservation missingIdSlots(&state.materialized_budget);
+			MaterializedByteReservation missingIdSlots(&state.shared.materialized_budget);
 			for (const storage::EntityRef &reference: references) {
 				validateNodeRef(
 						reference,
 						"logical-plan materialization received an invalid or Edge reference where a Node was required");
-				if (!state.node_cache.contains(reference.entity_id)) {
+				if (!state.shared.node_cache.contains(reference.entity_id)) {
 					appendMissingReferenceId(missingIds, reference.entity_id, references.size(), missingIdSlots);
 				}
 			}
 			std::ranges::sort(missingIds);
 			missingIds.erase(std::unique(missingIds.begin(), missingIds.end()), missingIds.end());
-			if (missingIds.size() > state.bounds.maximum_node_records) {
+			if (missingIds.size() > state.shared.bounds.maximum_node_records) {
 				throw std::runtime_error("logical-plan Node materialization exceeded its record bound");
 			}
 
-			MaterializedByteReservation fallbackBytes(&state.materialized_budget);
+			MaterializedByteReservation fallbackBytes(&state.shared.materialized_budget);
 			std::vector<storage::LogicalGraphNode> loaded;
 			size_t fallbackHeapBytes = 0U;
 			// A record enters this fallback only when the shared cache declines it.
 			for (size_t offset = 0U; offset < missingIds.size();) {
 				checkGuard(state);
 				size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-				MaterializedByteReservation sourceBytes(&state.materialized_budget);
+				MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 				std::vector<storage::LogicalGraphNode> batch;
 				while (true) {
 					const auto ids = std::span<const uint64_t>(missingIds).subspan(offset, end - offset);
@@ -1215,7 +1237,7 @@ namespace graph::query::execution {
 								throw std::runtime_error("logical-plan shaped Node batch changed logical ID order");
 							}
 						}
-						retainShapedBatchBytes(batch, sourceBytes, state.context);
+						retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 						break;
 					} catch (const std::runtime_error &error) {
 						if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" ||
@@ -1229,16 +1251,16 @@ namespace graph::query::execution {
 				}
 				for (size_t index = 0U; index < batch.size(); ++index) {
 					const uint64_t id = batch[index].node_id;
-					const size_t recordBytes = logicalNodeCacheBytes(batch[index], state.context);
+					const size_t recordBytes = logicalNodeCacheBytes(batch[index], state.shared.context);
 					const size_t previousSourceBytes = sourceBytes.bytes();
 					// The vector frame remains live, but its heap payload is transferred
 					// to either the cache or the fallback buffer.
 					sourceBytes.set(previousSourceBytes - (recordBytes - sizeof(storage::LogicalGraphNode)));
 					cacheNodeRecord(state, std::move(batch[index]));
-					if (!state.node_cache.contains(id) && collectResults) {
+					if (!state.shared.node_cache.contains(id) && collectResults) {
 						appendReferenceFallback(loaded, std::move(batch[index]), recordBytes, missingIds.size(),
 												fallbackHeapBytes, fallbackBytes);
-					} else if (!state.node_cache.contains(id)) {
+					} else if (!state.shared.node_cache.contains(id)) {
 						sourceBytes.set(previousSourceBytes);
 					}
 				}
@@ -1270,7 +1292,7 @@ namespace graph::query::execution {
 				const size_t previousBytes = resultBytes == nullptr ? 0U : resultBytes->bytes();
 				if (resultBytes != nullptr) {
 					admitReferenceResultBytes(*resultBytes,
-											  checkedSizeAdd(previousBytes, logicalNodeCacheBytes(node, state.context) - sizeof(node),
+											  checkedSizeAdd(previousBytes, logicalNodeCacheBytes(node, state.shared.context) - sizeof(node),
 															 "logical-plan Node reference result size overflowed"),
 											  "logical-plan Node reference result exceeded its shared byte bound");
 				}
@@ -1283,7 +1305,7 @@ namespace graph::query::execution {
 				}
 			};
 			for (const storage::EntityRef &reference: references) {
-				if (const auto cached = state.node_cache.find(reference.entity_id); cached != state.node_cache.end()) {
+				if (const auto cached = state.shared.node_cache.find(reference.entity_id); cached != state.shared.node_cache.end()) {
 					validateNode(cached->second, state);
 					appendResult(cached->second);
 					continue;
@@ -1303,27 +1325,27 @@ namespace graph::query::execution {
 								  const bool collectResults = true,
 								  MaterializedByteReservation *resultBytes = nullptr) {
 			std::vector<uint64_t> missingIds;
-			MaterializedByteReservation missingIdSlots(&state.materialized_budget);
+			MaterializedByteReservation missingIdSlots(&state.shared.materialized_budget);
 			for (const storage::EntityRef &reference: references) {
 				validateEdgeRef(reference, "logical-plan materialization received an invalid or Node reference where "
 										   "an Edge was required");
-				if (!state.edge_cache.contains(reference.entity_id)) {
+				if (!state.shared.edge_cache.contains(reference.entity_id)) {
 					appendMissingReferenceId(missingIds, reference.entity_id, references.size(), missingIdSlots);
 				}
 			}
 			std::ranges::sort(missingIds);
 			missingIds.erase(std::unique(missingIds.begin(), missingIds.end()), missingIds.end());
-			if (missingIds.size() > state.bounds.maximum_edge_records) {
+			if (missingIds.size() > state.shared.bounds.maximum_edge_records) {
 				throw std::runtime_error("logical-plan Edge materialization exceeded its record bound");
 			}
 
-			MaterializedByteReservation fallbackBytes(&state.materialized_budget);
+			MaterializedByteReservation fallbackBytes(&state.shared.materialized_budget);
 			std::vector<storage::LogicalGraphEdge> loaded;
 			size_t fallbackHeapBytes = 0U;
 			for (size_t offset = 0U; offset < missingIds.size();) {
 				checkGuard(state);
 				size_t end = std::min(missingIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-				MaterializedByteReservation sourceBytes(&state.materialized_budget);
+				MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 				std::vector<storage::LogicalGraphEdge> batch;
 				while (true) {
 					const auto ids = std::span<const uint64_t>(missingIds).subspan(offset, end - offset);
@@ -1338,7 +1360,7 @@ namespace graph::query::execution {
 								throw std::runtime_error("logical-plan shaped Edge batch changed logical ID order");
 							}
 						}
-						retainShapedBatchBytes(batch, sourceBytes, state.context);
+						retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 						break;
 					} catch (const std::runtime_error &error) {
 						if (std::string_view(error.what()) != "shared materialization exceeded its byte bound" ||
@@ -1352,11 +1374,11 @@ namespace graph::query::execution {
 				}
 				for (size_t index = 0U; index < batch.size(); ++index) {
 					const uint64_t id = batch[index].edge_id;
-					const size_t recordBytes = logicalEdgeCacheBytes(batch[index], state.context);
+					const size_t recordBytes = logicalEdgeCacheBytes(batch[index], state.shared.context);
 					const size_t previousSourceBytes = sourceBytes.bytes();
 					sourceBytes.set(previousSourceBytes - (recordBytes - sizeof(storage::LogicalGraphEdge)));
 					cacheEdgeRecord(state, std::move(batch[index]));
-					if (!state.edge_cache.contains(id)) {
+					if (!state.shared.edge_cache.contains(id)) {
 						appendReferenceFallback(loaded, std::move(batch[index]), recordBytes, missingIds.size(),
 												fallbackHeapBytes, fallbackBytes);
 					}
@@ -1387,7 +1409,7 @@ namespace graph::query::execution {
 			}
 			for (const storage::EntityRef &reference: references) {
 				const storage::LogicalGraphEdge *edge = nullptr;
-				if (const auto cached = state.edge_cache.find(reference.entity_id); cached != state.edge_cache.end()) {
+				if (const auto cached = state.shared.edge_cache.find(reference.entity_id); cached != state.shared.edge_cache.end()) {
 					edge = &cached->second;
 				} else {
 					const auto position = std::ranges::lower_bound(loaded, reference.entity_id, {},
@@ -1403,7 +1425,7 @@ namespace graph::query::execution {
 					if (resultBytes != nullptr) {
 						admitReferenceResultBytes(*resultBytes,
 												  checkedSizeAdd(previousBytes,
-																 logicalEdgeCacheBytes(*edge, state.context) - sizeof(*edge),
+																 logicalEdgeCacheBytes(*edge, state.shared.context) - sizeof(*edge),
 																 "logical-plan Edge reference result size overflowed"),
 												  "logical-plan Edge reference result exceeded its shared byte bound");
 					}
@@ -1424,7 +1446,7 @@ namespace graph::query::execution {
 			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
 				validateNode(*node, state);
 				return detail::copyLogicalEntityGuarded(*node, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				});
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
@@ -1454,13 +1476,13 @@ namespace graph::query::execution {
 																	  const LogicalPlanReadValue &value) {
 			const uint64_t id = nodeBindingId(value, state);
 			if (std::holds_alternative<storage::EntityRef>(value)) {
-				if (!state.snapshot.supportsNodeExistenceProbes()) {
+				if (!state.shared.snapshot.supportsNodeExistenceProbes()) {
 					validateNodeIdentity(state, id);
 					return {id, {}, {}};
 				}
 				checkGuard(state);
 				const std::array<uint64_t, 1U> ids{id};
-				const auto present = state.snapshot.containsNodesSorted(ids);
+				const auto present = state.shared.snapshot.containsNodesSorted(ids);
 				if (present.size() != 1U || !present.front()) {
 					throw std::runtime_error("logical-plan pattern source is missing from its pinned snapshot");
 				}
@@ -1473,7 +1495,7 @@ namespace graph::query::execution {
 			if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
 				validateEdge(*edge);
 				return detail::copyLogicalEntityGuarded(*edge, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				});
 			}
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
@@ -1489,17 +1511,17 @@ namespace graph::query::execution {
 
 		[[nodiscard]] PropertyMap readInlineProperties(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 													   ExecutionState &state) {
-			if (entries.size() > state.bounds.maximum_property_entries) {
+			if (entries.size() > state.shared.bounds.maximum_property_entries) {
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
-			incrementBounded(state.stats.property_sets_materialized,
+			incrementBounded(state.task.stats.property_sets_materialized,
 							 "logical-plan Property materialization counter overflowed");
 			PropertyMap properties;
 			properties.reserve(entries.size());
 			for (const storage::LogicalGraphPropertyEntry &entry: entries) {
 				checkGuard(state);
 				if (entry.key.empty() || !properties.emplace(entry.key, detail::copyPropertyValueGuarded(entry.value, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).second) {
 					throw std::runtime_error("logical graph backend returned an invalid direct Property entry set");
 				}
@@ -1641,11 +1663,11 @@ namespace graph::query::execution {
 					throw std::invalid_argument("logical-plan Node scan has an empty, duplicate, or conflicting "
 												"parameter Property predicate key");
 				}
-				if (state.context == nullptr) {
+				if (state.shared.context == nullptr) {
 					throw std::runtime_error("logical-plan parameter equality predicate requires a QueryContext");
 				}
-				const auto value = state.context->parameters.find(predicate.parameter_name);
-				if (value == state.context->parameters.end()) {
+				const auto value = state.shared.context->parameters.find(predicate.parameter_name);
+				if (value == state.shared.context->parameters.end()) {
 					throw std::runtime_error("logical-plan read runtime could not resolve a query parameter");
 				}
 				// Cypher equality with null does not select a Node, so it need not
@@ -1700,9 +1722,9 @@ namespace graph::query::execution {
 			for (;;) {
 				checkGuard(state);
 				try {
-					auto page = state.snapshot.supportsAdjacencyTopologyBufferAdmission()
-						? state.snapshot.scanAdjacentEdgeTopologiesWithBufferAdmission(nodeId, direction, continuation, requested, admit)
-						: state.snapshot.scanAdjacentEdgeTopologies(nodeId, direction, continuation, requested);
+					auto page = state.shared.snapshot.supportsAdjacencyTopologyBufferAdmission()
+						? state.shared.snapshot.scanAdjacentEdgeTopologiesWithBufferAdmission(nodeId, direction, continuation, requested, admit)
+						: state.shared.snapshot.scanAdjacentEdgeTopologies(nodeId, direction, continuation, requested);
 					if (page.edges.size() > requested || (page.edges.empty() && page.continuation))
 						throw std::runtime_error("logical graph topology source returned an invalid page shape");
 					uint64_t previous = continuation ? continuation->previous_edge_id : 0U;
@@ -1744,9 +1766,9 @@ namespace graph::query::execution {
 			for (;;) {
 				checkGuard(state);
 				try {
-					auto page = state.snapshot.supportsAdjacencyReferenceBufferAdmission()
-						? state.snapshot.scanAdjacentEdgeRefsWithBufferAdmission(nodeId, direction, continuation, requested, admit)
-						: state.snapshot.scanAdjacentEdgeRefs(nodeId, direction, continuation, requested);
+					auto page = state.shared.snapshot.supportsAdjacencyReferenceBufferAdmission()
+						? state.shared.snapshot.scanAdjacentEdgeRefsWithBufferAdmission(nodeId, direction, continuation, requested, admit)
+						: state.shared.snapshot.scanAdjacentEdgeRefs(nodeId, direction, continuation, requested);
 					if (page.edges.size() > requested || (page.edges.empty() && page.continuation))
 						throw std::runtime_error("logical graph reference source returned an invalid page shape");
 					admit(checkedSizeMul(page.edges.capacity(), sizeof(storage::EntityRef),
@@ -1765,7 +1787,7 @@ namespace graph::query::execution {
 			checkGuard(state);
 			if (!snapshot.supportsPropertyReadAdmission())
 				return edge ? snapshot.readEdgeProperty(id, key) : snapshot.readNodeProperty(id, key);
-			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 			sourceBytes.set(sizeof(std::vector<PropertyValue>) + sizeof(PropertyValue));
 			const std::function<void(size_t)> admission = [&](size_t bytes) {
 				checkGuard(state);
@@ -1792,7 +1814,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] PropertyValue readProperty(storage::LogicalGraphReadSnapshot &snapshot, LogicalPlanReadRow &row,
 												 const std::string &variable, const std::string &key,
-												 ExecutionState &state) {
+												 ExecutionState &state, const LogicalPlanReadValue *boundBinding = nullptr) {
 			if (key.empty()) {
 				throw std::invalid_argument("logical-plan Property access has an empty key");
 			}
@@ -1810,7 +1832,7 @@ namespace graph::query::execution {
 						return source;
 					default: break;
 				}
-				MaterializedByteReservation copyBytes(&state.materialized_budget);
+				MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
 				PropertyValue copied = copyReservedPropertyValue(source, state, copyBytes);
 				debug::PerfTrace::addValue("logical_plan.property.owned_result_copy_bytes",
 					static_cast<int64_t>(copyBytes.bytes()));
@@ -1829,17 +1851,21 @@ namespace graph::query::execution {
 				// An EntityRef cache is a selected-field cache, not proof that the
 				// requested field is absent. Continue to the token-aware native read
 				// for a field not seen on this row yet.
-				const auto binding = row.values.find(variable);
-				if (binding == row.values.end() || !std::holds_alternative<storage::EntityRef>(binding->second)) {
+				const auto *binding = boundBinding;
+				if (binding == nullptr) {
+					const auto found = row.values.find(variable);
+					if (found != row.values.end()) binding = &found->second;
+				}
+				if (binding == nullptr || !std::holds_alternative<storage::EntityRef>(*binding)) {
 					return PropertyValue();
 				}
 			}
-			const LogicalPlanReadValue &binding = requireBinding(row, variable);
+			const LogicalPlanReadValue &binding = boundBinding == nullptr ? requireBinding(row, variable) : *boundBinding;
 			if (const auto *reference = std::get_if<storage::EntityRef>(&binding);
-				reference != nullptr && !reference->is_edge && state.property_columns != nullptr &&
-				*state.property_columns->variable == variable) {
+				reference != nullptr && !reference->is_edge && state.task.property_columns != nullptr &&
+				*state.task.property_columns->variable == variable) {
 				validateNodeRef(*reference, "logical-plan borrowed Property received an invalid Node reference");
-				const auto &view = *state.property_columns;
+				const auto &view = *state.task.property_columns;
 				const auto id = std::ranges::lower_bound(view.ids, reference->entity_id);
 				const auto keyPosition = std::ranges::find(*view.keys, key);
 				if (id != view.ids.end() && *id == reference->entity_id && keyPosition != view.keys->end()) {
@@ -1970,7 +1996,7 @@ namespace graph::query::execution {
 							"logical-plan entity Property function requires a node, relationship, or Map");
 				}
 				return row.property_cache.emplace(variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).first->second;
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&binding)) {
@@ -1992,7 +2018,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] size_t retainedExpressionValueBytes(const PropertyValue &value, const ExecutionState &state) {
 			return detail::retainedPropertyValueBytes(value, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 		}
 
@@ -2003,7 +2029,7 @@ namespace graph::query::execution {
 		public:
 			template<typename Value>
 			ScopedRowBinding(LogicalPlanReadRow &row, std::string_view variable, const Value &value,
-							 ExecutionState &state) : row_(row), binding_bytes_(&state.materialized_budget) {
+							 ExecutionState &state) : row_(row), binding_bytes_(&state.shared.materialized_budget) {
 				if (variable.empty()) {
 					throw std::invalid_argument("logical-plan temporary variable name cannot be empty");
 				}
@@ -2014,20 +2040,20 @@ namespace graph::query::execution {
 				binding_bytes_.set(bytes);
 				variable_.assign(variable);
 				if (const auto previous = row_.values.find(variable_); previous != row_.values.end()) {
-					bytes = checkedSizeAdd(bytes, logicalReadValueBytes(previous->second, state.context),
+					bytes = checkedSizeAdd(bytes, logicalReadValueBytes(previous->second, state.shared.context),
 										   "logical-plan scoped binding size overflowed");
 					bytes = checkedSizeAdd(bytes, sizeof(LogicalPlanReadValue),
 										   "logical-plan scoped binding size overflowed");
 				}
 				if (const auto previous = row_.property_cache.find(variable_); previous != row_.property_cache.end()) {
 					bytes = checkedSizeAdd(
-							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.context),
+							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.shared.context),
 							"logical-plan scoped binding size overflowed");
 				}
 				if (const auto previous = row_.entity_metadata_cache.find(variable_);
 					previous != row_.entity_metadata_cache.end()) {
 					bytes = checkedSizeAdd(
-							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.context),
+							bytes, propertyMapBytes(previous->second, "logical-plan scoped binding size overflowed", state.shared.context),
 							"logical-plan scoped binding size overflowed");
 				}
 				binding_bytes_.set(bytes);
@@ -2080,10 +2106,10 @@ namespace graph::query::execution {
 				return retainedExpressionValueBytes(value, state);
 			}
 			[[nodiscard]] static size_t bindingPayloadBytes(const storage::LogicalGraphNode &value, const ExecutionState &state) {
-				return logicalNodeCacheBytes(value, state.context);
+				return logicalNodeCacheBytes(value, state.shared.context);
 			}
 			[[nodiscard]] static size_t bindingPayloadBytes(const storage::LogicalGraphEdge &value, const ExecutionState &state) {
-				return logicalEdgeCacheBytes(value, state.context);
+				return logicalEdgeCacheBytes(value, state.shared.context);
 			}
 
 			LogicalPlanReadRow &row_;
@@ -2101,7 +2127,7 @@ namespace graph::query::execution {
 				throw std::runtime_error(std::string("logical-plan ") + operation + " requires a List value");
 			}
 			const std::vector<PropertyValue> &list = value.getList();
-			if (list.size() > state.bounds.maximum_rows) {
+			if (list.size() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error(std::string("logical-plan ") + operation +
 										 " exceeded the configured List bound");
 			}
@@ -2110,7 +2136,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] size_t materializedListStorageBytes(const PropertyValue &value, const ExecutionState &state) {
 			const auto estimates = detail::propertyBufferEstimates(value, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 			const size_t logicalBytes = checkedSizeAdd(estimates.logicalBytes,
 								  checkedSizeMul(value.getList().capacity(), sizeof(PropertyValue),
@@ -2135,8 +2161,8 @@ namespace graph::query::execution {
 																	const std::string &edgeType,
 																	expressions::PatternDirection direction,
 																	ExecutionState &state) {
-			if (!state.snapshot.supportsNativeAdjacentEdgeRefScans() || !state.snapshot.supportsNodeExistenceProbes() ||
-				(!edgeType.empty() && !state.snapshot.supportsNativeRelationshipTypeTokens(edgeType)) ||
+			if (!state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() || !state.shared.snapshot.supportsNodeExistenceProbes() ||
+				(!edgeType.empty() && !state.shared.snapshot.supportsNativeRelationshipTypeTokens(edgeType)) ||
 				(direction != expressions::PatternDirection::PAT_OUTGOING &&
 				 direction != expressions::PatternDirection::PAT_INCOMING &&
 				 direction != expressions::PatternDirection::PAT_BOTH)) {
@@ -2147,7 +2173,7 @@ namespace graph::query::execution {
 			}
 			std::optional<uint64_t> edgeTypeToken;
 			if (!edgeType.empty()) {
-				edgeTypeToken = state.snapshot.findRelationshipTypeToken(edgeType);
+				edgeTypeToken = state.shared.snapshot.findRelationshipTypeToken(edgeType);
 				if (!edgeTypeToken.has_value()) {
 					return false;
 				}
@@ -2157,12 +2183,12 @@ namespace graph::query::execution {
 				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
 				uint64_t previousEdgeId = 0U;
 				for (;;) {
-					if (sourceEdges == state.bounds.maximum_edges_per_node) {
+					if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 						throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
 					}
-					const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-														state.bounds.maximum_adjacency_page_records);
-					MaterializedByteReservation referenceBytes(&state.materialized_budget);
+					const size_t pageRecords = std::min(state.shared.bounds.maximum_edges_per_node - sourceEdges,
+														state.shared.bounds.maximum_adjacency_page_records);
+					MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 					const auto page = readReferencePageBudgeted(state, sourceNodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 					if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
 						(continuation.has_value() &&
@@ -2173,7 +2199,7 @@ namespace graph::query::execution {
 					// Validate and filter the complete page before probing endpoints.  The
 					// endpoint requests are then sorted/deduplicated for one bounded
 					// Directory lookup, while candidates retain their original order.
-					MaterializedByteReservation candidateBytes(&state.materialized_budget);
+					MaterializedByteReservation candidateBytes(&state.shared.materialized_budget);
 					candidateBytes.set(checkedSizeMul(page.edges.size(), sizeof(const storage::EntityRef *),
 						"logical-plan pattern candidate slots overflowed"));
 					std::vector<const storage::EntityRef *> candidates;
@@ -2199,7 +2225,7 @@ namespace graph::query::execution {
 						}
 						incrementBounded(sourceEdges,
 										 "logical-plan pattern-expression per-Node Edge counter overflowed");
-						incrementBounded(state.stats.edges_scanned,
+						incrementBounded(state.task.stats.edges_scanned,
 										 "logical-plan pattern-expression Edge counter overflowed");
 						if (direction == expressions::PatternDirection::PAT_BOTH &&
 							adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -2215,8 +2241,8 @@ namespace graph::query::execution {
 						if (!page.continuation.has_value()) {
 							return false;
 						}
-					} else if (state.snapshot.supportsNodeExistenceProbes()) {
-						MaterializedByteReservation targetBytes(&state.materialized_budget);
+					} else if (state.shared.snapshot.supportsNodeExistenceProbes()) {
+						MaterializedByteReservation targetBytes(&state.shared.materialized_budget);
 						targetBytes.set(checkedSizeMul(candidates.size(), sizeof(uint64_t),
 							"logical-plan pattern endpoint slots overflowed"));
 						std::vector<uint64_t> targetIds;
@@ -2229,9 +2255,9 @@ namespace graph::query::execution {
 														: reference->source_node_id);
 						}
 						detail::sortUniqueIdsGuarded(targetIds, [&] {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						});
-						MaterializedByteReservation presenceBytes(&state.materialized_budget);
+						MaterializedByteReservation presenceBytes(&state.shared.materialized_budget);
 						// Reserve a complete machine word for the final partial bit block.
 						const auto presenceSize = [&](size_t bits) {
 							return checkedSizeMul(bits / 8U + (bits % 8U != 0U), 1U,
@@ -2239,7 +2265,7 @@ namespace graph::query::execution {
 						};
 						presenceBytes.set(checkedSizeAdd(presenceSize(targetIds.size()), sizeof(size_t),
 							"logical-plan pattern presence slots overflowed"));
-						const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
+						const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetIds);
 						presenceBytes.set(presenceSize(present.capacity()));
 						checkGuard(state);
 						if (present.size() != targetIds.size()) {
@@ -2266,7 +2292,7 @@ namespace graph::query::execution {
 								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 										? candidates.front()->target_node_id
 										: candidates.front()->source_node_id;
-						if (!state.snapshot.containsNode(targetId)) {
+						if (!state.shared.snapshot.containsNode(targetId)) {
 							throw std::runtime_error(
 									"logical graph backend returned an Edge topology with a missing endpoint");
 						}
@@ -2312,11 +2338,11 @@ namespace graph::query::execution {
 											   const storage::LogicalGraphNode &target) {
 				validateNode(target, state);
 				validateEdge(edge);
-				if (lazyCandidates && (target.properties.size() > state.bounds.maximum_property_entries ||
-									   edge.properties.size() > state.bounds.maximum_property_entries ||
-									   checkedSizeAdd(logicalNodeCacheBytes(target, state.context), logicalEdgeCacheBytes(edge, state.context),
+				if (lazyCandidates && (target.properties.size() > state.shared.bounds.maximum_property_entries ||
+									   edge.properties.size() > state.shared.bounds.maximum_property_entries ||
+									   checkedSizeAdd(logicalNodeCacheBytes(target, state.shared.context), logicalEdgeCacheBytes(edge, state.shared.context),
 													  "logical-plan EXISTS candidate byte count overflowed") >
-											   state.bounds.maximum_materialized_bytes)) {
+											   state.shared.bounds.maximum_materialized_bytes)) {
 					throw std::runtime_error("logical-plan EXISTS candidate exceeded its Property or byte bound");
 				}
 			};
@@ -2326,7 +2352,7 @@ namespace graph::query::execution {
 												   MaterializedByteReservation &recordBytes) {
 				if (ids.empty() || keys.empty())
 					return;
-				if (keys.size() > state.bounds.maximum_property_entries) {
+				if (keys.size() > state.shared.bounds.maximum_property_entries) {
 					throw std::runtime_error("logical-plan pattern named columns exceeded their Property bound");
 				}
 				for (size_t index = 0U; index < records.size(); ++index) {
@@ -2354,7 +2380,7 @@ namespace graph::query::execution {
 				if (keyViews.empty())
 					return;
 				checkGuard(state);
-				MaterializedByteReservation columnBytes(&state.materialized_budget);
+				MaterializedByteReservation columnBytes(&state.shared.materialized_budget);
 				const size_t columnFrames = checkedSizeAdd(
 						checkedSizeMul(keyViews.size(), sizeof(std::vector<PropertyValue>),
 									   "logical-plan pattern column frame size overflowed"),
@@ -2368,14 +2394,14 @@ namespace graph::query::execution {
 					columnBytes.set(checkedSizeAdd(columnBytes.bytes(), bytes,
 												   "logical-plan pattern Property source size overflowed"));
 				};
-				const bool sourceAdmission = state.snapshot.supportsPropertyReadAdmission();
+				const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
 				auto columns =
-						edgeRecords ? (sourceAdmission ? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+						edgeRecords ? (sourceAdmission ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
 																 ids, keyViews, admitProperty)
-													   : state.snapshot.readEdgePropertyColumnsSorted(ids, keyViews))
-									: (sourceAdmission ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+													   : state.shared.snapshot.readEdgePropertyColumnsSorted(ids, keyViews))
+									: (sourceAdmission ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 																 ids, keyViews, admitProperty)
-													   : state.snapshot.readNodePropertyColumnsSorted(ids, keyViews));
+													   : state.shared.snapshot.readNodePropertyColumnsSorted(ids, keyViews));
 				if (columns.size() != keyViews.size()) {
 					throw std::runtime_error("logical graph pattern named columns changed column count");
 				}
@@ -2427,12 +2453,12 @@ namespace graph::query::execution {
 				for (const auto &record: records) {
 					size_t recordBytes;
 					if constexpr (requires { record.node_id; })
-						recordBytes = logicalNodeCacheBytes(record, state.context);
+						recordBytes = logicalNodeCacheBytes(record, state.shared.context);
 					else
-						recordBytes = logicalEdgeCacheBytes(record, state.context);
+						recordBytes = logicalEdgeCacheBytes(record, state.shared.context);
 					bytes = checkedSizeAdd(bytes, recordBytes, "logical-plan pattern named columns size overflowed");
-					if (record.properties.size() > state.bounds.maximum_property_entries ||
-						bytes > state.bounds.maximum_materialized_bytes) {
+					if (record.properties.size() > state.shared.bounds.maximum_property_entries ||
+						bytes > state.shared.bounds.maximum_materialized_bytes) {
 						throw std::runtime_error(
 								"logical-plan pattern named columns exceeded their materialized bound");
 					}
@@ -2446,10 +2472,10 @@ namespace graph::query::execution {
 			}
 			std::optional<uint64_t> edgeTypeToken;
 			const bool canUseReferencePages =
-					state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
-					(edgeType.empty() || state.snapshot.supportsNativeRelationshipTypeTokens(edgeType));
+					state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+					(edgeType.empty() || state.shared.snapshot.supportsNativeRelationshipTypeTokens(edgeType));
 			if (canUseReferencePages && !edgeType.empty()) {
-				edgeTypeToken = state.snapshot.findRelationshipTypeToken(edgeType);
+				edgeTypeToken = state.shared.snapshot.findRelationshipTypeToken(edgeType);
 				if (!edgeTypeToken.has_value()) {
 					return true;
 				}
@@ -2459,12 +2485,12 @@ namespace graph::query::execution {
 			// bounded per-invocation cache so repeated targets in a supernode do not
 			// reopen the same Entity Map entry for the same logical predicate.
 			using LabelMatch = std::pair<uint64_t, bool>;
-			MaterializedByteReservation labelCacheBytes(&state.materialized_budget);
+			MaterializedByteReservation labelCacheBytes(&state.shared.materialized_budget);
 			std::vector<LabelMatch> targetLabelMatches;
 			const auto cachedLabel = [&](uint64_t id) {
 				return std::ranges::find(targetLabelMatches, id, &LabelMatch::first);
 			};
-			MaterializedByteReservation labelFilterBytes(&state.materialized_budget);
+			MaterializedByteReservation labelFilterBytes(&state.shared.materialized_budget);
 			std::vector<std::string> targetLabelFilter;
 			if (!targetLabel.empty()) {
 				const size_t nameBytes = std::max(targetLabel.size(), std::string{}.capacity());
@@ -2484,14 +2510,14 @@ namespace graph::query::execution {
 				uint64_t previousEdgeId = 0U;
 				if (canUseReferencePages) {
 					for (;;) {
-						if (sourceEdges == state.bounds.maximum_edges_per_node) {
+						if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 							throw std::runtime_error(
 									"logical-plan pattern expression exceeded its per-Node Edge bound");
 						}
 						const size_t pageRecords =
-								std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-										 lazyCandidates ? size_t{1U} : state.bounds.maximum_adjacency_page_records);
-						MaterializedByteReservation referenceBytes(&state.materialized_budget);
+								std::min(state.shared.bounds.maximum_edges_per_node - sourceEdges,
+										 lazyCandidates ? size_t{1U} : state.shared.bounds.maximum_adjacency_page_records);
+						MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 						const auto page = readReferencePageBudgeted(state, source.node_id, adjacencyDirection, continuation, pageRecords, referenceBytes);
 						if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
 							throw std::runtime_error("logical graph backend returned an invalid pattern-expression "
@@ -2505,7 +2531,7 @@ namespace graph::query::execution {
 						// Validate and filter the whole bounded reference page first.  A
 						// single sorted label-column lookup then serves all distinct target
 						// Nodes on the page instead of reopening the Entity Map per Edge.
-						MaterializedByteReservation candidateBytes(&state.materialized_budget);
+						MaterializedByteReservation candidateBytes(&state.shared.materialized_budget);
 						candidateBytes.set(checkedSizeMul(page.edges.size(), sizeof(const storage::EntityRef *),
 							"logical-plan pattern candidate slots overflowed"));
 						std::vector<const storage::EntityRef *> candidates;
@@ -2532,7 +2558,7 @@ namespace graph::query::execution {
 							}
 							incrementBounded(sourceEdges,
 											 "logical-plan pattern-expression per-Node Edge counter overflowed");
-							incrementBounded(state.stats.edges_scanned,
+							incrementBounded(state.task.stats.edges_scanned,
 											 "logical-plan pattern-expression Edge counter overflowed");
 							if (direction == expressions::PatternDirection::PAT_BOTH &&
 								adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -2549,8 +2575,8 @@ namespace graph::query::execution {
 							static_cast<void>(targetId);
 							candidates.push_back(&reference);
 						}
-						if (state.snapshot.supportsNodeExistenceProbes() && !candidates.empty()) {
-							detail::BudgetMemoryResource endpointMemory(state.materialized_budget);
+						if (state.shared.snapshot.supportsNodeExistenceProbes() && !candidates.empty()) {
+							detail::BudgetMemoryResource endpointMemory(state.shared.materialized_budget);
 							std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
 							endpointIds.reserve(candidates.size());
 							for (const auto *candidate: candidates) {
@@ -2558,11 +2584,11 @@ namespace graph::query::execution {
 										? candidate->target_node_id : candidate->source_node_id);
 							}
 							detail::sortUniqueIdsGuarded(endpointIds, [&] {
-								if (state.context != nullptr) state.context->checkGuardNow();
+								if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 							});
-							MaterializedByteReservation presenceBytes(&state.materialized_budget);
+							MaterializedByteReservation presenceBytes(&state.shared.materialized_budget);
 							presenceBytes.set(packedBooleanBytes(endpointIds.size()));
-							const auto present = state.snapshot.containsNodesSorted(endpointIds);
+							const auto present = state.shared.snapshot.containsNodesSorted(endpointIds);
 							presenceBytes.set(packedBooleanBytes(present.capacity()));
 							checkGuard(state);
 							if (present.size() != endpointIds.size()) {
@@ -2572,8 +2598,8 @@ namespace graph::query::execution {
 								throw std::runtime_error("logical graph backend returned a pattern-expression Edge with a missing endpoint");
 							}
 						}
-						MaterializedByteReservation labelIdsBytes(&state.materialized_budget);
-						MaterializedByteReservation labelBitsBytes(&state.materialized_budget);
+						MaterializedByteReservation labelIdsBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation labelBitsBytes(&state.shared.materialized_budget);
 						std::vector<uint64_t> targetIds;
 						std::vector<bool> matches;
 						if (!targetLabel.empty() && !candidates.empty()) {
@@ -2588,17 +2614,17 @@ namespace graph::query::execution {
 								if (cachedLabel(id) == targetLabelMatches.end()) targetIds.push_back(id);
 							}
 							detail::sortUniqueIdsGuarded(targetIds, [&] {
-								if (state.context != nullptr) state.context->checkGuardNow();
+								if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 							});
 							if (!targetIds.empty()) {
 								labelBitsBytes.set(checkedSizeAdd(targetIds.size() / 8U + (targetIds.size() % 8U != 0U),
 									sizeof(size_t), "logical-plan pattern label bit slots overflowed"));
-								matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, targetLabelFilter);
+								matches = state.shared.snapshot.readNodeLabelMatchesSorted(targetIds, targetLabelFilter);
 								labelBitsBytes.set(matches.capacity() / 8U + (matches.capacity() % 8U != 0U));
 								checkGuard(state);
 								if (matches.size() != targetIds.size())
 									throw std::runtime_error("logical graph backend changed pattern-expression target label cardinality");
-								const size_t cacheLimit = std::min(state.bounds.maximum_rows, size_t{64U});
+								const size_t cacheLimit = std::min(state.shared.bounds.maximum_rows, size_t{64U});
 								for (size_t index = 0U; index < targetIds.size() && targetLabelMatches.size() < cacheLimit; ++index) {
 									if (targetLabelMatches.size() == targetLabelMatches.capacity()) {
 										const size_t old = targetLabelMatches.capacity();
@@ -2661,7 +2687,7 @@ namespace graph::query::execution {
 							if (!page.continuation.has_value()) {
 								return true;
 							}
-							if (sourceEdges == state.bounds.maximum_edges_per_node || page.edges.empty() ||
+							if (sourceEdges == state.shared.bounds.maximum_edges_per_node || page.edges.empty() ||
 								page.continuation->previous_edge_id != page.edges.back().entity_id ||
 								page.continuation->next_edge_id == 0U ||
 								page.continuation->previous_edge_id == page.continuation->next_edge_id) {
@@ -2671,7 +2697,7 @@ namespace graph::query::execution {
 							continuation = page.continuation;
 							continue;
 						}
-						MaterializedByteReservation gatherBytes(&state.materialized_budget);
+						MaterializedByteReservation gatherBytes(&state.shared.materialized_budget);
 						gatherBytes.set(checkedSizeMul(candidates.size(), 2U * sizeof(uint64_t),
 							"logical-plan pattern gather slots overflowed"));
 						std::vector<uint64_t> pageEdgeIds;
@@ -2692,10 +2718,10 @@ namespace graph::query::execution {
 															: referencePointer->source_node_id);
 						}
 						detail::sortUniqueIdsGuarded(pageEdgeIds, [&] {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						});
 						detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						});
 						storage::EntityReadShape edgeShape =
 								bindingShape == nullptr ? completeEdgeReadShape() : bindingShape->relationship;
@@ -2705,7 +2731,7 @@ namespace graph::query::execution {
 						storage::EntityReadShape targetShape =
 								bindingShape == nullptr ? completeNodeReadShape() : bindingShape->target;
 						targetShape.include_labels = targetShape.include_labels || !targetLabel.empty();
-						MaterializedByteReservation pageEdgeBytes(&state.materialized_budget);
+						MaterializedByteReservation pageEdgeBytes(&state.shared.materialized_budget);
 						std::vector<storage::LogicalGraphEdge> pageEdges =
 								pageEdgeIds.empty()
 										? std::vector<storage::LogicalGraphEdge>{}
@@ -2714,8 +2740,8 @@ namespace graph::query::execution {
 							throw std::runtime_error(
 									"logical graph backend changed pattern-expression Edge batch cardinality");
 						}
-						retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.context);
-						MaterializedByteReservation pageTargetBytes(&state.materialized_budget);
+						retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.shared.context);
+						MaterializedByteReservation pageTargetBytes(&state.shared.materialized_budget);
 						std::vector<storage::LogicalGraphNode> pageTargets =
 								pageTargetIds.empty() ? std::vector<storage::LogicalGraphNode>{}
 													  : readNodesShapedSortedBudgeted(state, pageTargetIds, targetShape,
@@ -2724,14 +2750,14 @@ namespace graph::query::execution {
 							throw std::runtime_error(
 									"logical graph backend changed pattern-expression target batch cardinality");
 						}
-						retainShapedBatchBytes(pageTargets, pageTargetBytes, state.context);
+						retainShapedBatchBytes(pageTargets, pageTargetBytes, state.shared.context);
 						if (bindingShape != nullptr) {
 							appendNamedProperties(pageEdges, pageEdgeIds, bindingShape->relationship_named_properties,
 												  true, pageEdgeBytes);
-							retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.context);
+							retainShapedBatchBytes(pageEdges, pageEdgeBytes, state.shared.context);
 							appendNamedProperties(pageTargets, pageTargetIds, bindingShape->target_named_properties,
 												  false, pageTargetBytes);
-							retainShapedBatchBytes(pageTargets, pageTargetBytes, state.context);
+							retainShapedBatchBytes(pageTargets, pageTargetBytes, state.shared.context);
 						}
 						for (const storage::EntityRef *referencePointer: candidates) {
 							const storage::EntityRef &reference = *referencePointer;
@@ -2762,7 +2788,7 @@ namespace graph::query::execution {
 						if (!page.continuation.has_value()) {
 							return true;
 						}
-						if (sourceEdges == state.bounds.maximum_edges_per_node || page.edges.empty() ||
+						if (sourceEdges == state.shared.bounds.maximum_edges_per_node || page.edges.empty() ||
 							page.continuation->previous_edge_id != page.edges.back().entity_id ||
 							page.continuation->next_edge_id == 0U ||
 							page.continuation->previous_edge_id == page.continuation->next_edge_id) {
@@ -2773,16 +2799,16 @@ namespace graph::query::execution {
 					}
 				}
 				for (;;) {
-					if (sourceEdges == state.bounds.maximum_edges_per_node) {
+					if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 						throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
 					}
 					const size_t pageRecords =
-							std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-									 lazyCandidates ? size_t{1U} : state.bounds.maximum_adjacency_page_records);
+							std::min(state.shared.bounds.maximum_edges_per_node - sourceEdges,
+									 lazyCandidates ? size_t{1U} : state.shared.bounds.maximum_adjacency_page_records);
 					// The pattern visitor has no Edge Property predicate on this path.
 					// Scan topology first, then materialize the selected full Edge batch
 					// only for candidates that survive endpoint/type validation.
-					MaterializedByteReservation topologyBytes(&state.materialized_budget);
+					MaterializedByteReservation topologyBytes(&state.shared.materialized_budget);
 					const auto page = readTopologyPageBudgeted(state, source.node_id,
 						adjacencyDirection, continuation, pageRecords, topologyBytes);
 					if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
@@ -2799,7 +2825,7 @@ namespace graph::query::execution {
 					// before the per-match materialization loop so parallel edges do not
 					// repeat an Entity Directory descent. Readers without the optional batch
 					// probe retain the complete-read fallback below.
-					MaterializedByteReservation endpointIdsBytes(&state.materialized_budget);
+					MaterializedByteReservation endpointIdsBytes(&state.shared.materialized_budget);
 					endpointIdsBytes.set(checkedSizeMul(page.edges.size(), sizeof(uint64_t),
 						"logical-plan pattern topology endpoint slots overflowed"));
 					std::vector<uint64_t> pageTargetIds;
@@ -2821,37 +2847,37 @@ namespace graph::query::execution {
 						}
 					}
 					detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
-						if (state.context != nullptr) state.context->checkGuardNow();
+						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					});
-					MaterializedByteReservation presenceBytes(&state.materialized_budget);
-					if (state.snapshot.supportsNodeExistenceProbes()) {
+					MaterializedByteReservation presenceBytes(&state.shared.materialized_budget);
+					if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 						presenceBytes.set(checkedSizeAdd(pageTargetIds.size() / 8U + (pageTargetIds.size() % 8U != 0U),
 							sizeof(size_t), "logical-plan pattern topology presence slots overflowed"));
 					}
 					const std::vector<bool> pageTargetPresent =
-							state.snapshot.supportsNodeExistenceProbes()
-									? state.snapshot.containsNodesSorted(pageTargetIds)
+							state.shared.snapshot.supportsNodeExistenceProbes()
+									? state.shared.snapshot.containsNodesSorted(pageTargetIds)
 									: std::vector<bool>{};
 					presenceBytes.set(pageTargetPresent.capacity() / 8U + (pageTargetPresent.capacity() % 8U != 0U));
 					checkGuard(state);
-					if (state.snapshot.supportsNodeExistenceProbes() &&
+					if (state.shared.snapshot.supportsNodeExistenceProbes() &&
 						pageTargetPresent.size() != pageTargetIds.size()) {
 						throw std::runtime_error(
 								"logical graph backend changed pattern-expression endpoint cardinality");
 					}
-					if (state.snapshot.supportsNodeExistenceProbes() &&
+					if (state.shared.snapshot.supportsNodeExistenceProbes() &&
 						std::ranges::any_of(pageTargetPresent, [](bool present) { return !present; })) {
 						throw std::runtime_error("logical graph backend returned a pattern-expression Edge "
 												 "with a missing endpoint");
 					}
 					if (!targetLabel.empty() && !pageTargetIds.empty()) {
-						MaterializedByteReservation labelBytes(&state.materialized_budget);
+						MaterializedByteReservation labelBytes(&state.shared.materialized_budget);
 						labelBytes.set(packedBooleanBytes(pageTargetIds.size()));
 						std::vector<bool> labels;
-						if (state.snapshot.supportsNodeExistenceProbes()) {
-							labels = state.snapshot.readNodeLabelMatchesSorted(pageTargetIds, targetLabelFilter);
+						if (state.shared.snapshot.supportsNodeExistenceProbes()) {
+							labels = state.shared.snapshot.readNodeLabelMatchesSorted(pageTargetIds, targetLabelFilter);
 						} else {
-							MaterializedByteReservation nodesBytes(&state.materialized_budget);
+							MaterializedByteReservation nodesBytes(&state.shared.materialized_budget);
 							const auto nodes = readNodesShapedSortedBudgeted(
 									state, pageTargetIds, {.include_labels = true}, &nodesBytes);
 							if (nodes.size() != pageTargetIds.size()) {
@@ -2876,7 +2902,7 @@ namespace graph::query::execution {
 						}
 						pageTargetIds.resize(accepted);
 					}
-					MaterializedByteReservation edgeIdsBytes(&state.materialized_budget);
+					MaterializedByteReservation edgeIdsBytes(&state.shared.materialized_budget);
 					edgeIdsBytes.set(checkedSizeMul(page.edges.size(), sizeof(uint64_t),
 						"logical-plan pattern topology Edge slots overflowed"));
 					std::vector<uint64_t> pageEdgeIds;
@@ -2900,7 +2926,7 @@ namespace graph::query::execution {
 						}
 					}
 					detail::sortUniqueIdsGuarded(pageEdgeIds, [&] {
-						if (state.context != nullptr) state.context->checkGuardNow();
+						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					});
 					storage::EntityReadShape edgeShape =
 							bindingShape == nullptr ? completeEdgeReadShape() : bindingShape->relationship;
@@ -2910,7 +2936,7 @@ namespace graph::query::execution {
 					storage::EntityReadShape targetShape =
 							bindingShape == nullptr ? completeNodeReadShape() : bindingShape->target;
 					targetShape.include_labels = targetShape.include_labels || !targetLabel.empty();
-					MaterializedByteReservation pageEdgeBytes(&state.materialized_budget);
+					MaterializedByteReservation pageEdgeBytes(&state.shared.materialized_budget);
 					std::vector<storage::LogicalGraphEdge> pageEdgeRecords =
 							pageEdgeIds.empty()
 									? std::vector<storage::LogicalGraphEdge>{}
@@ -2919,8 +2945,8 @@ namespace graph::query::execution {
 						throw std::runtime_error(
 								"logical graph backend changed pattern-expression Edge batch cardinality");
 					}
-					retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.context);
-					MaterializedByteReservation pageTargetBytes(&state.materialized_budget);
+					retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.shared.context);
+					MaterializedByteReservation pageTargetBytes(&state.shared.materialized_budget);
 					std::vector<storage::LogicalGraphNode> pageTargetRecords =
 							pageTargetIds.empty() ? std::vector<storage::LogicalGraphNode>{}
 												  : readNodesShapedSortedBudgeted(state, pageTargetIds, targetShape,
@@ -2929,14 +2955,14 @@ namespace graph::query::execution {
 						throw std::runtime_error(
 								"logical graph backend changed pattern-expression target batch cardinality");
 					}
-					retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.context);
+					retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.shared.context);
 					if (bindingShape != nullptr) {
 						appendNamedProperties(pageEdgeRecords, pageEdgeIds, bindingShape->relationship_named_properties,
 											  true, pageEdgeBytes);
-						retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.context);
+						retainShapedBatchBytes(pageEdgeRecords, pageEdgeBytes, state.shared.context);
 						appendNamedProperties(pageTargetRecords, pageTargetIds, bindingShape->target_named_properties,
 											  false, pageTargetBytes);
-						retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.context);
+						retainShapedBatchBytes(pageTargetRecords, pageTargetBytes, state.shared.context);
 					}
 					for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 						checkGuard(state);
@@ -2952,7 +2978,7 @@ namespace graph::query::execution {
 						}
 						incrementBounded(sourceEdges,
 										 "logical-plan pattern-expression per-Node Edge counter overflowed");
-						incrementBounded(state.stats.edges_scanned,
+						incrementBounded(state.task.stats.edges_scanned,
 										 "logical-plan pattern-expression Edge counter overflowed");
 						// A correct global adjacency index returns a self-loop in both directions.
 						// OUT is visited first, so omit only that duplicate without retaining a
@@ -3004,7 +3030,7 @@ namespace graph::query::execution {
 					if (!page.continuation.has_value()) {
 						return true;
 					}
-					if (sourceEdges == state.bounds.maximum_edges_per_node ||
+					if (sourceEdges == state.shared.bounds.maximum_edges_per_node ||
 						page.continuation->previous_edge_id != page.edges.back().edge_id ||
 						page.continuation->next_edge_id == 0U ||
 						page.continuation->previous_edge_id == page.continuation->next_edge_id) {
@@ -3061,18 +3087,18 @@ namespace graph::query::execution {
 							projected != row.values.end()) {
 							return projected->second;
 						}
-						return readProperty(state.snapshot, row, reference.getVariableName(),
+						return readProperty(state.shared.snapshot, row, reference.getVariableName(),
 											reference.getPropertyName(), state);
 					}
 					return requireBinding(row, reference.getVariableName());
 				}
 				case ExpressionType::PARAMETER: {
-					if (state.context == nullptr) {
+					if (state.shared.context == nullptr) {
 						throw std::runtime_error("logical-plan parameter evaluation requires a QueryContext");
 					}
 					const auto &parameter = dynamic_cast<const expressions::ParameterExpression &>(expression);
-					const auto found = state.context->parameters.find(parameter.getParameterName());
-					if (found == state.context->parameters.end()) {
+					const auto found = state.shared.context->parameters.find(parameter.getParameterName());
+					if (found == state.shared.context->parameters.end()) {
 						throw std::runtime_error("logical-plan read runtime could not resolve a query parameter");
 					}
 					return found->second;
@@ -3080,17 +3106,17 @@ namespace graph::query::execution {
 				case ExpressionType::EXPR_LIST_LITERAL: {
 					const auto &list = dynamic_cast<const expressions::ListLiteralExpression &>(expression);
 					if (list.isStatic()) {
-						if (list.getValue().getList().size() > state.bounds.maximum_rows) {
+						if (list.getValue().getList().size() > state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
 						}
-						MaterializedByteReservation copyBytes(&state.materialized_budget);
+						MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
 						copyBytes.set(materializedListStorageBytes(list.getValue(), state));
 						return list.getValue();
 					}
-					if (list.getElements().size() > state.bounds.maximum_rows) {
+					if (list.getElements().size() > state.shared.bounds.maximum_rows) {
 						throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
 					}
-					MaterializedByteReservation valuesReservation(&state.materialized_budget);
+					MaterializedByteReservation valuesReservation(&state.shared.materialized_budget);
 					valuesReservation.set(
 							checkedSizeAdd(sizeof(uint32_t),
 										   checkedSizeMul(list.getElements().size(), sizeof(PropertyValue),
@@ -3497,11 +3523,11 @@ namespace graph::query::execution {
 				const storage::LogicalGraphNode node = [&]() {
 					if (const auto *referenceValue = std::get_if<storage::EntityRef>(&binding)) {
 						validateNodeRef(*referenceValue, "logical-plan labels() requires a valid node variable");
-						return state.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
+						return state.shared.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
 					}
 					return materializeNodeValue(state, binding);
 				}();
-				if (node.labels.size() > state.bounds.maximum_rows) {
+				if (node.labels.size() > state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan labels() exceeded the configured List bound");
 				}
 				std::vector<PropertyValue> labels;
@@ -3525,7 +3551,7 @@ namespace graph::query::execution {
 				if (const auto *referenceValue = std::get_if<storage::EntityRef>(&binding)) {
 					validateEdgeRef(*referenceValue, "logical-plan type() requires a valid relationship variable");
 					PropertyValue result(
-							state.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
+							state.shared.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
 					row.entity_metadata_cache[reference->getVariableName()].insert_or_assign(name, result);
 					return result;
 				}
@@ -3545,11 +3571,11 @@ namespace graph::query::execution {
 						"logical-plan entity Property function requires a node, relationship, or Map variable");
 			}
 			const PropertyMap &properties =
-					readBindingProperties(state.snapshot, row, reference->getVariableName(), state);
+					readBindingProperties(state.shared.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
 				return PropertyValue(properties);
 			}
-			if (properties.size() > state.bounds.maximum_rows) {
+			if (properties.size() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan keys() exceeded the configured List bound");
 			}
 			std::vector<std::string> orderedKeys;
@@ -3591,7 +3617,7 @@ namespace graph::query::execution {
 			if (step == 0) {
 				throw std::runtime_error("range() step cannot be zero");
 			}
-			MaterializedByteReservation listBytes(&state.materialized_budget);
+			MaterializedByteReservation listBytes(&state.shared.materialized_budget);
 			std::vector<PropertyValue> result;
 			size_t payloadBytes = 0U;
 			const auto admitListBytes = [&](size_t capacity, size_t payload) {
@@ -3607,14 +3633,14 @@ namespace graph::query::execution {
 				listBytes.set(bytes);
 			};
 			const bool hasValues = step > 0 ? start <= end : start >= end;
-			if (hasValues && state.bounds.maximum_rows != 0U) {
+			if (hasValues && state.shared.bounds.maximum_rows != 0U) {
 				const uint64_t distance = step > 0 ? static_cast<uint64_t>(end) - static_cast<uint64_t>(start)
 												   : static_cast<uint64_t>(start) - static_cast<uint64_t>(end);
 				const uint64_t magnitude =
 						step > 0 ? static_cast<uint64_t>(step) : uint64_t{0} - static_cast<uint64_t>(step);
 				const uint64_t additionalValues = distance / magnitude;
 				const size_t initialCapacity =
-						std::min(state.bounds.maximum_rows,
+						std::min(state.shared.bounds.maximum_rows,
 								 additionalValues >= 15U ? size_t{16} : static_cast<size_t>(additionalValues + 1U));
 				admitListBytes(initialCapacity, sizeof(int64_t));
 				result.reserve(initialCapacity);
@@ -3623,7 +3649,7 @@ namespace graph::query::execution {
 			int64_t current = start;
 			while ((step > 0 && current <= end) || (step < 0 && current >= end)) {
 				checkGuard(state);
-				if (result.size() == state.bounds.maximum_rows) {
+				if (result.size() == state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan range() exceeded the configured List bound");
 				}
 				const size_t nextPayloadBytes =
@@ -3631,7 +3657,7 @@ namespace graph::query::execution {
 				if (result.size() == result.capacity()) {
 					const size_t capacity = result.capacity();
 					const size_t nextCapacity = capacity == 0U								? 1U
-												: capacity > state.bounds.maximum_rows / 2U ? state.bounds.maximum_rows
+												: capacity > state.shared.bounds.maximum_rows / 2U ? state.shared.bounds.maximum_rows
 																							: capacity * 2U;
 					admitListBytes(nextCapacity, nextPayloadBytes);
 					result.reserve(nextCapacity);
@@ -3658,7 +3684,7 @@ namespace graph::query::execution {
 			if (!registered->validateArgCount(function.getArgumentCount())) {
 				throw std::runtime_error("logical-plan scalar function has an invalid argument count");
 			}
-			if (function.getArgumentCount() > state.bounds.maximum_rows) {
+			if (function.getArgumentCount() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan scalar function exceeded the configured argument bound");
 			}
 			if (dynamic_cast<const expressions::EntityIntrospectionFunction *>(registered) != nullptr) {
@@ -3685,7 +3711,7 @@ namespace graph::query::execution {
 																		 : ShortestPathResultMode::SPR_LENGTH);
 			}
 			std::vector<PropertyValue> arguments;
-			MaterializedByteReservation argumentBytes(&state.materialized_budget);
+			MaterializedByteReservation argumentBytes(&state.shared.materialized_budget);
 			const size_t requestedArgumentSlotsBytes =
 					checkedSizeMul(function.getArgumentCount(), sizeof(PropertyValue),
 								   "logical-plan scalar function argument storage size overflowed");
@@ -3701,7 +3727,7 @@ namespace graph::query::execution {
 					throw std::logic_error("logical-plan scalar function has a null argument expression");
 				}
 				PropertyValue value = scalarValue(evaluateExpression(*argument, row, state));
-				if (value.getType() == PropertyType::LIST && value.getList().size() > state.bounds.maximum_rows) {
+				if (value.getType() == PropertyType::LIST && value.getList().size() > state.shared.bounds.maximum_rows) {
 					throw std::runtime_error(
 							"logical-plan scalar function received a List exceeding the configured List bound");
 				}
@@ -3749,11 +3775,11 @@ namespace graph::query::execution {
 			Record emptyRecord;
 			const std::unordered_map<std::string, PropertyValue> emptyParameters;
 			const std::unordered_map<std::string, PropertyValue> &parameters =
-					state.context == nullptr ? emptyParameters : state.context->parameters;
+					state.shared.context == nullptr ? emptyParameters : state.shared.context->parameters;
 			const expressions::EvaluationContext evaluationContext(
-					emptyRecord, parameters, {.maximum_collection_elements = state.bounds.maximum_rows});
+					emptyRecord, parameters, {.maximum_collection_elements = state.shared.bounds.maximum_rows});
 			PropertyValue result = registered->evaluate(arguments, evaluationContext);
-			if (result.getType() == PropertyType::LIST && result.getList().size() > state.bounds.maximum_rows) {
+			if (result.getType() == PropertyType::LIST && result.getList().size() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error(
 						"logical-plan scalar function returned a List exceeding the configured List bound");
 			}
@@ -3775,7 +3801,7 @@ namespace graph::query::execution {
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
 					const PropertyValue left = scalarValue(evaluateExpression(*binary.getLeft(), row, state));
-					MaterializedByteReservation operandBytes(&state.materialized_budget);
+					MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
 					operandBytes.set(retainedExpressionValueBytes(left, state));
 					const BinaryOperatorType operation = binary.getOperator();
 					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
@@ -3837,7 +3863,7 @@ namespace graph::query::execution {
 					if (isNull(actual)) {
 						return PropertyValue();
 					}
-					MaterializedByteReservation operandBytes(&state.materialized_budget);
+					MaterializedByteReservation operandBytes(&state.shared.materialized_budget);
 					operandBytes.set(retainedExpressionValueBytes(actual, state));
 					if (in.hasDynamicList()) {
 						const PropertyValue candidates =
@@ -3887,7 +3913,7 @@ namespace graph::query::execution {
 					if (caseExpression.isSimpleCase()) {
 						const PropertyValue comparisonValue =
 								scalarValue(evaluateExpression(*caseExpression.getComparisonExpression(), row, state));
-						MaterializedByteReservation comparisonBytes(&state.materialized_budget);
+						MaterializedByteReservation comparisonBytes(&state.shared.materialized_budget);
 						comparisonBytes.set(retainedExpressionValueBytes(comparisonValue, state));
 						for (const expressions::CaseBranch &branch: caseExpression.getBranches()) {
 							if (!branch.whenExpression || !branch.thenExpression) {
@@ -3897,7 +3923,7 @@ namespace graph::query::execution {
 									scalarValue(evaluateExpression(*branch.whenExpression, row, state));
 							// Only the current WHEN value coexists with the comparison.
 							// Release its charge before evaluating the next branch.
-							MaterializedByteReservation whenBytes(&state.materialized_budget);
+							MaterializedByteReservation whenBytes(&state.shared.materialized_budget);
 							whenBytes.set(retainedExpressionValueBytes(whenValue, state));
 							if (!isNull(whenValue) && comparisonValue == whenValue) {
 								return scalarValue(evaluateExpression(*branch.thenExpression, row, state));
@@ -3924,7 +3950,7 @@ namespace graph::query::execution {
 					if (slice.getList() == nullptr) {
 						throw std::logic_error("logical-plan List slice has no source expression");
 					}
-					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					MaterializedByteReservation sourceListBytes(&state.shared.materialized_budget);
 					PropertyValue listValue = scalarValue(evaluateExpression(*slice.getList(), row, state));
 					if (isNull(listValue)) {
 						return PropertyValue();
@@ -3956,7 +3982,7 @@ namespace graph::query::execution {
 						const int64_t index = normalize(evaluateIndex(slice.getStart(), "index"));
 						if (index < 0 || index >= length)
 							return PropertyValue();
-						MaterializedByteReservation selectedBytes(&state.materialized_budget);
+						MaterializedByteReservation selectedBytes(&state.shared.materialized_budget);
 						selectedBytes.set(retainedExpressionValueBytes(list[static_cast<size_t>(index)], state));
 						return list[static_cast<size_t>(index)];
 					}
@@ -3978,7 +4004,7 @@ namespace graph::query::execution {
 								resultSize, retainedExpressionValueBytes(list[static_cast<size_t>(index)], state),
 								"logical-plan List slice result size overflowed");
 					}
-					MaterializedByteReservation resultBytes(&state.materialized_budget);
+					MaterializedByteReservation resultBytes(&state.shared.materialized_budget);
 					resultBytes.set(resultSize);
 					std::vector<PropertyValue> result;
 					result.reserve(resultCount);
@@ -4008,9 +4034,9 @@ namespace graph::query::execution {
 						expressions::ListComprehensionExpression::ComprehensionType::COMP_REDUCE) {
 						throw std::logic_error("logical-plan List comprehension cannot use a reduce mode");
 					}
-					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					MaterializedByteReservation sourceListBytes(&state.shared.materialized_budget);
 					sourceListBytes.set(materializedListStorageBytes(listValue, state));
-					MaterializedByteReservation resultBytes(&state.materialized_budget);
+					MaterializedByteReservation resultBytes(&state.shared.materialized_budget);
 					std::vector<PropertyValue> result;
 					size_t resultPayloadBytes = sizeof(uint32_t);
 					for (const PropertyValue &element: list) {
@@ -4033,7 +4059,7 @@ namespace graph::query::execution {
 						const size_t nextPayloadBytes =
 								checkedSizeAdd(resultPayloadBytes, retainedExpressionValueBytes(mapped, state),
 											   "logical-plan List comprehension result size overflowed");
-						if (nextPayloadBytes > state.bounds.maximum_materialized_bytes) {
+						if (nextPayloadBytes > state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan List comprehension exceeded its materialized byte bound");
 						}
@@ -4072,10 +4098,10 @@ namespace graph::query::execution {
 						reduce.getVariable().empty()) {
 						throw std::logic_error("logical-plan REDUCE expression is incomplete");
 					}
-					MaterializedByteReservation accumulatorBytes(&state.materialized_budget);
+					MaterializedByteReservation accumulatorBytes(&state.shared.materialized_budget);
 					PropertyValue accumulator = scalarValue(evaluateExpression(*reduce.getInitialExpr(), row, state));
 					accumulatorBytes.set(retainedExpressionValueBytes(accumulator, state));
-					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					MaterializedByteReservation sourceListBytes(&state.shared.materialized_budget);
 					const PropertyValue listValue = scalarValue(evaluateExpression(*reduce.getListExpr(), row, state));
 					if (isNull(listValue)) {
 						return PropertyValue();
@@ -4083,7 +4109,7 @@ namespace graph::query::execution {
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "REDUCE");
 					sourceListBytes.set(materializedListStorageBytes(listValue, state));
 					for (const PropertyValue &element: list) {
-						MaterializedByteReservation nextBytes(&state.materialized_budget);
+						MaterializedByteReservation nextBytes(&state.shared.materialized_budget);
 						PropertyValue next;
 						{
 							ScopedRowBinding accumulatorBinding(row, reduce.getAccumulator(), accumulator, state);
@@ -4103,7 +4129,7 @@ namespace graph::query::execution {
 						quantifier.getVariable().empty()) {
 						throw std::logic_error("logical-plan quantifier expression is incomplete");
 					}
-					MaterializedByteReservation sourceListBytes(&state.materialized_budget);
+					MaterializedByteReservation sourceListBytes(&state.shared.materialized_budget);
 					const PropertyValue listValue =
 							scalarValue(evaluateExpression(*quantifier.getListExpression(), row, state));
 					if (isNull(listValue)) {
@@ -4155,7 +4181,7 @@ namespace graph::query::execution {
 					if (!projection.isMapLiteral() && projection.getVariable().empty()) {
 						throw std::logic_error("logical-plan Map projection has an empty variable");
 					}
-					if (projection.getItems().size() > state.bounds.maximum_property_entries) {
+					if (projection.getItems().size() > state.shared.bounds.maximum_property_entries) {
 						throw std::runtime_error("logical-plan Map projection exceeded the configured Property bound");
 					}
 					if (!projection.isMapLiteral()) {
@@ -4170,14 +4196,14 @@ namespace graph::query::execution {
 							}
 						}
 					}
-					MaterializedByteReservation resultBytes(&state.materialized_budget);
+					MaterializedByteReservation resultBytes(&state.shared.materialized_budget);
 					PropertyValue::MapType result;
 					size_t resultPayloadBytes = sizeof(uint32_t);
 					resultBytes.set(resultPayloadBytes);
 					const auto insertResult = [&](const std::string &key, const PropertyValue &value) {
 						const auto previous = result.find(key);
 						const bool newKey = previous == result.end();
-						if (newKey && result.size() == state.bounds.maximum_property_entries) {
+						if (newKey && result.size() == state.shared.bounds.maximum_property_entries) {
 							throw std::runtime_error(
 									"logical-plan Map projection exceeded the configured Property bound");
 						}
@@ -4205,7 +4231,7 @@ namespace graph::query::execution {
 							resultBytes.set(nextResultBytes);
 							result.insert_or_assign(key, value);
 						} else {
-							MaterializedByteReservation replacementBytes(&state.materialized_budget);
+							MaterializedByteReservation replacementBytes(&state.shared.materialized_budget);
 							replacementBytes.set(valueBytes);
 							result.insert_or_assign(key, value);
 							replacementBytes.reset();
@@ -4223,8 +4249,8 @@ namespace graph::query::execution {
 									throw std::logic_error("logical-plan Map projection has an empty Property key");
 								}
 								const PropertyValue selected =
-										readProperty(state.snapshot, row, projection.getVariable(), item.key, state);
-								MaterializedByteReservation selectedBytes(&state.materialized_budget);
+										readProperty(state.shared.snapshot, row, projection.getVariable(), item.key, state);
+								MaterializedByteReservation selectedBytes(&state.shared.materialized_budget);
 								selectedBytes.set(property_utils::getPropertyValueSize(selected));
 								insertResult(item.key, selected);
 								break;
@@ -4237,7 +4263,7 @@ namespace graph::query::execution {
 										item.expression == nullptr
 												? PropertyValue()
 												: scalarValue(evaluateExpression(*item.expression, row, state));
-								MaterializedByteReservation literalBytes(&state.materialized_budget);
+								MaterializedByteReservation literalBytes(&state.shared.materialized_budget);
 								literalBytes.set(property_utils::getPropertyValueSize(literal));
 								insertResult(item.key, literal);
 								break;
@@ -4246,14 +4272,14 @@ namespace graph::query::execution {
 								if (projection.isMapLiteral()) {
 									throw std::logic_error("logical-plan Map literal has an all-Properties selector");
 								}
-								MaterializedByteReservation sourceBytes(&state.materialized_budget);
+								MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 								const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
 								const auto *mapValue = std::get_if<PropertyValue>(&binding);
 								const auto cached = row.property_cache.find(projection.getVariable());
 								const PropertyMap &properties =
 										mapValue != nullptr && cached == row.property_cache.end()
 												? mapValue->getMap()
-												: readBindingProperties(state.snapshot, row, projection.getVariable(),
+												: readBindingProperties(state.shared.snapshot, row, projection.getVariable(),
 																		state);
 								sourceBytes.set(propertyMapBytes(properties,
 																 "logical-plan Map projection source size overflowed"));
@@ -4303,7 +4329,7 @@ namespace graph::query::execution {
 						return PropertyValue(matchesWhere(nullptr));
 					}
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
-							exists.getWhereExpression(), nullptr, exists.getTargetVar(), {}, state.snapshot);
+							exists.getWhereExpression(), nullptr, exists.getTargetVar(), {}, state.shared.snapshot);
 					bool matched = false;
 					static_cast<void>(visitPatternTargets(
 							sourceNode, exists.getRelType(), exists.getTargetLabel(), exists.getDirection(), state,
@@ -4329,7 +4355,7 @@ namespace graph::query::execution {
 						return PropertyValue(std::vector<PropertyValue>{});
 					}
 					const storage::LogicalGraphNode sourceNode = patternSourceIdentity(state, source->second);
-					MaterializedByteReservation valuesReservation(&state.materialized_budget);
+					MaterializedByteReservation valuesReservation(&state.shared.materialized_budget);
 					std::vector<PropertyValue> values;
 					size_t valuesBytes = sizeof(uint32_t);
 					const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
@@ -4340,7 +4366,7 @@ namespace graph::query::execution {
 										evaluateExpression(*comprehension.getWhereExpression(), row, state))) != true) {
 								return true;
 							}
-							if (values.size() == state.bounds.maximum_rows) {
+							if (values.size() == state.shared.bounds.maximum_rows) {
 								throw std::runtime_error(
 										"logical-plan Pattern comprehension exceeded its result bound");
 							}
@@ -4350,13 +4376,13 @@ namespace graph::query::execution {
 							const size_t nextValueBytes =
 									checkedSizeAdd(valuesBytes, mappedBytes,
 												   "logical-plan Pattern comprehension result size overflowed");
-							if (nextValueBytes > state.bounds.maximum_materialized_bytes) {
+							if (nextValueBytes > state.shared.bounds.maximum_materialized_bytes) {
 								throw std::runtime_error(
 										"logical-plan Pattern comprehension exceeded its materialized byte bound");
 							}
 							const size_t nextCapacity =
 									values.size() == values.capacity()
-											? std::min(state.bounds.maximum_rows,
+											? std::min(state.shared.bounds.maximum_rows,
 													   std::max(values.size() + 1U,
 																checkedSizeMul(values.capacity(), 2U,
 																			   "logical-plan Pattern comprehension "
@@ -4403,7 +4429,7 @@ namespace graph::query::execution {
 					const auto finishValues = [&]() {
 						PropertyValue result(std::move(values));
 						// Confirm that the incremental charge matches the returned value.
-						if (property_utils::getPropertyValueSize(result) > state.bounds.maximum_materialized_bytes) {
+						if (property_utils::getPropertyValueSize(result) > state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan Pattern comprehension exceeded its materialized byte bound");
 						}
@@ -4415,7 +4441,7 @@ namespace graph::query::execution {
 					}
 					const std::optional<PatternBindingReadShape> patternShape = inspectPatternBindingReadShape(
 							comprehension.getWhereExpression(), comprehension.getMapExpression(),
-							comprehension.getTargetVar(), comprehension.getRelationshipVar(), state.snapshot);
+							comprehension.getTargetVar(), comprehension.getRelationshipVar(), state.shared.snapshot);
 					static_cast<void>(visitPatternTargets(
 							sourceNode, comprehension.getRelType(), comprehension.getTargetLabel(),
 							comprehension.getDirection(), state,
@@ -4448,7 +4474,7 @@ namespace graph::query::execution {
 					// readers without that capability retain the complete-read fallback.
 					const uint64_t startNodeId = nodeBindingId(startBinding->second, state);
 					const uint64_t endNodeId = nodeBindingId(endBinding->second, state);
-					if (state.snapshot.supportsNodeExistenceProbes()) {
+					if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 						std::vector<uint64_t> endpointIds;
 						if (std::holds_alternative<storage::EntityRef>(startBinding->second)) {
 							endpointIds.push_back(startNodeId);
@@ -4459,7 +4485,7 @@ namespace graph::query::execution {
 						std::ranges::sort(endpointIds);
 						endpointIds.erase(std::unique(endpointIds.begin(), endpointIds.end()), endpointIds.end());
 						if (!endpointIds.empty()) {
-							const std::vector<bool> present = state.snapshot.containsNodesSorted(endpointIds);
+							const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(endpointIds);
 							if (present.size() != endpointIds.size()) {
 								throw std::runtime_error(
 										"logical graph shortestPath endpoint probe cardinality changed");
@@ -4479,16 +4505,16 @@ namespace graph::query::execution {
 						}
 					}
 					int maximumHops = shortest.getMaxHops();
-					if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
-						if (*state.context->maxVarLengthDepth < 0) {
+					if (state.shared.context != nullptr && state.shared.context->maxVarLengthDepth.has_value()) {
+						if (*state.shared.context->maxVarLengthDepth < 0) {
 							throw std::invalid_argument("logical-plan shortestPath has a negative query depth bound");
 						}
-						maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
+						maximumHops = std::min(maximumHops, *state.shared.context->maxVarLengthDepth);
 					}
 					if (maximumHops < shortest.getMinHops()) {
 						return PropertyValue();
 					}
-					if (static_cast<uint64_t>(maximumHops) > state.bounds.maximum_node_records) {
+					if (static_cast<uint64_t>(maximumHops) > state.shared.bounds.maximum_node_records) {
 						throw std::runtime_error("logical-plan shortestPath exceeds its Node-depth bound");
 					}
 
@@ -4497,7 +4523,7 @@ namespace graph::query::execution {
 						storage::LogicalGraphEdgeTopology edge;
 					};
 					// The lease outlives the BFS containers it represents.
-					MaterializedByteReservation shortestPathStateBytes(&state.materialized_budget);
+					MaterializedByteReservation shortestPathStateBytes(&state.shared.materialized_budget);
 					std::unordered_map<uint64_t, int> distances;
 					std::unordered_map<uint64_t, std::vector<Parent>> parents;
 					std::deque<uint64_t> frontier;
@@ -4508,16 +4534,16 @@ namespace graph::query::execution {
 					std::optional<int> targetDistance = startNodeId == endNodeId ? std::optional<int>{0} : std::nullopt;
 					size_t exploredEdges = 0U;
 					const size_t maximumExploredEdges = [&]() {
-						if (state.bounds.maximum_node_records >
-							std::numeric_limits<size_t>::max() / state.bounds.maximum_edges_per_node) {
+						if (state.shared.bounds.maximum_node_records >
+							std::numeric_limits<size_t>::max() / state.shared.bounds.maximum_edges_per_node) {
 							throw std::overflow_error("logical-plan shortestPath Edge budget overflowed");
 						}
-						return state.bounds.maximum_node_records * state.bounds.maximum_edges_per_node;
+						return state.shared.bounds.maximum_node_records * state.shared.bounds.maximum_edges_per_node;
 					}();
 					const auto chargeShortestPathState = [&](size_t bytes) {
 						const size_t remaining =
-								state.bounds.maximum_materialized_bytes -
-								std::min(shortestPathStateBytes.bytes(), state.bounds.maximum_materialized_bytes);
+								state.shared.bounds.maximum_materialized_bytes -
+								std::min(shortestPathStateBytes.bytes(), state.shared.bounds.maximum_materialized_bytes);
 						if (bytes > remaining) {
 							throw std::runtime_error(
 									"logical-plan shortestPath exceeded its materialized state byte bound");
@@ -4525,17 +4551,17 @@ namespace graph::query::execution {
 						shortestPathStateBytes.set(checkedSizeAdd(shortestPathStateBytes.bytes(), bytes,
 																  "logical-plan shortestPath state size overflowed"));
 					};
-					const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
+					const bool supportsExistenceProbes = state.shared.snapshot.supportsNodeExistenceProbes();
 					std::optional<uint64_t> relationshipTypeToken;
 					if (!shortest.getRelType().empty() &&
-						state.snapshot.supportsNativeRelationshipTypeTokens(shortest.getRelType())) {
-						relationshipTypeToken = state.snapshot.findRelationshipTypeToken(shortest.getRelType());
+						state.shared.snapshot.supportsNativeRelationshipTypeTokens(shortest.getRelType())) {
+						relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(shortest.getRelType());
 						if (!relationshipTypeToken.has_value()) {
 							return PropertyValue();
 						}
 					}
 					const bool useNativeAdjacencyRefs =
-							state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+							state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() &&
 							(shortest.getRelType().empty() || relationshipTypeToken.has_value());
 					const auto visitAdjacent = [&](uint64_t nodeId, const auto &onEdge) {
 						size_t sourceEdges = 0U;
@@ -4544,17 +4570,17 @@ namespace graph::query::execution {
 							uint64_t previousEdgeId = 0U;
 							for (;;) {
 								if (exploredEdges == maximumExploredEdges ||
-									sourceEdges == state.bounds.maximum_edges_per_node) {
+									sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its total Edge bound");
 								}
-								const size_t perNodeRemaining = state.bounds.maximum_edges_per_node - sourceEdges;
+								const size_t perNodeRemaining = state.shared.bounds.maximum_edges_per_node - sourceEdges;
 								const size_t pageRecords =
-										std::min(perNodeRemaining, state.bounds.maximum_adjacency_page_records);
-								MaterializedByteReservation adjacencyPageBytes(&state.materialized_budget);
+										std::min(perNodeRemaining, state.shared.bounds.maximum_adjacency_page_records);
+								MaterializedByteReservation adjacencyPageBytes(&state.shared.materialized_budget);
 								std::vector<storage::LogicalGraphEdgeTopology> pageEdges;
 								std::optional<storage::LogicalGraphAdjacencyContinuation> pageContinuation;
 								if (useNativeAdjacencyRefs) {
-									MaterializedByteReservation referenceBytes(&state.materialized_budget);
+									MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 									const auto page = readReferencePageBudgeted(state, nodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 									if (page.edges.size() > pageRecords ||
 										(page.edges.empty() && page.continuation.has_value())) {
@@ -4664,7 +4690,7 @@ namespace graph::query::execution {
 										checkedSizeAdd(adjacencyPageBytes.bytes(), endpointProbeBytes,
 													   "logical-plan shortestPath adjacency page size overflowed"));
 								const std::vector<bool> endpointPresent =
-										supportsExistenceProbes ? state.snapshot.containsNodesSorted(endpointIds)
+										supportsExistenceProbes ? state.shared.snapshot.containsNodesSorted(endpointIds)
 																: std::vector<bool>{};
 								if (supportsExistenceProbes) {
 									const size_t actualPresenceBytes =
@@ -4691,7 +4717,7 @@ namespace graph::query::execution {
 													 "logical-plan shortestPath Edge counter overflowed");
 									incrementBounded(sourceEdges,
 													 "logical-plan shortestPath per-Node Edge counter overflowed");
-									incrementBounded(state.stats.edges_scanned,
+									incrementBounded(state.task.stats.edges_scanned,
 													 "logical-plan shortestPath runtime Edge counter overflowed");
 									if (shortest.getDirection() == expressions::PatternDirection::PAT_BOTH &&
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -4726,7 +4752,7 @@ namespace graph::query::execution {
 								if (!pageContinuation.has_value()) {
 									return true;
 								}
-								if (sourceEdges == state.bounds.maximum_edges_per_node ||
+								if (sourceEdges == state.shared.bounds.maximum_edges_per_node ||
 									pageContinuation->previous_edge_id != pageEdges.back().edge_id ||
 									pageContinuation->next_edge_id == 0U ||
 									pageContinuation->previous_edge_id == pageContinuation->next_edge_id) {
@@ -4773,7 +4799,7 @@ namespace graph::query::execution {
 							}
 							const auto existing = distances.find(next);
 							if (existing == distances.end()) {
-								if (distances.size() == state.bounds.maximum_node_records) {
+								if (distances.size() == state.shared.bounds.maximum_node_records) {
 									throw std::runtime_error(
 											"logical-plan shortestPath exceeded its frontier Node bound");
 								}
@@ -4781,7 +4807,7 @@ namespace graph::query::execution {
 														sizeof(uint64_t));
 								distances.emplace(next, nextDistance);
 								frontier.push_back(next);
-								if (parentEntries == state.bounds.maximum_rows) {
+								if (parentEntries == state.shared.bounds.maximum_rows) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its parent-DAG bound");
 								}
 								chargeShortestPathState(
@@ -4791,7 +4817,7 @@ namespace graph::query::execution {
 								incrementBounded(parentEntries,
 												 "logical-plan shortestPath parent-DAG counter overflowed");
 							} else if (existing->second == nextDistance) {
-								if (parentEntries == state.bounds.maximum_rows) {
+								if (parentEntries == state.shared.bounds.maximum_rows) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its parent-DAG bound");
 								}
 								chargeShortestPathState(
@@ -4822,7 +4848,7 @@ namespace graph::query::execution {
 									checkedSizeAdd(checkedSizeMul(static_cast<size_t>(*targetDistance), size_t{2U},
 																  "logical-plan shortestPath size overflowed"),
 												   size_t{1U}, "logical-plan shortestPath size overflowed");
-							if (elements > state.bounds.maximum_rows) {
+							if (elements > state.shared.bounds.maximum_rows) {
 								throw std::runtime_error("logical-plan scalar function received a List exceeding the "
 														 "configured List bound");
 							}
@@ -4833,13 +4859,13 @@ namespace graph::query::execution {
 							if (shortestMode == ShortestPathResultMode::SPR_LENGTH) {
 								const auto markerMatches = [&](uint64_t id, bool edge) {
 									checkGuard(state);
-									const auto present = edge ? state.snapshot.edgePropertyExists(id, "_type")
-															  : state.snapshot.nodePropertyExists(id, "_type");
+									const auto present = edge ? state.shared.snapshot.edgePropertyExists(id, "_type")
+															  : state.shared.snapshot.nodePropertyExists(id, "_type");
 									if (present.has_value() && !*present)
 										return true;
 									PropertyValue marker;
 									if (present.has_value()) {
-										marker = readSelectedPropertyBudgeted(state.snapshot, id, edge, "_type", state);
+										marker = readSelectedPropertyBudgeted(state.shared.snapshot, id, edge, "_type", state);
 									} else {
 										// Unsupported presence probes retain the complete reader
 										// fallback and distinguish a missing key from explicit NULL.
@@ -4852,7 +4878,7 @@ namespace graph::query::execution {
 										marker = field->value;
 									}
 									if (property_utils::getPropertyValueSize(marker) >
-										state.bounds.maximum_materialized_bytes) {
+										state.shared.bounds.maximum_materialized_bytes) {
 										throw std::runtime_error(
 												"logical-plan shortestPath marker exceeded its materialized bound");
 									}
@@ -4896,7 +4922,7 @@ namespace graph::query::execution {
 							size_t count = 0U;
 							for (const Parent &parent: previous->second) {
 								const size_t contribution = countPaths(parent.node_id);
-								if (contribution > state.bounds.maximum_rows - count) {
+								if (contribution > state.shared.bounds.maximum_rows - count) {
 									throw std::runtime_error(
 											"logical-plan shortestPath exceeded its result-path bound");
 								}
@@ -4934,13 +4960,13 @@ namespace graph::query::execution {
 						path.reserve(pathElements);
 						const auto appendEntity = [&](const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 													  std::string_view type, uint64_t id) {
-							if (entries.size() > state.bounds.maximum_property_entries) {
+							if (entries.size() > state.shared.bounds.maximum_property_entries) {
 								throw std::runtime_error(
 										"logical graph backend returned too many direct Property entries");
 							}
-							incrementBounded(state.stats.property_sets_materialized,
+							incrementBounded(state.task.stats.property_sets_materialized,
 											 "logical-plan Property materialization counter overflowed");
-							MaterializedByteReservation keyBytes(&state.materialized_budget);
+							MaterializedByteReservation keyBytes(&state.shared.materialized_budget);
 							keyBytes.set(checkedSizeMul(entries.size(), sizeof(std::string_view),
 														"logical-plan shortestPath Property key size overflowed"));
 							std::vector<std::string_view> keys;
@@ -4993,7 +5019,7 @@ namespace graph::query::execution {
 							}
 							path.emplace_back(std::move(entityMap));
 						};
-						MaterializedByteReservation orderedNodeBytes(&state.materialized_budget);
+						MaterializedByteReservation orderedNodeBytes(&state.shared.materialized_budget);
 						orderedNodeBytes.set(
 								checkedSizeMul(nodeIds.size(), sizeof(uint64_t),
 											   "logical-plan shortestPath ordered Node ID size overflowed"));
@@ -5001,7 +5027,7 @@ namespace graph::query::execution {
 						std::ranges::sort(orderedNodeIds);
 						orderedNodeIds.erase(std::unique(orderedNodeIds.begin(), orderedNodeIds.end()),
 											 orderedNodeIds.end());
-						MaterializedByteReservation nodeRecordBytes(&state.materialized_budget);
+						MaterializedByteReservation nodeRecordBytes(&state.shared.materialized_budget);
 						nodeRecordBytes.set(checkedSizeMul(orderedNodeIds.size(), sizeof(storage::LogicalGraphNode),
 														   "logical-plan shortestPath retained Node size overflowed"));
 						std::vector<storage::LogicalGraphNode> nodeRecords;
@@ -5011,7 +5037,7 @@ namespace graph::query::execution {
 						for (size_t offset = 0U; offset < orderedNodeIds.size();
 							 offset += DEFAULT_PROPERTY_BATCH_ROWS) {
 							const size_t count = std::min(DEFAULT_PROPERTY_BATCH_ROWS, orderedNodeIds.size() - offset);
-							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 							auto batch = readNodesShapedSortedBudgeted(
 									state, std::span<const uint64_t>(orderedNodeIds).subspan(offset, count),
 									completeNodeReadShape(), &sourceBytes);
@@ -5026,9 +5052,9 @@ namespace graph::query::execution {
 											"logical-plan shortestPath Node batch changed logical ID order");
 								}
 							}
-							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 							for (auto &node: batch) {
-								const size_t heapBytes = logicalNodeCacheBytes(node, state.context) - sizeof(node);
+								const size_t heapBytes = logicalNodeCacheBytes(node, state.shared.context) - sizeof(node);
 								sourceBytes.set(sourceBytes.bytes() - heapBytes);
 								nodeRecordBytes.set(
 										checkedSizeAdd(nodeRecordBytes.bytes(), heapBytes,
@@ -5039,7 +5065,7 @@ namespace graph::query::execution {
 						std::vector<uint64_t>().swap(orderedNodeIds);
 						orderedNodeBytes.reset();
 						std::vector<uint64_t> orderedEdgeIds;
-						MaterializedByteReservation orderedEdgeBytes(&state.materialized_budget);
+						MaterializedByteReservation orderedEdgeBytes(&state.shared.materialized_budget);
 						orderedEdgeBytes.set(
 								checkedSizeMul(edges.size(), sizeof(uint64_t),
 											   "logical-plan shortestPath ordered Edge ID size overflowed"));
@@ -5050,7 +5076,7 @@ namespace graph::query::execution {
 						std::ranges::sort(orderedEdgeIds);
 						orderedEdgeIds.erase(std::unique(orderedEdgeIds.begin(), orderedEdgeIds.end()),
 											 orderedEdgeIds.end());
-						MaterializedByteReservation edgeRecordBytes(&state.materialized_budget);
+						MaterializedByteReservation edgeRecordBytes(&state.shared.materialized_budget);
 						edgeRecordBytes.set(checkedSizeMul(orderedEdgeIds.size(), sizeof(storage::LogicalGraphEdge),
 														   "logical-plan shortestPath retained Edge size overflowed"));
 						std::vector<storage::LogicalGraphEdge> edgeRecords;
@@ -5060,7 +5086,7 @@ namespace graph::query::execution {
 						for (size_t offset = 0U; offset < orderedEdgeIds.size();
 							 offset += DEFAULT_PROPERTY_BATCH_ROWS) {
 							const size_t count = std::min(DEFAULT_PROPERTY_BATCH_ROWS, orderedEdgeIds.size() - offset);
-							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 							auto batch = readEdgesShapedSortedBudgeted(
 									state, std::span<const uint64_t>(orderedEdgeIds).subspan(offset, count),
 									completeEdgeReadShape(), &sourceBytes);
@@ -5075,9 +5101,9 @@ namespace graph::query::execution {
 											"logical-plan shortestPath Edge batch changed logical ID order");
 								}
 							}
-							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 							for (auto &edge: batch) {
-								const size_t heapBytes = logicalEdgeCacheBytes(edge, state.context) - sizeof(edge);
+								const size_t heapBytes = logicalEdgeCacheBytes(edge, state.shared.context) - sizeof(edge);
 								sourceBytes.set(sourceBytes.bytes() - heapBytes);
 								edgeRecordBytes.set(
 										checkedSizeAdd(edgeRecordBytes.bytes(), heapBytes,
@@ -5121,10 +5147,10 @@ namespace graph::query::execution {
 						return PropertyValue(std::move(path));
 					};
 
-					MaterializedByteReservation allPathReservation(&state.materialized_budget);
+					MaterializedByteReservation allPathReservation(&state.shared.materialized_budget);
 					std::vector<PropertyValue> allPaths;
 					size_t allPathBytes = 0U;
-					MaterializedByteReservation reversedPathBytes(&state.materialized_budget);
+					MaterializedByteReservation reversedPathBytes(&state.shared.materialized_budget);
 					reversedPathBytes.set(sizeof(uint64_t));
 					std::vector<uint64_t> reversedNodes;
 					reversedNodes.reserve(1U);
@@ -5141,11 +5167,11 @@ namespace graph::query::execution {
 								typeBytes, "logical-plan shortestPath reverse path size overflowed");
 					};
 					std::function<void(uint64_t)> collectPaths = [&](uint64_t nodeId) {
-						if (allPaths.size() == state.bounds.maximum_rows) {
+						if (allPaths.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan shortestPath exceeded its result-path bound");
 						}
 						if (nodeId == startNodeId) {
-							MaterializedByteReservation forwardPathBytes(&state.materialized_budget);
+							MaterializedByteReservation forwardPathBytes(&state.shared.materialized_budget);
 							size_t forwardBytes = checkedSizeAdd(
 									checkedSizeMul(reversedNodes.size(), sizeof(uint64_t),
 												   "logical-plan shortestPath forward Node size overflowed"),
@@ -5160,11 +5186,11 @@ namespace graph::query::execution {
 							std::vector<uint64_t> nodes(reversedNodes.rbegin(), reversedNodes.rend());
 							std::vector<storage::LogicalGraphEdgeTopology> edges(reversedEdges.rbegin(),
 																				 reversedEdges.rend());
-							MaterializedByteReservation pendingPathBytes(&state.materialized_budget);
+							MaterializedByteReservation pendingPathBytes(&state.shared.materialized_budget);
 							PropertyValue path = materializePath(nodes, edges, pendingPathBytes);
 							const size_t pathBytes = property_utils::getPropertyValueSize(path);
-							if (pathBytes > state.bounds.maximum_materialized_bytes ||
-								allPathBytes > state.bounds.maximum_materialized_bytes - pathBytes) {
+							if (pathBytes > state.shared.bounds.maximum_materialized_bytes ||
+								allPathBytes > state.shared.bounds.maximum_materialized_bytes - pathBytes) {
 								throw std::runtime_error(
 										"logical-plan shortestPath exceeded its materialized byte bound");
 							}
@@ -5172,7 +5198,7 @@ namespace graph::query::execution {
 									allPathBytes, pathBytes, "logical-plan shortestPath result size overflowed");
 							const size_t nextCapacity =
 									allPaths.size() == allPaths.capacity()
-											? std::min(state.bounds.maximum_rows,
+											? std::min(state.shared.bounds.maximum_rows,
 													   std::max(allPaths.size() + 1U,
 																checkedSizeMul(allPaths.capacity(), 2U,
 																			   "logical-plan shortestPath result "
@@ -5274,7 +5300,7 @@ namespace graph::query::execution {
 						decltype(distances){}.swap(distances);
 						decltype(frontier){}.swap(frontier);
 						shortestPathStateBytes.reset();
-						MaterializedByteReservation outputBytes(&state.materialized_budget);
+						MaterializedByteReservation outputBytes(&state.shared.materialized_budget);
 						return materializePath(reversedNodes, reversedEdges, outputBytes);
 					}
 					collectPaths(endNodeId);
@@ -5780,11 +5806,11 @@ namespace graph::query::execution {
 			}
 			size_t predictedMapBytes = 0U;
 			if (sourceBytes != nullptr) {
-				if (entity.properties.size() > state.bounds.maximum_property_entries) {
+				if (entity.properties.size() > state.shared.bounds.maximum_property_entries) {
 					throw std::runtime_error("logical graph backend returned too many direct Property entries");
 				}
 				constexpr const char *message = "logical-plan NamedPath Property cache size overflowed";
-				size_t bytes = directPropertyMapStorageBytes(entity.properties, message, state.context);
+				size_t bytes = directPropertyMapStorageBytes(entity.properties, message, state.shared.context);
 				bytes -= sizeof(PropertyMap);
 				predictedMapBytes = bytes;
 				const size_t nextBytes = checkedSizeAdd(sourceBytes->bytes(), bytes, message);
@@ -5796,15 +5822,15 @@ namespace graph::query::execution {
 			PropertyMap properties = [&] {
 				if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
 					validateNode(entity, state);
-					return readNodeProperties(state.snapshot, entity, state);
+					return readNodeProperties(state.shared.snapshot, entity, state);
 				} else {
 					validateEdge(entity);
-					return readEdgeProperties(state.snapshot, entity, state);
+					return readEdgeProperties(state.shared.snapshot, entity, state);
 				}
 			}();
 			if (sourceBytes != nullptr) {
 				const size_t actualMapBytes = propertyMapBytes(properties,
-					"logical-plan NamedPath Property cache size overflowed", state.context) - sizeof(PropertyMap);
+					"logical-plan NamedPath Property cache size overflowed", state.shared.context) - sizeof(PropertyMap);
 				sourceBytes->set(checkedSizeAdd(sourceBytes->bytes() - predictedMapBytes, actualMapBytes,
 					"logical-plan NamedPath Property cache size overflowed"));
 			}
@@ -5813,7 +5839,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] PropertyMap copyResultPropertyMap(const PropertyMap &properties, ExecutionState &state) {
 			return detail::copyPropertyMapGuarded(properties, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 		}
 
@@ -5826,10 +5852,10 @@ namespace graph::query::execution {
 				return copyResultPropertyMap(*cached, state);
 			if constexpr (std::is_same_v<Entity, storage::LogicalGraphNode>) {
 				validateNode(entity, state);
-				return readNodeProperties(state.snapshot, entity, state);
+				return readNodeProperties(state.shared.snapshot, entity, state);
 			} else {
 				validateEdge(entity);
-				return readEdgeProperties(state.snapshot, entity, state);
+				return readEdgeProperties(state.shared.snapshot, entity, state);
 			}
 		}
 
@@ -5842,7 +5868,7 @@ namespace graph::query::execution {
 			for (const storage::LogicalGraphPropertyEntry &entry: entity.properties) {
 				checkGuard(state);
 				if (!properties.emplace(entry.key, detail::copyPropertyValueGuarded(entry.value, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).second) {
 					throw std::runtime_error("logical-plan result received duplicate complete Entity properties");
 				}
@@ -5852,7 +5878,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] size_t completeResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 														 ExecutionState &state) {
-			detail::BudgetMemoryResource keyMemory(state.materialized_budget);
+			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
 			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
 			size_t bytes = sizeof(PropertyMap);
@@ -5880,7 +5906,7 @@ namespace graph::query::execution {
 				size_t labelsUntilGuard = 256U;
 				for (const std::string &label: entity.labels) {
 					if (--labelsUntilGuard == 0U) {
-						if (state.context != nullptr) state.context->checkGuardNow();
+						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						labelsUntilGuard = 256U;
 					}
 					bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
@@ -5901,7 +5927,7 @@ namespace graph::query::execution {
 					checkedSizeAdd(rowPrefixBytes, columnNameBytes, "logical-plan result row size overflowed");
 			nextBytes = checkedSizeAdd(nextBytes, sizeof(ResultValue), "logical-plan result row size overflowed");
 			nextBytes = checkedSizeAdd(nextBytes, entityBytes, "logical-plan result row size overflowed");
-			if (nextBytes > state.bounds.maximum_materialized_bytes) {
+			if (nextBytes > state.shared.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 			}
 			reservation.set(nextBytes);
@@ -5914,7 +5940,7 @@ namespace graph::query::execution {
 														 bool repeatedEntity, MaterializedByteReservation &outputReservation,
 			MaterializedByteReservation &propertyCacheReservation) {
 			const auto copyCheckpoint = [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			};
 			if (!rowPreflighted && !std::holds_alternative<storage::EntityRef>(value)) {
 				size_t predictedBytes;
@@ -5928,7 +5954,7 @@ namespace graph::query::execution {
 			}
 			if (const auto *property = std::get_if<PropertyValue>(&value)) {
 				return ResultValue(detail::copyPropertyValueGuarded(*property, [&] {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				}));
 			}
 			// Borrow a prefetched complete record while constructing the public
@@ -5936,11 +5962,11 @@ namespace graph::query::execution {
 			if (const auto *reference = std::get_if<storage::EntityRef>(&value)) {
 				validateEntityRef(*reference);
 				if (reference->is_edge) {
-					MaterializedByteReservation loadedBytes(&state.materialized_budget);
+					MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
 					std::optional<storage::LogicalGraphEdge> loaded;
-					const auto cached = state.edge_cache.find(reference->entity_id);
+					const auto cached = state.shared.edge_cache.find(reference->entity_id);
 					const storage::LogicalGraphEdge *edge = nullptr;
-					if (cached != state.edge_cache.end()) {
+					if (cached != state.shared.edge_cache.end()) {
 						edge = &cached->second;
 					} else {
 						loaded.emplace(readEdgeCached(state, reference->entity_id));
@@ -5951,18 +5977,18 @@ namespace graph::query::execution {
 							rowPreflighted ? std::nullopt
 										   : std::optional<size_t>(completeEntityResultBytes(*edge, state));
 					if (loaded)
-						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.context));
+						loadedBytes.set(logicalEdgeCacheBytes(*edge, state.shared.context));
 					if (entityBytes)
 						admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
 					PropertyMap properties = materializeCompleteEntityProperties(*edge, state);
 					return ResultValue(LogicalEdgeResult{edge->edge_id, edge->source_node_id, edge->target_node_id,
 														 detail::copyPropertyStringGuarded(edge->type, copyCheckpoint), std::move(properties)});
 				}
-				MaterializedByteReservation loadedBytes(&state.materialized_budget);
+				MaterializedByteReservation loadedBytes(&state.shared.materialized_budget);
 				std::optional<storage::LogicalGraphNode> loaded;
-				const auto cached = state.node_cache.find(reference->entity_id);
+				const auto cached = state.shared.node_cache.find(reference->entity_id);
 				const storage::LogicalGraphNode *node = nullptr;
-				if (cached != state.node_cache.end()) {
+				if (cached != state.shared.node_cache.end()) {
 					node = &cached->second;
 				} else {
 					loaded.emplace(readNodeCached(state, reference->entity_id));
@@ -5971,7 +5997,7 @@ namespace graph::query::execution {
 				const std::optional<size_t> entityBytes =
 						rowPreflighted ? std::nullopt : std::optional<size_t>(completeEntityResultBytes(*node, state));
 				if (loaded)
-					loadedBytes.set(logicalNodeCacheBytes(*node, state.context));
+					loadedBytes.set(logicalNodeCacheBytes(*node, state.shared.context));
 				if (entityBytes)
 					admitCompleteEntityResult(*entityBytes, rowPrefixBytes, columnNameBytes, state, outputReservation);
 				PropertyMap properties = materializeCompleteEntityProperties(*node, state);
@@ -5998,10 +6024,10 @@ namespace graph::query::execution {
 
 		[[nodiscard]] size_t inlineResultPropertyBytes(const std::vector<storage::LogicalGraphPropertyEntry> &entries,
 													   ExecutionState &state) {
-			if (entries.size() > state.bounds.maximum_property_entries) {
+			if (entries.size() > state.shared.bounds.maximum_property_entries) {
 				throw std::runtime_error("logical graph backend returned too many direct Property entries");
 			}
-			detail::BudgetMemoryResource keyMemory(state.materialized_budget);
+			detail::BudgetMemoryResource keyMemory(state.shared.materialized_budget);
 			std::pmr::unordered_set<std::string_view> keys(&keyMemory);
 			keys.reserve(entries.size());
 			size_t bytes = sizeof(PropertyMap);
@@ -6030,14 +6056,14 @@ namespace graph::query::execution {
 			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
 				if (--labelsUntilGuard == 0U) {
-					if (state.context != nullptr) state.context->checkGuardNow();
+					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					labelsUntilGuard = 256U;
 				}
 				bytes = checkedSizeAdd(bytes, std::max(label.size(), detail::dynamicStringBufferBytes(label)), "logical-plan result row size overflowed");
 			}
 			return checkedSizeAdd(bytes,
 								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.context)
+										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
 										  : inlineResultPropertyBytes(node.properties, state),
 								  "logical-plan result row size overflowed");
 		}
@@ -6052,7 +6078,7 @@ namespace graph::query::execution {
 												"logical-plan result row size overflowed");
 			return checkedSizeAdd(bytes,
 								  cached != nullptr
-										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.context)
+										  ? propertyMapBytes(*cached, "logical-plan result row size overflowed", state.shared.context)
 										  : inlineResultPropertyBytes(edge.properties, state),
 								  "logical-plan result row size overflowed");
 		}
@@ -6061,15 +6087,15 @@ namespace graph::query::execution {
 																			ExecutionState &state) {
 			validateEntityRef(reference);
 			if (reference.is_edge) {
-				const auto cached = state.edge_cache.find(reference.entity_id);
-				if (cached == state.edge_cache.end())
+				const auto cached = state.shared.edge_cache.find(reference.entity_id);
+				if (cached == state.shared.edge_cache.end())
 					return std::nullopt;
 				const auto &edge = cached->second;
 				validateEdgeReferenceRecord(reference, edge, state, "logical graph Entity reference");
 				return completeEntityResultBytes(edge, state);
 			}
-			const auto cached = state.node_cache.find(reference.entity_id);
-			if (cached == state.node_cache.end())
+			const auto cached = state.shared.node_cache.find(reference.entity_id);
+			if (cached == state.shared.node_cache.end())
 				return std::nullopt;
 			const auto &node = cached->second;
 			validateNode(node, state);
@@ -6138,20 +6164,20 @@ namespace graph::query::execution {
 				predictableBytes =
 						checkedSizeAdd(predictableBytes, *entityBytes, "logical-plan result row size overflowed");
 			}
-			MaterializedByteReservation outputReservation(&state.materialized_budget);
+			MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 			if (predictable) {
-				if (predictableBytes > state.bounds.maximum_materialized_bytes) {
+				if (predictableBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 				}
-				if (predictableBytes > state.materialized_budget.available()) {
+				if (predictableBytes > state.shared.materialized_budget.available()) {
 					throw std::runtime_error("shared materialization exceeded its byte bound");
 				}
 				outputReservation.set(predictableBytes);
 			}
-			MaterializedByteReservation propertyCacheReservation(&state.materialized_budget);
+			MaterializedByteReservation propertyCacheReservation(&state.shared.materialized_budget);
 			QueryResult::Row output;
 			output.reserve(columns.size());
-			detail::BudgetMemoryResource propertyCacheMemory(state.materialized_budget);
+			detail::BudgetMemoryResource propertyCacheMemory(state.shared.materialized_budget);
 			MaterializedPropertyCache materialized(&propertyCacheMemory);
 			size_t constructedBytes = sizeof(QueryResult::Row);
 			for (const std::string &column: columns) {
@@ -6173,7 +6199,7 @@ namespace graph::query::execution {
 				}
 				ResultValue value = materializeResultValue(row, found->second, state, materialized, constructedBytes,
 														   column.size(), predictable, repeatedEntity, outputReservation, propertyCacheReservation);
-				const size_t valueBytes = resultValueBytes(value, state.context);
+				const size_t valueBytes = resultValueBytes(value, state.shared.context);
 				if (output.emplace(column, std::move(value)).second) {
 					constructedBytes =
 							checkedSizeAdd(constructedBytes, column.size(), "logical-plan result row size overflowed");
@@ -6304,10 +6330,10 @@ namespace graph::query::execution {
 
 		void prefetchEntityRefsInRows(const std::vector<LogicalPlanReadRow> &rows, ExecutionState &state,
 									  const bool includePathReferences = false) {
-			MaterializedByteReservation nodeReferenceSlots(&state.materialized_budget);
-			MaterializedByteReservation edgeReferenceSlots(&state.materialized_budget);
-			MaterializedByteReservation nodeIdStorage(&state.materialized_budget);
-			MaterializedByteReservation edgeIdStorage(&state.materialized_budget);
+			MaterializedByteReservation nodeReferenceSlots(&state.shared.materialized_budget);
+			MaterializedByteReservation edgeReferenceSlots(&state.shared.materialized_budget);
+			MaterializedByteReservation nodeIdStorage(&state.shared.materialized_budget);
+			MaterializedByteReservation edgeIdStorage(&state.shared.materialized_budget);
 			std::vector<storage::EntityRef> nodeReferences;
 			std::vector<storage::EntityRef> edgeReferences;
 			std::unordered_set<uint64_t> nodeIds;
@@ -6361,16 +6387,16 @@ namespace graph::query::execution {
 						continue;
 					}
 					if (reference->is_edge) {
-						const auto edge = state.edge_cache.find(reference->entity_id);
-						if (edge == state.edge_cache.end()) {
+						const auto edge = state.shared.edge_cache.find(reference->entity_id);
+						if (edge == state.shared.edge_cache.end()) {
 							throw std::runtime_error("logical-plan batched Edge materialization lost a relationship");
 						}
 						validateEdgeReferenceRecord(*reference, edge->second, state,
 													"logical graph batched Entity reference");
 						value = edge->second;
 					} else {
-						const auto node = state.node_cache.find(reference->entity_id);
-						if (node == state.node_cache.end()) {
+						const auto node = state.shared.node_cache.find(reference->entity_id);
+						if (node == state.shared.node_cache.end()) {
 							throw std::runtime_error("logical-plan batched Node materialization lost a Node");
 						}
 						validateNode(node->second, state);
@@ -6385,11 +6411,11 @@ namespace graph::query::execution {
 		template<typename Invoke>
 		[[nodiscard]] bool invokeOutputVisitorChecked(ExecutionState &state, Invoke &&invoke) {
 			checkGuardNow(state);
-			const auto fence = state.snapshot.mutationFence();
+			const auto fence = state.shared.snapshot.mutationFence();
 			const bool keepGoing = invoke();
 			// The last callback (including an early stop) may have no subsequent source checkpoint.
 			checkGuardNow(state);
-			const auto currentFence = state.snapshot.mutationFence();
+			const auto currentFence = state.shared.snapshot.mutationFence();
 			if (fence.has_value() && currentFence != fence)
 				throw std::runtime_error("logical-plan snapshot changed during output callback");
 			return keepGoing;
@@ -6437,7 +6463,7 @@ namespace graph::query::execution {
 			// The vector's full row-slot capacity is already reserved above. Charge
 			// only the row payload here to avoid counting each active object twice.
 			const auto outputRowPayloadBytes = [](const LogicalPlanReadRow &row, const ExecutionState &state) {
-				return logicalReadRowBytes(row, state.context) - sizeof(LogicalPlanReadRow);
+				return logicalReadRowBytes(row, state.shared.context) - sizeof(LogicalPlanReadRow);
 			};
 			const auto flush = [&](ExecutionState &state) {
 				if (rows.empty() || stoppedByVisitor) {
@@ -6478,14 +6504,14 @@ namespace graph::query::execution {
 			};
 			const FinalRowVisitor collect = [&](LogicalPlanReadRow &row, ExecutionState &state) {
 				if (!budgetBound) {
-					bufferedReservation = MaterializedByteReservation(&state.materialized_budget);
+					bufferedReservation = MaterializedByteReservation(&state.shared.materialized_budget);
 					budgetBound = true;
 				}
 				const size_t rowBytes = outputRowPayloadBytes(row, state);
 				if (!rows.empty() && (rows.size() == batchCapacity ||
 									  rowBytes > bounds.maximum_materialized_bytes -
 														 std::min(bufferedBytes, bounds.maximum_materialized_bytes) ||
-									  rowBytes > state.materialized_budget.available())) {
+									  rowBytes > state.shared.materialized_budget.available())) {
 					if (!flush(state)) {
 						return false;
 					}
@@ -6531,7 +6557,8 @@ namespace graph::query::execution {
 
 		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
 										 const InternalVisitor &visitor,
-										 const ChargedRowVisitor *chargedReceiver = nullptr);
+										 const ChargedRowVisitor *chargedReceiver = nullptr,
+										 const NodeColumnReceiver *columnReceiver = nullptr);
 
 		struct BatchableEntityPropertyPredicate {
 			std::string variable;
@@ -7202,8 +7229,8 @@ namespace graph::query::execution {
 										   const std::vector<std::string> &completeEntityVariables = {},
 										   const ChargedRowVisitor *chargedReceiver = nullptr,
 										   bool borrowRepeatedNodeColumns = false) {
-			if (!state.allow_deferred_entity_refs ||
-				(!state.snapshot.supportsNativeNodeRefScans() && !state.snapshot.supportsNativeEdgeRefScans())) {
+			if (!state.shared.allow_deferred_entity_refs ||
+				(!state.shared.snapshot.supportsNativeNodeRefScans() && !state.shared.snapshot.supportsNativeEdgeRefScans())) {
 				return std::nullopt;
 			}
 			std::vector<BatchableEntityPropertyPredicate> requests;
@@ -7281,15 +7308,15 @@ namespace graph::query::execution {
 				}
 			}
 
-			const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
+			const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_rows);
 			if (batchCapacity == 0U) {
 				return std::nullopt;
 			}
-			MaterializedByteReservation bufferedRowsBytes(&state.materialized_budget);
-			MaterializedByteReservation selectionBytes(&state.materialized_budget);
+			MaterializedByteReservation bufferedRowsBytes(&state.shared.materialized_budget);
+			MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
 			BoundedBatch<LogicalPlanReadRow> rows(
-					batchCapacity, state.bounds.maximum_materialized_bytes,
-					[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); });
+					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
+					[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); });
 			rows.reserve(batchCapacity);
 			bool stoppedByVisitor = false;
 			size_t largestInputRowBytes = 0U;
@@ -7315,7 +7342,7 @@ namespace graph::query::execution {
 				const size_t withSelection =
 						checkedSizeAdd(nextBytes, SelectionVector::requiredStorageBytes(rows.size()),
 									   "logical-plan prefetch selection size overflowed");
-				if (nextBytes > state.bounds.maximum_materialized_bytes ||
+				if (nextBytes > state.shared.bounds.maximum_materialized_bytes ||
 					bufferedRowsBytes.wouldExceed(withSelection)) {
 					throw PrefetchBytePressure{};
 				}
@@ -7358,7 +7385,7 @@ namespace graph::query::execution {
 			const auto splitBufferedRowsAndFlush = [&]() {
 				rows.recalculateBytes();
 				MaterializedByteReservation pendingBytes(std::move(bufferedRowsBytes));
-				bufferedRowsBytes = MaterializedByteReservation(&state.materialized_budget);
+				bufferedRowsBytes = MaterializedByteReservation(&state.shared.materialized_budget);
 				std::vector<LogicalPlanReadRow> bufferedRows = std::move(rows.values());
 				rows.clear();
 				const size_t splitCapacity = std::max<size_t>(1U, bufferedRows.size() / 2U);
@@ -7366,7 +7393,7 @@ namespace graph::query::execution {
 				while (!bufferedRows.empty()) {
 					if (!rows.empty() && rows.wouldExceedBytes(bufferedRows.back()) && !flush())
 						return false;
-					const size_t rowBytes = logicalReadRowBytes(bufferedRows.back(), state.context);
+					const size_t rowBytes = logicalReadRowBytes(bufferedRows.back(), state.shared.context);
 					LogicalPlanReadRow row = std::move(bufferedRows.back());
 					bufferedRows.pop_back();
 					MaterializedByteReservation rowCharge = pendingBytes.splitOff(rowBytes);
@@ -7384,9 +7411,9 @@ namespace graph::query::execution {
 				checkGuard(state);
 				try {
 					std::optional<ScopedPropertyColumns> ownedColumns;
-					MaterializedByteReservation ownedColumnBytes(&state.materialized_budget);
+					MaterializedByteReservation ownedColumnBytes(&state.shared.materialized_budget);
 					if (!completeEntityVariables.empty()) {
-						MaterializedByteReservation referenceWorkspaceBytes(&state.materialized_budget);
+						MaterializedByteReservation referenceWorkspaceBytes(&state.shared.materialized_budget);
 						size_t maximumNodeReferences = 0U;
 						size_t maximumEdgeReferences = 0U;
 						for (const LogicalPlanReadRow &row: rows.values()) {
@@ -7458,7 +7485,7 @@ namespace graph::query::execution {
 						}
 					}
 					if (!metadataGroups.empty()) {
-						MaterializedByteReservation metadataWorkspaceBytes(&state.materialized_budget);
+						MaterializedByteReservation metadataWorkspaceBytes(&state.shared.materialized_budget);
 						size_t maximumNodeIds = 0U;
 						size_t maximumEdgeIds = 0U;
 						for (const MetadataGroup &group: metadataGroups) {
@@ -7474,13 +7501,13 @@ namespace graph::query::execution {
 								const auto cached = row.entity_metadata_cache.find(group.variable);
 								if (!reference->is_edge && group.labels &&
 									(cached == row.entity_metadata_cache.end() || !cached->second.contains("labels")) &&
-									!state.node_cache.contains(reference->entity_id)) {
+									!state.shared.node_cache.contains(reference->entity_id)) {
 									maximumNodeIds = checkedSizeAdd(maximumNodeIds, 1U,
 																	"logical-plan metadata Node ID count overflowed");
 								}
 								if (reference->is_edge && group.type &&
 									(cached == row.entity_metadata_cache.end() || !cached->second.contains("type")) &&
-									!state.edge_cache.contains(reference->entity_id)) {
+									!state.shared.edge_cache.contains(reference->entity_id)) {
 									maximumEdgeIds = checkedSizeAdd(maximumEdgeIds, 1U,
 																	"logical-plan metadata Edge ID count overflowed");
 								}
@@ -7517,13 +7544,13 @@ namespace graph::query::execution {
 								validateEntityRef(*reference);
 								if (!reference->is_edge && group.labels &&
 									(cached == row.entity_metadata_cache.end() || !cached->second.contains("labels"))) {
-									if (!state.node_cache.contains(reference->entity_id)) {
+									if (!state.shared.node_cache.contains(reference->entity_id)) {
 										nodeIds.push_back(reference->entity_id);
 									}
 								}
 								if (reference->is_edge && group.type &&
 									(cached == row.entity_metadata_cache.end() || !cached->second.contains("type"))) {
-									if (!state.edge_cache.contains(reference->entity_id)) {
+									if (!state.shared.edge_cache.contains(reference->entity_id)) {
 										edgeIds.push_back(reference->entity_id);
 									}
 								}
@@ -7533,8 +7560,8 @@ namespace graph::query::execution {
 						nodeIds.erase(std::unique(nodeIds.begin(), nodeIds.end()), nodeIds.end());
 						std::ranges::sort(edgeIds);
 						edgeIds.erase(std::unique(edgeIds.begin(), edgeIds.end()), edgeIds.end());
-						if (nodeIds.size() > state.bounds.maximum_node_records ||
-							edgeIds.size() > state.bounds.maximum_edge_records) {
+						if (nodeIds.size() > state.shared.bounds.maximum_node_records ||
+							edgeIds.size() > state.shared.bounds.maximum_edge_records) {
 							throw std::runtime_error("logical-plan metadata batch exceeded its Entity bound");
 						}
 						std::vector<storage::LogicalGraphNode> loadedNodes;
@@ -7560,7 +7587,7 @@ namespace graph::query::execution {
 						for (size_t offset = 0U; offset < nodeIds.size();) {
 							checkGuard(state);
 							const size_t end = std::min(nodeIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 							std::vector<storage::LogicalGraphNode> batch = readNodesShapedSortedBudgeted(
 									state, std::span<const uint64_t>(nodeIds).subspan(offset, end - offset),
 									{.include_labels = true}, &sourceBytes);
@@ -7575,11 +7602,11 @@ namespace graph::query::execution {
 											"logical graph metadata Node batch changed logical ID order");
 								}
 							}
-							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 							size_t batchPayloadBytes = 0U;
 							for (const storage::LogicalGraphNode &node: batch) {
 								batchPayloadBytes =
-										checkedSizeAdd(batchPayloadBytes, logicalNodeCacheBytes(node, state.context) - sizeof(node),
+										checkedSizeAdd(batchPayloadBytes, logicalNodeCacheBytes(node, state.shared.context) - sizeof(node),
 													   "logical-plan metadata Node payload size overflowed");
 							}
 							for (storage::LogicalGraphNode &node: batch)
@@ -7590,7 +7617,7 @@ namespace graph::query::execution {
 						for (size_t offset = 0U; offset < edgeIds.size();) {
 							checkGuard(state);
 							const size_t end = std::min(edgeIds.size(), offset + DEFAULT_PROPERTY_BATCH_ROWS);
-							MaterializedByteReservation sourceBytes(&state.materialized_budget);
+							MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 							std::vector<storage::LogicalGraphEdge> batch = readEdgesShapedSortedBudgeted(
 									state, std::span<const uint64_t>(edgeIds).subspan(offset, end - offset),
 									{.include_type = true}, &sourceBytes);
@@ -7605,11 +7632,11 @@ namespace graph::query::execution {
 											"logical graph metadata Edge batch changed logical ID order");
 								}
 							}
-							retainShapedBatchBytes(batch, sourceBytes, state.context);
+							retainShapedBatchBytes(batch, sourceBytes, state.shared.context);
 							size_t batchPayloadBytes = 0U;
 							for (const storage::LogicalGraphEdge &edge: batch) {
 								batchPayloadBytes =
-										checkedSizeAdd(batchPayloadBytes, logicalEdgeCacheBytes(edge, state.context) - sizeof(edge),
+										checkedSizeAdd(batchPayloadBytes, logicalEdgeCacheBytes(edge, state.shared.context) - sizeof(edge),
 													   "logical-plan metadata Edge payload size overflowed");
 							}
 							for (storage::LogicalGraphEdge &edge: batch)
@@ -7661,8 +7688,8 @@ namespace graph::query::execution {
 									if (position != loadedNodes.end() && position->node_id == reference->entity_id) {
 										putLabels(row, group.variable, position->labels);
 									} else {
-										const auto cached = state.node_cache.find(reference->entity_id);
-										if (cached == state.node_cache.end()) {
+										const auto cached = state.shared.node_cache.find(reference->entity_id);
+										if (cached == state.shared.node_cache.end()) {
 											throw std::runtime_error(
 													"logical-plan metadata batch lost a requested Node");
 										}
@@ -7677,8 +7704,8 @@ namespace graph::query::execution {
 																	"logical-plan metadata batch relationship");
 										putType(row, group.variable, position->type);
 									} else {
-										const auto cached = state.edge_cache.find(reference->entity_id);
-										if (cached == state.edge_cache.end()) {
+										const auto cached = state.shared.edge_cache.find(reference->entity_id);
+										if (cached == state.shared.edge_cache.end()) {
 											throw std::runtime_error(
 													"logical-plan metadata batch lost a requested relationship");
 										}
@@ -7693,7 +7720,7 @@ namespace graph::query::execution {
 					for (const PropertyGroup &group: groups) {
 						// IDs can contain at most one binding per buffered row. Reserve that
 						// temporary gather space before either vector starts growing.
-						MaterializedByteReservation propertyReadBytes(&state.materialized_budget);
+						MaterializedByteReservation propertyReadBytes(&state.shared.materialized_budget);
 						const size_t maximumIdScratch = checkedSizeMul(
 								checkedSizeMul(rows.size(), 2U, "logical-plan Property ID scratch size overflowed"),
 								sizeof(uint64_t), "logical-plan Property ID scratch size overflowed");
@@ -7712,8 +7739,8 @@ namespace graph::query::execution {
 							if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
 								validateEntityRef(*reference);
 								if (reference->is_edge) {
-									if (const auto cached = state.edge_cache.find(reference->entity_id);
-										cached != state.edge_cache.end()) {
+									if (const auto cached = state.shared.edge_cache.find(reference->entity_id);
+										cached != state.shared.edge_cache.end()) {
 										for (const std::string &key: group.keys) {
 											const auto property =
 													std::ranges::find(cached->second.properties, key,
@@ -7728,8 +7755,8 @@ namespace graph::query::execution {
 										}
 										continue;
 									}
-								} else if (const auto cached = state.node_cache.find(reference->entity_id);
-										   cached != state.node_cache.end()) {
+								} else if (const auto cached = state.shared.node_cache.find(reference->entity_id);
+										   cached != state.shared.node_cache.end()) {
 									for (const std::string &key: group.keys) {
 										const auto property =
 												std::ranges::find(cached->second.properties, key,
@@ -7804,17 +7831,17 @@ namespace graph::query::execution {
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						const bool sourceAdmission = state.snapshot.supportsPropertyReadAdmission();
+						const bool sourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
 						auto nodeColumns = nodeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
 										   : sourceAdmission
-												   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+												   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 															 nodeIds, keys, admitProperty)
-												   : state.snapshot.readNodePropertyColumnsSorted(nodeIds, keys);
+												   : state.shared.snapshot.readNodePropertyColumnsSorted(nodeIds, keys);
 						auto edgeColumns = edgeIds.empty() ? std::vector<std::vector<PropertyValue>>{}
 										   : sourceAdmission
-												   ? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+												   ? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
 															 edgeIds, keys, admitProperty)
-												   : state.snapshot.readEdgePropertyColumnsSorted(edgeIds, keys);
+												   : state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, keys);
 						// Invalid storage output must fail before budget retries. Otherwise
 						// smaller reads could conceal corruption in the original batch.
 						const auto validateColumns = [&](const std::vector<uint64_t> &ids,
@@ -7845,7 +7872,7 @@ namespace graph::query::execution {
 																	  "logical-plan Property batch size overflowed");
 						const size_t retainedWorkingSet = checkedSizeAdd(
 								columnStructures, retainedColumns, "logical-plan Property working set size overflowed");
-						if (retainedWorkingSet > state.bounds.maximum_materialized_bytes) {
+						if (retainedWorkingSet > state.shared.bounds.maximum_materialized_bytes) {
 							if (rows.size() > 1U) {
 								throw PrefetchBytePressure{};
 							}
@@ -7936,13 +7963,13 @@ namespace graph::query::execution {
 					// are covered by the same bound as the input rows.
 					const size_t bitmapBytes = SelectionVector::requiredStorageBytes(rows.size());
 					const size_t sharedAvailable =
-							checkedSizeAdd(state.materialized_budget.available(), bufferedRowsBytes.bytes(),
+							checkedSizeAdd(state.shared.materialized_budget.available(), bufferedRowsBytes.bytes(),
 										   "logical-plan prefetch allowance overflowed");
-					const size_t enrichedLimit = std::min(state.bounds.maximum_materialized_bytes,
+					const size_t enrichedLimit = std::min(state.shared.bounds.maximum_materialized_bytes,
 														  sharedAvailable - std::min(sharedAvailable, bitmapBytes));
 					size_t enrichedBytes = 0U;
 					for (const LogicalPlanReadRow &row: rows.values()) {
-						const size_t rowBytes = logicalReadRowBytes(row, state.context);
+						const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes > enrichedLimit - std::min(enrichedBytes, enrichedLimit)) {
 							if (rows.size() > 1U) {
 								throw PrefetchBytePressure{};
@@ -7959,9 +7986,9 @@ namespace graph::query::execution {
 					bufferedRowsBytes.set(rows.bytes());
 					struct ColumnScope {
 						ExecutionState &state; const ScopedPropertyColumns *previous;
-						~ColumnScope() { state.property_columns = previous; }
-					} columnScope{state, state.property_columns};
-					if (ownedColumns) state.property_columns = &*ownedColumns;
+						~ColumnScope() { state.task.property_columns = previous; }
+					} columnScope{state, state.task.property_columns};
+					if (ownedColumns) state.task.property_columns = &*ownedColumns;
 					selectionBytes.set(SelectionVector::requiredStorageBytes(rows.size()));
 					SelectionVector selection(rows.size());
 					if (selectionPredicate) {
@@ -7984,8 +8011,8 @@ namespace graph::query::execution {
 						auto &columns = *ownedColumns;
 						const size_t scratchBytes = checkedSizeMul(columns.ids.size(), sizeof(size_t),
 							"logical-plan selected scatter size overflowed");
-						if (scratchBytes > state.materialized_budget.available()) throw PrefetchBytePressure{};
-						detail::BudgetMemoryResource scatterMemory(state.materialized_budget);
+						if (scratchBytes > state.shared.materialized_budget.available()) throw PrefetchBytePressure{};
+						detail::BudgetMemoryResource scatterMemory(state.shared.materialized_budget);
 						std::pmr::vector<size_t> lastSelected(columns.ids.size(), rows.size(), &scatterMemory);
 						const auto ordinalFor = [&](const LogicalPlanReadRow &row) -> std::optional<size_t> {
 							const auto *reference = std::get_if<storage::EntityRef>(&row.values.at(*columns.variable));
@@ -8020,7 +8047,7 @@ namespace graph::query::execution {
 								}
 							}
 						}
-						state.property_columns = columnScope.previous;
+						state.task.property_columns = columnScope.previous;
 						ownedColumns.reset();
 						ownedColumnBytes.reset();
 					}
@@ -8037,7 +8064,7 @@ namespace graph::query::execution {
 						if (selection.includes(index)) {
 							if (chargedReceiver != nullptr) {
 								MaterializedByteReservation rowCharge =
-										bufferedRowsBytes.splitOff(logicalReadRowBytes(row, state.context));
+										bufferedRowsBytes.splitOff(logicalReadRowBytes(row, state.shared.context));
 								if (!(*chargedReceiver)(std::move(row), std::move(rowCharge))) {
 									keepGoing = false;
 									break;
@@ -8068,9 +8095,9 @@ namespace graph::query::execution {
 			const auto acceptInput = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
 				// Leave room for cache enrichment rather than filling the entire
 				// allowance with input references before their payload sizes are known.
-				const size_t rowBytes = logicalReadRowBytes(row, state.context);
+				const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);
 				const size_t batchAllowance =
-						checkedSizeAdd(checkedSizeAdd(state.materialized_budget.available(), bufferedRowsBytes.bytes(),
+						checkedSizeAdd(checkedSizeAdd(state.shared.materialized_budget.available(), bufferedRowsBytes.bytes(),
 													  "logical-plan prefetch input allowance overflowed"),
 									   charge.bytes(), "logical-plan prefetch input allowance overflowed");
 				const size_t headroom = checkedSizeMul(std::max(largestInputRowBytes, rowBytes), 2U,
@@ -8104,7 +8131,7 @@ namespace graph::query::execution {
 			const bool childCompleted = visitOperator(
 					child, state,
 					[&](LogicalPlanReadRow row) {
-						return acceptInput(std::move(row), MaterializedByteReservation(&state.materialized_budget));
+						return acceptInput(std::move(row), MaterializedByteReservation(&state.shared.materialized_budget));
 					},
 					supportsChargedRowHandoff(child.getType()) ? &chargedInput : nullptr);
 			if (stoppedByVisitor || !flush()) {
@@ -8238,7 +8265,7 @@ namespace graph::query::execution {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
-				!state.snapshot.supportsNativeNodeRefScans()) {
+				!state.shared.snapshot.supportsNativeNodeRefScans()) {
 				return std::nullopt;
 			}
 			const logical::LogicalAggItem &count = aggregations.front();
@@ -8262,7 +8289,9 @@ namespace graph::query::execution {
 			// ordinary Node scan filters out.
 			const auto parameterPredicates = resolveParameterPropertyPredicates(scan, state);
 			if (!parameterPredicates.has_value()) {
-				return true;
+				LogicalPlanReadRow result;
+				result.values.emplace(count.alias, PropertyValue(int64_t{0}));
+				return visitor(std::move(result));
 			}
 			if (!parameterPredicates->empty()) {
 				return std::nullopt;
@@ -8288,24 +8317,24 @@ namespace graph::query::execution {
 							"logical graph direct Node count returned an invalid or non-monotonic Node reference");
 				}
 				previousNodeId = reference.entity_id;
-				incrementBounded(state.stats.nodes_scanned, "logical-plan direct Node count counter overflowed");
+				incrementBounded(state.task.stats.nodes_scanned, "logical-plan direct Node count counter overflowed");
 				if (!labelsMatch) {
 					return true;
 				}
-				if (inputRows == state.bounds.maximum_rows) {
+				if (inputRows == state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 				}
 				incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
 				return true;
 			};
 			if (scan.getLabels().empty()) {
-				state.snapshot.visitNodeRefs(state.bounds.maximum_node_records,
+				state.shared.snapshot.visitNodeRefs(state.shared.bounds.maximum_node_records,
 											 [&visitReference](const storage::EntityRef &reference) {
 												 return visitReference(reference, true);
 											 });
 			} else {
-				state.snapshot.visitNodeRefsForLabelPredicate(
-						state.bounds.maximum_node_records, scan.getLabels(),
+				state.shared.snapshot.visitNodeRefsForLabelPredicate(
+						state.shared.bounds.maximum_node_records, scan.getLabels(),
 						[&visitReference](const storage::EntityRef &reference, bool labelsMatch) {
 							return visitReference(reference, labelsMatch);
 						});
@@ -8329,8 +8358,8 @@ namespace graph::query::execution {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
-				!state.snapshot.supportsNativeBatchAdjacentEdgeRefs() ||
-				!state.snapshot.supportsNodeExistenceProbes()) {
+				!state.shared.snapshot.supportsNativeBatchAdjacentEdgeRefs() ||
+				!state.shared.snapshot.supportsNodeExistenceProbes()) {
 				return std::nullopt;
 			}
 			const logical::LogicalAggItem &count = aggregations.front();
@@ -8370,22 +8399,22 @@ namespace graph::query::execution {
 			}
 
 			int maximumHops = traversal.getMaxHops();
-			if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
-				if (*state.context->maxVarLengthDepth < 0) {
+			if (state.shared.context != nullptr && state.shared.context->maxVarLengthDepth.has_value()) {
+				if (*state.shared.context->maxVarLengthDepth < 0) {
 					throw std::invalid_argument("logical-plan variable-length count has a negative query depth bound");
 				}
-				maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
+				maximumHops = std::min(maximumHops, *state.shared.context->maxVarLengthDepth);
 			}
-			if (static_cast<uint64_t>(maximumHops) > state.bounds.maximum_node_records) {
+			if (static_cast<uint64_t>(maximumHops) > state.shared.bounds.maximum_node_records) {
 				throw std::runtime_error("logical-plan variable-length count exceeds its configured depth bound");
 			}
 
 			std::optional<uint64_t> relationshipTypeToken;
 			if (!traversal.getEdgeType().empty()) {
-				if (!state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
+				if (!state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
 					return std::nullopt;
 				}
-				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+				relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 			}
 
 			storage::EntityReadShape targetShape;
@@ -8395,7 +8424,7 @@ namespace graph::query::execution {
 				if (key.empty()) {
 					throw std::invalid_argument("logical-plan variable-length target predicate has an empty key");
 				}
-				const std::optional<uint32_t> token = state.snapshot.findPropertyToken(key);
+				const std::optional<uint32_t> token = state.shared.snapshot.findPropertyToken(key);
 				if (!token.has_value()) {
 					// A storage-neutral null result cannot distinguish an absent key from
 					// a backend without native Property tokens. Preserve correctness by
@@ -8426,7 +8455,7 @@ namespace graph::query::execution {
 									  "logical-plan variable-length frontier size overflowed");
 			};
 			const auto incrementResult = [&](uint64_t &resultCount) {
-				if (resultCount == state.bounds.maximum_rows) {
+				if (resultCount == state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 				}
 				if (resultCount == static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
@@ -8443,7 +8472,7 @@ namespace graph::query::execution {
 				checkGuard(state);
 				const LogicalPlanReadValue &binding = requireBinding(row, traversal.getSourceVar());
 				const uint64_t sourceId = nodeBindingId(binding, state);
-				if (sourceId == 0U || frontier.size() == state.bounds.maximum_node_records) {
+				if (sourceId == 0U || frontier.size() == state.shared.bounds.maximum_node_records) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its source Node bound");
 				}
 				if (traversal.getMinHops() == 0 && maximumHops >= 0) {
@@ -8458,12 +8487,12 @@ namespace graph::query::execution {
 						}
 						source = batch.front();
 						validateNode(source, state);
-						if (source.properties.size() > state.bounds.maximum_property_entries ||
-							logicalNodeCacheBytes(source, state.context) > state.bounds.maximum_materialized_bytes) {
+						if (source.properties.size() > state.shared.bounds.maximum_property_entries ||
+							logicalNodeCacheBytes(source, state.shared.context) > state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error("logical-plan zero-hop target exceeded its materialized bound");
 						}
 					}
-					if (nodeMatches(state.snapshot, source, traversal.getTargetLabels(),
+					if (nodeMatches(state.shared.snapshot, source, traversal.getTargetLabels(),
 									traversal.getTargetProperties(), state)) {
 						incrementResult(resultCount);
 					}
@@ -8482,7 +8511,7 @@ namespace graph::query::execution {
 											   checkedSizeAdd(pathPayloadBytes, addedSlotBytes,
 															  "logical-plan variable-length frontier size overflowed"),
 											   "logical-plan variable-length frontier size overflowed");
-				if (frontierBytes > state.bounds.maximum_materialized_bytes) {
+				if (frontierBytes > state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 				return true;
@@ -8502,7 +8531,7 @@ namespace graph::query::execution {
 				}
 				std::ranges::sort(currentNodeIds);
 				currentNodeIds.erase(std::unique(currentNodeIds.begin(), currentNodeIds.end()), currentNodeIds.end());
-				if (currentNodeIds.size() > state.bounds.maximum_node_records) {
+				if (currentNodeIds.size() > state.shared.bounds.maximum_node_records) {
 					throw std::runtime_error("logical-plan variable-length frontier exceeded its Node bound");
 				}
 
@@ -8515,14 +8544,14 @@ namespace graph::query::execution {
 									   "logical-plan variable-length layer size overflowed");
 				const size_t frontierAndLayerBytes = checkedSizeAdd(
 						frontierBytes, layerFixedBytes, "logical-plan variable-length layer size overflowed");
-				if (frontierAndLayerBytes >= state.bounds.maximum_materialized_bytes) {
+				if (frontierAndLayerBytes >= state.shared.bounds.maximum_materialized_bytes) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 				const size_t maximumAdjacencyRecords =
-						(state.bounds.maximum_materialized_bytes - frontierAndLayerBytes) / sizeof(AdjacentRecord);
+						(state.shared.bounds.maximum_materialized_bytes - frontierAndLayerBytes) / sizeof(AdjacentRecord);
 				std::vector<AdjacentRecord> adjacency;
 				const size_t estimatedAdjacency =
-						std::min(state.bounds.maximum_edge_records,
+						std::min(state.shared.bounds.maximum_edge_records,
 								 checkedSizeMul(currentNodeIds.size(), size_t{4U},
 												"logical-plan variable-length adjacency capacity overflowed"));
 				adjacency.reserve(std::min(estimatedAdjacency, maximumAdjacencyRecords));
@@ -8542,25 +8571,25 @@ namespace graph::query::execution {
 					adjacency.push_back(record);
 				};
 				const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
-					if (scannedEdges == state.bounds.maximum_edge_records) {
+					if (scannedEdges == state.shared.bounds.maximum_edge_records) {
 						throw std::runtime_error("logical-plan variable-length count exceeded its Edge bound");
 					}
-					const size_t remaining = state.bounds.maximum_edge_records - scannedEdges;
+					const size_t remaining = state.shared.bounds.maximum_edge_records - scannedEdges;
 					const size_t edgeVisitBound =
 							checkedSizeAdd(remaining, 1U, "logical-plan variable-length Edge bound overflowed");
-					state.snapshot.visitAdjacentEdgeRefsForNodes(
+					state.shared.snapshot.visitAdjacentEdgeRefsForNodes(
 							currentNodeIds, adjacencyDirection, edgeVisitBound,
 							[&](const storage::EntityRef &reference) {
 								checkGuard(state);
 								validateEdgeRef(
 										reference,
 										"logical graph batch adjacency returned an invalid or non-Edge reference");
-								if (scannedEdges == state.bounds.maximum_edge_records) {
+								if (scannedEdges == state.shared.bounds.maximum_edge_records) {
 									throw std::runtime_error(
 											"logical-plan variable-length count exceeded its Edge bound");
 								}
 								++scannedEdges;
-								incrementBounded(state.stats.edges_scanned,
+								incrementBounded(state.task.stats.edges_scanned,
 												 "logical-plan variable-length Edge counter overflowed");
 								const uint64_t sourceId =
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
@@ -8583,7 +8612,7 @@ namespace graph::query::execution {
 									return true;
 								}
 								const size_t sourceOrdinal = static_cast<size_t>(source - currentNodeIds.begin());
-								if (edgeCounts[sourceOrdinal] == state.bounds.maximum_edges_per_node) {
+								if (edgeCounts[sourceOrdinal] == state.shared.bounds.maximum_edges_per_node) {
 									throw std::runtime_error(
 											"logical-plan variable-length count exceeded its per-Node Edge bound");
 								}
@@ -8623,8 +8652,8 @@ namespace graph::query::execution {
 				const size_t targetVectorBytes =
 						checkedSizeMul(adjacency.size(), sizeof(uint64_t),
 									   "logical-plan variable-length target vector size overflowed");
-				if (targetVectorBytes > state.bounds.maximum_materialized_bytes -
-												std::min(retainedLayerBytes, state.bounds.maximum_materialized_bytes)) {
+				if (targetVectorBytes > state.shared.bounds.maximum_materialized_bytes -
+												std::min(retainedLayerBytes, state.shared.bounds.maximum_materialized_bytes)) {
 					throw std::runtime_error("logical-plan variable-length count exceeded its materialized byte bound");
 				}
 
@@ -8635,12 +8664,12 @@ namespace graph::query::execution {
 				}
 				std::ranges::sort(targetNodeIds);
 				targetNodeIds.erase(std::unique(targetNodeIds.begin(), targetNodeIds.end()), targetNodeIds.end());
-				if (targetNodeIds.size() > state.bounds.maximum_node_records) {
+				if (targetNodeIds.size() > state.shared.bounds.maximum_node_records) {
 					throw std::runtime_error("logical-plan variable-length endpoints exceeded the Node bound");
 				}
 				std::vector<uint8_t> targetMatches(targetNodeIds.size(), uint8_t{0U});
 				if (traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()) {
-					const std::vector<bool> present = state.snapshot.containsNodesSorted(targetNodeIds);
+					const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetNodeIds);
 					if (present.size() != targetNodeIds.size() ||
 						std::ranges::any_of(present, [](const bool value) { return !value; })) {
 						throw std::runtime_error(
@@ -8658,18 +8687,18 @@ namespace graph::query::execution {
 						if (targets[index].node_id != targetNodeIds[index]) {
 							throw std::runtime_error("logical graph backend changed variable-length target identity");
 						}
-						targetBytes = checkedSizeAdd(targetBytes, logicalNodeCacheBytes(targets[index], state.context),
+						targetBytes = checkedSizeAdd(targetBytes, logicalNodeCacheBytes(targets[index], state.shared.context),
 													 "logical-plan variable-length target batch size overflowed");
 						const size_t stagedBytes = checkedSizeAdd(
 								retainedLayerBytes,
 								checkedSizeAdd(targetVectorBytes, targetBytes,
 											   "logical-plan variable-length target batch size overflowed"),
 								"logical-plan variable-length target batch size overflowed");
-						if (stagedBytes > state.bounds.maximum_materialized_bytes) {
+						if (stagedBytes > state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan variable-length count exceeded its materialized byte bound");
 						}
-						targetMatches[index] = nodeMatches(state.snapshot, targets[index], traversal.getTargetLabels(),
+						targetMatches[index] = nodeMatches(state.shared.snapshot, targets[index], traversal.getTargetLabels(),
 														   traversal.getTargetProperties(), state);
 					}
 				}
@@ -8722,7 +8751,7 @@ namespace graph::query::execution {
 											   "logical-plan variable-length frontier size overflowed");
 						if (checkedSizeAdd(retainedBytes, nextFrontierBytes,
 										   "logical-plan variable-length frontier size overflowed") >
-							state.bounds.maximum_materialized_bytes) {
+							state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan variable-length count exceeded its materialized byte bound");
 						}
@@ -8743,7 +8772,7 @@ namespace graph::query::execution {
 			const auto &groupExpressions = aggregate.getGroupByExprs();
 			const auto &aggregations = aggregate.getAggregations();
 			if (!groupExpressions.empty() || aggregations.size() != 1U ||
-				!state.snapshot.supportsNativeEdgeRefScans() || !state.snapshot.supportsNodeExistenceProbes()) {
+				!state.shared.snapshot.supportsNativeEdgeRefScans() || !state.shared.snapshot.supportsNodeExistenceProbes()) {
 				return std::nullopt;
 			}
 			const logical::LogicalAggItem &count = aggregations.front();
@@ -8793,16 +8822,16 @@ namespace graph::query::execution {
 			if (seed.getVariable() != inner.getSourceVar()) {
 				return std::nullopt;
 			}
-			if (state.bounds.maximum_rows == std::numeric_limits<size_t>::max() ||
-				state.bounds.maximum_edge_records == std::numeric_limits<size_t>::max()) {
+			if (state.shared.bounds.maximum_rows == std::numeric_limits<size_t>::max() ||
+				state.shared.bounds.maximum_edge_records == std::numeric_limits<size_t>::max()) {
 				throw std::overflow_error("logical-plan two-hop relationship count bound overflowed");
 			}
 			std::optional<uint64_t> innerType;
 			if (!inner.getEdgeType().empty()) {
-				if (!state.snapshot.supportsNativeRelationshipTypeTokens(inner.getEdgeType())) {
+				if (!state.shared.snapshot.supportsNativeRelationshipTypeTokens(inner.getEdgeType())) {
 					return std::nullopt;
 				}
-				innerType = state.snapshot.findRelationshipTypeToken(inner.getEdgeType());
+				innerType = state.shared.snapshot.findRelationshipTypeToken(inner.getEdgeType());
 				if (!innerType.has_value()) {
 					LogicalPlanReadRow result;
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
@@ -8811,10 +8840,10 @@ namespace graph::query::execution {
 			}
 			std::optional<uint64_t> outerType;
 			if (!outer.getEdgeType().empty()) {
-				if (!state.snapshot.supportsNativeRelationshipTypeTokens(outer.getEdgeType())) {
+				if (!state.shared.snapshot.supportsNativeRelationshipTypeTokens(outer.getEdgeType())) {
 					return std::nullopt;
 				}
-				outerType = state.snapshot.findRelationshipTypeToken(outer.getEdgeType());
+				outerType = state.shared.snapshot.findRelationshipTypeToken(outer.getEdgeType());
 				if (!outerType.has_value()) {
 					LogicalPlanReadRow result;
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
@@ -8822,35 +8851,35 @@ namespace graph::query::execution {
 				}
 			}
 
-			detail::BudgetMemoryResource intermediateMemory(state.materialized_budget);
+			detail::BudgetMemoryResource intermediateMemory(state.shared.materialized_budget);
 			const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
 			const auto visitBatchRefs = [&](std::span<const uint64_t> sources,
 				storage::LogicalGraphReadDirection direction, size_t bound,
 				const std::function<bool(const storage::EntityRef &)> &consume) {
-				if (state.snapshot.supportsBatchAdjacencyReferenceBufferAdmission()) {
-					MaterializedByteReservation sourceBytes(&state.materialized_budget);
-					state.snapshot.visitAdjacentEdgeRefsForNodesWithBufferAdmission(sources, direction, bound, consume,
+				if (state.shared.snapshot.supportsBatchAdjacencyReferenceBufferAdmission()) {
+					MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
+					state.shared.snapshot.visitAdjacentEdgeRefsForNodesWithBufferAdmission(sources, direction, bound, consume,
 						[&](size_t bytes) {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 							if (sourceBytes.wouldExceed(bytes)) throw storage::LogicalGraphBufferPressure();
 							sourceBytes.set(bytes);
 						});
 				} else {
-					state.snapshot.visitAdjacentEdgeRefsForNodes(sources, direction, bound, consume);
+					state.shared.snapshot.visitAdjacentEdgeRefsForNodes(sources, direction, bound, consume);
 				}
 			};
 
 			std::pmr::vector<uint64_t> seedIds(&intermediateMemory);
 			static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
 				const uint64_t id = nodeBindingId(requireBinding(row, seed.getVariable()), state);
-				if (id == 0U || seedIds.size() == state.bounds.maximum_node_records) {
+				if (id == 0U || seedIds.size() == state.shared.bounds.maximum_node_records) {
 					throw std::runtime_error("logical-plan two-hop relationship count exceeded its source Node bound");
 				}
 				seedIds.push_back(id);
 				return true;
 			}));
 			detail::sortUniqueIdsGuarded(seedIds, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 
 			using Multiplicity = uint64_t;
@@ -8871,15 +8900,15 @@ namespace graph::query::execution {
 					checkGuard(state);
 					validateEdgeRef(reference,
 									"logical-plan two-hop relationship count received an invalid or Node reference");
-					if (scanned == state.bounds.maximum_edge_records) {
+					if (scanned == state.shared.bounds.maximum_edge_records) {
 						throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 					}
 					++scanned;
-					incrementBounded(state.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
+					incrementBounded(state.task.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
 					const bool outgoing = sourceSet.contains(reference.source_node_id);
 					const bool incoming = sourceSet.contains(reference.target_node_id);
 					const auto consumeOne = [&](const uint64_t sourceId, const uint64_t targetId) {
-						if (sourceEdgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
+						if (sourceEdgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
 							throw std::runtime_error(
 									"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
 						}
@@ -8909,10 +8938,10 @@ namespace graph::query::execution {
 					return true;
 				};
 				const auto visitDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
-					if (scanned == state.bounds.maximum_edge_records) {
+					if (scanned == state.shared.bounds.maximum_edge_records) {
 						throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 					}
-					const size_t remaining = state.bounds.maximum_edge_records - scanned;
+					const size_t remaining = state.shared.bounds.maximum_edge_records - scanned;
 					const size_t edgeVisitBound =
 							checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
 					visitBatchRefs(sources, adjacencyDirection, edgeVisitBound, consume);
@@ -8924,17 +8953,17 @@ namespace graph::query::execution {
 					visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
 				}
 				if (next != nullptr) {
-					if (next->size() > state.bounds.maximum_node_records) {
+					if (next->size() > state.shared.bounds.maximum_node_records) {
 						throw std::runtime_error(
 								"logical-plan two-hop relationship count exceeded its intermediate Node bound");
 					}
 					detail::sortUniqueIdsGuarded(targetIds, [&] {
-						if (state.context != nullptr) state.context->checkGuardNow();
+						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					});
-					MaterializedByteReservation presentBytes(&state.materialized_budget);
+					MaterializedByteReservation presentBytes(&state.shared.materialized_budget);
 					presentBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
 						"logical-plan two-hop bit slots overflowed"));
-					const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
+					const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetIds);
 					presentBytes.set(bitBytes(present.capacity()));
 					checkGuard(state);
 					if (present.size() != targetIds.size() ||
@@ -8944,10 +8973,10 @@ namespace graph::query::execution {
 					}
 					const std::vector<std::string> &labels = inner.getTargetLabels();
 					if (!labels.empty()) {
-						MaterializedByteReservation matchesBytes(&state.materialized_budget);
+						MaterializedByteReservation matchesBytes(&state.shared.materialized_budget);
 						matchesBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
 							"logical-plan two-hop bit slots overflowed"));
-						const std::vector<bool> matches = state.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
+						const std::vector<bool> matches = state.shared.snapshot.readNodeLabelMatchesSorted(targetIds, labels);
 						matchesBytes.set(bitBytes(matches.capacity()));
 						checkGuard(state);
 						if (matches.size() != targetIds.size()) {
@@ -8975,7 +9004,7 @@ namespace graph::query::execution {
 				intermediateIds.push_back(id);
 			}
 			detail::sortUniqueIdsGuarded(intermediateIds, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
 			uint64_t resultCount = 0U;
 			// The second pass retains multiplicity from the first hop.  It uses the same
@@ -8994,15 +9023,15 @@ namespace graph::query::execution {
 				checkGuard(state);
 				validateEdgeRef(reference,
 								"logical-plan two-hop relationship count received an invalid or Node reference");
-				if (scanned == state.bounds.maximum_edge_records) {
+				if (scanned == state.shared.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 				}
 				++scanned;
-				incrementBounded(state.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
+				incrementBounded(state.task.stats.edges_scanned, "logical-plan two-hop Edge counter overflowed");
 				const bool outgoing = sourceSet.contains(reference.source_node_id);
 				const bool incoming = sourceSet.contains(reference.target_node_id);
 				const auto consume = [&](uint64_t sourceId, uint64_t targetId) {
-					if (edgeCounts[sourceId] == state.bounds.maximum_edges_per_node) {
+					if (edgeCounts[sourceId] == state.shared.bounds.maximum_edges_per_node) {
 						throw std::runtime_error(
 								"logical-plan two-hop relationship count exceeded its per-Node Edge bound");
 					}
@@ -9028,10 +9057,10 @@ namespace graph::query::execution {
 				return true;
 			};
 			const auto visitOuterDirection = [&](const storage::LogicalGraphReadDirection adjacencyDirection) {
-				if (scanned == state.bounds.maximum_edge_records) {
+				if (scanned == state.shared.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan two-hop relationship count exceeded its Edge bound");
 				}
-				const size_t remaining = state.bounds.maximum_edge_records - scanned;
+				const size_t remaining = state.shared.bounds.maximum_edge_records - scanned;
 				const size_t edgeVisitBound =
 						checkedSizeAdd(remaining, 1U, "logical-plan two-hop Edge bound overflowed");
 				visitBatchRefs(intermediateIds, adjacencyDirection, edgeVisitBound,
@@ -9044,24 +9073,24 @@ namespace graph::query::execution {
 				visitOuterDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
 			}
 			detail::sortUniqueIdsGuarded(finalTargetIds, [&] {
-				if (state.context != nullptr) state.context->checkGuardNow();
+				if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 			});
-			MaterializedByteReservation finalPresentBytes(&state.materialized_budget);
+			MaterializedByteReservation finalPresentBytes(&state.shared.materialized_budget);
 			finalPresentBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
 				"logical-plan two-hop bit slots overflowed"));
-			const std::vector<bool> finalPresent = state.snapshot.containsNodesSorted(finalTargetIds);
+			const std::vector<bool> finalPresent = state.shared.snapshot.containsNodesSorted(finalTargetIds);
 			finalPresentBytes.set(bitBytes(finalPresent.capacity()));
 			checkGuard(state);
 			if (finalPresent.size() != finalTargetIds.size() ||
 				std::ranges::any_of(finalPresent, [](bool value) { return !value; })) {
 				throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
 			}
-			MaterializedByteReservation finalLabelBytes(&state.materialized_budget);
+			MaterializedByteReservation finalLabelBytes(&state.shared.materialized_budget);
 			std::vector<bool> finalLabels;
 			if (!outer.getTargetLabels().empty()) {
 				finalLabelBytes.set(checkedSizeAdd(bitBytes(finalTargetIds.size()), sizeof(size_t),
 					"logical-plan two-hop label bit slots overflowed"));
-				finalLabels = state.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
+				finalLabels = state.shared.snapshot.readNodeLabelMatchesSorted(finalTargetIds, outer.getTargetLabels());
 				finalLabelBytes.set(bitBytes(finalLabels.capacity()));
 				checkGuard(state);
 				if (finalLabels.size() != finalTargetIds.size()) {
@@ -9079,7 +9108,7 @@ namespace graph::query::execution {
 					throw std::overflow_error("logical-plan two-hop relationship count overflowed");
 				}
 				resultCount += multiplicity;
-				if (resultCount > state.bounds.maximum_rows) {
+				if (resultCount > state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 				}
 			}
@@ -9137,27 +9166,27 @@ namespace graph::query::execution {
 			}
 			std::optional<uint64_t> relationshipTypeToken;
 			if (!traversal.getEdgeType().empty() &&
-				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
-				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+				state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
+				relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					LogicalPlanReadRow result;
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
 					return visitor(std::move(result));
 				}
 			}
-			const bool useNativeAdjacencyRefs = state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+			const bool useNativeAdjacencyRefs = state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() &&
 												(traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
 			// Nullable columns need a presence probe to distinguish stored NULL
 			// from an absent Property without loading unrelated values.
 			const bool targetPropertiesCanBeSelected =
 					useNativeAdjacencyRefs && !traversal.getTargetProperties().empty() &&
-					(state.snapshot.supportsPropertyPresenceProbes() ||
+					(state.shared.snapshot.supportsPropertyPresenceProbes() ||
 					 !std::ranges::any_of(traversal.getTargetProperties(),
 						[](const auto &predicate) { return isNull(predicate.second); }));
 
 			debug::ScopedPerfTimer timer("logical_plan.anchored_relationship_count");
 			size_t inputRows = 0U;
-			const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
+			const bool supportsExistenceProbes = state.shared.snapshot.supportsNodeExistenceProbes();
 			const auto visitSource = [&](LogicalPlanReadRow row) {
 				const LogicalPlanReadValue &sourceBinding = requireBinding(row, traversal.getSourceVar());
 				// The topology cursor needs only the stable logical ID. Keep a native
@@ -9171,25 +9200,25 @@ namespace graph::query::execution {
 					uint64_t target_node_id = 0U;
 					bool type_matches = false;
 				};
-				MaterializedByteReservation pendingBytes(&state.materialized_budget);
+				MaterializedByteReservation pendingBytes(&state.shared.materialized_budget);
 				std::vector<PendingTarget> pendingTargets;
 				using LabelMatch = std::pair<uint64_t, bool>;
-				MaterializedByteReservation labelCacheBytes(&state.materialized_budget);
+				MaterializedByteReservation labelCacheBytes(&state.shared.materialized_budget);
 				std::vector<LabelMatch> targetLabelCache;
 				const auto cachedLabel = [&](uint64_t id) { return std::ranges::find(targetLabelCache, id, &LabelMatch::first); };
 				// Target Property values are stable for the pinned snapshot.  Keep a
 				// bounded per-source cache so a super-node whose adjacency spans many
 				// pages does not reread the same target on every page flush.
 				using PropertyCacheEntry = std::pair<uint64_t, std::vector<PropertyValue>>;
-				MaterializedByteReservation propertyCacheSlots(&state.materialized_budget);
-				MaterializedByteReservation targetPropertyCacheReservation(&state.materialized_budget);
+				MaterializedByteReservation propertyCacheSlots(&state.shared.materialized_budget);
+				MaterializedByteReservation targetPropertyCacheReservation(&state.shared.materialized_budget);
 				std::vector<PropertyCacheEntry> targetPropertyCache;
 				const auto cachedProperties = [&](uint64_t id) {
 					return std::ranges::find(targetPropertyCache, id, &PropertyCacheEntry::first);
 				};
 				size_t targetPropertyCacheBytes = 0U;
 				const size_t targetBatchCapacity = std::max<size_t>(
-						1U, std::min(state.bounds.maximum_adjacency_page_records, state.bounds.maximum_edges_per_node));
+						1U, std::min(state.shared.bounds.maximum_adjacency_page_records, state.shared.bounds.maximum_edges_per_node));
 				const auto visitDirection = [&](storage::LogicalGraphReadDirection direction) {
 					uint64_t previousEdgeId = 0U;
 					const auto flushTargets = [&]() {
@@ -9200,7 +9229,7 @@ namespace graph::query::execution {
 						// same bounded target validation batch.  The latter used to fall
 						// through to one existence/label read per Edge even though COUNT
 						// has no visitor early-termination boundary.
-						MaterializedByteReservation targetIdsBytes(&state.materialized_budget);
+						MaterializedByteReservation targetIdsBytes(&state.shared.materialized_budget);
 						std::vector<uint64_t> targetIds;
 						if (useNativeAdjacencyRefs ||
 							(traversal.getTargetProperties().empty() &&
@@ -9214,18 +9243,18 @@ namespace graph::query::execution {
 								targetIds.push_back(candidate.target_node_id);
 							}
 							detail::sortUniqueIdsGuarded(targetIds, [&] {
-								if (state.context != nullptr) state.context->checkGuardNow();
+								if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 							});
 						}
 						const auto bitBytes = [](size_t capacity) { return capacity / 8U + (capacity % 8U != 0U); };
-						MaterializedByteReservation labelBitsBytes(&state.materialized_budget);
+						MaterializedByteReservation labelBitsBytes(&state.shared.materialized_budget);
 						std::vector<bool> labelsMatch;
 						if (!traversal.getTargetLabels().empty()) {
 							labelBitsBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
 								"logical-plan anchored label bit slots overflowed"));
 							labelsMatch.resize(targetIds.size());
 							labelBitsBytes.set(bitBytes(labelsMatch.capacity()));
-							MaterializedByteReservation uncachedIdsBytes(&state.materialized_budget);
+							MaterializedByteReservation uncachedIdsBytes(&state.shared.materialized_budget);
 							uncachedIdsBytes.set(checkedSizeMul(targetIds.size(), sizeof(uint64_t),
 								"logical-plan anchored cold label slots overflowed"));
 							std::vector<uint64_t> uncachedIds;
@@ -9238,10 +9267,10 @@ namespace graph::query::execution {
 								else labelsMatch[index] = cached->second;
 							}
 							if (!uncachedIds.empty()) {
-								MaterializedByteReservation resolvedBitsBytes(&state.materialized_budget);
+								MaterializedByteReservation resolvedBitsBytes(&state.shared.materialized_budget);
 								resolvedBitsBytes.set(checkedSizeAdd(bitBytes(uncachedIds.size()), sizeof(size_t),
 									"logical-plan anchored resolved bit slots overflowed"));
-								const std::vector<bool> resolved = state.snapshot.readNodeLabelMatchesSorted(
+								const std::vector<bool> resolved = state.shared.snapshot.readNodeLabelMatchesSorted(
 										uncachedIds, traversal.getTargetLabels());
 								resolvedBitsBytes.set(bitBytes(resolved.capacity()));
 								checkGuard(state);
@@ -9249,7 +9278,7 @@ namespace graph::query::execution {
 									throw std::runtime_error(
 											"logical graph backend changed anchored target label-match cardinality");
 								}
-								const size_t cacheLimit = std::min(state.bounds.maximum_edges_per_node, size_t{64U});
+								const size_t cacheLimit = std::min(state.shared.bounds.maximum_edges_per_node, size_t{64U});
 								for (size_t index = 0U; index < uncachedIds.size(); ++index) {
 									const auto position = std::ranges::lower_bound(targetIds, uncachedIds[index]);
 									labelsMatch[static_cast<size_t>(position - targetIds.begin())] = resolved[index];
@@ -9268,9 +9297,9 @@ namespace graph::query::execution {
 								}
 							}
 						}
-						MaterializedByteReservation keySlotsBytes(&state.materialized_budget);
-						MaterializedByteReservation coldIdsBytes(&state.materialized_budget);
-						MaterializedByteReservation targetPropertyReadBytes(&state.materialized_budget);
+						MaterializedByteReservation keySlotsBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation coldIdsBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation targetPropertyReadBytes(&state.shared.materialized_budget);
 						std::vector<std::string_view> targetPropertyKeys;
 						std::vector<std::vector<PropertyValue>> resolvedPropertyColumns;
 						std::vector<uint64_t> uncachedPropertyIds;
@@ -9326,9 +9355,9 @@ namespace graph::query::execution {
 									targetPropertyReadBytes.set(checkedSizeAdd(targetPropertyReadBytes.bytes(), bytes,
 										"logical-plan anchored target Property batch size overflowed"));
 								};
-								resolvedPropertyColumns = state.snapshot.supportsPropertyReadAdmission()
-									? state.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission)
-									: state.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
+								resolvedPropertyColumns = state.shared.snapshot.supportsPropertyReadAdmission()
+									? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(uncachedPropertyIds, keyViews, admission)
+									: state.shared.snapshot.readNodePropertyColumnsSorted(uncachedPropertyIds, keyViews);
 								if (resolvedPropertyColumns.size() != targetPropertyKeys.size())
 									throw std::runtime_error("logical graph backend changed anchored target Property column cardinality");
 								for (const auto &column: resolvedPropertyColumns)
@@ -9345,7 +9374,7 @@ namespace graph::query::execution {
 							}
 							targetPropertyReadBytes.set(actualColumnsBytes);
 							checkGuard(state);
-							const size_t cacheLimit = std::min(state.bounds.maximum_edges_per_node, size_t{64U});
+							const size_t cacheLimit = std::min(state.shared.bounds.maximum_edges_per_node, size_t{64U});
 							for (size_t ordinal = 0U; ordinal < uncachedPropertyIds.size() && targetPropertyCache.size() < cacheLimit; ++ordinal) {
 								size_t payloadBytes = 0U;
 								for (const auto &column: resolvedPropertyColumns)
@@ -9381,12 +9410,12 @@ namespace graph::query::execution {
 								targetPropertyCacheBytes += actualBytes;
 							}
 						}
-						MaterializedByteReservation existenceBytes(&state.materialized_budget);
+						MaterializedByteReservation existenceBytes(&state.shared.materialized_budget);
 						std::vector<bool> targetExists;
-						if (state.snapshot.supportsNodeExistenceProbes()) {
+						if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 							existenceBytes.set(checkedSizeAdd(bitBytes(targetIds.size()), sizeof(size_t),
 								"logical-plan anchored existence bit slots overflowed"));
-							targetExists = state.snapshot.containsNodesSorted(targetIds);
+							targetExists = state.shared.snapshot.containsNodesSorted(targetIds);
 							existenceBytes.set(bitBytes(targetExists.capacity()));
 							checkGuard(state);
 							if (targetExists.size() != targetIds.size()) {
@@ -9443,7 +9472,7 @@ namespace graph::query::execution {
 									}
 									if (isNull(*actual)) {
 										checkGuardNow(state);
-										const auto present = state.snapshot.nodePropertyExists(candidate.target_node_id, key);
+										const auto present = state.shared.snapshot.nodePropertyExists(candidate.target_node_id, key);
 										if (!present) throw std::runtime_error("anchored count Property presence probe is unavailable");
 										if (!*present) { matches = false; break; }
 									}
@@ -9452,7 +9481,7 @@ namespace graph::query::execution {
 							if (!matches) {
 								continue;
 							}
-							if (inputRows == state.bounds.maximum_rows) {
+							if (inputRows == state.shared.bounds.maximum_rows) {
 								throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 							}
 							incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
@@ -9463,7 +9492,7 @@ namespace graph::query::execution {
 					const auto consumeTopology = [&](const uint64_t edgeId, const uint64_t edgeSourceNodeId,
 													 const uint64_t edgeTargetNodeId, const bool typeMatches) {
 						checkGuard(state);
-						if (sourceEdges == state.bounds.maximum_edges_per_node) {
+						if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 							throw std::runtime_error(
 									"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 						}
@@ -9476,7 +9505,7 @@ namespace graph::query::execution {
 									"logical graph backend returned an invalid anchored relationship topology");
 						}
 						++sourceEdges;
-						incrementBounded(state.stats.edges_scanned,
+						incrementBounded(state.task.stats.edges_scanned,
 										 "logical-plan anchored relationship Edge counter overflowed");
 						if (traversal.getDirection() == "both" &&
 							direction == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -9499,12 +9528,12 @@ namespace graph::query::execution {
 						if (!requiresBatchedTargetRead) {
 							if (!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty()) {
 								const storage::LogicalGraphNode target = readNodeCached(state, targetId);
-								if (!nodeMatches(state.snapshot, target, traversal.getTargetLabels(),
+								if (!nodeMatches(state.shared.snapshot, target, traversal.getTargetLabels(),
 												 traversal.getTargetProperties(), state)) {
 									return true;
 								}
 							} else if (supportsExistenceProbes) {
-								if (!state.snapshot.containsNode(targetId)) {
+								if (!state.shared.snapshot.containsNode(targetId)) {
 									throw std::runtime_error(
 											"logical graph backend returned an Edge topology with a missing endpoint");
 								}
@@ -9545,24 +9574,24 @@ namespace graph::query::execution {
 							}
 							return true;
 						}
-						if (inputRows == state.bounds.maximum_rows) {
+						if (inputRows == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 						}
 						incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
 						return true;
 					};
-					if (sourceEdges == state.bounds.maximum_edges_per_node) {
+					if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 						// Ask for one bounded probe so an additional Edge is rejected rather
 						// than silently truncating the aggregate input.
 						if (useNativeAdjacencyRefs) {
-							MaterializedByteReservation referenceBytes(&state.materialized_budget);
+							MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 							const auto page = readReferencePageBudgeted(state, sourceNodeId, direction, std::nullopt, 1U, referenceBytes);
 							if (!page.edges.empty()) {
 								throw std::runtime_error(
 										"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 							}
 						} else {
-							state.snapshot.visitAdjacentEdgeTopologies(
+							state.shared.snapshot.visitAdjacentEdgeTopologies(
 									sourceNodeId, direction, 1U, [](const storage::LogicalGraphEdgeTopology &) -> bool {
 										throw std::runtime_error("logical-plan anchored relationship count exceeded "
 																 "its per-Node Edge bound");
@@ -9570,17 +9599,17 @@ namespace graph::query::execution {
 						}
 						return;
 					}
-					const size_t directionLimit = state.bounds.maximum_edges_per_node - sourceEdges;
+					const size_t directionLimit = state.shared.bounds.maximum_edges_per_node - sourceEdges;
 					if (useNativeAdjacencyRefs) {
 						std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
 						for (;;) {
-							if (sourceEdges == state.bounds.maximum_edges_per_node) {
+							if (sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 								throw std::runtime_error(
 										"logical-plan anchored relationship count exceeded its per-Node Edge bound");
 							}
-							const size_t pageRecords = std::min(state.bounds.maximum_edges_per_node - sourceEdges,
-																state.bounds.maximum_adjacency_page_records);
-							MaterializedByteReservation referenceBytes(&state.materialized_budget);
+							const size_t pageRecords = std::min(state.shared.bounds.maximum_edges_per_node - sourceEdges,
+																state.shared.bounds.maximum_adjacency_page_records);
+							MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 							const auto page = readReferencePageBudgeted(state, sourceNodeId, direction, continuation, pageRecords, referenceBytes);
 							if (page.edges.size() > pageRecords ||
 								(page.edges.empty() && page.continuation.has_value()) ||
@@ -9615,7 +9644,7 @@ namespace graph::query::execution {
 							continuation = page.continuation;
 						}
 					}
-					state.snapshot.visitAdjacentEdgeTopologies(
+					state.shared.snapshot.visitAdjacentEdgeTopologies(
 							sourceNodeId, direction, directionLimit,
 							[&](const storage::LogicalGraphEdgeTopology &edge) {
 								return consumeTopology(edge.edge_id, edge.source_node_id, edge.target_node_id,
@@ -9634,21 +9663,21 @@ namespace graph::query::execution {
 			};
 			const InternalVisitor sourceVisitor = visitSource;
 			const bool canUseGlobalSourceSet = traversal.getTargetProperties().empty() && supportsExistenceProbes &&
-											   state.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
+											   state.shared.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
 											   (traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
 			if (!canUseGlobalSourceSet) {
 				static_cast<void>(visitOperator(seed, state, sourceVisitor));
 			} else {
 				std::vector<uint64_t> sourceIds;
-				sourceIds.reserve(std::min(state.bounds.maximum_node_records,
-										   state.bounds.maximum_adjacency_page_records * size_t{2U}));
+				sourceIds.reserve(std::min(state.shared.bounds.maximum_node_records,
+										   state.shared.bounds.maximum_adjacency_page_records * size_t{2U}));
 				static_cast<void>(visitOperator(seed, state, [&](LogicalPlanReadRow row) {
 					const uint64_t sourceId = nodeBindingId(requireBinding(row, traversal.getSourceVar()), state);
 					if (sourceId == 0U) {
 						throw std::runtime_error(
 								"logical-plan anchored relationship count returned an invalid source Node");
 					}
-					if (sourceIds.size() == state.bounds.maximum_node_records) {
+					if (sourceIds.size() == state.shared.bounds.maximum_node_records) {
 						throw std::runtime_error(
 								"logical-plan anchored relationship count exceeded its source Node bound");
 					}
@@ -9657,7 +9686,7 @@ namespace graph::query::execution {
 				}));
 				std::ranges::sort(sourceIds);
 				sourceIds.erase(std::unique(sourceIds.begin(), sourceIds.end()), sourceIds.end());
-				const size_t globalSourceThreshold = std::max<size_t>(1U, state.bounds.maximum_adjacency_page_records);
+				const size_t globalSourceThreshold = std::max<size_t>(1U, state.shared.bounds.maximum_adjacency_page_records);
 				if (sourceIds.size() < globalSourceThreshold) {
 					for (const uint64_t sourceId: sourceIds) {
 						LogicalPlanReadRow row;
@@ -9679,8 +9708,8 @@ namespace graph::query::execution {
 					size_t globalEdgesScanned = 0U;
 					std::vector<PendingGlobalEdge> pending;
 					const size_t globalBatchCapacity =
-							std::max<size_t>(1U, std::min(state.bounds.maximum_adjacency_page_records,
-														  state.bounds.maximum_edge_records));
+							std::max<size_t>(1U, std::min(state.shared.bounds.maximum_adjacency_page_records,
+														  state.shared.bounds.maximum_edge_records));
 					pending.reserve(globalBatchCapacity);
 					const auto flushGlobal = [&]() {
 						if (pending.empty()) {
@@ -9692,16 +9721,16 @@ namespace graph::query::execution {
 							targetIds.push_back(candidate.target_node_id);
 						}
 						detail::sortUniqueIdsGuarded(targetIds, [&] {
-							if (state.context != nullptr) state.context->checkGuardNow();
+							if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 						});
-						const std::vector<bool> present = state.snapshot.containsNodesSorted(targetIds);
+						const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(targetIds);
 						if (present.size() != targetIds.size()) {
 							throw std::runtime_error(
 									"logical graph backend changed anchored global target existence cardinality");
 						}
 						const std::vector<bool> labelsMatch = traversal.getTargetLabels().empty()
 																	  ? std::vector<bool>(targetIds.size(), true)
-																	  : state.snapshot.readNodeLabelMatchesSorted(
+																	  : state.shared.snapshot.readNodeLabelMatchesSorted(
 																				targetIds, traversal.getTargetLabels());
 						if (labelsMatch.size() != targetIds.size()) {
 							throw std::runtime_error(
@@ -9717,7 +9746,7 @@ namespace graph::query::execution {
 							if (!labelsMatch[static_cast<size_t>(position - targetIds.begin())]) {
 								continue;
 							}
-							if (inputRows == state.bounds.maximum_rows) {
+							if (inputRows == state.shared.bounds.maximum_rows) {
 								throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 							}
 							incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
@@ -9725,25 +9754,25 @@ namespace graph::query::execution {
 						pending.clear();
 					};
 					const auto visitGlobalDirection = [&](const storage::LogicalGraphReadDirection direction) {
-						if (globalEdgesScanned == state.bounds.maximum_edge_records) {
+						if (globalEdgesScanned == state.shared.bounds.maximum_edge_records) {
 							throw std::runtime_error(
 									"logical-plan anchored global relationship count exceeded its Edge bound");
 						}
-						const size_t remaining = state.bounds.maximum_edge_records - globalEdgesScanned;
+						const size_t remaining = state.shared.bounds.maximum_edge_records - globalEdgesScanned;
 						const size_t edgeVisitBound =
 								checkedSizeAdd(remaining, 1U, "logical-plan anchored global Edge bound overflowed");
-						state.snapshot.visitAdjacentEdgeRefsForNodes(
+						state.shared.snapshot.visitAdjacentEdgeRefsForNodes(
 								sourceIds, direction, edgeVisitBound, [&](const storage::EntityRef &reference) {
 									checkGuard(state);
 									validateEdgeRef(reference, "logical-plan anchored global relationship count "
 															   "received an invalid or Node reference");
-									if (globalEdgesScanned == state.bounds.maximum_edge_records) {
+									if (globalEdgesScanned == state.shared.bounds.maximum_edge_records) {
 										throw std::runtime_error("logical-plan anchored global relationship count "
 																 "exceeded its Edge bound");
 									}
 									incrementBounded(globalEdgesScanned,
 													 "logical-plan anchored global Edge counter overflowed");
-									incrementBounded(state.stats.edges_scanned,
+									incrementBounded(state.task.stats.edges_scanned,
 													 "logical-plan anchored global Edge statistics overflowed");
 									const bool outgoing =
 											direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING;
@@ -9754,7 +9783,7 @@ namespace graph::query::execution {
 									}
 									const auto countSourceEdge = [&](const uint64_t sourceId) {
 										const size_t count = sourceEdgeCounts[sourceId];
-										if (count == state.bounds.maximum_edges_per_node) {
+										if (count == state.shared.bounds.maximum_edges_per_node) {
 											throw std::runtime_error("logical-plan anchored relationship count "
 																	 "exceeded its per-Node Edge bound");
 										}
@@ -9811,7 +9840,7 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			const logical::LogicalOperator *traversalOperator = aggregateChildren.front();
-			MaterializedByteReservation predicateViewBytes(&state.materialized_budget);
+			MaterializedByteReservation predicateViewBytes(&state.shared.materialized_budget);
 			std::vector<DirectEdgePredicateView> pushedEdgePredicates;
 			if (traversalOperator->getType() == logical::LogicalOpType::LOP_FILTER) {
 				const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*traversalOperator);
@@ -9860,7 +9889,7 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 
-			if (state.bounds.maximum_rows == std::numeric_limits<size_t>::max()) {
+			if (state.shared.bounds.maximum_rows == std::numeric_limits<size_t>::max()) {
 				throw std::overflow_error("logical-plan direct relationship count input bound overflowed");
 			}
 			debug::ScopedPerfTimer timer("logical_plan.direct_relationship_count");
@@ -9871,17 +9900,17 @@ namespace graph::query::execution {
 			// endpoint set was previously probed once per Property batch, which
 			// restarted the Entity Directory cursor hundreds of times on large scans.
 			// No result is emitted before this set is authenticated.
-			const size_t endpointCacheCapacity = state.bounds.maximum_node_records;
-			MaterializedByteReservation endpointBytes(&state.materialized_budget);
+			const size_t endpointCacheCapacity = state.shared.bounds.maximum_node_records;
+			MaterializedByteReservation endpointBytes(&state.shared.materialized_budget);
 			std::unordered_set<uint64_t> endpointsToValidate;
 			// Charge the key plus conservative node/bucket links before inserting.
 			// Do not reserve from the adjacency page bound: a large configured page
 			// may otherwise allocate an endpoint table before the shared byte budget
 			// has admitted any endpoint.
 			constexpr size_t endpointEntryBytes = sizeof(uint64_t) + 2U * sizeof(void *);
-			const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
+			const bool supportsExistenceProbes = state.shared.snapshot.supportsNodeExistenceProbes();
 			const auto validateEndpoints = [&]() {
-				MaterializedByteReservation endpointScratch(&state.materialized_budget);
+				MaterializedByteReservation endpointScratch(&state.shared.materialized_budget);
 				endpointScratch.set(checkedSizeMul(endpointsToValidate.size(), sizeof(uint64_t),
 												   "logical-plan count endpoint scratch overflowed"));
 				std::vector<uint64_t> endpointIds(endpointsToValidate.begin(), endpointsToValidate.end());
@@ -9894,7 +9923,7 @@ namespace graph::query::execution {
 							checkedSizeAdd(endpointScratch.bytes(),
 										   endpointIds.size() / 8U + static_cast<size_t>(endpointIds.size() % 8U != 0U),
 										   "logical-plan count endpoint presence scratch overflowed"));
-					const std::vector<bool> present = state.snapshot.containsNodesSorted(endpointIds);
+					const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(endpointIds);
 					if (present.size() != endpointIds.size()) {
 						throw std::runtime_error("logical graph backend changed Node existence batch cardinality");
 					}
@@ -9942,8 +9971,8 @@ namespace graph::query::execution {
 			}
 			std::optional<uint64_t> relationshipTypeToken;
 			if (!traversal.getEdgeType().empty() &&
-				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
-				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+				state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
+				relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					LogicalPlanReadRow result;
 					result.values.emplace(count.alias, PropertyValue(int64_t{0}));
@@ -9968,17 +9997,17 @@ namespace graph::query::execution {
 			// from amortizing validation and selection work when no Property column
 			// is requested.
 			const size_t batchCapacity = std::min(
-					{DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records, state.bounds.maximum_rows});
+					{DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_edge_records, state.shared.bounds.maximum_rows});
 			BoundedBatch<storage::LogicalGraphEdgeTopology> pending(
-					batchCapacity, state.bounds.maximum_materialized_bytes,
+					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
 					[](const auto &edge) {
 						return checkedSizeAdd(sizeof(storage::LogicalGraphEdgeTopology), edge.type.size(),
 											  "logical-plan count topology size overflowed");
 					},
-					&state.materialized_budget);
+					&state.shared.materialized_budget);
 			pending.reserve(batchCapacity);
 			const auto countTopology = [&](const storage::LogicalGraphEdgeTopology &edge) {
-				if (inputRows == state.bounds.maximum_rows) {
+				if (inputRows == state.shared.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 				}
 				incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
@@ -10014,7 +10043,7 @@ namespace graph::query::execution {
 					pending.clear();
 					return;
 				}
-				MaterializedByteReservation ordinalBytes(&state.materialized_budget);
+				MaterializedByteReservation ordinalBytes(&state.shared.materialized_budget);
 				ordinalBytes.set(
 						checkedSizeMul(pending.size(), sizeof(size_t), "logical-plan count ordinal size overflowed"));
 				std::vector<size_t> sortedOrdinals(pending.size());
@@ -10024,14 +10053,14 @@ namespace graph::query::execution {
 				std::ranges::sort(sortedOrdinals, [&pending](const size_t left, const size_t right) {
 					return pending.values()[left].edge_id < pending.values()[right].edge_id;
 				});
-				MaterializedByteReservation selectionBytes(&state.materialized_budget);
+				MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
 				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
 				SelectionVector selection(pending.size());
 				struct CountPropertyBytePressure {};
 				std::function<void(size_t, size_t)> selectRange;
 				selectRange = [&](size_t begin, size_t end) {
 					try {
-						MaterializedByteReservation idBytes(&state.materialized_budget);
+						MaterializedByteReservation idBytes(&state.shared.materialized_budget);
 						const size_t requestedIds =
 								checkedSizeMul(end - begin, sizeof(uint64_t), "logical-plan count ID size overflowed");
 						if (idBytes.wouldExceed(requestedIds))
@@ -10047,7 +10076,7 @@ namespace graph::query::execution {
 							}
 							edgeIds.push_back(id);
 						}
-						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						MaterializedByteReservation columnBytes(&state.shared.materialized_budget);
 						const std::function<void(size_t)> admission = [&](size_t bytes) {
 							checkGuard(state);
 							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
@@ -10061,10 +10090,10 @@ namespace graph::query::execution {
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
 						const auto sortedColumns =
-								state.snapshot.supportsPropertyReadAdmission()
-										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+								state.shared.snapshot.supportsPropertyReadAdmission()
+										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
 												  edgeIds, edgePropertyKeys, admission)
-										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
 						if (sortedColumns.size() != edgePredicates.size()) {
 							throw std::runtime_error("logical graph backend changed Edge Property column cardinality");
 						}
@@ -10076,7 +10105,7 @@ namespace graph::query::execution {
 						}
 						const size_t retained =
 								propertyColumnBytes(sortedColumns, edgePropertyKeys,
-													"logical-plan direct Edge Property batch size overflowed", state.context);
+													"logical-plan direct Edge Property batch size overflowed", state.shared.context);
 						if (columnBytes.wouldExceed(retained))
 							throw CountPropertyBytePressure{};
 						columnBytes.set(retained);
@@ -10112,11 +10141,11 @@ namespace graph::query::execution {
 			};
 			const auto consumeTopology = [&](const storage::LogicalGraphEdgeTopology &edge) {
 				checkGuard(state);
-				if (edgeRecords == state.bounds.maximum_edge_records) {
+				if (edgeRecords == state.shared.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan direct relationship count exceeded its Edge record bound");
 				}
 				incrementBounded(edgeRecords, "logical-plan direct relationship count Edge counter overflowed");
-				incrementBounded(state.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
+				incrementBounded(state.task.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
 				if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
 					throw std::runtime_error(
 							"logical graph backend returned an Edge topology with invalid identity or endpoints");
@@ -10137,11 +10166,11 @@ namespace graph::query::execution {
 			// Use it only when the snapshot explicitly provides the native cheap path;
 			// generic readers retain their topology-only projection.
 			const size_t edgeVisitBound =
-					checkedSizeAdd(state.bounds.maximum_edge_records, 1U,
+					checkedSizeAdd(state.shared.bounds.maximum_edge_records, 1U,
 								   "logical-plan direct relationship count Edge bound overflowed");
-			if (state.snapshot.supportsNativeEdgeRefScans() &&
+			if (state.shared.snapshot.supportsNativeEdgeRefScans() &&
 				(traversal.getEdgeType().empty() || relationshipTypeToken.has_value())) {
-				state.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
+				state.shared.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
 																	 const storage::EntityRef &reference) {
 					validateEdgeRef(reference,
 									"logical-plan direct relationship count received an invalid or Node reference");
@@ -10152,7 +10181,7 @@ namespace graph::query::execution {
 							{reference.entity_id, reference.source_node_id, reference.target_node_id, {}});
 				});
 			} else {
-				state.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
+				state.shared.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
 			}
 			flushPending();
 			validateEndpoints();
@@ -10175,8 +10204,8 @@ namespace graph::query::execution {
 		[[nodiscard]] std::optional<bool> tryVisitDirectTraversal(
 				const logical::LogicalTraversal &traversal, ExecutionState &state, const InternalVisitor &visitor,
 				const std::vector<std::pair<std::string, PropertyValue>> *additionalEdgeProperties = nullptr) {
-			if (!state.allow_deferred_entity_refs || !state.snapshot.supportsNativeNodeRefScans() ||
-				!state.snapshot.supportsNativeEdgeRefScans() ||
+			if (!state.shared.allow_deferred_entity_refs || !state.shared.snapshot.supportsNativeNodeRefScans() ||
+				!state.shared.snapshot.supportsNativeEdgeRefScans() ||
 				(traversal.getDirection() != "out" && traversal.getDirection() != "in")) {
 				return std::nullopt;
 			}
@@ -10194,7 +10223,7 @@ namespace graph::query::execution {
 					!sourceScan.getLabels().empty() || !sourceScan.getPropertyPredicates().empty() ||
 					!sourceScan.getRangePredicates().empty() || sourceScan.getCompositeEquality().has_value() ||
 					!sourceScan.getParameterPropertyPredicates().empty();
-			if (sourceConstrained && state.snapshot.supportsNativeAdjacentEdgeRefScans()) {
+			if (sourceConstrained && state.shared.snapshot.supportsNativeAdjacentEdgeRefScans()) {
 				return std::nullopt;
 			}
 			if (sourceScan.getVariable() != traversal.getSourceVar() ||
@@ -10217,7 +10246,7 @@ namespace graph::query::execution {
 				size_t edges_seen = 0U;
 			};
 			std::vector<SourceRow> sources;
-			sources.reserve(std::min(state.bounds.maximum_node_records, size_t{4'096U}));
+			sources.reserve(std::min(state.shared.bounds.maximum_node_records, size_t{4'096U}));
 			// An unconstrained source has no predicate that can reduce the Edge
 			// stream.  Keep source bindings lazy and let the global Edge cursor drive
 			// the pipeline; scanning every Node first would add an unrelated O(|V|)
@@ -10226,17 +10255,17 @@ namespace graph::query::execution {
 			const bool globalEdgePath = !sourceConstrained;
 			std::unordered_map<uint64_t, size_t> sourceOrdinals;
 			if (globalEdgePath) {
-				sourceOrdinals.reserve(std::min(state.bounds.maximum_node_records, size_t{4'096U}));
+				sourceOrdinals.reserve(std::min(state.shared.bounds.maximum_node_records, size_t{4'096U}));
 			} else {
-				state.snapshot.visitNodeRefsForLabelPredicate(
-						state.bounds.maximum_node_records, sourceScan.getLabels(),
+				state.shared.snapshot.visitNodeRefsForLabelPredicate(
+						state.shared.bounds.maximum_node_records, sourceScan.getLabels(),
 						[&](const storage::EntityRef &reference, const bool labelsMatch) {
 							checkGuard(state);
 							if (reference.is_edge || reference.entity_id == 0U) {
 								throw std::runtime_error(
 										"logical graph direct traversal returned an invalid source Node reference");
 							}
-							incrementBounded(state.stats.nodes_scanned,
+							incrementBounded(state.task.stats.nodes_scanned,
 											 "logical-plan direct traversal Node counter overflowed");
 							if (labelsMatch) {
 								sources.push_back({reference.entity_id, std::nullopt, 0U});
@@ -10303,7 +10332,7 @@ namespace graph::query::execution {
 				for (const std::string &key: sourcePropertyKeys) {
 					sourcePropertyKeyViews.push_back(key);
 				}
-				MaterializedByteReservation sourcePropertyBytes(&state.materialized_budget);
+				MaterializedByteReservation sourcePropertyBytes(&state.shared.materialized_budget);
 				const size_t sourceFrames = checkedSizeAdd(
 						checkedSizeMul(sourcePropertyKeyViews.size(), sizeof(std::vector<PropertyValue>),
 									   "logical-plan source Property frame size overflowed"),
@@ -10320,12 +10349,12 @@ namespace graph::query::execution {
 					sourcePropertyBytes.set(checkedSizeAdd(sourcePropertyBytes.bytes(), bytes,
 														   "logical-plan source Property payload size overflowed"));
 				};
-				const bool supportsSourceAdmission = state.snapshot.supportsPropertyReadAdmission();
+				const bool supportsSourceAdmission = state.shared.snapshot.supportsPropertyReadAdmission();
 				std::vector<std::vector<PropertyValue>> sourceValues =
 						supportsSourceAdmission
-								? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+								? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 										  sourceIds, sourcePropertyKeyViews, admitSourceProperty)
-								: state.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
+								: state.shared.snapshot.readNodePropertyColumnsSorted(sourceIds, sourcePropertyKeyViews);
 				if (sourceValues.size() != sourcePropertyKeys.size()) {
 					throw std::runtime_error("logical graph backend changed source Node Property column cardinality");
 				}
@@ -10336,7 +10365,7 @@ namespace graph::query::execution {
 					}
 				}
 				const size_t retainedSourceBytes = propertyColumnBytes(
-						sourceValues, sourcePropertyKeyViews, "logical-plan source Property batch size overflowed", state.context);
+						sourceValues, sourcePropertyKeyViews, "logical-plan source Property batch size overflowed", state.shared.context);
 				const size_t retainedSourceBatchBytes =
 						checkedSizeAdd(sourceIdBytes, std::max(sourceFrames, retainedSourceBytes),
 									   "logical-plan source Property batch size overflowed");
@@ -10454,8 +10483,8 @@ namespace graph::query::execution {
 			validateTraversalTargetProperties(traversal);
 			std::optional<uint64_t> relationshipTypeToken;
 			if (!traversal.getEdgeType().empty() &&
-				state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
-				relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+				state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
+				relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 				if (!relationshipTypeToken.has_value()) {
 					return true;
 				}
@@ -10482,11 +10511,11 @@ namespace graph::query::execution {
 			const size_t desiredEdgeBatchCapacity =
 					edgePredicates.empty() && targetPredicates.empty()
 							? size_t{1U}
-							: std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_edge_records,
-										state.bounds.maximum_rows});
+							: std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_edge_records,
+										state.shared.bounds.maximum_rows});
 			const size_t edgeBatchCapacity = std::min(desiredEdgeBatchCapacity,
-					std::max<size_t>(1U, state.materialized_budget.available() / (8U * sizeof(PendingEdge))));
-			detail::BudgetMemoryResource pendingMemory(state.materialized_budget);
+					std::max<size_t>(1U, state.shared.materialized_budget.available() / (8U * sizeof(PendingEdge))));
+			detail::BudgetMemoryResource pendingMemory(state.shared.materialized_budget);
 			std::pmr::vector<PendingEdge> pending{&pendingMemory};
 			pending.reserve(edgeBatchCapacity);
 			const auto flushPending = [&]() {
@@ -10498,7 +10527,7 @@ namespace graph::query::execution {
 				// one Entity Directory descent is not paid per Edge.  Topology-only
 				// traversal keeps edgeBatchCapacity == 1 and therefore retains its
 				// strict visitor early-termination contract.
-				if (globalEdgePath && state.snapshot.supportsNodeExistenceProbes()) {
+				if (globalEdgePath && state.shared.snapshot.supportsNodeExistenceProbes()) {
 					std::vector<uint64_t> sourceIds;
 					sourceIds.reserve(pending.size());
 					for (const PendingEdge &candidate: pending) {
@@ -10512,7 +10541,7 @@ namespace graph::query::execution {
 					debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_requests", 1);
 					debug::PerfTrace::addValue("logical_plan.direct_source_existence_batch_ids",
 											   static_cast<int64_t>(sourceIds.size()));
-					const std::vector<bool> present = state.snapshot.containsNodesSorted(sourceIds);
+					const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(sourceIds);
 					if (present.size() != sourceIds.size()) {
 						throw std::runtime_error("logical graph backend changed direct traversal source cardinality");
 					}
@@ -10521,14 +10550,14 @@ namespace graph::query::execution {
 								"logical graph backend returned an Edge topology with a missing source Node");
 					}
 				}
-				MaterializedByteReservation selectionBytes(&state.materialized_budget);
+				MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
 				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
 				SelectionVector selection(pending.size());
-				MaterializedByteReservation selectedPropertyBytes(&state.materialized_budget);
-				MaterializedByteReservation reorderedPropertyBytes(&state.materialized_budget);
+				MaterializedByteReservation selectedPropertyBytes(&state.shared.materialized_budget);
+				MaterializedByteReservation reorderedPropertyBytes(&state.shared.materialized_budget);
 				std::vector<std::vector<PropertyValue>> selectedProperties;
 				if (!edgePredicates.empty()) {
-					MaterializedByteReservation orderingBytes(&state.materialized_budget);
+					MaterializedByteReservation orderingBytes(&state.shared.materialized_budget);
 					orderingBytes.set(checkedSizeMul(pending.size(), 2U * sizeof(size_t) + sizeof(uint64_t),
 						"logical-plan direct traversal ordering size overflowed"));
 					std::vector<size_t> sortedOrdinals(pending.size());
@@ -10581,13 +10610,13 @@ namespace graph::query::execution {
 							selectedPropertyBytes.set(next);
 						};
 						auto sortedColumns =
-								state.snapshot.supportsPropertyReadAdmission()
-										? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+								state.shared.snapshot.supportsPropertyReadAdmission()
+										? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
 												  edgeIds, edgePropertyKeys, admission)
-										: state.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
+										: state.shared.snapshot.readEdgePropertyColumnsSorted(edgeIds, edgePropertyKeys);
 						const size_t selectedEdgeBytes = propertyColumnBytes(
 								sortedColumns, edgePropertyKeys,
-								"logical-plan direct traversal Edge Property batch size overflowed", state.context);
+								"logical-plan direct traversal Edge Property batch size overflowed", state.shared.context);
 						if (selectedPropertyBytes.wouldExceed(selectedEdgeBytes)) {
 							throw std::runtime_error(
 									"logical-plan direct traversal Edge Property batch exceeded its byte bound");
@@ -10647,7 +10676,7 @@ namespace graph::query::execution {
 				// not consume a selected-Property read. Binding is checked first because
 				// a repeated variable can reject a non-self traversal before any target
 				// access is observable.
-				MaterializedByteReservation targetCopiedPropertyBytes(&state.materialized_budget);
+				MaterializedByteReservation targetCopiedPropertyBytes(&state.shared.materialized_budget);
 				std::vector<TargetCandidate> targets;
 				targets.reserve(pending.size());
 				selection.forEachSelected([&](const size_t index) {
@@ -10659,10 +10688,10 @@ namespace graph::query::execution {
 					LogicalPlanReadRow expanded;
 					if (source.cached_row.has_value()) {
 						const size_t previous = targetCopiedPropertyBytes.bytes();
-						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(*source.cached_row, state.context),
+						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(*source.cached_row, state.shared.context),
 							"logical-plan expanded row size overflowed"));
 						expanded = detail::copyLogicalReadRowGuarded(*source.cached_row, [&] { checkGuardNow(state); });
-						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(expanded, state.context),
+						targetCopiedPropertyBytes.set(checkedSizeAdd(previous, logicalReadRowBytes(expanded, state.shared.context),
 							"logical-plan expanded row size overflowed"));
 					}
 					if (!source.cached_row.has_value()) {
@@ -10697,10 +10726,10 @@ namespace graph::query::execution {
 						}
 					}
 					detail::sortUniqueIdsGuarded(targetIds, [&] {
-						if (state.context != nullptr) state.context->checkGuardNow();
+						if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 					});
 					const std::vector<bool> labelsMatch =
-							state.snapshot.readNodeLabelMatchesSorted(targetIds, traversal.getTargetLabels());
+							state.shared.snapshot.readNodeLabelMatchesSorted(targetIds, traversal.getTargetLabels());
 					if (labelsMatch.size() != targetIds.size()) {
 						throw std::runtime_error("logical graph backend changed target label-match cardinality");
 					}
@@ -10756,7 +10785,7 @@ namespace graph::query::execution {
 						for (const std::string &key: targetPropertyKeys) {
 							targetPropertyKeyViews.push_back(key);
 						}
-						MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+						MaterializedByteReservation targetPropertyBytes(&state.shared.materialized_budget);
 						size_t targetKeyBytes = 0U;
 						for (const std::string_view key: targetPropertyKeyViews) {
 							targetKeyBytes = checkedSizeAdd(targetKeyBytes, key.size(),
@@ -10778,14 +10807,14 @@ namespace graph::query::execution {
 							}
 							targetPropertyBytes.set(next);
 						};
-						auto targetValues = state.snapshot.supportsPropertyReadAdmission()
-													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+						auto targetValues = state.shared.snapshot.supportsPropertyReadAdmission()
+													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 															  targetIds, targetPropertyKeyViews, targetAdmission)
-													: state.snapshot.readNodePropertyColumnsSorted(
+													: state.shared.snapshot.readNodePropertyColumnsSorted(
 															  targetIds, targetPropertyKeyViews);
 						const size_t selectedTargetPayloadBytes =
 								propertyColumnBytes(targetValues, targetPropertyKeyViews,
-													"logical-plan direct target Property batch size overflowed", state.context);
+													"logical-plan direct target Property batch size overflowed", state.shared.context);
 						if (targetPropertyBytes.wouldExceed(selectedTargetPayloadBytes)) {
 							throw std::runtime_error(
 									"logical-plan direct target Property batch exceeded its byte bound");
@@ -10848,11 +10877,11 @@ namespace graph::query::execution {
 											 const uint64_t typeToken = 0U) {
 				checkGuard(state);
 				validateEdge(edge);
-				if (edgeRecords == state.bounds.maximum_edge_records) {
+				if (edgeRecords == state.shared.bounds.maximum_edge_records) {
 					throw std::runtime_error("logical-plan direct traversal exceeded its global Edge bound");
 				}
 				incrementBounded(edgeRecords, "logical-plan direct traversal Edge counter overflowed");
-				incrementBounded(state.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
+				incrementBounded(state.task.stats.edges_scanned, "logical-plan read runtime Edge counter overflowed");
 
 				const uint64_t sourceId = traversal.getDirection() == "out" ? edge.source_node_id : edge.target_node_id;
 				size_t sourceOrdinal = 0U;
@@ -10862,15 +10891,15 @@ namespace graph::query::execution {
 					}
 					const auto existing = sourceOrdinals.find(sourceId);
 					if (existing == sourceOrdinals.end()) {
-						if (sources.size() == state.bounds.maximum_node_records) {
+						if (sources.size() == state.shared.bounds.maximum_node_records) {
 							throw std::runtime_error(
 									"logical-plan direct traversal exceeded its source Node record bound");
 						}
 						// Property-bearing batches validate source liveness in flushPending().
 						// Keep the scalar check only for topology-only batches, whose capacity is
 						// intentionally one to preserve strict early termination.
-						if (state.snapshot.supportsNodeExistenceProbes() && edgeBatchCapacity == 1U &&
-							!state.snapshot.containsNode(sourceId)) {
+						if (state.shared.snapshot.supportsNodeExistenceProbes() && edgeBatchCapacity == 1U &&
+							!state.shared.snapshot.containsNode(sourceId)) {
 							return true;
 						}
 						sourceOrdinal = sources.size();
@@ -10882,7 +10911,7 @@ namespace graph::query::execution {
 				} else {
 					auto source = std::ranges::lower_bound(sources, sourceId, {}, &SourceRow::node_id);
 					if (source == sources.end() || source->node_id != sourceId ||
-						source->edges_seen == state.bounds.maximum_edges_per_node) {
+						source->edges_seen == state.shared.bounds.maximum_edges_per_node) {
 						return true;
 					}
 					incrementBounded(source->edges_seen,
@@ -10891,7 +10920,7 @@ namespace graph::query::execution {
 				}
 				if (globalEdgePath) {
 					SourceRow &source = sources[sourceOrdinal];
-					if (source.edges_seen == state.bounds.maximum_edges_per_node) {
+					if (source.edges_seen == state.shared.bounds.maximum_edges_per_node) {
 						return true;
 					}
 					incrementBounded(source.edges_seen,
@@ -10904,10 +10933,10 @@ namespace graph::query::execution {
 				pending.push_back({{edge.edge_id, edge.source_node_id, edge.target_node_id, {}}, typeToken, sourceOrdinal});
 				return pending.size() != edgeBatchCapacity || flushPending();
 			};
-			const size_t edgeVisitBound = checkedSizeAdd(state.bounds.maximum_edge_records, 1U,
+			const size_t edgeVisitBound = checkedSizeAdd(state.shared.bounds.maximum_edge_records, 1U,
 														 "logical-plan direct traversal Edge bound overflowed");
 			if (traversal.getEdgeType().empty() || relationshipTypeToken.has_value()) {
-				state.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
+				state.shared.snapshot.visitEdgeRefsForTypePredicate(edgeVisitBound, relationshipTypeToken, [&consumeTopology, &relationshipTypeToken](
 																	 const storage::EntityRef &reference) {
 					validateEdgeRef(reference, "logical-plan direct traversal received an invalid or Node reference");
 					if (relationshipTypeToken.has_value() && reference.type_token != *relationshipTypeToken) {
@@ -10918,7 +10947,7 @@ namespace graph::query::execution {
 							reference.type_token);
 				});
 			} else {
-				state.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
+				state.shared.snapshot.visitEdgeTopologies(edgeVisitBound, consumeTopology);
 			}
 			if (continueVisitor) {
 				static_cast<void>(flushPending());
@@ -10936,20 +10965,21 @@ namespace graph::query::execution {
 		[[nodiscard]] std::optional<bool>
 		tryVisitBatchedNativeNodeRefScan(const logical::LogicalNodeScan &scan,
 										 const std::vector<std::pair<std::string, PropertyValue>> &parameterPredicates,
-										 ExecutionState &state, const InternalVisitor &visitor) {
-			if (!state.allow_deferred_entity_refs || !state.snapshot.supportsNativeNodeRefScans()) {
+										 ExecutionState &state, const InternalVisitor &visitor,
+										 const NodeColumnReceiver *columnReceiver = nullptr) {
+			if (!state.shared.allow_deferred_entity_refs || !state.shared.snapshot.supportsNativeNodeRefScans()) {
 				return std::nullopt;
 			}
 
 			std::vector<std::string> propertyKeys;
 			propertyKeys.reserve(scan.getPropertyPredicates().size() + parameterPredicates.size() +
 								 scan.getRangePredicates().size());
-			const auto appendKey = [&propertyKeys](const std::string &key) {
+			const auto appendKey = [&propertyKeys](std::string_view key) {
 				if (key.empty()) {
 					throw std::invalid_argument("logical-plan Node Property predicate has an empty key");
 				}
 				if (std::ranges::find(propertyKeys, key) == propertyKeys.end()) {
-					propertyKeys.push_back(key);
+					propertyKeys.emplace_back(key);
 				}
 			};
 			const auto collectEqualityKeys = [&](const auto &predicates) {
@@ -10977,8 +11007,20 @@ namespace graph::query::execution {
 					appendKey(composite->keys[index]);
 				}
 			}
+			if (columnReceiver) {
+				for (const auto key : columnReceiver->keys) appendKey(key);
+			}
 			if (propertyKeys.empty()) {
 				return std::nullopt;
+			}
+			MaterializedByteReservation propertyKeyBytes(&state.shared.materialized_budget);
+			if (columnReceiver) {
+				size_t bytes = checkedSizeMul(propertyKeys.capacity(), sizeof(std::string),
+					"logical-plan Node column key capacity overflowed");
+				for (const auto &key : propertyKeys) bytes = checkedSizeAdd(bytes,
+					detail::dynamicStringBufferBytes(key), "logical-plan Node column key buffers overflowed");
+				if (propertyKeyBytes.wouldExceed(bytes)) return std::nullopt;
+				propertyKeyBytes.set(bytes);
 			}
 
 			struct PendingNodeRef {
@@ -10987,12 +11029,12 @@ namespace graph::query::execution {
 			// Keep reference buffering below a quarter of the available allowance so
 			// IDs, ordinal mappings, selected values and a row can coexist at flush.
 			const size_t byteBatchCapacity =
-					std::max<size_t>(1U, state.materialized_budget.available() / sizeof(PendingNodeRef) / 4U);
+					std::max<size_t>(1U, state.shared.materialized_budget.available() / sizeof(PendingNodeRef) / 4U);
 			const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS, byteBatchCapacity,
-												   state.bounds.maximum_node_records, state.bounds.maximum_rows});
+												   state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_rows});
 			BoundedBatch<PendingNodeRef> pending(
-					batchCapacity, state.bounds.maximum_materialized_bytes,
-					[](const auto &) { return sizeof(PendingNodeRef); }, &state.materialized_budget);
+					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
+					[](const auto &) { return sizeof(PendingNodeRef); }, &state.shared.materialized_budget);
 			pending.reserve(batchCapacity);
 			bool continueVisitor = true;
 			const auto flushPending = [&]() {
@@ -11007,7 +11049,7 @@ namespace graph::query::execution {
 				std::function<bool(size_t, size_t)> processRange;
 				processRange = [&](size_t begin, size_t end) -> bool {
 					try {
-						MaterializedByteReservation lookupBytes(&state.materialized_budget);
+						MaterializedByteReservation lookupBytes(&state.shared.materialized_budget);
 						const size_t scratch = checkedSizeMul(end - begin, sizeof(uint64_t) + 2U * sizeof(size_t),
 															  "logical-plan Node column lookup size overflowed");
 						if (lookupBytes.wouldExceed(scratch))
@@ -11032,19 +11074,19 @@ namespace graph::query::execution {
 							nodeIds.push_back(id);
 							lookupOrdinals[original - begin] = sorted;
 						}
-						MaterializedByteReservation rowBytes(&state.materialized_budget);
+						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 						LogicalPlanReadRow row;
 						const auto prepareRow = [&](const storage::EntityRef &reference) {
 							row.values.emplace(scan.getVariable(), reference);
 							for (const auto &key: propertyKeys)
 								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
 						};
-						prepareRow(pending.values()[begin].reference);
-						const size_t structuralBytes = logicalReadRowBytes(row, state.context);
+						if (!columnReceiver) prepareRow(pending.values()[begin].reference);
+						size_t structuralBytes = columnReceiver ? 0U : logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes.wouldExceed(structuralBytes))
 							throw NodeColumnBytePressure{};
 						rowBytes.set(structuralBytes);
-						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						MaterializedByteReservation columnBytes(&state.shared.materialized_budget);
 						const std::function<void(size_t)> admission = [&](size_t bytes) {
 							checkGuard(state);
 							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
@@ -11057,10 +11099,10 @@ namespace graph::query::execution {
 									static_cast<int64_t>(
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
-						auto columns = state.snapshot.supportsPropertyReadAdmission()
-											   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+						auto columns = state.shared.snapshot.supportsPropertyReadAdmission()
+											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 														 nodeIds, keyViews, admission)
-											   : state.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
+											   : state.shared.snapshot.readNodePropertyColumnsSorted(nodeIds, keyViews);
 						if (columns.size() != propertyKeys.size()) {
 							throw std::runtime_error("logical graph backend changed Node Property column cardinality");
 						}
@@ -11071,20 +11113,69 @@ namespace graph::query::execution {
 							}
 						}
 						const size_t retained =
-								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.context);
+								propertyColumnBytes(columns, keyViews, "logical-plan Node selected size overflowed", state.shared.context);
 						if (columnBytes.wouldExceed(retained))
 							throw NodeColumnBytePressure{};
 						columnBytes.set(retained);
+						std::optional<detail::BoundNodeColumnPredicates> boundPredicates;
+						try {
+							boundPredicates.emplace(scan, parameterPredicates, propertyKeys, state.shared.materialized_budget);
+						} catch (const MaterializedByteLimitExceeded &) {
+							// Optional metadata is admitted only after the source and row
+							// owners. Declining it preserves the existing scalar path.
+						}
+						MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
+						std::optional<SelectionVector> selection;
+						const size_t bitmapBytes = SelectionVector::requiredStorageBytes(end - begin);
+						if (boundPredicates && !selectionBytes.wouldExceed(bitmapBytes)) {
+							selectionBytes.set(bitmapBytes);
+							selection.emplace(end - begin);
+							const auto filtered = boundPredicates->filter(columns, *selection, state.shared.materialized_budget,
+								[&] { checkGuard(state); });
+							debug::PerfTrace::addValue("logical_plan.node_column_filter.typed_columns",
+								static_cast<int64_t>(filtered.typed_columns));
+							debug::PerfTrace::addValue("logical_plan.node_column_filter.scalar_columns",
+								static_cast<int64_t>(filtered.scalar_columns));
+							debug::PerfTrace::addValue("logical_plan.node_column_filter.rejected_before_rows",
+								static_cast<int64_t>(selection->size() - selection->selectedCount()));
+							// Rejected payloads cannot escape. Release them before handing a
+							// survivor downstream, retaining only charged matrix slots/NULLs.
+							for (size_t index = 0U; index < selection->size(); ++index) {
+								if (selection->includes(index)) continue;
+								for (auto &column : columns) {
+									checkGuard(state);
+									const size_t bytes = detail::retainedPropertyValueBytes(column[index], [&] { checkGuardNow(state); });
+									column[index] = PropertyValue();
+									columnBytes.set(checkedSizeAdd(columnBytes.bytes() - bytes, 1U,
+										"logical-plan rejected column bytes overflowed"));
+								}
+							}
+						}
+						// Predicate instructions borrow the source only during filtering.
+						// Release their capacity before downstream owning-output admission.
+						boundPredicates.reset();
+						if (columnReceiver && selection) {
+							debug::PerfTrace::addValue("logical_plan.node_column_consumer.batches", 1);
+							continueVisitor = columnReceiver->consume(propertyKeys, columns, *selection, lookupOrdinals);
+							return continueVisitor;
+						}
+						if (columnReceiver) {
+							prepareRow(pending.values()[begin].reference);
+							structuralBytes = logicalReadRowBytes(row, state.shared.context);
+							if (rowBytes.wouldExceed(structuralBytes)) throw NodeColumnBytePressure{};
+							rowBytes.set(structuralBytes);
+						}
 						// No byte-pressure retry is issued after a row is delivered: only
 						// pre-read/pre-delivery pressure may split this original scan range.
 						for (size_t index = begin; index < end && continueVisitor; ++index) {
 							checkGuard(state);
+							const size_t sorted = lookupOrdinals[index - begin];
+							if (selection && !selection->includes(sorted)) continue;
 							if (index != begin) {
 								row = LogicalPlanReadRow{};
 								prepareRow(pending.values()[index].reference);
 								rowBytes.set(structuralBytes);
 							}
-							const size_t sorted = lookupOrdinals[index - begin];
 							for (size_t column = 0U; column < propertyKeys.size(); ++column) {
 								const size_t valueBytes = detail::retainedPropertyValueBytes(columns[column][sorted], [&] { checkGuardNow(state); });
 								columnBytes.set(columnBytes.bytes() - valueBytes);
@@ -11093,7 +11184,7 @@ namespace graph::query::execution {
 								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
 										std::move(columns[column][sorted]);
 							}
-							if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
+							if (selection.has_value() || nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 												   state, true)) {
 								rowBytes.reset();
 								continueVisitor = visitor(std::move(row));
@@ -11116,13 +11207,13 @@ namespace graph::query::execution {
 				return continueVisitor;
 			};
 
-			state.snapshot.visitNodeRefsForLabelPredicate(
-					state.bounds.maximum_node_records, scan.getLabels(),
+			state.shared.snapshot.visitNodeRefsForLabelPredicate(
+					state.shared.bounds.maximum_node_records, scan.getLabels(),
 					[&](const storage::EntityRef &reference, const bool labelsMatch) {
 						checkGuard(state);
 						validateNodeRef(reference,
 										"logical graph backend returned an invalid or Edge reference from a Node scan");
-						incrementBounded(state.stats.nodes_scanned,
+						incrementBounded(state.task.stats.nodes_scanned,
 										 "logical-plan read runtime Node counter overflowed");
 						if (!labelsMatch) {
 							return true;
@@ -11150,22 +11241,22 @@ namespace graph::query::execution {
 			if (nativeCandidates.snapshot_generation == 0U) {
 				throw std::runtime_error("logical graph native indexed Node candidates have no snapshot generation");
 			}
-			const size_t candidateBytes = logicalIndexCandidateBatchBytes(nativeCandidates, state.context);
-			if (candidateBytes > state.bounds.maximum_candidate_bytes) {
+			const size_t candidateBytes = logicalIndexCandidateBatchBytes(nativeCandidates, state.shared.context);
+			if (candidateBytes > state.shared.bounds.maximum_candidate_bytes) {
 				throw std::runtime_error("logical graph indexed Node candidate batch exceeded its byte bound");
 			}
 			debug::PerfTrace::addValue(
 					"logical_plan.index_candidate.materialized_bytes",
 					static_cast<int64_t>(
 							std::min(candidateBytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
-			const std::optional<uint64_t> snapshotGeneration = state.snapshot.nativeSnapshotGeneration();
+			const std::optional<uint64_t> snapshotGeneration = state.shared.snapshot.nativeSnapshotGeneration();
 			if (!snapshotGeneration.has_value() || *snapshotGeneration == 0U ||
 				nativeCandidates.snapshot_generation != *snapshotGeneration) {
 				throw std::runtime_error(
 						"logical graph native indexed Node candidates do not belong to the pinned snapshot");
 			}
-			if (candidateRecords > state.bounds.maximum_node_records ||
-				nativeCandidates.candidates.size() > state.bounds.maximum_node_records - candidateRecords) {
+			if (candidateRecords > state.shared.bounds.maximum_node_records ||
+				nativeCandidates.candidates.size() > state.shared.bounds.maximum_node_records - candidateRecords) {
 				throw std::runtime_error("logical graph indexed Node lookup exceeded the Node scan bound");
 			}
 			candidateRecords += nativeCandidates.candidates.size();
@@ -11205,11 +11296,11 @@ namespace graph::query::execution {
 			}
 			// The immutable producer batch stays alive while rows are handed downstream.
 			// Reserve its retained storage as well as each independent row-cache copy.
-			MaterializedByteReservation verifiedCandidateBytes(&state.materialized_budget);
+			MaterializedByteReservation verifiedCandidateBytes(&state.shared.materialized_budget);
 			if (nativeCandidates.predicates_verified)
 				verifiedCandidateBytes.set(candidateBytes);
-			MaterializedByteReservation candidateScratchBytes(&state.materialized_budget);
-			const bool residualColumns = !nativeCandidates.predicates_verified && state.snapshot.supportsNativeNodeRefScans() &&
+			MaterializedByteReservation candidateScratchBytes(&state.shared.materialized_budget);
+			const bool residualColumns = !nativeCandidates.predicates_verified && state.shared.snapshot.supportsNativeNodeRefScans() &&
 				!nativeCandidates.candidates.empty();
 			if (!residualColumns) {
 				candidateScratchBytes.set(checkedSizeAdd(
@@ -11247,7 +11338,7 @@ namespace graph::query::execution {
 			};
 			std::vector<bool> candidateLabelsMatch(residualColumns ? 0U : nativeCandidates.candidates.size(), true);
 			if (!nativeCandidates.label_scope_verified && !candidateNodeIds.empty() && !scan.getLabels().empty()) {
-				candidateLabelsMatch = state.snapshot.readNodeLabelMatchesSorted(candidateNodeIds, scan.getLabels());
+				candidateLabelsMatch = state.shared.snapshot.readNodeLabelMatchesSorted(candidateNodeIds, scan.getLabels());
 				if (candidateLabelsMatch.size() != candidateNodeIds.size()) {
 					throw std::runtime_error("logical graph backend changed indexed Node label-match cardinality");
 				}
@@ -11303,13 +11394,13 @@ namespace graph::query::execution {
 													  "logical-plan indexed Node batch capacity overflowed"),
 									   "logical-plan indexed Node batch capacity overflowed");
 				const size_t byteBatchCapacity =
-						std::max<size_t>(1U, state.bounds.maximum_materialized_bytes / minimumCandidateBytes);
+						std::max<size_t>(1U, state.shared.bounds.maximum_materialized_bytes / minimumCandidateBytes);
 				// Adapt the row cap before reading. Admission-capable readers reserve
 				// payload bytes at the source; compatibility readers are checked on
 				// return. Pre-delivery pressure can further split these ranges.
 				const size_t candidateBatchCapacity =
-						std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_node_records,
-								  state.bounds.maximum_rows, byteBatchCapacity});
+						std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_node_records,
+								  state.shared.bounds.maximum_rows, byteBatchCapacity});
 				if (candidateBatchCapacity == 0U) {
 					throw std::runtime_error("logical-plan indexed Node Property batch has no positive capacity");
 				}
@@ -11318,7 +11409,7 @@ namespace graph::query::execution {
 				processRange = [&](size_t offset, size_t count) -> bool {
 					try {
 						checkGuard(state);
-						MaterializedByteReservation idBytes(&state.materialized_budget);
+						MaterializedByteReservation idBytes(&state.shared.materialized_budget);
 						const size_t idSlots = checkedSizeMul(count, sizeof(uint64_t), "logical-plan residual IDs overflowed");
 						if (idBytes.wouldExceed(idSlots)) throw IndexedColumnBytePressure{};
 						idBytes.set(idSlots);
@@ -11331,11 +11422,11 @@ namespace graph::query::execution {
 							const size_t labelSlots = checkedSizeAdd(idSlots, count / 8U + (count % 8U != 0U), "logical-plan residual labels overflowed");
 							if (idBytes.wouldExceed(labelSlots)) throw IndexedColumnBytePressure{};
 							idBytes.set(labelSlots);
-							labelsMatch = state.snapshot.readNodeLabelMatchesSorted(batchIds, scan.getLabels());
+							labelsMatch = state.shared.snapshot.readNodeLabelMatchesSorted(batchIds, scan.getLabels());
 							if (labelsMatch.size() != count) throw std::runtime_error("logical graph indexed Node labels changed cardinality");
 							idBytes.set(checkedSizeAdd(idSlots, labelsMatch.capacity() / 8U + (labelsMatch.capacity() % 8U != 0U), "logical-plan residual labels overflowed"));
 						}
-						MaterializedByteReservation rowBytes(&state.materialized_budget);
+						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 						LogicalPlanReadRow row;
 						const auto prepareRow = [&](const storage::EntityRef &candidate) {
 							row.values.emplace(scan.getVariable(), candidate);
@@ -11343,11 +11434,11 @@ namespace graph::query::execution {
 								row.property_cache[scan.getVariable()].emplace(key, PropertyValue());
 						};
 						prepareRow(nativeCandidates.candidates[offset]);
-						const size_t structuralBytes = logicalReadRowBytes(row, state.context);
+						const size_t structuralBytes = logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes.wouldExceed(structuralBytes))
 							throw IndexedColumnBytePressure{};
 						rowBytes.set(structuralBytes);
-						MaterializedByteReservation columnBytes(&state.materialized_budget);
+						MaterializedByteReservation columnBytes(&state.shared.materialized_budget);
 						const std::function<void(size_t)> admission = [&](size_t bytes) {
 							checkGuard(state);
 							const size_t next = checkedSizeAdd(columnBytes.bytes(), bytes,
@@ -11361,16 +11452,16 @@ namespace graph::query::execution {
 											std::min(bytes, static_cast<size_t>(std::numeric_limits<int64_t>::max()))));
 						};
 						auto columns = propertyKeys.empty() ? std::vector<std::vector<PropertyValue>>{}
-									   : state.snapshot.supportsPropertyReadAdmission()
-											   ? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+									   : state.shared.snapshot.supportsPropertyReadAdmission()
+											   ? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 														 batchIds, keyViews, admission)
-											   : state.snapshot.readNodePropertyColumnsSorted(batchIds, keyViews);
+											   : state.shared.snapshot.readNodePropertyColumnsSorted(batchIds, keyViews);
 						if (columns.size() != propertyKeys.size() ||
 							std::ranges::any_of(columns, [&](const auto &column) { return column.size() != count; }))
 							throw std::runtime_error(
 									"logical graph backend changed indexed Node Property column cardinality");
 						const size_t selectedBytes = propertyColumnBytes(
-								columns, keyViews, "logical-plan indexed Node Property batch size overflowed", state.context);
+								columns, keyViews, "logical-plan indexed Node Property batch size overflowed", state.shared.context);
 						if (columnBytes.wouldExceed(selectedBytes))
 							throw IndexedColumnBytePressure{};
 						columnBytes.set(selectedBytes);
@@ -11379,7 +11470,7 @@ namespace graph::query::execution {
 							const size_t candidateIndex = offset + batchIndex;
 							const auto &candidate = nativeCandidates.candidates[candidateIndex];
 							rememberCandidate(candidate.entity_id);
-							incrementBounded(state.stats.nodes_scanned,
+							incrementBounded(state.task.stats.nodes_scanned,
 											 "logical-plan indexed Node lookup counter overflowed");
 							if (batchIndex != 0U) {
 								row = LogicalPlanReadRow{};
@@ -11395,21 +11486,21 @@ namespace graph::query::execution {
 								row.property_cache.at(scan.getVariable()).at(propertyKeys[column]) =
 										std::move(columns[column][batchIndex]);
 							}
-							if (!nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
+							if (!nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 													state, labelsMatch.empty() || labelsMatch[batchIndex])) {
 								row = LogicalPlanReadRow{};
 								rowBytes.reset();
 								continue;
 							}
-							if (!state.allow_deferred_entity_refs) {
+							if (!state.shared.allow_deferred_entity_refs) {
 								auto node = readNodeCached(state, candidate.entity_id);
-								if (!nodeScanMatches(state.snapshot, node, scan, parameterPredicates, state)) {
+								if (!nodeScanMatches(state.shared.snapshot, node, scan, parameterPredicates, state)) {
 									throw std::runtime_error(
 											"logical graph indexed Node candidate changed during materialization");
 								}
 								row.values[scan.getVariable()] = std::move(node);
 								row.property_cache.erase(scan.getVariable());
-								rowBytes.set(logicalReadRowBytes(row, state.context));
+								rowBytes.set(logicalReadRowBytes(row, state.shared.context));
 							}
 							rowBytes.reset();
 							if (!visitor(std::move(row)))
@@ -11435,13 +11526,13 @@ namespace graph::query::execution {
 				checkGuard(state);
 				const storage::EntityRef &candidate = nativeCandidates.candidates[candidateIndex];
 				rememberCandidate(candidate.entity_id);
-				incrementBounded(state.stats.nodes_scanned, "logical-plan indexed Node lookup counter overflowed");
+				incrementBounded(state.task.stats.nodes_scanned, "logical-plan indexed Node lookup counter overflowed");
 				if ((nativeCandidates.exact_match_verified || nativeCandidates.predicates_verified) &&
-					state.allow_deferred_entity_refs && state.snapshot.supportsNativeNodeRefScans()) {
-					MaterializedByteReservation rowBytes(&state.materialized_budget);
+					state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans()) {
+					MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 					LogicalPlanReadRow row;
 					row.values.emplace(scan.getVariable(), candidate);
-					rowBytes.set(logicalReadRowBytes(row, state.context));
+					rowBytes.set(logicalReadRowBytes(row, state.shared.context));
 					const auto copyProperty = [&](const std::string &key, const PropertyValue &value) {
 						size_t previous = 0U;
 						if (const auto cache = row.property_cache.find(scan.getVariable());
@@ -11467,7 +11558,7 @@ namespace graph::query::execution {
 						for (const auto &column: nativeCandidates.verified_property_columns) {
 							copyProperty(column.key, column.values[candidateIndex]);
 						}
-						if (!nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan, parameterPredicates,
+						if (!nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan, parameterPredicates,
 												state, candidateLabelsMatch[candidateIndex])) {
 							throw std::runtime_error("logical graph native indexed Node candidates violate their "
 													 "verified Property predicates");
@@ -11484,7 +11575,7 @@ namespace graph::query::execution {
 					continue;
 				}
 				const storage::LogicalGraphNode node = readNodeCached(state, candidate.entity_id);
-				if (nodeScanMatches(state.snapshot, node, scan, parameterPredicates, state)) {
+				if (nodeScanMatches(state.shared.snapshot, node, scan, parameterPredicates, state)) {
 					LogicalPlanReadRow row;
 					row.values.emplace(scan.getVariable(), node);
 					if (!visitor(std::move(row))) {
@@ -11496,7 +11587,8 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
-										 const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver) {
+										 const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver,
+										 const NodeColumnReceiver *columnReceiver) {
 			checkGuard(state);
 			switch (op.getType()) {
 				case logical::LogicalOpType::LOP_SINGLE_ROW: {
@@ -11504,8 +11596,8 @@ namespace graph::query::execution {
 													 // cannot own a child.
 						throw std::runtime_error("logical SingleRow unexpectedly has a child");
 					}
-					return state.injected_row == nullptr ? visitor({}) :
-						visitor(detail::copyLogicalReadRowGuarded(*state.injected_row, [&] { checkGuardNow(state); }));
+					return state.task.injected_row == nullptr ? visitor({}) :
+						visitor(detail::copyLogicalReadRowGuarded(*state.task.injected_row, [&] { checkGuardNow(state); }));
 				}
 				case logical::LogicalOpType::LOP_NODE_SCAN: {
 					const auto &scan = dynamic_cast<const logical::LogicalNodeScan &>(op);
@@ -11554,62 +11646,62 @@ namespace graph::query::execution {
 						}
 					};
 					size_t indexedCandidateRecords = 0U;
-					MaterializedByteReservation seenIndexedCandidateBytes(&state.materialized_budget);
+					MaterializedByteReservation seenIndexedCandidateBytes(&state.shared.materialized_budget);
 					std::unordered_set<uint64_t> seenIndexedCandidateIds;
 					const auto candidateVisitor = [&](const storage::IndexCandidateBatch &batch) {
 						return visitIndexedCandidateBatch(batch, scan, equalityPredicates, *parameterPredicates,
 														  indexedCandidateRecords, seenIndexedCandidateIds,
 														  seenIndexedCandidateBytes, state, visitor);
 					};
-					if (exactPropertyLookup && state.snapshot.supportsNativeExactNodeCandidates()) {
+					if (exactPropertyLookup && state.shared.snapshot.supportsNativeExactNodeCandidates()) {
 						if (const auto streamed = consumeCandidateStream([&] {
-								return state.snapshot.visitNodeCandidatesByExactProperties(
-										scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
-										state.bounds.maximum_property_entries,
-										state.snapshot.supportsPropertyReadAdmission()
-												? std::min(state.bounds.maximum_candidate_bytes,
+								return state.shared.snapshot.visitNodeCandidatesByExactProperties(
+										scan.getLabels(), equalityPredicates, state.shared.bounds.maximum_node_records,
+										state.shared.bounds.maximum_property_entries,
+										state.shared.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.shared.bounds.maximum_candidate_bytes,
 														   std::max<size_t>(1U,
-																			state.materialized_budget.available() / 2U))
-												: state.bounds.maximum_candidate_bytes,
+																			state.shared.materialized_budget.available() / 2U))
+												: state.shared.bounds.maximum_candidate_bytes,
 										candidateVisitor);
 							});
 							streamed.has_value()) {
 							return *streamed;
 						}
 					}
-					if (rangePropertyLookup && state.snapshot.supportsNativeRangeNodeCandidates()) {
+					if (rangePropertyLookup && state.shared.snapshot.supportsNativeRangeNodeCandidates()) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
 						if (const auto streamed = consumeCandidateStream([&] {
-								return state.snapshot.visitNodeCandidatesByPropertyRange(
+								return state.shared.snapshot.visitNodeCandidatesByPropertyRange(
 										scan.getLabels(),
 										{range.key, range.minValue, range.maxValue, range.minInclusive,
 										 range.maxInclusive},
-										state.bounds.maximum_node_records, state.bounds.maximum_property_entries,
-										state.snapshot.supportsPropertyReadAdmission()
-												? std::min(state.bounds.maximum_candidate_bytes,
+										state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries,
+										state.shared.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.shared.bounds.maximum_candidate_bytes,
 														   std::max<size_t>(1U,
-																			state.materialized_budget.available() / 2U))
-												: state.bounds.maximum_candidate_bytes,
+																			state.shared.materialized_budget.available() / 2U))
+												: state.shared.bounds.maximum_candidate_bytes,
 										candidateVisitor);
 							});
 							streamed.has_value()) {
 							return *streamed;
 						}
 					}
-					if (compositeRangePropertyLookup && state.snapshot.supportsNativeRangeNodeCandidates()) {
+					if (compositeRangePropertyLookup && state.shared.snapshot.supportsNativeRangeNodeCandidates()) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
 						if (const auto streamed = consumeCandidateStream([&] {
-								return state.snapshot.visitNodeCandidatesByCompositePropertyRange(
+								return state.shared.snapshot.visitNodeCandidatesByCompositePropertyRange(
 										scan.getLabels(),
 										{equalityPredicates,
 										 {range.key, range.minValue, range.maxValue, range.minInclusive,
 										  range.maxInclusive}},
-										state.bounds.maximum_node_records, state.bounds.maximum_property_entries,
-										state.snapshot.supportsPropertyReadAdmission()
-												? std::min(state.bounds.maximum_candidate_bytes,
+										state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries,
+										state.shared.snapshot.supportsPropertyReadAdmission()
+												? std::min(state.shared.bounds.maximum_candidate_bytes,
 														   std::max<size_t>(1U,
-																			state.materialized_budget.available() / 2U))
-												: state.bounds.maximum_candidate_bytes,
+																			state.shared.materialized_budget.available() / 2U))
+												: state.shared.bounds.maximum_candidate_bytes,
 										candidateVisitor);
 							});
 							streamed.has_value()) {
@@ -11619,43 +11711,43 @@ namespace graph::query::execution {
 					std::optional<storage::IndexCandidateBatch> exactIndexCandidates;
 					std::optional<storage::IndexCandidateBatch> rangeIndexCandidates;
 					std::optional<std::vector<storage::LogicalGraphNode>> indexNodes;
-					if (exactPropertyLookup && state.snapshot.supportsNativeExactNodeCandidates()) {
-						exactIndexCandidates = state.snapshot.findNodeCandidatesByExactProperties(
-								scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
-								state.bounds.maximum_property_entries);
+					if (exactPropertyLookup && state.shared.snapshot.supportsNativeExactNodeCandidates()) {
+						exactIndexCandidates = state.shared.snapshot.findNodeCandidatesByExactProperties(
+								scan.getLabels(), equalityPredicates, state.shared.bounds.maximum_node_records,
+								state.shared.bounds.maximum_property_entries);
 					} else if (exactPropertyLookup) {
-						indexNodes = state.snapshot.findNodesByExactProperties(scan.getLabels(), equalityPredicates,
-																			   state.bounds.maximum_node_records,
-																			   state.bounds.maximum_property_entries);
+						indexNodes = state.shared.snapshot.findNodesByExactProperties(scan.getLabels(), equalityPredicates,
+																			   state.shared.bounds.maximum_node_records,
+																			   state.shared.bounds.maximum_property_entries);
 					} else if (rangePropertyLookup) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
-						if (state.snapshot.supportsNativeRangeNodeCandidates()) {
-							rangeIndexCandidates = state.snapshot.findNodeCandidatesByPropertyRange(
+						if (state.shared.snapshot.supportsNativeRangeNodeCandidates()) {
+							rangeIndexCandidates = state.shared.snapshot.findNodeCandidatesByPropertyRange(
 									scan.getLabels(),
 									{range.key, range.minValue, range.maxValue, range.minInclusive, range.maxInclusive},
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries);
 						} else {
-							indexNodes = state.snapshot.findNodesByPropertyRange(
+							indexNodes = state.shared.snapshot.findNodesByPropertyRange(
 									scan.getLabels(),
 									{range.key, range.minValue, range.maxValue, range.minInclusive, range.maxInclusive},
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries);
 						}
 					} else if (compositeRangePropertyLookup) {
 						const logical::RangePredicate &range = scan.getRangePredicates().front();
-						if (state.snapshot.supportsNativeRangeNodeCandidates()) {
-							rangeIndexCandidates = state.snapshot.findNodeCandidatesByCompositePropertyRange(
+						if (state.shared.snapshot.supportsNativeRangeNodeCandidates()) {
+							rangeIndexCandidates = state.shared.snapshot.findNodeCandidatesByCompositePropertyRange(
 									scan.getLabels(),
 									{equalityPredicates,
 									 {range.key, range.minValue, range.maxValue, range.minInclusive,
 									  range.maxInclusive}},
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries);
 						} else {
-							indexNodes = state.snapshot.findNodesByCompositePropertyRange(
+							indexNodes = state.shared.snapshot.findNodesByCompositePropertyRange(
 									scan.getLabels(),
 									{equalityPredicates,
 									 {range.key, range.minValue, range.maxValue, range.minInclusive,
 									  range.maxInclusive}},
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries);
 						}
 					}
 					if (exactIndexCandidates.has_value() || rangeIndexCandidates.has_value()) {
@@ -11667,7 +11759,7 @@ namespace graph::query::execution {
 														  visitor);
 					}
 					if (indexNodes.has_value()) {
-						if (indexNodes->size() > state.bounds.maximum_node_records) {
+						if (indexNodes->size() > state.shared.bounds.maximum_node_records) {
 							throw std::runtime_error("logical graph indexed Node lookup exceeded the Node scan bound");
 						}
 						uint64_t previousNodeId = 0U;
@@ -11685,11 +11777,11 @@ namespace graph::query::execution {
 								}
 							}
 							previousNodeId = node.node_id;
-							incrementBounded(state.stats.nodes_scanned,
+							incrementBounded(state.task.stats.nodes_scanned,
 											 "logical-plan indexed Node lookup counter overflowed");
 							// The physical index is an acceleration only. Re-evaluate all
 							// logical scan predicates before exposing an indexed candidate.
-							if (nodeScanMatches(state.snapshot, node, scan, *parameterPredicates, state)) {
+							if (nodeScanMatches(state.shared.snapshot, node, scan, *parameterPredicates, state)) {
 								LogicalPlanReadRow row;
 								row.values.emplace(scan.getVariable(), node);
 								if (!visitor(std::move(row))) {
@@ -11700,29 +11792,29 @@ namespace graph::query::execution {
 						return true;
 					}
 					if (const std::optional<bool> batched =
-								tryVisitBatchedNativeNodeRefScan(scan, *parameterPredicates, state, visitor);
+								tryVisitBatchedNativeNodeRefScan(scan, *parameterPredicates, state, visitor, columnReceiver);
 						batched.has_value()) {
 						return *batched;
 					}
-					if (state.allow_deferred_entity_refs && state.snapshot.supportsNativeNodeRefScans()) {
+					if (state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans()) {
 						bool continueVisitor = true;
 						// Keep label evaluation on the page-local reference scan. The native
 						// adapter resolves label tokens once and reports a match fact, avoiding
 						// a second point Entity-Map read for every scanned Node.
-						state.snapshot.visitNodeRefsForLabelPredicate(
-								state.bounds.maximum_node_records, scan.getLabels(),
+						state.shared.snapshot.visitNodeRefsForLabelPredicate(
+								state.shared.bounds.maximum_node_records, scan.getLabels(),
 								[&](const storage::EntityRef &reference, const bool labelsMatch) {
 									checkGuard(state);
 									validateNodeRef(reference, "logical graph backend returned an invalid or Edge "
 															   "reference from a Node scan");
-									incrementBounded(state.stats.nodes_scanned,
+									incrementBounded(state.task.stats.nodes_scanned,
 													 "logical-plan read runtime Node counter overflowed");
 									if (!labelsMatch) {
 										return true;
 									}
 									LogicalPlanReadRow row;
 									row.values.emplace(scan.getVariable(), reference);
-									if (nodeRefScanMatches(state.snapshot, row, scan.getVariable(), scan,
+									if (nodeRefScanMatches(state.shared.snapshot, row, scan.getVariable(), scan,
 														   *parameterPredicates, state, true)) {
 										continueVisitor = visitor(std::move(row));
 									}
@@ -11733,9 +11825,9 @@ namespace graph::query::execution {
 					uint64_t afterNodeId = 0U;
 					for (;;) {
 						const storage::LogicalGraphNodePage page =
-								state.snapshot.scanNodesAfter(afterNodeId, state.bounds.maximum_node_page_records,
-															  state.bounds.maximum_metadata_pages_per_node_page);
-						if (page.nodes.size() > state.bounds.maximum_node_page_records) {
+								state.shared.snapshot.scanNodesAfter(afterNodeId, state.shared.bounds.maximum_node_page_records,
+															  state.shared.bounds.maximum_metadata_pages_per_node_page);
+						if (page.nodes.size() > state.shared.bounds.maximum_node_page_records) {
 							throw std::runtime_error("logical graph backend exceeded the Node page bound");
 						}
 						if (page.nodes.empty()) {
@@ -11752,16 +11844,16 @@ namespace graph::query::execution {
 								throw std::runtime_error("logical graph backend returned non-monotonic Node page IDs");
 							}
 							previousNodeId = node.node_id;
-							incrementBounded(state.stats.nodes_scanned,
+							incrementBounded(state.task.stats.nodes_scanned,
 											 "logical-plan read runtime Node counter overflowed");
-							if (nodeScanMatches(state.snapshot, node, scan, *parameterPredicates, state)) {
+							if (nodeScanMatches(state.shared.snapshot, node, scan, *parameterPredicates, state)) {
 								LogicalPlanReadRow row;
 								row.values.emplace(scan.getVariable(), node);
 								if (!visitor(std::move(row))) {
 									return false;
 								}
 							}
-							if (state.stats.nodes_scanned == state.bounds.maximum_node_records) {
+							if (state.task.stats.nodes_scanned == state.shared.bounds.maximum_node_records) {
 								return false;
 							}
 						}
@@ -11783,7 +11875,7 @@ namespace graph::query::execution {
 							return true;
 						if (chargedReceiver != nullptr) {
 							if (charge.bytes() != 0U)
-								charge.set(logicalReadRowBytes(row, state.context));
+								charge.set(logicalReadRowBytes(row, state.shared.context));
 							return (*chargedReceiver)(std::move(row), std::move(charge));
 						}
 						charge.reset();
@@ -11847,7 +11939,7 @@ namespace graph::query::execution {
 							filterChild, state,
 							[&](LogicalPlanReadRow row) {
 								return acceptFilteredRow(std::move(row),
-														 MaterializedByteReservation(&state.materialized_budget));
+														 MaterializedByteReservation(&state.shared.materialized_budget));
 							},
 							supportsChargedRowHandoff(filterChild.getType()) ? &chargedInput : nullptr);
 				}
@@ -11864,7 +11956,7 @@ namespace graph::query::execution {
 							throw std::invalid_argument("logical-plan Project has an invalid output item");
 						}
 					}
-					detail::BudgetMemoryResource distinctMemory(state.materialized_budget);
+					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
 					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
 					const auto *identityReference =
 							items.size() == 1U && !project.isDistinct()
@@ -11872,6 +11964,23 @@ namespace graph::query::execution {
 											  items.front().expression.get())
 									: nullptr;
 					const bool canForwardIdentity = identityReference != nullptr && !identityReference->hasProperty();
+					const logical::LogicalOperator &projectChild = requireOnlyChild(project);
+					std::optional<detail::BoundProjectionReferences> boundReferences;
+					// Single-item ownership forwarding stays on its existing path. The
+					// transition adapter benefits repeated direct references in wider
+					// projections without charging constant-only expressions for slots.
+					if (items.size() > 1U && std::ranges::any_of(items, [](const auto &item) {
+						return dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get()) != nullptr;
+					})) {
+						MaterializedByteReservation inputNamesBytes(&state.shared.materialized_budget);
+						const auto inputs = projectChild.getOutputVariables();
+						size_t bytes = checkedSizeMul(inputs.capacity(), sizeof(std::string),
+							"logical-plan binding input names overflowed");
+						for (const auto &name : inputs) bytes = checkedSizeAdd(bytes, detail::dynamicStringBufferBytes(name),
+							"logical-plan binding input name buffers overflowed");
+						inputNamesBytes.set(bytes);
+						boundReferences.emplace(inputs, items, state.shared.materialized_budget);
+					}
 					const auto projectRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
 						if (!project.isDistinct() && items.size() == 1U) {
 							const auto *propertyReference =
@@ -11889,7 +11998,7 @@ namespace graph::query::execution {
 										row.entity_metadata_cache.clear();
 										row.path_cache.clear();
 										row.values.emplace(items.front().alias, std::move(projectedValue));
-										charge.set(logicalReadRowBytes(row, state.context));
+										charge.set(logicalReadRowBytes(row, state.shared.context));
 										if (chargedReceiver != nullptr) {
 											return (*chargedReceiver)(std::move(row), std::move(charge));
 										}
@@ -11918,7 +12027,7 @@ namespace graph::query::execution {
 								row.entity_metadata_cache.clear();
 								row.path_cache.clear();
 								row.values.emplace(items.front().alias, identity);
-								charge.set(logicalReadRowBytes(row, state.context));
+								charge.set(logicalReadRowBytes(row, state.shared.context));
 								if (chargedReceiver != nullptr) {
 									return (*chargedReceiver)(std::move(row), std::move(charge));
 								}
@@ -11958,34 +12067,51 @@ namespace graph::query::execution {
 							}
 							retainAndRenameAlias(row.entity_metadata_cache);
 							retainAndRenameAlias(row.path_cache);
-							charge.set(logicalReadRowBytes(row, state.context));
+							charge.set(logicalReadRowBytes(row, state.shared.context));
 							if (chargedReceiver != nullptr) {
 								return (*chargedReceiver)(std::move(row), std::move(charge));
 							}
 							charge.reset();
 							return visitor(std::move(row));
 						}
-						const size_t inputBytes = logicalReadRowBytes(row, state.context);
+						const size_t inputBytes = logicalReadRowBytes(row, state.shared.context);
 						if (charge.bytes() == 0U)
 							charge.set(inputBytes);
 						const size_t inputChargeBytes = charge.bytes();
 						size_t projectedBytes = 0U;
 						LogicalPlanReadRow projected;
 						projected.values.reserve(items.size());
-						for (const logical::LogicalProjectItem &item: items) {
-							checkGuard(state);
-							projected.values.emplace(item.alias, evaluateExpression(*item.expression, row, state));
-							propagateProjectedEntityCaches(*item.expression, row, projected, item.alias, state);
-							projectedBytes = logicalReadRowBytes(projected, state.context);
-							charge.set(checkedSizeAdd(inputChargeBytes, projectedBytes,
-													  "logical-plan Project live row size overflowed"));
-						}
+						{
+							std::optional<detail::BoundProjectionReferences::RowBinding> inputSlots;
+							if (boundReferences) inputSlots.emplace(*boundReferences, row);
+							size_t itemIndex = 0U;
+							for (const logical::LogicalProjectItem &item: items) {
+								checkGuard(state);
+								const auto *instruction = boundReferences ? &boundReferences->instruction(itemIndex) : nullptr;
+								const auto *value = instruction == nullptr ? nullptr : boundReferences->value(*instruction);
+								if (value != nullptr && instruction->kind == detail::ProjectionReferenceKind::PRK_VALUE) {
+									debug::PerfTrace::addValue("logical_plan.bound_projection.slot_reads", 1);
+									projected.values.emplace(item.alias, *value);
+								} else if (value != nullptr && instruction->kind == detail::ProjectionReferenceKind::PRK_PROPERTY) {
+									debug::PerfTrace::addValue("logical_plan.bound_projection.property_reads", 1);
+									projected.values.emplace(item.alias, readProperty(state.shared.snapshot, row,
+										instruction->expression->getVariableName(), instruction->expression->getPropertyName(), state, value));
+								} else {
+									projected.values.emplace(item.alias, evaluateExpression(*item.expression, row, state));
+								}
+								++itemIndex;
+								propagateProjectedEntityCaches(*item.expression, row, projected, item.alias, state);
+								projectedBytes = logicalReadRowBytes(projected, state.shared.context);
+								charge.set(checkedSizeAdd(inputChargeBytes, projectedBytes,
+														  "logical-plan Project live row size overflowed"));
+							}
+						} // Slot borrows end before input destruction or downstream callbacks.
 						if (project.isDistinct()) {
 							auto key = distinctRowKey(projected, items, &distinctMemory);
 							if (distinctRows.contains(key)) {
 								return true;
 							}
-							if (distinctRows.size() == state.bounds.maximum_distinct_rows) {
+							if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows) {
 								throw std::runtime_error("logical-plan DISTINCT exceeded its row bound");
 							}
 							distinctRows.insert(std::move(key));
@@ -11999,11 +12125,10 @@ namespace graph::query::execution {
 						return visitor(std::move(projected));
 					};
 					const auto emitProjectedRow = [&](LogicalPlanReadRow row) {
-						return projectRow(std::move(row), MaterializedByteReservation(&state.materialized_budget));
+						return projectRow(std::move(row), MaterializedByteReservation(&state.shared.materialized_budget));
 					};
 					const ChargedRowVisitor chargedProject = projectRow;
 
-					const logical::LogicalOperator &projectChild = requireOnlyChild(project);
 					// Fuse scalar observers across one projection boundary. The eligibility
 					// check rejects every bare/path-dependent use, so the internal NULL
 					// slots cannot escape or participate in entity/path comparisons.
@@ -12110,7 +12235,7 @@ namespace graph::query::execution {
 										propagateProjectedEntityCaches(*item.expression, row, intermediate, item.alias, state);
 									}
 								}
-								if (logicalReadRowBytes(intermediate, state.context) > state.bounds.maximum_materialized_bytes) {
+								if (logicalReadRowBytes(intermediate, state.shared.context) > state.shared.bounds.maximum_materialized_bytes) {
 									throw std::runtime_error(
 											"logical-plan scalar path projection exceeded its materialized bound");
 								}
@@ -12229,15 +12354,15 @@ namespace graph::query::execution {
 						std::vector<std::pmr::unordered_set<std::pmr::string>> distinct_values;
 						size_t accounted_bytes = 0U;
 					};
-					MaterializedByteReservation aggregateStateBytes(&state.materialized_budget);
-					MaterializedByteReservation groupStorageBytes(&state.materialized_budget);
-					detail::BudgetMemoryResource aggregateIndexMemory(state.materialized_budget);
+					MaterializedByteReservation aggregateStateBytes(&state.shared.materialized_budget);
+					MaterializedByteReservation groupStorageBytes(&state.shared.materialized_budget);
+					detail::BudgetMemoryResource aggregateIndexMemory(state.shared.materialized_budget);
 					std::vector<AggregateGroup> groups;
 					std::pmr::unordered_map<std::pmr::string, size_t> groupIndexes{&aggregateIndexMemory};
 					size_t aggregateMemoryBytes = 0U;
 					const auto chargeAggregateBytes = [&](const size_t bytes) {
-						if (bytes > state.bounds.maximum_materialized_bytes -
-											std::min(aggregateMemoryBytes, state.bounds.maximum_materialized_bytes)) {
+						if (bytes > state.shared.bounds.maximum_materialized_bytes -
+											std::min(aggregateMemoryBytes, state.shared.bounds.maximum_materialized_bytes)) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its materialization byte bound");
 						}
 						const size_t nextBytes = checkedSizeAdd(
@@ -12246,8 +12371,8 @@ namespace graph::query::execution {
 						aggregateMemoryBytes = nextBytes;
 					};
 					const auto createGroup = [&](std::vector<PropertyValue> values) {
-						if (groups.size() == state.bounds.maximum_distinct_rows ||
-							groups.size() == state.bounds.maximum_rows) {
+						if (groups.size() == state.shared.bounds.maximum_distinct_rows ||
+							groups.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its group bound");
 						}
 						size_t groupBytes = 0U;
@@ -12274,7 +12399,7 @@ namespace graph::query::execution {
 									createAccumulator(functions[index], false, percentiles[index], &aggregateIndexMemory,
 										[&](size_t objectBytes) {
 											checkGuardNow(state);
-											if (objectBytes > state.materialized_budget.available())
+											if (objectBytes > state.shared.materialized_budget.available())
 												throw std::runtime_error("logical-plan Aggregate accumulator object exceeded its materialized byte bound");
 											chargeAggregateBytes(objectBytes);
 											groupBytes = checkedSizeAdd(groupBytes, objectBytes,
@@ -12300,11 +12425,11 @@ namespace graph::query::execution {
 							const size_t requestedStorageBytes =
 									checkedSizeMul(requestedCapacity, sizeof(AggregateGroup),
 												   "logical-plan Aggregate group vector size overflowed");
-							if (requestedStorageBytes > state.materialized_budget.available()) {
+							if (requestedStorageBytes > state.shared.materialized_budget.available()) {
 								throw std::runtime_error("logical-plan Aggregate group vector growth exceeded its "
 														 "materialized byte bound");
 							}
-							MaterializedByteReservation groupStorageGrowthBytes(&state.materialized_budget);
+							MaterializedByteReservation groupStorageGrowthBytes(&state.shared.materialized_budget);
 							groupStorageGrowthBytes.set(requestedStorageBytes);
 							groups.reserve(requestedCapacity);
 							const size_t actualCapacityBytes =
@@ -12319,23 +12444,189 @@ namespace graph::query::execution {
 					if (groupExpressions.empty()) {
 						static_cast<void>(createGroup({}));
 					}
+					const auto accountAccumulatorRetention = [&](AggregateGroup &group, size_t beforeBytes, size_t afterBytes) {
+						if (afterBytes >= beforeBytes) {
+							chargeAggregateBytes(afterBytes - beforeBytes);
+							group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, afterBytes - beforeBytes,
+								"logical-plan Aggregate group size overflowed");
+						} else {
+							aggregateMemoryBytes -= beforeBytes - afterBytes;
+							aggregateStateBytes.set(aggregateMemoryBytes);
+							group.accounted_bytes -= beforeBytes - afterBytes;
+						}
+					};
 
 					size_t inputRows = 0U;
+					const logical::LogicalOperator &aggregateChild = requireOnlyChild(aggregate);
+					std::pmr::vector<std::string_view> aggregateColumnKeys(&aggregateIndexMemory);
+					std::pmr::vector<size_t> aggregateColumnBindings(&aggregateIndexMemory);
+					std::optional<NodeColumnReceiver> aggregateColumnReceiver;
+					bool aggregateColumnsBound = false;
+					const size_t rowCountBinding = std::numeric_limits<size_t>::max();
+					bool columnAggregateEligible = groupExpressions.empty() && !countOnlyAggregate &&
+						state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
+						aggregateChild.getType() == logical::LogicalOpType::LOP_NODE_SCAN;
+					if (columnAggregateEligible) {
+						const auto &scan = dynamic_cast<const logical::LogicalNodeScan &>(aggregateChild);
+						for (size_t index = 0U; index < aggregations.size(); ++index) {
+							const auto &item = aggregations[index];
+							const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(item.argument.get());
+							if (item.distinct ||
+								(item.argument && (!reference || reference->getVariableName() != scan.getVariable())) ||
+								(functions[index] != AggregateFunctionType::AGG_COUNT && (!reference || !reference->hasProperty()))) {
+								columnAggregateEligible = false;
+								break;
+							}
+							// Preserve payload-free COUNT probes for fields not already
+							// required by a value-consuming sibling aggregate.
+							if (functions[index] == AggregateFunctionType::AGG_COUNT && reference && reference->hasProperty()) {
+								const bool sharedValueInput = std::ranges::any_of(aggregations, [&](const auto &sibling) {
+									const auto *other = dynamic_cast<const expressions::VariableReferenceExpression *>(sibling.argument.get());
+									return aggregateFunctionType(sibling.functionName) != AggregateFunctionType::AGG_COUNT && other &&
+										other->hasProperty() && other->getVariableName() == scan.getVariable() &&
+										other->getPropertyName() == reference->getPropertyName();
+								});
+								if (!sharedValueInput) { columnAggregateEligible = false; break; }
+							}
+						}
+						if (columnAggregateEligible) {
+							try {
+								aggregateColumnKeys.reserve(aggregations.size());
+								aggregateColumnBindings.reserve(aggregations.size());
+								for (const auto &item : aggregations) {
+									const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(item.argument.get());
+									if (!reference || !reference->hasProperty()) {
+										aggregateColumnBindings.push_back(rowCountBinding);
+										continue;
+									}
+									const std::string_view key = reference->getPropertyName();
+									auto found = std::ranges::find(aggregateColumnKeys, key);
+									if (found == aggregateColumnKeys.end()) {
+										aggregateColumnKeys.push_back(key);
+										found = aggregateColumnKeys.end() - 1;
+									}
+									aggregateColumnBindings.push_back(static_cast<size_t>(found - aggregateColumnKeys.begin()));
+								}
+							} catch (const MaterializedByteLimitExceeded &) {
+								columnAggregateEligible = false;
+							}
+						}
+					}
+					if (columnAggregateEligible) {
+						aggregateColumnReceiver.emplace(NodeColumnReceiver{aggregateColumnKeys,
+							[&](std::span<const std::string> keys, std::span<const std::vector<PropertyValue>> columns,
+								const SelectionVector &selection, std::span<const size_t> originalOrdinals) {
+								if (!aggregateColumnsBound) {
+									for (auto &binding : aggregateColumnBindings) {
+										if (binding == rowCountBinding) continue;
+										const auto found = std::ranges::find(keys, aggregateColumnKeys[binding]);
+										if (found == keys.end()) throw std::logic_error("aggregate input column was not produced");
+										binding = static_cast<size_t>(found - keys.begin());
+									}
+									aggregateColumnsBound = true;
+								}
+								detail::PrimitiveNumericColumns numericColumns(state.shared.materialized_budget);
+								MaterializedByteReservation numericStateHeadroom(&state.shared.materialized_budget);
+								size_t numericStateBytes = 0U;
+								for (size_t index = 0U; index < functions.size(); ++index) {
+									if (functions[index] == AggregateFunctionType::AGG_MIN || functions[index] == AggregateFunctionType::AGG_MAX) {
+										const size_t retained = groups.front().accumulators[index]->retainedBytesForAdmission();
+										numericStateBytes = checkedSizeAdd(numericStateBytes, sizeof(int64_t) - std::min(retained, sizeof(int64_t)),
+											"logical-plan numeric aggregate state size overflowed");
+									}
+								}
+								bool numericPrepared = false;
+								// Growing collections own their allocation protocol; optional conversion
+								// buffers must not compete with that state or trigger update replay.
+								const bool primitiveOnly = std::ranges::all_of(functions, [](auto function) {
+									return function == AggregateFunctionType::AGG_COUNT || function == AggregateFunctionType::AGG_SUM ||
+										function == AggregateFunctionType::AGG_AVG || function == AggregateFunctionType::AGG_MIN ||
+										function == AggregateFunctionType::AGG_MAX || function == AggregateFunctionType::AGG_STDEV ||
+										function == AggregateFunctionType::AGG_STDEVP;
+								});
+								if (primitiveOnly && !numericStateHeadroom.wouldExceed(numericStateBytes)) {
+									// Optional buffers cannot consume the scalar extremum's
+									// first retained value allowance. Actual updates charge it below.
+									numericStateHeadroom.set(numericStateBytes);
+									numericPrepared = numericColumns.tryPrepare(columns, aggregateColumnBindings,
+										[&] { checkGuard(state); });
+									numericStateHeadroom.reset();
+								}
+								debug::PerfTrace::addValue("logical_plan.aggregate.typed_columns",
+									static_cast<int64_t>(numericColumns.typedColumnCount()));
+								if (numericPrepared && numericColumns.typedColumnCount() == 0U) {
+									// Dynamic-only batches gain nothing from conversion metadata.
+									numericColumns.release();
+									numericPrepared = false;
+								}
+								for (const size_t ordinal : originalOrdinals) {
+									checkGuard(state);
+									if (!selection.includes(ordinal)) continue;
+									if (inputRows == state.shared.bounds.maximum_rows)
+										throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+									++inputRows;
+									for (size_t index = 0U; index < aggregations.size(); ++index) {
+										checkGuard(state);
+										auto &accumulator = *groups.front().accumulators[index];
+										if (functions[index] == AggregateFunctionType::AGG_COUNT || functions[index] == AggregateFunctionType::AGG_SUM ||
+											functions[index] == AggregateFunctionType::AGG_AVG || functions[index] == AggregateFunctionType::AGG_STDEV ||
+											functions[index] == AggregateFunctionType::AGG_STDEVP) {
+											// Count and numeric sums retain no variable payload. Keep
+											// their typed loop free of retention probes and copy guards.
+											if (aggregateColumnBindings[index] == rowCountBinding) accumulator.updateRow();
+											else if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], ordinal);
+											else accumulator.update(columns[aggregateColumnBindings[index]][ordinal]);
+											continue;
+										}
+										const size_t beforeBytes = accumulator.retainedBytesForAdmission();
+										MaterializedByteReservation updateScratch(&state.shared.materialized_budget);
+										bool admissionRejected = false;
+										const std::function<void(size_t)> admit = [&](size_t bytes) {
+											checkGuardNow(state);
+											try { updateScratch.set(bytes); }
+											catch (const MaterializedByteLimitExceeded &) { admissionRejected = true; throw; }
+										};
+										try {
+											if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], ordinal, admit);
+											else accumulator.updateAdmitted(columns[aggregateColumnBindings[index]][ordinal], admit);
+										} catch (const MaterializedByteLimitExceeded &) {
+											if (!admissionRejected || !numericPrepared) throw;
+											// Extremum copying has not published state on admission failure.
+											// Drop optional buffers and retry only this update, never rows
+											// already counted or accumulated. Guard failures still escape.
+											numericColumns.release();
+											numericPrepared = false;
+											updateScratch.reset();
+											accumulator.updateAdmitted(columns[aggregateColumnBindings[index]][ordinal], admit);
+											debug::PerfTrace::addValue("logical_plan.aggregate.optional_buffers_released", 1);
+										}
+										updateScratch.reset();
+										accountAccumulatorRetention(groups.front(), beforeBytes, accumulator.retainedBytesForAdmission());
+									}
+								}
+								debug::PerfTrace::addValue("logical_plan.aggregate.column_input_rows",
+									static_cast<int64_t>(selection.selectedCount()));
+								return true;
+							}});
+					} else {
+						std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
+						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
+					}
 					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
 														 MaterializedByteReservation inputRowBytes) {
 						if (countOnlyAggregate) {
 							inputRowBytes.reset();
 						} else if (inputRowBytes.bytes() == 0U) {
 							admitReferenceResultBytes(
-									inputRowBytes, logicalReadRowBytes(row, state.context),
+									inputRowBytes, logicalReadRowBytes(row, state.shared.context),
 									"logical-plan Aggregate input row exceeded its shared byte bound");
 						}
 						checkGuard(state);
-						if (inputRows == state.bounds.maximum_rows) {
+						if (inputRows == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 						}
 						++inputRows;
-						MaterializedByteReservation groupValueScratch(&state.materialized_budget);
+						MaterializedByteReservation groupValueScratch(&state.shared.materialized_budget);
 						size_t groupValueBytes = checkedSizeMul(groupExpressions.size(), sizeof(PropertyValue),
 							"logical-plan Aggregate group value array overflowed");
 						groupValueScratch.set(groupValueBytes);
@@ -12389,19 +12680,19 @@ namespace graph::query::execution {
 										if (binding != row.values.end()) {
 											if (const auto *node =
 														std::get_if<storage::LogicalGraphNode>(&binding->second)) {
-												presence = state.snapshot.nodePropertyIsNonNull(
+												presence = state.shared.snapshot.nodePropertyIsNonNull(
 														node->node_id, property->getPropertyName());
 											} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(
 															   &binding->second)) {
-												presence = state.snapshot.edgePropertyIsNonNull(
+												presence = state.shared.snapshot.edgePropertyIsNonNull(
 														edge->edge_id, property->getPropertyName());
 											} else if (const auto *reference =
 															   std::get_if<storage::EntityRef>(&binding->second)) {
 												validateEntityRef(*reference);
-												presence = reference->is_edge ? state.snapshot.edgePropertyIsNonNull(
+												presence = reference->is_edge ? state.shared.snapshot.edgePropertyIsNonNull(
 																						reference->entity_id,
 																						property->getPropertyName())
-																			  : state.snapshot.nodePropertyIsNonNull(
+																			  : state.shared.snapshot.nodePropertyIsNonNull(
 																						reference->entity_id,
 																						property->getPropertyName());
 											}
@@ -12420,22 +12711,14 @@ namespace graph::query::execution {
 									appendDistinctPropertyValue(key, value);
 									if (!group.distinct_values[index].insert(std::move(key)).second) continue;
 								}
-								MaterializedByteReservation updateScratch(&state.materialized_budget);
+								MaterializedByteReservation updateScratch(&state.shared.materialized_budget);
 								group.accumulators[index]->updateAdmitted(value, [&](size_t bytes) {
 									checkGuardNow(state); updateScratch.set(bytes);
 								});
 								updateScratch.reset();
 							}
 							const size_t afterBytes = group.accumulators[index]->retainedBytesForAdmission();
-							if (afterBytes >= beforeBytes) {
-								chargeAggregateBytes(afterBytes - beforeBytes);
-								group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, afterBytes - beforeBytes,
-																	   "logical-plan Aggregate group size overflowed");
-							} else {
-								aggregateMemoryBytes -= beforeBytes - afterBytes;
-								aggregateStateBytes.set(aggregateMemoryBytes);
-								group.accounted_bytes -= beforeBytes - afterBytes;
-							}
+							accountAccumulatorRetention(group, beforeBytes, afterBytes);
 						}
 						return true;
 					};
@@ -12443,7 +12726,7 @@ namespace graph::query::execution {
 					// only delayed accumulation and duplicated the source's row storage.
 					const auto consumeUnchargedAggregateRow = [&](LogicalPlanReadRow row) {
 						return consumeAggregateRow(std::move(row),
-												   MaterializedByteReservation(&state.materialized_budget));
+												   MaterializedByteReservation(&state.shared.materialized_budget));
 					};
 					const ChargedRowVisitor chargedAggregateRow = consumeAggregateRow;
 					std::vector<const expressions::Expression *> aggregateCandidates;
@@ -12451,7 +12734,7 @@ namespace graph::query::execution {
 					for (const auto &expression: groupExpressions) {
 						aggregateCandidates.push_back(expression.get());
 					}
-					const bool canProbeCountProperties = state.snapshot.supportsPropertyNonNullProbes();
+					const bool canProbeCountProperties = state.shared.snapshot.supportsPropertyNonNullProbes();
 					for (size_t index = 0U; index < aggregations.size(); ++index) {
 						const auto &item = aggregations[index];
 						if (!item.argument)
@@ -12476,8 +12759,8 @@ namespace graph::query::execution {
 					// Complete-Entity expressions are different: COUNT(properties(n)) still
 					// needs the complete map, so that requirement is batched even for a
 					// count-only aggregate.
-					if ((!aggregatePropertyExpressions.empty() && !countOnlyAggregate) ||
-						!completeEntityVariables.empty()) {
+					if (!aggregateColumnReceiver && ((!aggregatePropertyExpressions.empty() && !countOnlyAggregate) ||
+						!completeEntityVariables.empty())) {
 						batchedProperties = tryVisitBatchedPropertyExpressions(
 								requireOnlyChild(aggregate), aggregatePropertyExpressions, state,
 								consumeUnchargedAggregateRow, {}, completeEntityVariables, &chargedAggregateRow,
@@ -12485,19 +12768,22 @@ namespace graph::query::execution {
 									return expression && expression->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS;
 								}) && std::ranges::none_of(aggregations, [](const auto &item) { return item.distinct; }));
 					}
-					const logical::LogicalOperator &aggregateChild = requireOnlyChild(aggregate);
 					const bool completed = batchedProperties.has_value()
 												   ? *batchedProperties
 												   : visitOperator(aggregateChild, state, consumeUnchargedAggregateRow,
 																   supportsChargedRowHandoff(aggregateChild.getType())
 																		   ? &chargedAggregateRow
-																		   : nullptr);
+																		   : nullptr,
+																   aggregateColumnReceiver ? &*aggregateColumnReceiver : nullptr);
 					if (!completed) {
 						throw std::runtime_error(
 								"logical-plan Aggregate could not prove that its complete input was read");
 					}
 					// Release lookup nodes and buckets before downstream output is
 					// admitted. Per-group DISTINCT keys live until their group is consumed.
+					aggregateColumnReceiver.reset();
+					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
+					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
 					decltype(groupIndexes){&aggregateIndexMemory}.swap(groupIndexes);
 					const size_t outputGroupCount = groups.size();
 					for (size_t groupIndex = 0U; groupIndex < outputGroupCount; ++groupIndex) {
@@ -12524,11 +12810,11 @@ namespace graph::query::execution {
 							std::vector<AggregateGroup>{}.swap(groups);
 							groupStorageBytes.reset();
 						}
-						const size_t outputBytes = logicalReadRowBytes(row, state.context) -
-								(state.resident_output_batch_bytes == 0U ? 0U : sizeof(LogicalPlanReadRow));
+						const size_t outputBytes = logicalReadRowBytes(row, state.shared.context) -
+								(state.shared.resident_output_batch_bytes == 0U ? 0U : sizeof(LogicalPlanReadRow));
 						// Buffered output already charges its row-slot capacity. Its
 						// collector admits only payload; do not charge that slot twice.
-						if (outputBytes > state.materialized_budget.available()) {
+						if (outputBytes > state.shared.materialized_budget.available()) {
 							throw std::runtime_error(
 									"logical-plan Aggregate output exceeded the shared materialized byte bound");
 						}
@@ -12560,10 +12846,10 @@ namespace graph::query::execution {
 					validateColumns(rightColumns);
 
 					BoundedBatch<LogicalPlanReadRow> rightRows(
-							state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
-							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
-							&state.materialized_budget);
-					rightRows.reserve(state.bounds.maximum_rows);
+							state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
+							&state.shared.materialized_budget);
+					rightRows.reserve(state.shared.bounds.maximum_rows);
 					std::vector<std::string> sharedColumns;
 					sharedColumns.reserve(std::min(leftColumns.size(), rightColumns.size()));
 					std::unordered_set<std::string> rightColumnSet;
@@ -12579,18 +12865,18 @@ namespace graph::query::execution {
 					// Build a bounded hash index over shared bindings. A join with no
 					// shared columns intentionally retains Cartesian semantics by using
 					// the same candidate list for every left row.
-					detail::BudgetMemoryResource rightIndexMemory(state.materialized_budget);
+					detail::BudgetMemoryResource rightIndexMemory(state.shared.materialized_budget);
 					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> rightRowsByKey{&rightIndexMemory};
 					const bool rightCompleted = visitOperator(*right, state, [&](LogicalPlanReadRow row) {
-						if (rightRows.size() == state.bounds.maximum_rows) {
+						if (rightRows.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error(
 									"logical-plan Join exceeded its materialized right-side row bound");
 						}
 						LogicalPlanReadRow normalized = normalizeOutputRow(std::move(row), rightColumns);
 						const auto key = bindingKey(normalized, sharedColumns, &rightIndexMemory);
-						const size_t rowBytes = logicalReadRowBytes(normalized, state.context);
-						if (rowBytes > state.bounds.maximum_materialized_bytes -
-							std::min(rightRows.bytes(), state.bounds.maximum_materialized_bytes))
+						const size_t rowBytes = logicalReadRowBytes(normalized, state.shared.context);
+						if (rowBytes > state.shared.bounds.maximum_materialized_bytes -
+							std::min(rightRows.bytes(), state.shared.bounds.maximum_materialized_bytes))
 							throw std::runtime_error("logical-plan Join exceeded its materialized byte bound");
 						rightRows.append(std::move(normalized));
 						rightRowsByKey[key].push_back(rightRows.size() - 1U);
@@ -12606,10 +12892,10 @@ namespace graph::query::execution {
 
 					bool stoppedByVisitor = false;
 					const bool leftCompleted = visitOperator(*left, state, [&](LogicalPlanReadRow row) {
-						MaterializedByteReservation leftReservation(&state.materialized_budget);
+						MaterializedByteReservation leftReservation(&state.shared.materialized_budget);
 						LogicalPlanReadRow normalizedLeft = normalizeOutputRow(std::move(row), leftColumns);
 						const auto key = bindingKey(normalizedLeft, sharedColumns, &rightIndexMemory);
-						leftReservation.set(logicalReadRowBytes(normalizedLeft, state.context));
+						leftReservation.set(logicalReadRowBytes(normalizedLeft, state.shared.context));
 						const auto candidates = rightRowsByKey.find(key);
 						if (candidates == rightRowsByKey.end()) {
 							return true;
@@ -12618,16 +12904,16 @@ namespace graph::query::execution {
 							checkGuard(state);
 							const LogicalPlanReadRow &rightRow = rightRows.values()[rightIndex];
 							const bool lastCandidate = rightIndex == candidates->second.back();
-							MaterializedByteReservation outputReservation(&state.materialized_budget);
+							MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 							if (lastCandidate) {
 								outputReservation.absorb(std::move(leftReservation));
-								leftReservation = MaterializedByteReservation(&state.materialized_budget);
+								leftReservation = MaterializedByteReservation(&state.shared.materialized_budget);
 							} else {
-								outputReservation.set(logicalReadRowBytes(normalizedLeft, state.context));
+								outputReservation.set(logicalReadRowBytes(normalizedLeft, state.shared.context));
 							}
 							// Admit the right-side copy while its reusable source is still retained.
 							outputReservation.set(checkedSizeAdd(outputReservation.bytes(),
-								logicalReadRowBytes(rightRow, state.context) - sizeof(LogicalPlanReadRow),
+								logicalReadRowBytes(rightRow, state.shared.context) - sizeof(LogicalPlanReadRow),
 								"logical-plan combined row size overflowed"));
 							LogicalPlanReadRow combined = lastCandidate ? std::move(normalizedLeft) : detail::copyLogicalReadRowGuarded(normalizedLeft, [&] { checkGuardNow(state); });
 							if (lastCandidate) {
@@ -12649,7 +12935,7 @@ namespace graph::query::execution {
 								continue;
 							}
 							mergeCompatibleRowCaches(combined, rightRow, state);
-							outputReservation.set(logicalReadRowBytes(combined, state.context));
+							outputReservation.set(logicalReadRowBytes(combined, state.shared.context));
 							bool keepGoing = true;
 							if (chargedReceiver != nullptr) {
 								keepGoing = (*chargedReceiver)(std::move(combined), std::move(outputReservation));
@@ -12706,23 +12992,23 @@ namespace graph::query::execution {
 						}
 					}
 
-					detail::BudgetMemoryResource patternIndexMemory(state.materialized_budget);
+					detail::BudgetMemoryResource patternIndexMemory(state.shared.materialized_budget);
 					std::pmr::unordered_map<std::pmr::string, std::pmr::vector<size_t>> patternRowsByKey{&patternIndexMemory};
 					BoundedBatch<LogicalPlanReadRow> patternRows(
-							state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
-							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
-							&state.materialized_budget);
-					patternRows.reserve(state.bounds.maximum_rows);
+							state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
+							&state.shared.materialized_budget);
+					patternRows.reserve(state.shared.bounds.maximum_rows);
 					const bool patternCompleted = visitOperator(*pattern, state, [&](LogicalPlanReadRow row) {
-						if (patternRows.size() == state.bounds.maximum_rows) {
+						if (patternRows.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error(
 									"logical-plan OptionalMatch exceeded its materialized pattern row bound");
 						}
 						LogicalPlanReadRow normalized = normalizeOutputRow(std::move(row), patternColumns);
 						const auto key = bindingKey(normalized, sharedColumns, &patternIndexMemory);
-						const size_t rowBytes = logicalReadRowBytes(normalized, state.context);
-						if (rowBytes > state.bounds.maximum_materialized_bytes -
-							std::min(patternRows.bytes(), state.bounds.maximum_materialized_bytes))
+						const size_t rowBytes = logicalReadRowBytes(normalized, state.shared.context);
+						if (rowBytes > state.shared.bounds.maximum_materialized_bytes -
+							std::min(patternRows.bytes(), state.shared.bounds.maximum_materialized_bytes))
 							throw std::runtime_error("logical-plan OptionalMatch exceeded its materialized byte bound");
 						patternRows.append(std::move(normalized));
 						patternRowsByKey[key].push_back(patternRows.size() - 1U);
@@ -12735,10 +13021,10 @@ namespace graph::query::execution {
 
 					bool stoppedByVisitor = false;
 					const bool inputCompleted = visitOperator(*input, state, [&](LogicalPlanReadRow row) {
-						MaterializedByteReservation inputReservation(&state.materialized_budget);
+						MaterializedByteReservation inputReservation(&state.shared.materialized_budget);
 						LogicalPlanReadRow normalizedInput = normalizeOutputRow(std::move(row), inputColumns);
 						const auto key = bindingKey(normalizedInput, sharedColumns, &patternIndexMemory);
-						inputReservation.set(logicalReadRowBytes(normalizedInput, state.context));
+						inputReservation.set(logicalReadRowBytes(normalizedInput, state.shared.context));
 						const auto matches = patternRowsByKey.find(key);
 						if (matches == patternRowsByKey.end()) {
 							LogicalPlanReadRow nullExtended = std::move(normalizedInput);
@@ -12748,8 +13034,8 @@ namespace graph::query::execution {
 									nullExtended.values.emplace(column, PropertyValue());
 								}
 							}
-							MaterializedByteReservation outputReservation(&state.materialized_budget);
-							outputReservation.set(logicalReadRowBytes(nullExtended, state.context));
+							MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
+							outputReservation.set(logicalReadRowBytes(nullExtended, state.shared.context));
 							bool keepGoing = true;
 							if (chargedReceiver != nullptr) {
 								keepGoing = (*chargedReceiver)(std::move(nullExtended), std::move(outputReservation));
@@ -12767,16 +13053,16 @@ namespace graph::query::execution {
 							checkGuard(state);
 							const LogicalPlanReadRow &match = patternRows.values()[matchIndex];
 							const bool lastMatch = matchIndex == matches->second.back();
-							MaterializedByteReservation outputReservation(&state.materialized_budget);
+							MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 							if (lastMatch) {
 								outputReservation.absorb(std::move(inputReservation));
-								inputReservation = MaterializedByteReservation(&state.materialized_budget);
+								inputReservation = MaterializedByteReservation(&state.shared.materialized_budget);
 							} else {
-								outputReservation.set(logicalReadRowBytes(normalizedInput, state.context));
+								outputReservation.set(logicalReadRowBytes(normalizedInput, state.shared.context));
 							}
 							// Admit the right-side copy while its reusable source is still retained.
 							outputReservation.set(checkedSizeAdd(outputReservation.bytes(),
-								logicalReadRowBytesIncluding(match, [&](const std::string &alias) { return !inputColumnSet.contains(alias); }, state.context) - sizeof(LogicalPlanReadRow),
+								logicalReadRowBytesIncluding(match, [&](const std::string &alias) { return !inputColumnSet.contains(alias); }, state.shared.context) - sizeof(LogicalPlanReadRow),
 								"logical-plan combined row size overflowed"));
 							LogicalPlanReadRow combined = lastMatch ? std::move(normalizedInput) : detail::copyLogicalReadRowGuarded(normalizedInput, [&] { checkGuardNow(state); });
 							if (lastMatch) {
@@ -12788,7 +13074,7 @@ namespace graph::query::execution {
 								}
 							}
 							mergeCompatibleRowCaches(combined, match, state, &inputColumnSet);
-							outputReservation.set(logicalReadRowBytes(combined, state.context));
+							outputReservation.set(logicalReadRowBytes(combined, state.shared.context));
 							bool keepGoing = true;
 							if (chargedReceiver != nullptr) {
 								keepGoing = (*chargedReceiver)(std::move(combined), std::move(outputReservation));
@@ -12825,10 +13111,10 @@ namespace graph::query::execution {
 						}
 					}
 					const auto executeForInput = [&](LogicalPlanReadRow inputRow) {
-						MaterializedByteReservation outerReservation(&state.materialized_budget);
-						MaterializedByteReservation importedReservation(&state.materialized_budget);
+						MaterializedByteReservation outerReservation(&state.shared.materialized_budget);
+						MaterializedByteReservation importedReservation(&state.shared.materialized_budget);
 						LogicalPlanReadRow retainedInput = std::move(inputRow);
-						outerReservation.set(logicalReadRowBytes(retainedInput, state.context));
+						outerReservation.set(logicalReadRowBytes(retainedInput, state.shared.context));
 						const std::vector<std::string> &importedVars = subquery.getImportedVars();
 						for (size_t index = 0U; index < importedVars.size(); ++index) {
 							const std::string &variable = importedVars[index];
@@ -12845,7 +13131,7 @@ namespace graph::query::execution {
 						const size_t importedBytes =
 								logicalReadRowBytesIncluding(retainedInput, [&](const std::string &name) {
 									return std::ranges::find(importedVars, name) != importedVars.end();
-								}, state.context);
+								}, state.shared.context);
 						admitReferenceResultBytes(importedReservation, importedBytes,
 												  "logical-plan CallSubquery imports exceeded its shared byte bound");
 						LogicalPlanReadRow injected;
@@ -12875,13 +13161,13 @@ namespace graph::query::execution {
 							const LogicalPlanReadRow *previous;
 
 							InjectionScope(ExecutionState &executionState, const LogicalPlanReadRow &row) :
-								state(executionState), previous(executionState.injected_row) {
-								state.injected_row = &row;
+								state(executionState), previous(executionState.task.injected_row) {
+								state.task.injected_row = &row;
 							}
 
-							~InjectionScope() { state.injected_row = previous; }
+							~InjectionScope() { state.task.injected_row = previous; }
 						};
-						admitReferenceResultBytes(importedReservation, logicalReadRowBytes(injected, state.context),
+						admitReferenceResultBytes(importedReservation, logicalReadRowBytes(injected, state.shared.context),
 								"logical-plan CallSubquery imports exceeded its shared byte bound");
 						bool emitted = false;
 						bool completed = false;
@@ -12891,17 +13177,17 @@ namespace graph::query::execution {
 														   MaterializedByteReservation bodyReservation) {
 								if (bodyReservation.bytes() == 0U) {
 									admitReferenceResultBytes(
-											bodyReservation, logicalReadRowBytes(subqueryRow, state.context),
+											bodyReservation, logicalReadRowBytes(subqueryRow, state.shared.context),
 											"logical-plan CallSubquery body row exceeded its shared byte bound");
 								}
 								LogicalPlanReadRow normalized =
 										normalizeOutputRow(std::move(subqueryRow), returnedVariables);
 								admitReferenceResultBytes(
-										bodyReservation, logicalReadRowBytes(normalized, state.context),
+										bodyReservation, logicalReadRowBytes(normalized, state.shared.context),
 										"logical-plan CallSubquery body row exceeded its shared byte bound");
-								MaterializedByteReservation outputReservation(&state.materialized_budget);
+								MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 								admitReferenceResultBytes(
-										outputReservation, logicalReadRowBytes(retainedInput, state.context),
+										outputReservation, logicalReadRowBytes(retainedInput, state.shared.context),
 										"logical-plan CallSubquery output exceeded its shared byte bound");
 								LogicalPlanReadRow combined = detail::copyLogicalReadRowGuarded(retainedInput, [&] { checkGuardNow(state); });
 								for (const auto &[variable, value]: normalized.values) {
@@ -12914,7 +13200,7 @@ namespace graph::query::execution {
 								mergeOwnedRowCaches(combined, std::move(normalized));
 								outputReservation.absorb(std::move(bodyReservation));
 								admitReferenceResultBytes(
-										outputReservation, logicalReadRowBytes(combined, state.context),
+										outputReservation, logicalReadRowBytes(combined, state.shared.context),
 										"logical-plan CallSubquery output exceeded its shared byte bound");
 								emitted = true;
 								if (chargedReceiver != nullptr) {
@@ -12928,7 +13214,7 @@ namespace graph::query::execution {
 									*body, state,
 									[&](LogicalPlanReadRow row) {
 										return acceptBodyRow(std::move(row),
-															 MaterializedByteReservation(&state.materialized_budget));
+															 MaterializedByteReservation(&state.shared.materialized_budget));
 									},
 									supportsChargedRowHandoff(body->getType()) ? &chargedBodyRow : nullptr);
 						}
@@ -12996,20 +13282,20 @@ namespace graph::query::execution {
 														 MaterializedByteReservation inputRowBytes) {
 						if (inputRowBytes.bytes() == 0U) {
 							admitReferenceResultBytes(
-									inputRowBytes, logicalReadRowBytes(row, state.context),
+									inputRowBytes, logicalReadRowBytes(row, state.shared.context),
 									"logical-plan NamedPath input row exceeded its shared byte bound");
 						}
-						MaterializedByteReservation boundNodeSlots(&state.materialized_budget);
-						MaterializedByteReservation boundNodePointerSlots(&state.materialized_budget);
-						MaterializedByteReservation deferredBoundNodeSlots(&state.materialized_budget);
-						MaterializedByteReservation nodePointerSlots(&state.materialized_budget);
-						MaterializedByteReservation edgePointerSlots(&state.materialized_budget);
-						MaterializedByteReservation boundEdgeSlots(&state.materialized_budget);
-						MaterializedByteReservation boundNodeResultBytes(&state.materialized_budget);
-						MaterializedByteReservation capturedNodeResultBytes(&state.materialized_budget);
-						MaterializedByteReservation edgeResultBytes(&state.materialized_budget);
-						MaterializedByteReservation inlineNodePayloadBytes(&state.materialized_budget);
-						MaterializedByteReservation inlineEdgePayloadBytes(&state.materialized_budget);
+						MaterializedByteReservation boundNodeSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation boundNodePointerSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation deferredBoundNodeSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation nodePointerSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation edgePointerSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation boundEdgeSlots(&state.shared.materialized_budget);
+						MaterializedByteReservation boundNodeResultBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation capturedNodeResultBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation edgeResultBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation inlineNodePayloadBytes(&state.shared.materialized_budget);
+						MaterializedByteReservation inlineEdgePayloadBytes(&state.shared.materialized_budget);
 						std::vector<storage::LogicalGraphNode> boundNodeRecords;
 						size_t boundNodeCapacity = nodeVariables.size();
 						if (capturedVariableLengthPath) {
@@ -13041,7 +13327,7 @@ namespace graph::query::execution {
 								const size_t previousBytes = inlineNodePayloadBytes.bytes();
 								admitReferenceResultBytes(
 										inlineNodePayloadBytes,
-										checkedSizeAdd(previousBytes, logicalNodeCacheBytes(*node, state.context) - sizeof(*node),
+										checkedSizeAdd(previousBytes, logicalNodeCacheBytes(*node, state.shared.context) - sizeof(*node),
 													   "logical-plan NamedPath inline Node payload overflowed"),
 										"logical-plan NamedPath inline Node payload exceeded its shared byte bound");
 								try {
@@ -13089,7 +13375,7 @@ namespace graph::query::execution {
 							}
 							nodes.clear();
 							reserveNamedPathSlots(nodes, captured->second.nodes.size(), nodePointerSlots);
-							MaterializedByteReservation deferredCapturedNodeSlots(&state.materialized_budget);
+							MaterializedByteReservation deferredCapturedNodeSlots(&state.shared.materialized_budget);
 							std::vector<storage::EntityRef> deferredCapturedNodes;
 							if (!captured->second.node_refs.empty()) {
 								for (const storage::EntityRef &reference: captured->second.node_refs) {
@@ -13154,10 +13440,10 @@ namespace graph::query::execution {
 								std::optional<storage::EntityRef> reference;
 								std::optional<storage::LogicalGraphEdge> complete;
 							};
-							MaterializedByteReservation pendingEdgeSlots(&state.materialized_budget);
+							MaterializedByteReservation pendingEdgeSlots(&state.shared.materialized_budget);
 							std::vector<PendingNamedEdge> pendingEdges;
 							reserveNamedPathSlots(pendingEdges, edgeVariables.size(), pendingEdgeSlots);
-							MaterializedByteReservation deferredEdgeSlots(&state.materialized_budget);
+							MaterializedByteReservation deferredEdgeSlots(&state.shared.materialized_budget);
 							std::vector<storage::EntityRef> deferredReferences;
 							for (const std::string &variable: edgeVariables) {
 								const LogicalPlanReadValue &value = requireBinding(row, variable);
@@ -13175,7 +13461,7 @@ namespace graph::query::execution {
 									const size_t previousBytes = inlineEdgePayloadBytes.bytes();
 									admitReferenceResultBytes(
 											inlineEdgePayloadBytes,
-											checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(*edge, state.context) - sizeof(*edge),
+											checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(*edge, state.shared.context) - sizeof(*edge),
 														   "logical-plan NamedPath inline Edge payload overflowed"),
 											"logical-plan NamedPath inline Edge payload exceeded its shared byte "
 											"bound");
@@ -13217,8 +13503,8 @@ namespace graph::query::execution {
 							}
 						}
 
-						MaterializedByteReservation sourcePropertyBytes(&state.materialized_budget);
-						detail::BudgetMemoryResource propertyCacheMemory(state.materialized_budget);
+						MaterializedByteReservation sourcePropertyBytes(&state.shared.materialized_budget);
+						detail::BudgetMemoryResource propertyCacheMemory(state.shared.materialized_budget);
 						MaterializedPropertyCache materialized(&propertyCacheMemory);
 						const auto pathIdValue = [](uint64_t id) {
 							if (id > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
@@ -13227,7 +13513,7 @@ namespace graph::query::execution {
 							}
 							return PropertyValue(static_cast<int64_t>(id));
 						};
-						MaterializedByteReservation pathBytes(&state.materialized_budget);
+						MaterializedByteReservation pathBytes(&state.shared.materialized_budget);
 						const auto admitPathBytes = [&](size_t nextBytes) {
 							if (pathBytes.wouldExceed(nextBytes)) {
 								throw std::runtime_error(
@@ -13252,7 +13538,7 @@ namespace graph::query::execution {
 							const size_t propertyCount = checkedSizeAdd(
 									properties.size(), static_cast<size_t>(!hasType) + static_cast<size_t>(!hasId),
 									"logical-plan NamedPath Property count overflowed");
-							if (propertyCount > state.bounds.maximum_property_entries) {
+							if (propertyCount > state.shared.bounds.maximum_property_entries) {
 								throw std::runtime_error(
 										"logical-plan NamedPath exceeded the configured Property bound");
 							}
@@ -13305,20 +13591,20 @@ namespace graph::query::execution {
 						row.complete_entity_property_cache.erase(namedPath.getPathVariable());
 						return visitor(std::move(row));
 					};
-					if (!state.allow_cross_row_entity_batches) {
+					if (!state.shared.allow_cross_row_entity_batches) {
 						return visitOperator(requireOnlyChild(namedPath), state, [&](LogicalPlanReadRow row) {
 							return processNamedPathRow(std::move(row),
-													   MaterializedByteReservation(&state.materialized_budget));
+													   MaterializedByteReservation(&state.shared.materialized_budget));
 						});
 					}
-					const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows);
+					const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_rows);
 					if (batchCapacity == 0U) {
 						throw std::runtime_error("logical-plan NamedPath has no positive batch capacity");
 					}
 					BoundedBatch<LogicalPlanReadRow> rows(
-							batchCapacity, state.bounds.maximum_materialized_bytes,
-							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.context); },
-							&state.materialized_budget);
+							batchCapacity, state.shared.bounds.maximum_materialized_bytes,
+							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
+							&state.shared.materialized_budget);
 					rows.reserve(batchCapacity);
 					const auto flushNamedPathRows = [&]() {
 						if (rows.empty()) {
@@ -13358,19 +13644,19 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan variable-length Traversal has an unknown direction");
 					}
 					int maximumHops = traversal.getMaxHops();
-					if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
-						if (*state.context->maxVarLengthDepth < 0) {
+					if (state.shared.context != nullptr && state.shared.context->maxVarLengthDepth.has_value()) {
+						if (*state.shared.context->maxVarLengthDepth < 0) {
 							throw std::invalid_argument(
 									"logical-plan variable-length Traversal has a negative query depth bound");
 						}
-						maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
+						maximumHops = std::min(maximumHops, *state.shared.context->maxVarLengthDepth);
 					}
-					if (static_cast<uint64_t>(maximumHops) > state.bounds.maximum_node_records) {
+					if (static_cast<uint64_t>(maximumHops) > state.shared.bounds.maximum_node_records) {
 						throw std::runtime_error(
 								"logical-plan variable-length Traversal exceeds its configured depth bound");
 					}
 					if (maximumHops != 0 &&
-						state.bounds.maximum_edges_per_node >
+						state.shared.bounds.maximum_edges_per_node >
 								std::numeric_limits<size_t>::max() / static_cast<size_t>(maximumHops)) {
 						throw std::overflow_error("logical-plan variable-length Traversal edge budget overflowed");
 					}
@@ -13380,7 +13666,7 @@ namespace graph::query::execution {
 						static_cast<void>(expected);
 						if (key.empty())
 							throw std::invalid_argument("logical-plan Property predicate has an empty key");
-						const auto token = state.snapshot.findPropertyToken(key);
+						const auto token = state.shared.snapshot.findPropertyToken(key);
 						if (!token) {
 							targetReadShape.all_properties = true;
 						} else {
@@ -13398,14 +13684,14 @@ namespace graph::query::execution {
 					// token. Missing and stored NULL both fail non-null equality predicates.
 					// Nullable values additionally require a cheap presence probe.
 					const bool useNamedPredicateColumns = targetReadShape.all_properties &&
-						state.snapshot.supportsPropertyReadAdmission() &&
-						(state.snapshot.supportsPropertyPresenceProbes() ||
+						state.shared.snapshot.supportsPropertyReadAdmission() &&
+						(state.shared.snapshot.supportsPropertyPresenceProbes() ||
 						 !std::ranges::any_of(traversal.getTargetProperties(),
 							[](const auto &predicate) { return isNull(predicate.second); }));
 					const auto readNamedPredicateNodes = [&](const std::vector<uint64_t> &ids,
 						MaterializedByteReservation &retainedTargets) {
 						std::vector<std::string_view> keys;
-						MaterializedByteReservation columnsBytes(&state.materialized_budget);
+						MaterializedByteReservation columnsBytes(&state.shared.materialized_budget);
 						columnsBytes.set(checkedSizeMul(traversal.getTargetProperties().size(), sizeof(std::string_view),
 							"traversal named key slots overflowed"));
 						keys.reserve(traversal.getTargetProperties().size());
@@ -13413,19 +13699,19 @@ namespace graph::query::execution {
 							static_cast<void>(expected);
 							if (std::ranges::find(keys, key) == keys.end()) keys.push_back(key);
 						}
-						if (keys.size() > state.bounds.maximum_property_entries)
+						if (keys.size() > state.shared.bounds.maximum_property_entries)
 							throw std::runtime_error("traversal named columns exceeded their Property bound");
 						auto nodes = readNodesShapedSortedBudgeted(state, ids,
 							{.include_labels = targetReadShape.include_labels}, &retainedTargets);
 						if (nodes.size() != ids.size()) throw std::runtime_error("traversal named targets changed cardinality");
-						retainShapedBatchBytes(nodes, retainedTargets, state.context);
+						retainShapedBatchBytes(nodes, retainedTargets, state.shared.context);
 						const size_t frames = checkedSizeAdd(checkedSizeMul(keys.capacity(), sizeof(std::string_view),
 							"traversal named key capacity overflowed"), checkedSizeMul(keys.size(),
 								checkedSizeAdd(sizeof(std::vector<PropertyValue>), checkedSizeMul(ids.size(), sizeof(PropertyValue),
 									"traversal named column slots overflowed"), "traversal named column frames overflowed"),
 								"traversal named column frames overflowed"), "traversal named frames overflowed");
 						columnsBytes.set(frames);
-						auto columns = state.snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keys, [&](size_t bytes) {
+						auto columns = state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(ids, keys, [&](size_t bytes) {
 							checkGuard(state);
 							columnsBytes.set(checkedSizeAdd(columnsBytes.bytes(), bytes, "traversal named source overflowed"));
 						});
@@ -13433,7 +13719,7 @@ namespace graph::query::execution {
 						for (const auto &column: columns)
 							if (column.size() != ids.size()) throw std::runtime_error("traversal named column changed row count");
 						columnsBytes.set(checkedSizeAdd(keys.capacity() * sizeof(std::string_view),
-							propertyColumnBytes(columns, keys, "traversal named columns overflowed", state.context),
+							propertyColumnBytes(columns, keys, "traversal named columns overflowed", state.shared.context),
 							"traversal named columns overflowed"));
 						for (size_t column = 0U; column < keys.size(); ++column) for (size_t row = 0U; row < ids.size(); ++row) {
 							checkGuard(state);
@@ -13443,7 +13729,7 @@ namespace graph::query::execution {
 								const bool nullable = std::ranges::any_of(traversal.getTargetProperties(),
 									[&](const auto &predicate) { return predicate.first == keys[column] && isNull(predicate.second); });
 								if (!nullable) continue;
-								const auto present = state.snapshot.nodePropertyExists(ids[row], keys[column]);
+								const auto present = state.shared.snapshot.nodePropertyExists(ids[row], keys[column]);
 								if (!present) throw std::runtime_error("traversal Property presence probe is unavailable");
 								if (!*present) continue;
 							}
@@ -13453,7 +13739,7 @@ namespace graph::query::execution {
 								checkedSizeAdd(payload, sizeof(storage::LogicalGraphPropertyEntry) + keys[column].size(),
 									"traversal named entry overflowed"), "traversal named handoff overflowed"));
 							nodes[row].properties.push_back({std::string(keys[column]), std::move(columns[column][row])});
-							retainShapedBatchBytes(nodes, retainedTargets, state.context);
+							retainShapedBatchBytes(nodes, retainedTargets, state.shared.context);
 						}
 						return nodes;
 					};
@@ -13463,16 +13749,16 @@ namespace graph::query::execution {
 							auto nodes = readNamedPredicateNodes(std::vector<uint64_t>{id}, retainedTarget);
 							return std::move(nodes.front());
 						}
-						auto node = state.snapshot.readNodeShaped(id, targetReadShape);
+						auto node = state.shared.snapshot.readNodeShaped(id, targetReadShape);
 						validateNode(node, state);
 						if (node.node_id != id)
 							throw std::runtime_error("logical graph traversal changed target identity");
-						if (node.properties.size() > state.bounds.maximum_property_entries ||
-							logicalNodeCacheBytes(node, state.context) > state.bounds.maximum_materialized_bytes) {
+						if (node.properties.size() > state.shared.bounds.maximum_property_entries ||
+							logicalNodeCacheBytes(node, state.shared.context) > state.shared.bounds.maximum_materialized_bytes) {
 							throw std::runtime_error(
 									"logical-plan traversal predicate exceeded its materialized bound");
 						}
-						const size_t targetBytes = logicalNodeCacheBytes(node, state.context);
+						const size_t targetBytes = logicalNodeCacheBytes(node, state.shared.context);
 						if (retainedTarget.wouldExceed(targetBytes)) {
 							throw std::runtime_error(
 									"logical-plan traversal predicate target exceeded its shared byte bound");
@@ -13483,7 +13769,7 @@ namespace graph::query::execution {
 					const auto readPredicateNodes = [&](const std::vector<uint64_t> &ids,
 														MaterializedByteReservation &retainedTargets) {
 						checkGuard(state);
-						if (ids.size() > state.bounds.maximum_node_records) {
+						if (ids.size() > state.shared.bounds.maximum_node_records) {
 							throw std::runtime_error("logical-plan traversal predicate batch exceeded its Node bound");
 						}
 						if (useNamedPredicateColumns && !ids.empty()) return readNamedPredicateNodes(ids, retainedTargets);
@@ -13501,58 +13787,58 @@ namespace graph::query::execution {
 							if (nodes[index].node_id != ids[index]) {
 								throw std::runtime_error("logical graph traversal changed target batch identity");
 							}
-							bytes = checkedSizeAdd(bytes, logicalNodeCacheBytes(nodes[index], state.context),
+							bytes = checkedSizeAdd(bytes, logicalNodeCacheBytes(nodes[index], state.shared.context),
 												   "logical-plan traversal predicate batch size overflowed");
-							if (nodes[index].properties.size() > state.bounds.maximum_property_entries ||
-								bytes > state.bounds.maximum_materialized_bytes) {
+							if (nodes[index].properties.size() > state.shared.bounds.maximum_property_entries ||
+								bytes > state.shared.bounds.maximum_materialized_bytes) {
 								throw std::runtime_error(
 										"logical-plan traversal predicate batch exceeded its materialized bound");
 							}
 						}
-						retainShapedBatchBytes(nodes, retainedTargets, state.context);
+						retainShapedBatchBytes(nodes, retainedTargets, state.shared.context);
 						return nodes;
 					};
 					const bool batchPredicateTargets =
-							state.allow_cross_row_entity_batches &&
+							state.shared.allow_cross_row_entity_batches &&
 							(!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty());
 					const size_t maximumEdgeVisits =
 							maximumHops == 0 ? 0U
-											 : state.bounds.maximum_edges_per_node * static_cast<size_t>(maximumHops);
+											 : state.shared.bounds.maximum_edges_per_node * static_cast<size_t>(maximumHops);
 					// An exact target lookup can build one reverse reachability envelope for
 					// the whole operator. The forward DFS still owns path semantics; this
 					// index-driven envelope only removes branches that cannot reach a target.
 					bool reversePruningEnabled = false;
 					std::unordered_map<uint64_t, int> reverseDistance;
-					MaterializedByteReservation reverseEnvelopeBytes(&state.materialized_budget);
-					if (state.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
+					MaterializedByteReservation reverseEnvelopeBytes(&state.shared.materialized_budget);
+					if (state.shared.snapshot.supportsNativeBatchAdjacentEdgeRefs() &&
 						!traversal.getTargetProperties().empty()) {
 						// Reverse pruning needs only seed IDs. Native candidates already validate
 						// the target predicates; avoid hydrating unrelated target Properties.
 						const auto readCandidateTargets = [&]() -> std::optional<std::vector<storage::LogicalGraphNode>> {
-							if (!state.snapshot.supportsNativeExactNodeCandidates()) return std::nullopt;
+							if (!state.shared.snapshot.supportsNativeExactNodeCandidates()) return std::nullopt;
 							std::vector<storage::LogicalGraphNode> targets;
-							MaterializedByteReservation targetSlots(&state.materialized_budget);
+							MaterializedByteReservation targetSlots(&state.shared.materialized_budget);
 							bool verified = true;
-							const size_t sourceBytes = std::min(state.bounds.maximum_candidate_bytes,
-									std::max<size_t>(1U, state.materialized_budget.available() / 2U));
-							const auto streamed = state.snapshot.visitNodeCandidatesByExactProperties(
+							const size_t sourceBytes = std::min(state.shared.bounds.maximum_candidate_bytes,
+									std::max<size_t>(1U, state.shared.materialized_budget.available() / 2U));
+							const auto streamed = state.shared.snapshot.visitNodeCandidatesByExactProperties(
 									traversal.getTargetLabels(), traversal.getTargetProperties(),
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries, sourceBytes,
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries, sourceBytes,
 									[&](const storage::IndexCandidateBatch &batch) {
 										checkGuard(state);
-										if (batch.snapshot_generation == 0U || state.snapshot.nativeSnapshotGeneration() != batch.snapshot_generation)
+										if (batch.snapshot_generation == 0U || state.shared.snapshot.nativeSnapshotGeneration() != batch.snapshot_generation)
 											throw std::runtime_error("reverse target candidates do not belong to the pinned snapshot");
 										if (!batch.exact_match_verified || !batch.predicates_verified || !batch.label_scope_verified) { verified = false; return false; }
-										const size_t bytes = logicalIndexCandidateBatchBytes(batch, state.context);
+										const size_t bytes = logicalIndexCandidateBatchBytes(batch, state.shared.context);
 										if (bytes > sourceBytes) throw std::runtime_error("reverse target candidate batch exceeded its byte bound");
-										MaterializedByteReservation candidateSlots(&state.materialized_budget);
+										MaterializedByteReservation candidateSlots(&state.shared.materialized_budget);
 										candidateSlots.set(bytes);
-										if (batch.candidates.size() > state.bounds.maximum_node_records - targets.size())
+										if (batch.candidates.size() > state.shared.bounds.maximum_node_records - targets.size())
 											throw std::runtime_error("reverse target candidates exceeded the Node bound");
 										const size_t required = targets.size() + batch.candidates.size();
 										if (required > targets.capacity()) {
-											const size_t grown = targets.capacity() > state.bounds.maximum_node_records / 2U
-													? state.bounds.maximum_node_records : targets.capacity() * 2U;
+											const size_t grown = targets.capacity() > state.shared.bounds.maximum_node_records / 2U
+													? state.shared.bounds.maximum_node_records : targets.capacity() * 2U;
 											const size_t capacity = std::max(required, grown);
 											targetSlots.set(checkedSizeMul(checkedSizeAdd(targets.capacity(), capacity,
 													"reverse target capacity overflowed"), sizeof(storage::LogicalGraphNode), "reverse target slots overflowed"));
@@ -13573,13 +13859,13 @@ namespace graph::query::execution {
 						};
 						auto targetNodes = readCandidateTargets();
 						if (!targetNodes.has_value()) {
-							targetNodes = state.snapshot.findNodesByExactProperties(
+							targetNodes = state.shared.snapshot.findNodesByExactProperties(
 									traversal.getTargetLabels(), traversal.getTargetProperties(),
-									state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+									state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_property_entries);
 						}
 						if (targetNodes.has_value()) {
 							reversePruningEnabled = true;
-							if (targetNodes->size() > state.bounds.maximum_node_records) {
+							if (targetNodes->size() > state.shared.bounds.maximum_node_records) {
 								throw std::runtime_error(
 										"logical graph exact target lookup exceeded the variable-length Node bound");
 							}
@@ -13588,7 +13874,7 @@ namespace graph::query::execution {
 												   "logical-plan reverse reachability target storage overflowed");
 							for (const storage::LogicalGraphNode &target: *targetNodes) {
 								targetBytes =
-										checkedSizeAdd(targetBytes, logicalNodeCacheBytes(target, state.context),
+										checkedSizeAdd(targetBytes, logicalNodeCacheBytes(target, state.shared.context),
 													   "logical-plan reverse reachability target storage overflowed");
 							}
 							const auto reverseMapBytes = [](size_t entries) {
@@ -13630,32 +13916,32 @@ namespace graph::query::execution {
 							const std::optional<uint64_t> reverseTypeToken =
 									traversal.getEdgeType().empty()
 											? std::nullopt
-											: state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+											: state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 							size_t reverseEdgeVisits = 0U;
 							const auto reverseDirection = [&](const std::span<const uint64_t> currentFrontier,
 															  const storage::LogicalGraphReadDirection
 																	  adjacencyDirection,
 															  std::vector<uint64_t> &nextFrontier) {
-								if (reverseEdgeVisits == state.bounds.maximum_edge_records) {
+								if (reverseEdgeVisits == state.shared.bounds.maximum_edge_records) {
 									throw std::runtime_error(
 											"logical-plan reverse reachability exceeded its Edge bound");
 								}
-								const size_t remaining = state.bounds.maximum_edge_records - reverseEdgeVisits;
+								const size_t remaining = state.shared.bounds.maximum_edge_records - reverseEdgeVisits;
 								const size_t edgeVisitBound = checkedSizeAdd(
 										remaining, 1U, "logical-plan reverse reachability Edge bound overflowed");
-								state.snapshot.visitAdjacentEdgeRefsForNodes(
+								state.shared.snapshot.visitAdjacentEdgeRefsForNodes(
 										currentFrontier, adjacencyDirection, edgeVisitBound,
 										[&](const storage::EntityRef &reference) {
 											checkGuard(state);
 											validateEdgeRef(reference, "logical graph reverse reachability returned an "
 																	   "invalid or non-Edge reference");
-											if (reverseEdgeVisits == state.bounds.maximum_edge_records) {
+											if (reverseEdgeVisits == state.shared.bounds.maximum_edge_records) {
 												throw std::runtime_error(
 														"logical-plan reverse reachability exceeded its Edge bound");
 											}
 											++reverseEdgeVisits;
 											incrementBounded(
-													state.stats.edges_scanned,
+													state.task.stats.edges_scanned,
 													"logical-plan reverse reachability Edge counter overflowed");
 											if (reverseTypeToken.has_value() &&
 												reference.type_token != *reverseTypeToken) {
@@ -13772,7 +14058,7 @@ namespace graph::query::execution {
 						const bool sourceNeedsPredicate =
 								traversal.getMinHops() == 0 &&
 								(!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty());
-						MaterializedByteReservation sourcePredicateBytes(&state.materialized_budget);
+						MaterializedByteReservation sourcePredicateBytes(&state.shared.materialized_budget);
 						const storage::LogicalGraphNode source =
 								sourceNeedsPredicate ? readPredicateNode(sourceId, sourcePredicateBytes)
 													 : patternSourceIdentity(state, sourceBinding);
@@ -13799,12 +14085,12 @@ namespace graph::query::execution {
 															   &onEdge) {
 							std::optional<uint64_t> relationshipTypeToken;
 							const bool useNativeAdjacencyReferences =
-									state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+									state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() &&
 									(traversal.getEdgeType().empty() ||
-									 state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType()));
+									 state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType()));
 							if (useNativeAdjacencyReferences && !traversal.getEdgeType().empty()) {
 								relationshipTypeToken =
-										state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+										state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 								if (!relationshipTypeToken.has_value()) {
 									return true;
 								}
@@ -13820,8 +14106,8 @@ namespace graph::query::execution {
 										}
 										const size_t pageRecords =
 												std::min(maximumEdgeVisits - edgeVisits,
-														 state.bounds.maximum_adjacency_page_records);
-										MaterializedByteReservation referenceBytes(&state.materialized_budget);
+														 state.shared.bounds.maximum_adjacency_page_records);
+										MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 										const auto page = readReferencePageBudgeted(state, nodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 										if (page.edges.size() > pageRecords ||
 											(page.edges.empty() && page.continuation.has_value()) ||
@@ -13833,8 +14119,8 @@ namespace graph::query::execution {
 										}
 										const bool deferPageTargets = traversal.getTargetLabels().empty() &&
 																	  traversal.getTargetProperties().empty() &&
-																	  state.snapshot.supportsNodeExistenceProbes();
-										MaterializedByteReservation pageEndpointBytes(&state.materialized_budget);
+																	  state.shared.snapshot.supportsNodeExistenceProbes();
+										MaterializedByteReservation pageEndpointBytes(&state.shared.materialized_budget);
 										std::vector<uint64_t> pageEndpointIds;
 										if (deferPageTargets || batchPredicateTargets) {
 											pageEndpointBytes.set(checkedSizeMul(
@@ -13869,9 +14155,9 @@ namespace graph::query::execution {
 													pageEndpointIds.end());
 										}
 										const std::vector<bool> pageEndpointsPresent =
-												deferPageTargets ? state.snapshot.containsNodesSorted(pageEndpointIds)
+												deferPageTargets ? state.shared.snapshot.containsNodesSorted(pageEndpointIds)
 																 : std::vector<bool>{};
-										MaterializedByteReservation predicateTargetBytes(&state.materialized_budget);
+										MaterializedByteReservation predicateTargetBytes(&state.shared.materialized_budget);
 										const auto predicateTargets =
 												batchPredicateTargets
 														? readPredicateNodes(pageEndpointIds, predicateTargetBytes)
@@ -13909,7 +14195,7 @@ namespace graph::query::execution {
 																		 "variable-length Edge reference");
 											}
 											++edgeVisits;
-											incrementBounded(state.stats.edges_scanned,
+											incrementBounded(state.task.stats.edges_scanned,
 															 "logical-plan variable-length Edge counter overflowed");
 											if (direction == "both" &&
 												adjacencyDirection ==
@@ -13929,7 +14215,7 @@ namespace graph::query::execution {
 											const bool deferTargetNode = traversal.getTargetLabels().empty() &&
 																		 traversal.getTargetProperties().empty();
 											if (deferTargetNode) {
-												if (state.snapshot.supportsNodeExistenceProbes()) {
+												if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 													const auto endpoint =
 															std::ranges::lower_bound(pageEndpointIds, targetId);
 													if (endpoint == pageEndpointIds.end() || *endpoint != targetId ||
@@ -13945,7 +14231,7 @@ namespace graph::query::execution {
 													validateNodeIdentity(state, targetId);
 												}
 											}
-											MaterializedByteReservation localTargetBytes(&state.materialized_budget);
+											MaterializedByteReservation localTargetBytes(&state.shared.materialized_budget);
 											std::optional<storage::LogicalGraphNode> localTarget;
 											const storage::LogicalGraphNode &target =
 													deferTargetNode			? localTarget.emplace(
@@ -13982,12 +14268,12 @@ namespace graph::query::execution {
 									}
 									const size_t remaining = maximumEdgeVisits - edgeVisits;
 									const size_t pageRecords =
-											std::min(remaining, state.bounds.maximum_adjacency_page_records);
+											std::min(remaining, state.shared.bounds.maximum_adjacency_page_records);
 									// Variable-length traversal never binds an Edge value or reads Edge
 									// Properties. Use the topology cursor even when reference pages are
 									// unavailable; target Nodes remain materialized only when predicates
 									// require them.
-									MaterializedByteReservation topologyBytes(&state.materialized_budget);
+									MaterializedByteReservation topologyBytes(&state.shared.materialized_budget);
 									const auto page = readTopologyPageBudgeted(state, nodeId, adjacencyDirection,
 										continuation, pageRecords, topologyBytes);
 									if (page.edges.size() > pageRecords ||
@@ -13997,8 +14283,8 @@ namespace graph::query::execution {
 									}
 									const bool deferPageTargets = traversal.getTargetLabels().empty() &&
 																  traversal.getTargetProperties().empty() &&
-																  state.snapshot.supportsNodeExistenceProbes();
-									MaterializedByteReservation pageEndpointBytes(&state.materialized_budget);
+																  state.shared.snapshot.supportsNodeExistenceProbes();
+									MaterializedByteReservation pageEndpointBytes(&state.shared.materialized_budget);
 									std::vector<uint64_t> pageEndpointIds;
 									if (deferPageTargets || batchPredicateTargets) {
 										pageEndpointBytes.set(checkedSizeMul(
@@ -14029,9 +14315,9 @@ namespace graph::query::execution {
 												pageEndpointIds.end());
 									}
 									const std::vector<bool> pageEndpointsPresent =
-											deferPageTargets ? state.snapshot.containsNodesSorted(pageEndpointIds)
+											deferPageTargets ? state.shared.snapshot.containsNodesSorted(pageEndpointIds)
 															 : std::vector<bool>{};
-									MaterializedByteReservation predicateTargetBytes(&state.materialized_budget);
+									MaterializedByteReservation predicateTargetBytes(&state.shared.materialized_budget);
 									const auto predicateTargets =
 											batchPredicateTargets
 													? readPredicateNodes(pageEndpointIds, predicateTargetBytes)
@@ -14061,7 +14347,7 @@ namespace graph::query::execution {
 																	 "variable-length adjacent Edge");
 										}
 										++edgeVisits;
-										incrementBounded(state.stats.edges_scanned,
+										incrementBounded(state.task.stats.edges_scanned,
 														 "logical-plan variable-length Edge counter overflowed");
 										if (direction == "both" &&
 											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -14078,7 +14364,7 @@ namespace graph::query::execution {
 										const bool deferTargetNode = traversal.getTargetLabels().empty() &&
 																	 traversal.getTargetProperties().empty();
 										if (deferTargetNode) {
-											if (state.snapshot.supportsNodeExistenceProbes()) {
+											if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 												const auto endpoint =
 														std::ranges::lower_bound(pageEndpointIds, targetId);
 												if (endpoint == pageEndpointIds.end() || *endpoint != targetId ||
@@ -14092,7 +14378,7 @@ namespace graph::query::execution {
 												validateNodeIdentity(state, targetId);
 											}
 										}
-										MaterializedByteReservation localTargetBytes(&state.materialized_budget);
+										MaterializedByteReservation localTargetBytes(&state.shared.materialized_budget);
 										std::optional<storage::LogicalGraphNode> localTarget;
 										const storage::LogicalGraphNode &target =
 												deferTargetNode
@@ -14132,24 +14418,24 @@ namespace graph::query::execution {
 						visitPath = [&](const storage::LogicalGraphNode &node, int depth) {
 							checkGuard(state);
 							if (depth >= traversal.getMinHops() && depth <= maximumHops &&
-								nodeMatches(state.snapshot, node, traversal.getTargetLabels(),
+								nodeMatches(state.shared.snapshot, node, traversal.getTargetLabels(),
 											traversal.getTargetProperties(), state)) {
 								const bool deferredNode = !pathNodeRefs.empty() && pathNodeRefs.back().entity_id != 0U;
 								constexpr const char *outputMessage = "logical-plan path output size overflowed";
-								size_t predictedBytes = logicalReadRowBytes(row, state.context);
+								size_t predictedBytes = logicalReadRowBytes(row, state.shared.context);
 								predictedBytes = checkedSizeAdd(predictedBytes,
 									checkedSizeMul(traversal.getTargetVar().size(), 2U, outputMessage), outputMessage);
 								predictedBytes = checkedSizeAdd(predictedBytes, sizeof(LogicalPlanReadValue), outputMessage);
 								predictedBytes = checkedSizeAdd(predictedBytes,
-									deferredNode ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(node, state.context), outputMessage);
+									deferredNode ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(node, state.shared.context), outputMessage);
 								for (const auto &record : pathNodeRecords)
-									predictedBytes = checkedSizeAdd(predictedBytes, logicalNodeCacheBytes(record, state.context), outputMessage);
+									predictedBytes = checkedSizeAdd(predictedBytes, logicalNodeCacheBytes(record, state.shared.context), outputMessage);
 								for (const auto &record : pathEdgeRecords)
-									predictedBytes = checkedSizeAdd(predictedBytes, logicalEdgeCacheBytes(record, state.context), outputMessage);
+									predictedBytes = checkedSizeAdd(predictedBytes, logicalEdgeCacheBytes(record, state.shared.context), outputMessage);
 								predictedBytes = checkedSizeAdd(predictedBytes,
 									checkedSizeMul(checkedSizeAdd(pathNodeRefs.size(), pathEdgeRefs.size(), outputMessage),
 										sizeof(storage::EntityRef), outputMessage), outputMessage);
-								MaterializedByteReservation outputReservation(&state.materialized_budget);
+								MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 								outputReservation.set(predictedBytes);
 								LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
 								LogicalPlanReadValue targetValue =
@@ -14160,7 +14446,7 @@ namespace graph::query::execution {
 											traversal.getTargetVar(),
 											detail::copyLogicalReadPathGuarded(pathNodeRecords, pathEdgeRecords, pathNodeRefs,
 												pathEdgeRefs, [&] { checkGuardNow(state); }));
-									outputReservation.set(logicalReadRowBytes(expanded, state.context));
+									outputReservation.set(logicalReadRowBytes(expanded, state.shared.context));
 									bool keepGoing = true;
 									if (chargedReceiver != nullptr) {
 										keepGoing = (*chargedReceiver)(std::move(expanded), std::move(outputReservation));
@@ -14219,7 +14505,7 @@ namespace graph::query::execution {
 						// One input may produce many output rows. Keep its existing charge
 						// until expansion ends; the receiving buffer admits each new row.
 						if (inputCharge.bytes() == 0U) {
-							const size_t inputBytes = logicalReadRowBytes(input, state.context);
+							const size_t inputBytes = logicalReadRowBytes(input, state.shared.context);
 							if (inputBytes > sizeof(LogicalPlanReadRow)) {
 								// The empty row frame is stack-owned. Charge retained bindings
 								// when an upstream operator cannot transfer a row reservation.
@@ -14228,7 +14514,7 @@ namespace graph::query::execution {
 						}
 						// Literal lists live with the plan; expression results live through
 						// this invocation. Iterate either directly instead of copying the list.
-						MaterializedByteReservation evaluatedBytes(&state.materialized_budget);
+						MaterializedByteReservation evaluatedBytes(&state.shared.materialized_budget);
 						LogicalPlanReadValue evaluated;
 						std::span<const PropertyValue> values;
 						if (unwind.hasLiteralList()) {
@@ -14242,12 +14528,12 @@ namespace graph::query::execution {
 							if (const auto *parameter = dynamic_cast<const expressions::ParameterExpression *>(
 										unwind.getListExpr().get());
 								parameter != nullptr) {
-								if (state.context == nullptr) {
+								if (state.shared.context == nullptr) {
 									throw std::runtime_error(
 											"logical-plan parameter evaluation requires a QueryContext");
 								}
-								const auto found = state.context->parameters.find(parameter->getParameterName());
-								if (found == state.context->parameters.end()) {
+								const auto found = state.shared.context->parameters.find(parameter->getParameterName());
+								if (found == state.shared.context->parameters.end()) {
 									throw std::runtime_error(
 											"logical-plan read runtime could not resolve a query parameter");
 								}
@@ -14280,13 +14566,13 @@ namespace graph::query::execution {
 								values = std::span<const PropertyValue>(scalar, 1U);
 							}
 						}
-						if (values.size() > state.bounds.maximum_rows) {
+						if (values.size() > state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan UNWIND exceeded its input list bound");
 						}
 						for (const PropertyValue &value: values) {
 							checkGuard(state);
-							MaterializedByteReservation outputBytes(&state.materialized_budget);
-							outputBytes.set(checkedSizeAdd(logicalReadRowBytes(input, state.context),
+							MaterializedByteReservation outputBytes(&state.shared.materialized_budget);
+							outputBytes.set(checkedSizeAdd(logicalReadRowBytes(input, state.shared.context),
 								checkedSizeAdd(unwind.getAlias().size(), sizeof(LogicalPlanReadValue),
 									"logical-plan UNWIND output size overflowed"), "logical-plan UNWIND output size overflowed"));
 							LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(input, [&] { checkGuardNow(state); });
@@ -14295,8 +14581,8 @@ namespace graph::query::execution {
 							expanded.complete_entity_property_cache.erase(unwind.getAlias());
 							expanded.entity_metadata_cache.erase(unwind.getAlias());
 							expanded.path_cache.erase(unwind.getAlias());
-							const size_t rowBytes = logicalReadRowBytes(expanded, state.context);
-							if (rowBytes > state.bounds.maximum_materialized_bytes) {
+							const size_t rowBytes = logicalReadRowBytes(expanded, state.shared.context);
+							if (rowBytes > state.shared.bounds.maximum_materialized_bytes) {
 								throw std::runtime_error("logical-plan UNWIND exceeded its materialized byte bound");
 							}
 							bool keepGoing = true;
@@ -14314,11 +14600,11 @@ namespace graph::query::execution {
 						return true;
 					};
 					const auto emitUnwindRows = [&](LogicalPlanReadRow input) {
-						return expandRows(std::move(input), MaterializedByteReservation(&state.materialized_budget));
+						return expandRows(std::move(input), MaterializedByteReservation(&state.shared.materialized_budget));
 					};
 					const ChargedRowVisitor chargedInput = expandRows;
 					const logical::LogicalOperator &unwindChild = requireOnlyChild(unwind);
-					if (state.allow_cross_row_entity_batches && !unwind.hasLiteralList() &&
+					if (state.shared.allow_cross_row_entity_batches && !unwind.hasLiteralList() &&
 						unwind.getListExpr() != nullptr) {
 						const std::vector<const expressions::Expression *> listExpressions{unwind.getListExpr().get()};
 						if (const std::optional<bool> batched = tryVisitBatchedPropertyExpressions(
@@ -14335,7 +14621,7 @@ namespace graph::query::execution {
 				}
 				case logical::LogicalOpType::LOP_LOAD_CSV: {
 					const auto &loadCsv = dynamic_cast<const logical::LogicalLoadCsv &>(op);
-					if (state.context == nullptr) {
+					if (state.shared.context == nullptr) {
 						throw std::runtime_error(
 								"logical LOAD CSV requires an execution context with an import policy");
 					}
@@ -14352,9 +14638,9 @@ namespace graph::query::execution {
 						if (input.values.contains(loadCsv.getRowVariable())) {
 							throw std::runtime_error("logical LOAD CSV attempted to rebind its row variable");
 						}
-						const size_t inputBytes = logicalReadRowBytes(input, state.context);
-						MaterializedByteReservation retainedSource(&state.materialized_budget);
-						if (inputCharge.bytes() == 0U && inputBytes >= state.materialized_budget.available()) {
+						const size_t inputBytes = logicalReadRowBytes(input, state.shared.context);
+						MaterializedByteReservation retainedSource(&state.shared.materialized_budget);
+						if (inputCharge.bytes() == 0U && inputBytes >= state.shared.materialized_budget.available()) {
 							throw std::runtime_error("logical LOAD CSV input exhausted its materialized byte bound");
 						}
 						if (inputCharge.bytes() != 0U) {
@@ -14376,7 +14662,7 @@ namespace graph::query::execution {
 							retainedSource.set(checkedSizeAdd(inputAndUriBytes, pathBytesEstimate,
 															  "logical LOAD CSV retained size overflowed"));
 						}
-						const std::filesystem::path csvPath = resolveCsvImportFile(uri, *state.context);
+						const std::filesystem::path csvPath = resolveCsvImportFile(uri, *state.shared.context);
 						const auto &nativePath = csvPath.native();
 						const size_t pathBytes =
 								checkedSizeMul(nativePath.capacity(), sizeof(std::filesystem::path::value_type),
@@ -14393,11 +14679,11 @@ namespace graph::query::execution {
 								"logical LOAD CSV retained size overflowed");
 						retainedSource.set(retainedInputSourcePathBytes);
 						CsvReader reader(sourcePath, delimiter,
-										 CsvReaderLimits{state.context->csv_import_policy.maximum_record_bytes,
-														 state.context->csv_import_policy.maximum_columns,
-														 state.context->csv_import_policy.maximum_field_bytes,
-														 state.materialized_budget.available()},
-										 [&state] { state.context->checkGuardNow(); });
+										 CsvReaderLimits{state.shared.context->csv_import_policy.maximum_record_bytes,
+														 state.shared.context->csv_import_policy.maximum_columns,
+														 state.shared.context->csv_import_policy.maximum_field_bytes,
+														 state.shared.materialized_budget.available()},
+										 [&state] { state.shared.context->checkGuardNow(); });
 
 						std::vector<std::string> headers;
 						size_t headerBytes = 0U;
@@ -14419,11 +14705,11 @@ namespace graph::query::execution {
 												   checkedSizeMul(headers.size(), sizeof(std::string_view),
 																  "logical LOAD CSV header validation size overflowed"),
 												   "logical LOAD CSV header validation size overflowed");
-							if (validationBytes > state.materialized_budget.available()) {
+							if (validationBytes > state.shared.materialized_budget.available()) {
 								throw std::runtime_error(
 										"logical LOAD CSV header validation exceeded its materialized byte bound");
 							}
-							state.context->checkGuardNow();
+							state.shared.context->checkGuardNow();
 							std::vector<std::string_view> sortedHeaders;
 							sortedHeaders.reserve(headers.size());
 							const size_t actualValidationBytes = checkedSizeAdd(
@@ -14431,14 +14717,14 @@ namespace graph::query::execution {
 									checkedSizeMul(sortedHeaders.capacity(), sizeof(std::string_view),
 												   "logical LOAD CSV header validation capacity overflowed"),
 									"logical LOAD CSV header validation capacity overflowed");
-							if (actualValidationBytes > state.materialized_budget.available()) {
+							if (actualValidationBytes > state.shared.materialized_budget.available()) {
 								throw std::runtime_error(
 										"logical LOAD CSV header validation exceeded its materialized byte bound");
 							}
 							for (const auto &header: headers)
 								sortedHeaders.emplace_back(header);
 							std::sort(sortedHeaders.begin(), sortedHeaders.end());
-							state.context->checkGuardNow();
+							state.shared.context->checkGuardNow();
 							if (std::adjacent_find(sortedHeaders.begin(), sortedHeaders.end()) != sortedHeaders.end()) {
 								throw std::runtime_error("logical LOAD CSV has empty or duplicate header names");
 							}
@@ -14446,7 +14732,7 @@ namespace graph::query::execution {
 
 						const size_t retainedBytes = checkedSizeAdd(retainedSource.bytes(), headerBytes,
 																	"logical LOAD CSV retained size overflowed");
-						if (headerBytes >= state.materialized_budget.available()) {
+						if (headerBytes >= state.shared.materialized_budget.available()) {
 							throw std::runtime_error("logical LOAD CSV headers exhausted its materialized byte bound");
 						}
 						retainedSource.set(retainedBytes);
@@ -14456,10 +14742,10 @@ namespace graph::query::execution {
 								break;
 							// The row limit only needs an EOF probe to determine whether
 							// another row exists. Do not parse or allocate that forbidden row.
-							if (loadedRows == state.context->csv_import_policy.maximum_rows) {
+							if (loadedRows == state.shared.context->csv_import_policy.maximum_rows) {
 								throw std::runtime_error("logical LOAD CSV exceeded its row bound");
 							}
-							reader.setMaximumBufferedBytes(state.materialized_budget.available());
+							reader.setMaximumBufferedBytes(state.shared.materialized_budget.available());
 							if (!reader.hasNext())
 								break;
 							checkGuard(state);
@@ -14472,7 +14758,7 @@ namespace graph::query::execution {
 								fieldBytes = checkedSizeAdd(fieldBytes, csvStringCapacityBytes(field),
 															"logical LOAD CSV field capacity overflowed");
 							}
-							MaterializedByteReservation rowReservation(&state.materialized_budget);
+							MaterializedByteReservation rowReservation(&state.shared.materialized_budget);
 							admitReferenceResultBytes(rowReservation, fieldBytes,
 													  "logical LOAD CSV fields exceeded their materialized byte bound");
 							size_t constructionBytes = checkedSizeAdd(sizeof(PropertyValue), fieldBytes,
@@ -14500,7 +14786,7 @@ namespace graph::query::execution {
 							}
 							size_t valueBytes = sizeof(uint32_t);
 							for (size_t index = 0U; index < valueCount; ++index) {
-									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									if ((index & 255U) == 0U && state.shared.context != nullptr) state.shared.context->checkGuardNow();
 								valueBytes = checkedSizeAdd(valueBytes, sizeof(size_t),
 															"logical LOAD CSV value size overflowed");
 								valueBytes = checkedSizeAdd(valueBytes, fields[index].size(),
@@ -14547,7 +14833,7 @@ namespace graph::query::execution {
 								outputContainerBytes = checkedSizeAdd(mapNodeStorageBytes, actualBucketBytes,
 																	  "logical LOAD CSV map storage overflowed");
 								for (size_t index = 0U; index < valueCount; ++index) {
-									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									if ((index & 255U) == 0U && state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									const size_t headerCapacity = csvStringCapacityBytes(headers[index]);
 									if (headerCapacity > headers[index].size()) {
 										outputContainerBytes = checkedSizeAdd(
@@ -14562,7 +14848,7 @@ namespace graph::query::execution {
 									}
 								}
 								for (size_t index = 0U; index < headers.size() && index < fields.size(); ++index) {
-									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									if ((index & 255U) == 0U && state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									values.emplace(headers[index], PropertyValue(std::move(fields[index])));
 								}
 								rowValue = PropertyValue(std::move(values));
@@ -14585,7 +14871,7 @@ namespace graph::query::execution {
 								}
 								outputContainerBytes = actualValueSlots;
 								for (size_t index = 0U; index < valueCount; ++index) {
-									if ((index & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									if ((index & 255U) == 0U && state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									const size_t fieldCapacity = csvStringCapacityBytes(fields[index]);
 									if (fieldCapacity > fields[index].size()) {
 										outputContainerBytes = checkedSizeAdd(
@@ -14595,7 +14881,7 @@ namespace graph::query::execution {
 								}
 								size_t convertedFields = 0U;
 								for (std::string &field: fields) {
-									if ((convertedFields++ & 255U) == 0U && state.context != nullptr) state.context->checkGuardNow();
+									if ((convertedFields++ & 255U) == 0U && state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									values.emplace_back(std::move(field));
 								}
 								rowValue = PropertyValue(std::move(values));
@@ -14615,7 +14901,7 @@ namespace graph::query::execution {
 							expanded.property_cache.erase(loadCsv.getRowVariable());
 							expanded.complete_entity_property_cache.erase(loadCsv.getRowVariable());
 							expanded.entity_metadata_cache.erase(loadCsv.getRowVariable());
-							const size_t rowBytes = logicalReadRowBytes(expanded, state.context);
+							const size_t rowBytes = logicalReadRowBytes(expanded, state.shared.context);
 							admitReferenceResultBytes(rowReservation, std::max(rowBytes, outputBytes),
 													  "logical LOAD CSV exceeded its materialized byte bound");
 							// BoundedBatch requires its exact logical row charge. Preserve CSV's
@@ -14638,13 +14924,13 @@ namespace graph::query::execution {
 
 					const std::vector<logical::LogicalOperator *> children = loadCsv.getChildren();
 					if (children.empty()) {
-						return streamRows({}, MaterializedByteReservation(&state.materialized_budget));
+						return streamRows({}, MaterializedByteReservation(&state.shared.materialized_budget));
 					}
 					if (children.size() != 1U || children.front() == nullptr) {
 						throw std::invalid_argument("logical LOAD CSV has an invalid input pipeline");
 					}
 					const auto streamUnchargedRow = [&](LogicalPlanReadRow input) {
-						return streamRows(std::move(input), MaterializedByteReservation(&state.materialized_budget));
+						return streamRows(std::move(input), MaterializedByteReservation(&state.shared.materialized_budget));
 					};
 					const ChargedRowVisitor chargedStreamRows = streamRows;
 					return visitOperator(*children.front(), state, streamUnchargedRow,
@@ -14671,7 +14957,7 @@ namespace graph::query::execution {
 						}
 					}
 
-					detail::BudgetMemoryResource distinctMemory(state.materialized_budget);
+					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
 					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
 					const auto visitChild = [&](const logical::LogicalOperator &child) {
 						const auto acceptRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
@@ -14681,14 +14967,14 @@ namespace graph::query::execution {
 								if (distinctRows.contains(key)) {
 									return true;
 								}
-								if (distinctRows.size() == state.bounds.maximum_distinct_rows) {
+								if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows) {
 									throw std::runtime_error("logical-plan UNION DISTINCT exceeded its row bound");
 								}
 								distinctRows.insert(std::move(key));
 							}
 							if (chargedReceiver != nullptr) {
 								if (charge.bytes() != 0U)
-									charge.set(logicalReadRowBytes(output, state.context));
+									charge.set(logicalReadRowBytes(output, state.shared.context));
 								return (*chargedReceiver)(std::move(output), std::move(charge));
 							}
 							charge.reset();
@@ -14699,7 +14985,7 @@ namespace graph::query::execution {
 								child, state,
 								[&](LogicalPlanReadRow row) {
 									return acceptRow(std::move(row),
-													 MaterializedByteReservation(&state.materialized_budget));
+													 MaterializedByteReservation(&state.shared.materialized_budget));
 								},
 								chargedReceiver != nullptr && supportsChargedRowHandoff(child.getType()) ? &chargedInput
 																										 : nullptr);
@@ -14722,7 +15008,7 @@ namespace graph::query::execution {
 						std::vector<PropertyValue> keys;
 					};
 					const auto decoratedRowBytes = [&state](const DecoratedRow &decorated) {
-						size_t bytes = logicalReadRowBytes(decorated.row, state.context);
+						size_t bytes = logicalReadRowBytes(decorated.row, state.shared.context);
 						for (const PropertyValue &key: decorated.keys) {
 							bytes = checkedSizeAdd(bytes, retainedExpressionValueBytes(key, state),
 												   "logical-plan Sort materialization size overflowed");
@@ -14731,17 +15017,17 @@ namespace graph::query::execution {
 					};
 					// Destroy buffered key vectors before their slot reservation on
 					// cancellation or exception as well as on the normal output path.
-					MaterializedByteReservation keySlots(&state.materialized_budget);
-					MaterializedByteReservation enrichmentPayload(&state.materialized_budget);
-					BoundedBatch<DecoratedRow> rows(state.bounds.maximum_rows, state.bounds.maximum_materialized_bytes,
-													decoratedRowBytes, &state.materialized_budget);
+					MaterializedByteReservation keySlots(&state.shared.materialized_budget);
+					MaterializedByteReservation enrichmentPayload(&state.shared.materialized_budget);
+					BoundedBatch<DecoratedRow> rows(state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
+													decoratedRowBytes, &state.shared.materialized_budget);
 					// Start with one bounded batch, not the complete cardinality/byte
 					// allowance. Small grouped results must not allocate millions of
 					// unused sort slots; the vector grows for actual input rows.
-					rows.reserve(std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.bounds.maximum_rows,
-										   state.bounds.maximum_node_records}));
+					rows.reserve(std::min({DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_rows,
+										   state.shared.bounds.maximum_node_records}));
 					const auto collectChargedRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
-						if (rows.size() == state.bounds.maximum_rows) {
+						if (rows.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Sort exceeded its materialization row bound");
 						}
 						// Delay expression evaluation until we know ordering can affect the
@@ -14755,7 +15041,7 @@ namespace graph::query::execution {
 					};
 					const auto collectRow = [&](LogicalPlanReadRow row) {
 						return collectChargedRow(std::move(row),
-												 MaterializedByteReservation(&state.materialized_budget));
+												 MaterializedByteReservation(&state.shared.materialized_budget));
 					};
 					std::vector<const expressions::Expression *> sortCandidates;
 					sortCandidates.reserve(items.size());
@@ -14786,9 +15072,9 @@ namespace graph::query::execution {
 													 "logical-plan Sort key-slot size overflowed");
 						size_t keySlotBytes =
 								checkedSizeMul(rows.size(), slotsPerRow, "logical-plan Sort key-slot size overflowed");
-						if (keySlotBytes > state.bounds.maximum_materialized_bytes -
-												   std::min(rows.bytes(), state.bounds.maximum_materialized_bytes) ||
-							keySlotBytes > state.materialized_budget.available()) {
+						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
+												   std::min(rows.bytes(), state.shared.bounds.maximum_materialized_bytes) ||
+							keySlotBytes > state.shared.materialized_budget.available()) {
 							throw std::runtime_error(
 									"logical-plan Sort key slots exceeded its materialized byte bound");
 						}
@@ -14803,38 +15089,38 @@ namespace graph::query::execution {
 								checkedSizeAdd(rows.bytes(), keySlotBytes,
 									"logical-plan Sort materialization size overflowed"),
 								additionalEnrichmentBytes, "logical-plan Sort materialization size overflowed");
-							if (extraSlots > state.bounds.maximum_materialized_bytes -
-									std::min(retainedBytes, state.bounds.maximum_materialized_bytes) ||
-								extraSlots > state.materialized_budget.available()) {
+							if (extraSlots > state.shared.bounds.maximum_materialized_bytes -
+									std::min(retainedBytes, state.shared.bounds.maximum_materialized_bytes) ||
+								extraSlots > state.shared.materialized_budget.available()) {
 								throw std::runtime_error("logical-plan Sort key slots exceeded its materialized byte bound");
 							}
 							keySlotBytes = checkedSizeAdd(keySlotBytes, extraSlots,
 								"logical-plan Sort key-slot size overflowed");
 							keySlots.set(keySlotBytes);
-							size_t accountedRowBytes = logicalReadRowBytes(row.row, state.context);
+							size_t accountedRowBytes = logicalReadRowBytes(row.row, state.shared.context);
 							for (const logical::LogicalSortItem &item: items) {
 								checkGuard(state);
 								PropertyValue key = scalarValue(evaluateExpression(*item.expression, row.row, state));
 								const size_t keyBytes = retainedExpressionValueBytes(key, state);
-								const size_t currentRowBytes = logicalReadRowBytes(row.row, state.context);
+								const size_t currentRowBytes = logicalReadRowBytes(row.row, state.shared.context);
 								const size_t rowGrowth = currentRowBytes > accountedRowBytes ?
 									currentRowBytes - accountedRowBytes : 0U;
 								const size_t enrichmentBytes = checkedSizeAdd(keyBytes, rowGrowth,
 									"logical-plan Sort cache enrichment size overflowed");
 								if (enrichmentBytes >
-									state.bounds.maximum_materialized_bytes -
+									state.shared.bounds.maximum_materialized_bytes -
 											std::min(
 													checkedSizeAdd(checkedSizeAdd(rows.bytes(), keySlotBytes,
 																				  "logical-plan Sort materialization "
 																				  "size overflowed"),
 																   additionalEnrichmentBytes,
 																   "logical-plan Sort materialization size overflowed"),
-													state.bounds.maximum_materialized_bytes)) {
+													state.shared.bounds.maximum_materialized_bytes)) {
 									throw std::runtime_error(
 											"logical-plan Sort exceeded its materialization byte bound");
 								}
 								if (enrichmentBytes >
-									state.materialized_budget.available()) {
+									state.shared.materialized_budget.available()) {
 									throw std::runtime_error(
 											"logical-plan Sort keys exceeded the shared materialized byte bound");
 								}
@@ -14870,7 +15156,7 @@ namespace graph::query::execution {
 								"logical-plan Sort key-slot size overflowed");
 							std::vector<PropertyValue>().swap(charged.value.keys);
 							keySlots.set(keySlots.bytes() - releasedSlots);
-							charged.reservation.set(logicalReadRowBytes(charged.value.row, state.context));
+							charged.reservation.set(logicalReadRowBytes(charged.value.row, state.shared.context));
 							if (!(*chargedReceiver)(std::move(charged.value.row), std::move(charged.reservation))) {
 								return false;
 							}
@@ -14893,7 +15179,7 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan SKIP cannot be negative");
 					}
 					const uint64_t offset = static_cast<uint64_t>(skip.getOffset());
-					if (state.bounds.maximum_rows == 0U) {
+					if (state.shared.bounds.maximum_rows == 0U) {
 						throw std::runtime_error("logical-plan SKIP has no positive batch capacity");
 					}
 					size_t skipped = 0U;
@@ -14917,7 +15203,7 @@ namespace graph::query::execution {
 							child, state,
 							[&](LogicalPlanReadRow row) {
 								return acceptRow(std::move(row),
-												 MaterializedByteReservation(&state.materialized_budget));
+												 MaterializedByteReservation(&state.shared.materialized_budget));
 							},
 							supportsChargedRowHandoff(child.getType()) ? &chargedRow : nullptr);
 				}
@@ -14930,7 +15216,7 @@ namespace graph::query::execution {
 						return true;
 					}
 					const uint64_t maximum = static_cast<uint64_t>(limit.getLimit());
-					if (state.bounds.maximum_rows == 0U) {
+					if (state.shared.bounds.maximum_rows == 0U) {
 						throw std::runtime_error("logical-plan LIMIT has no positive batch capacity");
 					}
 					size_t delivered = 0U;
@@ -14963,7 +15249,7 @@ namespace graph::query::execution {
 							child, state,
 							[&](LogicalPlanReadRow row) {
 								return acceptRow(std::move(row),
-												 MaterializedByteReservation(&state.materialized_budget));
+												 MaterializedByteReservation(&state.shared.materialized_budget));
 							},
 							supportsChargedRowHandoff(child.getType()) ? &chargedRow : nullptr);
 					// Reaching the window exhausts its logical output even when the
@@ -14991,8 +15277,8 @@ namespace graph::query::execution {
 						const bool topologyOnly = traversal.getEdgeProperties().empty();
 						std::optional<uint64_t> relationshipTypeToken;
 						if (!traversal.getEdgeType().empty() &&
-							state.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
-							relationshipTypeToken = state.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
+							state.shared.snapshot.supportsNativeRelationshipTypeTokens(traversal.getEdgeType())) {
+							relationshipTypeToken = state.shared.snapshot.findRelationshipTypeToken(traversal.getEdgeType());
 							if (!relationshipTypeToken.has_value()) {
 								return true;
 							}
@@ -15001,7 +15287,7 @@ namespace graph::query::execution {
 						// can drive selected Edge-property predicates even when the pattern
 						// omits an Edge binding; no complete Edge object is required.
 						const bool useReferencePages =
-								state.snapshot.supportsNativeAdjacentEdgeRefScans() &&
+								state.shared.snapshot.supportsNativeAdjacentEdgeRefScans() &&
 								(traversal.getEdgeType().empty() || relationshipTypeToken.has_value());
 						std::vector<std::pair<std::string, PropertyValue>> edgePredicates;
 						edgePredicates.reserve(traversal.getEdgeProperties().size());
@@ -15027,14 +15313,14 @@ namespace graph::query::execution {
 										uint64_t target_id = 0U;
 										size_t property_ordinal = 0U;
 									};
-								MaterializedByteReservation pendingReferenceBytes(&state.materialized_budget);
+								MaterializedByteReservation pendingReferenceBytes(&state.shared.materialized_budget);
 								const size_t requestedBatchCapacity =
 										edgePredicates.empty() && traversal.getTargetProperties().empty()
 												? size_t{1U}
 												: std::max<size_t>(
 														  1U, std::min({DEFAULT_PROPERTY_BATCH_ROWS,
-																		state.bounds.maximum_adjacency_page_records,
-																		state.bounds.maximum_edges_per_node}));
+																		state.shared.bounds.maximum_adjacency_page_records,
+																		state.shared.bounds.maximum_edges_per_node}));
 								// Include the live source page, retained references and target scratch.
 								size_t bytesPerReference = 2U * sizeof(storage::EntityRef) + sizeof(TargetCandidate) +
 										sizeof(uint64_t) + 2U * sizeof(size_t);
@@ -15062,7 +15348,7 @@ namespace graph::query::execution {
 													"logical-plan adjacent target batch estimate overflowed"),
 											"logical-plan adjacent target batch estimate overflowed");
 								}
-								const size_t budgetRows = state.materialized_budget.available() / bytesPerReference;
+								const size_t budgetRows = state.shared.materialized_budget.available() / bytesPerReference;
 								const size_t batchCapacity =
 										std::min(requestedBatchCapacity, std::max<size_t>(1U, budgetRows));
 								pendingReferenceBytes.set(
@@ -15076,9 +15362,9 @@ namespace graph::query::execution {
 									if (pendingReferences.empty()) {
 										return true;
 									}
-									if (!edgePredicates.empty() && state.snapshot.supportsNodeExistenceProbes() &&
+									if (!edgePredicates.empty() && state.shared.snapshot.supportsNodeExistenceProbes() &&
 											!std::ranges::any_of(edgePredicates, [](const auto &predicate) { return isNull(predicate.second); })) {
-										detail::BudgetMemoryResource endpointMemory(state.materialized_budget);
+										detail::BudgetMemoryResource endpointMemory(state.shared.materialized_budget);
 										std::pmr::vector<uint64_t> endpointIds{&endpointMemory};
 										endpointIds.reserve(pendingReferences.size());
 										for (const auto &reference: pendingReferences) {
@@ -15086,22 +15372,22 @@ namespace graph::query::execution {
 												? reference.target_node_id : reference.source_node_id);
 										}
 										detail::sortUniqueIdsGuarded(endpointIds, [&] { checkGuardNow(state); });
-										MaterializedByteReservation presenceBytes(&state.materialized_budget);
+										MaterializedByteReservation presenceBytes(&state.shared.materialized_budget);
 										presenceBytes.set(packedBooleanBytes(endpointIds.size()));
-										const auto present = state.snapshot.containsNodesSorted(endpointIds);
+										const auto present = state.shared.snapshot.containsNodesSorted(endpointIds);
 										presenceBytes.set(packedBooleanBytes(present.capacity()));
 										if (present.size() != endpointIds.size())
 											throw std::runtime_error("logical graph backend changed adjacent endpoint cardinality");
 										if (std::ranges::any_of(present, [](bool value) { return !value; }))
 											throw std::runtime_error("logical graph backend returned an adjacent Edge with a missing endpoint");
 									}
-									MaterializedByteReservation selectionBytes(&state.materialized_budget);
+									MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
 									selectionBytes.set(SelectionVector::requiredStorageBytes(pendingReferences.size()));
 									SelectionVector selection(pendingReferences.size());
-									MaterializedByteReservation selectedPropertyBytes(&state.materialized_budget);
+									MaterializedByteReservation selectedPropertyBytes(&state.shared.materialized_budget);
 									std::vector<std::vector<PropertyValue>> selectedProperties;
 									if (!edgePredicates.empty()) {
-										MaterializedByteReservation orderingBytes(&state.materialized_budget);
+										MaterializedByteReservation orderingBytes(&state.shared.materialized_budget);
 										orderingBytes.set(checkedSizeMul(pendingReferences.size(), sizeof(size_t) + sizeof(uint64_t),
 											"logical-plan adjacent Edge ordering size overflowed"));
 										std::vector<size_t> sortedOrdinals(pendingReferences.size());
@@ -15184,14 +15470,14 @@ namespace graph::query::execution {
 												selectedPropertyBytes.set(next);
 											};
 											auto sortedColumns =
-													state.snapshot.supportsPropertyReadAdmission()
-															? state.snapshot.readEdgePropertyColumnsSortedWithAdmission(
+													state.shared.snapshot.supportsPropertyReadAdmission()
+															? state.shared.snapshot.readEdgePropertyColumnsSortedWithAdmission(
 																	  edgeIds, edgePropertyKeys, admission)
-															: state.snapshot.readEdgePropertyColumnsSorted(
+															: state.shared.snapshot.readEdgePropertyColumnsSorted(
 																	  edgeIds, edgePropertyKeys);
 											const size_t selectedEdgeBytes = propertyColumnBytes(
 													sortedColumns, edgePropertyKeys,
-													"logical-plan adjacent Edge Property batch size overflowed", state.context);
+													"logical-plan adjacent Edge Property batch size overflowed", state.shared.context);
 											const size_t retainedEdgeBytes = checkedSizeAdd(
 													fixedBytes - columnFrames, selectedEdgeBytes,
 													"logical-plan adjacent Edge Property batch size overflowed");
@@ -15230,11 +15516,11 @@ namespace graph::query::execution {
 									}
 									// Source columns and reorder scratch have left scope; retain only the moved columns.
 									selectedPropertyBytes.set(propertyColumnBytes(selectedProperties, {},
-										"logical-plan retained adjacent Property size overflowed", state.context));
+										"logical-plan retained adjacent Property size overflowed", state.shared.context));
 									// Resolve target predicates in one bounded column batch.  The
 									// previous per-reference complete read made a high-degree
 									// anchored traversal pay one Entity/Property lookup per Edge.
-									detail::BudgetMemoryResource targetScratchMemory(state.materialized_budget);
+									detail::BudgetMemoryResource targetScratchMemory(state.shared.materialized_budget);
 									std::pmr::vector<TargetCandidate> targets{&targetScratchMemory};
 									targets.reserve(pendingReferences.size());
 									for (size_t index = 0U; index < pendingReferences.size(); ++index) {
@@ -15262,13 +15548,13 @@ namespace graph::query::execution {
 										targetIds.push_back(target.target_id);
 									}
 									detail::sortUniqueIdsGuarded(targetIds, [&] {
-										if (state.context != nullptr) state.context->checkGuardNow();
+										if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									});
-									MaterializedByteReservation targetLabelsBytes(&state.materialized_budget);
+									MaterializedByteReservation targetLabelsBytes(&state.shared.materialized_budget);
 									std::vector<bool> targetLabelsMatch;
 									if (!traversal.getTargetLabels().empty()) {
 										targetLabelsBytes.set(packedBooleanBytes(targetIds.size()));
-										targetLabelsMatch = state.snapshot.readNodeLabelMatchesSorted(
+										targetLabelsMatch = state.shared.snapshot.readNodeLabelMatchesSorted(
 												targetIds, traversal.getTargetLabels());
 										targetLabelsBytes.set(packedBooleanBytes(targetLabelsMatch.capacity()));
 										if (targetLabelsMatch.size() != targetIds.size()) {
@@ -15282,11 +15568,11 @@ namespace graph::query::execution {
 									const auto &targetPredicates = traversal.getTargetProperties();
 									validateTraversalTargetProperties(traversal);
 									if (traversal.getTargetLabels().empty() && targetPredicates.empty()) {
-										if (state.snapshot.supportsNodeExistenceProbes() && edgePredicates.empty()) {
-											MaterializedByteReservation targetPresenceBytes(&state.materialized_budget);
+										if (state.shared.snapshot.supportsNodeExistenceProbes() && edgePredicates.empty()) {
+											MaterializedByteReservation targetPresenceBytes(&state.shared.materialized_budget);
 											targetPresenceBytes.set(packedBooleanBytes(targetIds.size()));
 											const std::vector<bool> present =
-													state.snapshot.containsNodesSorted(targetIds);
+													state.shared.snapshot.containsNodesSorted(targetIds);
 											targetPresenceBytes.set(packedBooleanBytes(present.capacity()));
 											if (present.size() != targetIds.size()) {
 												throw std::runtime_error(
@@ -15296,7 +15582,7 @@ namespace graph::query::execution {
 												throw std::runtime_error("logical graph backend returned an adjacent "
 																		 "Edge with a missing endpoint");
 											}
-										} else if (!state.snapshot.supportsNodeExistenceProbes()) {
+										} else if (!state.shared.snapshot.supportsNodeExistenceProbes()) {
 											for (const uint64_t targetId: targetIds) {
 												validateNodeIdentity(state, targetId);
 											}
@@ -15305,7 +15591,7 @@ namespace graph::query::execution {
 									std::pmr::vector<std::string_view> targetKeyViews{&targetScratchMemory};
 									targetKeyViews.reserve(targetPredicates.size());
 									for (const auto &[key, expected]: targetPredicates) targetKeyViews.push_back(key);
-									MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+									MaterializedByteReservation targetPropertyBytes(&state.shared.materialized_budget);
 									size_t targetKeyBytes = 0U;
 									for (const std::string_view key: targetKeyViews) {
 										targetKeyBytes = checkedSizeAdd(
@@ -15340,14 +15626,14 @@ namespace graph::query::execution {
 									};
 									auto targetColumns =
 											targetPredicates.empty() ? std::vector<std::vector<PropertyValue>>{}
-											: state.snapshot.supportsPropertyReadAdmission()
-													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+											: state.shared.snapshot.supportsPropertyReadAdmission()
+													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 															  targetIds, targetKeyViews, targetAdmission)
-													: state.snapshot.readNodePropertyColumnsSorted(targetIds,
+													: state.shared.snapshot.readNodePropertyColumnsSorted(targetIds,
 																								   targetKeyViews);
 									const size_t targetPayloadBytes = propertyColumnBytes(
 											targetColumns, targetKeyViews,
-											"logical-plan adjacent target Property batch size overflowed", state.context);
+											"logical-plan adjacent target Property batch size overflowed", state.shared.context);
 									const size_t retainedTargetBytes = checkedSizeAdd(
 											targetFixedBytes - targetFrames, targetPayloadBytes,
 											"logical-plan adjacent target Property batch size overflowed");
@@ -15392,10 +15678,10 @@ namespace graph::query::execution {
 										}
 										const storage::EntityRef &reference =
 												pendingReferences[candidate.reference_index];
-										MaterializedByteReservation expandedPropertyBytes(&state.materialized_budget);
-										expandedPropertyBytes.set(logicalReadRowBytes(row, state.context));
+										MaterializedByteReservation expandedPropertyBytes(&state.shared.materialized_budget);
+										expandedPropertyBytes.set(logicalReadRowBytes(row, state.shared.context));
 										LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
-										expandedPropertyBytes.set(logicalReadRowBytes(expanded, state.context));
+										expandedPropertyBytes.set(logicalReadRowBytes(expanded, state.shared.context));
 										if (!traversal.getEdgeVar().empty() &&
 											!bindValue(expanded, traversal.getEdgeVar(), reference)) {
 											continue;
@@ -15432,13 +15718,13 @@ namespace graph::query::execution {
 									return true;
 								};
 								for (;;) {
-									const size_t remaining = state.bounds.maximum_edges_per_node - sourceEdges;
+									const size_t remaining = state.shared.bounds.maximum_edges_per_node - sourceEdges;
 									if (remaining == 0U) {
 										return true;
 									}
 									const size_t pageRecords =
-											std::min(remaining, state.bounds.maximum_adjacency_page_records);
-									MaterializedByteReservation referenceBytes(&state.materialized_budget);
+											std::min(remaining, state.shared.bounds.maximum_adjacency_page_records);
+									MaterializedByteReservation referenceBytes(&state.shared.materialized_budget);
 									const auto page = readReferencePageBudgeted(state, sourceNodeId, adjacencyDirection, continuation, pageRecords, referenceBytes);
 									if (page.edges.size() > pageRecords ||
 										(page.edges.empty() && page.continuation.has_value()) ||
@@ -15468,7 +15754,7 @@ namespace graph::query::execution {
 										}
 										incrementBounded(sourceEdges,
 														 "logical-plan Traversal per-Node Edge counter overflowed");
-										incrementBounded(state.stats.edges_scanned,
+										incrementBounded(state.task.stats.edges_scanned,
 														 "logical-plan read runtime Edge counter overflowed");
 										if (direction == "both" &&
 											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -15501,15 +15787,15 @@ namespace graph::query::execution {
 								}
 							}
 							for (;;) {
-								const size_t remaining = state.bounds.maximum_edges_per_node - sourceEdges;
+								const size_t remaining = state.shared.bounds.maximum_edges_per_node - sourceEdges;
 								if (remaining == 0U) { // ZYX_COV_EXCL_LINE: a full adjacency bound returns immediately
 													   // after the preceding page.
 									return true;
 								}
 								const size_t pageRecords =
-										std::min(remaining, state.bounds.maximum_adjacency_page_records);
-								MaterializedByteReservation topologyBytes(&state.materialized_budget);
-								MaterializedByteReservation fullPageBytes(&state.materialized_budget);
+										std::min(remaining, state.shared.bounds.maximum_adjacency_page_records);
+								MaterializedByteReservation topologyBytes(&state.shared.materialized_budget);
+								MaterializedByteReservation fullPageBytes(&state.shared.materialized_budget);
 								std::optional<storage::LogicalGraphAdjacencyPage> fullPage;
 								std::optional<storage::LogicalGraphAdjacencyTopologyPage> topologyPage;
 								// Relationship types and endpoints are topology data. When a
@@ -15519,35 +15805,35 @@ namespace graph::query::execution {
 								// as the reference-page and direct traversal paths.
 								const bool prefilterWithTopology =
 										!topologyOnly &&
-										state.snapshot.supportsNativeAdjacentEdgeTopologyPages();
+										state.shared.snapshot.supportsNativeAdjacentEdgeTopologyPages();
 								if (topologyOnly || prefilterWithTopology) {
 									topologyPage = readTopologyPageBudgeted(state, sourceNodeId, adjacencyDirection,
 										continuation, pageRecords, topologyBytes);
 								} else {
-									if (state.snapshot.supportsAdjacencyReadAdmission()) {
+									if (state.shared.snapshot.supportsAdjacencyReadAdmission()) {
 										size_t propertyBytes = 0U, bufferBytes = 0U;
 										const auto updateBudget = [&] {
 											checkGuardNow(state);
 											fullPageBytes.set(checkedSizeAdd(propertyBytes, bufferBytes, "logical-plan adjacency source size overflowed"));
 										};
-										fullPage = state.snapshot.scanAdjacentEdgesWithAdmission(sourceNodeId, adjacencyDirection,
+										fullPage = state.shared.snapshot.scanAdjacentEdgesWithAdmission(sourceNodeId, adjacencyDirection,
 											continuation, pageRecords,
 											[&](size_t bytes) { propertyBytes = checkedSizeAdd(propertyBytes, bytes, "adjacency Property size overflowed"); updateBudget(); },
 											[&](size_t bytes) { bufferBytes = bytes; updateBudget(); });
-									} else if (state.snapshot.supportsAdjacencyPropertyReadAdmission()) {
-										fullPage = state.snapshot.scanAdjacentEdgesWithPropertyAdmission(sourceNodeId, adjacencyDirection,
+									} else if (state.shared.snapshot.supportsAdjacencyPropertyReadAdmission()) {
+										fullPage = state.shared.snapshot.scanAdjacentEdgesWithPropertyAdmission(sourceNodeId, adjacencyDirection,
 											continuation, pageRecords, [&](size_t bytes) {
 												checkGuardNow(state);
 												fullPageBytes.set(checkedSizeAdd(fullPageBytes.bytes(), bytes, "logical-plan adjacency source size overflowed"));
 											});
 									} else {
-										fullPage = state.snapshot.scanAdjacentEdges(sourceNodeId, adjacencyDirection, continuation, pageRecords);
+										fullPage = state.shared.snapshot.scanAdjacentEdges(sourceNodeId, adjacencyDirection, continuation, pageRecords);
 									}
 									for (const auto &edge : fullPage->edges) {
 										validateEdge(edge);
 										static_cast<void>(inlineResultPropertyBytes(edge.properties, state));
 									}
-									retainShapedBatchBytes(fullPage->edges, fullPageBytes, state.context);
+									retainShapedBatchBytes(fullPage->edges, fullPageBytes, state.shared.context);
 								}
 								const bool topologyPageSelected = topologyOnly || prefilterWithTopology;
 								const size_t pageSize =
@@ -15578,11 +15864,11 @@ namespace graph::query::execution {
 												traversal.getTargetProperties(),
 												[](const auto &predicate) { return isNull(predicate.second); });
 								const bool canBatchTargetShape =
-										state.snapshot.supportsNativeNodeRefScans() && targetNeedsRecord &&
+										state.shared.snapshot.supportsNativeNodeRefScans() && targetNeedsRecord &&
 										(traversal.getTargetLabels().empty() ||
-										 state.snapshot.supportsNodeExistenceProbes()) &&
+										 state.shared.snapshot.supportsNodeExistenceProbes()) &&
 										(traversal.getTargetProperties().empty() || targetPropertiesCanBeSelected);
-								detail::BudgetMemoryResource pageTargetMemory(state.materialized_budget);
+								detail::BudgetMemoryResource pageTargetMemory(state.shared.materialized_budget);
 								std::pmr::unordered_map<uint64_t, bool> pageTargetMatches{&pageTargetMemory};
 								// Both topology and complete adjacency pages already carry endpoint
 								// IDs. Validate their liveness once per bounded page instead of
@@ -15590,7 +15876,7 @@ namespace graph::query::execution {
 								// so memory remains bounded by the adjacency page limit and
 								// early-stop semantics stay unchanged at the visitor boundary.
 								std::pmr::unordered_map<uint64_t, bool> pageTargetPresence{&pageTargetMemory};
-								if (state.snapshot.supportsNodeExistenceProbes() &&
+								if (state.shared.snapshot.supportsNodeExistenceProbes() &&
 									traversal.getTargetLabels().empty() && traversal.getTargetProperties().empty()) {
 									// Validate the topology record before building a batch request.  The
 									// sorted existence API intentionally rejects zero IDs with
@@ -15625,11 +15911,11 @@ namespace graph::query::execution {
 										}
 									}
 									detail::sortUniqueIdsGuarded(pageTargetIds, [&] {
-										if (state.context != nullptr) state.context->checkGuardNow();
+										if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									});
-									MaterializedByteReservation presentBytes(&state.materialized_budget);
+									MaterializedByteReservation presentBytes(&state.shared.materialized_budget);
 									presentBytes.set(packedBooleanBytes(pageTargetIds.size()));
-									const std::vector<bool> present = state.snapshot.containsNodesSorted(pageTargetIds);
+									const std::vector<bool> present = state.shared.snapshot.containsNodesSorted(pageTargetIds);
 									presentBytes.set(packedBooleanBytes(present.capacity()));
 									if (present.size() != pageTargetIds.size()) {
 										throw std::runtime_error(
@@ -15662,13 +15948,13 @@ namespace graph::query::execution {
 										}
 									}
 									detail::sortUniqueIdsGuarded(targetIds, [&] {
-										if (state.context != nullptr) state.context->checkGuardNow();
+										if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 									});
-									MaterializedByteReservation labelsBytes(&state.materialized_budget);
+									MaterializedByteReservation labelsBytes(&state.shared.materialized_budget);
 									std::vector<bool> labelsMatch;
 									if (!traversal.getTargetLabels().empty()) {
 										labelsBytes.set(packedBooleanBytes(targetIds.size()));
-										labelsMatch = state.snapshot.readNodeLabelMatchesSorted(
+										labelsMatch = state.shared.snapshot.readNodeLabelMatchesSorted(
 												targetIds, traversal.getTargetLabels());
 										labelsBytes.set(packedBooleanBytes(labelsMatch.capacity()));
 										if (labelsMatch.size() != targetIds.size()) {
@@ -15687,7 +15973,7 @@ namespace graph::query::execution {
 									std::pmr::vector<std::string_view> targetKeyViews{&pageTargetMemory};
 									targetKeyViews.reserve(orderedTargetPredicates.size());
 									for (const auto &[key, expected] : orderedTargetPredicates) targetKeyViews.push_back(key);
-									MaterializedByteReservation targetPropertyBytes(&state.materialized_budget);
+									MaterializedByteReservation targetPropertyBytes(&state.shared.materialized_budget);
 									size_t targetKeyBytes = 0U;
 									for (const std::string_view key: targetKeyViews) {
 										targetKeyBytes = checkedSizeAdd(
@@ -15721,14 +16007,14 @@ namespace graph::query::execution {
 									};
 									const auto targetColumns =
 											targetKeyViews.empty() ? std::vector<std::vector<PropertyValue>>{}
-											: state.snapshot.supportsPropertyReadAdmission()
-													? state.snapshot.readNodePropertyColumnsSortedWithAdmission(
+											: state.shared.snapshot.supportsPropertyReadAdmission()
+													? state.shared.snapshot.readNodePropertyColumnsSortedWithAdmission(
 															  targetIds, targetKeyViews, targetAdmission)
-													: state.snapshot.readNodePropertyColumnsSorted(targetIds,
+													: state.shared.snapshot.readNodePropertyColumnsSorted(targetIds,
 																								   targetKeyViews);
 									const size_t targetPayloadBytes = propertyColumnBytes(
 											targetColumns, targetKeyViews,
-											"logical-plan paged target Property batch size overflowed", state.context);
+											"logical-plan paged target Property batch size overflowed", state.shared.context);
 									const size_t retainedTargetBytes =
 											checkedSizeAdd(targetFixedBytes - targetFrames, targetPayloadBytes,
 														   "logical-plan paged target Property batch size overflowed");
@@ -15767,7 +16053,7 @@ namespace graph::query::execution {
 									}
 									incrementBounded(sourceEdges,
 													 "logical-plan Traversal per-Node Edge counter overflowed");
-									incrementBounded(state.stats.edges_scanned,
+									incrementBounded(state.task.stats.edges_scanned,
 													 "logical-plan read runtime Edge counter overflowed");
 									if (direction == "both" &&
 										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
@@ -15778,7 +16064,7 @@ namespace graph::query::execution {
 										? edge.target_node_id : edge.source_node_id;
 									const auto targetMatch = pageTargetMatches.find(prefilterTargetId);
 									if (targetMatch != pageTargetMatches.end() && !targetMatch->second) return true;
-									if (!edgeMatches(state.snapshot, edge, traversal.getEdgeType(),
+									if (!edgeMatches(state.shared.snapshot, edge, traversal.getEdgeType(),
 													 traversal.getEdgeProperties(), state)) {
 										return true;
 									}
@@ -15790,12 +16076,12 @@ namespace graph::query::execution {
 									// If no target variable is requested, endpoint existence is sufficient;
 									// avoid reading and decoding a Node that can never reach the result.
 									const bool canDeferTarget = !targetNeedsRecord &&
-																state.allow_deferred_entity_refs &&
-																state.snapshot.supportsNodeExistenceProbes() &&
+																state.shared.allow_deferred_entity_refs &&
+																state.shared.snapshot.supportsNodeExistenceProbes() &&
 																(traversal.getTargetVar().empty() ||
-																 (state.snapshot.supportsNativeNodeRefScans() &&
+																 (state.shared.snapshot.supportsNativeNodeRefScans() &&
 																  existingTarget == row.values.end()));
-									MaterializedByteReservation uncachedTargetBytes(&state.materialized_budget);
+									MaterializedByteReservation uncachedTargetBytes(&state.shared.materialized_budget);
 									std::optional<storage::LogicalGraphNode> uncachedTarget;
 									const storage::LogicalGraphNode *target = nullptr;
 									if (canBatchTargetShape) {
@@ -15811,40 +16097,40 @@ namespace graph::query::execution {
 										// sufficient; do not materialize a Node that cannot be observed.
 										if (!traversal.getTargetVar().empty()) {
 											target = &readNodeCachedBorrowed(state, targetId, uncachedTarget, uncachedTargetBytes);
-											if (!nodeMatches(state.snapshot, *target, traversal.getTargetLabels(),
+											if (!nodeMatches(state.shared.snapshot, *target, traversal.getTargetLabels(),
 															 traversal.getTargetProperties(), state)) {
 												return true;
 											}
 										}
 									} else if (targetNeedsRecord || !canDeferTarget) {
 										target = &readNodeCachedBorrowed(state, targetId, uncachedTarget, uncachedTargetBytes);
-										if (!nodeMatches(state.snapshot, *target, traversal.getTargetLabels(),
+										if (!nodeMatches(state.shared.snapshot, *target, traversal.getTargetLabels(),
 														 traversal.getTargetProperties(), state)) {
 											return true;
 										}
-									} else if (state.snapshot.supportsNodeExistenceProbes()) {
+									} else if (state.shared.snapshot.supportsNodeExistenceProbes()) {
 										const auto pagePresence = pageTargetPresence.find(targetId);
 										const bool present = pagePresence != pageTargetPresence.end()
 																	 ? pagePresence->second
-																	 : state.snapshot.containsNode(targetId);
+																	 : state.shared.snapshot.containsNode(targetId);
 										if (!present) {
 											throw std::runtime_error("logical graph backend returned an adjacent Edge "
 																	 "with a missing endpoint");
 										}
 									}
-									MaterializedByteReservation outputReservation(&state.materialized_budget);
+									MaterializedByteReservation outputReservation(&state.shared.materialized_budget);
 									constexpr const char *outputMessage = "logical-plan traversal output size overflowed";
-									size_t outputBytes = logicalReadRowBytes(row, state.context);
+									size_t outputBytes = logicalReadRowBytes(row, state.shared.context);
 									const auto addBindingBytes = [&](const std::string &alias, size_t payloadBytes) {
 										outputBytes = checkedSizeAdd(outputBytes, alias.size(), outputMessage);
 										outputBytes = checkedSizeAdd(outputBytes, sizeof(LogicalPlanReadValue), outputMessage);
 										outputBytes = checkedSizeAdd(outputBytes, payloadBytes, outputMessage);
 									};
 									if (!traversal.getEdgeVar().empty()) {
-										addBindingBytes(traversal.getEdgeVar(), topologyOnly ? sizeof(storage::EntityRef) : logicalEdgeCacheBytes(edge, state.context));
+										addBindingBytes(traversal.getEdgeVar(), topologyOnly ? sizeof(storage::EntityRef) : logicalEdgeCacheBytes(edge, state.shared.context));
 									}
 									if (!traversal.getTargetVar().empty()) {
-										addBindingBytes(traversal.getTargetVar(), canDeferTarget ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(*target, state.context));
+										addBindingBytes(traversal.getTargetVar(), canDeferTarget ? sizeof(storage::EntityRef) : logicalNodeCacheBytes(*target, state.shared.context));
 									}
 									outputReservation.set(outputBytes);
 									LogicalPlanReadRow expanded = detail::copyLogicalReadRowGuarded(row, [&] { checkGuardNow(state); });
@@ -15868,7 +16154,7 @@ namespace graph::query::execution {
 											return true;
 										}
 									}
-									outputReservation.set(logicalReadRowBytes(expanded, state.context));
+									outputReservation.set(logicalReadRowBytes(expanded, state.shared.context));
 									if (chargedReceiver != nullptr) {
 										return (*chargedReceiver)(std::move(expanded), std::move(outputReservation));
 									}
@@ -15892,7 +16178,7 @@ namespace graph::query::execution {
 									// topology records still pass through processEdge so counters,
 									// endpoint validation, duplicate handling, and early-stop
 									// semantics remain identical to the complete-page path.
-									detail::BudgetMemoryResource matchingIdMemory(state.materialized_budget);
+									detail::BudgetMemoryResource matchingIdMemory(state.shared.materialized_budget);
 									std::pmr::vector<uint64_t> matchingIds{&matchingIdMemory};
 									matchingIds.reserve(topologyPage->edges.size());
 									for (const storage::LogicalGraphEdgeTopology &topology: topologyPage->edges) {
@@ -15913,12 +16199,12 @@ namespace graph::query::execution {
 									std::ranges::sort(matchingIds);
 									matchingIds.erase(std::unique(matchingIds.begin(), matchingIds.end()),
 													  matchingIds.end());
-									MaterializedByteReservation matchingEdgeBytes(&state.materialized_budget);
+									MaterializedByteReservation matchingEdgeBytes(&state.shared.materialized_budget);
 									const std::vector<storage::LogicalGraphEdge> matchingEdges =
 											matchingIds.empty() ? std::vector<storage::LogicalGraphEdge>{}
 																: readEdgesShapedSortedBudgeted(
 																		  state, matchingIds, completeEdgeReadShape(), &matchingEdgeBytes);
-									retainShapedBatchBytes(matchingEdges, matchingEdgeBytes, state.context);
+									retainShapedBatchBytes(matchingEdges, matchingEdgeBytes, state.shared.context);
 									if (matchingEdges.size() != matchingIds.size()) {
 										throw std::runtime_error(
 												"logical graph backend changed typed Edge batch cardinality");
@@ -15956,7 +16242,7 @@ namespace graph::query::execution {
 									}
 								}
 								if (!pageContinuation.has_value() ||
-									sourceEdges == state.bounds.maximum_edges_per_node) {
+									sourceEdges == state.shared.bounds.maximum_edges_per_node) {
 									return true;
 								}
 								if (pageContinuation->previous_edge_id == 0U || pageContinuation->next_edge_id == 0U ||
@@ -15990,24 +16276,19 @@ namespace graph::query::execution {
 						  const ExecutionFinalizer *finalizer = nullptr, const bool allowCrossRowEntityBatches = false,
 						  const size_t residentOutputBatchBytes = 0U) {
 			validateBounds(bounds, static_cast<bool>(visitor));
-			ExecutionState state{snapshot,
-								 bounds,
-								 {},
-								 context,
-								 nullptr,
-								 allowDeferredEntityRefs,
-								 allowCrossRowEntityBatches,
-								 residentOutputBatchBytes};
+			ExecutionSharedState shared{snapshot, bounds, context, allowDeferredEntityRefs,
+				allowCrossRowEntityBatches, residentOutputBatchBytes};
+			ExecutionState state{shared, {}};
 			try {
 				static_cast<void>(visitOperator(root, state, [&](LogicalPlanReadRow row) {
-					if (state.stats.rows_emitted ==
+					if (state.task.stats.rows_emitted ==
 						bounds.maximum_rows) { // ZYX_COV_EXCL_LINE: this visitor returns false with the
 											   // final row, so its producer cannot invoke it again.
 						return false;
 					}
 					const bool continueVisitor = visitor(row, state);
-					incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
-					return continueVisitor && state.stats.rows_emitted < bounds.maximum_rows;
+					incrementBounded(state.task.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
+					return continueVisitor && state.task.stats.rows_emitted < bounds.maximum_rows;
 				}));
 				if (finalizer != nullptr) {
 					(*finalizer)(state, false);
@@ -16016,7 +16297,7 @@ namespace graph::query::execution {
 				if (finalizer != nullptr) (*finalizer)(state, true);
 				throw;
 			}
-			return state.stats;
+			return state.task.stats;
 		}
 
 		[[nodiscard]] LogicalPlanReadRuntimeStats
@@ -16130,12 +16411,13 @@ namespace graph::query::execution {
 			const QueryContext &context) const {
 		validateBounds(bounds, static_cast<bool>(visitor));
 		context.checkGuardNow();
-		ExecutionState state{snapshot, bounds, {}, &context, nullptr, false, false};
-		MaterializedByteReservation importedCacheBytes(&state.materialized_budget);
-		MaterializedByteReservation refreshedEntityBytes(&state.materialized_budget);
+		ExecutionSharedState shared{snapshot, bounds, &context, false, false};
+		ExecutionState state{shared, {}};
+		MaterializedByteReservation importedCacheBytes(&state.shared.materialized_budget);
+		MaterializedByteReservation refreshedEntityBytes(&state.shared.materialized_budget);
 		importedCacheBytes.set(logicalReadRowBytesIncluding(inputRow, [](const std::string &) { return true; }, &context, false, true));
 		LogicalPlanReadRow refreshed;
-		state.injected_row = &refreshed;
+		state.task.injected_row = &refreshed;
 		const auto checkpoint = [&] { context.checkGuardNow(); };
 		const auto invalidatedCache = [&](const std::string &alias) {
 			const auto binding = inputRow.values.find(alias);
@@ -16179,7 +16461,7 @@ namespace graph::query::execution {
 				++edgeBindingCount;
 			}
 		}
-		MaterializedByteReservation routingBytes(&state.materialized_budget);
+		MaterializedByteReservation routingBytes(&state.shared.materialized_budget);
 		routingBytes.set(checkedSizeMul(checkedSizeAdd(nodeBindingCount, edgeBindingCount,
 													   "logical-plan imported Entity routing count overflowed"),
 										sizeof(uint64_t), "logical-plan imported Entity routing size overflowed"));
@@ -16211,12 +16493,12 @@ namespace graph::query::execution {
 		const auto refreshNodeBatch = [&](const size_t offset, const size_t count) {
 			checkGuard(state);
 			const auto ids = std::span<const uint64_t>(nodeIds).subspan(offset, count);
-			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 			auto nodes = readNodesShapedSortedBudgeted(state, ids, completeNodeReadShape(), &sourceBytes);
 			context.checkGuardNow();
 			if (nodes.size() != count)
 				throw std::runtime_error("logical-plan imported Node batch changed cardinality");
-			MaterializedByteReservation consumerBytes(&state.materialized_budget);
+			MaterializedByteReservation consumerBytes(&state.shared.materialized_budget);
 			consumerBytes.set(
 					checkedSizeMul(count, sizeof(size_t), "logical-plan imported Node consumer size overflowed"));
 			std::vector<size_t> remaining(count, 0U);
@@ -16241,12 +16523,12 @@ namespace graph::query::execution {
 													  "logical-plan imported Node batch size overflowed");
 			for (const auto &node: nodes)
 				actualSourceBytes = checkedSizeAdd(actualSourceBytes,
-												   logicalNodeCacheBytes(node, state.context) - sizeof(storage::LogicalGraphNode),
+												   logicalNodeCacheBytes(node, state.shared.context) - sizeof(storage::LogicalGraphNode),
 												   "logical-plan imported Node batch size overflowed");
 			sourceBytes.set(actualSourceBytes);
 			for (size_t index = 0U; index < count; ++index) {
 				checkGuard(state);
-				const size_t payloadBytes = logicalNodeCacheBytes(nodes[index], state.context) - sizeof(storage::LogicalGraphNode);
+				const size_t payloadBytes = logicalNodeCacheBytes(nodes[index], state.shared.context) - sizeof(storage::LogicalGraphNode);
 				for (auto &[_, value]: refreshed.values) {
 					checkGuard(state);
 					auto *reference = std::get_if<storage::EntityRef>(&value);
@@ -16257,12 +16539,12 @@ namespace graph::query::execution {
 					if (last) refreshedEntityBytes.absorb(sourceBytes.splitOff(payloadBytes));
 					try {
 						refreshedEntityBytes.set(checkedSizeAdd(previousBytes,
-							logicalNodeCacheBytes(nodes[index], state.context), "logical-plan refreshed entity size overflowed"));
+							logicalNodeCacheBytes(nodes[index], state.shared.context), "logical-plan refreshed entity size overflowed"));
 						if (last) {
 							value = LogicalPlanReadValue(std::move(nodes[index]));
 						} else {
 							auto copy = detail::copyLogicalEntityGuarded(nodes[index], checkpoint);
-							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalNodeCacheBytes(copy, state.context),
+							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalNodeCacheBytes(copy, state.shared.context),
 								"logical-plan refreshed entity size overflowed"));
 							value = LogicalPlanReadValue(std::move(copy));
 						}
@@ -16293,12 +16575,12 @@ namespace graph::query::execution {
 		const auto refreshEdgeBatch = [&](const size_t offset, const size_t count) {
 			checkGuard(state);
 			const auto ids = std::span<const uint64_t>(edgeIds).subspan(offset, count);
-			MaterializedByteReservation sourceBytes(&state.materialized_budget);
+			MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
 			auto edges = readEdgesShapedSortedBudgeted(state, ids, completeEdgeReadShape(), &sourceBytes);
 			context.checkGuardNow();
 			if (edges.size() != count)
 				throw std::runtime_error("logical-plan imported Edge batch changed cardinality");
-			MaterializedByteReservation consumerBytes(&state.materialized_budget);
+			MaterializedByteReservation consumerBytes(&state.shared.materialized_budget);
 			consumerBytes.set(
 					checkedSizeMul(count, sizeof(size_t), "logical-plan imported Edge consumer size overflowed"));
 			std::vector<size_t> remaining(count, 0U);
@@ -16323,12 +16605,12 @@ namespace graph::query::execution {
 													  "logical-plan imported Edge batch size overflowed");
 			for (const auto &edge: edges)
 				actualSourceBytes = checkedSizeAdd(actualSourceBytes,
-												   logicalEdgeCacheBytes(edge, state.context) - sizeof(storage::LogicalGraphEdge),
+												   logicalEdgeCacheBytes(edge, state.shared.context) - sizeof(storage::LogicalGraphEdge),
 												   "logical-plan imported Edge batch size overflowed");
 			sourceBytes.set(actualSourceBytes);
 			for (size_t index = 0U; index < count; ++index) {
 				checkGuard(state);
-				const size_t payloadBytes = logicalEdgeCacheBytes(edges[index], state.context) - sizeof(storage::LogicalGraphEdge);
+				const size_t payloadBytes = logicalEdgeCacheBytes(edges[index], state.shared.context) - sizeof(storage::LogicalGraphEdge);
 				for (auto &[_, value]: refreshed.values) {
 					checkGuard(state);
 					auto *reference = std::get_if<storage::EntityRef>(&value);
@@ -16339,12 +16621,12 @@ namespace graph::query::execution {
 					if (last) refreshedEntityBytes.absorb(sourceBytes.splitOff(payloadBytes));
 					try {
 						refreshedEntityBytes.set(checkedSizeAdd(previousBytes,
-							logicalEdgeCacheBytes(edges[index], state.context), "logical-plan refreshed entity size overflowed"));
+							logicalEdgeCacheBytes(edges[index], state.shared.context), "logical-plan refreshed entity size overflowed"));
 						if (last) {
 							value = LogicalPlanReadValue(std::move(edges[index]));
 						} else {
 							auto copy = detail::copyLogicalEntityGuarded(edges[index], checkpoint);
-							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(copy, state.context),
+							refreshedEntityBytes.set(checkedSizeAdd(previousBytes, logicalEdgeCacheBytes(copy, state.shared.context),
 								"logical-plan refreshed entity size overflowed"));
 							value = LogicalPlanReadValue(std::move(copy));
 						}
@@ -16373,7 +16655,7 @@ namespace graph::query::execution {
 			}
 		};
 		const size_t nodeFrameCapacity =
-				std::max<size_t>(1U, state.materialized_budget.available() / sizeof(storage::LogicalGraphNode));
+				std::max<size_t>(1U, state.shared.materialized_budget.available() / sizeof(storage::LogicalGraphNode));
 		const size_t nodeBatchCapacity =
 				std::min({bounds.maximum_node_records, DEFAULT_PROPERTY_BATCH_ROWS, nodeFrameCapacity});
 		for (size_t offset = 0U; offset < nodeIds.size(); offset += nodeBatchCapacity) {
@@ -16381,7 +16663,7 @@ namespace graph::query::execution {
 			refreshNodes(offset, std::min(nodeBatchCapacity, nodeIds.size() - offset));
 		}
 		const size_t edgeFrameCapacity =
-				std::max<size_t>(1U, state.materialized_budget.available() / sizeof(storage::LogicalGraphEdge));
+				std::max<size_t>(1U, state.shared.materialized_budget.available() / sizeof(storage::LogicalGraphEdge));
 		const size_t edgeBatchCapacity =
 				std::min({bounds.maximum_edge_records, DEFAULT_PROPERTY_BATCH_ROWS, edgeFrameCapacity});
 		for (size_t offset = 0U; offset < edgeIds.size(); offset += edgeBatchCapacity) {
@@ -16393,10 +16675,10 @@ namespace graph::query::execution {
 		std::vector<uint64_t>().swap(edgeIds);
 		context.checkGuardNow();
 		const bool completed = visitOperator(root, state, [&](LogicalPlanReadRow row) {
-			if (state.stats.rows_emitted == bounds.maximum_rows) {
+			if (state.task.stats.rows_emitted == bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan read runtime exceeded its row bound");
 			}
-			incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
+			incrementBounded(state.task.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
 			materializeRowEntityRefs(row, state);
 			enforceMaterializedRowBound(row, state);
 			return invokeOutputVisitorChecked(state, [&] { return visitor(row); });
@@ -16404,7 +16686,7 @@ namespace graph::query::execution {
 		if (!completed) {
 			throw std::runtime_error("logical-plan read runtime input-row execution was stopped by its visitor");
 		}
-		return state.stats;
+		return state.task.stats;
 	}
 
 	LogicalPlanReadValue LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
@@ -16413,7 +16695,8 @@ namespace graph::query::execution {
 		// Resolving an uncached Property collection touches durable storage, so
 		// expression-only evaluation enforces the same finite read limits as a plan.
 		validateBounds(bounds, true);
-		ExecutionState state{snapshot, bounds, {}, &context, nullptr, false, false};
+		ExecutionSharedState shared{snapshot, bounds, &context, false, false};
+		ExecutionState state{shared, {}};
 		checkGuard(state);
 		return evaluateExpression(expression, row, state);
 	}

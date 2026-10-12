@@ -161,6 +161,45 @@ TEST_F(SumAccumulatorTest, RejectsNonNumericValues) {
 	EXPECT_THROW(acc->update(PropertyValue(true)), std::invalid_argument);
 }
 
+TEST_F(SumAccumulatorTest, PositiveOverflowKeepsThePriorValueAndAllowsFurtherUpdates) {
+	SumAccumulator acc;
+	acc.update(PropertyValue(std::numeric_limits<int64_t>::max()));
+	EXPECT_THROW(acc.update(PropertyValue(int64_t{1})), std::overflow_error);
+	EXPECT_EQ(acc.getResult(), PropertyValue(std::numeric_limits<int64_t>::max()));
+	acc.update(PropertyValue(int64_t{-1}));
+	EXPECT_EQ(acc.getResult(), PropertyValue(std::numeric_limits<int64_t>::max() - 1));
+}
+
+TEST_F(SumAccumulatorTest, NegativeOverflowKeepsThePriorValueAndResetRestoresAnEmptyState) {
+	SumAccumulator acc;
+	acc.update(PropertyValue(std::numeric_limits<int64_t>::min()));
+	EXPECT_THROW(acc.update(PropertyValue(int64_t{-1})), std::overflow_error);
+	EXPECT_EQ(acc.getResult(), PropertyValue(std::numeric_limits<int64_t>::min()));
+	acc.reset();
+	EXPECT_EQ(acc.getResult().getType(), PropertyType::NULL_TYPE);
+	acc.update(PropertyValue(int64_t{7}));
+	EXPECT_EQ(acc.getResult(), PropertyValue(7));
+}
+
+TEST_F(SumAccumulatorTest, OppositeSignIntegerExtremesRemainExact) {
+	for (bool minimumFirst : {false, true}) {
+		SumAccumulator acc;
+		acc.update(PropertyValue(minimumFirst ? std::numeric_limits<int64_t>::min() : std::numeric_limits<int64_t>::max()));
+		acc.update(PropertyValue(minimumFirst ? std::numeric_limits<int64_t>::max() : std::numeric_limits<int64_t>::min()));
+		EXPECT_EQ(acc.getResult(), PropertyValue(int64_t{-1}));
+	}
+}
+
+TEST_F(SumAccumulatorTest, FloatingInputDoesNotSilentlyMaskIntegerOverflow) {
+	SumAccumulator acc;
+	acc.update(PropertyValue(0.5));
+	acc.update(PropertyValue(std::numeric_limits<int64_t>::max()));
+	const PropertyValue before = acc.getResult();
+	EXPECT_THROW(acc.update(PropertyValue(int64_t{1})), std::overflow_error);
+	EXPECT_EQ(acc.getResult(), before);
+	EXPECT_EQ(acc.clone()->getResult(), before);
+}
+
 // Sum clone with mixed types
 TEST_F(SumAccumulatorTest, CloneMixed) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_SUM);

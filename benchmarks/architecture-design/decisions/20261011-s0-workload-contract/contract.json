@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "status": "preregistered contract; does not prove implementation or performance acceptance",
+  "resources": {
+    "container_memory_bytes": 6442450944,
+    "query_materialization_bytes": 67108864,
+    "threads": 1,
+    "cpu_quota": 1,
+    "vm_memory_gib": 8,
+    "vm_cpus": 2,
+    "swap": "disabled beyond container memory; --memory-swap equals --memory",
+    "format": "record actual envelope/Superblock/local codec versions per binary; recreate each version from identical logical data",
+    "durability": "never disable sync; record acknowledgement boundary per engine"
+  },
+  "datasets": {
+    "training": {
+      "seed": 42,
+      "scale": "medium",
+      "nodes": 225000,
+      "edges": 860000
+    },
+    "holdout": {
+      "seed": 314159,
+      "users": 73000,
+      "posts": 87000,
+      "tags": 3000,
+      "degree": 7,
+      "selection": [
+        0.003,
+        0.37
+      ],
+      "purpose": "not used for tuning; runner extension pending"
+    },
+    "manifest": "hash every input and record schema/indexes/types; freeze operation sequence and expected state before timing"
+  },
+  "sampling": {
+    "processes": 3,
+    "warmups": 3,
+    "measurements": 10,
+    "aggregation": "median of independent process P50s; retain each process distribution and min/max P50; never pool as independent observations",
+    "tail_policy": "10-sample P95 is descriptive only; threshold decisions need targeted extended sampling",
+    "stop_rule": "if within 5 percentage points of gate or control P50 range exceeds 5 percent, add at most 2 independent processes with 100 samples; tail-sensitive steady-state requires at least 1000 observations/process; stop at 30 minutes per case; unresolved becomes inconclusive",
+    "cache_modes": [
+      "warm: three warmups; OS cache not flushed",
+      "fresh-open: open included, OS cache remains",
+      "cold: only with explicit isolated VM/cache reset evidence, never equate process restart with cold"
+    ],
+    "order": "control/current/Kuzu; current/Kuzu/control; Kuzu/control/current; profiling in separate processes"
+  },
+  "targets": {
+    "primary": [
+      "scan",
+      "aggregate",
+      "sort"
+    ],
+    "performance_gate": "at least 10 percent reproducible end-to-end P50 reduction versus frozen control",
+    "architecture_probe": "report 2x and 10x milestones without claiming they are guaranteed; record residual Kuzu ratio; no cumulative-small-gain success claim",
+    "kuzu": "same semantics/resources; unsupported N/A; entry/binding overhead disclosed"
+  },
+  "protections": {
+    "cases": [
+      "point",
+      "traversal",
+      "wide_large",
+      "write",
+      "mixed"
+    ],
+    "latency": "no stable P50/P95 regression over 5 percent outside control variation; descriptive P95 cannot alone prove protection",
+    "resources": "no memory cap increase; report RSS, charged query memory, read/write bytes, file size, retirement backlog; stable growth over 5 percent requires explicit tradeoff decision"
+  },
+  "correctness": [
+    "IDs, typed values, null versus missing, multiplicity, required order",
+    "separate validation from timing; full observed output still consumed inside timing",
+    "mutations: post-state, indexes, reopen, old snapshot, constraints, failure publication",
+    "budget/read-only/cancel/ENOSPC/crash: defined error, no partial output advertised as success, scratch cleanup"
+  ],
+  "attribution": {
+    "cases": [
+      "scan",
+      "aggregate",
+      "sort",
+      "point",
+      "traversal"
+    ],
+    "timers": [
+      "planning/cache",
+      "snapshot setup",
+      "entity/property directory resolution",
+      "page access/validation",
+      "selected-property decode",
+      "expression evaluation",
+      "row/container allocation and copy",
+      "aggregation/sort",
+      "owning output"
+    ],
+    "counters": [
+      "CPU samples",
+      "allocations/bytes",
+      "rows in/out",
+      "property owners/pages/bytes",
+      "edge record lookups",
+      "cache hits/misses",
+      "charged/peak memory"
+    ],
+    "experiments": [
+      "storage-only field read",
+      "same input through typed versus generic execution",
+      "Top-K versus full sort with identical ordering semantics",
+      "trusted adjacency candidate versus current authenticated backlookup only after protocol acceptance"
+    ],
+    "falsification": "timer nesting not summed; instrumentation separate from formal timing; mechanism improvements without end-to-end gain do not pass"
+  },
+  "cleanup": [
+    "task containers/images/volumes only; no global prune",
+    "temporary CSV/database/build copies removed by owned manifest",
+    "bounded logs/raw samples plus compressed control retained",
+    "restore temporary VM/DNS/proxy configuration"
+  ],
+  "workloads": [
+    {
+      "id": "point",
+      "family": "point",
+      "operation": "Hit/miss indexed lookup; random single property and complete entity fetch",
+      "inputs": "medium; seed 42; 1000 fixed random IDs plus 10 percent missing IDs",
+      "oracle": "Exact ID/value/type/presence; retain duplicate input IDs",
+      "timing": "warm query including consuming owning output",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "existing",
+      "entry": "retrieval and indexed profiles"
+    },
+    {
+      "id": "scan",
+      "family": "scan",
+      "operation": "Label/type scans with zero, sparse, dense and compound predicates",
+      "inputs": "medium; selectivities 0, 0.001, 0.125, 0.5, 1; 1 and 4 projected fields",
+      "oracle": "Independent generated expected ID multiset and typed values",
+      "timing": "warm scan/filter/output; no import",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "existing",
+      "entry": "scan profile; additional selectivity cases pending"
+    },
+    {
+      "id": "traversal",
+      "family": "traversal",
+      "operation": "1/2/6-hop; diamond branches; cycle intersection; self loops and parallel edges",
+      "inputs": "medium plus deterministic hub with 10000 neighbors; bounded duplicate-sensitive path cases",
+      "oracle": "Independent adjacency-list evaluator preserving paths and multiplicities",
+      "timing": "warm full result consumption",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "aggregate",
+      "family": "aggregate",
+      "operation": "DISTINCT and true country group counts; skewed and high-cardinality groups",
+      "inputs": "medium; group cardinalities 8 and 100000; 90 percent skew",
+      "oracle": "Exact typed group-key/count mapping, not number of groups",
+      "timing": "warm full aggregate output",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "existing",
+      "entry": "scan profile; skew/high cardinality and value observer pending"
+    },
+    {
+      "id": "sort",
+      "family": "sort",
+      "operation": "Full sort and ORDER BY score DESC LIMIT K",
+      "inputs": "medium; K=1,100,10000; equal scores and null/missing values",
+      "oracle": "Sorted values plus ID multiset with defined tie behavior; do not impose unspecified tie order",
+      "timing": "warm output consumption",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "existing",
+      "entry": "topk_property_sort; full sort and output observer pending"
+    },
+    {
+      "id": "parameters",
+      "family": "parameters",
+      "operation": "Same logical query with changed bound values and schema epoch",
+      "inputs": "100 fixed parameter sets; country/range/id; index create/drop between executions",
+      "oracle": "Compare cached and uncached execution exact outputs and expected invalidation",
+      "timing": "Report first planning, warm execution and invalidation separately",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "dynamic",
+      "family": "dynamic",
+      "operation": "Set/remove/type-change and enumerate heterogeneous properties",
+      "inputs": "10000 entities; 1,8,64 keys; shapes interleaved; 10000 singleton keys; integer/string/null/missing",
+      "oracle": "Reference property maps; old/new snapshot values and exact field enumeration",
+      "timing": "Read and committed mutation measured separately",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "wide-large",
+      "family": "wide_large",
+      "operation": "Random field/complete entity read and single-field update beside large payload",
+      "inputs": "1000 entities; 8/128 fields; payload 32 KiB/1 MiB; deterministic bytes",
+      "oracle": "Full typed maps and payload bytes; updated key plus all unchanged values",
+      "timing": "Read output consumption; update through durable acknowledgement separately",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "write",
+      "family": "write",
+      "operation": "Create node/edge, set/remove, unchanged set, delete; batches of 1/100/1000",
+      "inputs": "Same immutable restored database before each measured sample; identical operation sequence",
+      "oracle": "Exact post-state after reopen, indexes/constraints and snapshot visibility",
+      "timing": "Through durable acknowledgement; cloning excluded and recorded separately",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "existing",
+      "entry": "write_durable profile; remove/unchanged/batches pending"
+    },
+    {
+      "id": "mixed",
+      "family": "mixed",
+      "operation": "90 percent reads/10 percent committed field updates",
+      "inputs": "Fixed seed sequence; 1 and 4 clients; 100000 operations per round; same memory cap",
+      "oracle": "Independent committed-state model; errors/retries tracked; promised isolation tested",
+      "timing": "End-to-end operation latency including retries; no silent dropped operations",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "snapshot",
+      "family": "snapshot",
+      "operation": "Hold old snapshot across committed update/delete/reuse, then release and reclaim",
+      "inputs": "10000 updates with one snapshot pinned; repeat without pinned snapshot",
+      "oracle": "Exact old/new views and no premature reuse; reachable page integrity after reopen",
+      "timing": "Record commits, release/reclaim separately",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "maintenance",
+      "family": "maintenance",
+      "operation": "Insert/delete churn and bounded reclamation to resource plateau",
+      "inputs": "10 windows of 10000 operations; repeat data population sizes; no held snapshot",
+      "oracle": "Exact live graph and integrity; allocator/file-size counters across windows",
+      "timing": "Foreground plus explicitly accounted maintenance; no uncharged background work",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    },
+    {
+      "id": "budget",
+      "family": "budget",
+      "operation": "Sort/hash aggregation beyond materialization budget; cancel and reopen",
+      "inputs": "64 MiB default; dedicated 4 MiB sub-budget; growing rows until accounted demand exceeds limit; capped generated input",
+      "oracle": "Exact successful output or declared unsupported budget error; no partial success; scratch leak checks",
+      "timing": "Execution and cleanup; resource exhaustion/cancellation included",
+      "metrics": [
+        "process P50/P95",
+        "RSS/charged query memory",
+        "read/write bytes",
+        "file/backlog size",
+        "failures/retries"
+      ],
+      "implementation": "pending",
+      "entry": ""
+    }
+  ],
+  "execution_policy": "User update: implementation and module tests first; all performance timing and timed preflight deferred to final optimization acceptance window."
+}

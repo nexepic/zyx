@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/property/LargeValue.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 
@@ -119,6 +120,14 @@ namespace graph::storage {
 				const SelectedPropertyReadAdmission *admission = nullptr,
 				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
 		[[nodiscard]] static size_t entryCount(std::span<const std::byte> bytes);
+		// Validates the owner and complete offset/token directory without decoding
+		// values. The caller authenticates containing pages; this is not a value
+		// integrity scan. Capacity is admitted before allocating the token vector.
+		// Reports absolute requested bytes, then actual vector capacity bytes;
+		// callbacks must replace their prior charge rather than accumulate it.
+		[[nodiscard]] static std::vector<uint32_t> decodeTokens(std::span<const std::byte> bytes,
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr,
+				const CancellationCheckpoint *cancellation = nullptr);
 	};
 
 	// LargeValue contents deliberately omit the owner: the compact reference in
@@ -134,7 +143,8 @@ namespace graph::storage {
 		// only the header plus directory; entry payload bytes are not required.
 		[[nodiscard]] static std::vector<EntityPropertyLargeValueEntryLocation>
 		decodeDirectory(std::span<const std::byte> headerAndDirectory,
-				const SelectedPropertyReadAdmission *slotsAdmission = nullptr);
+				const SelectedPropertyReadAdmission *slotsAdmission = nullptr,
+				const CancellationCheckpoint *cancellation = nullptr);
 		// Decodes one complete entry range returned by decodeDirectory.
 		[[nodiscard]] static PropertyCollectionRootEntry
 		decodeEntry(std::span<const std::byte> bytes, uint32_t expectedToken);

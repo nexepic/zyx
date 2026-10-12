@@ -177,8 +177,9 @@ TEST_F(CypherASTBuilderExtractionTest, SetExtractsParenthesizedPropertyMapMergeA
 	EXPECT_EQ(clause.items[1].variable, "n");
 	EXPECT_NE(clause.items[1].expression, nullptr);
 
-	EXPECT_EQ(clause.items[2].type, graph::query::ir::SetItemType::SIT_PROPERTY);
-	EXPECT_EQ(clause.items[2].key, "age");
+	EXPECT_EQ(clause.items[2].type, graph::query::ir::SetItemType::SIT_MAP_MERGE);
+	EXPECT_TRUE(clause.items[2].key.empty());
+	EXPECT_NE(clause.items[2].expression, nullptr);
 
 	EXPECT_EQ(clause.items[3].type, graph::query::ir::SetItemType::SIT_LABEL);
 	EXPECT_EQ(clause.items[3].key, "Person");

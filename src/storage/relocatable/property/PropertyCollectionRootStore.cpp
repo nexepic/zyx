@@ -153,7 +153,9 @@ namespace graph::storage {
 
 		[[nodiscard]] LargeValuePropertyDirectory readLargeValuePropertyDirectory(
 				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference,
-				const SelectedPropertyReadAdmission *bufferAdmission = nullptr) {
+				const SelectedPropertyReadAdmission *bufferAdmission = nullptr,
+				const CancellationCheckpoint *cancellation = nullptr) {
+			if (cancellation) cancellation->check();
 			debug::PerfTrace::addValue("native_graph.read.property_large_value_directory_reads", 1);
 			LargeValueManifest manifest = store.manifest(snapshot, reference,
 					bufferAdmission ? *bufferAdmission : SelectedPropertyReadAdmission{});
@@ -184,7 +186,7 @@ namespace graph::storage {
 			const SelectedPropertyReadAdmission admitLocations = [&](size_t bytes) {
 				if (bufferAdmission) (*bufferAdmission)(checkedLargeValueBuffers(result.range_cache.retainedBytes(), checkedLargeValueBuffers(checkedLargeValueBuffers(checkedLargeValueBuffers(manifestBytes, header.capacity()), result.header_and_directory.capacity()), bytes)));
 			};
-			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory, bufferAdmission ? &admitLocations : nullptr);
+			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory, bufferAdmission ? &admitLocations : nullptr, cancellation);
 			const uint64_t payloadBytes = LittleEndianCodec::readU32(result.header_and_directory, 12U);
 			if (headerBytes + payloadBytes - directoryBytes != manifest.logical_bytes) {
 				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -677,6 +679,59 @@ namespace graph::storage {
 		const std::vector<std::byte> bytes =
 				page.read({location->page_id, location->slot_id, location->slot_generation});
 		return decodeEntityPropertyCount(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes);
+	}
+
+	std::vector<uint32_t> PropertyCollectionRootStore::readEntityPropertyTokens(
+		const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+		const SelectedPropertyReadAdmission &tokenAdmission,
+		const SelectedPropertyReadAdmission &transientAdmission, const CancellationCheckpoint *cancellation) const {
+		if (cancellation) cancellation->check();
+		if (!metadata_.ownsSnapshot(snapshot) || !key.isValid() || !tokenAdmission || !transientAdmission) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+				"Entity Property token read requires an owned snapshot, valid owner and admissions");
+		}
+		const auto location = metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		if (!location) return {};
+		const auto decode = [&](PageId pageId, PageOwnerKind ownerKind, std::span<const std::byte> bytes) {
+			if (location->key != key || location->page_id != pageId || ownerKind != PageOwnerKind::POK_PROPERTY) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+					"Entity Property token location does not resolve to its Property page");
+			}
+			if (!EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+				if (entityKeyForRoot(EntityPropertyCollectionRootCodec::decodeOwner(bytes)) != key)
+					throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property token root has another owner");
+				return EntityPropertyCollectionRootCodec::decodeTokens(bytes, &tokenAdmission, cancellation);
+			}
+			if (large_values_ == nullptr)
+				throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property token read requires a LargeValue store");
+			const auto reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			if (entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}}) != key ||
+				reference.value.kind != LargeValueKind::LVK_BYTES ||
+				reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE)
+				throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property token reference has invalid ownership or content type");
+			std::vector<uint32_t> tokens;
+			{
+				auto directory = readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value, &transientAdmission, cancellation);
+				tokenAdmission(directory.locations.size() * sizeof(uint32_t));
+				if (cancellation) cancellation->check();
+				tokens.reserve(directory.locations.size());
+				tokenAdmission(tokens.capacity() * sizeof(uint32_t));
+				if (cancellation) cancellation->check();
+				for (const auto &entry : directory.locations) {
+					if (cancellation) cancellation->check();
+					tokens.push_back(entry.key_token);
+				}
+			}
+			transientAdmission(0U);
+			return tokens;
+		};
+		if (auto pinned = pages_.readPinned(snapshot, location->page_id); pinned) {
+			return decode(pinned->page.pageId(), pinned->page.ownerKind(),
+				pinned->page.read({location->page_id, location->slot_id, location->slot_generation}));
+		}
+		const auto page = pages_.read(snapshot, location->page_id);
+		const auto bytes = page.read({location->page_id, location->slot_id, location->slot_generation});
+		return decode(page.pageId(), page.ownerKind(), bytes);
 	}
 
 	void PropertyCollectionRootStore::readEntityPropertyCountsSorted(

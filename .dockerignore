@@ -13,6 +13,7 @@ buildDir_*/
 build_release/
 build_wasm/
 build-docker/
+build_*/
 CMakeFiles/
 CMakeCache.txt
 CMakeUserPresets.json
@@ -47,5 +48,6 @@ docs/apps/docs/next-env.d.ts
 out/
 
 # Benchmark outputs are mounted at runtime.
+benchmarks/architecture-design/results/
 benchmarks/graphdb-comparison/results/*
 !benchmarks/graphdb-comparison/results/.gitkeep

@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <set>
@@ -217,27 +218,47 @@ namespace graph::storage {
 
 		[[nodiscard]] ResolvedProperties
 		resolveProperties(const std::vector<LogicalGraphWriteProperty> &properties,
-						  const std::function<std::optional<uint32_t>(std::string_view)> &resolvePropertyKey) {
-			std::vector<LogicalGraphWriteProperty> ordered = properties;
-			std::ranges::sort(ordered, {}, &LogicalGraphWriteProperty::key);
+						  const std::function<std::optional<uint32_t>(std::string_view)> &resolvePropertyKey,
+						  const std::function<void()> &checkpoint) {
+			if (checkpoint) checkpoint();
+			// Borrow only ordering descriptors; resolved entries own the sole new
+			// copy of each input value and outlive these synchronous references.
+			std::vector<const LogicalGraphWriteProperty *> ordered;
+			ordered.reserve(properties.size());
+			for (const auto &property : properties) {
+				if (checkpoint) checkpoint();
+				ordered.push_back(&property);
+			}
+			std::ranges::sort(ordered, [&](const auto *left, const auto *right) {
+				if (checkpoint) checkpoint();
+				return left->key < right->key;
+			});
 			for (size_t index = 0U; index < ordered.size(); ++index) {
-				if (ordered[index].key.empty() || (index != 0U && ordered[index - 1U].key == ordered[index].key)) {
+				if (checkpoint) checkpoint();
+				if (ordered[index]->key.empty() || (index != 0U && ordered[index - 1U]->key == ordered[index]->key)) {
 					throw std::invalid_argument(
 							"native logical graph mutation requires nonempty, unique Property keys per entity");
 				}
 			}
 			ResolvedProperties result;
 			result.entries.reserve(ordered.size());
-			for (const LogicalGraphWriteProperty &property: ordered) {
+			for (const auto *descriptor: ordered) {
+				if (checkpoint) checkpoint();
+				const LogicalGraphWriteProperty &property = *descriptor;
 				const std::optional<uint32_t> token = resolvePropertyKey(property.key);
 				if (!token.has_value() || *token == 0U) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native logical graph mutation could not resolve a Property-key Token in its snapshot");
 				}
+				if (checkpoint) checkpoint();
 				result.entries.push_back({*token, property.value});
 			}
-			std::ranges::sort(result.entries, {}, &PropertyCollectionRootEntry::key_token);
+			std::ranges::sort(result.entries, [&](const auto &left, const auto &right) {
+				if (checkpoint) checkpoint();
+				return left.key_token < right.key_token;
+			});
 			for (size_t index = 1U; index < result.entries.size(); ++index) {
+				if (checkpoint) checkpoint();
 				if (result.entries[index - 1U].key_token == result.entries[index].key_token) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native logical graph mutation resolved distinct Property keys to one Token");
@@ -251,12 +272,15 @@ namespace graph::storage {
 		// materialization below performs that work exactly once.
 		void validatePropertyKeysAndTokens(
 				const std::vector<LogicalGraphWriteProperty> &properties,
-				const std::function<std::optional<uint32_t>(std::string_view)> &resolvePropertyKey) {
+				const std::function<std::optional<uint32_t>(std::string_view)> &resolvePropertyKey,
+				const std::function<void()> &checkpoint) {
+			if (checkpoint) checkpoint();
 			std::unordered_set<std::string_view> names;
 			std::unordered_set<uint32_t> tokens;
 			names.reserve(properties.size());
 			tokens.reserve(properties.size());
 			for (const LogicalGraphWriteProperty &property: properties) {
+				if (checkpoint) checkpoint();
 				if (property.key.empty() || !names.emplace(property.key).second) {
 					throw std::invalid_argument(
 							"native logical graph mutation requires nonempty, unique Property keys per entity");
@@ -266,6 +290,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 							 "native logical graph mutation could not resolve a Property-key Token in its snapshot");
 				}
+				if (checkpoint) checkpoint();
 				if (!tokens.emplace(*token).second) {
 					fail(FormatError::FERR_INVALID_STATE,
 							 "native logical graph mutation resolved distinct Property keys to one Token");
@@ -505,7 +530,7 @@ namespace graph::storage {
 												   return resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL,
 																		 name);
 											   }),
-							 resolveProperties(request.properties, resolvePropertyKey)});
+							 resolveProperties(request.properties, resolvePropertyKey, readControl.checkpoint)});
 		}
 		// Validate each Edge before the first graph mutation consumes a durable
 		// logical-ID lease. The resolved values are intentionally transient: keeping
@@ -519,7 +544,7 @@ namespace graph::storage {
 						 "native logical graph mutation could not resolve a relationship-type Token in its snapshot");
 				}
 			}
-			validatePropertyKeysAndTokens(request.properties, resolvePropertyKey);
+			validatePropertyKeysAndTokens(request.properties, resolvePropertyKey, readControl.checkpoint);
 		}
 		// Read old states in logical-ID order so snapshot cursors can share page
 		// and directory descents across the transaction, independent of request order.
@@ -530,17 +555,17 @@ namespace graph::storage {
 		// replacements need an additional sparse override map.
 		std::unordered_map<uint64_t, ResolvedProperties> createdEdgeProperties;
 		for (const LogicalGraphPropertyMutationRequest &request: batch.property_replacements) {
-			const ResolvedProperties resolved = resolveProperties(request.properties, resolvePropertyKey);
+			ResolvedProperties resolved = resolveProperties(request.properties, resolvePropertyKey, readControl.checkpoint);
 			if (request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
 				if (request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
-					persistedNodes[request.entity.value].properties = resolved;
+					persistedNodes[request.entity.value].properties = std::move(resolved);
 				} else {
-					persistedEdges.emplace(request.entity.value, resolved);
+					persistedEdges.emplace(request.entity.value, std::move(resolved));
 				}
 			} else if (request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
-				nodes.at(static_cast<size_t>(request.entity.value)).properties = resolved;
+				nodes.at(static_cast<size_t>(request.entity.value)).properties = std::move(resolved);
 			} else {
-				createdEdgeProperties.insert_or_assign(request.entity.value, resolved);
+				createdEdgeProperties.insert_or_assign(request.entity.value, std::move(resolved));
 			}
 		}
 		for (const LogicalGraphNodeLabelMutationRequest &request: batch.node_label_replacements) {
@@ -711,7 +736,7 @@ namespace graph::storage {
 				}
 				typeToken = *resolved;
 			}
-			ResolvedProperties properties = resolveProperties(request.properties, resolvePropertyKey);
+			ResolvedProperties properties = resolveProperties(request.properties, resolvePropertyKey, readControl.checkpoint);
 			if (const auto override = createdEdgeProperties.find(ordinal); override != createdEdgeProperties.end()) {
 				properties = override->second;
 			}
@@ -733,8 +758,8 @@ namespace graph::storage {
 		}
 		for (const auto &[nodeId, mutation]: persistedNodes) {
 			const PageBackedGraphNode old = graph_.readNode(snapshot, nodeId, &oldStateReads);
-			const std::vector<uint64_t> newLabels = mutation.labels.value_or(old.label_token_ids);
-			const std::vector<PropertyCollectionRootEntry> newProperties =
+			const std::vector<uint64_t> &newLabels = mutation.labels.has_value() ? *mutation.labels : old.label_token_ids;
+			const std::vector<PropertyCollectionRootEntry> &newProperties =
 					mutation.properties.has_value() ? mutation.properties->entries : old.properties;
 			if (newLabels == old.label_token_ids && newProperties == old.properties) {
 				continue;
@@ -742,14 +767,17 @@ namespace graph::storage {
 			const PropertyCollectionRoot oldRoot = nodeRoot(nodeId, old.properties);
 			const PropertyCollectionRoot newRoot = nodeRoot(nodeId, newProperties);
 			stageVectorSemanticDelta(nodeId, old.label_token_ids, &oldRoot, newLabels, &newRoot);
-			scalar.stageNodeLabels(transaction, nodeId, old.label_token_ids, true);
-			accountLabels(old.label_token_ids, true);
-			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId, old.label_token_ids,
-								   oldRoot, true);
-			scalar.stageNodeLabels(transaction, nodeId, newLabels, false);
-			accountLabels(newLabels, false);
-			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId, newLabels, newRoot,
-								   false);
+			if (newLabels != old.label_token_ids) {
+				std::vector<uint64_t> removedLabels, addedLabels;
+				std::ranges::set_difference(old.label_token_ids, newLabels, std::back_inserter(removedLabels));
+				std::ranges::set_difference(newLabels, old.label_token_ids, std::back_inserter(addedLabels));
+				scalar.stageNodeLabels(transaction, nodeId, removedLabels, true);
+				accountLabels(removedLabels, true);
+				scalar.stageNodeLabels(transaction, nodeId, addedLabels, false);
+				accountLabels(addedLabels, false);
+			}
+			scalar.stagePropertyDelta(transaction, IndexDefinitionEntityKind::IDEK_NODE, nodeId,
+				old.label_token_ids, oldRoot, newLabels, newRoot);
 			if (newLabels != old.label_token_ids) {
 				transaction.replaceNodeLabels(nodeId, newLabels);
 			}
@@ -765,8 +793,7 @@ namespace graph::storage {
 			}
 			const PropertyCollectionRoot oldRoot = edgeRoot(edgeId, old.properties);
 			const PropertyCollectionRoot newRoot = edgeRoot(edgeId, properties.entries);
-			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {}, oldRoot, true);
-			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {}, newRoot, false);
+			scalar.stagePropertyDelta(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {}, oldRoot, {}, newRoot);
 			transaction.replaceEdgeProperty(newRoot);
 			hasStagedWork = true;
 		}

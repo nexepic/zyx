@@ -4,6 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CONAN_HOME=/root/.conan2
 
 WORKDIR /src
+ARG BUILD_JOBS=1
+ARG DEPENDENCY_JOBS=2
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -20,12 +22,15 @@ RUN python3 -m venv /opt/conan \
     && /opt/conan/bin/pip install --no-cache-dir --upgrade pip conan
 ENV PATH=/opt/conan/bin:$PATH
 
-COPY . .
+COPY conanfile.py .
 
 RUN conan profile detect --force \
-    && conan install . --output-folder=build-docker --build=missing -s build_type=Release -o '&:with_tests=False' \
-    && cmake -S . -B build-docker -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=build-docker/conan_toolchain.cmake -DZYX_BUILD_TESTS=OFF \
-    && cmake --build build-docker --target zyx_compare_bench
+    && conan install . --output-folder=build-docker --build=missing --build='antlr4-cppruntime/*' -s build_type=Release -s compiler.cppstd=20 -c tools.build:jobs=${DEPENDENCY_JOBS} -o '&:with_tests=False'
+
+COPY . .
+
+RUN cmake -S . -B build-docker -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=build-docker/conan_toolchain.cmake -DZYX_BUILD_TESTS=OFF \
+    && cmake --build build-docker --target zyx_compare_bench --parallel ${BUILD_JOBS}
 
 FROM python:3.12-slim AS runtime
 

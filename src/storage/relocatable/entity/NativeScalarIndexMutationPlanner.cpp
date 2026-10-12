@@ -223,41 +223,61 @@ namespace graph::storage {
 				!hasPublishedRoot(snapshot, definition.index_id)) {
 				continue;
 			}
-			if (ownerKind == IndexDefinitionEntityKind::IDEK_NODE && definition.label_token_id != 0U &&
-				!hasLabel(nodeLabels, definition.label_token_id)) {
-				continue;
-			}
-			std::vector<PropertyValue> values;
-			values.reserve(definition.property_names.size());
-			bool indexed = true;
-			for (const std::string &name: definition.property_names) {
-				const std::optional<uint32_t> token = resolvePropertyKey(snapshot, name);
-				if (!token.has_value()) {
-					indexed = false;
-					break;
-				}
-				const PropertyValue *value = findPropertyValue(root, *token);
-				if (value == nullptr) {
-					indexed = false;
-					break;
-				}
-				values.push_back(*value);
-			}
-			if (!indexed) {
-				continue;
-			}
-			const std::optional<std::vector<std::byte>> key =
-					definition.kind == IndexDefinitionKind::IDK_PROPERTY
-							? IndexKeyCodec::tryEncodeEntryKey(values.front(), ownerId)
-							: IndexKeyCodec::tryEncodeCompositeEntryKey(values, ownerId);
-			if (!key.has_value()) {
-				continue;
-			}
+			const auto key = propertyEntryKey(snapshot, definition, ownerId, nodeLabels, root);
+			if (!key) continue;
 			if (erase) {
 				transaction.stageScalarIndexErase(indexes_, definition.index_id, *key);
 			} else {
 				transaction.stageScalarIndexUpsert(indexes_, definition.index_id, *key, ownerId);
 			}
+		}
+	}
+
+	std::optional<std::vector<std::byte>> NativeScalarIndexMutationPlanner::propertyEntryKey(
+		const MetadataSnapshotPin &snapshot, const IndexDefinition &definition, uint64_t ownerId,
+		std::span<const uint64_t> nodeLabels, const PropertyCollectionRoot &root) const {
+		if (definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE && definition.label_token_id != 0U &&
+			!hasLabel(nodeLabels, definition.label_token_id)) return std::nullopt;
+		std::vector<PropertyValue> values;
+		values.reserve(definition.property_names.size());
+		for (const auto &name : definition.property_names) {
+			const auto token = resolvePropertyKey(snapshot, name);
+			if (!token) return std::nullopt;
+			const auto *value = findPropertyValue(root, *token);
+			if (!value) return std::nullopt;
+			values.push_back(*value);
+		}
+		return definition.kind == IndexDefinitionKind::IDK_PROPERTY
+			? IndexKeyCodec::tryEncodeEntryKey(values.front(), ownerId)
+			: IndexKeyCodec::tryEncodeCompositeEntryKey(values, ownerId);
+	}
+
+	void NativeScalarIndexMutationPlanner::stagePropertyDelta(NativeGraphWriteTransaction &transaction,
+		IndexDefinitionEntityKind ownerKind, uint64_t ownerId, std::span<const uint64_t> oldLabels,
+		const PropertyCollectionRoot &oldRoot, std::span<const uint64_t> newLabels,
+		const PropertyCollectionRoot &newRoot) const {
+		if (ownerKind != IndexDefinitionEntityKind::IDEK_NODE && ownerKind != IndexDefinitionEntityKind::IDEK_EDGE)
+			fail(FormatError::FERR_INVALID_HEADER, "native scalar Index planner has an unknown Property owner kind");
+		if (ownerKind == IndexDefinitionEntityKind::IDEK_NODE) {
+			validateCanonicalLabels(oldLabels);
+			validateCanonicalLabels(newLabels);
+		} else if (!oldLabels.empty() || !newLabels.empty()) {
+			fail(FormatError::FERR_INVALID_HEADER, "native scalar Index planner does not accept Node labels for an Edge Property root");
+		}
+		validatePropertyRoot(ownerKind, ownerId, oldRoot);
+		validatePropertyRoot(ownerKind, ownerId, newRoot);
+		const auto &snapshot = transaction.baseSnapshot();
+		for (const auto &definition : definitions_) {
+			if (definition.entity_kind != ownerKind ||
+				(definition.kind != IndexDefinitionKind::IDK_PROPERTY && definition.kind != IndexDefinitionKind::IDK_COMPOSITE) ||
+				!hasPublishedRoot(snapshot, definition.index_id)) continue;
+			const auto before = propertyEntryKey(snapshot, definition, ownerId, oldLabels, oldRoot);
+			const auto after = propertyEntryKey(snapshot, definition, ownerId, newLabels, newRoot);
+			// Byte identity handles codec equivalence and collisions consistently
+			// with lookup, rather than relying on dynamic value equality.
+			if (before == after) continue;
+			if (before) transaction.stageScalarIndexErase(indexes_, definition.index_id, *before);
+			if (after) transaction.stageScalarIndexUpsert(indexes_, definition.index_id, *after, ownerId);
 		}
 	}
 
