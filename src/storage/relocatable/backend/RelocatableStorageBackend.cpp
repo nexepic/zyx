@@ -731,6 +731,12 @@ namespace graph::storage {
 					appendIssuedIds(reservation.edge_ranges, nextIssuedEdgeIds, nextEdgeIdRanges, "Edge");
 					foldCreatedEntityFinalState(batch, nodeOffset, edgeOffset, nextAccumulated);
 					append(nextAccumulated, batch);
+					debug::PerfTrace::addValue("native_graph.write.transaction_retained_property_targets",
+						static_cast<int64_t>(std::min(nextAccumulated.property_replacements.size(),
+							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+					debug::PerfTrace::addValue("native_graph.write.transaction_retained_label_targets",
+						static_cast<int64_t>(std::min(nextAccumulated.node_label_replacements.size(),
+							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
 
 					issued_node_ids_ = std::move(nextIssuedNodeIds);
 					issued_edge_ids_ = std::move(nextIssuedEdgeIds);
@@ -965,8 +971,14 @@ namespace graph::storage {
 
 				try {
 					CanonicalMutation canonical = canonicalizeFinalState();
-					LogicalGraphMutationBatchResult result =
-							backend_.executeLogicalGraphMutationBatch(canonical.batch, fence_);
+					if (!canonical.batch.property_replacements.empty() &&
+						backend_.currentNativeLogicalGraphMutationFence() != fence_)
+						throw LogicalGraphMutationConflict("logical transaction Property source fence changed before final planning");
+					const CanonicalPropertyPatches patches = extractFinalPropertyPatches(canonical.batch);
+					LogicalGraphMutationBatchResult result = patches.requests.empty()
+						? backend_.executeLogicalGraphMutationBatch(canonical.batch, fence_)
+						: backend_.executeLogicalGraphMutationBatchWithPropertyPatches(
+							*snapshot_, canonical.batch, patches.requests, patches.entry_bound, fence_);
 					if (result != canonical.durable_result) { // the executor returns the canonical result produced from the same fenced batch.
 						throw std::logic_error(
 								"relocatable logical transaction publication changed its canonical creation identity");
@@ -985,7 +997,9 @@ namespace graph::storage {
 					// A failed logical commit must not leave a caller with a reusable
 					// transaction whose staged state may no longer be meaningful.
 					abandonOutstandingCreationReservations();
-					state_ = LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
+					state_ = backend_.hasIndeterminateWriteOutcome()
+						? LogicalGraphTransactionState::LGTTS_INDETERMINATE
+						: LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
 					accumulated_ = {};
 					snapshot_.reset();
 					throw;
@@ -1255,20 +1269,39 @@ namespace graph::storage {
 				return result;
 			}
 
+			template<typename Mutation, typename Reference>
+			static void mergeFinalReplacements(std::vector<Mutation> &destination, std::vector<Mutation> &source,
+				const Reference &reference) {
+				const auto target = [&](const Mutation &mutation) {
+					const auto &entity = reference(mutation);
+					return std::tuple{static_cast<uint8_t>(entity.entity_kind),
+						static_cast<uint8_t>(entity.reference_kind), entity.value};
+				};
+				std::map<std::tuple<uint8_t, uint8_t, uint64_t>, size_t> positions;
+				for (size_t index = 0U; index < destination.size(); ++index)
+					positions.emplace(target(destination[index]), index);
+				for (auto &replacement : source) {
+					const auto key = target(replacement);
+					if (const auto previous = positions.find(key); previous != positions.end()) {
+						// The statement overlay already owns intermediate visibility.
+						// Retain one authoritative final collection per entity here.
+						destination[previous->second] = std::move(replacement);
+					} else {
+						positions.emplace(key, destination.size());
+						destination.push_back(std::move(replacement));
+					}
+				}
+			}
+
 			static void append(LogicalGraphMutationBatch &destination, LogicalGraphMutationBatch &source) {
 				destination.node_creates.insert(destination.node_creates.end(),
-												std::make_move_iterator(source.node_creates.begin()),
-												std::make_move_iterator(source.node_creates.end()));
+					std::make_move_iterator(source.node_creates.begin()), std::make_move_iterator(source.node_creates.end()));
 				destination.edge_creates.insert(destination.edge_creates.end(),
-												std::make_move_iterator(source.edge_creates.begin()),
-												std::make_move_iterator(source.edge_creates.end()));
-				destination.property_replacements.insert(destination.property_replacements.end(),
-														 std::make_move_iterator(source.property_replacements.begin()),
-														 std::make_move_iterator(source.property_replacements.end()));
-				destination.node_label_replacements.insert(
-						destination.node_label_replacements.end(),
-						std::make_move_iterator(source.node_label_replacements.begin()),
-						std::make_move_iterator(source.node_label_replacements.end()));
+					std::make_move_iterator(source.edge_creates.begin()), std::make_move_iterator(source.edge_creates.end()));
+				mergeFinalReplacements(destination.property_replacements, source.property_replacements,
+					[](const auto &mutation) -> const auto & { return mutation.entity; });
+				mergeFinalReplacements(destination.node_label_replacements, source.node_label_replacements,
+					[](const auto &mutation) -> const auto & { return mutation.node; });
 				destination.edge_deletes.insert(destination.edge_deletes.end(),
 												std::make_move_iterator(source.edge_deletes.begin()),
 												std::make_move_iterator(source.edge_deletes.end()));
@@ -1385,6 +1418,72 @@ namespace graph::storage {
 				LogicalGraphMutationBatch batch;
 				LogicalGraphMutationBatchResult durable_result;
 			};
+
+			struct CanonicalPropertyPatches {
+				std::vector<LogicalGraphPropertyPatchRequest> requests;
+				size_t entry_bound = 0U;
+			};
+
+			// Stage/overlay continue to own complete visible collections. At commit,
+			// derive the delta from the pinned base and authoritative final state;
+			// never trust a caller-supplied hint about which fields changed.
+			[[nodiscard]] CanonicalPropertyPatches extractFinalPropertyPatches(LogicalGraphMutationBatch &batch) const {
+				CanonicalPropertyPatches result;
+				std::vector<LogicalGraphPropertyMutationRequest> remaining;
+				remaining.reserve(batch.property_replacements.size());
+				result.requests.reserve(batch.property_replacements.size());
+				for (auto &replacement : batch.property_replacements) {
+					// Explicit NULL in a complete map is distinct from patch REMOVE.
+					if (replacement.entity.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED ||
+						std::ranges::any_of(replacement.properties, [](const auto &field) {
+							return field.value.getType() == PropertyType::NULL_TYPE;
+						})) {
+						remaining.push_back(std::move(replacement));
+						continue;
+					}
+					const EntityReadShape shape{.all_properties = true};
+					std::vector<LogicalGraphPropertyEntry> source =
+						replacement.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE
+							? snapshot_->readNodeShaped(replacement.entity.value, shape).properties
+							: snapshot_->readEdgeShaped(replacement.entity.value, shape).properties;
+					std::ranges::sort(source, {}, &LogicalGraphPropertyEntry::key);
+					std::vector<const LogicalGraphWriteProperty *> final;
+					final.reserve(replacement.properties.size());
+					for (const auto &field : replacement.properties) final.push_back(&field);
+					std::ranges::sort(final, [](const auto *left, const auto *right) { return left->key < right->key; });
+					for (size_t index = 0U; index < final.size(); ++index) {
+						if (final[index]->key.empty() || (index != 0U && final[index - 1U]->key == final[index]->key))
+							throw std::invalid_argument("logical transaction final properties require unique nonempty keys");
+					}
+					LogicalGraphPropertyPatchRequest patch{replacement.entity, {}, {}};
+					size_t oldIndex = 0U, finalIndex = 0U;
+					while (oldIndex < source.size() || finalIndex < final.size()) {
+						if (finalIndex == final.size() || (oldIndex < source.size() && source[oldIndex].key < final[finalIndex]->key)) {
+							patch.removals.push_back(source[oldIndex++].key);
+						} else if (oldIndex == source.size() || final[finalIndex]->key < source[oldIndex].key) {
+							patch.sets.push_back(*final[finalIndex++]);
+						} else {
+							if (source[oldIndex].value != final[finalIndex]->value) patch.sets.push_back(*final[finalIndex]);
+							++oldIndex;
+							++finalIndex;
+						}
+					}
+					if (patch.sets.empty() && patch.removals.empty()) {
+						// Retain the original request so a no-op commit still validates
+						// its optimistic graph fence against an intervening writer.
+						remaining.push_back(std::move(replacement));
+						continue;
+					}
+					for (size_t count : {source.size(), patch.sets.size(), patch.removals.size()}) {
+						if (count > (std::numeric_limits<size_t>::max)() - result.entry_bound)
+							throw std::overflow_error("logical transaction Property patch entry bound overflowed");
+						result.entry_bound += count;
+					}
+					result.requests.push_back(std::move(patch));
+				}
+				batch.property_replacements = std::move(remaining);
+				return result;
+			}
 
 			struct PendingCreationReservation {
 				size_t node_count = 0U;
@@ -1633,6 +1732,15 @@ namespace graph::storage {
 							(request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE &&
 							 persistedEdgeDeletes.contains(request.entity.value))) {
 							continue;
+						}
+						if (request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE &&
+							!persistedNodeDeleteRequests.empty()) {
+							const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+							const auto detached = [&](uint64_t nodeId) {
+								const auto found = persistedNodeDeleteRequests.find(nodeId);
+								return found != persistedNodeDeleteRequests.end() && found->second->detach;
+							};
+							if (detached(edge.source_node_id) || detached(edge.target_node_id)) continue;
 						}
 						persistedPropertyReplacements.insert_or_assign(
 								{static_cast<uint8_t>(request.entity.entity_kind), request.entity.value},
@@ -3028,11 +3136,33 @@ namespace graph::storage {
 	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeLogicalGraphMutationBatchWithReadControl(
 		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 		const LogicalGraphMutationReadControl &control) {
+		return executeNativeMutationBatch(batch, expectedFence, control, {}, 0U);
+	}
+
+	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeLogicalGraphMutationBatchWithPropertyPatches(
+		LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+		const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control) {
+		if (control.checkpoint) control.checkpoint();
+		if (!expectedFence.isValid() || maximumPropertyEntries == 0U)
+			throw std::invalid_argument("native Property patches require a valid snapshot fence and positive entry bound");
+		const auto sourceFence = snapshot.mutationFence();
+		if (!sourceFence || !sourceFence->isValid())
+			throw std::invalid_argument("native Property patches require a fenced source snapshot");
+		if (*sourceFence != expectedFence)
+			throw LogicalGraphMutationConflict("native Property patch planning fence differs from its source snapshot");
+		return executeNativeMutationBatch(companionBatch, expectedFence, control, patches, maximumPropertyEntries);
+	}
+
+	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeNativeMutationBatch(
+		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+		const LogicalGraphMutationReadControl &control,
+		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries) {
 		if (control.checkpoint) control.checkpoint();
 		requireOpen();
 		if (batch.node_creates.empty() && batch.edge_creates.empty() && batch.property_replacements.empty() &&
 			batch.node_label_replacements.empty() && batch.edge_deletes.empty() && batch.node_deletes.empty() &&
-			!batch.creation_identity_plan.has_value()) {
+			!batch.creation_identity_plan.has_value() && patches.empty()) {
 			return {};
 		}
 		if (isReadOnly()) {
@@ -3062,7 +3192,10 @@ namespace graph::storage {
 			beforeExecution.release();
 			NativeGraphMutationExecutionResult execution;
 			try {
-				execution = native_graph_mutation_executor_->execute(batch, fenceValidator, control);
+				execution = patches.empty()
+					? native_graph_mutation_executor_->execute(batch, fenceValidator, control)
+					: native_graph_mutation_executor_->executeWithPropertyPatches(
+						batch, patches, maximumPropertyEntries, fenceValidator, control);
 			} catch (...) {
 				// A failed final durability fence can leave a complete inactive
 				// Superblock selected even though the caller received an error. Compare

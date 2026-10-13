@@ -231,7 +231,7 @@ namespace graph::storage {
 		// Companion mutations and normalized patches share one publication.
 		// Created ordinals resolve only within companionBatch and patch its initial
 		// creation fields. Complete replacement and patch targets must be disjoint.
-		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithPropertyPatches(
+		[[nodiscard]] virtual LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithPropertyPatches(
 			LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
 			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
 			const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control = {});

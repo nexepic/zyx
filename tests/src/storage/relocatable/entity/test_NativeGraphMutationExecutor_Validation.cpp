@@ -161,6 +161,176 @@ namespace {
 
 class NativeGraphMutationExecutorValidationTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {};
 
+TEST_F(NativeGraphMutationExecutorValidationTest, NativePatchesKeepUnchangedFieldsTokenizedAndPreserveOldSnapshots) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	auto resolver = tokens();
+	size_t noteLookups = 0U;
+	resolver.property_key_token = [&](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+		if (name == "age") return 17U;
+		if (name == "note") { ++noteLookups; return 19U; }
+		return std::nullopt;
+	};
+	resolver.property_key_name = [](const MetadataSnapshotPin &, uint32_t) -> std::optional<std::string> {
+		throw std::runtime_error("patch must not resolve unchanged token names without constraints");
+	};
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_,
+		std::move(resolver), [](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {{"age", PropertyValue(1)}, {"note", PropertyValue("retained")}}}, {{}, {}}};
+	create.edge_creates = {{createdNodeReference(0U), createdNodeReference(1U), "KNOWS",
+		{{"age", PropertyValue(2)}, {"note", PropertyValue("edge retained")}}}};
+	const auto created = executor.execute(create);
+	ASSERT_TRUE(created.committed());
+	auto before = metadata_->openSnapshot();
+	const uint64_t nodeId = created.result.created_node_ids.front();
+	const uint64_t edgeId = created.result.created_edge_ids.front();
+	const auto generation = before.superblock().generation;
+	noteLookups = 0U;
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{
+		{{LogicalGraphMutationEntityKind::LGMK_EDGE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, edgeId}, {}, {"age", "missing"}},
+		{{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, nodeId}, {{"age", PropertyValue(42)}}, {}}};
+	const auto changed = executor.executeWithPropertyPatches({}, patches, 8U,
+		[generation](const Superblock &base) { return base.generation == generation; });
+	ASSERT_TRUE(changed.committed());
+	EXPECT_EQ(noteLookups, 0U);
+	auto after = metadata_->openSnapshot();
+	EXPECT_EQ(graph.readNode(after, nodeId).properties,
+		(std::vector<PropertyCollectionRootEntry>{{17U, PropertyValue(42)}, {19U, PropertyValue("retained")}}));
+	EXPECT_EQ(graph.readEdge(after, edgeId).properties,
+		(std::vector<PropertyCollectionRootEntry>{{19U, PropertyValue("edge retained")}}));
+	EXPECT_EQ(graph.readNode(before, nodeId).properties.front().value, PropertyValue(1));
+	EXPECT_EQ(graph.readEdge(before, edgeId).properties.front().value, PropertyValue(2));
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, NativePatchesFoldCreatedFieldsAndRejectInvalidBatchBeforePublication) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, tokens(),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {{"age", PropertyValue(1)}}}, {{}, {}}};
+	create.edge_creates = {{createdNodeReference(0U), createdNodeReference(1U), "KNOWS", {{"age", PropertyValue(2)}}}};
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{
+		{createdNodeReference(0U), {{"age", PropertyValue(3)}}, {}},
+		{{LogicalGraphMutationEntityKind::LGMK_EDGE, LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE, 0U}, {}, {"age"}}};
+	const auto fence = [](const Superblock &) { return true; };
+	EXPECT_THROW(static_cast<void>(executor.executeWithPropertyPatches(create, patches, 3U, fence)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(executor.executeWithPropertyPatches(create, patches, 4U, {})), std::invalid_argument);
+	auto overlapping = create;
+	overlapping.node_creates.front().properties.clear();
+	overlapping.property_replacements = {{createdNodeReference(0U), {{"age", PropertyValue(1)}}}};
+	EXPECT_THROW(static_cast<void>(executor.executeWithPropertyPatches(overlapping, patches, 4U, fence)), std::invalid_argument);
+	const auto created = executor.executeWithPropertyPatches(create, patches, 4U, fence);
+	ASSERT_TRUE(created.committed());
+	auto snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(graph.readNode(snapshot, created.result.created_node_ids.front()).properties,
+		(std::vector<PropertyCollectionRootEntry>{{17U, PropertyValue(3)}}));
+	EXPECT_TRUE(graph.readEdge(snapshot, created.result.created_edge_ids.front()).properties.empty());
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, NativePatchesKeepConstraintAndAdmissionFailuresAtomic) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	ConstraintDefinition required;
+	required.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST;
+	required.name = "required-age";
+	required.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	required.kind = ConstraintDefinitionKind::CDK_NOT_NULL;
+	required.schema_token_id = 7U;
+	required.property_names = {"age"};
+	auto resolver = tokens();
+	size_t unrelatedNameLookups = 0U;
+	resolver.property_key_token = [](const MetadataSnapshotPin &, std::string_view name) -> std::optional<uint32_t> {
+		if (name == "age") return 17U;
+		if (name == "note") return 19U;
+		return std::nullopt;
+	};
+	resolver.property_key_name = [&](const MetadataSnapshotPin &, uint32_t token) -> std::optional<std::string> {
+		if (token == 17U) return "age";
+		if (token == 19U) { ++unrelatedNameLookups; return "note"; }
+		return std::nullopt;
+	};
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, std::move(resolver),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[required](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{required}; }, executorOptions());
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {{"age", PropertyValue(1)}, {"note", PropertyValue(std::string(1024U, 'n'))}}}};
+	const auto created = executor.execute(create);
+	ASSERT_TRUE(created.committed());
+	const uint64_t nodeId = created.result.created_node_ids.front();
+	const auto reference = LogicalGraphMutationEntityReference{LogicalGraphMutationEntityKind::LGMK_NODE,
+		LogicalGraphMutationReferenceKind::LGRK_PERSISTED, nodeId};
+	auto before = metadata_->openSnapshot();
+	const auto generation = before.superblock().generation;
+	const auto fence = [generation](const Superblock &base) { return base.generation == generation; };
+	const std::vector<LogicalGraphPropertyPatchRequest> remove{{reference, {}, {"age"}}};
+	EXPECT_THROW(static_cast<void>(executor.executeWithPropertyPatches({}, remove, 3U, fence)), std::runtime_error);
+	const std::vector<LogicalGraphPropertyPatchRequest> update{{reference, {{"age", PropertyValue(2)}}, {}}};
+	LogicalGraphMutationReadControl control;
+	control.property_admission = [](size_t) { throw std::runtime_error("source budget rejected"); };
+	EXPECT_THROW(static_cast<void>(executor.executeWithPropertyPatches({}, update, 3U, fence, control)), std::runtime_error);
+	auto unchanged = metadata_->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, generation);
+	EXPECT_EQ(graph.readNode(unchanged, nodeId).properties.front().value, PropertyValue(1));
+	unrelatedNameLookups = 0U;
+	ASSERT_TRUE(executor.executeWithPropertyPatches({}, update, 3U, fence).committed());
+	EXPECT_EQ(unrelatedNameLookups, 0U);
+	auto after = metadata_->openSnapshot();
+	EXPECT_EQ(graph.readNode(after, nodeId).properties.front().value, PropertyValue(2));
+	EXPECT_EQ(graph.readNode(after, nodeId).properties.back().value, PropertyValue(std::string(1024U, 'n')));
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, NativePatchesCancelAtEveryPlanningCheckpointWithoutPublishing) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, tokens(),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"Person"}, {{"age", PropertyValue(1)}}}, {{"Person"}, {{"age", PropertyValue(1)}}}};
+	const auto created = executor.execute(create);
+	ASSERT_TRUE(created.committed());
+	std::vector<LogicalGraphPropertyPatchRequest> patches;
+	for (uint64_t id : created.result.created_node_ids)
+		patches.push_back({{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id},
+			{{"age", PropertyValue(2)}}, {"missing"}});
+	std::ranges::reverse(patches);
+	bool completed = false;
+	size_t failures = 0U;
+	for (size_t stop = 1U; stop <= 256U; ++stop) {
+		size_t checkpoints = 0U;
+		LogicalGraphMutationReadControl control;
+		control.checkpoint = [&] {
+			if (++checkpoints == stop) throw std::runtime_error("cancelled-native-patch");
+		};
+		try {
+			const auto result = executor.executeWithPropertyPatches({}, patches, 6U,
+				[](const Superblock &base) { return base.generation.isValid(); }, control);
+			ASSERT_TRUE(result.committed());
+			completed = true;
+			break;
+		} catch (const std::runtime_error &error) {
+			ASSERT_STREQ(error.what(), "cancelled-native-patch");
+			++failures;
+			auto unchanged = metadata_->openSnapshot();
+			for (uint64_t id : created.result.created_node_ids)
+				EXPECT_EQ(graph.readNode(unchanged, id).properties.front().value, PropertyValue(1));
+		}
+	}
+	EXPECT_TRUE(completed);
+	EXPECT_GT(failures, 0U);
+	auto after = metadata_->openSnapshot();
+	for (uint64_t id : created.result.created_node_ids)
+		EXPECT_EQ(graph.readNode(after, id).properties.front().value, PropertyValue(2));
+}
+
 TEST_F(NativeGraphMutationExecutorValidationTest,
 	   RejectsInvalidBatchReferencesAndConflictingFinalStatesBeforePublishingGraphData) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
@@ -1379,6 +1549,33 @@ TEST_F(NativeGraphMutationExecutorValidationTest, UpdatesAnExistingVectorIndexTh
 	EXPECT_EQ(manifest.delta_entry_count, 2U);
 	EXPECT_TRUE(metadata_->findIndexRootOptional(snapshot, manifest.delta_mapping_index_id).has_value());
 	snapshot.release();
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest, NativePropertyPatchPublishesVectorDeltaWithTheGraphRoot) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, vectorTokens(),
+		[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{vectorDefinition()}; },
+		[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+	const auto created = executor.execute(vectorCreateBatch());
+	ASSERT_TRUE(created.committed());
+	const uint64_t nodeId = created.result.created_node_ids.front();
+	auto before = metadata_->openSnapshot();
+	const auto generation = before.superblock().generation;
+	const auto initial = graph.readNode(before, nodeId).properties;
+	const PropertyValue embedding(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(3)});
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{{
+		{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, nodeId},
+		{{"embedding", embedding}}, {}}};
+	ASSERT_TRUE(executor.executeWithPropertyPatches({}, patches, 2U,
+		[generation](const Superblock &base) { return base.generation == generation; }).committed());
+	auto after = metadata_->openSnapshot();
+	EXPECT_EQ(graph.readNode(after, nodeId).properties, (std::vector<PropertyCollectionRootEntry>{{17U, embedding}}));
+	EXPECT_EQ(graph.readNode(before, nodeId).properties, initial);
+	const auto manifest = vector_manifests_->read(after, vectorDefinition().index_id).manifest();
+	EXPECT_EQ(manifest.delta_entry_count, 2U);
+	EXPECT_TRUE(metadata_->findIndexRootOptional(after, manifest.delta_mapping_index_id).has_value());
 }
 
 TEST_F(NativeGraphMutationExecutorValidationTest, MutationOldStateReadsSharePropertyPageAndPreserveOldSnapshot) {

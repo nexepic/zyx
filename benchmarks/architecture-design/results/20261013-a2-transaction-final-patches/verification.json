@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-13",
+  "tests_passed": 126,
+  "tests_failed": 0,
+  "suites": 4,
+  "full_suite_run": false,
+  "benchmark_run": false,
+  "required_current_source_tests": [
+    "ExplicitCypherTransactionKeepsIntermediateVisibilityAndUsesNativeFinalPatches",
+    "LaterDetachDeleteDiscardsEarlierPersistedEdgePropertyChanges",
+    "ExplicitPropertyTransactionFinalSyncFailureIsIndeterminateUntilReopen",
+    "ExplicitCompleteReplacementRetainsItsStoredNullField",
+    "ExplicitTransactionUnchangedReplacementStillDetectsInterveningWriter"
+  ],
+  "binary_sha256": "bd6a9c5ee07b31c5b52d93defa0d118307207941aa4543ec0a1eaba06551d7fb",
+  "core_sha256": "cbf87e3de94fc4d54fefc320f16f4130f012c709139d82bb12b86c7b076d3d1f"
+}

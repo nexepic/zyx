@@ -1,0 +1,2 @@
+source /workspace/zyx-cloud-env.sh && cmake --build buildDir --target zyx_test_suite --parallel 4
+./buildDir/zyx_test_suite --gtest_filter='LogicalGraphPropertyPatchTest.*:RelocatableStorageBackendTest.CreatedPropertyPatchesFoldIntoNativeCreationAndSurviveReopen:RelocatableStorageBackendTest.PersistedPropertyPatchAdmissionFailureAllowsRetryAndPreservesOldLargeValueSnapshot:RelocatableStorageBackendTest.PropertyPatchUniqueFailureRollsBackAllTargetsAndCompanionLabels'

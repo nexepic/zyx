@@ -1,0 +1,13 @@
+{
+  "accepted_ids": [
+    "S0.1",
+    "S1.2"
+  ],
+  "accepted": 2,
+  "total": 34,
+  "percent": 5.9,
+  "S3.1": "in_progress",
+  "native_direct_patch_consumer": "implemented_and_module_verified",
+  "explicit_transaction_patch_consumer": "legacy_adapter_pending_migration",
+  "performance_acceptance": "deferred_to_final_window"
+}

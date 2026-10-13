@@ -271,6 +271,10 @@ namespace graph::storage {
 		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithReadControl(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 			const LogicalGraphMutationReadControl &control) override;
+		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithPropertyPatches(
+			LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+			const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control = {}) override;
 
 		// Internal logical-transaction bridge: return durable IDs before exposing a
 		// provisional result, so the executor can later adopt the same ranges.
@@ -505,6 +509,10 @@ namespace graph::storage {
 
 	private:
 		friend class RelocatableLogicalGraphReadSnapshot;
+		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeMutationBatch(
+			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+			const LogicalGraphMutationReadControl &control,
+			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries);
 		void requireOpen() const;
 		void requireOwnedSnapshot(const RelocatableReadSnapshot &snapshot) const;
 		[[nodiscard]] std::string resolveNodeLabelToken(const MetadataSnapshotPin &snapshot,

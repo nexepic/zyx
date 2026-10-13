@@ -29,6 +29,23 @@ TEST(LogicalGraphPropertyPatchTest, PreservesOtherFieldsAndReadsPreviousStagedVa
 	EXPECT_EQ(transaction.readSnapshot().readNodeShaped(1U, {.all_properties = true}).properties.front().value, PropertyValue("Ada"));
 }
 
+TEST(LogicalGraphPropertyPatchTest, UnchangedValuesAndMissingRemovalsDoNotStageAReplacement) {
+	InMemoryLogicalTransaction transaction;
+	LogicalGraphTransactionOverlay overlay(transaction);
+	auto snapshot = overlay.openLogicalGraphReadSnapshot();
+	ASSERT_TRUE(snapshot->mutationFence().has_value());
+	const uint64_t initialRevision = snapshot->mutationFence()->logical_revision;
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{
+		{nodeReference(1U), {{"name", PropertyValue("Ada")}}, {"missing"}}};
+	EXPECT_NO_THROW(static_cast<void>(overlay.executeLogicalGraphPropertyPatches(
+		*snapshot, patches, 64U, *snapshot->mutationFence())));
+	auto after = overlay.openLogicalGraphReadSnapshot();
+	ASSERT_TRUE(after->mutationFence().has_value());
+	EXPECT_EQ(after->mutationFence()->logical_revision, initialRevision);
+	EXPECT_EQ(after->readNodeShaped(1U, {.all_properties = true}).properties,
+		(std::vector<LogicalGraphPropertyEntry>{{"name", PropertyValue("Ada")}}));
+}
+
 TEST(LogicalGraphPropertyPatchTest, InvalidFinalRequestRejectsTheWholePatchList) {
 	InMemoryLogicalTransaction transaction;
 	LogicalGraphTransactionOverlay overlay(transaction);

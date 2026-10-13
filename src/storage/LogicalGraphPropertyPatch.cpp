@@ -170,6 +170,30 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 				});
 			return found != source.end() && found->key == key;
 		};
+		// Preserve the staged revision and avoid rebuilding every downstream
+		// index/property root when the patch leaves the visible collection intact.
+		bool changesSource = false;
+		for (const auto *property : sets) {
+			checkpoint();
+			const auto found = std::lower_bound(source.begin(), source.end(), std::string_view(property->key),
+				[&](const auto &candidate, std::string_view key) {
+					checkpoint(); return candidate.key < key;
+				});
+			if (found == source.end() || found->key != property->key || found->value != property->value) {
+				changesSource = true;
+				break;
+			}
+		}
+		if (!changesSource) {
+			for (const auto key : removals) {
+				checkpoint();
+				if (containsSourceKey(key)) {
+					changesSource = true;
+					break;
+				}
+			}
+		}
+		if (!changesSource) continue;
 		size_t outputEntries = source.size();
 		for (const auto key : removals) { checkpoint(); if (containsSourceKey(key)) --outputEntries; }
 		for (const auto *property : sets) { checkpoint(); if (!containsSourceKey(property->key)) ++outputEntries; }

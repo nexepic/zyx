@@ -1,0 +1,5 @@
+set -e
+source /workspace/zyx-cloud-env.sh
+ninja -C buildDir -j4 zyx_core CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp.o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_TransactionAtomicity.cpp.o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_WriteSurface.cpp.o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeScalarIndexMutationPlanner.cpp.o
+# Link selected objects using module-link-command.txt with cwd=buildDir.
+/tmp/zyx-transaction-patch-tests --gtest_filter='NativeGraphMutationExecutorValidationTest.*:NativeScalarIndexMutationPlannerTest.*:LogicalGraphPropertyPatchTest.*:RelocatableStorageBackendTest.*-RelocatableStorageBackendTest.*Stream*:RelocatableStorageBackendTest.*Bulk*'

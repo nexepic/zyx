@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -412,6 +413,22 @@ namespace graph::storage {
 	NativeGraphMutationExecutionResult
 	NativeGraphMutationExecutor::execute(const LogicalGraphMutationBatch &batch,
 									 const NativeGraphMutationFenceValidator &expectedFence, const LogicalGraphMutationReadControl &readControl) const {
+		return executeImpl(batch, {}, 0U, expectedFence, readControl);
+	}
+
+	NativeGraphMutationExecutionResult NativeGraphMutationExecutor::executeWithPropertyPatches(
+			const LogicalGraphMutationBatch &batch, std::span<const LogicalGraphPropertyPatchRequest> patches,
+			size_t maximumPropertyEntries, const NativeGraphMutationFenceValidator &expectedFence,
+			const LogicalGraphMutationReadControl &readControl) const {
+		if (!expectedFence || maximumPropertyEntries == 0U)
+			throw std::invalid_argument("native Property patches require a fence and positive entry bound");
+		return executeImpl(batch, patches, maximumPropertyEntries, expectedFence, readControl);
+	}
+
+	NativeGraphMutationExecutionResult NativeGraphMutationExecutor::executeImpl(
+			const LogicalGraphMutationBatch &batch, std::span<const LogicalGraphPropertyPatchRequest> patches,
+			size_t maximumPropertyEntries, const NativeGraphMutationFenceValidator &expectedFence,
+			const LogicalGraphMutationReadControl &readControl) const {
 		debug::ScopedPerfTimer timer("native_graph.execute");
 		// Fold complete old/new memberships before updating estimates. In particular,
 		// removing and re-adding the same label must not underflow or double count.
@@ -434,6 +451,47 @@ namespace graph::storage {
 		};
 		if (readControl.checkpoint) readControl.checkpoint();
 		validateShape(batch);
+		size_t patchEntries = 0U;
+		const auto chargePatchEntries = [&](size_t count) {
+			if (count > maximumPropertyEntries - patchEntries)
+				throw std::runtime_error("native Property patches exceeded their entry bound");
+			patchEntries += count;
+		};
+		if (patches.size() > maximumPropertyEntries)
+			throw std::runtime_error("native Property patches exceeded their target bound");
+		std::set<std::tuple<uint8_t, uint8_t, uint64_t>> patchTargets;
+		for (const auto &replacement : batch.property_replacements)
+			patchTargets.insert(referenceKey(replacement.entity));
+		for (const auto &patch : patches) {
+			if (readControl.checkpoint) readControl.checkpoint();
+			validateReference(batch, patch.entity, "native Property patch");
+			if (!patchTargets.insert(referenceKey(patch.entity)).second)
+				throw std::invalid_argument("native Property patches overlap a replacement or another patch");
+			if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED &&
+				((patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE &&
+				  std::ranges::any_of(batch.node_deletes, [&](const auto &v) { return v.node_id == patch.entity.value; })) ||
+				 (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE &&
+				  std::ranges::any_of(batch.edge_deletes, [&](const auto &v) { return v.edge_id == patch.entity.value; }))))
+				throw std::invalid_argument("native Property patches cannot target a deleted entity");
+			chargePatchEntries(patch.sets.size());
+			chargePatchEntries(patch.removals.size());
+			if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE)
+				chargePatchEntries(batch.node_creates.at(static_cast<size_t>(patch.entity.value)).properties.size());
+			else if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE)
+				chargePatchEntries(batch.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties.size());
+			std::set<std::string_view> names;
+			for (const auto &property : patch.sets) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (property.key.empty() || property.value.getType() == PropertyType::NULL_TYPE ||
+					!names.insert(property.key).second)
+					throw std::invalid_argument("native Property patch sets require unique nonempty keys and non-null values");
+			}
+			for (const auto &name : patch.removals) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (name.empty() || !names.insert(name).second)
+					throw std::invalid_argument("native Property patch removals must be unique and disjoint from sets");
+			}
+		}
 		NativeGraphWriteTransaction transaction = writer_.beginTransaction();
 		if (expectedFence && !expectedFence(transaction.baseSuperblock())) {
 			transaction.rollback();
@@ -522,6 +580,12 @@ namespace graph::storage {
 			return tokens_.property_key_name(snapshot, token);
 		};
 
+		const std::vector<ConstraintDefinition> constraintDefinitions = constraint_definitions_(snapshot);
+		if (constraintDefinitions.size() > options_.maximum_constraint_definitions)
+			fail(FormatError::FERR_INVALID_STATE, "native logical graph mutation constraint reader exceeded its bound");
+		// The validator returns immediately without definitions. Avoid a second
+		// owning copy of every creation/property payload in that common case.
+		LogicalGraphMutationBatch constraintBatch = constraintDefinitions.empty() ? LogicalGraphMutationBatch{} : batch;
 		std::vector<ResolvedNodeCreate> nodes;
 		nodes.reserve(batch.node_creates.size());
 		for (const LogicalGraphNodeCreateRequest &request: batch.node_creates) {
@@ -568,6 +632,122 @@ namespace graph::storage {
 				createdEdgeProperties.insert_or_assign(request.entity.value, std::move(resolved));
 			}
 		}
+		std::vector<const LogicalGraphPropertyPatchRequest *> orderedPatches;
+		std::optional<PageBackedConstraintPropertySelection> constraintSelection;
+		orderedPatches.reserve(patches.size());
+		for (const auto &patch : patches) {
+			if (readControl.checkpoint) readControl.checkpoint();
+			orderedPatches.push_back(&patch);
+		}
+		std::ranges::sort(orderedPatches, [&](const auto *left, const auto *right) {
+			if (readControl.checkpoint) readControl.checkpoint();
+			return referenceKey(left->entity) < referenceKey(right->entity);
+		});
+		const SelectedPropertyReadAdmission sourceAdmission = makeSelectedPropertyBatchAdmission(
+			[&](size_t bytes) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (readControl.property_admission) readControl.property_admission(bytes);
+			});
+		for (const auto *descriptor : orderedPatches) {
+			if (readControl.checkpoint) readControl.checkpoint();
+			const auto &patch = *descriptor;
+			ResolvedProperties source;
+			if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
+				source = std::move(nodes.at(static_cast<size_t>(patch.entity.value)).properties);
+			} else if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE) {
+				source = resolveProperties(batch.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties,
+					resolvePropertyKey, readControl.checkpoint);
+			} else {
+				const std::array<uint64_t, 1U> ids{patch.entity.value};
+				if (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
+					static_cast<void>(graph_.readNodeRecord(snapshot, ids.front(), &oldStateReads));
+					source.entries = std::move(graph_.readNodePropertiesSorted(snapshot, ids, &oldStateReads,
+						&sourceAdmission).front());
+				} else {
+					static_cast<void>(graph_.readEdgeTopology(snapshot, ids.front(), &oldStateReads));
+					source.entries = graph_.readEdgeProperties(snapshot, ids.front(), &oldStateReads, &sourceAdmission);
+				}
+			}
+			if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED)
+				chargePatchEntries(source.entries.size());
+			ResolvedProperties sets = resolveProperties(patch.sets, resolvePropertyKey, readControl.checkpoint);
+			std::set<uint32_t> operationTokens;
+			for (const auto &entry : sets.entries) operationTokens.insert(entry.key_token);
+			std::set<uint32_t> removals;
+			for (const auto &name : patch.removals) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				std::optional<uint32_t> token;
+				if (const auto staged = stagedPropertyNames.find(name); staged != stagedPropertyNames.end())
+					token = staged->second;
+				else if (system_catalog_ != nullptr)
+					token = system_catalog_->findPropertyToken(snapshot, name);
+				else
+					token = tokens_.property_key_token(snapshot, name);
+				if (!token) continue; // Removing an unknown name must not create a token.
+				if (*token == 0U || !operationTokens.insert(*token).second)
+					fail(FormatError::FERR_INVALID_STATE, "native Property patch resolved distinct keys to one Token");
+				removals.insert(*token);
+			}
+			ResolvedProperties final;
+			size_t finalSize = source.entries.size();
+			const auto sourceContains = [&](uint32_t token) {
+				const auto found = std::lower_bound(source.entries.begin(), source.entries.end(), token,
+					[](const auto &entry, uint32_t key) { return entry.key_token < key; });
+				return found != source.entries.end() && found->key_token == token;
+			};
+			for (uint32_t token : removals) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (sourceContains(token)) --finalSize;
+			}
+			for (const auto &entry : sets.entries) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (!sourceContains(entry.key_token)) ++finalSize;
+			}
+			final.entries.reserve(finalSize);
+			size_t oldIndex = 0U, setIndex = 0U;
+			while (oldIndex < source.entries.size() || setIndex < sets.entries.size()) {
+				if (readControl.checkpoint) readControl.checkpoint();
+				if (setIndex < sets.entries.size() && (oldIndex == source.entries.size() ||
+					sets.entries[setIndex].key_token <= source.entries[oldIndex].key_token)) {
+					if (oldIndex < source.entries.size() &&
+						sets.entries[setIndex].key_token == source.entries[oldIndex].key_token) ++oldIndex;
+					final.entries.push_back(std::move(sets.entries[setIndex++]));
+				} else {
+					auto &entry = source.entries[oldIndex++];
+					if (!removals.contains(entry.key_token)) final.entries.push_back(std::move(entry));
+				}
+			}
+			if (!constraintDefinitions.empty()) {
+				if (!constraintSelection)
+					constraintSelection = selectConstraintProperties(constraintDefinitions, resolvePropertyKey);
+				const auto &selected = patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE
+					? constraintSelection->node_tokens : constraintSelection->edge_tokens;
+				std::vector<LogicalGraphWriteProperty> logical;
+				logical.reserve(std::min(final.entries.size(), selected.size()));
+				for (const auto &entry : final.entries) {
+					if (readControl.checkpoint) readControl.checkpoint();
+					// Only validator-owned fields belong in this transient view;
+					// the full tokenized root remains the graph's authoritative state.
+					if (!std::binary_search(selected.begin(), selected.end(), entry.key_token)) continue;
+					const auto name = resolvePropertyName(entry.key_token);
+					if (!name || name->empty()) fail(FormatError::FERR_INVALID_STATE, "native Property patch lost its token name");
+					logical.push_back({*name, entry.value});
+				}
+				if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE)
+					constraintBatch.node_creates.at(static_cast<size_t>(patch.entity.value)).properties = std::move(logical);
+				else if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE)
+					constraintBatch.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties = std::move(logical);
+				else constraintBatch.property_replacements.push_back({patch.entity, std::move(logical)});
+			}
+			if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE)
+				nodes.at(static_cast<size_t>(patch.entity.value)).properties = std::move(final);
+			else if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE)
+				createdEdgeProperties.emplace(patch.entity.value, std::move(final));
+			else if (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE)
+				persistedNodes[patch.entity.value].properties = std::move(final);
+			else persistedEdges.emplace(patch.entity.value, std::move(final));
+			debug::PerfTrace::addValue("native_graph.write.property_patch_targets", 1);
+		}
 		for (const LogicalGraphNodeLabelMutationRequest &request: batch.node_label_replacements) {
 			const std::vector<uint64_t> resolved =
 					resolveLabels(request.labels, [&resolveSchemaToken](std::string_view name) {
@@ -594,7 +774,6 @@ namespace graph::storage {
 			transaction.eraseEdge(edgeId);
 			topologyDeletedEdges.insert(edgeId);
 		}
-		LogicalGraphMutationBatch constraintBatch = batch;
 		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
 			if (!request.detach) {
 				continue;
@@ -602,7 +781,7 @@ namespace graph::storage {
 			for (const uint64_t edgeId:
 				 transaction.collectIncidentEdgeIds(request.node_id, request.maximum_detach_edges)) {
 				if (deletedEdges.insert(edgeId).second) {
-					constraintBatch.edge_deletes.push_back({edgeId});
+					if (!constraintDefinitions.empty()) constraintBatch.edge_deletes.push_back({edgeId});
 				}
 			}
 		}
@@ -613,7 +792,6 @@ namespace graph::storage {
 		}
 
 		const std::vector<IndexDefinition> indexDefinitions = index_definitions_(snapshot);
-		const std::vector<ConstraintDefinition> constraintDefinitions = constraint_definitions_(snapshot);
 		if (indexDefinitions.size() > options_.maximum_index_definitions ||
 			constraintDefinitions.size() > options_.maximum_constraint_definitions) {
 			fail(FormatError::FERR_INVALID_STATE,
@@ -675,6 +853,8 @@ namespace graph::storage {
 				perIndex.push_back(std::move(mutation));
 			}
 		};
+		if (!constraintSelection)
+			constraintSelection = selectConstraintProperties(constraintDefinitions, resolvePropertyKey);
 		PageBackedConstraintMutationAdapter constraintAdapter(
 				snapshot, graph_, indexes_, metadata_,
 				[&resolvePropertyName](const MetadataSnapshotPin &, uint32_t token) {
@@ -690,7 +870,7 @@ namespace graph::storage {
 					const std::optional<uint64_t> token =
 							resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
 					return token.value_or(0U);
-				}, selectConstraintProperties(constraintDefinitions, resolvePropertyKey),
+				}, std::move(*constraintSelection),
 				readControl.checkpoint, readControl.property_admission);
 		ConstraintMutationValidator validator(
 				constraintAdapter.makeAdapter(),
@@ -723,6 +903,7 @@ namespace graph::storage {
 		}
 		result.created_edge_ids.reserve(batch.edge_creates.size());
 		for (size_t ordinal = 0U; ordinal < batch.edge_creates.size(); ++ordinal) {
+			if (readControl.checkpoint) readControl.checkpoint();
 			const LogicalGraphBatchEdgeCreateRequest &request = batch.edge_creates[ordinal];
 			const uint64_t sourceNodeId = resolveEntityId(request.source, result);
 			const uint64_t targetNodeId = resolveEntityId(request.target, result);
@@ -736,10 +917,10 @@ namespace graph::storage {
 				}
 				typeToken = *resolved;
 			}
-			ResolvedProperties properties = resolveProperties(request.properties, resolvePropertyKey, readControl.checkpoint);
+			ResolvedProperties properties;
 			if (const auto override = createdEdgeProperties.find(ordinal); override != createdEdgeProperties.end()) {
-				properties = override->second;
-			}
+				properties = std::move(override->second);
+			} else properties = resolveProperties(request.properties, resolvePropertyKey, readControl.checkpoint);
 			const uint64_t edgeId =
 					batch.creation_identity_plan.has_value()
 							? transaction.createEdgeWithReservedId(batch.creation_identity_plan->edge_ids.at(ordinal),
@@ -750,7 +931,7 @@ namespace graph::storage {
 			scalar.stageEdgeType(transaction, edgeId, typeToken, false);
 			accountToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, typeToken, false);
 			if (!properties.entries.empty()) {
-				PropertyCollectionRoot root = edgeRoot(edgeId, properties.entries);
+				PropertyCollectionRoot root = edgeRoot(edgeId, std::move(properties.entries));
 				transaction.replaceEdgeProperty(root);
 				scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {}, root, false);
 			}

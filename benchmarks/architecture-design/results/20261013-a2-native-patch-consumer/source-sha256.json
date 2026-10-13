@@ -1,0 +1,12 @@
+{
+  "include/graph/storage/LogicalGraphWrite.hpp": "7814249b73b94da7bbb5ecf8f5dbeeed07089e4618c05a6ab90173cb1318cfe3",
+  "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "6a896a3e5bb5f97ec95d785a32f11a0d04b06ecd4aac87dc2d4437e72b08a412",
+  "include/graph/storage/relocatable/entity/NativeGraphMutationExecutor.hpp": "ad16e2cb542986d330e848fd4466e9169d0005261d5b11ae9e6f2d536e3352f6",
+  "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "306b30ec259fd253db0eb55e620736313a65b3c72def293fcfee332570c43b45",
+  "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "791941d571e6b71c4d0380a36fdb31196cc116da8ee53c1cbeeff76c1c8b022c",
+  "tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp": "b70ea955a80074ff0963a409aedc45db002f0ddbdcffc876f3159ae61ac93cee",
+  "tests/src/storage/relocatable/entity/test_NativeGraphMutationExecutor_Validation.cpp": "a86270cc21ef16b764c6973af0289ad1898a07421af0f639293a40569f2d800d",
+  "src/query/execution/LogicalPlanMutationRuntime.cpp": "a002cd7a872cd700ad3f2e78299d699810a32e76fe24166ed25b6bf9f5123a29",
+  "src/storage/LogicalGraphTransactionOverlay.cpp": "7a33b661317b9ac61ec81d202dcf0f3cbbb72ec8c73136ac7c04c7607a040a43",
+  "src/storage/LogicalGraphPropertyPatch.cpp": "6e2f23503d62d1f711ffe6731c25b5c31ef3cec24afc762647dcdabc028f2abc"
+}

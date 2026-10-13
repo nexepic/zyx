@@ -1,0 +1,9 @@
+{
+  "tests_passed": 127,
+  "tests_failed": 0,
+  "suites": 4,
+  "full_suite_run": false,
+  "benchmark_run": false,
+  "binary_sha256": "b82f97723c380caa10a67418b713e0fc335f3db2540f0dff2bdea72f10f67f35",
+  "core_sha256": "9c3ed63801d6c76ab93410b53cac92c08c325f3b2cc76a74db8fdac8b8df27b1"
+}
