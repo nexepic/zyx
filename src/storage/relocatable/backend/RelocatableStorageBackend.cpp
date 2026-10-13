@@ -670,7 +670,7 @@ namespace graph::storage {
 					return {};
 				}
 				if (!preview_reservation_.has_value()) {
-					preview_reservation_.emplace();
+					preview_reservation_.emplace(PendingCreationReservation{0U, 0U, {}});
 					preview_reservation_->node_count = batch.node_creates.size();
 					preview_reservation_->edge_count = batch.edge_creates.size();
 					preview_reservation_->reservation = backend_.reserveLogicalGraphCreationIds(
