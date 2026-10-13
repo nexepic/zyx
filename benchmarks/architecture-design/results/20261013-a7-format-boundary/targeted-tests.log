@@ -1,0 +1,242 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 103 tests from 10 test suites.
+[----------] Global test environment set-up.
+[----------] 9 tests from RelocatableFormatTest
+[ RUN      ] RelocatableFormatTest.StrongIdentifiersAreExplicitAndComparable
+[       OK ] RelocatableFormatTest.StrongIdentifiersAreExplicitAndComparable (0 ms)
+[ RUN      ] RelocatableFormatTest.LittleEndianPrimitivesUsePortableCanonicalBytes
+[       OK ] RelocatableFormatTest.LittleEndianPrimitivesUsePortableCanonicalBytes (0 ms)
+[ RUN      ] RelocatableFormatTest.LittleEndianPrimitivesRejectTruncatedBuffers
+[       OK ] RelocatableFormatTest.LittleEndianPrimitivesRejectTruncatedBuffers (0 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecMatchesGoldenLittleEndianBytes
+[       OK ] RelocatableFormatTest.EnvelopeCodecMatchesGoldenLittleEndianBytes (0 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecAcceptsCanonicalFreeSegment
+[       OK ] RelocatableFormatTest.EnvelopeCodecAcceptsCanonicalFreeSegment (0 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecRejectsTruncatedAndCorruptInput
+[       OK ] RelocatableFormatTest.EnvelopeCodecRejectsTruncatedAndCorruptInput (0 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecRejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableFormatTest.EnvelopeCodecRejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (1 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecRejectsMalformedFieldsWithDeterministicErrors
+[       OK ] RelocatableFormatTest.EnvelopeCodecRejectsMalformedFieldsWithDeterministicErrors (0 ms)
+[ RUN      ] RelocatableFormatTest.EnvelopeCodecRejectsImpossibleHeaderAndLifecycleCombinations
+[       OK ] RelocatableFormatTest.EnvelopeCodecRejectsImpossibleHeaderAndLifecycleCombinations (0 ms)
+[----------] 9 tests from RelocatableFormatTest (1 ms total)
+
+[----------] 10 tests from RelocatableSuperblockTest
+[ RUN      ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips
+[       OK ] RelocatableSuperblockTest.CodecMatchesGoldenFieldsAndRoundTrips (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages
+[       OK ] RelocatableSuperblockTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages (15 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableSuperblockTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (1470 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor
+[       OK ] RelocatableSuperblockTest.PersistsAndValidatesTheMetadataEmergencyReserveDescriptor (0 ms)
+[ RUN      ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary
+[       OK ] RelocatableSuperblockTest.ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration
+[       OK ] RelocatableSuperblockTest.AllowsEmptyRootsAndSelectsTheNewestValidGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag
+[       OK ] RelocatableSuperblockTest.PersistsTheTypedPageDirectoryBootstrapFlag (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues
+[       OK ] RelocatableSuperblockTest.RejectsInvalidInMemoryValues (0 ms)
+[ RUN      ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes
+[       OK ] RelocatableSuperblockTest.RejectsTruncatedChecksummedAndMalformedDiskBytes (0 ms)
+[ RUN      ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain
+[       OK ] RelocatableSuperblockTest.AAndBSelectionSurvivesOneCorruptCopyAndRejectsSplitBrain (0 ms)
+[----------] 10 tests from RelocatableSuperblockTest (1486 ms total)
+
+[----------] 6 tests from RelocatableSuperblockPairTest
+[ RUN      ] RelocatableSuperblockPairTest.PublishesNewRootsIntoTheInactiveSlotAndRecoversThem
+[       OK ] RelocatableSuperblockPairTest.PublishesNewRootsIntoTheInactiveSlotAndRecoversThem (1 ms)
+[ RUN      ] RelocatableSuperblockPairTest.RejectsNonAdvancingAndMalformedPublicationRequests
+[       OK ] RelocatableSuperblockPairTest.RejectsNonAdvancingAndMalformedPublicationRequests (0 ms)
+[ RUN      ] RelocatableSuperblockPairTest.CrashBeforeOrDuringInactiveWriteRetainsThePriorGeneration
+[       OK ] RelocatableSuperblockPairTest.CrashBeforeOrDuringInactiveWriteRetainsThePriorGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockPairTest.CrashAfterCompleteInactiveWriteRecoversTheNewGeneration
+[       OK ] RelocatableSuperblockPairTest.CrashAfterCompleteInactiveWriteRecoversTheNewGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockPairTest.RebuildsEitherCorruptCopyInsteadOfOverwritingTheValidGeneration
+[       OK ] RelocatableSuperblockPairTest.RebuildsEitherCorruptCopyInsteadOfOverwritingTheValidGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockPairTest.RejectsUnknownFailpointWithoutChangingTheRecoveredGeneration
+[       OK ] RelocatableSuperblockPairTest.RejectsUnknownFailpointWithoutChangingTheRecoveredGeneration (0 ms)
+[----------] 6 tests from RelocatableSuperblockPairTest (3 ms total)
+
+[----------] 9 tests from RelocatableSuperblockFileTest
+[ RUN      ] RelocatableSuperblockFileTest.InitializesFixedBootstrapAndPersistsBothCopies
+[       OK ] RelocatableSuperblockFileTest.InitializesFixedBootstrapAndPersistsBothCopies (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.PublishesThenReopensTheNewestMetadataGeneration
+[       OK ] RelocatableSuperblockFileTest.PublishesThenReopensTheNewestMetadataGeneration (1 ms)
+[ RUN      ] RelocatableSuperblockFileTest.SeparatelyRecordsDataAndSuperblockPublicationFences
+[       OK ] RelocatableSuperblockFileTest.SeparatelyRecordsDataAndSuperblockPublicationFences (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.RebuildsEitherCorruptPeerWithoutDiscardingTheValidCopy
+[       OK ] RelocatableSuperblockFileTest.RebuildsEitherCorruptPeerWithoutDiscardingTheValidCopy (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.CrashBoundariesRetainOldOrPublishNewGenerationDeterministically
+[       OK ] RelocatableSuperblockFileTest.CrashBoundariesRetainOldOrPublishNewGenerationDeterministically (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.NativeShortWriteCannotPublishAPartialGeneration
+[       OK ] RelocatableSuperblockFileTest.NativeShortWriteCannotPublishAPartialGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.NativeDiskFullFailureCannotPublishANewGeneration
+[       OK ] RelocatableSuperblockFileTest.NativeDiskFullFailureCannotPublishANewGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.NativeCandidateRootSyncFailureCannotPublishANewGeneration
+[       OK ] RelocatableSuperblockFileTest.NativeCandidateRootSyncFailureCannotPublishANewGeneration (0 ms)
+[ RUN      ] RelocatableSuperblockFileTest.RejectsMalformedStaleAndTruncatedBootstrapStates
+[       OK ] RelocatableSuperblockFileTest.RejectsMalformedStaleAndTruncatedBootstrapStates (0 ms)
+[----------] 9 tests from RelocatableSuperblockFileTest (6 ms total)
+
+[----------] 16 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues
+[       OK ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode
+[       OK ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence
+[       OK ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads (5 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes
+[       OK ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation (5 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry
+[       OK ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission
+[       OK ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry (0 ms)
+[----------] 16 tests from RelocatablePropertyCollectionRootTest (12 ms total)
+
+[----------] 3 tests from RelocatableLargeValueRefTest
+[ RUN      ] RelocatableLargeValueRefTest.RoundTripsLogicalIdentityAndRejectsChecksumOrMetadataCorruption
+[       OK ] RelocatableLargeValueRefTest.RoundTripsLogicalIdentityAndRejectsChecksumOrMetadataCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueRefTest.RejectsNonCanonicalIdentityAndWellChecksummedWireCorruption
+[       OK ] RelocatableLargeValueRefTest.RejectsNonCanonicalIdentityAndWellChecksummedWireCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueRefTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueRefTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (2 ms)
+[----------] 3 tests from RelocatableLargeValueRefTest (2 ms total)
+
+[----------] 6 tests from RelocatableLargeValueManifestPageTest
+[ RUN      ] RelocatableLargeValueManifestPageTest.RoundTripsMixedChunksAndBindsTypedOwner
+[       OK ] RelocatableLargeValueManifestPageTest.RoundTripsMixedChunksAndBindsTypedOwner (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RoundTripsInternalAndLeafNodesWithOrderedRanges
+[       OK ] RelocatableLargeValueManifestPageTest.RoundTripsInternalAndLeafNodesWithOrderedRanges (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.FailsClosedForMalformedChunksAndUnusedBytes
+[       OK ] RelocatableLargeValueManifestPageTest.FailsClosedForMalformedChunksAndUnusedBytes (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueManifestPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (1065 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RejectsChecksummedHeaderAndLogicalShapeCorruption
+[       OK ] RelocatableLargeValueManifestPageTest.RejectsChecksummedHeaderAndLogicalShapeCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.AdmitsDecodedManifestArraysBeforeAllocationAndAllowsRetry
+[       OK ] RelocatableLargeValueManifestPageTest.AdmitsDecodedManifestArraysBeforeAllocationAndAllowsRetry (0 ms)
+[----------] 6 tests from RelocatableLargeValueManifestPageTest (1066 ms total)
+
+[----------] 5 tests from RelocatableLargeValueDataPageTest
+[ RUN      ] RelocatableLargeValueDataPageTest.PreservesCanonicalChunkFragmentsAndOwnerIdentity
+[       OK ] RelocatableLargeValueDataPageTest.PreservesCanonicalChunkFragmentsAndOwnerIdentity (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsChecksummedAndCanonicalLayoutCorruption
+[       OK ] RelocatableLargeValueDataPageTest.RejectsChecksummedAndCanonicalLayoutCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueDataPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (387 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsEveryInvalidFrameIdentityAndChecksummedHeaderShape
+[       OK ] RelocatableLargeValueDataPageTest.RejectsEveryInvalidFrameIdentityAndChecksummedHeaderShape (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.AdmitsDecodedPayloadAfterIntegrityChecksAndAllowsRetry
+[       OK ] RelocatableLargeValueDataPageTest.AdmitsDecodedPayloadAfterIntegrityChecksAndAllowsRetry (0 ms)
+[----------] 5 tests from RelocatableLargeValueDataPageTest (387 ms total)
+
+[----------] 26 tests from RelocatableBTreePageCodecTest
+[ RUN      ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata
+[       OK ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation (138 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads (8 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes
+[       OK ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams
+[       OK ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues
+[       OK ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata
+[       OK ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage
+[       OK ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants
+[       OK ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode
+[       OK ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount
+[       OK ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode
+[       OK ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints (2320 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads
+[       OK ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads (21 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership
+[       OK ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership (0 ms)
+[----------] 26 tests from RelocatableBTreePageCodecTest (2491 ms total)
+
+[----------] 13 tests from StorageFormatTest
+[ RUN      ] StorageFormatTest.ClassifiesEmptyTruncatedAndUnrecognizedFiles
+[       OK ] StorageFormatTest.ClassifiesEmptyTruncatedAndUnrecognizedFiles (0 ms)
+[ RUN      ] StorageFormatTest.RecognizesCompleteAndIncompleteRelocatableBootstrapFiles
+[       OK ] StorageFormatTest.RecognizesCompleteAndIncompleteRelocatableBootstrapFiles (0 ms)
+[ RUN      ] StorageFormatTest.DescribesEveryKnownAndUnknownFormat
+[       OK ] StorageFormatTest.DescribesEveryKnownAndUnknownFormat (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsHistoricalFileMagic
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsHistoricalFileMagic (0 ms)
+[ RUN      ] StorageFormatTest.UnsupportedBootstrapVersionsAreRejectedWithoutChangingTheExistingFile
+[       OK ] StorageFormatTest.UnsupportedBootstrapVersionsAreRejectedWithoutChangingTheExistingFile (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsMissingAndNonRegularPaths
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsMissingAndNonRegularPaths (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryCreatesAndOpensANewRelocatableDatabase
+[       OK ] StorageFormatTest.DatabaseFactoryCreatesAndOpensANewRelocatableDatabase (49 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryCreatesNoMetadataWalShmOrMigrationSidecar
+[       OK ] StorageFormatTest.DatabaseFactoryCreatesNoMetadataWalShmOrMigrationSidecar (44 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsBufferPoolCapacitySmallerThanOneRawPage
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsBufferPoolCapacitySmallerThanOneRawPage (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryReopensRelocatableDatabasesInWritableAndReadOnlyModes
+[       OK ] StorageFormatTest.DatabaseFactoryReopensRelocatableDatabasesInWritableAndReadOnlyModes (57 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsUnrecognizedExistingFiles
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsUnrecognizedExistingFiles (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsChecksumValidButNonCanonicalBootstraps
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsChecksumValidButNonCanonicalBootstraps (0 ms)
+[ RUN      ] StorageFormatTest.DatabaseFactoryRejectsBootstrapsWithNoValidChecksum
+[       OK ] StorageFormatTest.DatabaseFactoryRejectsBootstrapsWithNoValidChecksum (0 ms)
+[----------] 13 tests from StorageFormatTest (152 ms total)
+
+[----------] Global test environment tear-down
+[==========] 103 tests from 10 test suites ran. (5612 ms total)
+[  PASSED  ] 103 tests.

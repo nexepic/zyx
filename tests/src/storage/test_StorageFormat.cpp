@@ -182,6 +182,32 @@ TEST_F(StorageFormatTest, DatabaseFactoryRejectsHistoricalFileMagic) {
 				 std::runtime_error);
 }
 
+TEST_F(StorageFormatTest, UnsupportedBootstrapVersionsAreRejectedWithoutChangingTheExistingFile) {
+	const std::array<uint16_t, 2U> versions{
+		static_cast<uint16_t>(RSS_SUPERBLOCK_VERSION - 1U), static_cast<uint16_t>(RSS_SUPERBLOCK_VERSION + 1U)};
+	for (const uint16_t version : versions) {
+		resetFile();
+		auto unsupported = SuperblockCodec::encode(initialSuperblock());
+		LittleEndianCodec::writeU16(unsupported, SUPERBLOCK_FORMAT_VERSION_OFFSET, version);
+		resealSuperblock(unsupported);
+		std::array<std::byte, RSS_FILE_BOOTSTRAP_BYTES> expected{};
+		std::copy(unsupported.begin(), unsupported.end(), expected.begin());
+		std::copy(unsupported.begin(), unsupported.end(), expected.begin() + RSS_SUPERBLOCK_BYTES);
+		io->writeAt(0U, expected.data(), expected.size());
+		io->sync();
+		closeFixtureFile();
+		EXPECT_THROW(static_cast<void>(StorageBackendFactory::create(path.string(), 4096U, OpenMode::OPEN_EXISTING_FILE)),
+			std::runtime_error);
+		ASSERT_EQ(std::filesystem::file_size(path), expected.size());
+		std::ifstream unchanged(path, std::ios::binary);
+		ASSERT_TRUE(unchanged.is_open());
+		std::array<std::byte, RSS_FILE_BOOTSTRAP_BYTES> actual{};
+		unchanged.read(reinterpret_cast<char *>(actual.data()), static_cast<std::streamsize>(actual.size()));
+		ASSERT_EQ(unchanged.gcount(), static_cast<std::streamsize>(actual.size()));
+		EXPECT_EQ(actual, expected);
+	}
+}
+
 TEST_F(StorageFormatTest, DatabaseFactoryRejectsMissingAndNonRegularPaths) {
 	closeFixtureFile();
 	ASSERT_TRUE(std::filesystem::remove(path));
