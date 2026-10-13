@@ -1,0 +1,264 @@
+{
+  "date": "2026-10-13",
+  "status": "development_profile_not_stable_release",
+  "envelope_version": 4,
+  "superblock_version": 30,
+  "byte_order": "little_endian",
+  "prototype_scope_excluded": "benchmarks/graphdb-comparison/include and architecture-design prototypes are not an adopted production file format",
+  "slot_recovery": "select highest generation among supported valid slots; fail if none; reject differing same-generation slots",
+  "migration": "not implemented; explicit offline copy to a new database is the selected future method",
+  "declared_version_constants": [
+    {
+      "constant": "RSS_ALLOCATOR_PAGE_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/allocation/AllocatorPage.hpp",
+      "source_sha256": "b572c0873f8d81d0078aaa253742640be2f8685d4fb9956fe987d0bca423b652"
+    },
+    {
+      "constant": "RSS_SHARED_PAGE_POOL_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/allocation/SharedPagePool.hpp",
+      "source_sha256": "4a47b8093a7dae7784225d8f24d02cebc329f4c31b554e14c7fbf5778e7a351a"
+    },
+    {
+      "constant": "RSS_PAGE_OWNER_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/allocation/SharedPagePool.hpp",
+      "source_sha256": "4a47b8093a7dae7784225d8f24d02cebc329f4c31b554e14c7fbf5778e7a351a"
+    },
+    {
+      "constant": "RSS_SLOTTED_PAGE_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/allocation/SlottedPage.hpp",
+      "source_sha256": "f64d41269a44e06b416cf5485389ee68388c76a55ed406a35895290c2162e211"
+    },
+    {
+      "constant": "RSS_ENTITY_LABEL_SET_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/entity/EntityLabelSet.hpp",
+      "source_sha256": "695bbe1bd096d515d6821fbbb24e094af8561d504340fff7b44cc92053d5c65c"
+    },
+    {
+      "constant": "RSS_ENTITY_PAGE_VERSION",
+      "value": 4,
+      "source": "include/graph/storage/relocatable/entity/EntityPage.hpp",
+      "source_sha256": "2216a453e6b3bcdb5763efea87affbb72f3f128a6c41df16761b285382c325f4"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_RUN_SET_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/entity/NativeBulkEdgePrivateRunSet.hpp",
+      "source_sha256": "a41e5c6239d18611c628573f68730b9aa8ebc60c621889a227bb248dc3fd141c"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_EDGE_RECORD_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp",
+      "source_sha256": "2f18f7e9587236f5474e97a872f211aece780916dd0ee2ba0dfee2934c41f99a"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_EDGE_RUN_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp",
+      "source_sha256": "dacfd18d3ff786ec1d2b6fae92616f99f829a7b397e6e0a04c14f896efdba29f"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_EDGE_MANIFEST_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp",
+      "source_sha256": "6568d9da3c67c3e74258891a620e058ad85cdb54913cd90733ee66bd4dd71c15"
+    },
+    {
+      "constant": "RSS_FORMAT_VERSION",
+      "value": 4,
+      "source": "include/graph/storage/relocatable/format/Format.hpp",
+      "source_sha256": "1f290a90fda7d5db6842cad3556c951eacbdd9e862e3744cb7e5167cbf0e9eea"
+    },
+    {
+      "constant": "RSS_SUPERBLOCK_VERSION",
+      "value": 30,
+      "source": "include/graph/storage/relocatable/format/Superblock.hpp",
+      "source_sha256": "016e1a6f2db131e0b412af02b29055e2d0b40fb4a5c9209637ddfbbc4772b741"
+    },
+    {
+      "constant": "RSS_BTREE_PAGE_VERSION",
+      "value": 3,
+      "source": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "source_sha256": "a11383c96e41cdd56dafcbfdcfd3d47b2f19a11ffbad00ee37ab8359683e6a90"
+    },
+    {
+      "constant": "RSS_BTREE_ENTRY_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "source_sha256": "a11383c96e41cdd56dafcbfdcfd3d47b2f19a11ffbad00ee37ab8359683e6a90"
+    },
+    {
+      "constant": "RSS_BTREE_PACKED_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "source_sha256": "a11383c96e41cdd56dafcbfdcfd3d47b2f19a11ffbad00ee37ab8359683e6a90"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_RUN_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/index/NativeBulkRun.hpp",
+      "source_sha256": "65549914b1511393e2eb8b524b7519f0a9d847070d88c5819aa057207d83cf44"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_RUN_MANIFEST_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/index/NativeBulkRun.hpp",
+      "source_sha256": "65549914b1511393e2eb8b524b7519f0a9d847070d88c5819aa057207d83cf44"
+    },
+    {
+      "constant": "RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/maintenance/LargeValueMaintenanceJournal.hpp",
+      "source_sha256": "bf8bee7955230cb68669589082564d9afdeccd53cede8d16884c268e62a55d49"
+    },
+    {
+      "constant": "RSS_CATALOG_PAGE_VERSION",
+      "value": 4,
+      "source": "include/graph/storage/relocatable/metadata/CatalogPage.hpp",
+      "source_sha256": "4a27cf1e0b0f8b4627e4d84d57b57ddf50733567e13a93bbcfd60fb268f03095"
+    },
+    {
+      "constant": "RSS_CATALOG_RADIX_PAGE_VERSION",
+      "value": 4,
+      "source": "include/graph/storage/relocatable/metadata/CatalogRadix.hpp",
+      "source_sha256": "e5ce4ce948c642b0f0f9d9326b276198316a9fd2ab0928925bf69d278e6fe5a7"
+    },
+    {
+      "constant": "RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION",
+      "value": 5,
+      "source": "include/graph/storage/relocatable/metadata/CatalogRadix.hpp",
+      "source_sha256": "e5ce4ce948c642b0f0f9d9326b276198316a9fd2ab0928925bf69d278e6fe5a7"
+    },
+    {
+      "constant": "RSS_LOCATION_LEAF_VERSION",
+      "value": 3,
+      "source": "include/graph/storage/relocatable/metadata/LocationDirectory.hpp",
+      "source_sha256": "2f217aaf7b6ed2125b8134004374fae5895332a9f4a25b533976fdf402605459"
+    },
+    {
+      "constant": "RSS_METADATA_PAGE_POOL_VERSION",
+      "value": 4,
+      "source": "include/graph/storage/relocatable/metadata/MetadataPagePool.hpp",
+      "source_sha256": "65d92f62bab8ecf4f2e29d0819349b1a8da32c62961d884edd68ba598d40e8d9"
+    },
+    {
+      "constant": "RSS_METADATA_PAGE_ROUTE_LEAF_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/metadata/MetadataPageRoute.hpp",
+      "source_sha256": "7264416d01ff9f5b49d8a26d3c29a9f1827cbe8b6dcd6ab482507fbc362a6846"
+    },
+    {
+      "constant": "RSS_PAGE_DIRECTORY_BOOTSTRAP_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/metadata/PageDirectoryBootstrap.hpp",
+      "source_sha256": "428a2f17dad29ac78d38ecde5be3d87ae60fda8842a0b83289087766b1fda958"
+    },
+    {
+      "constant": "RSS_STATE_RECORD_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/metadata/StateRecord.hpp",
+      "source_sha256": "f772560adeea168069f3fe3715405b2df5025178aef581e465c63a8b81b1564c"
+    },
+    {
+      "constant": "RSS_LARGE_VALUE_REF_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "source_sha256": "013d1d6dc0d32c42fb195dbc12792342b7480309e9ff37dc24dd0926fa79fa93"
+    },
+    {
+      "constant": "RSS_LARGE_VALUE_MANIFEST_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "source_sha256": "013d1d6dc0d32c42fb195dbc12792342b7480309e9ff37dc24dd0926fa79fa93"
+    },
+    {
+      "constant": "RSS_LARGE_VALUE_DATA_PAGE_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "source_sha256": "013d1d6dc0d32c42fb195dbc12792342b7480309e9ff37dc24dd0926fa79fa93"
+    },
+    {
+      "constant": "RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION",
+      "value": 2,
+      "source": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "source_sha256": "52963e1792bc601f3afd9d8b603769e5ef46d28a89296b8b5984dc527656e6b7"
+    },
+    {
+      "constant": "RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION",
+      "value": 3,
+      "source": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "source_sha256": "52963e1792bc601f3afd9d8b603769e5ef46d28a89296b8b5984dc527656e6b7"
+    },
+    {
+      "constant": "RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "source_sha256": "52963e1792bc601f3afd9d8b603769e5ef46d28a89296b8b5984dc527656e6b7"
+    },
+    {
+      "constant": "RSS_CONSTRAINT_DEFINITION_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/schema/ConstraintDefinition.hpp",
+      "source_sha256": "ee8a4d907f350222d58d7e53210349d90b7c719f5279c64a91e182bd30266246"
+    },
+    {
+      "constant": "RSS_INDEX_DEFINITION_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/schema/IndexDefinition.hpp",
+      "source_sha256": "6a5450ec07224cb8e591397bae4d10925b4b054f77ecfa5dbd1cdb22aa1dd307"
+    },
+    {
+      "constant": "RSS_TOKEN_DEFINITION_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/schema/TokenDefinition.hpp",
+      "source_sha256": "c32efb786f5e66e6a78f8d9da9bf1a3aa0e241988ba629006a3037db22c15c14"
+    },
+    {
+      "constant": "RSS_VECTOR_ADJACENCY_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/vector/VectorAdjacency.hpp",
+      "source_sha256": "3ccbebd1c3c5caf74b57eeafafd7ddc5ab35ae53745ad2f2e7253b9b00e95409"
+    },
+    {
+      "constant": "RSS_VECTOR_CODEBOOK_VERSION",
+      "value": 3,
+      "source": "include/graph/storage/relocatable/vector/VectorCodebook.hpp",
+      "source_sha256": "aa74cdfb02980e6162e2da7540a0637aa1de20a81b0b3679822b8a70ad17babd"
+    },
+    {
+      "constant": "RSS_VECTOR_CODEBOOK_EXTENT_VERSION",
+      "value": 1,
+      "source": "include/graph/storage/relocatable/vector/VectorCodebookExtent.hpp",
+      "source_sha256": "0daed24c071706ac4b3f20979836bb5177f89ea96527ff719105d22e088fc2aa"
+    },
+    {
+      "constant": "RSS_VECTOR_MANIFEST_VERSION",
+      "value": 8,
+      "source": "include/graph/storage/relocatable/vector/VectorManifestPage.hpp",
+      "source_sha256": "a37d69b32f2654444f496d4a05cf142bb0840f86aa0187437cf70ceea5f628ce"
+    },
+    {
+      "constant": "RSS_VECTOR_PAGE_VERSION",
+      "value": 3,
+      "source": "include/graph/storage/relocatable/vector/VectorPage.hpp",
+      "source_sha256": "6ec0678898e529b61c81b4adb9b1d74fa0824d86bf208280d8ab514144943d24"
+    },
+    {
+      "constant": "RSS_NATIVE_BULK_TOKEN_RESOLVER_VERSION",
+      "value": 1,
+      "source": "src/storage/relocatable/entity/NativeBulkEdgePrivateTokenResolver.cpp",
+      "source_sha256": "dda859484ce4ea6df3946da55f86936507c73d5776796f4085071b6e1a67ccbb"
+    },
+    {
+      "constant": "PRIVATE_SCRATCH_RESERVATION_VERSION",
+      "value": 1,
+      "source": "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp",
+      "source_sha256": "8d5b9290dfff9b550148eb8fc0b5aa93b4e8c1c1da1883fc357427fcc4d55eb4"
+    }
+  ]
+}
