@@ -1,0 +1,48 @@
+ninja: Entering directory `buildDir'
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableStorageBackend.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:392:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  392 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:401:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  401 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:482:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  482 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:576:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  576 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:585:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  585 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1419:56: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1419 |                                         const EntityReadShape shape{.all_properties = true};
+      |                                                                                           ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1713:96: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1713 |                                                         const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+      |                                                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:3229:75: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3229 |                                 snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                       ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:3236:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3236 |                                 snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                     ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:3965:71: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3965 |                                 snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                   ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4407:78: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4407 |                                         snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4959:79: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4959 |                                                 snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                         ^
+13 warnings generated.
+[2/3] Linking CXX static library libzyx_core.a

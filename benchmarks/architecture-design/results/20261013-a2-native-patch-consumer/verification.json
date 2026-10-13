@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-13",
+  "tests_passed": 59,
+  "tests_failed": 0,
+  "suites": 3,
+  "full_suite_run": false,
+  "benchmark_run": false,
+  "binary": "/tmp/zyx-native-patch-tests",
+  "binary_sha256": "c8beb339b30c015ced2914cd77c037f4f216e3490b85ffc4f58c406176c56997",
+  "core_sha256": "6aff203a5fc5ea3953ce123e7443cf15e60209d1aaf88550ddb4deab0cc56169"
+}

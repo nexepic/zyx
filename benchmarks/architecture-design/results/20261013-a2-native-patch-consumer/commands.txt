@@ -1,0 +1,4 @@
+source /workspace/zyx-cloud-env.sh
+ninja -C buildDir -j4 zyx_core CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeGraphMutationExecutor_Validation.cpp.o CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp.o CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_LogicalGraphPropertyPatch.cpp.o
+# Link selected objects using module-link-command.txt with cwd=buildDir.
+/tmp/zyx-native-patch-tests --gtest_filter='NativeGraphMutationExecutorValidationTest.*:RelocatableStorageBackendTest.*:LogicalGraphPropertyPatchTest.*'

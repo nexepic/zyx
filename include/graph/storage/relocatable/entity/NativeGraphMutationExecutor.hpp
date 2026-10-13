@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -95,7 +96,20 @@ namespace graph::storage {
 				const NativeGraphMutationFenceValidator &expectedFence = {},
 				const LogicalGraphMutationReadControl &readControl = {}) const;
 
+		// Internal native patch entry point. Sources remain tokenized in the
+		// transaction snapshot; unchanged fields need no name resolution.
+		[[nodiscard]] NativeGraphMutationExecutionResult executeWithPropertyPatches(
+				const LogicalGraphMutationBatch &batch,
+				std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+				const NativeGraphMutationFenceValidator &expectedFence,
+				const LogicalGraphMutationReadControl &readControl = {}) const;
+
 	private:
+		[[nodiscard]] NativeGraphMutationExecutionResult executeImpl(
+				const LogicalGraphMutationBatch &batch,
+				std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+				const NativeGraphMutationFenceValidator &expectedFence,
+				const LogicalGraphMutationReadControl &readControl) const;
 		NativeGraphWritePlanner &writer_;
 		PageBackedGraphReadAdapter &graph_;
 		BTreePageStore &indexes_;
