@@ -641,7 +641,9 @@ namespace graph::storage {
 			}
 			void release(uint64_t id) override {
 				requireActive();auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch release handle is stale or foreign");
-				auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;
+				try {auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());}
+				catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
+				locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;
 			}
 			void finish() override {
 				if(!refund_)return;
@@ -649,7 +651,8 @@ namespace graph::storage {
 				while(!locations_.empty()) {
 					std::array<NativeBulkRunFragmentLocation,64U> batch;size_t count=0U;
 					for(const auto &[id,location]:locations_){if(count==batch.size())break;batch[count++]=location;}
-					auto gate=backend_.acquireNativePublicationGate();store_->releaseBatch(std::span(batch).first(count),backend_.nextNativeBulkScratchCheckpointLsn());
+					try {auto gate=backend_.acquireNativePublicationGate();store_->releaseBatch(std::span(batch).first(count),backend_.nextNativeBulkScratchCheckpointLsn());}
+					catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
 					for(size_t i=0;i<count;++i)locations_.erase(locations_.begin());used_bytes_-=count*RSS_SEGMENT_SIZE;
 				}
 				releasePermit();

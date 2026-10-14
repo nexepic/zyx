@@ -124,5 +124,27 @@
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
+  },
+  "current_request": {
+    "requested_additional_items": 12,
+    "baseline_accepted": 22,
+    "target_accepted": 34,
+    "target_percent": 100,
+    "candidate_ids": [
+      "S0.3",
+      "S0.4",
+      "S2.5",
+      "S3.5",
+      "S4.4",
+      "S5.3",
+      "S5.4",
+      "S5.5",
+      "S6.1",
+      "S6.2",
+      "S6.3",
+      "S6.4"
+    ],
+    "completed_ids": [],
+    "status": "in_progress"
   }
 }
