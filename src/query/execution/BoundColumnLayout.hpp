@@ -34,19 +34,13 @@ public:
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource(),
 		const std::function<void()> &checkpoint = {})
 		: memory_(budget, upstream), names_(&memory_), budget_(&budget) {
-		if (!upstream || names.size() > (std::numeric_limits<uint32_t>::max)())
-			throw std::invalid_argument("column layout requires a valid allocator and uint32 column count");
-		const auto guard = [&] { if (checkpoint) checkpoint(); };
-		for (const auto &name : names) { guard(); if (name.empty()) throw std::invalid_argument("column layout has an empty name"); }
-		guard();
-		names_.reserve(names.size());
-		std::pmr::set<std::string_view> unique(&memory_);
-		for (const auto &name : names) {
-			guard();
-			if (!unique.insert(name).second) throw std::invalid_argument("column layout has duplicate names");
-			names_.emplace_back(name);
-		}
-		guard(); // Temporary validation nodes refund before publication.
+		initialize(names, upstream, checkpoint);
+	}
+	BoundColumnLayout(std::in_place_t, std::span<const std::string_view> names, MaterializedByteBudget &budget,
+		std::pmr::memory_resource *upstream = std::pmr::get_default_resource(),
+		const std::function<void()> &checkpoint = {})
+		: memory_(budget, upstream), names_(&memory_), budget_(&budget) {
+		initialize(names, upstream, checkpoint);
 	}
 	BoundColumnLayout(const BoundColumnLayout &) = delete;
 	BoundColumnLayout &operator=(const BoundColumnLayout &) = delete;
@@ -68,13 +62,34 @@ public:
 			throw std::invalid_argument("column descriptor belongs to another layout");
 		return names_.at(column.index);
 	}
-	void validate(std::span<const std::string> names) const {
+	void validate(std::span<const std::string> names) const { validateNames(names); }
+	void validateViews(std::span<const std::string_view> names) const { validateNames(names); }
+private:
+	template<class Name>
+	void validateNames(std::span<const Name> names) const {
 		if (names.size() != names_.size()) throw std::logic_error("bound column layout changed its width");
 		for (size_t index = 0U; index < names.size(); ++index)
 			if (std::string_view(names[index]) != std::string_view(names_[index]))
 				throw std::logic_error("bound column layout changed its names or order");
 	}
-private:
+
+	template<class Name>
+	void initialize(std::span<const Name> names, std::pmr::memory_resource *upstream, const std::function<void()> &checkpoint) {
+		if (!upstream || names.size() > (std::numeric_limits<uint32_t>::max)())
+			throw std::invalid_argument("column layout requires a valid allocator and uint32 column count");
+		const auto guard = [&] { if (checkpoint) checkpoint(); };
+		for (const auto &name : names) { guard(); if (name.empty()) throw std::invalid_argument("column layout has an empty name"); }
+		guard();
+		names_.reserve(names.size());
+		std::pmr::set<std::string_view> unique(&memory_);
+		for (const auto &name : names) {
+			guard();
+			if (!unique.insert(name).second) throw std::invalid_argument("column layout has duplicate names");
+			names_.emplace_back(name);
+		}
+		guard(); // Temporary validation nodes refund before publication.
+	}
+
 	BatchIdentity identity_;
 	BudgetMemoryResource memory_;
 	std::pmr::vector<std::pmr::string> names_;

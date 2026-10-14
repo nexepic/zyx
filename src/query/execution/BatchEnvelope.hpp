@@ -93,7 +93,54 @@ public:
 	template<class Guard>
 	void publish(std::span<const std::string> names, std::span<const BatchColumnSource> sources, size_t rows,
 		std::span<const uint32_t> selected, std::span<const uint64_t> originalOrdinals, Guard guard) {
-		identity_.advance(); guard(); validateSnapshot(snapshot_); layout_.validate(names);
+		publishImpl(names, sources, rows, selected, originalOrdinals, std::move(guard));
+	}
+	template<class Guard>
+	void publish(std::span<const std::string_view> names, std::span<const BatchColumnSource> sources, size_t rows,
+		std::span<const uint32_t> selected, std::span<const uint64_t> originalOrdinals, Guard guard) {
+		publishImpl(names, sources, rows, selected, originalOrdinals, std::move(guard));
+	}
+
+	[[nodiscard]] size_t size() const noexcept { return rows_; }
+	[[nodiscard]] size_t selectedCount() const noexcept { return selected_.size(); }
+	[[nodiscard]] BatchRowId rowId(size_t row) const {
+		if (!published_ || row >= rows_) throw std::out_of_range("batch row is outside publication");
+		return identity_.row(static_cast<uint32_t>(row));
+	}
+	[[nodiscard]] BatchRowId selectedRow(size_t index) const { return rowId(selected_.at(index)); }
+	[[nodiscard]] uint64_t originalOrdinal(BatchRowId row) const { validateRow(row); return ordinals_.at(row.index); }
+	[[nodiscard]] BatchCellView cell(BoundColumnId column, BatchRowId row) const {
+		validateRow(row); (void) layout_.name(column); const auto &source = columns_.at(column.index);
+		source.validate(source.owner, source.version);
+		return source.read(source.owner, {row.index, source.version.owner, source.version.incarnation}, source.ordinal);
+	}
+	[[nodiscard]] BatchRowId sourceRow(BoundColumnId column, BatchRowId row) const {
+		validateRow(row); (void) layout_.name(column); const auto &source = columns_.at(column.index);
+		source.validate(source.owner, source.version); return {row.index, source.version.owner, source.version.incarnation};
+	}
+	[[nodiscard]] BatchColumnKind columnKind(BoundColumnId column) const {
+		if (!published_) throw std::logic_error("batch has no published columns");
+		(void) layout_.name(column); return columns_.at(column.index).kind;
+	}
+	[[nodiscard]] bool exactPresence(BoundColumnId column) const { (void) layout_.name(column); return columns_.at(column.index).exact_presence; }
+	void validateSnapshot(const storage::LogicalGraphReadSnapshot &snapshot) const {
+		if (&snapshot != &snapshot_ || snapshot.mutationFence() != fence_ || snapshot.bindingSchemaIdentity() != schema_ || snapshot.supportsPropertyTokenResolution() != token_support_)
+			throw std::invalid_argument("batch belongs to another data snapshot");
+	}
+	[[nodiscard]] uint64_t program() const noexcept { return program_; }
+	void validateProgram(uint64_t program) const { if (program != program_) throw std::invalid_argument("batch belongs to another execution program"); }
+	void release() noexcept {
+		identity_.invalidate(); published_ = false; rows_ = 0U;
+		std::pmr::vector<BatchColumnSource>(&memory_).swap(columns_);
+		std::pmr::vector<uint32_t>(&memory_).swap(selected_); std::pmr::vector<uint64_t>(&memory_).swap(ordinals_);
+	}
+private:
+	template<class Guard, class Name>
+	void publishImpl(std::span<const Name> names, std::span<const BatchColumnSource> sources, size_t rows,
+		std::span<const uint32_t> selected, std::span<const uint64_t> originalOrdinals, Guard guard) {
+		identity_.advance(); guard(); validateSnapshot(snapshot_);
+		if constexpr (std::is_same_v<Name, std::string_view>) layout_.validateViews(names);
+		else layout_.validate(names);
 		if (sources.size() != layout_.size() || rows > maximum_rows_ || selected.size() > maximum_rows_ || originalOrdinals.size() != rows)
 			throw std::invalid_argument("batch envelope has inconsistent rectangular metadata");
 		for (const auto &source : sources) {
@@ -121,36 +168,6 @@ public:
 		guard(); validateSnapshot(snapshot_);
 		columns_.swap(nextColumns); selected_.swap(nextSelected); ordinals_.swap(nextOrdinals); rows_ = rows; published_ = true;
 	}
-	[[nodiscard]] size_t size() const noexcept { return rows_; }
-	[[nodiscard]] size_t selectedCount() const noexcept { return selected_.size(); }
-	[[nodiscard]] BatchRowId rowId(size_t row) const {
-		if (!published_ || row >= rows_) throw std::out_of_range("batch row is outside publication");
-		return identity_.row(static_cast<uint32_t>(row));
-	}
-	[[nodiscard]] BatchRowId selectedRow(size_t index) const { return rowId(selected_.at(index)); }
-	[[nodiscard]] uint64_t originalOrdinal(BatchRowId row) const { validateRow(row); return ordinals_.at(row.index); }
-	[[nodiscard]] BatchCellView cell(BoundColumnId column, BatchRowId row) const {
-		validateRow(row); (void) layout_.name(column); const auto &source = columns_.at(column.index);
-		source.validate(source.owner, source.version);
-		return source.read(source.owner, {row.index, source.version.owner, source.version.incarnation}, source.ordinal);
-	}
-	[[nodiscard]] BatchRowId sourceRow(BoundColumnId column, BatchRowId row) const {
-		validateRow(row); (void) layout_.name(column); const auto &source = columns_.at(column.index);
-		source.validate(source.owner, source.version); return {row.index, source.version.owner, source.version.incarnation};
-	}
-	[[nodiscard]] bool exactPresence(BoundColumnId column) const { (void) layout_.name(column); return columns_.at(column.index).exact_presence; }
-	void validateSnapshot(const storage::LogicalGraphReadSnapshot &snapshot) const {
-		if (&snapshot != &snapshot_ || snapshot.mutationFence() != fence_ || snapshot.bindingSchemaIdentity() != schema_ || snapshot.supportsPropertyTokenResolution() != token_support_)
-			throw std::invalid_argument("batch belongs to another data snapshot");
-	}
-	[[nodiscard]] uint64_t program() const noexcept { return program_; }
-	void validateProgram(uint64_t program) const { if (program != program_) throw std::invalid_argument("batch belongs to another execution program"); }
-	void release() noexcept {
-		identity_.invalidate(); published_ = false; rows_ = 0U;
-		std::pmr::vector<BatchColumnSource>(&memory_).swap(columns_);
-		std::pmr::vector<uint32_t>(&memory_).swap(selected_); std::pmr::vector<uint64_t>(&memory_).swap(ordinals_);
-	}
-private:
 	static void validateCell(BatchColumnKind kind, const BatchCellView &cell) {
 		if (cell.state != ColumnCellState::CCS_VALUE) {
 			if ((cell.state != ColumnCellState::CCS_NULL && cell.state != ColumnCellState::CCS_MISSING) || !std::holds_alternative<std::monostate>(cell.data))

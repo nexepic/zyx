@@ -70,3 +70,17 @@ TEST_F(RelocatableStorageBackendTest, CachedLogicalPlansRebindParameterTypesAndR
 	context.parameters["value"] = PropertyValue("replacement"); database.close();
 	EXPECT_EQ(std::get<std::string>(text.getRows().front().at("value").asPrimitive().getVariant()), std::string(8192U, 'a'));
 }
+
+TEST_F(RelocatableStorageBackendTest, NativeScanPredicateProjectionAndAggregateUseBoundBatchPublication) {
+	materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open();
+	auto engine = database.getQueryEngine(); engine->execute("CREATE (:Binding {id:1,rank:5}),(:Binding {id:2,rank:8})");
+	TraceValues trace;
+	const auto projected = engine->execute("MATCH (n:Binding {rank:8}) RETURN n.id AS id,n.rank AS rank");
+	ASSERT_EQ(projected.rowCount(), 1U); EXPECT_EQ(projected.getRows().front().at("id").toString(), "2");
+	EXPECT_EQ(projected.getRows().front().at("rank").toString(), "8");
+	const auto aggregate = engine->execute("MATCH (n:Binding {rank:8}) RETURN sum(n.rank) AS total");
+	ASSERT_EQ(aggregate.rowCount(), 1U); EXPECT_EQ(aggregate.getRows().front().at("total").toString(), "8");
+	const auto values = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(values.contains("logical_plan.bound_scan.published"));
+	EXPECT_GT(values.at("logical_plan.bound_scan.published").totalValue, 0);
+}
