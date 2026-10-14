@@ -312,6 +312,23 @@ namespace graph::storage {
 	// but cannot derive page locations, Segment IDs, or storage placement from it.
 	// Metadata-only allocation may advance an implementation's publication
 	// generation without invalidating this fence.
+	// Authenticated catalog observation for query-local property/schema binding.
+	// Catalog tokens are opaque equality data, never dereferenceable locations.
+	// This is conservative: catalog statistics and shared page-directory changes
+	// can invalidate it too. It is not an independent persistent schema epoch.
+	// Overlay view tokens distinguish unrelated transactions at equal revisions.
+	struct LogicalGraphSchemaIdentity {
+		uint64_t database_token = 0U;
+		uint64_t format_token = 0U;
+		std::array<uint64_t, 6U> catalog_tokens{};
+		uint64_t view_token = 0U;
+		uint64_t logical_revision = 0U;
+		[[nodiscard]] constexpr bool isValid() const {
+			return database_token != 0U && format_token != 0U && (view_token != 0U || logical_revision == 0U);
+		}
+		constexpr bool operator==(const LogicalGraphSchemaIdentity &) const = default;
+	};
+
 	struct LogicalGraphMutationFence {
 		// Each graph-visible root is represented by its physical slot, frame, and
 		// generation. Keep the storage width derived from that contract instead of
@@ -1098,6 +1115,10 @@ namespace graph::storage {
 		// fence. Read-only-only adapters may return nullopt; callers then must not
 		// attempt a read-dependent optimistic mutation through that adapter.
 		[[nodiscard]] virtual std::optional<LogicalGraphMutationFence> mutationFence() const { return std::nullopt; }
+		// Unsupported readers explicitly decline authenticated schema binding.
+		// The identity does not replace a data snapshot/fence, semantic plan key,
+		// capability validation or owning lifetime; it enables no plan cache alone.
+		[[nodiscard]] virtual std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const { return std::nullopt; }
 	};
 
 	// Storage backends opt in only after they can provide a snapshot-safe logical

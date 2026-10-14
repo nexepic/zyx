@@ -484,6 +484,18 @@ namespace graph::storage {
 				return RelocatableStorageBackend::makeLogicalGraphMutationFence(superblock);
 			}
 
+			[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {
+				const auto fence = mutationFence(); // authenticates the pinned metadata identity
+				// The System Catalog has a logical B+Tree root. Root PageId and its
+				// lifetime generation can survive descendant COW updates, so observe
+				// both directories that resolve its immutable tree in this snapshot.
+				const auto &catalog = snapshot_.superblock().index_root_directory_root;
+				const auto &pages = snapshot_.superblock().page_directory_root;
+				return LogicalGraphSchemaIdentity{fence->backend_token, fence->format_token,
+					{catalog.physical_slot.value(), static_cast<uint64_t>(catalog.frame_index), catalog.generation.value(),
+					 pages.physical_slot.value(), static_cast<uint64_t>(pages.frame_index), pages.generation.value()}, 0U, 0U};
+			}
+
 			[[nodiscard]] LogicalGraphVectorSearchResult
 			searchLogicalVector(const LogicalGraphVectorSearchRequest &request) const override {
 				return backend_.searchLogicalVector(snapshot_, request);

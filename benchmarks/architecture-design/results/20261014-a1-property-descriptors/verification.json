@@ -1,0 +1,21 @@
+{
+  "base_commit": "646298aeaf6c503fb0e17a3a5c8c803903500b73",
+  "source": "working_tree",
+  "passed": 103,
+  "suite_counts": {
+    "BoundPropertyBindingsTest": 11,
+    "BoundSlotRegistryTest": 12,
+    "RelocatableStorageBackendTest": 6,
+    "LogicalGraphTransactionOverlayUndoTest": 7,
+    "LogicalGraphTransactionOverlayTest": 67
+  },
+  "full_suite": false,
+  "benchmark": false,
+  "physical_plan_cache_enabled": false,
+  "production_query_pipeline_migrated": false,
+  "S1.1": "in_progress",
+  "accepted": 4,
+  "total": 34,
+  "percent": 11.8,
+  "commit_push": "deferred_until_acceptance_increases"
+}

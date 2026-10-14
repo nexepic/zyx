@@ -9,6 +9,7 @@
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -25,6 +26,15 @@
 namespace graph::storage {
 
 	namespace {
+		uint64_t nextOverlayViewToken() {
+			static std::atomic<uint64_t> next{1U};
+			uint64_t value = next.load(std::memory_order_relaxed);
+			for (;;) {
+				if (value == (std::numeric_limits<uint64_t>::max)())
+					throw std::overflow_error("logical transaction overlay view identity exhausted");
+				if (next.compare_exchange_weak(value, value + 1U, std::memory_order_relaxed)) return value;
+			}
+		}
 
 		template<typename Edge>
 		void ensureAdjacencyCapacity(std::vector<Edge> &edges, size_t maximumRecords) {
@@ -2147,6 +2157,10 @@ namespace graph::storage {
 			requireActive();
 			return overlay_.overlayFence();
 		}
+		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {
+			requireActive();
+			return overlay_.overlaySchemaIdentity();
+		}
 
 	private:
 
@@ -2926,6 +2940,10 @@ namespace graph::storage {
 			requireActive();
 			return overlay_.overlayFence();
 		}
+		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {
+			requireActive();
+			return overlay_.overlaySchemaIdentity();
+		}
 
 		[[nodiscard]] LogicalGraphVectorSearchResult
 		searchLogicalVector(const LogicalGraphVectorSearchRequest &request) const override {
@@ -3020,7 +3038,7 @@ namespace graph::storage {
 	};
 
 	LogicalGraphTransactionOverlay::LogicalGraphTransactionOverlay(LogicalGraphTransaction &transaction) :
-		transaction_(transaction) {
+			transaction_(transaction), view_token_(nextOverlayViewToken()) {
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
 			throw std::logic_error("logical transaction overlay requires an active transaction");
 		}
@@ -3184,6 +3202,17 @@ namespace graph::storage {
 
 	std::optional<LogicalGraphMutationFence> LogicalGraphTransactionOverlay::baseFence() const {
 		return baseSnapshot().mutationFence();
+	}
+
+	std::optional<LogicalGraphSchemaIdentity> LogicalGraphTransactionOverlay::overlaySchemaIdentity() const {
+		auto identity = baseSnapshot().bindingSchemaIdentity();
+		// A mutable overlay cannot be treated as this transaction's immutable base.
+		if (!identity) return std::nullopt;
+		if (!identity->isValid()) throw std::logic_error("logical transaction base returned an invalid schema identity");
+		if (identity->view_token != 0U) return std::nullopt;
+		identity->view_token = view_token_;
+		identity->logical_revision = logical_revision_;
+		return identity;
 	}
 
 	std::optional<LogicalGraphMutationFence> LogicalGraphTransactionOverlay::overlayFence() const {
