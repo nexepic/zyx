@@ -1,0 +1,7 @@
+# S4.1 acceptance
+
+The consistency protocol retains authoritative Edge records and checks encountered covered identity, endpoint and type before output or filtering. Native tests implement two laboratory carriers: a separate u64 Packed B+Tree leaf routes to a shared authenticated fixed-width topology value; shared segmented values pack low-degree entries and split a hub into bounded 64-entry blocks. 1,100 entries preserve parallel edges and self-loops, bounded continuation by ordinal, old-value snapshots and reopen. Valid bytes with wrong fields or missing masters fail comparison. A separate native u64-leaf test authenticates the actual page and resolves its locator.
+
+For the 35,200-byte shared payload, uniform packing uses 2 chunks; 64-entry segmentation uses 18 (a distinct trailer prevents content deduplication from reusing the other layout). This is physical layout evidence, not end-to-end page IO, latency or steady-state space evidence. The map of expected masters is a test oracle; it is not a second production authority.
+
+Both candidates are rejected for production admission: neither carrier owns an atomic authoritative graph route, dual-direction mutation protocol or reachability-based retirement. Candidate COW/reopen checks prove carrier lifetime only. No format constants or reserved EMPTY-tree interpretation change. Accept S4.1 as the implemented comparison and explicit retain-current-layout decision; enabling covered/segmented storage requires a new admission decision and the missing lifecycle gates. No performance thresholds are claimed.
