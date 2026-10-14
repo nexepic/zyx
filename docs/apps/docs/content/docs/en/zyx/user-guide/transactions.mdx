@@ -90,12 +90,13 @@ For the full Python Transaction API, see [Python API Reference](../api/python-ap
 ## Behavior Notes
 
 :::warning Concurrency Model
-ZYX uses a **single-writer/multi-reader** model: only one write transaction is allowed at a time, while read transactions execute concurrently via snapshot isolation. Nested transactions are not supported.
+The native backend provides **pinned snapshot reads and conservative optimistic write validation**. Several ordinary write transactions may stage changes, while durable publication is serialized within one writable backend. If another graph-changing transaction commits, a stale writer can fail with a conflict even when it changes a different entity. Start a new transaction and repeat its reads to retry. Read-only transactions keep their original snapshot. This is not a general serializable-isolation guarantee. Use one writable database owner; independent writable handles/processes are outside this contract. Nested transactions are not supported.
 :::
 
 - Uncommitted changes are not durable until `COMMIT`
-- After `COMMIT`, data is written to WAL and can be recovered even if the process crashes
-- Use `save` or API `save()` after commit when immediate disk persistence is needed
+- A successful native `COMMIT` durably publishes a complete copy-on-write generation; it does not require a later `save()` or the legacy WAL path
+- A failed commit ends the transaction. If the durable outcome is indeterminate, close/reopen the database and inspect recovered state before retrying; do not automatically replay procedures or other external side effects
+- Ordinary transactions read their own staged changes. Streamed bulk append has a separate contract and does not provide this overlay behavior
 
 ## Failure Handling Pattern
 
@@ -107,7 +108,7 @@ flowchart TD
   C -->|No| E[ROLLBACK]
   D -->|Yes| F[COMMIT]
   D -->|No| B
-  F --> G[save — optional flush]
+  F --> G[Durable generation published]
 ```
 
 1. Start an explicit transaction for multi-step writes
