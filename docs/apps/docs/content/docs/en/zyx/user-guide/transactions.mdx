@@ -115,3 +115,5 @@ flowchart TD
 2. Validate intermediate assumptions with `MATCH ... RETURN`
 3. `COMMIT` only when all checks pass
 4. `ROLLBACK` on any semantic or business failure
+
+A bounded native blind-write exception now permits up to 64 persisted Node property owners to rebase. It applies only before any transaction read snapshot or Vector snapshot has been exposed, and excludes patches, creation/deletion, labels and Edge mutations. Under the publication gate, validation compares every owner’s Property Directory slot identity/generation (including absence) and Node liveness with its pinned base; the executor then rebuilds from latest roots and checks current constraints/indexes. At most three builds are allowed. Any exposed read, unsupported operation or over-cap dependency set retains the whole-graph fence. This exception does not add automatic query/procedure replay or cross-owner concurrency.

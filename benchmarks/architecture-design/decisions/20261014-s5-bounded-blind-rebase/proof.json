@@ -1,0 +1,20 @@
+{
+  "item": "S5.1",
+  "status": "accepted",
+  "selected_tests": 214,
+  "new_histories": 6,
+  "concurrent_repetitions": 20,
+  "max_blind_owners": 64,
+  "max_rebuilds": 3,
+  "read_fallback": "whole_graph_fence",
+  "full_suite": false,
+  "performance_timing": false,
+  "format_change": false,
+  "local_evidence": "benchmarks/architecture-design/results/20261014-s5-bounded-blind-rebase",
+  "sha256": {
+    "zyx-s51-selected-tests.log": "8f4759dc9f196b9d8f0b3150497f799f778b468af720588a545496ce5ec56d7a",
+    "zyx-s51-selected.xml": "3127257f16f12eb7c4eb71d7e7f0cb2d40a05aae1986fa25e1b9dbdfd5b254f1",
+    "zyx-s51-selected-link-command.txt": "26c26ef536e73bb36ce7f9f47d9a87926e2a42b4e3ee7daf754b38b671331696",
+    "zyx-s51-races.log": "c2aa59add0d728ed727412f16e7677d4b14ed508c260f38ad01c35c1cb891c1b"
+  }
+}

@@ -123,6 +123,7 @@ TEST_F(RelocatableStorageBackendTest, IsolationDisjointWritesOnSharedPropertyPag
 		ASSERT_EQ(a.page_id, b.page_id); ASSERT_NE(a.slot_id, b.slot_id);
 	}
 	auto first = backend.beginLogicalGraphTransaction(false), second = backend.beginLogicalGraphTransaction(false);
+	EXPECT_EQ(second->readSnapshot().readNodeProperty(ids[1],"value"),PropertyValue(0));
 	(void) first->stageMutationBatch(isolationSet(ids[0], "value", PropertyValue(11)));
 	(void) second->stageMutationBatch(isolationSet(ids[1], "value", PropertyValue(22)));
 	(void) first->commit();
@@ -146,6 +147,7 @@ TEST_F(RelocatableStorageBackendTest, IsolationSimultaneousCommitHasOneWinnerAnd
 	const auto ids=backend.createLogicalNodes({{{"Race"},{{"value",PropertyValue(0)}}},{{"Race"},{{"value",PropertyValue(0)}}}});
 	auto reader=backend.beginLogicalGraphTransaction(true);
 	auto first=backend.beginLogicalGraphTransaction(false),second=backend.beginLogicalGraphTransaction(false);
+	(void)first->readSnapshot();(void)second->readSnapshot();
 	(void)first->stageMutationBatch(isolationSet(ids[0],"value",PropertyValue(11)));
 	(void)second->stageMutationBatch(isolationSet(ids[1],"value",PropertyValue(22)));
 	std::barrier start(3);std::atomic<int> committed{0},conflicted{0},unexpected{0};

@@ -619,9 +619,9 @@ namespace graph::storage {
 		public:
 			RelocatableLogicalGraphTransaction(RelocatableStorageBackend &backend, bool readOnly,
 											   std::unique_ptr<LogicalGraphVectorSearchSnapshot> snapshot,
-											   LogicalGraphMutationFence fence, Generation metadataGeneration) :
+											   LogicalGraphMutationFence fence, Generation metadataGeneration, RelocatableReadSnapshot rawSnapshot) :
 				backend_(backend), read_only_(readOnly), snapshot_(std::move(snapshot)), fence_(std::move(fence)),
-				metadata_generation_(metadataGeneration), issued_node_ids_(), issued_edge_ids_() {
+				metadata_generation_(metadataGeneration), raw_snapshot_(std::move(rawSnapshot)), issued_node_ids_(), issued_edge_ids_() {
 				if (snapshot_ == nullptr) { // transaction construction only receives a snapshot opened by the initialized native backend.
 					throw std::logic_error("relocatable logical transaction could not open its read snapshot");
 				}
@@ -648,6 +648,8 @@ namespace graph::storage {
 					throw std::logic_error(
 							"relocatable streamed bulk Edge transaction does not support read-your-writes reads");
 				}
+				reads_exposed_ = true;
+				raw_snapshot_.release();
 				return *snapshot_;
 			}
 
@@ -657,6 +659,8 @@ namespace graph::storage {
 					throw std::logic_error("relocatable streamed bulk Edge transaction does not support Vector "
 										   "read-your-writes reads");
 				}
+				reads_exposed_ = true;
+				raw_snapshot_.release();
 				return *snapshot_;
 			}
 
@@ -935,12 +939,14 @@ namespace graph::storage {
 					}
 					state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
 					snapshot_.reset();
+					raw_snapshot_.release();
 					return {};
 				}
 				if (hasStreamedBulkEdges()) {
 					std::exception_ptr cleanup_failure;
 					try {
 						snapshot_.reset();
+						raw_snapshot_.release();
 						const bool maintenanceAttached = backend_.maintenanceEnabled();
 						const bool maintenanceQuiesced =
 								backend_.currentNativeMetadataGeneration() != metadata_generation_ &&
@@ -985,6 +991,7 @@ namespace graph::storage {
 						bulk_session_lease_.reset();
 						state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
 						snapshot_.reset();
+						raw_snapshot_.release();
 						return {};
 					} catch (...) {
 						cleanup_failure = std::current_exception();
@@ -998,6 +1005,7 @@ namespace graph::storage {
 					state_ = backend_.hasIndeterminateWriteOutcome() ? LogicalGraphTransactionState::LGTTS_INDETERMINATE
 																	 : LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
 					snapshot_.reset();
+					raw_snapshot_.release();
 					if (cleanup_failure != nullptr) {
 						std::rethrow_exception(cleanup_failure);
 					}
@@ -1007,12 +1015,23 @@ namespace graph::storage {
 
 				try {
 					CanonicalMutation canonical = canonicalizeFinalState();
-					if ((!canonical.batch.property_replacements.empty() || !property_patches_.empty()) &&
+					const bool blindRebase = !reads_exposed_ && property_patches_.empty() &&
+						!canonical.batch.property_replacements.empty() && canonical.batch.property_replacements.size() <= 64U &&
+						canonical.batch.node_creates.empty() && canonical.batch.edge_creates.empty() &&
+						canonical.batch.node_label_replacements.empty() && canonical.batch.node_deletes.empty() &&
+						canonical.batch.edge_deletes.empty() && !canonical.batch.creation_identity_plan &&
+						std::ranges::all_of(canonical.batch.property_replacements, [](const auto &request) {
+							return request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE &&
+								request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED;
+						});
+					if (!blindRebase && (!canonical.batch.property_replacements.empty() || !property_patches_.empty()) &&
 						backend_.currentNativeLogicalGraphMutationFence() != fence_)
 						throw LogicalGraphMutationConflict("logical transaction Property source fence changed before final planning");
-					CanonicalPropertyPatches patches = extractFinalPropertyPatches(canonical.batch);
+					CanonicalPropertyPatches patches = blindRebase ? CanonicalPropertyPatches{} : extractFinalPropertyPatches(canonical.batch);
 					appendCanonicalStagedPropertyPatches(canonical.batch, patches);
-					LogicalGraphMutationBatchResult result = patches.requests.empty()
+					LogicalGraphMutationBatchResult result = blindRebase
+						? backend_.executeNativeBlindNodePropertyReplacements(canonical.batch, raw_snapshot_, fence_)
+						: patches.requests.empty()
 						? backend_.executeLogicalGraphMutationBatch(canonical.batch, fence_)
 						: backend_.executeLogicalGraphMutationBatchWithPropertyPatches(
 							*snapshot_, canonical.batch, patches.requests, patches.entry_bound, fence_);
@@ -1025,6 +1044,7 @@ namespace graph::storage {
 					property_patches_.clear();
 					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
+					raw_snapshot_.release();
 					return result;
 				} catch (const LogicalGraphMutationConflict &) {
 					abandonOutstandingCreationReservations();
@@ -1033,6 +1053,7 @@ namespace graph::storage {
 					property_patches_.clear();
 					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
+					raw_snapshot_.release();
 					throw;
 				} catch (...) {
 					// A failed logical commit must not leave a caller with a reusable
@@ -1045,6 +1066,7 @@ namespace graph::storage {
 					property_patches_.clear();
 					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
+					raw_snapshot_.release();
 					throw;
 				}
 			}
@@ -1064,6 +1086,7 @@ namespace graph::storage {
 				property_patches_.clear();
 				property_patch_entry_bound_ = 0U;
 				snapshot_.reset();
+				raw_snapshot_.release();
 				state_ = LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
 				if (cleanup_failure != nullptr) {
 					std::rethrow_exception(cleanup_failure);
@@ -2047,6 +2070,8 @@ namespace graph::storage {
 			std::unique_ptr<LogicalGraphVectorSearchSnapshot> snapshot_;
 			LogicalGraphMutationFence fence_;
 			Generation metadata_generation_{};
+			RelocatableReadSnapshot raw_snapshot_;
+			bool reads_exposed_ = false;
 			LogicalGraphMutationBatch accumulated_;
 			std::vector<LogicalGraphPropertyPatchRequest> property_patches_;
 			size_t property_patch_entry_bound_ = 0U;
@@ -2877,9 +2902,8 @@ namespace graph::storage {
 			}
 			const std::optional<LogicalGraphMutationFence> actualFence = logicalSnapshot->mutationFence();
 			if (actualFence.has_value() && *actualFence == expectedFence) {
-				rawSnapshot.release();
 				return std::make_unique<RelocatableLogicalGraphTransaction>(*this, readOnly, std::move(logicalSnapshot),
-																			expectedFence, baseMetadataGeneration);
+																			expectedFence, baseMetadataGeneration, std::move(rawSnapshot));
 			}
 			logicalSnapshot.reset();
 			rawSnapshot.release();
@@ -3360,10 +3384,45 @@ namespace graph::storage {
 		return executeNativeMutationBatch(companionBatch, expectedFence, control, patches, maximumPropertyEntries);
 	}
 
+	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeNativeBlindNodePropertyReplacements(
+		const LogicalGraphMutationBatch &batch, const RelocatableReadSnapshot &source,
+		const LogicalGraphMutationFence &expected) {
+		requireOwnedSnapshot(source);
+		if (makeLogicalGraphMutationFence(source.superblock()) != expected ||
+			batch.property_replacements.empty() || batch.property_replacements.size() > 64U ||
+			!batch.node_creates.empty() || !batch.edge_creates.empty() || !batch.node_deletes.empty() ||
+			!batch.edge_deletes.empty() || !batch.node_label_replacements.empty() || batch.creation_identity_plan)
+			throw std::invalid_argument("blind Property rebase requires a bounded native replacement-only source");
+		// Dependency storage is a fixed stack array. Absence is a dependency too.
+		std::array<std::optional<EntityPropertyLocation>,64U> dependencies;
+		for (size_t i=0;i<batch.property_replacements.size();++i) {
+			const auto &entity=batch.property_replacements[i].entity;
+			if (entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
+				entity.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED || entity.value==0U)
+				throw std::invalid_argument("blind Property rebase requires persisted Node owners");
+			if (!metadata_->findNodePageLocationOptional(source.pin_,entity.value))
+				throw LogicalGraphMutationConflict("blind Property rebase source Node is absent");
+			dependencies[i]=metadata_->findEntityPropertyLocationOptional(source.pin_,{EntityPropertyOwnerKind::EPOK_NODE,entity.value});
+		}
+		const auto validate=[&](const MetadataSnapshotPin &latest) {
+			for(size_t i=0;i<batch.property_replacements.size();++i) {
+				const auto id=batch.property_replacements[i].entity.value;
+				if (!metadata_->findNodePageLocationOptional(latest,id) ||
+					metadata_->findEntityPropertyLocationOptional(latest,{EntityPropertyOwnerKind::EPOK_NODE,id}) != dependencies[i])
+					throw LogicalGraphMutationConflict("blind Property rebase owner changed or was deleted");
+			}
+		};
+		// The executor constructs private pages from latest roots under the gate;
+		// no old physical page or caller callback is replayed. Current constraints
+		// and indexes are validated/maintained by the ordinary executor.
+		return executeNativeMutationBatch(batch,expected,{}, {},0U,validate);
+	}
+
 	LogicalGraphMutationBatchResult RelocatableStorageBackend::executeNativeMutationBatch(
 		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 		const LogicalGraphMutationReadControl &control,
-		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries) {
+		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+		const std::function<void(const MetadataSnapshotPin &)> &rebaseValidation) {
 		if (control.checkpoint) control.checkpoint();
 		requireOpen();
 		if (batch.node_creates.empty() && batch.edge_creates.empty() && batch.property_replacements.empty() &&
@@ -3390,11 +3449,17 @@ namespace graph::storage {
 			};
 		}
 
-		constexpr size_t MAX_CONFLICT_RETRIES = 4U;
+		const size_t MAX_CONFLICT_RETRIES = rebaseValidation ? 3U : 4U;
 		for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
 			MetadataSnapshotPin beforeExecution = metadata_->openSnapshot();
 			const LogicalGraphMutationFence graphFenceBeforeExecution =
 					makeLogicalGraphMutationFence(beforeExecution.superblock());
+			if (rebaseValidation) {
+				rebaseValidation(beforeExecution);
+				fenceValidator = [graphFenceBeforeExecution](const Superblock &base) {
+					return makeLogicalGraphMutationFence(base) == graphFenceBeforeExecution;
+				};
+			}
 			beforeExecution.release();
 			NativeGraphMutationExecutionResult execution;
 			try {
@@ -3444,11 +3509,13 @@ namespace graph::storage {
 				}
 				return execution.result;
 			}
-			if (expectedFence.has_value()) {
+			if (expectedFence.has_value() && !rebaseValidation) {
 				throw LogicalGraphMutationConflict(
 						"relocatable logical graph mutation batch no longer matches its read snapshot fence");
 			}
 		}
+		if (rebaseValidation)
+			throw LogicalGraphMutationConflict("blind Property rebase exceeded its three-build limit");
 		throw std::runtime_error(
 				"relocatable logical graph mutation batch exceeded its optimistic conflict retry limit");
 	}
