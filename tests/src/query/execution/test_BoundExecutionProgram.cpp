@@ -101,4 +101,18 @@ TEST(BoundExecutionProgramTest, AdmissionCancellationAndWorkLimitsRefundAllOwned
 	EXPECT_THROW((BoundExecutionProgram(*plan.root, snapshot, budget, [] {}, {.operators = 1U})), std::runtime_error);
 	EXPECT_EQ(budget.used(), 0U);
 }
+TEST(BoundExecutionProgramTest, InjectedInputsAreExplicitSealedSlotsAcrossStandaloneAndNestedOperators) {
+	std::vector<logical::LogicalProjectItem> innerItems{{std::make_shared<expressions::VariableReferenceExpression>("external"), "x"}};
+	auto inner = std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalSingleRow>(), std::move(innerItems));
+	std::vector<logical::LogicalProjectItem> outerItems{{std::make_shared<expressions::VariableReferenceExpression>("x"), "value"}};
+	logical::LogicalProject root(std::move(inner), std::move(outerItems));
+	ProgramSnapshot snapshot; MaterializedByteBudget budget(65536U);
+	const std::array<std::string_view, 1U> injected{"external"};
+	BoundExecutionProgram program(root, snapshot, budget, [] {}, {}, std::pmr::get_default_resource(), injected);
+	const auto outer = program.view(program.root()); ASSERT_TRUE(program.input(program.root(), "x"));
+	const auto project = program.view(outer.children[0]); ASSERT_TRUE(program.input(outer.children[0], "external"));
+	EXPECT_NE(*program.input(program.root(), "x"), *program.input(outer.children[0], "external"));
+	ASSERT_EQ(project.children.size(), 1U); EXPECT_TRUE(program.input(project.children[0], "external"));
+}
+
 }

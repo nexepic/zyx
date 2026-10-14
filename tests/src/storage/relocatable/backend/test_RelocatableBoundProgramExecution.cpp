@@ -84,3 +84,48 @@ TEST_F(RelocatableStorageBackendTest, NativeScanPredicateProjectionAndAggregateU
 	ASSERT_TRUE(values.contains("logical_plan.bound_scan.published"));
 	EXPECT_GT(values.at("logical_plan.bound_scan.published").totalValue, 0);
 }
+
+TEST_F(RelocatableStorageBackendTest, BoundRemainingConsumersPreserveUnwindSortJoinOptionalAndUnionMultiplicity) {
+	materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open(); auto engine = database.getQueryEngine();
+	engine->execute("CREATE (:Binding {id:1,rank:5}),(:Binding {id:2,rank:8})");
+	TraceValues trace;
+	const auto expanded = engine->execute("MATCH (n:Binding) WITH n,[n.rank,n.rank+1] AS values UNWIND values AS value RETURN n.id AS id,value ORDER BY value DESC,id");
+	ASSERT_EQ(expanded.rowCount(), 4U);
+	EXPECT_EQ(expanded.getRows()[0].at("value").toString(), "9"); EXPECT_EQ(expanded.getRows()[1].at("value").toString(), "8");
+	EXPECT_EQ(expanded.getRows()[2].at("value").toString(), "6"); EXPECT_EQ(expanded.getRows()[3].at("value").toString(), "5");
+	const auto joined = engine->execute("MATCH (a:Binding),(b:Binding) RETURN a.id AS a,b.id AS b ORDER BY a,b"); ASSERT_EQ(joined.rowCount(), 4U);
+	const auto optional = engine->execute("MATCH (n:Binding) OPTIONAL MATCH (n)-[r:ABSENT]->(m) RETURN n.id AS id,r,m ORDER BY id");
+	ASSERT_EQ(optional.rowCount(), 2U); EXPECT_EQ(optional.getRows()[0].at("id").toString(), "1");
+	for (const auto &row : optional.getRows()) { EXPECT_EQ(row.at("r").toString(), "null"); EXPECT_EQ(row.at("m").toString(), "null"); }
+	const auto all = engine->execute("RETURN 1 AS value UNION ALL RETURN 1 AS value"); EXPECT_EQ(all.rowCount(), 2U);
+	const auto distinct = engine->execute("RETURN 1 AS value UNION RETURN 1 AS value"); EXPECT_EQ(distinct.rowCount(), 1U);
+}
+
+TEST_F(RelocatableStorageBackendTest, BoundMutationReadSidesRefreshValuesAndProcedureExpressionsShareTheBindingBoundary) {
+	materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open(); auto engine = database.getQueryEngine();
+	engine->execute("CREATE (:Binding {id:1,rank:5})"); TraceValues trace;
+	const auto changed = engine->execute("MATCH (n:Binding) SET n.rank=n.rank+1 RETURN n.rank AS rank");
+	ASSERT_EQ(changed.rowCount(), 1U); EXPECT_EQ(changed.getRows().front().at("rank").toString(), "6");
+	graph::query::QueryContext context; context.parameters.emplace("increment", PropertyValue(int64_t(2)));
+	const auto next = engine->execute("MATCH (n:Binding) SET n.rank=n.rank+$increment RETURN n.rank AS rank", context);
+	ASSERT_EQ(next.rowCount(), 1U); EXPECT_EQ(next.getRows().front().at("rank").toString(), "8");
+	const auto exists = engine->execute("CALL gds.graph.exists('uncreated_projection') YIELD exists RETURN exists,$increment AS increment", context);
+	ASSERT_EQ(exists.rowCount(), 1U); EXPECT_EQ(exists.getRows().front().at("exists").asPrimitive(), PropertyValue(false));
+	EXPECT_EQ(exists.getRows().front().at("increment").toString(), "2");
+	const auto values = graph::debug::PerfTrace::snapshotAndReset(); ASSERT_TRUE(values.contains("logical_plan.bound_inputs.imported_programs"));
+	EXPECT_GT(values.at("logical_plan.bound_inputs.imported_programs").totalValue, 0);
+}
+
+TEST_F(RelocatableStorageBackendTest, BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot) {
+	materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open();
+	const auto csvPath = std::filesystem::path(data_path_.string() + ".csv");
+	struct RemoveCsv { std::filesystem::path path; ~RemoveCsv() { std::error_code error; std::filesystem::remove(path, error); } } cleanup{csvPath};
+	{ std::ofstream output(csvPath); output << "id,rank\n1,5\n2,8\n"; ASSERT_TRUE(output.good()); }
+	graph::query::LogicalReadExecutionOptions options; options.csv_import_root = csvPath.parent_path();
+	auto backend = std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(database.getStorageBackend());
+	graph::query::QueryEngine engine(backend, options); graph::query::QueryContext context;
+	context.parameters.emplace("uri", PropertyValue("file://" + csvPath.string()));
+	const auto result = engine.execute("LOAD CSV WITH HEADERS FROM $uri AS row RETURN sum(toInteger(row.rank)) AS total", context);
+	ASSERT_EQ(result.rowCount(), 1U); EXPECT_EQ(result.getRows().front().at("total").toString(), "13");
+	database.close(); EXPECT_EQ(result.getRows().front().at("total").toString(), "13");
+}

@@ -1,0 +1,38 @@
+{
+  "status": "accepted",
+  "item": "S2.3",
+  "selected_tests": {
+    "bound-expression": 11,
+    "bound-native": 8,
+    "column-layout-runtime": 222,
+    "consumer-tests": 350
+  },
+  "total_tests": 591,
+  "native_commands": 916,
+  "native_families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "performance_timing": false,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s2-consumer-binding",
+  "sha256": {
+    "registration.json": "33435021743fdb95c5edac21d1663861085f0f1c882386d7cbbbaab02a65163f",
+    "column-layout-runtime.log": "457d3a3f5caa019b55c12668fb8113cedf11f28065fbe33e469e9d2b53f120b3",
+    "report.json": "389911915a0cc4b7bc6112bc404ab74603cafbe435d719e94e81f7661a43c598",
+    "bound-native.log": "4a3fdef3c6f5eed50cafca119d5e48a3fe16e06d4b312083cb1698b6656f1801",
+    "bound-expression.log": "039bfc55161bfd036d30396bf8a3d98eb86d57bcff2d43f8cf7184f3b0016e86",
+    "trace.json": "86b3633441b7af0b49c7a2ca51a690454263dae9281c6567b752e1035985f9de",
+    "consumer-tests.log": "6e52f2e85991bc080c87b1f5dfa65e1cb68f27353024ad950aaa2e1ac391c32a"
+  }
+}
