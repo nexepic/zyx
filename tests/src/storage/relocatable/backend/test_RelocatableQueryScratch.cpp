@@ -52,3 +52,29 @@ TEST_F(RelocatableStorageBackendTest, QueryScratchInternalPolicyCanDenyPermissio
 	EXPECT_EQ(backend.currentNativeMetadataGeneration(),before);
 	EXPECT_EQ(backend.ioStats().data.write_bytes,0U);backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites) {
+	for (const bool batch : {false, true}) {
+		SCOPED_TRACE(batch);
+		materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;
+		RelocatableStorageBackend backend(options);backend.open();
+		const auto node=backend.createLogicalNodes({{{"ScratchFailure"},{{"value",PropertyValue(7)}}}}).at(0);
+		auto old=backend.openLogicalGraphReadSnapshot();auto scratch=backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE,1);
+		const std::vector<std::byte> bytes(64,std::byte{0x11});const auto handle=scratch->write(bytes);
+		bool injected=false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting hook([&](file_handle_t,const void *,size_t,pwrite_off_t){injected=true;return static_cast<pwrite_ssize_t>(-1);});
+			if(batch)EXPECT_THROW(scratch->finish(),std::exception);
+			else EXPECT_THROW(scratch->release(handle),std::exception);
+		}
+		ASSERT_TRUE(injected);EXPECT_TRUE(backend.hasIndeterminateWriteOutcome());
+		EXPECT_THROW(scratch->write(bytes),std::logic_error);
+		EXPECT_THROW(scratch->read(handle),std::logic_error);
+		EXPECT_THROW(backend.replaceLogicalNodeProperties({{node,{{"value",PropertyValue(99)}}}}),std::logic_error);
+		EXPECT_EQ(old->readNodeProperty(node,"value"),PropertyValue(7));
+		scratch.reset();old.reset();backend.close();backend.open();
+		auto recovered=backend.openLogicalGraphReadSnapshot();EXPECT_EQ(recovered->readNodeProperty(node,"value"),PropertyValue(7));recovered.reset();
+		EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
+		std::filesystem::remove(data_path_);
+	}
+}
