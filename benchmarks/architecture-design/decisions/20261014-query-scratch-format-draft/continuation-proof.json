@@ -1,0 +1,25 @@
+{
+  "status": "in_progress_not_stage_acceptance",
+  "request_additional_items": 12,
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "affected_regression": {
+    "tests": 1042,
+    "suites": 48,
+    "failures": 0,
+    "note": "coordinator ownership-absorb follow-up subsequently checked with all 9 coordinator tests"
+  },
+  "final_coordinator_tests": 9,
+  "files": {
+    "/tmp/zyx-scratch-resource-regression.log": {
+      "sha256": "f85697fd35c8b5f65f0c452caf36719d792cde56ae08a8ac0d40f7005c18bae4"
+    },
+    "/tmp/zyx-scratch-resource-regression.xml": {
+      "sha256": "95bd5c8ba25ffa12def99a95728a2ac4d490c7f6fde7e16b127e54f8e01ed4d7"
+    },
+    "/tmp/zyx-resource-keepalive-tests.log": {
+      "sha256": "4b134f7652bd95956127adcd725ac68ec90f511237f260f3b79b4ba0224fc26d"
+    }
+  }
+}
