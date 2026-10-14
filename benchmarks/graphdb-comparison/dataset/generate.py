@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import random
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ SCALES: dict[str, ScaleConfig] = {
     "smoke": ScaleConfig("smoke", users=100, posts=120, tags=30, follows_per_user=3, tags_per_post=2),
     "small": ScaleConfig("small", users=10_000, posts=12_000, tags=1_000, follows_per_user=5, tags_per_post=2),
     "medium": ScaleConfig("medium", users=100_000, posts=120_000, tags=5_000, follows_per_user=5, tags_per_post=2),
+    "holdout": ScaleConfig("holdout", users=73_000, posts=87_000, tags=3_000, follows_per_user=7, tags_per_post=2),
 }
 
 COUNTRIES = ["CN", "US", "DE", "JP", "SG", "BR", "IN", "FR"]
@@ -123,7 +125,17 @@ def write_dataset(dataset: GraphDataset, output_dir: Path) -> dict[str, object]:
         "authored": _write_csv(output_dir / "authored.csv", dataset.authored, ["src", "dst", "weight"]),
         "has_tag": _write_csv(output_dir / "has_tag.csv", dataset.has_tag, ["src", "dst", "weight"]),
     }
-    manifest: dict[str, object] = {"scale": dataset.scale, "seed": dataset.seed, "counts": counts}
+    filenames = ("users.csv", "posts.csv", "tags.csv", "follows.csv", "authored.csv", "has_tag.csv")
+    manifest: dict[str, object] = {
+        "scale": dataset.scale, "seed": dataset.seed, "counts": counts,
+        "files": {name: {"sha256": hashlib.sha256((output_dir / name).read_bytes()).hexdigest(),
+                         "bytes": (output_dir / name).stat().st_size} for name in filenames},
+        "topology": "directed ring; each outgoing hop is a distinct edge; self-loops/multiplicity retained",
+        "schema": {"User": {"id": "string", "age": "int64", "country": "string", "score": "double"},
+                   "Post": {"id": "string", "created_at": "int64", "score": "double"},
+                   "Tag": {"id": "string", "rank": "int64"},
+                   "relationships": {"FOLLOWS": "weight:int64", "AUTHORED": "weight:int64", "HAS_TAG": "weight:int64"}},
+    }
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return manifest
 
@@ -131,11 +143,12 @@ def write_dataset(dataset: GraphDataset, output_dir: Path) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate graph benchmark CSV dataset")
     parser.add_argument("--scale", choices=sorted(SCALES), default="smoke")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    dataset = generate_graph(SCALES[args.scale], seed=args.seed)
+    seed = args.seed if args.seed is not None else (314159 if args.scale == "holdout" else 42)
+    dataset = generate_graph(SCALES[args.scale], seed=seed)
     manifest = write_dataset(dataset, args.output)
     print(json.dumps(manifest, sort_keys=True))
     return 0

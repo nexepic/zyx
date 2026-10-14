@@ -1,0 +1,9 @@
+# S0.2 workload/resource-contract acceptance
+
+2026-10-14: accept S0.2 delivery. The bilingual contract, implemented native/Kuzu worker entries, exact smoke/formal dimensions and variants, capability matrix, independent typed full-result oracles, pre-query registration, actual medium/holdout input hashes and source/local-format freeze close the earlier pending workload-contract deliverables.
+
+Fresh native worker smoke passed **916 commands over 13 families**; real Kuzu0.11.3 passed **603 commands over 11 equivalent families**. Both execute actual database paths, complete output, real four-client threads, old snapshots and reopen; incompatible dynamic/fence/reclaimer/charged-budget details are classified explicitly. Native tests additionally check logical/physical readonly byte limits, sort/hash failure, cancellation and integrity. Reports/traces/hashes are summarized in preflight-proof.json and retained in matching local results. Fifteen Python contract/oracle tests and292 selected native/parser regression tests passed. The discovered escaped-property-key bug is fixed with a public native regression.
+
+Acceptance is for the executable workload/resource contract and correctness smoke, **not full formal-size execution, enforced comparative resources, steady-state plateau, S0.3/S0.4 or performance**. Those executions remain in the user's final performance window. The native harness is a QueryEngine/native-administration entry; public ABI and Kuzu Python overhead must be recorded separately in formal comparisons. The historical frozen control and optimization table remain unchanged.
+
+Milestone **4/5 newly accepted**, total **10/34 (29.4%)**. S0 **2/4 (50%)**; S1 **7/7 design delivery**. S2.1 is the remaining milestone item. current-progress.json is synchronized; commit/push is authorized.
