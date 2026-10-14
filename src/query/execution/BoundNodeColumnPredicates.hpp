@@ -5,6 +5,7 @@
 
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "query/execution/PrimitiveColumnFilter.hpp"
+#include "query/execution/BatchEnvelope.hpp"
 
 namespace graph::query::execution::detail {
 
@@ -90,6 +91,43 @@ public:
 				}
 			}
 			begin = end;
+		}
+		return stats;
+	}
+
+	// Consume the same authenticated batch descriptors used by scan/project
+	// and aggregate. Primitive cells stay primitive; mixed values borrow the
+	// already charged source rather than allocate a second row/value copy.
+	template<class Guard>
+	[[nodiscard]] ColumnFilterStats filter(const BatchEnvelope &batch, const BoundColumnLayout &layout,
+		SelectionVector &selection, Guard guard) const {
+		if (batch.size() != selection.size() || layout.size() < column_count_)
+			throw std::invalid_argument("bound filter envelope changed its shape");
+		ColumnFilterStats stats;
+		size_t previousColumn = SIZE_MAX;
+		for (const auto &predicate : predicates_) {
+			guard(); const auto column = layout.column(predicate.column);
+			if (predicate.column != previousColumn) {
+				const auto kind = batch.columnKind(column);
+				if (kind == BatchColumnKind::BCK_INTEGER || kind == BatchColumnKind::BCK_DOUBLE || kind == BatchColumnKind::BCK_BOOLEAN)
+					++stats.typed_columns;
+				else ++stats.scalar_columns;
+				previousColumn = predicate.column;
+			}
+			for (size_t index = 0U; index < selection.size(); ++index) {
+				guard(); if (!selection.includes(index)) continue;
+				const auto cell = batch.cell(column, batch.rowId(index));
+				bool matches = false;
+				if (cell.state == ColumnCellState::CCS_VALUE) matches = std::visit([&](auto value) -> bool {
+					using T = decltype(value);
+					if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double> || std::is_same_v<T, bool>)
+						return columnPredicateMatches(PropertyValue(value), predicate);
+					else if constexpr (std::is_same_v<T, const PropertyValue *>)
+						return columnPredicateMatches(*value, predicate);
+					else throw std::invalid_argument("predicate envelope has an unsupported value source");
+				}, cell.data);
+				if (!matches) selection.reject(index);
+			}
 		}
 		return stats;
 	}

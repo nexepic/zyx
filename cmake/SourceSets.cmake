@@ -407,6 +407,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundExecutionProgram.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundExpressionInputs.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BatchEnvelope.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeScanBatch.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveColumnFilter.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeColumnPredicates.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanNodeColumnAggregate.cpp"

@@ -1,0 +1,41 @@
+{
+  "status": "accepted",
+  "item": "S2.2",
+  "tests": [
+    {
+      "selection": "scan/layout/predicate/native",
+      "passed": 33
+    },
+    {
+      "selection": "runtime/selection/filter/aggregate",
+      "passed": 222
+    }
+  ],
+  "test_selections_overlap": true,
+  "native_commands": 916,
+  "native_families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "performance_timing": false,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s2-core-pipeline",
+  "evidence_sha256": {
+    "scan-tests.log": "bcd95520c0cfb1cc8045782422e23649a96ed36f614da4595a9cdeee53c605dd",
+    "registration.json": "9e5af80c41cffe94fcce33bcc345b8dd16094cce3e5b314c3e08c57593b6d8cf",
+    "report.json": "1e343ba31365a3dcaeb717c8e62e5bc72482dc7d7cc8f48ea33febfe4a474e33",
+    "runtime-tests.log": "0d73f3f7e8faffe5802b398832b985e5959132318d04c138d17fcdc4dc096243",
+    "trace.json": "624f134b7a7cfa6fc76b90439a9a796c404ec2356c80e13a9b69b0e9112e4042"
+  },
+  "worker_sha256": "45c39e4f18c14e75a552b08a26e7e875ed931e5dec6a3ddfb725918e2f3fc910"
+}

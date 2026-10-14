@@ -14,6 +14,7 @@
 #include "query/execution/BoundExecutionProgram.hpp"
 #include "query/execution/BoundExpressionInputs.hpp"
 #include "query/execution/BatchEnvelope.hpp"
+#include "query/execution/BoundNodeScanBatch.hpp"
 #include "query/execution/BoundColumnLayout.hpp"
 #include "query/execution/BoundNodeColumnPredicates.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
@@ -11189,15 +11190,33 @@ namespace graph::query::execution {
 								// Optional bitmap admission can decline only before filtering.
 							}
 						}
+						std::optional<detail::BoundNodeScanBatch> scanBatch;
+						if (selection && state.shared.bound_program) {
+							try {
+								scanBatch.emplace(*state.shared.bound_program, state.shared.snapshot, propertyKeys, columns, nodeIds,
+									state.shared.materialized_budget, [&] { checkGuardNow(state); });
+								debug::PerfTrace::addValue("logical_plan.bound_scan.published", 1);
+							} catch (const MaterializedByteLimitExceeded &) {
+								debug::PerfTrace::addValue("logical_plan.bound_scan.admission_fallback", 1);
+							}
+						}
 						if (selection) {
-							const auto filtered = boundPredicates->filter(columns, *selection, state.shared.materialized_budget,
-								[&] { checkGuard(state); });
+							const auto filtered = scanBatch
+								? boundPredicates->filter(scanBatch->envelope(), scanBatch->layout(), *selection, [&] { checkGuard(state); })
+								: boundPredicates->filter(columns, *selection, state.shared.materialized_budget, [&] { checkGuard(state); });
 							debug::PerfTrace::addValue("logical_plan.node_column_filter.typed_columns",
 								static_cast<int64_t>(filtered.typed_columns));
 							debug::PerfTrace::addValue("logical_plan.node_column_filter.scalar_columns",
 								static_cast<int64_t>(filtered.scalar_columns));
 							debug::PerfTrace::addValue("logical_plan.node_column_filter.rejected_before_rows",
 								static_cast<int64_t>(selection->size() - selection->selectedCount()));
+							if (scanBatch) {
+								try { scanBatch->publishSelection(*selection, lookupOrdinals, [&] { checkGuardNow(state); }); }
+								catch (const MaterializedByteLimitExceeded &) { scanBatch.reset(); }
+							}
+							// Payload mutation invalidates the borrowed source matrix. Release
+							// every envelope before clearing rejected cells or moving rows.
+							scanBatch.reset();
 							// Rejected payloads cannot escape. Release them before handing a
 							// survivor downstream, retaining only charged matrix slots/NULLs.
 							for (size_t index = 0U; index < selection->size(); ++index) {
