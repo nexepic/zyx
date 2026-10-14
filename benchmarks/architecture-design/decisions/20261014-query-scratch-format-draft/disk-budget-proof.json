@@ -1,0 +1,53 @@
+{
+  "status": "in_progress_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "affected_regression": {
+    "tests": 1050,
+    "suites": 48,
+    "failures": 0
+  },
+  "real_process_crash_recovery": {
+    "repetitions": 20,
+    "expected_crash_exit": 86,
+    "physical_readonly_write_bytes": 0,
+    "graph_fence_preserved": true,
+    "all_passed": true
+  },
+  "disk_limits": {
+    "process": 2147483648,
+    "database_default": 1073741824,
+    "session_maximum": 134217728,
+    "domains": 64,
+    "sessions_per_domain": 64,
+    "unit": "complete_private_128KiB_extents",
+    "metadata_COW_included": false
+  },
+  "remaining": [
+    "global_memory_capacity_owner_audit",
+    "output_retention",
+    "query_cache_write_maintenance_class_integration",
+    "protected_maintenance_floor",
+    "partitioned_hash_and_aggregate",
+    "long_snapshot_retirement_backlog",
+    "final_performance_window"
+  ],
+  "evidence": {
+    "benchmarks/architecture-design/results/20261014-query-scratch-disk-budget/zyx-scratch-complete-matrix.log": {
+      "sha256": "6b076e090a5bbd1b9262cdaeb03d887b0fe3926f1eee86c343b12aee1f681df9"
+    },
+    "benchmarks/architecture-design/results/20261014-query-scratch-disk-budget/zyx-scratch-complete-matrix.xml": {
+      "sha256": "01623037be1fc015e80c32fc374327a63cd69d64180900ee3c2fe71f78628949"
+    },
+    "benchmarks/architecture-design/results/20261014-query-scratch-disk-budget/zyx-scratch-directory-tests.log": {
+      "sha256": "6fe20d92914874b7506b8ac46cebcf8625a35b84ac4e61b0e919391060533b27"
+    },
+    "benchmarks/architecture-design/results/20261014-query-scratch-disk-budget/zyx-scratch-crash-repetitions.json": {
+      "sha256": "2256359ee99ec9f38f711d50531d0e82a93e4611613781946fb7a48c04706677"
+    },
+    "benchmarks/architecture-design/results/20261014-query-scratch-disk-budget/zyx-scratch-crash-target-build.log": {
+      "sha256": "69542cb8a767e919074051d9c1e4fe0767677bb6481ef16144bc3d76da20247d"
+    }
+  }
+}

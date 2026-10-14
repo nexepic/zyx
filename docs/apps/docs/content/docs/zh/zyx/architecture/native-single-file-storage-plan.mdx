@@ -128,10 +128,22 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 | `SGK_LARGE_VALUE_DATA_POOL` | 通用 LargeValue chunk |
 | `SGK_LARGE_VALUE_MANIFEST_POOL` | 通用 LargeValue manifest/index |
 | `SGK_BULK_SCRATCH` | 事务私有、同文件 bounded-sort fragment；永不对图可见，若未发布则在可写打开时回收 |
+| `SGK_QUERY_SCRATCH`（15） | 显式启用的查询私有、同文件 spill extent；与 bulk scratch 分离，永不进入公开 Page/Extent 目录 |
 
 `SGK_CATALOG` 不再作为不可回收的专用物理池。Catalog page 使用 `SGK_METADATA_PAGE_POOL` 中的 `MPK_CATALOG` subtype。这样一个 metadata segment 可以混合容纳多种 metadata page，也可以在完全释放后复用为任意其他 SegmentKind。
 
 普通图 adjacency 是内建 Packed B+Tree，因此使用 `SGK_INDEX_PAGE_POOL`。`SGK_VECTOR_ADJACENCY_POOL` 只保留给 ANN 图状态；两者不能仅因都使用 adjacency 一词就共享 codec、owner kind、root 或维护策略。
+
+
+### 4.4 查询 scratch 开发格式
+
+当前开发实现使用 Segment envelope 版本 **5** 与 Superblock 版本 **31**。查询 scratch 注册 kind **15**，bulk scratch 保持 kind **14**。这是不兼容的开发格式变更：4/30 版本文件会被拒绝，不执行迁移，也不重写旧 A/B 根。稳定格式采用门槛仍待验收。
+
+`query_scratch_enabled` 默认为 `false`。显式启用的原生 Sort 路径使用归属验证的私有句柄、经过校验的版本 1 行/run block、稳定输入序号与有界双路归并。不支持的行或排序在首次 spill 前保留内存执行，已封存 run 后遇到则明确失败；不会重放已消费输入。物理只读文件不能分配、发布或回收 scratch，也不会退回宿主临时文件。
+
+私有 extent 在 I/O 前按完整 128 KiB 物理段准入：每会话 128 MiB、每个已打开文件身份的 `maximum_database_query_scratch_bytes`（默认 1 GiB）、每进程 2 GiB。硬链接和符号链接别名共享已打开文件身份。最多允许 64 个域、每域 64 个活跃 scratch 会话；资源准入不等待。资源锁会在进入元数据发布门锁前释放。成功持久回收后返还 extent 额度；不确定的 I/O 保留孤儿占用，直到独占、归属验证的可写恢复完成。损坏的 payload 或公开目录引用会阻止回收。Metadata COW extent 有独立归属，不包含在此私有 extent 配额中。
+
+完整性扫描把 sealed 私有 scratch 报告为需要所有者静止或可写恢复。物理只读打开不执行清理。这些磁盘边界和 Sort 测试不代表全局内存归属、输出生命周期、分区算子或 S5.3/S5.4 已完成验收。
 
 ## 5. Bootstrap、根目录和 Page Directory
 

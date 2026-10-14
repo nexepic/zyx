@@ -207,6 +207,11 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             PROPERTIES COMPILE_OPTIONS "-fno-profile-instr-generate;-fno-coverage-mapping"
         )
     endif()
+    # Explicitly selected process-crash probe; neither the default build nor
+    # CTest launches it. Its Python runner owns only fresh temporary databases.
+    add_executable(zyx_query_scratch_crash_worker EXCLUDE_FROM_ALL
+        tests/support/QueryScratchCrashWorker.cpp)
+    target_link_libraries(zyx_query_scratch_crash_worker PRIVATE zyx::core)
     add_executable(zyx_test_suite ${ZYX_TEST_SOURCES})
     target_include_directories(zyx_test_suite
         PRIVATE

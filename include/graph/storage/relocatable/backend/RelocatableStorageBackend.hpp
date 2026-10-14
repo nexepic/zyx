@@ -95,6 +95,8 @@ namespace graph::storage {
 		bool adaptive_property_row_chunks = true;
 		// Internal query-only permission, independent of graph write permissions.
 		bool query_scratch_enabled = false;
+		// Aggregate private scratch extents across sessions of this database file.
+		size_t maximum_database_query_scratch_bytes = size_t{1024} * 1024U * 1024U;
 		// The immutable schema registry is loaded once when a writable backend
 		// opens. Keep this bounded so a malformed file cannot force an unbounded
 		// allocation before the graph-write boundary is established.

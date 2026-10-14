@@ -8,6 +8,8 @@ namespace graph::storage {
 // A query-only internal permission. No file path, allocator or physical identity
 // crosses this interface. A logical read may hold it on a writable native file;
 // physically read-only files never provide this capability.
+// Sessions are task-confined. Returned read bytes own their storage; callers
+// must quiesce private readers before releasing handles or finishing the owner.
 class LogicalQueryScratchSession {
 public:
 	virtual ~LogicalQueryScratchSession() = default;
