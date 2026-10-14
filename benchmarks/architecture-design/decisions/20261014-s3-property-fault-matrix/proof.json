@@ -1,0 +1,18 @@
+{
+  "status": "accepted",
+  "item": "S3.4",
+  "selected_tests": 245,
+  "suites": 9,
+  "new_test_functions": 2,
+  "native_fault_histories": [
+    "ENOSPC_data",
+    "64_byte_torn_data",
+    "64_byte_torn_graph_superblock",
+    "post_superblock_final_sync"
+  ],
+  "physical_readonly_write_bytes": 0,
+  "s3_3_native_smoke_commands": 916,
+  "performance_timing": false,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s3-property-fault-matrix",
+  "test_sha256": "cb0ea019a985b581d0f0103a8e916fd91937a2ab0ef6d536fbd8b3f4ee6a4946"
+}
