@@ -1547,3 +1547,64 @@ TEST(NativeBulkRunMergerTest, OrderedSourceRejectsAnEmptyBTreeKeyBeforeExposingI
 
 	expectFormatError([&] { static_cast<void>(merged()); }, FormatError::FERR_INVALID_STATE);
 }
+
+TEST_F(NativeBulkRunStoreTest, QueryAndBulkRecoveryReclaimOnlyTheirOwnScratchKinds) {
+	auto metadata=RelocatableMetadataStore::initializeNew(io_,superblock());PhysicalSegmentAllocator physical(io_,*metadata);
+	NativeBulkRunStore bulk(physical,*metadata,storeOptions());auto options=storeOptions();options.scratch_kind=SegmentKind::SGK_QUERY_SCRATCH;
+	NativeBulkRunStore query(physical,*metadata,options);const std::vector<std::byte> bytes{std::byte{0x11}};
+	const auto bulkLocation=bulk.writeOpaquePayload(71,bytes,LogSequenceNumber(2));
+	const auto queryLocation=query.writeOpaquePayload(71,bytes,LogSequenceNumber(4));
+	bulk.reclaimUnpublishedOnOpen(LogSequenceNumber(6));
+	{
+		auto snapshot=metadata->openSnapshot();EXPECT_EQ(metadata->findCatalog(snapshot,bulkLocation.segment_id).state,SegmentState::SGS_OBSOLETE);
+		EXPECT_EQ(metadata->findCatalog(snapshot,queryLocation.segment_id).state,SegmentState::SGS_SEALED);
+		EXPECT_EQ(query.readOpaquePayload(snapshot,queryLocation),bytes);
+	}
+	query.reclaimUnpublishedOnOpen(LogSequenceNumber(8));auto snapshot=metadata->openSnapshot();
+	EXPECT_EQ(metadata->findCatalog(snapshot,queryLocation.segment_id).state,SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot,PhysicalSlotId(41)));
+}
+TEST_F(NativeBulkRunStoreTest, QueryScratchReleaseRejectsForeignGenerationOwnerDuplicatesAndBulkKindAtomically) {
+	auto metadata=RelocatableMetadataStore::initializeNew(io_,superblock());PhysicalSegmentAllocator physical(io_,*metadata);
+	auto options=storeOptions();options.scratch_kind=SegmentKind::SGK_QUERY_SCRATCH;NativeBulkRunStore query(physical,*metadata,options);
+	NativeBulkRunStore bulk(physical,*metadata,storeOptions());const std::vector<std::byte> bytes{std::byte{0x11}};
+	const auto first=query.writeOpaquePayload(71,bytes,LogSequenceNumber(2)),other=query.writeOpaquePayload(72,bytes,LogSequenceNumber(4));
+	const auto bulkLocation=bulk.writeOpaquePayload(71,bytes,LogSequenceNumber(6));
+	auto snapshot=metadata->openSnapshot();const auto generation=snapshot.superblock().generation;snapshot.release();
+	auto stale=first;stale.generation=Generation(2);
+	expectFormatError([&]{query.release(stale,LogSequenceNumber(8));},FormatError::FERR_INVALID_STATE);
+	auto foreign=first;foreign.transaction_id=72;
+	expectFormatError([&]{query.release(foreign,LogSequenceNumber(8));},FormatError::FERR_INVALID_STATE);
+	const std::array duplicate{first,first};expectFormatError([&]{query.releaseBatch(duplicate,LogSequenceNumber(8));},FormatError::FERR_INVALID_HEADER);
+	const std::array owners{first,other};expectFormatError([&]{query.releaseBatch(owners,LogSequenceNumber(8));},FormatError::FERR_INVALID_STATE);
+	const std::array mixed{first,bulkLocation};expectFormatError([&]{query.releaseBatch(mixed,LogSequenceNumber(8));},FormatError::FERR_INVALID_STATE);
+	snapshot=metadata->openSnapshot();EXPECT_EQ(snapshot.superblock().generation,generation);
+	EXPECT_EQ(query.readOpaquePayload(snapshot,first),bytes);EXPECT_EQ(query.readOpaquePayload(snapshot,other),bytes);
+	EXPECT_EQ(bulk.readOpaquePayload(snapshot,bulkLocation),bytes);
+}
+TEST_F(NativeBulkRunStoreTest, QueryScratchReclamationRejectsCorruptPublicPageRegistration) {
+	auto metadata=RelocatableMetadataStore::initializeNew(io_,superblock());PhysicalSegmentAllocator physical(io_,*metadata);
+	auto options=storeOptions();options.scratch_kind=SegmentKind::SGK_QUERY_SCRATCH;NativeBulkRunStore query(physical,*metadata,options);
+	const auto location=query.writeOpaquePayload(71,{std::byte{0x11}},LogSequenceNumber(2));
+	const std::array pages{PageLocation{PageId(100),location.segment_id,1,location.generation,0}};
+	static_cast<void>(metadata->upsertLocations(pages,{},LogSequenceNumber(4)));
+	auto before=metadata->openSnapshot();const auto generation=before.superblock().generation;before.release();
+	expectFormatError([&]{query.release(location,LogSequenceNumber(5));},FormatError::FERR_INVALID_STATE);
+	auto snapshot=metadata->openSnapshot();EXPECT_EQ(snapshot.superblock().generation,generation);
+	EXPECT_EQ(metadata->findCatalog(snapshot,location.segment_id).state,SegmentState::SGS_SEALED);
+	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(snapshot,PhysicalSlotId(40)));
+	EXPECT_EQ(metadata->findPageLocation(snapshot,PageId(100)).segment_id,location.segment_id);
+}
+TEST_F(NativeBulkRunStoreTest, QueryScratchReclamationRejectsCorruptPublicExtentRegistration) {
+	auto metadata=RelocatableMetadataStore::initializeNew(io_,superblock());PhysicalSegmentAllocator physical(io_,*metadata);
+	auto options=storeOptions();options.scratch_kind=SegmentKind::SGK_QUERY_SCRATCH;NativeBulkRunStore query(physical,*metadata,options);
+	const auto location=query.writeOpaquePayload(71,{std::byte{0x11}},LogSequenceNumber(2));
+	const std::array extents{ExtentLocation{ExtentId(100),location.segment_id,1,1,location.generation}};
+	static_cast<void>(metadata->upsertLocations({},extents,LogSequenceNumber(4)));
+	auto before=metadata->openSnapshot();const auto generation=before.superblock().generation;before.release();
+	expectFormatError([&]{query.reclaimUnpublishedOnOpen(LogSequenceNumber(5));},FormatError::FERR_INVALID_STATE);
+	auto snapshot=metadata->openSnapshot();EXPECT_EQ(snapshot.superblock().generation,generation);
+	EXPECT_EQ(metadata->findCatalog(snapshot,location.segment_id).state,SegmentState::SGS_SEALED);
+	EXPECT_TRUE(metadata->isPhysicalSlotAllocated(snapshot,PhysicalSlotId(40)));
+	EXPECT_EQ(metadata->findExtentLocation(snapshot,ExtentId(100)).segment_id,location.segment_id);
+}

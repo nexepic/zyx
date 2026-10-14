@@ -315,8 +315,9 @@ namespace graph::storage {
 			// A read-only integrity scan cannot know whether its owner is still alive,
 			// so a sealed scratch entry is recovery-required rather than silently
 			// counted as healthy graph storage.
-			if (entry.kind == SegmentKind::SGK_BULK_SCRATCH && entry.state == SegmentState::SGS_SEALED) {
-				throwIntegrityError("relocatable integrity scan found unpublished bulk scratch requiring writable recovery");
+			if ((entry.kind == SegmentKind::SGK_BULK_SCRATCH || entry.kind == SegmentKind::SGK_QUERY_SCRATCH) &&
+				entry.state == SegmentState::SGS_SEALED) {
+				throwIntegrityError("relocatable integrity scan found private scratch requiring owner quiescence or writable recovery");
 			}
 			if ((entry.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
 				 entry.owner_id != RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID) ||

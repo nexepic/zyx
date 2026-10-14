@@ -128,10 +128,22 @@ Recommended long-term SegmentKinds:
 | `SGK_LARGE_VALUE_DATA_POOL` | Generic LargeValue chunks |
 | `SGK_LARGE_VALUE_MANIFEST_POOL` | Generic LargeValue manifests/indexes |
 | `SGK_BULK_SCRATCH` | Transaction-private same-file bounded-sort fragments; never graph-visible and reclaimed on writable open if unpublished |
+| `SGK_QUERY_SCRATCH` (15) | Opt-in query-private same-file spill extents; separate from bulk scratch, never reachable from public Page/Extent directories |
 
 `SGK_CATALOG` is no longer an unreclaimable dedicated physical pool. Catalog pages use the `MPK_CATALOG` subtype inside `SGK_METADATA_PAGE_POOL`. A metadata Segment may hold multiple metadata page subtypes and, once empty, can be reused for any other SegmentKind.
 
 Ordinary graph adjacency is a built-in Packed B+Tree and therefore uses `SGK_INDEX_PAGE_POOL`. `SGK_VECTOR_ADJACENCY_POOL` is reserved exclusively for ANN graph state; the two structures must not share codecs, owner kinds, roots, or maintenance policies merely because both use the word adjacency.
+
+
+### 4.4 Query scratch development format
+
+The current development implementation uses Segment envelope version **5** and Superblock version **31**. Query scratch registers kind **15**; bulk scratch retains kind **14**. This is an incompatible development format change: version 4/30 files are refused without migration or rewriting an older A/B root. The stable-format adoption gate remains open.
+
+`query_scratch_enabled` defaults to `false`. Its opt-in native Sort path uses owner-authenticated private handles, checked version-1 row/run blocks, stable input ordinals and bounded two-way merging. Unsupported rows or orderings remain in memory before the first spill and fail explicitly if encountered after runs are sealed; consumed inputs are never replayed. Physical read-only files cannot allocate, publish or reclaim scratch and cannot use host temporary files as a fallback.
+
+Private extent admission counts each complete 128 KiB physical segment before IO: 128 MiB per session, `maximum_database_query_scratch_bytes` (default 1 GiB) per opened file identity, and 2 GiB per process. Hard-link and symlink aliases share the opened file identity. There are at most 64 domains and 64 active scratch sessions per domain; admission never waits. Resource locks are released before the metadata publication gate. Successful durable release refunds extent bytes; uncertain IO leaves the allowance charged as an orphan until exclusive authenticated writable recovery completes. Corrupt payloads and public-directory references prevent reclamation. Metadata COW extents are separately owned and are not included in this private-extent quota.
+
+Integrity scanning reports sealed private scratch as requiring owner quiescence or writable recovery. A physical read-only open performs no cleanup. These disk bounds and Sort tests do not complete global memory ownership, output retention, partitioned operators or S5.3/S5.4 acceptance.
 
 ## 5. Bootstrap, Roots, and Page Directory
 
