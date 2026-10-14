@@ -2,6 +2,8 @@
 
 日期：2026-10-12。范围：S1.2 的设计合同。实现与性能验收分别归 S3.1、S3.5，本记录不以设计取代实现。
 
+2026-10-14 接口细化与 S3.1 实现验收见 `../20261014-a2-field-staging/zh.md` 及 `acceptance-zh.md`。后续采用独立 owning raw 暂存入口与默认关闭的事务能力，替代本文第 2.1 节拟增的 batch 字段；保留全部消费者迁移与字段语义要求。本文其余“尚未实现”等表述保留为当时状态。
+
 ## 1. 当前调用链和问题
 
 Cypher SET/REMOVE、MERGE、CREATE/FOREACH 在 LogicalPlanMutationRuntime 中读取语句快照，维护实体最终属性与别名可见值。支持 shaped admission 的快照产生 LogicalGraphPropertyPatchRequest，否则使用旧完整替换请求。补丁经 LogicalGraphWriteBackend 的组合适配器读取源、排序合并成 property_replacements，和 companion batch 一起交给 executeLogicalGraphMutationBatchWithReadControl。

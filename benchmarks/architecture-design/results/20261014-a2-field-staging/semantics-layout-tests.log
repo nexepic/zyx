@@ -1,0 +1,616 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 293 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 202 tests from LogicalPlanMutationRuntimeTest
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeUsesOneAtomicBatchAndSelectsOnCreateOrOnMatch
+[       OK ] LogicalPlanMutationRuntimeTest.MergeUsesOneAtomicBatchAndSelectsOnCreateOrOnMatch (17 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeReevaluatesTheEntireDecisionAfterAnOptimisticConflict
+[       OK ] LogicalPlanMutationRuntimeTest.MergeReevaluatesTheEntireDecisionAfterAnOptimisticConflict (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachDeletesPersistedEntitiesInOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachDeletesPersistedEntitiesInOneAtomicBatch (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CountsRelationshipsThroughDirectAndAnchoredReadPlans
+[       OK ] LogicalPlanMutationRuntimeTest.CountsRelationshipsThroughDirectAndAnchoredReadPlans (9 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeDeduplicatesCreatedPatternsAcrossInputRowsAndMergesRelationships
+[       OK ] LogicalPlanMutationRuntimeTest.MergeDeduplicatesCreatedPatternsAcrossInputRowsAndMergesRelationships (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeUndirectedRelationshipFallsBackToIncomingAdjacency
+[       OK ] LogicalPlanMutationRuntimeTest.MergeUndirectedRelationshipFallsBackToIncomingAdjacency (3 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRejectsTopologyCandidatesWithoutMaterializingTheirProperties
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRejectsTopologyCandidatesWithoutMaterializingTheirProperties (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeBatchesIdentityPropertiesBeforeMaterializingTheMatchingRelationship
+[       OK ] LogicalPlanMutationRuntimeTest.MergeBatchesIdentityPropertiesBeforeMaterializingTheMatchingRelationship (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRejectsMalformedSelectedRelationshipPropertyColumns
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRejectsMalformedSelectedRelationshipPropertyColumns (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRejectsSelectedPropertiesThatDisagreeWithTheCompleteRelationship
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRejectsSelectedPropertiesThatDisagreeWithTheCompleteRelationship (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeBoundsSelectedRelationshipPropertyPayloads
+[       OK ] LogicalPlanMutationRuntimeTest.MergeBoundsSelectedRelationshipPropertyPayloads (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeAdmitsSelectedRelationshipPropertiesBeforeCopyingPayloads
+[       OK ] LogicalPlanMutationRuntimeTest.MergeAdmitsSelectedRelationshipPropertiesBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRejectsNonMonotonicTopologyBeforePublishing
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRejectsNonMonotonicTopologyBeforePublishing (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeOnMatchMapPatchReplacesAndMaterializesRelationshipProperties
+[       OK ] LogicalPlanMutationRuntimeTest.MergeOnMatchMapPatchReplacesAndMaterializesRelationshipProperties (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePostMutationsSynchronizeCreatedRelationshipProperties
+[       OK ] LogicalPlanMutationRuntimeTest.MergePostMutationsSynchronizeCreatedRelationshipProperties (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeUndirectedRelationshipSkipsItsSelfLoopBeforeFindingIncomingMatch
+[       OK ] LogicalPlanMutationRuntimeTest.MergeUndirectedRelationshipSkipsItsSelfLoopBeforeFindingIncomingMatch (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeIncomingSelfLoopRemainsVisibleToTheIncomingDirection
+[       OK ] LogicalPlanMutationRuntimeTest.MergeIncomingSelfLoopRemainsVisibleToTheIncomingDirection (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePreservesExistingRelationshipInputBindings
+[       OK ] LogicalPlanMutationRuntimeTest.MergePreservesExistingRelationshipInputBindings (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateIncomingRelationshipWritesTheReversedLogicalEndpoints
+[       OK ] LogicalPlanMutationRuntimeTest.CreateIncomingRelationshipWritesTheReversedLogicalEndpoints (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.UnwindCreatesOneLogicalNodePerInputValueInOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.UnwindCreatesOneLogicalNodePerInputValueInOneAtomicBatch (3 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateDistinctMaterializesLogicalNodeAndRelationshipIdentity
+[       OK ] LogicalPlanMutationRuntimeTest.CreateDistinctMaterializesLogicalNodeAndRelationshipIdentity (3 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateDistinctRetainsDifferentLogicalEntityIdentities
+[       OK ] LogicalPlanMutationRuntimeTest.CreateDistinctRetainsDifferentLogicalEntityIdentities (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateDeleteRemapsTheSurvivingRelationshipResult
+[       OK ] LogicalPlanMutationRuntimeTest.CreateDeleteRemapsTheSurvivingRelationshipResult (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryRebindsEveryOuterRowIntoOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryRebindsEveryOuterRowIntoOneAtomicBatch (7 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryFoldsCreateSetAndRemoveIntoOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryFoldsCreateSetAndRemoveIntoOneAtomicBatch (11 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryCreatesAndDeletesGraphEntitiesAtomically
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryCreatesAndDeletesGraphEntitiesAtomically (24 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesConfiguredIndependentPublicationBatches
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesConfiguredIndependentPublicationBatches (7 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesOneDefaultBatchForBoundedInput
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesOneDefaultBatchForBoundedInput (10 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallExportsCreatedValuesToItsOuterProjection
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallExportsCreatedValuesToItsOuterProjection (9 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallReturnsItsExportedColumnsWithoutAnOuterProjection
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallReturnsItsExportedColumnsWithoutAnOuterProjection (6 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreservesNodeOuterRows
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreservesNodeOuterRows (5 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreservesRelationshipOuterRows
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreservesRelationshipOuterRows (6 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallWithNoInputRowsDoesNotPublishAnEmptyBatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallWithNoInputRowsDoesNotPublishAnEmptyBatch (11 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallAppliesImportedSetAndRemoveUpdatesAtomically
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallAppliesImportedSetAndRemoveUpdatesAtomically (26 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallAppliesImportedSetAndRemoveUpdatesPerBatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallAppliesImportedSetAndRemoveUpdatesPerBatch (12 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesAnImplicitSingleRowWhenItsInputIsOmitted
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallUsesAnImplicitSingleRowWhenItsInputIsOmitted (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallKeepsCompletedBatchesWhenALaterBatchFailsAtomically
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallKeepsCompletedBatchesWhenALaterBatchFailsAtomically (8 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreflightsOuterProjectionBeforePublishingAnyBatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallPreflightsOuterProjectionBeforePublishingAnyBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallKeepsCompletedBatchesWhenCancellationPreventsTheNextPublication
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallKeepsCompletedBatchesWhenCancellationPreventsTheNextPublication (257 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateDoesNotPublishWhenItsReturnExpressionFails
+[       OK ] LogicalPlanMutationRuntimeTest.CreateDoesNotPublishWhenItsReturnExpressionFails (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateCachesPrepublicationScalarResultsButReturnsDurableEntityIds
+[       OK ] LogicalPlanMutationRuntimeTest.CreateCachesPrepublicationScalarResultsButReturnsDurableEntityIds (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetAndDeleteDoNotPublishWhenTheirReturnExpressionsFail
+[       OK ] LogicalPlanMutationRuntimeTest.SetAndDeleteDoNotPublishWhenTheirReturnExpressionsFail (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsUnsupportedBodiesBeforePublishingAnyBatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsUnsupportedBodiesBeforePublishingAnyBatch (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsExportingBodyBeforePublishingAnyBatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsExportingBodyBeforePublishingAnyBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsNegativeProgrammaticBatchSizeBeforeOpeningABatch
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsNegativeProgrammaticBatchSizeBeforeOpeningABatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsMalformedExportsAndBodiesBeforePublishing
+[       OK ] LogicalPlanMutationRuntimeTest.InTransactionsCallRejectsMalformedExportsAndBodiesBeforePublishing (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryRejectsExportsAndBatchesIndependently
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallSubqueryRejectsExportsAndBatchesIndependently (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedPublicMutationPlansBeforePublishing
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedPublicMutationPlansBeforePublishing (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CountStarAggregateCompilesAnAnonymousCreateThroughTheNativeMutationPath
+[       OK ] LogicalPlanMutationRuntimeTest.CountStarAggregateCompilesAnAnonymousCreateThroughTheNativeMutationPath (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.AnonymousCreatePublishesWithoutExposingAnonymousBindings
+[       OK ] LogicalPlanMutationRuntimeTest.AnonymousCreatePublishesWithoutExposingAnonymousBindings (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CypherAnonymousCreatePublishesWithoutVisibleResultRows
+[       OK ] LogicalPlanMutationRuntimeTest.CypherAnonymousCreatePublishesWithoutVisibleResultRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CountStarAggregateAcceptsAProjectWrappedAnonymousCreateAndRejectsNonCanonicalForms
+[       OK ] LogicalPlanMutationRuntimeTest.CountStarAggregateAcceptsAProjectWrappedAnonymousCreateAndRejectsNonCanonicalForms (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CountStarAggregateCountsAnAnonymousCreateRelationshipThroughTheNativePath
+[       OK ] LogicalPlanMutationRuntimeTest.CountStarAggregateCountsAnAnonymousCreateRelationshipThroughTheNativePath (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.TypedCreateEdgePreservesIncomingDirectionEndpointOrder
+[       OK ] LogicalPlanMutationRuntimeTest.TypedCreateEdgePreservesIncomingDirectionEndpointOrder (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.TypedCreateEdgePreservesEndpointOrderForUndirectedDirection
+[       OK ] LogicalPlanMutationRuntimeTest.TypedCreateEdgePreservesEndpointOrderForUndirectedDirection (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreatesOneLogicalNodePerListElementInOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreatesOneLogicalNodePerListElementInOneAtomicBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreatesAllBodyEntitiesInOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreatesAllBodyEntitiesInOneAtomicBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateThenSetUsesTheCreatedEntityWithinOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.CreateThenSetUsesTheCreatedEntityWithinOneAtomicBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ReusesLogicalReadExpressionSemanticsForCreateAndSet
+[       OK ] LogicalPlanMutationRuntimeTest.ReusesLogicalReadExpressionSemanticsForCreateAndSet (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ProjectsScalarExpressionsFromCreatedRelationshipFinalState
+[       OK ] LogicalPlanMutationRuntimeTest.ProjectsScalarExpressionsFromCreatedRelationshipFinalState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateSetMaterializesCreatedRelationshipAfterFinalStateFold
+[       OK ] LogicalPlanMutationRuntimeTest.CreateSetMaterializesCreatedRelationshipAfterFinalStateFold (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreateThenSetUsesOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreateThenSetUsesOneAtomicBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreateThenRemoveFoldsEachCreatedPropertyState
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreateThenRemoveFoldsEachCreatedPropertyState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachFoldsCreatedRelationshipPropertiesAgainstCreatedNodeState
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachFoldsCreatedRelationshipPropertiesAgainstCreatedNodeState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachPreservesMatchedRowsForFollowingProjection
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachPreservesMatchedRowsForFollowingProjection (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachScalarInputSkipsItsBodyAndRetainsTheInputRow
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachScalarInputSkipsItsBodyAndRetainsTheInputRow (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachUsesItsOuterInputWithoutAChildOnTheUpdateBody
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachUsesItsOuterInputWithoutAChildOnTheUpdateBody (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachRejectsAnEntityListExpressionBeforePublishingAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachRejectsAnEntityListExpressionBeforePublishingAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachRejectsAnOverBoundListBeforePublishingAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachRejectsAnOverBoundListBeforePublishingAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachRejectsCumulativeIterationsBeforePublishingAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachRejectsCumulativeIterationsBeforePublishingAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.TimedOutForeachDoesNotPublishAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.TimedOutForeachDoesNotPublishAnyMutation (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchChainPreservesFieldsAndRetriesWithoutDoubleApplication
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchChainPreservesFieldsAndRetriesWithoutDoubleApplication (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchChainRestoringOriginalValueDoesNotPublish
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchChainRestoringOriginalValueDoesNotPublish (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchMapMergeRemovesNullAndPreservesUnspecifiedFields
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchMapMergeRemovesNullAndPreservesUnspecifiedFields (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchControlFailureDoesNotPublishCompanionLabels
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchControlFailureDoesNotPublishCompanionLabels (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.EdgePropertyPatchPreservesOtherFieldsAndReturnsFinalValue
+[       OK ] LogicalPlanMutationRuntimeTest.EdgePropertyPatchPreservesOtherFieldsAndReturnsFinalValue (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchCompleteMapReplacementClearsUnspecifiedFields
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchCompleteMapReplacementClearsUnspecifiedFields (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchEmptyMapReplacementRemovesAllFields
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchEmptyMapReplacementRemovesAllFields (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchSourceAdmissionFailurePrecedesBackendPublication
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchSourceAdmissionFailurePrecedesBackendPublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementWorksAcrossCreateMergeAndForeachChains
+[       OK ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementWorksAcrossCreateMergeAndForeachChains (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementRejectsScalarBeforePublishingEarlierChanges
+[       OK ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementRejectsScalarBeforePublishingEarlierChanges (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MapMergeEvaluatesCompleteCaseExpressionBeforeApplyingFields
+[       OK ] LogicalPlanMutationRuntimeTest.MapMergeEvaluatesCompleteCaseExpressionBeforeApplyingFields (5 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MapMergeEvaluatesFieldReferencesAgainstTheSameInputState
+[       OK ] LogicalPlanMutationRuntimeTest.MapMergeEvaluatesFieldReferencesAgainstTheSameInputState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeMapActionsRetainTypesAndExpressionsWhenCloned
+[       OK ] LogicalPlanMutationRuntimeTest.MergeMapActionsRetainTypesAndExpressionsWhenCloned (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeOnCreateAndOnMatchKeepMapReplacementDistinctFromMerge
+[       OK ] LogicalPlanMutationRuntimeTest.MergeOnCreateAndOnMatchKeepMapReplacementDistinctFromMerge (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeMapActionFailureDoesNotPublishCreatedOrMatchedState
+[       OK ] LogicalPlanMutationRuntimeTest.MergeMapActionFailureDoesNotPublishCreatedOrMatchedState (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementRejectsEntryGrowthBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementRejectsEntryGrowthBeforePublication (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementCountsOnlyPersistedFieldsAtEntryLimit
+[       OK ] LogicalPlanMutationRuntimeTest.CompleteMapReplacementCountsOnlyPersistedFieldsAtEntryLimit (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyGrowthRejectsScalarAndMapWritesAcrossMutationChains
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyGrowthRejectsScalarAndMapWritesAcrossMutationChains (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MapMergeRemovalMakesRoomWithoutDependingOnFieldOrder
+[       OK ] LogicalPlanMutationRuntimeTest.MapMergeRemovalMakesRoomWithoutDependingOnFieldOrder (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePersistedNodeUsesPropertyPatchesAndRebuildsAfterConflict
+[       OK ] LogicalPlanMutationRuntimeTest.MergePersistedNodeUsesPropertyPatchesAndRebuildsAfterConflict (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePropertyPatchRestoringOriginalValueSkipsPublication
+[       OK ] LogicalPlanMutationRuntimeTest.MergePropertyPatchRestoringOriginalValueSkipsPublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePropertyPatchAdmissionFailureCannotPublishLabelChanges
+[       OK ] LogicalPlanMutationRuntimeTest.MergePropertyPatchAdmissionFailureCannotPublishLabelChanges (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePersistedEdgeUsesPatchForCompleteMapReplacement
+[       OK ] LogicalPlanMutationRuntimeTest.MergePersistedEdgeUsesPatchForCompleteMapReplacement (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateChainPublishesNewNodesAndPersistedPropertyPatchesTogether
+[       OK ] LogicalPlanMutationRuntimeTest.CreateChainPublishesNewNodesAndPersistedPropertyPatchesTogether (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCollapsesOrderedPersistedChangesIntoOnePropertyPatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCollapsesOrderedPersistedChangesIntoOnePropertyPatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateChainPatchAdmissionFailureRejectsCompanionCreations
+[       OK ] LogicalPlanMutationRuntimeTest.CreateChainPatchAdmissionFailureRejectsCompanionCreations (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreateReadsPreviousIterationPropertyChangesBeforeCurrentSet
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreateReadsPreviousIterationPropertyChangesBeforeCurrentSet (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachFailureAfterCrossEntityReadsDoesNotPublishStagedValues
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachFailureAfterCrossEntityReadsDoesNotPublishStagedValues (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachUpdatesAllAliasesBeforeCreatingDependentEntities
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachUpdatesAllAliasesBeforeCreatingDependentEntities (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachCreatedEntitiesReadTheirFinalStagedPropertiesWithinEachIteration
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachCreatedEntitiesReadTheirFinalStagedPropertiesWithinEachIteration (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.InitialCreatePropertiesRespectEntryBoundsForNodesAndRelationships
+[       OK ] LogicalPlanMutationRuntimeTest.InitialCreatePropertiesRespectEntryBoundsForNodesAndRelationships (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeIdentityEntryAdmissionPrecedesDynamicExpressionEvaluation
+[       OK ] LogicalPlanMutationRuntimeTest.MergeIdentityEntryAdmissionPrecedesDynamicExpressionEvaluation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeIdentityEntryAdmissionAllowsItsExactBoundary
+[       OK ] LogicalPlanMutationRuntimeTest.MergeIdentityEntryAdmissionAllowsItsExactBoundary (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePropertyChangesSynchronizeAliasesBeforeLaterAssignments
+[       OK ] LogicalPlanMutationRuntimeTest.MergePropertyChangesSynchronizeAliasesBeforeLaterAssignments (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePropertyRemovalIsVisibleThroughAliasesInLaterAssignments
+[       OK ] LogicalPlanMutationRuntimeTest.MergePropertyRemovalIsVisibleThroughAliasesInLaterAssignments (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeAliasExpressionFailureCannotPublishEarlierRemoval
+[       OK ] LogicalPlanMutationRuntimeTest.MergeAliasExpressionFailureCannotPublishEarlierRemoval (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.PropertyPatchLookupHandlesUnorderedFieldsAndMixedChanges
+[       OK ] LogicalPlanMutationRuntimeTest.PropertyPatchLookupHandlesUnorderedFieldsAndMixedChanges (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.BackendReadControlsRejectGuardAndConstraintSourceGrowthBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.BackendReadControlsRejectGuardAndConstraintSourceGrowthBeforePublication (2 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachFailureAfterStagingDoesNotPublishAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachFailureAfterStagingDoesNotPublishAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetFailureAfterStagingDoesNotPublishAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.SetFailureAfterStagingDoesNotPublishAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeFailureAfterStagingDoesNotPublishAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.MergeFailureAfterStagingDoesNotPublishAnyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeEvaluatesDynamicNodeIdentityPropertiesPerInputRow
+[       OK ] LogicalPlanMutationRuntimeTest.MergeEvaluatesDynamicNodeIdentityPropertiesPerInputRow (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows
+[       OK ] LogicalPlanMutationRuntimeTest.MergeAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRebuildsMixedCreatedAndScalarReturnExpressionsAfterPublication
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRebuildsMixedCreatedAndScalarReturnExpressionsAfterPublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows
+[       OK ] LogicalPlanMutationRuntimeTest.CreateAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateDistinctReturnAppliesAfterPublishingAllInputRows
+[       OK ] LogicalPlanMutationRuntimeTest.CreateDistinctReturnAppliesAfterPublishingAllInputRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateReturnSkipPastDistinctRowsStillPublishesAllInputRows
+[       OK ] LogicalPlanMutationRuntimeTest.CreateReturnSkipPastDistinctRowsStillPublishesAllInputRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateReturnLimitZeroStillPublishesAllInputRows
+[       OK ] LogicalPlanMutationRuntimeTest.CreateReturnLimitZeroStillPublishesAllInputRows (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeRejectsAnOverBoundInputWithoutPublishingItsPrefix
+[       OK ] LogicalPlanMutationRuntimeTest.MergeRejectsAnOverBoundInputWithoutPublishingItsPrefix (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeCachesPrepublicationScalarResultsButUsesPublishedEntityIds
+[       OK ] LogicalPlanMutationRuntimeTest.MergeCachesPrepublicationScalarResultsButUsesPublishedEntityIds (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeCachesPrepublicationSortKeys
+[       OK ] LogicalPlanMutationRuntimeTest.MergeCachesPrepublicationSortKeys (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateCachesPrepublicationSortKeys
+[       OK ] LogicalPlanMutationRuntimeTest.CreateCachesPrepublicationSortKeys (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateReevaluatesSortKeysThatDependOnDurableEntityIds
+[       OK ] LogicalPlanMutationRuntimeTest.CreateReevaluatesSortKeysThatDependOnDurableEntityIds (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateRejectsEntitySortKeysBeforePublishingTheBatch
+[       OK ] LogicalPlanMutationRuntimeTest.CreateRejectsEntitySortKeysBeforePublishingTheBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeDoesNotPublishWhenItsReturnExpressionFails
+[       OK ] LogicalPlanMutationRuntimeTest.MergeDoesNotPublishWhenItsReturnExpressionFails (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeDynamicIdentitySupportsParametersAndReadBindings
+[       OK ] LogicalPlanMutationRuntimeTest.MergeDynamicIdentitySupportsParametersAndReadBindings (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeDynamicIdentityNullOrFailureDoesNotPublishStagedRows
+[       OK ] LogicalPlanMutationRuntimeTest.MergeDynamicIdentityNullOrFailureDoesNotPublishStagedRows (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeEvaluatesDynamicRelationshipIdentityPropertiesPerInputRow
+[       OK ] LogicalPlanMutationRuntimeTest.MergeEvaluatesDynamicRelationshipIdentityPropertiesPerInputRow (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallFailureAfterStagingDoesNotPublishAnyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallFailureAfterStagingDoesNotPublishAnyMutation (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachReturnsCapturedRowsAfterItsMutationChangesTheInputMatch
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachReturnsCapturedRowsAfterItsMutationChangesTheInputMatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateThenRemoveFoldsTheFinalPropertyStateIntoOneAtomicBatch
+[       OK ] LogicalPlanMutationRuntimeTest.CreateThenRemoveFoldsTheFinalPropertyStateIntoOneAtomicBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateThenSetAndRemoveLabelsPublishesOnlyTheFinalLabelSet
+[       OK ] LogicalPlanMutationRuntimeTest.CreateThenSetAndRemoveLabelsPublishesOnlyTheFinalLabelSet (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateSetRetainsAnAlreadyDeclaredLabelWithoutDuplicatingIt
+[       OK ] LogicalPlanMutationRuntimeTest.CreateSetRetainsAnAlreadyDeclaredLabelWithoutDuplicatingIt (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetLabelOnlyPublishesThePersistedNodeLabelReplacement
+[       OK ] LogicalPlanMutationRuntimeTest.SetLabelOnlyPublishesThePersistedNodeLabelReplacement (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MatchCreateThenSetPublishesPersistedAndCreatedFinalStatesTogether
+[       OK ] LogicalPlanMutationRuntimeTest.MatchCreateThenSetPublishesPersistedAndCreatedFinalStatesTogether (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetAndRemoveUseCompleteNodeAndRelationshipPropertyReplacements
+[       OK ] LogicalPlanMutationRuntimeTest.SetAndRemoveUseCompleteNodeAndRelationshipPropertyReplacements (1 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetOnRelationshipDoesNotLeakItsPropertyCacheIntoEndpointBindings
+[       OK ] LogicalPlanMutationRuntimeTest.SetOnRelationshipDoesNotLeakItsPropertyCacheIntoEndpointBindings (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateChainUpdatesPersistedRelationshipAndPublishesOneFinalState
+[       OK ] LogicalPlanMutationRuntimeTest.CreateChainUpdatesPersistedRelationshipAndPublishesOneFinalState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateChainDeletesPersistedRelationshipAndReturnsItsPreDeleteBinding
+[       OK ] LogicalPlanMutationRuntimeTest.CreateChainDeletesPersistedRelationshipAndReturnsItsPreDeleteBinding (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteMaterializesPreDeleteBindingsAndHonorsDetachSemantics
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteMaterializesPreDeleteBindingsAndHonorsDetachSemantics (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteWithNoMatchesReturnsWithoutPublishingAnEmptyMutation
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteWithNoMatchesReturnsWithoutPublishingAnEmptyMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CountStarObservesMutationPipelineRowsAndMergePostMutations
+[       OK ] LogicalPlanMutationRuntimeTest.CountStarObservesMutationPipelineRowsAndMergePostMutations (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePostMutationsFoldLabelsAndNullMapEntriesForCreatedAndMatchedNodes
+[       OK ] LogicalPlanMutationRuntimeTest.MergePostMutationsFoldLabelsAndNullMapEntriesForCreatedAndMatchedNodes (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeAppliesRuntimeMapParametersToCreatedAndMatchedNodes
+[       OK ] LogicalPlanMutationRuntimeTest.MergeAppliesRuntimeMapParametersToCreatedAndMatchedNodes (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MutationAggregatesPreserveInputRowsAcrossSetAndMerge
+[       OK ] LogicalPlanMutationRuntimeTest.MutationAggregatesPreserveInputRowsAcrossSetAndMerge (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RetriesStandaloneCreateSetAndDeleteAfterOptimisticConflicts
+[       OK ] LogicalPlanMutationRuntimeTest.RetriesStandaloneCreateSetAndDeleteAfterOptimisticConflicts (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateSetChainCancelsTransientCreatesAndPublishesPersistedDeleteAtomically
+[       OK ] LogicalPlanMutationRuntimeTest.CreateSetChainCancelsTransientCreatesAndPublishesPersistedDeleteAtomically (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DetachDeleteCreatedNodeCancelsIncidentRelationshipAndKeepsOtherEndpoint
+[       OK ] LogicalPlanMutationRuntimeTest.DetachDeleteCreatedNodeCancelsIncidentRelationshipAndKeepsOtherEndpoint (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteCreatedNodeWithIncidentRelationshipFailsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteCreatedNodeWithIncidentRelationshipFailsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteCreatedTargetNodeWithIncidentRelationshipFailsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteCreatedTargetNodeWithIncidentRelationshipFailsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ForeachFoldsCreatedEntityDeletesWithoutPublishingResidualGraphState
+[       OK ] LogicalPlanMutationRuntimeTest.ForeachFoldsCreatedEntityDeletesWithoutPublishingResidualGraphState (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathFoldsLabelsNullsAndMapUpdatesInOrder
+[       OK ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathFoldsLabelsNullsAndMapUpdatesInOrder (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathAvoidsNoOpPublicationAndRetriesConflicts
+[       OK ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathAvoidsNoOpPublicationAndRetriesConflicts (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathRejectsBoundedPartialMutations
+[       OK ] LogicalPlanMutationRuntimeTest.UnifiedSetRemovePathRejectsBoundedPartialMutations (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.AppliesRuntimeMapParametersToPersistedAndCreatedEntities
+[       OK ] LogicalPlanMutationRuntimeTest.AppliesRuntimeMapParametersToPersistedAndCreatedEntities (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.NoOpSetAndRemoveDoNotPublishAnEmptyMutationBatch
+[       OK ] LogicalPlanMutationRuntimeTest.NoOpSetAndRemoveDoNotPublishAnEmptyMutationBatch (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetRemoveFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence
+[       OK ] LogicalPlanMutationRuntimeTest.SetRemoveFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence
+[       OK ] LogicalPlanMutationRuntimeTest.MergeFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence
+[       OK ] LogicalPlanMutationRuntimeTest.CreateFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateExhaustsConflictsWithoutPublishingAnyPartialMutation
+[       OK ] LogicalPlanMutationRuntimeTest.CreateExhaustsConflictsWithoutPublishingAnyPartialMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.SetRemoveExhaustsConflictsWithoutPublishingAnyPartialMutation
+[       OK ] LogicalPlanMutationRuntimeTest.SetRemoveExhaustsConflictsWithoutPublishingAnyPartialMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.DeleteExhaustsConflictsWithoutPublishingAnyPartialMutation
+[       OK ] LogicalPlanMutationRuntimeTest.DeleteExhaustsConflictsWithoutPublishingAnyPartialMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergeExhaustsConflictsWithoutPublishingAnyPartialMutation
+[       OK ] LogicalPlanMutationRuntimeTest.MergeExhaustsConflictsWithoutPublishingAnyPartialMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedCreateChainsAndInvalidStagedReferencesBeforePublishing
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedCreateChainsAndInvalidStagedReferencesBeforePublishing (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedMutationEntryPlansBeforeOpeningOrPublishing
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedMutationEntryPlansBeforeOpeningOrPublishing (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsLabelRemovalFromRelationshipsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsLabelRemovalFromRelationshipsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsLabelAssignmentToRelationshipsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsLabelAssignmentToRelationshipsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsInvalidRelationshipNodeEndpointsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsInvalidRelationshipNodeEndpointsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsCreatedRelationshipLabelRemovalBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsCreatedRelationshipLabelRemovalBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsUnknownSetAndRemoveItemKindsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsUnknownSetAndRemoveItemKindsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedSetAndRemoveItemShapesBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedSetAndRemoveItemShapesBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsEmptyAndForgedNestedPropertyMutationChainsBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsEmptyAndForgedNestedPropertyMutationChainsBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsUnknownCreatedRemoveItemKindBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsUnknownCreatedRemoveItemKindBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsUnboundCreateChainUpdatesBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsUnboundCreateChainUpdatesBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallResultPaginationDoesNotReduceItsAtomicMutationInput
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallResultPaginationDoesNotReduceItsAtomicMutationInput (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsResultPaginationForNonCreateWriteOnlyCallBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsResultPaginationForNonCreateWriteOnlyCallBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedWriteOnlyCallExportItemsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedWriteOnlyCallExportItemsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallExportsCreatedNodeAfterItsAtomicPublication
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallExportsCreatedNodeAfterItsAtomicPublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.WriteOnlyCallPassesExportedNodesThroughAnOuterProjection
+[       OK ] LogicalPlanMutationRuntimeTest.WriteOnlyCallPassesExportedNodesThroughAnOuterProjection (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsRedeclaredCreatedEntityVariablesBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsRedeclaredCreatedEntityVariablesBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMergeVariableConflictsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMergeVariableConflictsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedCallSubqueryShapesBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedCallSubqueryShapesBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedAggregateMutationChildrenBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedAggregateMutationChildrenBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsIncompletePublicCallPipelineShapesBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsIncompletePublicCallPipelineShapesBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsForgedMutationPipelineOperatorsBeforeOpeningASnapshot
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsForgedMutationPipelineOperatorsBeforeOpeningASnapshot (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsPropertyMutationWhenTheCompletePropertyReadExceedsItsBound
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsPropertyMutationWhenTheCompletePropertyReadExceedsItsBound (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMutationWhenNodeOrAdjacencyReadsReachTheirBounds
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMutationWhenNodeOrAdjacencyReadsReachTheirBounds (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsInvalidRuntimeMutationBindingsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsInvalidRuntimeMutationBindingsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.HandlesOnlyEmptyCreateNodeRedeclarations
+[       OK ] LogicalPlanMutationRuntimeTest.HandlesOnlyEmptyCreateNodeRedeclarations (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedInlinePropertiesBeforePublishingAMutation
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedInlinePropertiesBeforePublishingAMutation (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedMergeActionsAndDirectionsWithoutPublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedMergeActionsAndDirectionsWithoutPublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedMergeIdentityShapesBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedMergeIdentityShapesBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedReadMutationResultItemsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedReadMutationResultItemsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.RejectsMalformedCreatePropertyExpressionsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.RejectsMalformedCreatePropertyExpressionsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateSetMapMergePreservesEqualValuesAndAppliesEachRealChange
+[       OK ] LogicalPlanMutationRuntimeTest.CreateSetMapMergePreservesEqualValuesAndAppliesEachRealChange (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.CreateSetMapMergeRejectsInvalidMapsBeforePublication
+[       OK ] LogicalPlanMutationRuntimeTest.CreateSetMapMergeRejectsInvalidMapsBeforePublication (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.ReadSetMapMergePreservesEqualValuesAndAppliesEachRealChange
+[       OK ] LogicalPlanMutationRuntimeTest.ReadSetMapMergePreservesEqualValuesAndAppliesEachRealChange (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePropertyActionsAvoidNoOpPublicationAndApplyNullRemoval
+[       OK ] LogicalPlanMutationRuntimeTest.MergePropertyActionsAvoidNoOpPublicationAndApplyNullRemoval (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePostMutationChainUpdatesCreatedPropertiesAndLabelsAtomically
+[       OK ] LogicalPlanMutationRuntimeTest.MergePostMutationChainUpdatesCreatedPropertiesAndLabelsAtomically (0 ms)
+[ RUN      ] LogicalPlanMutationRuntimeTest.MergePostMutationChainRejectsInvalidAssignmentsWithoutPublication
+[       OK ] LogicalPlanMutationRuntimeTest.MergePostMutationChainRejectsInvalidAssignmentsWithoutPublication (0 ms)
+[----------] 202 tests from LogicalPlanMutationRuntimeTest (542 ms total)
+
+[----------] 12 tests from CypherTransactionTest
+[ RUN      ] CypherTransactionTest.BeginParsesSuccessfully
+[       OK ] CypherTransactionTest.BeginParsesSuccessfully (40 ms)
+[ RUN      ] CypherTransactionTest.BeginTransactionParsesSuccessfully
+[       OK ] CypherTransactionTest.BeginTransactionParsesSuccessfully (71 ms)
+[ RUN      ] CypherTransactionTest.CommitParsesAfterBegin
+[       OK ] CypherTransactionTest.CommitParsesAfterBegin (77 ms)
+[ RUN      ] CypherTransactionTest.RollbackParsesAfterBegin
+[       OK ] CypherTransactionTest.RollbackParsesAfterBegin (81 ms)
+[ RUN      ] CypherTransactionTest.CaseInsensitiveParsing
+[       OK ] CypherTransactionTest.CaseInsensitiveParsing (58 ms)
+[ RUN      ] CypherTransactionTest.BeginCommit_PersistsData
+[       OK ] CypherTransactionTest.BeginCommit_PersistsData (94 ms)
+[ RUN      ] CypherTransactionTest.BeginRollback_RevertsData
+[       OK ] CypherTransactionTest.BeginRollback_RevertsData (56 ms)
+[ RUN      ] CypherTransactionTest.BeginWithinBegin_Error
+[       OK ] CypherTransactionTest.BeginWithinBegin_Error (38 ms)
+[ RUN      ] CypherTransactionTest.CommitWithoutBegin_Error
+[       OK ] CypherTransactionTest.CommitWithoutBegin_Error (39 ms)
+[ RUN      ] CypherTransactionTest.RollbackWithoutBegin_Error
+[       OK ] CypherTransactionTest.RollbackWithoutBegin_Error (46 ms)
+[ RUN      ] CypherTransactionTest.MultipleQueriesInTransaction
+[       OK ] CypherTransactionTest.MultipleQueriesInTransaction (244 ms)
+[ RUN      ] CypherTransactionTest.HasActiveTransactionReflectsCypherTxn
+[       OK ] CypherTransactionTest.HasActiveTransactionReflectsCypherTxn (107 ms)
+[----------] 12 tests from CypherTransactionTest (956 ms total)
+
+[----------] 16 tests from RelocatablePropertyCollectionRootTest
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsCanonicalOwnerKeyedCollections (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodeReturnsOnlyTheRequestedToken (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues
+[       OK ] RelocatablePropertyCollectionRootTest.PresenceCodecUsesCanonicalDirectoryWithoutMaterializingValues (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode
+[       OK ] RelocatablePropertyCollectionRootTest.SelectedAdmissionRunsBeforeVariablePayloadDecode (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence
+[       OK ] RelocatablePropertyCollectionRootTest.MultiColumnSelectiveDecodePreservesTokenOrderAndAbsence (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueCombinedCountPreservesSelectionAndRejectsCorruptDirectory (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads
+[       OK ] RelocatablePropertyCollectionRootTest.SelectiveDecodersValidateOwnerNeutralAndOwnerKeyedPayloads (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads
+[       OK ] RelocatablePropertyCollectionRootTest.RoundTripsOwnerNeutralLargeValuePayloads (9 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsInvalidOwnerIdentitiesAndTokenOrder (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes
+[       OK ] RelocatablePropertyCollectionRootTest.FailsClosedForMalformedPersistentBytes (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation
+[       OK ] RelocatablePropertyCollectionRootTest.RejectsOrExactlyRoundTripsEverySingleBitMutation (12 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry
+[       OK ] RelocatablePropertyCollectionRootTest.FullAdmissionPrecedesAllVariableDecodeAndCanRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission
+[       OK ] RelocatablePropertyCollectionRootTest.FullInlineTokenValidationPrecedesAdmission (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueDirectoryValidationPrecedesSlotRejection (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.LargeValueSelectedBuffersRejectBeforeValueAdmissionAndRetry (0 ms)
+[ RUN      ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry
+[       OK ] RelocatablePropertyCollectionRootTest.InlineSelectedSlotsRejectBeforeValueDecodeAndRetry (0 ms)
+[----------] 16 tests from RelocatablePropertyCollectionRootTest (22 ms total)
+
+[----------] 20 tests from PropertyCollectionRootStoreCacheTest
+[ RUN      ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame
+[       OK ] PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame (9 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead (6 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead (6 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge
+[       OK ] PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties
+[       OK ] PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads
+[       OK ] PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo (6 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput
+[       OK ] PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor (8 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor
+[       OK ] PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls
+[       OK ] PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry (4 ms)
+[ RUN      ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission
+[       OK ] PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission (4 ms)
+[----------] 20 tests from PropertyCollectionRootStoreCacheTest (104 ms total)
+
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains
+[       OK ] PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains (2 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState
+[       OK ] PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState (7 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads (6 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads (31 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity
+[       OK ] PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity (50 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads (38 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing (8 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow (16 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit
+[       OK ] PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit (30 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots (22 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage (36 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot
+[       OK ] PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot (19 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp
+[       OK ] PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource (46 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove
+[       OK ] PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove (19 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically
+[       OK ] PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically (60 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources (31 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans
+[       OK ] PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans (1 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads
+[       OK ] PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads (14 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability
+[       OK ] PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability (14 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations
+[       OK ] PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations (12 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks (68 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode
+[       OK ] PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode (36 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries
+[       OK ] PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries (8 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry (8 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry
+[       OK ] PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry (8 ms)
+[ RUN      ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission
+[       OK ] PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission (30 ms)
+[----------] 29 tests from PropertyCollectionRootStoreValidationTest (645 ms total)
+
+[----------] 3 tests from RelocatableLargeValueRefTest
+[ RUN      ] RelocatableLargeValueRefTest.RoundTripsLogicalIdentityAndRejectsChecksumOrMetadataCorruption
+[       OK ] RelocatableLargeValueRefTest.RoundTripsLogicalIdentityAndRejectsChecksumOrMetadataCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueRefTest.RejectsNonCanonicalIdentityAndWellChecksummedWireCorruption
+[       OK ] RelocatableLargeValueRefTest.RejectsNonCanonicalIdentityAndWellChecksummedWireCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueRefTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueRefTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (2 ms)
+[----------] 3 tests from RelocatableLargeValueRefTest (2 ms total)
+
+[----------] 6 tests from RelocatableLargeValueManifestPageTest
+[ RUN      ] RelocatableLargeValueManifestPageTest.RoundTripsMixedChunksAndBindsTypedOwner
+[       OK ] RelocatableLargeValueManifestPageTest.RoundTripsMixedChunksAndBindsTypedOwner (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RoundTripsInternalAndLeafNodesWithOrderedRanges
+[       OK ] RelocatableLargeValueManifestPageTest.RoundTripsInternalAndLeafNodesWithOrderedRanges (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.FailsClosedForMalformedChunksAndUnusedBytes
+[       OK ] RelocatableLargeValueManifestPageTest.FailsClosedForMalformedChunksAndUnusedBytes (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueManifestPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (1561 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.RejectsChecksummedHeaderAndLogicalShapeCorruption
+[       OK ] RelocatableLargeValueManifestPageTest.RejectsChecksummedHeaderAndLogicalShapeCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueManifestPageTest.AdmitsDecodedManifestArraysBeforeAllocationAndAllowsRetry
+[       OK ] RelocatableLargeValueManifestPageTest.AdmitsDecodedManifestArraysBeforeAllocationAndAllowsRetry (0 ms)
+[----------] 6 tests from RelocatableLargeValueManifestPageTest (1563 ms total)
+
+[----------] 5 tests from RelocatableLargeValueDataPageTest
+[ RUN      ] RelocatableLargeValueDataPageTest.PreservesCanonicalChunkFragmentsAndOwnerIdentity
+[       OK ] RelocatableLargeValueDataPageTest.PreservesCanonicalChunkFragmentsAndOwnerIdentity (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsChecksummedAndCanonicalLayoutCorruption
+[       OK ] RelocatableLargeValueDataPageTest.RejectsChecksummedAndCanonicalLayoutCorruption (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation
+[       OK ] RelocatableLargeValueDataPageTest.RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation (428 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.RejectsEveryInvalidFrameIdentityAndChecksummedHeaderShape
+[       OK ] RelocatableLargeValueDataPageTest.RejectsEveryInvalidFrameIdentityAndChecksummedHeaderShape (0 ms)
+[ RUN      ] RelocatableLargeValueDataPageTest.AdmitsDecodedPayloadAfterIntegrityChecksAndAllowsRetry
+[       OK ] RelocatableLargeValueDataPageTest.AdmitsDecodedPayloadAfterIntegrityChecksAndAllowsRetry (0 ms)
+[----------] 5 tests from RelocatableLargeValueDataPageTest (428 ms total)
+
+[----------] Global test environment tear-down
+[==========] 293 tests from 8 test suites ran. (4267 ms total)
+[  PASSED  ] 293 tests.

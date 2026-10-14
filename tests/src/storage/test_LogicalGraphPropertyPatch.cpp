@@ -29,6 +29,37 @@ TEST(LogicalGraphPropertyPatchTest, PreservesOtherFieldsAndReadsPreviousStagedVa
 	EXPECT_EQ(transaction.readSnapshot().readNodeShaped(1U, {.all_properties = true}).properties.front().value, PropertyValue("Ada"));
 }
 
+TEST(LogicalGraphPropertyPatchTest, NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads) {
+	InMemoryLogicalTransaction transaction;
+	LogicalGraphTransactionOverlay overlay(transaction);
+	auto snapshot = overlay.openLogicalGraphReadSnapshot();
+	const auto fence = *snapshot->mutationFence();
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{
+		{nodeReference(1U), {{"name", PropertyValue("Ada")}, {"rank", PropertyValue(7)}}, {"missing"}}};
+	const auto normalized = normalizeLogicalGraphPropertyPatchBatch(*snapshot, {}, patches, 4U, fence);
+	ASSERT_EQ(normalized.persisted_patches.size(), 1U);
+	EXPECT_EQ(normalized.persisted_patches.front().sets,
+		(std::vector<LogicalGraphWriteProperty>{{"rank", PropertyValue(7)}}));
+	EXPECT_TRUE(normalized.persisted_patches.front().removals.empty());
+	ASSERT_EQ(normalized.batch.property_replacements.size(), 1U);
+	EXPECT_EQ(normalized.batch.property_replacements.front().properties.size(), 2U);
+	EXPECT_EQ(normalized.entry_work, 4U);
+	EXPECT_EQ(snapshot->mutationFence(), fence);
+	EXPECT_EQ(snapshot->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+}
+
+TEST(LogicalGraphPropertyPatchTest, LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback) {
+	InMemoryLogicalTransaction transaction;
+	EXPECT_FALSE(transaction.supportsPropertyPatchStaging());
+	const std::vector<LogicalGraphPropertyPatchRequest> patches{{nodeReference(1U), {{"rank", PropertyValue(7)}}, {}}};
+	EXPECT_THROW(static_cast<void>(transaction.stageMutationBatchWithPropertyPatches({}, patches, 2U)), std::logic_error);
+	EXPECT_EQ(transaction.state(), LogicalGraphTransactionState::LGTTS_ACTIVE);
+	LogicalGraphTransactionOverlay overlay(transaction);
+	auto snapshot = overlay.openLogicalGraphReadSnapshot();
+	EXPECT_NO_THROW(static_cast<void>(overlay.executeLogicalGraphPropertyPatches(*snapshot, patches, 2U, *snapshot->mutationFence())));
+	EXPECT_EQ(snapshot->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
+}
+
 TEST(LogicalGraphPropertyPatchTest, UnchangedValuesAndMissingRemovalsDoNotStageAReplacement) {
 	InMemoryLogicalTransaction transaction;
 	LogicalGraphTransactionOverlay overlay(transaction);

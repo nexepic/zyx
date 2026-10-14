@@ -2,11 +2,12 @@
   "accepted_ids": [
     "S0.1",
     "S1.2",
-    "S1.7"
+    "S1.7",
+    "S3.1"
   ],
-  "accepted": 3,
+  "accepted": 4,
   "total": 34,
-  "percent": 8.8,
+  "percent": 11.8,
   "stages": {
     "S0": {
       "accepted": 1,
@@ -24,9 +25,9 @@
       "percent": 0
     },
     "S3": {
-      "accepted": 0,
+      "accepted": 1,
       "total": 5,
-      "percent": 0
+      "percent": 20
     },
     "S4": {
       "accepted": 0,
@@ -44,6 +45,6 @@
       "percent": 0
     }
   },
-  "S3.1": "in_progress",
-  "commit_push": "authorized_checkpoint_after_S1.7_acceptance"
+  "S3.1": "accepted",
+  "commit_push": "authorized_checkpoint_after_S3.1_acceptance"
 }

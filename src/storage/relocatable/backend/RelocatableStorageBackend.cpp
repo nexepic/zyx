@@ -686,7 +686,16 @@ namespace graph::storage {
 			}
 
 			[[nodiscard]] LogicalGraphMutationBatchResult stageMutationBatch(LogicalGraphMutationBatch batch) override {
+				return stageMutationBatchWithPropertyPatches(std::move(batch), {}, 0U);
+			}
+
+			[[nodiscard]] bool supportsPropertyPatchStaging() const override { return true; }
+
+			[[nodiscard]] LogicalGraphMutationBatchResult stageMutationBatchWithPropertyPatches(
+				LogicalGraphMutationBatch batch, std::vector<LogicalGraphPropertyPatchRequest> patches,
+				size_t maximumPropertyEntries, const LogicalGraphMutationReadControl &control = {}) override {
 				requireActive("stage a mutation batch");
+				if (control.checkpoint) control.checkpoint();
 				if (hasStreamedBulkEdges()) {
 					throw std::logic_error(
 							"relocatable streamed bulk Edge transaction cannot stage ordinary overlay mutations");
@@ -698,6 +707,9 @@ namespace graph::storage {
 					throw std::invalid_argument(
 							"relocatable logical transaction owns creation identity reservation normalization");
 				}
+				size_t patchEntries = validateStagedPropertyPatches(batch, patches, maximumPropertyEntries, control);
+				if (maximumPropertyEntries > (std::numeric_limits<size_t>::max)() - property_patch_entry_bound_)
+					throw std::overflow_error("logical transaction Property patch entry bound overflowed");
 				const size_t nodeOffset = issued_node_ids_.size();
 				const size_t edgeOffset = issued_edge_ids_.size();
 				NativeGraphLogicalIdReservation reservation;
@@ -726,23 +738,47 @@ namespace graph::storage {
 					std::vector<LogicalGraphCreationIdentityRange> nextNodeIdRanges = node_id_ranges_;
 					std::vector<LogicalGraphCreationIdentityRange> nextEdgeIdRanges = edge_id_ranges_;
 					LogicalGraphMutationBatch nextAccumulated = accumulated_;
+					std::vector<LogicalGraphPropertyPatchRequest> nextPatches = property_patches_;
 					rebaseCreatedReferences(batch, issued_node_ids_, issued_edge_ids_);
+					for (auto &patch : patches)
+						rebaseReference(patch.entity, nodeOffset, edgeOffset, issued_node_ids_, issued_edge_ids_);
 					appendIssuedIds(reservation.node_ranges, nextIssuedNodeIds, nextNodeIdRanges, "Node");
 					appendIssuedIds(reservation.edge_ranges, nextIssuedEdgeIds, nextEdgeIdRanges, "Edge");
 					foldCreatedEntityFinalState(batch, nodeOffset, edgeOffset, nextAccumulated);
+					// Complete-map replacement resets all older field operations.
+					for (const auto &replacement : batch.property_replacements)
+						std::erase_if(nextPatches, [&](const auto &patch) { return patch.entity == replacement.entity; });
 					append(nextAccumulated, batch);
+					foldStagedPropertyPatches(nextAccumulated, nextPatches, patches,
+						patchEntries, maximumPropertyEntries, control);
 					debug::PerfTrace::addValue("native_graph.write.transaction_retained_property_targets",
 						static_cast<int64_t>(std::min(nextAccumulated.property_replacements.size(),
 							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
 					debug::PerfTrace::addValue("native_graph.write.transaction_retained_label_targets",
 						static_cast<int64_t>(std::min(nextAccumulated.node_label_replacements.size(),
 							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+					size_t retainedEntries = 0U;
+					for (const auto &patch : nextPatches)
+						for (size_t count : {patch.sets.size(), patch.removals.size()}) {
+							if (count > (std::numeric_limits<size_t>::max)() - retainedEntries)
+								throw std::overflow_error("logical transaction retained Property entries overflowed");
+							retainedEntries += count;
+						}
+					debug::PerfTrace::addValue("native_graph.write.transaction_retained_patch_targets",
+						static_cast<int64_t>(std::min(nextPatches.size(),
+							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+					debug::PerfTrace::addValue("native_graph.write.transaction_retained_patch_entries",
+						static_cast<int64_t>(std::min(retainedEntries,
+							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
 
+					if (control.checkpoint) control.checkpoint();
 					issued_node_ids_ = std::move(nextIssuedNodeIds);
 					issued_edge_ids_ = std::move(nextIssuedEdgeIds);
 					node_id_ranges_ = std::move(nextNodeIdRanges);
 					edge_id_ranges_ = std::move(nextEdgeIdRanges);
 					accumulated_ = std::move(nextAccumulated);
+					property_patches_ = std::move(nextPatches);
+					property_patch_entry_bound_ += maximumPropertyEntries;
 					if (preview_reservation_.has_value()) {
 						preview_reservation_.reset();
 					}
@@ -765,7 +801,7 @@ namespace graph::storage {
 				// Driver ABI writes append to the same bounded scratch writer and must
 				// retain their contiguous ID stream, while ordinary overlay work is still
 				// rejected by stageMutationBatch().
-				if (!hasStreamedBulkEdges() && (!isEmpty(accumulated_) || !issued_node_ids_.empty() ||
+				if (!hasStreamedBulkEdges() && (!isEmpty(accumulated_) || !property_patches_.empty() || !issued_node_ids_.empty() ||
 												!issued_edge_ids_.empty() || preview_reservation_.has_value())) {
 					throw std::logic_error("relocatable streamed bulk Edge transaction requires an otherwise empty "
 										   "logical transaction");
@@ -893,7 +929,7 @@ namespace graph::storage {
 			[[nodiscard]] LogicalGraphMutationBatchResult commit() override {
 				requireActive("commit");
 				if (read_only_) {
-					if (!isEmpty(accumulated_)) { // read-only transaction mutation entry points reject writes before staging.
+					if (!isEmpty(accumulated_) || !property_patches_.empty()) { // read-only entry points reject writes before staging.
 						throw std::logic_error(
 								"relocatable read-only logical transaction contains staged graph mutations");
 					}
@@ -971,10 +1007,11 @@ namespace graph::storage {
 
 				try {
 					CanonicalMutation canonical = canonicalizeFinalState();
-					if (!canonical.batch.property_replacements.empty() &&
+					if ((!canonical.batch.property_replacements.empty() || !property_patches_.empty()) &&
 						backend_.currentNativeLogicalGraphMutationFence() != fence_)
 						throw LogicalGraphMutationConflict("logical transaction Property source fence changed before final planning");
-					const CanonicalPropertyPatches patches = extractFinalPropertyPatches(canonical.batch);
+					CanonicalPropertyPatches patches = extractFinalPropertyPatches(canonical.batch);
+					appendCanonicalStagedPropertyPatches(canonical.batch, patches);
 					LogicalGraphMutationBatchResult result = patches.requests.empty()
 						? backend_.executeLogicalGraphMutationBatch(canonical.batch, fence_)
 						: backend_.executeLogicalGraphMutationBatchWithPropertyPatches(
@@ -985,12 +1022,16 @@ namespace graph::storage {
 					}
 					abandonOutstandingCreationReservations();
 					state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
+					property_patches_.clear();
+					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
 					return result;
 				} catch (const LogicalGraphMutationConflict &) {
 					abandonOutstandingCreationReservations();
 					state_ = LogicalGraphTransactionState::LGTTS_CONFLICTED;
 					accumulated_ = {};
+					property_patches_.clear();
+					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
 					throw;
 				} catch (...) {
@@ -1001,6 +1042,8 @@ namespace graph::storage {
 						? LogicalGraphTransactionState::LGTTS_INDETERMINATE
 						: LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
 					accumulated_ = {};
+					property_patches_.clear();
+					property_patch_entry_bound_ = 0U;
 					snapshot_.reset();
 					throw;
 				}
@@ -1018,6 +1061,8 @@ namespace graph::storage {
 				}
 				abandonOutstandingCreationReservations();
 				accumulated_ = {};
+				property_patches_.clear();
+				property_patch_entry_bound_ = 0U;
 				snapshot_.reset();
 				state_ = LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
 				if (cleanup_failure != nullptr) {
@@ -1310,6 +1355,122 @@ namespace graph::storage {
 												std::make_move_iterator(source.node_deletes.end()));
 			}
 
+			static auto propertyTarget(const LogicalGraphMutationEntityReference &entity) {
+				return std::tuple{static_cast<uint8_t>(entity.entity_kind),
+					static_cast<uint8_t>(entity.reference_kind), entity.value};
+			}
+
+			static size_t validateStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
+				const std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t maximumEntries,
+				const LogicalGraphMutationReadControl &control) {
+				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
+				if (!patches.empty() && (maximumEntries == 0U || patches.size() > maximumEntries))
+					throw std::invalid_argument("logical transaction Property patches require a positive work bound");
+				size_t entries = 0U;
+				std::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
+				for (const auto &patch : patches) {
+					checkpoint();
+					const auto &entity = patch.entity;
+					const bool node = entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE;
+					const bool edge = entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE;
+					const bool valid = ((node || edge) && entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED && entity.value != 0U) ||
+						(node && entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE && entity.value < batch.node_creates.size()) ||
+						(edge && entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE && entity.value < batch.edge_creates.size());
+					if (!valid || !targets.insert(propertyTarget(entity)).second)
+						throw std::invalid_argument("logical transaction Property patches require distinct valid targets");
+					for (size_t count : {patch.sets.size(), patch.removals.size()}) {
+						if (count > maximumEntries - entries)
+							throw std::length_error("logical transaction Property patches exceeded their entry bound");
+						entries += count;
+					}
+					std::set<std::string_view> keys;
+					for (const auto &field : patch.sets) {
+						checkpoint();
+						if (field.key.empty() || field.value.getType() == PropertyType::NULL_TYPE || !keys.insert(field.key).second)
+							throw std::invalid_argument("logical transaction Property sets require unique non-null fields");
+					}
+					for (const auto &key : patch.removals) {
+						checkpoint();
+						if (key.empty() || !keys.insert(key).second)
+							throw std::invalid_argument("logical transaction Property removals must be unique and disjoint");
+					}
+				}
+				for (const auto &replacement : batch.property_replacements)
+					if (targets.contains(propertyTarget(replacement.entity)))
+						throw std::invalid_argument("logical transaction Property patches overlap complete replacements");
+				for (const auto &deletion : batch.node_deletes)
+					if (targets.contains(propertyTarget({LogicalGraphMutationEntityKind::LGMK_NODE,
+						LogicalGraphMutationReferenceKind::LGRK_PERSISTED, deletion.node_id})))
+						throw std::invalid_argument("logical transaction Property patch targets a deleted Node");
+				for (const auto &deletion : batch.edge_deletes)
+					if (targets.contains(propertyTarget({LogicalGraphMutationEntityKind::LGMK_EDGE,
+						LogicalGraphMutationReferenceKind::LGRK_PERSISTED, deletion.edge_id})))
+						throw std::invalid_argument("logical transaction Property patch targets a deleted Edge");
+				return entries;
+			}
+
+			static void applyStagedPropertyPatch(std::vector<LogicalGraphWriteProperty> &properties,
+				LogicalGraphPropertyPatchRequest &patch, const LogicalGraphMutationReadControl &control) {
+				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
+				std::map<std::string, PropertyValue> fields;
+				for (auto &field : properties) {
+					checkpoint();
+					if (field.key.empty() || !fields.emplace(std::move(field.key), std::move(field.value)).second)
+						throw std::invalid_argument("logical transaction Property source has duplicate or empty keys");
+				}
+				for (auto &field : patch.sets) { checkpoint(); fields.insert_or_assign(std::move(field.key), std::move(field.value)); }
+				for (const auto &key : patch.removals) { checkpoint(); fields.erase(key); }
+				properties.clear();
+				properties.reserve(fields.size());
+				for (auto &[key, value] : fields) { checkpoint(); properties.push_back({key, std::move(value)}); }
+			}
+
+			static void mergeStagedPropertyPatch(LogicalGraphPropertyPatchRequest &previous,
+				LogicalGraphPropertyPatchRequest &next, const LogicalGraphMutationReadControl &control) {
+				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
+				std::map<std::string, std::optional<PropertyValue>> fields;
+				for (auto &field : previous.sets) { checkpoint(); fields.emplace(std::move(field.key), std::move(field.value)); }
+				for (auto &key : previous.removals) { checkpoint(); fields.emplace(std::move(key), std::nullopt); }
+				for (auto &field : next.sets) { checkpoint(); fields.insert_or_assign(std::move(field.key), std::move(field.value)); }
+				for (auto &key : next.removals) { checkpoint(); fields.insert_or_assign(std::move(key), std::nullopt); }
+				previous.sets.clear();
+				previous.removals.clear();
+				for (auto &[key, value] : fields) {
+					checkpoint();
+					if (value) previous.sets.push_back({key, std::move(*value)});
+					else previous.removals.push_back(key);
+				}
+			}
+
+			static void foldStagedPropertyPatches(LogicalGraphMutationBatch &accumulated,
+				std::vector<LogicalGraphPropertyPatchRequest> &retained,
+				std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t &entries, size_t maximumEntries,
+				const LogicalGraphMutationReadControl &control) {
+				for (auto &patch : patches) {
+					if (control.checkpoint) control.checkpoint();
+					std::vector<LogicalGraphWriteProperty> *source = nullptr;
+					if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE)
+						source = &accumulated.node_creates.at(static_cast<size_t>(patch.entity.value)).properties;
+					else if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE)
+						source = &accumulated.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties;
+					else {
+						const auto full = std::ranges::find(accumulated.property_replacements,
+							patch.entity, &LogicalGraphPropertyMutationRequest::entity);
+						if (full != accumulated.property_replacements.end()) source = &full->properties;
+					}
+					if (source) {
+						if (source->size() > maximumEntries - entries)
+							throw std::length_error("logical transaction Property patch source exceeded its entry bound");
+						entries += source->size();
+						applyStagedPropertyPatch(*source, patch, control);
+						continue;
+					}
+					const auto previous = std::ranges::find(retained, patch.entity, &LogicalGraphPropertyPatchRequest::entity);
+					if (previous == retained.end()) retained.push_back(std::move(patch));
+					else mergeStagedPropertyPatch(*previous, patch, control);
+				}
+			}
+
 			void foldCreatedEntityFinalState(LogicalGraphMutationBatch &batch, size_t nodeOffset, size_t edgeOffset,
 											 LogicalGraphMutationBatch &previouslyAccumulated) {
 				const auto nodeCreate = [&previouslyAccumulated, &batch,
@@ -1423,6 +1584,32 @@ namespace graph::storage {
 				std::vector<LogicalGraphPropertyPatchRequest> requests;
 				size_t entry_bound = 0U;
 			};
+
+			void appendCanonicalStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
+				CanonicalPropertyPatches &result) const {
+				if (property_patches_.empty()) return;
+				std::set<uint64_t> deletedNodes, detachedNodes, deletedEdges;
+				for (const auto &deletion : batch.node_deletes) {
+					deletedNodes.insert(deletion.node_id);
+					if (deletion.detach) detachedNodes.insert(deletion.node_id);
+				}
+				for (const auto &deletion : batch.edge_deletes) deletedEdges.insert(deletion.edge_id);
+				for (const auto &patch : property_patches_) {
+					if (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
+						if (deletedNodes.contains(patch.entity.value)) continue;
+					} else {
+						if (deletedEdges.contains(patch.entity.value)) continue;
+						if (!detachedNodes.empty()) {
+							const auto edge = snapshot_->readEdgeShaped(patch.entity.value, {.include_type = false});
+							if (detachedNodes.contains(edge.source_node_id) || detachedNodes.contains(edge.target_node_id)) continue;
+						}
+					}
+					result.requests.push_back(patch);
+				}
+				if (property_patch_entry_bound_ > (std::numeric_limits<size_t>::max)() - result.entry_bound)
+					throw std::overflow_error("logical transaction final Property patch bound overflowed");
+				result.entry_bound += property_patch_entry_bound_;
+			}
 
 			// Stage/overlay continue to own complete visible collections. At commit,
 			// derive the delta from the pinned base and authoritative final state;
@@ -1861,6 +2048,8 @@ namespace graph::storage {
 			LogicalGraphMutationFence fence_;
 			Generation metadata_generation_{};
 			LogicalGraphMutationBatch accumulated_;
+			std::vector<LogicalGraphPropertyPatchRequest> property_patches_;
+			size_t property_patch_entry_bound_ = 0U;
 			mutable std::optional<PendingCreationReservation> preview_reservation_;
 			std::vector<uint64_t> issued_node_ids_;
 			std::vector<uint64_t> issued_edge_ids_;

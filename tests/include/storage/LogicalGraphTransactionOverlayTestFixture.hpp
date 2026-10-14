@@ -639,6 +639,7 @@ namespace graph::storage::transaction_overlay_test {
 		void setIncompletePreview(bool enabled) { incomplete_preview_ = enabled; }
 		void setRejectCreatedPropertyOverrides(bool enabled) { reject_created_property_overrides_ = enabled; }
 		void setMismatchedStageResult(bool enabled) { mismatched_stage_result_ = enabled; }
+		void setRejectStage(bool enabled) { reject_stage_ = enabled; }
 		void setDuplicateNodeIds(bool enabled) { duplicate_node_ids_ = enabled; }
 		void setDuplicateEdgeIds(bool enabled) { duplicate_edge_ids_ = enabled; }
 		[[nodiscard]] LogicalGraphReadSnapshot &readSnapshot() override {
@@ -696,6 +697,7 @@ namespace graph::storage::transaction_overlay_test {
 		}
 		[[nodiscard]] LogicalGraphMutationBatchResult stageMutationBatch(LogicalGraphMutationBatch batch) override {
 			LogicalGraphMutationBatchResult result = previewMutationBatch(batch);
+			if (reject_stage_) throw std::runtime_error("injected statement staging failure");
 			staged_node_count_ += batch.node_creates.size();
 			staged_edge_count_ += batch.edge_creates.size();
 			if (mismatched_stage_result_) {
@@ -733,6 +735,7 @@ namespace graph::storage::transaction_overlay_test {
 		bool incomplete_preview_ = false;
 		bool reject_created_property_overrides_ = false;
 		bool mismatched_stage_result_ = false;
+		bool reject_stage_ = false;
 		bool duplicate_node_ids_ = false;
 		bool duplicate_edge_ids_ = false;
 	};

@@ -1,0 +1,20 @@
+{
+  "cmake/SourceSets.cmake": "4134b599678346f1d3e6739733a2857d7b5e4da01e25c4882c1fac8793fbe3c2",
+  "include/graph/storage/LogicalGraphWrite.hpp": "011770ec77c0f3eec7bd8aed1fb0dc666515930312415996facd3f1b3048007a",
+  "include/graph/storage/LogicalGraphTransactionOverlay.hpp": "c8263dbdba2a3f4a01cc4624b1d2ff0328a4f389e9266b3cb94a60648d97ffd0",
+  "src/storage/LogicalGraphPropertyPatch.cpp": "15bbccf78e66d5f2c513612400a719fed1581c0e10018eddbd21dfdc01ec484b",
+  "src/storage/LogicalGraphTransactionOverlay.cpp": "cefdc5733e9d6b3aeebee63caea99800789d773b77aece299e17aa1102405b38",
+  "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "15d56a1cd100e63c5be059f0a92e0b03607ffbcccf88de0af183320699c2904c",
+  "src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp": "791941d571e6b71c4d0380a36fdb31196cc116da8ee53c1cbeeff76c1c8b022c",
+  "src/query/execution/LogicalPlanMutationRuntime.cpp": "a002cd7a872cd700ad3f2e78299d699810a32e76fe24166ed25b6bf9f5123a29",
+  "tests/include/storage/LogicalGraphTransactionOverlayTestFixture.hpp": "4b7177f23d2855260099191106b90f7b3f775e941fc67142631824d9dcb393b5",
+  "tests/src/storage/test_LogicalGraphPropertyPatch.cpp": "b261e06fad72a691c84ca77c4c0eb16758e291cd766bde0a043cda3306b5a817",
+  "tests/src/storage/test_LogicalGraphTransactionOverlayUndo.cpp": "9f9fd19f2ad599f685a7fd56cd2b184fefd63a737ddd952fd9deaf427dedb955",
+  "tests/src/storage/relocatable/backend/test_RelocatablePropertyPatchStaging.cpp": "4ba2cce483ecf6363c6c8b1e00b5fd96c80264413d17cd10865ba69e9b9599ed",
+  "tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp": "35adddaf9e1f7f168c7dd2c1dcb2eaaae79d41c1ffa22dc323652334b991518b",
+  "benchmarks/architecture-design/decisions/current-progress.json": "f6ba2f64b8f9183bf6b098509841d0647eb22341b3300552aee4edd047f7c424",
+  "benchmarks/architecture-design/decisions/20261014-a2-field-staging/acceptance-en.md": "5368dac59bd6558dcec9790c476d8a5d9f813761aa6d83fcb3cadb0c34cdc756",
+  "benchmarks/architecture-design/decisions/20261014-a2-field-staging/acceptance-zh.md": "59b5b3ebbfac1661ce150694cb1038d9522347a13a5b1821e05358755578fce1",
+  "benchmarks/architecture-design/decisions/20261014-a2-field-staging/en.md": "bd1ad2e29bc8aceb499adae8f1f946e2f1311ec25f3e7c82fd930c4be4c86374",
+  "benchmarks/architecture-design/decisions/20261014-a2-field-staging/zh.md": "fa2c18e7d765bff2f317c82645e79b750b4369bc497734a95138fe5eb7bf273b"
+}

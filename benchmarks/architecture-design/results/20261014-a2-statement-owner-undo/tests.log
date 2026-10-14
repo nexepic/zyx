@@ -1,0 +1,156 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 72 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 5 tests from LogicalGraphTransactionOverlayUndoTest
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges
+[       OK ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop
+[       OK ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners
+[       OK ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners (1 ms)
+[----------] 5 tests from LogicalGraphTransactionOverlayUndoTest (1 ms total)
+
+[----------] 67 tests from LogicalGraphTransactionOverlayTest
+[ RUN      ] LogicalGraphTransactionOverlayTest.AdjacencyAdmissionForwardsAndCoversCreatedContinuation
+[       OK ] LogicalGraphTransactionOverlayTest.AdjacencyAdmissionForwardsAndCoversCreatedContinuation (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.UnmodifiedAdjacencyForwardsBothAdmissionCallbacks
+[       OK ] LogicalGraphTransactionOverlayTest.UnmodifiedAdjacencyForwardsBothAdmissionCallbacks (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ModifiedCombinedAdjacencyRejectsBuffersAndRetriesCreatedContinuation
+[       OK ] LogicalGraphTransactionOverlayTest.ModifiedCombinedAdjacencyRejectsBuffersAndRetriesCreatedContinuation (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.CombinedAdjacencyRetainsMetadataAcrossArrayGrowth
+[       OK ] LogicalGraphTransactionOverlayTest.CombinedAdjacencyRetainsMetadataAcrossArrayGrowth (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ModifiedAdjacencyAdmitsStagedPayloadBeforeCopyAndRetries
+[       OK ] LogicalGraphTransactionOverlayTest.ModifiedAdjacencyAdmitsStagedPayloadBeforeCopyAndRetries (14 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.UnsupportedBaseAdmissionFailsBeforeReadingOrInvokingCallback
+[       OK ] LogicalGraphTransactionOverlayTest.UnsupportedBaseAdmissionFailsBeforeReadingOrInvokingCallback (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.StagedSelectedColumnsCancelMidCopyAndRetry
+[       OK ] LogicalGraphTransactionOverlayTest.StagedSelectedColumnsCancelMidCopyAndRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.SelectedPropertyAdmissionCoversBaseAndStagedEdges
+[       OK ] LogicalGraphTransactionOverlayTest.SelectedPropertyAdmissionCoversBaseAndStagedEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ShapedAdmissionMergesBaseAndStagedPayloadsAcrossSnapshotRevisions
+[       OK ] LogicalGraphTransactionOverlayTest.ShapedAdmissionMergesBaseAndStagedPayloadsAcrossSnapshotRevisions (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NativeEdgeReferencesMergeStagedTopologyAndPreserveKnownTypes
+[       OK ] LogicalGraphTransactionOverlayTest.NativeEdgeReferencesMergeStagedTopologyAndPreserveKnownTypes (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NativeEdgeReferencesRejectMalformedTopologyAndIgnoredStop
+[       OK ] LogicalGraphTransactionOverlayTest.NativeEdgeReferencesRejectMalformedTopologyAndIgnoredStop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NativeNodeReferencesMergeStagedStateWithoutPayloadReads
+[       OK ] LogicalGraphTransactionOverlayTest.NativeNodeReferencesMergeStagedStateWithoutPayloadReads (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NativeNodeReferencesRejectMalformedSourcesAndIgnoredStop
+[       OK ] LogicalGraphTransactionOverlayTest.NativeNodeReferencesRejectMalformedSourcesAndIgnoredStop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NonNullProbesRespectStagedValuesAndTransactionLifetime
+[       OK ] LogicalGraphTransactionOverlayTest.NonNullProbesRespectStagedValuesAndTransactionLifetime (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.OverlaysPropertiesCreatedNodesAndResumableEdges
+[       OK ] LogicalGraphTransactionOverlayTest.OverlaysPropertiesCreatedNodesAndResumableEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ReusesCompleteRecordsFromBasePages
+[       OK ] LogicalGraphTransactionOverlayTest.ReusesCompleteRecordsFromBasePages (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.AppliesReadShapesToStagedEntitiesAndSortedBatches
+[       OK ] LogicalGraphTransactionOverlayTest.AppliesReadShapesToStagedEntitiesAndSortedBatches (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.CreationIdentityRangesAreBoundedAndNeverWrap
+[       OK ] LogicalGraphTransactionOverlayTest.CreationIdentityRangesAreBoundedAndNeverWrap (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsOversizedAndNonIncreasingBaseNodePages
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsOversizedAndNonIncreasingBaseNodePages (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.SharesTheBaseMetadataPageBudgetAcrossItsNodeOverlay
+[       OK ] LogicalGraphTransactionOverlayTest.SharesTheBaseMetadataPageBudgetAcrossItsNodeOverlay (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.MergesCompleteExactLookupWithTheTransactionFinalState
+[       OK ] LogicalGraphTransactionOverlayTest.MergesCompleteExactLookupWithTheTransactionFinalState (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.PreservesTheOptionalExactLookupFallback
+[       OK ] LogicalGraphTransactionOverlayTest.PreservesTheOptionalExactLookupFallback (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsMismatchedFenceAndReadOnlyStaging
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsMismatchedFenceAndReadOnlyStaging (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.DetachDeleteDoesNotChargeAlreadyDeletedBaseOrCreatedEdges
+[       OK ] LogicalGraphTransactionOverlayTest.DetachDeleteDoesNotChargeAlreadyDeletedBaseOrCreatedEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsNonDetachDeleteWithAVisibleIncidentEdgeAtStaging
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsNonDetachDeleteWithAVisibleIncidentEdgeAtStaging (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.AppliesFinalStateBatchForCreatedEntitiesAndProperties
+[       OK ] LogicalGraphTransactionOverlayTest.AppliesFinalStateBatchForCreatedEntitiesAndProperties (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ReplacesPersistedStateAndRejectsMalformedReadPages
+[       OK ] LogicalGraphTransactionOverlayTest.ReplacesPersistedStateAndRejectsMalformedReadPages (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsInvalidMutationsAndInvalidBaseFenceWithoutLeakingState
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsInvalidMutationsAndInvalidBaseFenceWithoutLeakingState (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RollsBackOverlayStateWhenTransactionIdentityResultsAreInconsistent
+[       OK ] LogicalGraphTransactionOverlayTest.RollsBackOverlayStateWhenTransactionIdentityResultsAreInconsistent (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VisitorsBoundPageMaterializationAcrossBatchesAndEarlyStop
+[       OK ] LogicalGraphTransactionOverlayTest.VisitorsBoundPageMaterializationAcrossBatchesAndEarlyStop (18 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.PreservesBaseContinuationsAndEnforcesVisitBounds
+[       OK ] LogicalGraphTransactionOverlayTest.PreservesBaseContinuationsAndEnforcesVisitBounds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.SparseAdjacencyDoesNotAllocateItsMaximumRecordBound
+[       OK ] LogicalGraphTransactionOverlayTest.SparseAdjacencyDoesNotAllocateItsMaximumRecordBound (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ScansTopologyWithoutMaterializingEdgesAcrossCreatedContinuation
+[       OK ] LogicalGraphTransactionOverlayTest.ScansTopologyWithoutMaterializingEdgesAcrossCreatedContinuation (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsMalformedCompleteAdjacencyBeforeOverlayFiltering
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsMalformedCompleteAdjacencyBeforeOverlayFiltering (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsMalformedBaseTopologyPagesBeforeOverlayFiltering
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsMalformedBaseTopologyPagesBeforeOverlayFiltering (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.TopologyContinuationsReplayAcrossDeletedGapsAndDifferentPageSizes
+[       OK ] LogicalGraphTransactionOverlayTest.TopologyContinuationsReplayAcrossDeletedGapsAndDifferentPageSizes (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.TopologyContinuationsPointToVisibleRowsAcrossDeletedGaps
+[       OK ] LogicalGraphTransactionOverlayTest.TopologyContinuationsPointToVisibleRowsAcrossDeletedGaps (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ResumesStagedAdjacencyByIdWithoutRescanningItsPrefix
+[       OK ] LogicalGraphTransactionOverlayTest.ResumesStagedAdjacencyByIdWithoutRescanningItsPrefix (1 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.AppliesDetachDeletionToBaseAndCreatedIncidentEdges
+[       OK ] LogicalGraphTransactionOverlayTest.AppliesDetachDeletionToBaseAndCreatedIncidentEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.CoversResumableNodeAndAdjacencyBoundaryFailures
+[       OK ] LogicalGraphTransactionOverlayTest.CoversResumableNodeAndAdjacencyBoundaryFailures (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.FiltersDeletedBasePagesAndRetainsCreatedContinuationValidation
+[       OK ] LogicalGraphTransactionOverlayTest.FiltersDeletedBasePagesAndRetainsCreatedContinuationValidation (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsInvalidReferenceKindsAndDeletedEntityMutations
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsInvalidReferenceKindsAndDeletedEntityMutations (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.DefensivelyHidesBaseEdgesWhoseEndpointWasDeleted
+[       OK ] LogicalGraphTransactionOverlayTest.DefensivelyHidesBaseEdgesWhoseEndpointWasDeleted (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.EnforcesNodeScanBudgetAndTerminalTraversalPaths
+[       OK ] LogicalGraphTransactionOverlayTest.EnforcesNodeScanBudgetAndTerminalTraversalPaths (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.DefensivelyEnforcesVisitorBoundsAndStopsCreatedVisitors
+[       OK ] LogicalGraphTransactionOverlayTest.DefensivelyEnforcesVisitorBoundsAndStopsCreatedVisitors (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.StopsEdgeVisitorsBeforeCrossingFromBaseToStagedRows
+[       OK ] LogicalGraphTransactionOverlayTest.StopsEdgeVisitorsBeforeCrossingFromBaseToStagedRows (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.BatchesExistenceProbesAcrossStagedAndBaseNodesWithoutPayloadReads
+[       OK ] LogicalGraphTransactionOverlayTest.BatchesExistenceProbesAcrossStagedAndBaseNodesWithoutPayloadReads (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsAllStagedAndEmptyReadsAfterTransactionEnds
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsAllStagedAndEmptyReadsAfterTransactionEnds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RejectsMalformedCreatedReferencesAndDetachBoundViolations
+[       OK ] LogicalGraphTransactionOverlayTest.RejectsMalformedCreatedReferencesAndDetachBoundViolations (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ValidatesVisitorsDirectionsAndEmptyDirectoryMetadata
+[       OK ] LogicalGraphTransactionOverlayTest.ValidatesVisitorsDirectionsAndEmptyDirectoryMetadata (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ValidatesShortCircuitingMutationInputsAndReusableProperties
+[       OK ] LogicalGraphTransactionOverlayTest.ValidatesShortCircuitingMutationInputsAndReusableProperties (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ValidatesTypedCreatedReferencesAndFiltersCreatedDirections
+[       OK ] LogicalGraphTransactionOverlayTest.ValidatesTypedCreatedReferencesAndFiltersCreatedDirections (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.FiltersDeletedNodesAcrossScansAndDirectEdgeReads
+[       OK ] LogicalGraphTransactionOverlayTest.FiltersDeletedNodesAcrossScansAndDirectEdgeReads (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.EnforcesCreatedTargetDetachAndHiddenPropertyLookup
+[       OK ] LogicalGraphTransactionOverlayTest.EnforcesCreatedTargetDetachAndHiddenPropertyLookup (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.RetainsReservationOnlyBatchesAndChecksBothDetachEdgeSources
+[       OK ] LogicalGraphTransactionOverlayTest.RetainsReservationOnlyBatchesAndChecksBothDetachEdgeSources (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ExactCandidateStreamValidatesBeforeHydrationAndAllowsRetry
+[       OK ] LogicalGraphTransactionOverlayTest.ExactCandidateStreamValidatesBeforeHydrationAndAllowsRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.ExactCandidateStreamFallsBackForUnsupportedOrUnverifiedProof
+[       OK ] LogicalGraphTransactionOverlayTest.ExactCandidateStreamFallsBackForUnsupportedOrUnverifiedProof (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.NativeExactStreamRejectsBrokenColumnsAndStopsSourceBeforeTail
+[       OK ] LogicalGraphTransactionOverlayTest.NativeExactStreamRejectsBrokenColumnsAndStopsSourceBeforeTail (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.PaginationRetainsOnlyDeletedGapTranslationsAndReplaysOldTokens
+[       OK ] LogicalGraphTransactionOverlayTest.PaginationRetainsOnlyDeletedGapTranslationsAndReplaysOldTokens (74 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorExactScanRetainsOnlyTopKAndRetriesAfterPartialScoring
+[       OK ] LogicalGraphTransactionOverlayTest.VectorExactScanRetainsOnlyTopKAndRetriesAfterPartialScoring (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.CancelledVectorOverlayScanPreservesStagedFinalStateForRetry
+[       OK ] LogicalGraphTransactionOverlayTest.CancelledVectorOverlayScanPreservesStagedFinalStateForRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorExactScanHonorsScorerReadShapeAndCompleteFallback
+[       OK ] LogicalGraphTransactionOverlayTest.VectorExactScanHonorsScorerReadShapeAndCompleteFallback (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorSnapshotDelegatesTheReadSurfaceAcrossOverlayRevisions
+[       OK ] LogicalGraphTransactionOverlayTest.VectorSnapshotDelegatesTheReadSurfaceAcrossOverlayRevisions (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorSnapshotPreservesShapedBatchesAcrossOverlayRevisions
+[       OK ] LogicalGraphTransactionOverlayTest.VectorSnapshotPreservesShapedBatchesAcrossOverlayRevisions (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorSnapshotPreservesPropertyBatchesAcrossOverlayRevisions
+[       OK ] LogicalGraphTransactionOverlayTest.VectorSnapshotPreservesPropertyBatchesAcrossOverlayRevisions (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.PreservesReadShapesAcrossOverlayAndVectorNodeScanPages
+[       OK ] LogicalGraphTransactionOverlayTest.PreservesReadShapesAcrossOverlayAndVectorNodeScanPages (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayTest.VectorSnapshotRetainsAdjacencyContinuationsWithinEachRevision
+[       OK ] LogicalGraphTransactionOverlayTest.VectorSnapshotRetainsAdjacencyContinuationsWithinEachRevision (0 ms)
+[----------] 67 tests from LogicalGraphTransactionOverlayTest (117 ms total)
+
+[----------] Global test environment tear-down
+[==========] 72 tests from 2 test suites ran. (119 ms total)
+[  PASSED  ] 72 tests.
