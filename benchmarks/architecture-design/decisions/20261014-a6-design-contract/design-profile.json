@@ -1,0 +1,126 @@
+{
+  "scope": "S1.6_complete_design_not_S5_production_acceptance",
+  "implementation": "private_three_level_allocator_foundation_only",
+  "hierarchy": [
+    "explicit_shared_process_owner",
+    "database_domain",
+    "resource_account",
+    "task_allocation_lease"
+  ],
+  "defaults_target_not_effective": {
+    "memory_process": 536870912,
+    "memory_database": 268435456,
+    "query": 67108864,
+    "database_class_caps": {
+      "query": 201326592,
+      "cache": 67108864,
+      "write": 134217728,
+      "maintenance": 33554432,
+      "code": 0
+    },
+    "process_protected_maintenance_floor": 16777216,
+    "live_database_domains": 64,
+    "active_queries_per_database": 64,
+    "scratch_disk_process": 2147483648,
+    "scratch_disk_database": 1073741824,
+    "scratch_disk_query": 134217728,
+    "user_retirement_backlog_database": 1073741824,
+    "foreground_maintenance": 16777216,
+    "background_maintenance": 8388608,
+    "maintenance_cycle_page_steps": 64
+  },
+  "actual_accounting": {
+    "global": "allocator_requests_capacity_growth_overlap_nested_and_fixed_owners",
+    "local_estimates": "separate_not_double_global_charge",
+    "shared_buffer": "single_owner_borrowers_charge_only_new_handles",
+    "transfers": "atomic_same_account_no_refund_readmit",
+    "output": "strong_domain_account_keepalive_after_database_close",
+    "external": "RSS_stacks_mmap_malloc_metadata_external_runtimes_reported_separately"
+  },
+  "admission": {
+    "atomicity": "one_root_mutex_process_database_account_total_and_class",
+    "pressure_order": [
+      "check_cancel_work",
+      "try_all_levels",
+      "release_local_optional",
+      "bounded_unpinned_cache_eviction",
+      "eligible_single_file_spill_with_reserved_workspace",
+      "retry_once",
+      "explicit_failure"
+    ],
+    "wait_policy": "no_resource_waits_first_version",
+    "lock_order": "resource_and_metadata_gates_never_nested",
+    "no_callbacks_allocation_IO_in_mutex": true,
+    "per_lease_threading": "task_confined_or_owner_serialized",
+    "shared_account_threading": "root_mutex_atomic",
+    "local_materialized_budget": "not_thread_safe_not_O7_ready"
+  },
+  "scratch": {
+    "permission": [
+      "physical_file_writable",
+      "query_scratch_policy_enabled",
+      "backend_internal_scratch_only_permit"
+    ],
+    "physical_readonly": "no_allocate_publish_reclaim_or_host_temp_escape",
+    "kind_target": "SGK_QUERY_SCRATCH_separate_from_bulk",
+    "owner": "durable_nonreused_uint64_highwater_lease_atomic_with_allocator",
+    "states": [
+      "registered",
+      "reserved_writing",
+      "sealed",
+      "retiring",
+      "reclaimed"
+    ],
+    "disk_charge": "physical_extent_rounding_until_safe_reclaimed",
+    "user_root_reachability": false,
+    "pin": "owner_extent_generation_private_domain_including_integrity_workers",
+    "metadata_retirement": "existing_snapshot_rules_preserved",
+    "publication": "latest_state_rebuild_under_shared_short_gate_no_stale_allocator_overwrite",
+    "recovery": "exclusive_writable_startup_before_queries_shared_live_owner_registry_authenticated_orphans_only",
+    "codec_values_versions": "A7_gate_before_S5.2_no_disk_format_change_this_iteration"
+  },
+  "spill": {
+    "first": "stable_sort_runs_existing_comparator_checked_uint64_input_ordinal_bounded_multiway_merge",
+    "second": "canonical_hash_partition_with_bounded_depth_and_skew_failure",
+    "unsupported_initial": [
+      "public_callback_read_ahead",
+      "correlated_subquery_path_owners",
+      "mutation_planning",
+      "grouped_factorization",
+      "unqualified_dynamic_codec",
+      "collect_exact_distinct_order_sensitive_or_float_reordering_without_specialized_algorithm"
+    ],
+    "failures": [
+      "quota",
+      "disk_full",
+      "IO",
+      "codec_corruption",
+      "cancel",
+      "owner_generation_conflict"
+    ],
+    "no_partial_complete_claim": true,
+    "cleanup": "idempotent_bounded_reserve_preserve_original_error_no_refund_unreclaimed_orphan"
+  },
+  "maintenance": "bounded_foreground_background_cap_backlog_limits_long_snapshot_pressure_observability_no_unbounded_growth",
+  "production_gates": {
+    "S5.1": "all_allocator_owner_audits_multidb_query_global_pressure_output_close_slots_floor_cancel_deadlock",
+    "S5.2_S5.3": "value_order_duplicate_NULL_guard_oracles_permissions_disk_publication_IO_faults_pins_recovery_user_page_safety_allocator_commit_interleavings",
+    "S5.4_S5.5_O7_O8": "remaining_resource_parallel_spill_and_performance_acceptance"
+  },
+  "not_implemented": [
+    "runtime_global_coordination",
+    "shared_database_registry",
+    "keepalive_wrapper",
+    "protected_floor",
+    "admission_slots",
+    "disk_coordinator",
+    "query_scratch_kind_codec_owner_pin_facade",
+    "query_sort_partition_spill",
+    "all_source_decoders_nested_fixed_owners"
+  ],
+  "performance": "final_window_only_mutex_contention_copy_IO_RSS_scratch_correctness_and_Kuzu_same_conditions",
+  "persistent_format_change": false,
+  "driver_abi_change": false,
+  "full_suite": false,
+  "benchmark_run": false
+}

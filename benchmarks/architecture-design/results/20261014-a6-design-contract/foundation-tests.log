@@ -1,0 +1,188 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 82 tests from 6 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from ResourceCoordinatorTest
+[ RUN      ] ResourceCoordinatorTest.ProcessDatabaseAndSharedAccountLimitsAreAtomicAndRefundable
+[       OK ] ResourceCoordinatorTest.ProcessDatabaseAndSharedAccountLimitsAreAtomicAndRefundable (0 ms)
+[ RUN      ] ResourceCoordinatorTest.CategoriesAreSingleAttributedAndRespectGlobalCapsAcrossDatabases
+[       OK ] ResourceCoordinatorTest.CategoriesAreSingleAttributedAndRespectGlobalCapsAcrossDatabases (0 ms)
+[ RUN      ] ResourceCoordinatorTest.DatabaseCategoryCapsAndOwnerTransfersCannotMultiplyQuota
+[       OK ] ResourceCoordinatorTest.DatabaseCategoryCapsAndOwnerTransfersCannotMultiplyQuota (0 ms)
+[ RUN      ] ResourceCoordinatorTest.MoveAssignmentRefundsPreviousAccountAndTransfersExactlyOnce
+[       OK ] ResourceCoordinatorTest.MoveAssignmentRefundsPreviousAccountAndTransfersExactlyOnce (0 ms)
+[ RUN      ] ResourceCoordinatorTest.AllocatorAdmitsBeforeUpstreamRefundsBadAllocAndChargesGrowthOverlap
+[       OK ] ResourceCoordinatorTest.AllocatorAdmitsBeforeUpstreamRefundsBadAllocAndChargesGrowthOverlap (0 ms)
+[ RUN      ] ResourceCoordinatorTest.ConcurrentAccountsAcrossDatabasesCannotOverbookProcessTotal
+[       OK ] ResourceCoordinatorTest.ConcurrentAccountsAcrossDatabasesCannotOverbookProcessTotal (0 ms)
+[ RUN      ] ResourceCoordinatorTest.CheckedLimitsAndMaximumSizeAdmissionNeverWrap
+[       OK ] ResourceCoordinatorTest.CheckedLimitsAndMaximumSizeAdmissionNeverWrap (0 ms)
+[----------] 7 tests from ResourceCoordinatorTest (0 ms total)
+
+[----------] 7 tests from BoundColumnLayoutTest
+[ RUN      ] BoundColumnLayoutTest.OwnsOrderedNamesAfterProducerStringsChangeAndPreservesDescriptors
+[       OK ] BoundColumnLayoutTest.OwnsOrderedNamesAfterProducerStringsChangeAndPreservesDescriptors (0 ms)
+[ RUN      ] BoundColumnLayoutTest.ReorderedRenamedMissingAndAdditionalColumnsFailBeforeConsumerEffects
+[       OK ] BoundColumnLayoutTest.ReorderedRenamedMissingAndAdditionalColumnsFailBeforeConsumerEffects (0 ms)
+[ RUN      ] BoundColumnLayoutTest.ForeignZeroAndReconstructedLayoutsRejectDescriptors
+[       OK ] BoundColumnLayoutTest.ForeignZeroAndReconstructedLayoutsRejectDescriptors (0 ms)
+[ RUN      ] BoundColumnLayoutTest.InvalidNamesRefundConstructionAndEmptyLayoutsAreValid
+[       OK ] BoundColumnLayoutTest.InvalidNamesRefundConstructionAndEmptyLayoutsAreValid (0 ms)
+[ RUN      ] BoundColumnLayoutTest.AdmissionPrecedesUpstreamAndChargesOnlyRetainedAllocatorRequests
+[       OK ] BoundColumnLayoutTest.AdmissionPrecedesUpstreamAndChargesOnlyRetainedAllocatorRequests (0 ms)
+[ RUN      ] BoundColumnLayoutTest.EveryAllocationFailureRefundsBudgetAndAllowsRetry
+[       OK ] BoundColumnLayoutTest.EveryAllocationFailureRefundsBudgetAndAllowsRetry (0 ms)
+[ RUN      ] BoundColumnLayoutTest.EveryGuardFailureRefundsOwnedAndValidationAllocations
+[       OK ] BoundColumnLayoutTest.EveryGuardFailureRefundsOwnedAndValidationAllocations (0 ms)
+[----------] 7 tests from BoundColumnLayoutTest (0 ms total)
+
+[----------] 16 tests from PrimitiveNumericColumnsTest
+[ RUN      ] PrimitiveNumericColumnsTest.ConvertsUniqueIntegerFieldsAndPreservesNullCountSumAndAverage
+[       OK ] PrimitiveNumericColumnsTest.ConvertsUniqueIntegerFieldsAndPreservesNullCountSumAndAverage (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.FloatingBuffersRetainNanAndInfinityAndCallerSpecifiedOrder
+[       OK ] PrimitiveNumericColumnsTest.FloatingBuffersRetainNanAndInfinityAndCallerSpecifiedOrder (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.MixedNumericAndInvalidValuesUseTheExistingDynamicAccumulator
+[       OK ] PrimitiveNumericColumnsTest.MixedNumericAndInvalidValuesUseTheExistingDynamicAccumulator (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.NullOnlyFieldsNeedNoValueBuffersAndValidateAccessBeforeSkipping
+[       OK ] PrimitiveNumericColumnsTest.NullOnlyFieldsNeedNoValueBuffersAndValidateAccessBeforeSkipping (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.MetadataAndPartialBufferBudgetFailuresDeclineWithoutChangingAggregates
+[       OK ] PrimitiveNumericColumnsTest.MetadataAndPartialBufferBudgetFailuresDeclineWithoutChangingAggregates (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.EveryAllocatorFailureEscapesAndOwnedCapacityIsRefunded
+[       OK ] PrimitiveNumericColumnsTest.EveryAllocatorFailureEscapesAndOwnedCapacityIsRefunded (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.CancellationIncludingBudgetExceptionsIsNotMistakenForOptionalAdmissionFailure
+[       OK ] PrimitiveNumericColumnsTest.CancellationIncludingBudgetExceptionsIsNotMistakenForOptionalAdmissionFailure (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.InvalidShapesAndBindingsFailBeforeAllocating
+[       OK ] PrimitiveNumericColumnsTest.InvalidShapesAndBindingsFailBeforeAllocating (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.TypedExtremaPreserveNanAndExistingCrossTypeOrdering
+[       OK ] PrimitiveNumericColumnsTest.TypedExtremaPreserveNanAndExistingCrossTypeOrdering (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.DynamicExtremumAdmissionFailureKeepsTheExistingOwningValue
+[       OK ] PrimitiveNumericColumnsTest.DynamicExtremumAdmissionFailureKeepsTheExistingOwningValue (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.ReleaseRefundsOnlyOwnedBuffersAndAllowsFreshPreparation
+[       OK ] PrimitiveNumericColumnsTest.ReleaseRefundsOnlyOwnedBuffersAndAllowsFreshPreparation (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.TypedDeviationMatchesScalarWelfordOrderAndNullSemantics
+[       OK ] PrimitiveNumericColumnsTest.TypedDeviationMatchesScalarWelfordOrderAndNullSemantics (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.DeviationPropagatesNonFiniteValuesAndRejectsDynamicInvalidInputs
+[       OK ] PrimitiveNumericColumnsTest.DeviationPropagatesNonFiniteValuesAndRejectsDynamicInvalidInputs (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.DescriptorsRejectForeignReleasedAndRepreparedRowsBeforeAccumulatorEffects
+[       OK ] PrimitiveNumericColumnsTest.DescriptorsRejectForeignReleasedAndRepreparedRowsBeforeAccumulatorEffects (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.PreparationFailureNeverPublishesRowsAndReleaseAllowsRetry
+[       OK ] PrimitiveNumericColumnsTest.PreparationFailureNeverPublishesRowsAndReleaseAllowsRetry (0 ms)
+[ RUN      ] PrimitiveNumericColumnsTest.EmptyPublishedBatchRejectsRowsAndRequiresReleaseBeforePreparation
+[       OK ] PrimitiveNumericColumnsTest.EmptyPublishedBatchRejectsRowsAndRequiresReleaseBeforePreparation (0 ms)
+[----------] 16 tests from PrimitiveNumericColumnsTest (0 ms total)
+
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows
+[       OK ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath
+[       OK ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches (2 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch
+[       OK ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults (2 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery
+[       OK ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates
+[       OK ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates (15 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure
+[       OK ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics
+[       OK ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn
+[       OK ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure (0 ms)
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest (27 ms total)
+
+[----------] 14 tests from FixedWidthBatchTest
+[ RUN      ] FixedWidthBatchTest.PublishesRectangularTypedColumnsAndPreservesThreeStates
+[       OK ] FixedWidthBatchTest.PublishesRectangularTypedColumnsAndPreservesThreeStates (0 ms)
+[ RUN      ] FixedWidthBatchTest.LaterColumnFailureRollsBackAllLengthsAndCanRetryAfterPressureRelease
+[       OK ] FixedWidthBatchTest.LaterColumnFailureRollsBackAllLengthsAndCanRetryAfterPressureRelease (0 ms)
+[ RUN      ] FixedWidthBatchTest.FailedGrowthKeepsPreviouslyPublishedRows
+[       OK ] FixedWidthBatchTest.FailedGrowthKeepsPreviouslyPublishedRows (0 ms)
+[ RUN      ] FixedWidthBatchTest.RollsBackEarlierColumnGrowthWhenLaterColumnFailsAfterPublishedRows
+[       OK ] FixedWidthBatchTest.RollsBackEarlierColumnGrowthWhenLaterColumnFailsAfterPublishedRows (0 ms)
+[ RUN      ] FixedWidthBatchTest.ClearAndReleaseApplyToEveryColumnAndRemainReusable
+[       OK ] FixedWidthBatchTest.ClearAndReleaseApplyToEveryColumnAndRemainReusable (0 ms)
+[ RUN      ] FixedWidthBatchTest.InvalidConstructionAndAllocatorFailureLeaveNoPublishedRows
+[       OK ] FixedWidthBatchTest.InvalidConstructionAndAllocatorFailureLeaveNoPublishedRows (0 ms)
+[ RUN      ] FixedWidthBatchTest.UpstreamFailureInLaterColumnRollsBackAndSupportsRetry
+[       OK ] FixedWidthBatchTest.UpstreamFailureInLaterColumnRollsBackAndSupportsRetry (0 ms)
+[ RUN      ] FixedWidthBatchTest.RowDescriptorsPreserveOrderedTypedValuesAndNullMissingStates
+[       OK ] FixedWidthBatchTest.RowDescriptorsPreserveOrderedTypedValuesAndNullMissingStates (0 ms)
+[ RUN      ] FixedWidthBatchTest.SuccessfulAppendInvalidatesPriorDescriptorsWithoutChangingTheirValues
+[       OK ] FixedWidthBatchTest.SuccessfulAppendInvalidatesPriorDescriptorsWithoutChangingTheirValues (0 ms)
+[ RUN      ] FixedWidthBatchTest.FailedLaterColumnGrowthInvalidatesHandlesButKeepsPublishedRows
+[       OK ] FixedWidthBatchTest.FailedLaterColumnGrowthInvalidatesHandlesButKeepsPublishedRows (0 ms)
+[ RUN      ] FixedWidthBatchTest.ClearAndReleaseNeverRevalidateOldDescriptorsWhenIndicesAreReused
+[       OK ] FixedWidthBatchTest.ClearAndReleaseNeverRevalidateOldDescriptorsWhenIndicesAreReused (0 ms)
+[ RUN      ] FixedWidthBatchTest.ForeignOwnersIncludingDifferentColumnTypesRejectDescriptors
+[       OK ] FixedWidthBatchTest.ForeignOwnersIncludingDifferentColumnTypesRejectDescriptors (0 ms)
+[ RUN      ] FixedWidthBatchTest.OwnersReconstructedAtTheSameAddressRejectOldDescriptors
+[       OK ] FixedWidthBatchTest.OwnersReconstructedAtTheSameAddressRejectOldDescriptors (0 ms)
+[ RUN      ] FixedWidthBatchTest.PhysicalRowsRequirePositiveUint32LimitsWithoutAllocating
+[       OK ] FixedWidthBatchTest.PhysicalRowsRequirePositiveUint32LimitsWithoutAllocating (0 ms)
+[----------] 14 tests from FixedWidthBatchTest (0 ms total)
+
+[----------] 12 tests from FixedWidthColumnTest
+[ RUN      ] FixedWidthColumnTest.BoundedReservationPreservesRowsAndAvoidsAppendGrowth
+[       OK ] FixedWidthColumnTest.BoundedReservationPreservesRowsAndAvoidsAppendGrowth (0 ms)
+[ RUN      ] FixedWidthColumnTest.PartialReservationFailureKeepsRowsAndChargesRetainedCapacity
+[       OK ] FixedWidthColumnTest.PartialReservationFailureKeepsRowsAndChargesRetainedCapacity (0 ms)
+[ RUN      ] FixedWidthColumnTest.DistinguishesValueNullAndMissingWithoutStringKeys
+[       OK ] FixedWidthColumnTest.DistinguishesValueNullAndMissingWithoutStringKeys (0 ms)
+[ RUN      ] FixedWidthColumnTest.BoolUsesContiguousByteStorageInsteadOfVectorBool
+[       OK ] FixedWidthColumnTest.BoolUsesContiguousByteStorageInsteadOfVectorBool (0 ms)
+[ RUN      ] FixedWidthColumnTest.ClearReusesCapacityAndReleaseRefundsIt
+[       OK ] FixedWidthColumnTest.ClearReusesCapacityAndReleaseRefundsIt (0 ms)
+[ RUN      ] FixedWidthColumnTest.DestructionRefundsOnlyItsOwnSharedCharge
+[       OK ] FixedWidthColumnTest.DestructionRefundsOnlyItsOwnSharedCharge (0 ms)
+[ RUN      ] FixedWidthColumnTest.FailedAllocationPreservesRowsAndAccountsRetainedCapacity
+[       OK ] FixedWidthColumnTest.FailedAllocationPreservesRowsAndAccountsRetainedCapacity (0 ms)
+[ RUN      ] FixedWidthColumnTest.GrowthChargesOldAndNewAllocationsWithoutLosingPreviousCells
+[       OK ] FixedWidthColumnTest.GrowthChargesOldAndNewAllocationsWithoutLosingPreviousCells (0 ms)
+[ RUN      ] FixedWidthColumnTest.RowBoundAndInvalidLimitFailExplicitly
+[       OK ] FixedWidthColumnTest.RowBoundAndInvalidLimitFailExplicitly (0 ms)
+[ RUN      ] FixedWidthColumnTest.UpstreamAllocationFailureRollsBackBudgetAdmission
+[       OK ] FixedWidthColumnTest.UpstreamAllocationFailureRollsBackBudgetAdmission (0 ms)
+[ RUN      ] FixedWidthColumnTest.NonPowerOfTwoBoundRetainsEveryCellAndRejectsNullAllocator
+[       OK ] FixedWidthColumnTest.NonPowerOfTwoBoundRetainsEveryCellAndRejectsNullAllocator (0 ms)
+[ RUN      ] FixedWidthColumnTest.BatchRollbackDropsUnpublishedCellsWithoutRefundingLiveCapacity
+[       OK ] FixedWidthColumnTest.BatchRollbackDropsUnpublishedCellsWithoutRefundingLiveCapacity (0 ms)
+[----------] 12 tests from FixedWidthColumnTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 82 tests from 6 test suites ran. (29 ms total)
+[  PASSED  ] 82 tests.
