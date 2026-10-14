@@ -12586,7 +12586,7 @@ namespace graph::query::execution {
 											// Count and numeric sums retain no variable payload. Keep
 											// their typed loop free of retention probes and copy guards.
 											if (aggregateColumnBindings[index] == rowCountBinding) accumulator.updateRow();
-											else if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], ordinal);
+											else if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericColumns.rowId(ordinal));
 											else accumulator.update(columns[aggregateColumnBindings[index]][ordinal]);
 											continue;
 										}
@@ -12599,7 +12599,7 @@ namespace graph::query::execution {
 											catch (const MaterializedByteLimitExceeded &) { admissionRejected = true; throw; }
 										};
 										try {
-											if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], ordinal, admit);
+											if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericColumns.rowId(ordinal), admit);
 											else accumulator.updateAdmitted(columns[aggregateColumnBindings[index]][ordinal], admit);
 										} catch (const MaterializedByteLimitExceeded &) {
 											if (!admissionRejected || !numericPrepared) throw;

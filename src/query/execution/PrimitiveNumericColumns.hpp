@@ -7,6 +7,7 @@
 
 #include "graph/query/execution/LogicalAggregateAccumulator.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
+#include "query/execution/BatchIdentity.hpp"
 
 namespace graph::query::execution::detail {
 
@@ -43,8 +44,10 @@ public:
 	template <typename Guard>
 	[[nodiscard]] bool tryPrepare(std::span<const std::vector<PropertyValue>> source,
 		std::span<const size_t> requested, Guard &&guard) {
-		if (!columns_.empty()) throw std::logic_error("numeric columns were already prepared");
+		if (prepared_ || !columns_.empty()) throw std::logic_error("numeric columns were already prepared");
 		const size_t rows = source.empty() ? 0U : source.front().size();
+		if (rows > (std::numeric_limits<uint32_t>::max)())
+			throw std::invalid_argument("numeric batch exceeds its uint32 row limit");
 		for (const auto &column : source) {
 			guard();
 			if (column.size() != rows) throw std::invalid_argument("numeric column matrix has inconsistent rows");
@@ -53,6 +56,7 @@ public:
 			if (ordinal != std::numeric_limits<size_t>::max() && ordinal >= source.size())
 				throw std::out_of_range("numeric column binding exceeds its source");
 		}
+		identity_.advance();
 		try {
 			columns_.reserve(source.size());
 			for (const auto &column : source) {
@@ -104,11 +108,23 @@ public:
 			}
 			target = std::move(staged);
 		}
+		rows_ = rows;
+		prepared_ = true; // Publish handles only after all guarded preparation succeeds.
 		return true;
 	}
 
 	[[nodiscard]] NumericColumnKind kind(size_t column) const { return columns_.at(column).kind; }
-	void release() noexcept { std::pmr::vector<Column>(&memory_).swap(columns_); }
+	void release() noexcept {
+		identity_.invalidate();
+		prepared_ = false;
+		rows_ = 0U;
+		std::pmr::vector<Column>(&memory_).swap(columns_);
+	}
+	[[nodiscard]] BatchRowId rowId(size_t index) const {
+		if (!prepared_) throw std::logic_error("numeric batch has no published rows");
+		if (index >= rows_) throw std::out_of_range("numeric batch row exceeds its published rows");
+		return identity_.row(static_cast<uint32_t>(index));
+	}
 	[[nodiscard]] size_t typedColumnCount() const {
 		size_t result = 0U;
 		for (const auto &column : columns_) if (column.prepared && column.kind != NumericColumnKind::NCK_DYNAMIC) ++result;
@@ -116,6 +132,14 @@ public:
 	}
 	void update(AggregateAccumulator &accumulator, AggregateFunctionType function, size_t column, size_t row,
 		const std::function<void(size_t)> &admit = [](size_t) {}) const {
+		update(accumulator, function, column, rowId(row), admit);
+	}
+	void update(AggregateAccumulator &accumulator, AggregateFunctionType function, size_t column, BatchRowId descriptor,
+		const std::function<void(size_t)> &admit = [](size_t) {}) const {
+		identity_.validate(descriptor);
+		if (!prepared_) throw std::logic_error("numeric batch has no published rows");
+		if (descriptor.index >= rows_) throw std::out_of_range("numeric batch row exceeds its published rows");
+		const size_t row = descriptor.index;
 		if (function != AggregateFunctionType::AGG_COUNT && function != AggregateFunctionType::AGG_SUM &&
 			function != AggregateFunctionType::AGG_AVG && function != AggregateFunctionType::AGG_MIN &&
 			function != AggregateFunctionType::AGG_MAX && function != AggregateFunctionType::AGG_STDEV &&
@@ -155,6 +179,9 @@ public:
 	}
 
 private:
+	BatchIdentity identity_;
+	size_t rows_ = 0U;
+	bool prepared_ = false;
 	BudgetMemoryResource memory_;
 	std::pmr::vector<Column> columns_;
 };

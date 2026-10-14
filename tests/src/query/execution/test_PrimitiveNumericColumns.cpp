@@ -276,4 +276,61 @@ TEST(PrimitiveNumericColumnsTest, DeviationPropagatesNonFiniteValuesAndRejectsDy
 	}
 }
 
+TEST(PrimitiveNumericColumnsTest, DescriptorsRejectForeignReleasedAndRepreparedRowsBeforeAccumulatorEffects) {
+	const std::vector<std::vector<PropertyValue>> firstSource{{PropertyValue(2), PropertyValue(3)}};
+	const std::vector<std::vector<PropertyValue>> nextSource{{PropertyValue(11), PropertyValue(13)}};
+	const std::vector<size_t> requested{0U};
+	MaterializedByteBudget budget(65536U);
+	detail::PrimitiveNumericColumns first(budget), second(budget);
+	ASSERT_TRUE(first.tryPrepare(firstSource, requested, [] {}));
+	ASSERT_TRUE(second.tryPrepare(nextSource, requested, [] {}));
+	const auto old = first.rowId(0U);
+	SumAccumulator sum;
+	EXPECT_THROW(second.update(sum, AggregateFunctionType::AGG_SUM, 0U, old), std::invalid_argument);
+	EXPECT_EQ(sum.getResult(), PropertyValue{});
+	first.update(sum, AggregateFunctionType::AGG_SUM, 0U, old);
+	EXPECT_EQ(sum.getResult(), PropertyValue(2));
+	first.release();
+	EXPECT_THROW(first.update(sum, AggregateFunctionType::AGG_SUM, 0U, old), std::invalid_argument);
+	ASSERT_TRUE(first.tryPrepare(nextSource, requested, [] {}));
+	EXPECT_THROW(first.update(sum, AggregateFunctionType::AGG_SUM, 0U, old), std::invalid_argument);
+	EXPECT_EQ(sum.getResult(), PropertyValue(2));
+	first.update(sum, AggregateFunctionType::AGG_SUM, 0U, first.rowId(1U));
+	EXPECT_EQ(sum.getResult(), PropertyValue(15));
+	auto outside = first.rowId(0U);
+	outside.index = 2U;
+	EXPECT_THROW(first.update(sum, AggregateFunctionType::AGG_SUM, 0U, outside), std::out_of_range);
+	EXPECT_EQ(sum.getResult(), PropertyValue(15));
+}
+
+TEST(PrimitiveNumericColumnsTest, PreparationFailureNeverPublishesRowsAndReleaseAllowsRetry) {
+	const std::vector<std::vector<PropertyValue>> source{{PropertyValue(2), PropertyValue(3)}};
+	const std::vector<size_t> requested{0U};
+	MaterializedByteBudget budget(65536U);
+	detail::PrimitiveNumericColumns columns(budget);
+	EXPECT_THROW(static_cast<void>(columns.rowId(0U)), std::logic_error);
+	size_t checkpoints = 0U;
+	EXPECT_THROW(static_cast<void>(columns.tryPrepare(source, requested, [&] {
+		if (++checkpoints == 3U) throw std::runtime_error("cancel preparation");
+	})), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(columns.rowId(0U)), std::logic_error);
+	columns.release();
+	EXPECT_EQ(budget.used(), 0U);
+	ASSERT_TRUE(columns.tryPrepare(source, requested, [] {}));
+	SumAccumulator sum;
+	columns.update(sum, AggregateFunctionType::AGG_SUM, 0U, columns.rowId(0U));
+	EXPECT_EQ(sum.getResult(), PropertyValue(2));
+}
+
+TEST(PrimitiveNumericColumnsTest, EmptyPublishedBatchRejectsRowsAndRequiresReleaseBeforePreparation) {
+	MaterializedByteBudget budget(65536U);
+	detail::PrimitiveNumericColumns columns(budget);
+	ASSERT_TRUE(columns.tryPrepare({}, {}, [] {}));
+	EXPECT_THROW(static_cast<void>(columns.rowId(0U)), std::out_of_range);
+	EXPECT_THROW(static_cast<void>(columns.tryPrepare({}, {}, [] {})), std::logic_error);
+	columns.release();
+	ASSERT_TRUE(columns.tryPrepare({}, {}, [] {}));
+	EXPECT_EQ(budget.used(), 0U);
+}
+
 } // namespace graph::query::execution
