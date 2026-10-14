@@ -7313,7 +7313,7 @@ namespace graph::query::execution {
 				return std::nullopt;
 			}
 			MaterializedByteReservation bufferedRowsBytes(&state.shared.materialized_budget);
-			MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
+			detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
 			BoundedBatch<LogicalPlanReadRow> rows(
 					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
 					[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); });
@@ -7968,6 +7968,7 @@ namespace graph::query::execution {
 					const size_t enrichedLimit = std::min(state.shared.bounds.maximum_materialized_bytes,
 														  sharedAvailable - std::min(sharedAvailable, bitmapBytes));
 					size_t enrichedBytes = 0U;
+					size_t largestEnrichedRowBytes = 0U;
 					for (const LogicalPlanReadRow &row: rows.values()) {
 						const size_t rowBytes = logicalReadRowBytes(row, state.shared.context);
 						if (rowBytes > enrichedLimit - std::min(enrichedBytes, enrichedLimit)) {
@@ -7977,6 +7978,7 @@ namespace graph::query::execution {
 							throw std::runtime_error("bounded batch exceeded its byte limit");
 						}
 						enrichedBytes += rowBytes;
+						largestEnrichedRowBytes = std::max(largestEnrichedRowBytes, rowBytes);
 					}
 					rows.recalculateBytes();
 					debug::PerfTrace::addValue("logical_plan.batch.flushes", 1);
@@ -7984,13 +7986,22 @@ namespace graph::query::execution {
 					debug::PerfTrace::addValue("logical_plan.batch.materialized_bytes",
 											   static_cast<int64_t>(rows.bytes()));
 					bufferedRowsBytes.set(rows.bytes());
+					// Borrowed columns remain resident during downstream callbacks. Keep
+					// the same two-row headroom used by input admission after enrichment,
+					// before publishing any row; split pressure must never replay effects.
+					if (ownedColumns && rows.size() > 1U) {
+						const size_t handoffHeadroom = checkedSizeAdd(bitmapBytes,
+							checkedSizeMul(largestEnrichedRowBytes, 2U, "logical-plan prefetch handoff headroom overflowed"),
+							"logical-plan prefetch handoff headroom overflowed");
+						if (handoffHeadroom > state.shared.materialized_budget.available())
+							throw PrefetchBytePressure{};
+					}
 					struct ColumnScope {
 						ExecutionState &state; const ScopedPropertyColumns *previous;
 						~ColumnScope() { state.task.property_columns = previous; }
 					} columnScope{state, state.task.property_columns};
 					if (ownedColumns) state.task.property_columns = &*ownedColumns;
-					selectionBytes.set(SelectionVector::requiredStorageBytes(rows.size()));
-					SelectionVector selection(rows.size());
+					SelectionVector selection(rows.size(), &selectionMemory);
 					if (selectionPredicate) {
 						for (size_t index = 0U; index < rows.size(); ++index) {
 							checkGuard(state);
@@ -8082,7 +8093,6 @@ namespace graph::query::execution {
 					}
 					rows.clear();
 					bufferedRowsBytes.reset();
-					selectionBytes.reset();
 					largestInputRowBytes = 0U;
 					return keepGoing;
 				} catch (const PrefetchBytePressure &) {
@@ -10053,9 +10063,8 @@ namespace graph::query::execution {
 				std::ranges::sort(sortedOrdinals, [&pending](const size_t left, const size_t right) {
 					return pending.values()[left].edge_id < pending.values()[right].edge_id;
 				});
-				MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
-				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
-				SelectionVector selection(pending.size());
+				detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
+				SelectionVector selection(pending.size(), &selectionMemory);
 				struct CountPropertyBytePressure {};
 				std::function<void(size_t, size_t)> selectRange;
 				selectRange = [&](size_t begin, size_t end) {
@@ -10550,9 +10559,8 @@ namespace graph::query::execution {
 								"logical graph backend returned an Edge topology with a missing source Node");
 					}
 				}
-				MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
-				selectionBytes.set(SelectionVector::requiredStorageBytes(pending.size()));
-				SelectionVector selection(pending.size());
+				detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
+				SelectionVector selection(pending.size(), &selectionMemory);
 				MaterializedByteReservation selectedPropertyBytes(&state.shared.materialized_budget);
 				MaterializedByteReservation reorderedPropertyBytes(&state.shared.materialized_budget);
 				std::vector<std::vector<PropertyValue>> selectedProperties;
@@ -11124,12 +11132,16 @@ namespace graph::query::execution {
 							// Optional metadata is admitted only after the source and row
 							// owners. Declining it preserves the existing scalar path.
 						}
-						MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
+						detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
 						std::optional<SelectionVector> selection;
 						const size_t bitmapBytes = SelectionVector::requiredStorageBytes(end - begin);
-						if (boundPredicates && !selectionBytes.wouldExceed(bitmapBytes)) {
-							selectionBytes.set(bitmapBytes);
-							selection.emplace(end - begin);
+						if (boundPredicates && bitmapBytes <= state.shared.materialized_budget.available()) {
+							try { selection.emplace(end - begin, &selectionMemory); }
+							catch (const MaterializedByteLimitExceeded &) {
+								// Optional bitmap admission can decline only before filtering.
+							}
+						}
+						if (selection) {
 							const auto filtered = boundPredicates->filter(columns, *selection, state.shared.materialized_budget,
 								[&] { checkGuard(state); });
 							debug::PerfTrace::addValue("logical_plan.node_column_filter.typed_columns",
@@ -15381,9 +15393,8 @@ namespace graph::query::execution {
 										if (std::ranges::any_of(present, [](bool value) { return !value; }))
 											throw std::runtime_error("logical graph backend returned an adjacent Edge with a missing endpoint");
 									}
-									MaterializedByteReservation selectionBytes(&state.shared.materialized_budget);
-									selectionBytes.set(SelectionVector::requiredStorageBytes(pendingReferences.size()));
-									SelectionVector selection(pendingReferences.size());
+									detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
+									SelectionVector selection(pendingReferences.size(), &selectionMemory);
 									MaterializedByteReservation selectedPropertyBytes(&state.shared.materialized_budget);
 									std::vector<std::vector<PropertyValue>> selectedProperties;
 									if (!edgePredicates.empty()) {

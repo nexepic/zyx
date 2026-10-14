@@ -1,0 +1,19 @@
+{
+  "baseline": "5b8cd519248462924719974c02c06244258ed4b7",
+  "status": "verified_partial_S2",
+  "accepted": 5,
+  "total": 34,
+  "percent": 14.7,
+  "tests": {
+    "runtime": 222,
+    "admission": 68,
+    "distinct": 222,
+    "all_pass": true
+  },
+  "full_suite": false,
+  "performance_benchmark": false,
+  "kuzu_comparison": false,
+  "platform": "Linux C++20",
+  "commit_push": "explicitly_authorized_partial_S2_checkpoint",
+  "control": "HEAD runtime with current SelectionVector header; not a full baseline build"
+}
