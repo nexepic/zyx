@@ -13,6 +13,7 @@
 #include <set>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -3103,6 +3104,43 @@ namespace graph::storage {
 
 	LogicalGraphMutationBatchResult LogicalGraphTransactionOverlay::executeLogicalGraphMutationBatch(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence) {
+		return executeStagedBatch(batch, expectedFence);
+	}
+
+	LogicalGraphMutationBatchResult LogicalGraphTransactionOverlay::executeLogicalGraphMutationBatchWithPropertyPatches(
+		LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+		const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control) {
+		auto normalized = normalizeLogicalGraphPropertyPatchBatch(snapshot, companionBatch, patches,
+			maximumPropertyEntries, expectedFence, control);
+		if (!transaction_.supportsPropertyPatchStaging() || normalized.persisted_patches.empty())
+			return executeStagedBatch(normalized.batch, expectedFence, nullptr, {}, 0U, control);
+		// Copy only companion requests into durable staging. Full patch outputs
+		// serve statement visibility and are released after this call.
+		LogicalGraphMutationBatch staged;
+		staged.node_creates = normalized.batch.node_creates;
+		staged.edge_creates = normalized.batch.edge_creates;
+		staged.node_label_replacements = normalized.batch.node_label_replacements;
+		staged.node_deletes = normalized.batch.node_deletes;
+		staged.edge_deletes = normalized.batch.edge_deletes;
+		staged.creation_identity_plan = normalized.batch.creation_identity_plan;
+		std::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
+		for (const auto &patch : normalized.persisted_patches)
+			targets.emplace(static_cast<uint8_t>(patch.entity.entity_kind),
+				static_cast<uint8_t>(patch.entity.reference_kind), patch.entity.value);
+		for (const auto &replacement : normalized.batch.property_replacements)
+			if (!targets.contains({static_cast<uint8_t>(replacement.entity.entity_kind),
+				static_cast<uint8_t>(replacement.entity.reference_kind), replacement.entity.value}))
+				staged.property_replacements.push_back(replacement);
+		return executeStagedBatch(normalized.batch, expectedFence, &staged,
+			std::move(normalized.persisted_patches), normalized.entry_work, control);
+	}
+
+	LogicalGraphMutationBatchResult LogicalGraphTransactionOverlay::executeStagedBatch(
+		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
+		const LogicalGraphMutationBatch *patchCompanion, std::vector<LogicalGraphPropertyPatchRequest> patches,
+		size_t entryWork, const LogicalGraphMutationReadControl &control) {
+		if (control.checkpoint) control.checkpoint();
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
 			throw std::logic_error("logical transaction overlay cannot stage a mutation after transaction completion");
 		}
@@ -3120,19 +3158,24 @@ namespace graph::storage {
 		}
 
 		const LogicalGraphMutationBatchResult preview = transaction_.previewMutationBatch(batch);
-		const auto nodesBefore = nodes_;
-		const auto edgesBefore = edges_;
+		StatementUndo undo;
 		try {
-			applyBatch(batch, preview);
-			const LogicalGraphMutationBatchResult staged = transaction_.stageMutationBatch(batch);
+			applyBatch(batch, preview, undo);
+			debug::PerfTrace::addValue("logical_graph.overlay.statement_undo_nodes", static_cast<int64_t>(
+				std::min(undo.nodes.size(), static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+			debug::PerfTrace::addValue("logical_graph.overlay.statement_undo_edges", static_cast<int64_t>(
+				std::min(undo.edges.size(), static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+			if (control.checkpoint) control.checkpoint();
+			const LogicalGraphMutationBatchResult staged = patchCompanion
+				? transaction_.stageMutationBatchWithPropertyPatches(*patchCompanion, std::move(patches), entryWork, control)
+				: transaction_.stageMutationBatch(batch);
 			if (staged != preview) {
 				throw std::logic_error("logical transaction changed a batch's provisional identity after validation");
 			}
 			++logical_revision_;
 			return staged;
 		} catch (...) {
-			nodes_ = nodesBefore;
-			edges_ = edgesBefore;
+			restoreStatement(undo);
 			throw;
 		}
 	}
@@ -3183,8 +3226,35 @@ namespace graph::storage {
 		return inserted->second;
 	}
 
+	void LogicalGraphTransactionOverlay::rememberNode(StatementUndo &undo, uint64_t nodeId) const {
+		if (undo.nodes.contains(nodeId)) return;
+		const auto found = nodes_.find(nodeId);
+		undo.nodes.emplace(nodeId, found == nodes_.end() ? std::nullopt : std::optional<NodeState>(found->second));
+	}
+
+	void LogicalGraphTransactionOverlay::rememberEdge(StatementUndo &undo, uint64_t edgeId) const {
+		if (undo.edges.contains(edgeId)) return;
+		const auto found = edges_.find(edgeId);
+		undo.edges.emplace(edgeId, found == edges_.end() ? std::nullopt : std::optional<EdgeState>(found->second));
+	}
+
+	void LogicalGraphTransactionOverlay::restoreStatement(StatementUndo &undo) noexcept {
+		static_assert(std::is_nothrow_swappable_v<NodeState>);
+		static_assert(std::is_nothrow_swappable_v<EdgeState>);
+		// applyBatch never erases existing owners. Restore by swapping in their
+		// saved values; rollback needs neither payload copying nor allocation.
+		for (auto &[id, before] : undo.nodes) {
+			if (!before) nodes_.erase(id);
+			else { using std::swap; swap(nodes_.find(id)->second, *before); }
+		}
+		for (auto &[id, before] : undo.edges) {
+			if (!before) edges_.erase(id);
+			else { using std::swap; swap(edges_.find(id)->second, *before); }
+		}
+	}
+
 	void LogicalGraphTransactionOverlay::applyBatch(const LogicalGraphMutationBatch &batch,
-																	 const LogicalGraphMutationBatchResult &result) {
+		const LogicalGraphMutationBatchResult &result, StatementUndo &undo) {
 		if (result.created_node_ids.size() != batch.node_creates.size() ||
 			result.created_edge_ids.size() != batch.edge_creates.size()) {
 			throw std::logic_error("logical transaction overlay received an incomplete provisional identity result");
@@ -3217,6 +3287,7 @@ namespace graph::storage {
 			state.created = true;
 			const PropertyMap properties = makePropertyMap(request.properties);
 			state.node.properties = makePropertyEntries(properties);
+			rememberNode(undo, nodeId);
 			if (!nodes_.emplace(nodeId, std::move(state)).second) {
 				throw std::logic_error("logical transaction overlay created a duplicate Node identity");
 			}
@@ -3226,7 +3297,9 @@ namespace graph::storage {
 			if (mutation.node.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
 				throw std::invalid_argument("logical transaction overlay label mutation requires a Node");
 			}
-			ensureNode(resolveReference(mutation.node)).node.labels = canonicalLabels(mutation.labels);
+			const uint64_t nodeId = resolveReference(mutation.node);
+			rememberNode(undo, nodeId);
+			ensureNode(nodeId).node.labels = canonicalLabels(mutation.labels);
 		}
 
 		for (size_t index = 0U; index < batch.edge_creates.size(); ++index) {
@@ -3249,6 +3322,7 @@ namespace graph::storage {
 			}
 			const PropertyMap properties = makePropertyMap(request.properties);
 			state.edge.properties = makePropertyEntries(properties);
+			rememberEdge(undo, edgeId);
 			if (!edges_.emplace(edgeId, std::move(state)).second) {
 				throw std::logic_error("logical transaction overlay created a duplicate Edge identity");
 			}
@@ -3258,9 +3332,11 @@ namespace graph::storage {
 			const uint64_t entityId = resolveReference(mutation.entity);
 			const PropertyMap properties = makePropertyMap(mutation.properties);
 			if (mutation.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
+				rememberNode(undo, entityId);
 				NodeState &state = ensureNode(entityId);
 				state.node.properties = makePropertyEntries(properties);
 			} else if (mutation.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE) {
+				rememberEdge(undo, entityId);
 				EdgeState &state = ensureEdge(entityId);
 				state.edge.properties = makePropertyEntries(properties);
 			} else {
@@ -3269,14 +3345,16 @@ namespace graph::storage {
 		}
 
 		for (const LogicalGraphEdgeDeleteRequest &request: batch.edge_deletes) {
+			rememberEdge(undo, request.edge_id);
 			EdgeState &edge = ensureEdge(request.edge_id);
 			edge.deleted = true;
 		}
 		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
+			rememberNode(undo, request.node_id);
 			NodeState &node = ensureNode(request.node_id);
 			if (request.detach) {
 				std::set<uint64_t> detachedIds;
-				const auto markIncident = [this, &detachedIds, &request](const LogicalGraphEdge &edge) {
+				const auto markIncident = [this, &undo, &detachedIds, &request](const LogicalGraphEdge &edge) {
 					if (const auto existing = edges_.find(edge.edge_id);
 						existing != edges_.end() && existing->second.deleted) {
 						return true;
@@ -3285,7 +3363,8 @@ namespace graph::storage {
 						if (detachedIds.size() > request.maximum_detach_edges) {
 							throw std::runtime_error("logical transaction overlay detach delete exceeded its explicit Edge bound");
 						}
-							ensureEdge(edge.edge_id).deleted = true;
+						rememberEdge(undo, edge.edge_id);
+						ensureEdge(edge.edge_id).deleted = true;
 					}
 					return true;
 				};
@@ -3306,6 +3385,7 @@ namespace graph::storage {
 						if (detachedIds.size() > request.maximum_detach_edges) {
 							throw std::runtime_error("logical transaction overlay detach delete exceeded its explicit Edge bound");
 						}
+						rememberEdge(undo, edgeId);
 						edge.deleted = true;
 					}
 				}

@@ -19,6 +19,19 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 	LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
 	std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
 	const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control) {
+	auto normalized = normalizeLogicalGraphPropertyPatchBatch(snapshot, companionBatch, patches,
+		maximumPropertyEntries, expectedFence, control);
+	if (patches.empty() && companionBatch.node_creates.empty() && companionBatch.edge_creates.empty() &&
+		companionBatch.property_replacements.empty() && companionBatch.node_label_replacements.empty() &&
+		companionBatch.node_deletes.empty() && companionBatch.edge_deletes.empty() && !companionBatch.creation_identity_plan)
+		return {};
+	return executeLogicalGraphMutationBatchWithReadControl(normalized.batch, expectedFence, control);
+}
+
+NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch(
+	LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+	std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+	const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control) {
 	if (maximumPropertyEntries == 0U) throw std::invalid_argument("Property patches require a positive entry bound");
 	if (patches.size() > maximumPropertyEntries) throw std::runtime_error("Property patches exceeded their target bound");
 	const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
@@ -85,15 +98,12 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 			throw std::invalid_argument("Property patches cannot overlap complete replacement targets");
 	}
 	if (patches.empty()) {
-		if (companionBatch.node_creates.empty() && companionBatch.edge_creates.empty() &&
-			companionBatch.property_replacements.empty() && companionBatch.node_label_replacements.empty() &&
-			companionBatch.node_deletes.empty() && companionBatch.edge_deletes.empty() && !companionBatch.creation_identity_plan)
-			return {};
-		return executeLogicalGraphMutationBatchWithReadControl(companionBatch, fence, control);
+		return {companionBatch, {}, entries};
 	}
 	if (persistedTargets != 0U && control.property_admission && !snapshot.supportsShapedPropertyReadAdmission())
 		throw std::logic_error("Property patch source does not support shaped admission");
-	LogicalGraphMutationBatch batch = companionBatch;
+	NormalizedLogicalGraphPropertyPatchBatch normalized{companionBatch, {}, 0U};
+	auto &batch = normalized.batch;
 	if (persistedTargets > (std::numeric_limits<size_t>::max)() - batch.property_replacements.size())
 		throw std::overflow_error("Property patch replacement count overflowed");
 	batch.property_replacements.reserve(batch.property_replacements.size() + persistedTargets);
@@ -194,6 +204,20 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 			}
 		}
 		if (!changesSource) continue;
+		LogicalGraphPropertyPatchRequest changed{patch.entity, {}, {}};
+		if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
+			for (const auto *property : sets) {
+				checkpoint();
+				const auto found = std::lower_bound(source.begin(), source.end(), std::string_view(property->key),
+					[&](const auto &field, std::string_view key) { checkpoint(); return field.key < key; });
+				if (found == source.end() || found->key != property->key || found->value != property->value)
+					changed.sets.push_back(*property);
+			}
+			for (const auto key : removals) {
+				checkpoint();
+				if (containsSourceKey(key)) changed.removals.emplace_back(key);
+			}
+		}
 		size_t outputEntries = source.size();
 		for (const auto key : removals) { checkpoint(); if (containsSourceKey(key)) --outputEntries; }
 		for (const auto *property : sets) { checkpoint(); if (!containsSourceKey(property->key)) ++outputEntries; }
@@ -206,8 +230,12 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 			checkpoint();
 			if (setIndex < sets.size() && (sourceIndex == source.size() || sets[setIndex]->key <= source[sourceIndex].key)) {
 				const auto &property = *sets[setIndex++];
-				if (sourceIndex < source.size() && source[sourceIndex].key == property.key) ++sourceIndex;
-				replacement.properties.push_back(property);
+				if (sourceIndex < source.size() && source[sourceIndex].key == property.key) {
+					auto &old = source[sourceIndex++];
+					if (old.value == property.value)
+						replacement.properties.push_back({std::move(old.key), std::move(old.value)});
+					else replacement.properties.push_back(property);
+				} else replacement.properties.push_back(property);
 			} else {
 				auto &property = source[sourceIndex++];
 				if (!std::binary_search(removals.begin(), removals.end(), std::string_view(property.key)))
@@ -222,10 +250,12 @@ LogicalGraphMutationBatchResult LogicalGraphWriteBackend::executeLogicalGraphMut
 			batch.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties = std::move(replacement.properties);
 		} else {
 			batch.property_replacements.push_back(std::move(replacement));
+			normalized.persisted_patches.push_back(std::move(changed));
 		}
 	}
 	checkpoint();
-	return executeLogicalGraphMutationBatchWithReadControl(batch, fence, control);
+	normalized.entry_work = entries;
+	return normalized;
 }
 
 } // namespace graph::storage

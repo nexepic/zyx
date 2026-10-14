@@ -562,6 +562,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/test_QueryGuard.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphReadContract.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlay.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlayUndo.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphPropertyPatch.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlayExactCandidates.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/storage/test_LogicalGraphTransactionOverlayVector.cpp"

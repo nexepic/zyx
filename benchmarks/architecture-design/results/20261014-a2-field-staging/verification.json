@@ -1,0 +1,21 @@
+{
+  "base_commit": "5cd1c87641fd021a504dbf9a702e94387964e171",
+  "status": "S3.1_accepted_before_delivery",
+  "distinct_passed": 507,
+  "counts": {
+    "native-tests.log": 141,
+    "overlay-tests.log": 72,
+    "semantics-layout-tests.log": 293,
+    "mode-mix-tests.log": 1
+  },
+  "supplemental_integrity_passed": 1,
+  "source_hashes": "source-hashes.json",
+  "binary_hashes": "binary-hashes.json",
+  "full_suite": false,
+  "performance_benchmark": false,
+  "platform": "Linux x86_64",
+  "cross_platform_builds_verified": false,
+  "S3.1": "accepted",
+  "A6_shared_budget": "pending",
+  "S3.5_performance": "pending"
+}

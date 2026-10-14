@@ -1,0 +1,241 @@
+ninja: Entering directory `buildDir'
+[0/2] Re-checking globbed directories...
+[1/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:392:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  392 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:401:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  401 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:482:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  482 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:576:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  576 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:585:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  585 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:37:85: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   37 |                                 const auto node = visible->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                                                 ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:41:87: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   41 |                                 const auto labels = visible->readNodeShaped(nodes.front(), {.include_labels = true}).labels;
+      |                                                                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:60:80: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   60 |         const auto node = after->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:67:72: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   67 |         EXPECT_EQ(after->readNodeShaped(nodes.front(), {.include_labels = true}).labels,
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:132:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |         EXPECT_EQ(before->readEdgeShaped(edges.front(), {.all_properties = true}).properties.front().value, PropertyValue(1));
+      |                                                                                ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:188:83: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  188 |         const auto node = snapshot->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                          ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:215:83: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  215 |         const auto node = snapshot->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                          ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:254:85: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  254 |                 const auto staged = visible->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                                   ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:270:85: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  270 |         const auto finalNode = after->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:274:72: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  274 |         EXPECT_EQ(after->readEdgeShaped(edges.front(), {.all_properties = true}).properties.front().value, PropertyValue(4));
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:275:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  275 |         EXPECT_EQ(before->readNodeShaped(nodes.front(), {.all_properties = true}).properties.size(), 3U);
+      |                                                                                ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:276:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  276 |         EXPECT_EQ(before->readEdgeShaped(edges.front(), {.all_properties = true}).properties.front().value, PropertyValue(1));
+      |                                                                                ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:296:85: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  296 |         const auto finalNode = after->readNodeShaped(nodes.front(), {.all_properties = true});
+      |                                                                                            ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:382:80: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  382 |         const auto node = current->readNodeShaped(ids.front(), {.all_properties = true});
+      |                                                                                       ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:422:107: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  422 |         const auto createdNode = current->readNodeShaped(result.created_node_ids.front(), {.all_properties = true});
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:430:107: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  430 |         const auto createdEdge = current->readEdgeShaped(result.created_edge_ids.front(), {.all_properties = true});
+      |                                                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:465:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  465 |                 const auto node = snapshot.readNodeShaped(ids.front(), {.all_properties = true});
+      |                                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:514:106: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  514 |                 const auto node = unchanged->readNodeShaped(ids[index], {.include_labels = true, .all_properties = true});
+      |                                                                                                                        ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatablePropertyPatches.cpp:524:104: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  524 |                 const auto node = changed->readNodeShaped(ids[index], {.include_labels = true, .all_properties = true});
+      |                                                                                                                      ^
+25 warnings generated.
+[2/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/test_LogicalGraphPropertyPatch.cpp.o
+In file included from /workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:3:
+In file included from /workspace/zyx/tests/include/storage/LogicalGraphTransactionOverlayTestFixture.hpp:27:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalGraphReadExecutor.hpp:18:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:392:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  392 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:401:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  401 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:482:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  482 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:576:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  576 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:585:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  585 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:3:
+In file included from /workspace/zyx/tests/include/storage/LogicalGraphTransactionOverlayTestFixture.hpp:28:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphTransactionOverlay.hpp:15:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:25:72: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   25 |         const auto node = snapshot->readNodeShaped(1U, {.all_properties = true});
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:29:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   29 |         EXPECT_EQ(transaction.readSnapshot().readNodeShaped(1U, {.all_properties = true}).properties.front().value, PropertyValue("Ada"));
+      |                                                                                        ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:45:61: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   45 |         EXPECT_EQ(after->readNodeShaped(1U, {.all_properties = true}).properties,
+      |                                                                    ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:57:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   57 |         EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+      |                                                                                                     ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:75:63: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   75 |         EXPECT_EQ(current->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
+      |                                                                      ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:86:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   86 |         EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+      |                                                                                                     ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:100:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  100 |         EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+      |                                                                                                     ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:104:63: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  104 |         EXPECT_EQ(current->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
+      |                                                                      ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:105:64: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  105 |         EXPECT_EQ(current->readEdgeShaped(10U, {.all_properties = true}).properties.front().value, PropertyValue(2));
+      |                                                                       ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:125:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  125 |         EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+      |                                                                                                     ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:141:102: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  141 |         const auto node = overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:160:66: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  160 |         EXPECT_TRUE(snapshot->readNodeShaped(1U, {.all_properties = true}).properties.empty());
+      |                                                                         ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:163:102: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  163 |         const auto node = overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true});
+      |                                                                                                             ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:189:63: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  189 |         EXPECT_EQ(current->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
+      |                                                                      ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:190:87: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  190 |         EXPECT_EQ(current->readNodeShaped(result.created_node_ids[0], {.all_properties = true}).properties.front().value, PropertyValue("Grace"));
+      |                                                                                              ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:191:87: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  191 |         EXPECT_EQ(current->readNodeShaped(result.created_node_ids[1], {.all_properties = true}).properties.front().value, PropertyValue(8));
+      |                                                                                              ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:192:103: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  192 |         const auto relationship = current->readEdgeShaped(result.created_edge_ids[0], {.all_properties = true});
+      |                                                                                                              ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:209:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  209 |         EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 1U);
+      |                                                                                                     ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:240:131: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  240 |         const auto node = overlay.openLogicalGraphReadSnapshot()->readNodeShaped(result.created_node_ids.front(), {.all_properties = true});
+      |                                                                                                                                          ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:276:63: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  276 |         EXPECT_EQ(current->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
+      |                                                                      ^
+/workspace/zyx/tests/src/storage/test_LogicalGraphPropertyPatch.cpp:292:63: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  292 |         EXPECT_EQ(current->readNodeShaped(1U, {.all_properties = true}).properties.front().value, PropertyValue("Ada"));
+      |                                                                      ^
+27 warnings generated.
+[3/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_TransactionAtomicity.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_TransactionAtomicity.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:392:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  392 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:401:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  401 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:482:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  482 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:576:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  576 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:585:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  585 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_TransactionAtomicity.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[4/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_WriteSurface.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_WriteSurface.cpp:8:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:392:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  392 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:401:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  401 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:482:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  482 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:576:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  576 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:585:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  585 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend_WriteSurface.cpp:8:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.

@@ -192,6 +192,19 @@ namespace graph::storage {
 		std::function<void(size_t)> property_admission;
 	};
 
+	// The legacy layout materializes full collections for statement visibility.
+	// Validated, changed persisted patches are retained separately so capable
+	// transactions can stage field operations rather than these collections.
+	struct NormalizedLogicalGraphPropertyPatchBatch {
+		LogicalGraphMutationBatch batch;
+		std::vector<LogicalGraphPropertyPatchRequest> persisted_patches;
+		size_t entry_work = 0U;
+	};
+	[[nodiscard]] NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch(
+		LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+		const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control = {});
+
 	// A caller that evaluated a read-dependent mutation against an older logical
 	// snapshot must restart planning, never replay the old row set at a newer
 	// generation. This distinct error makes that retry contract explicit.
@@ -277,6 +290,14 @@ namespace graph::storage {
 		// rollback invalidates them together with every staged observation.
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult
 		stageMutationBatch(LogicalGraphMutationBatch batch) = 0;
+		// Separate transport prevents legacy batch consumers from silently ignoring
+		// raw operations. Unsupported transactions retain the complete-state path.
+		[[nodiscard]] virtual bool supportsPropertyPatchStaging() const { return false; }
+		[[nodiscard]] virtual LogicalGraphMutationBatchResult stageMutationBatchWithPropertyPatches(
+			LogicalGraphMutationBatch, std::vector<LogicalGraphPropertyPatchRequest>, size_t,
+			const LogicalGraphMutationReadControl & = {}) {
+			throw std::logic_error("logical transaction does not support Property patch staging");
+		}
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult commit() = 0;
 		virtual void rollback() = 0;
 	};

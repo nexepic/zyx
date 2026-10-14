@@ -1,0 +1,22 @@
+{
+  "base_commit": "5cd1c87641fd021a504dbf9a702e94387964e171",
+  "status": "working_tree_verified",
+  "tests": {
+    "overlay": {
+      "passed": 72,
+      "suites": 2
+    },
+    "native": {
+      "passed": 127,
+      "suites": 4
+    }
+  },
+  "full_suite": false,
+  "performance_benchmark": false,
+  "accepted": 3,
+  "total": 34,
+  "percent": 8.8,
+  "S3.1": "in_progress",
+  "platform": "Linux x86_64",
+  "commit_push": "deferred_until_acceptance_increases"
+}

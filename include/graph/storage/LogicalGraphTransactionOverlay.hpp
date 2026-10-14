@@ -43,6 +43,10 @@ namespace graph::storage {
 		[[nodiscard]] LogicalGraphMutationBatchResult
 		executeLogicalGraphMutationBatch(const LogicalGraphMutationBatch &batch,
 									std::optional<LogicalGraphMutationFence> expectedFence = std::nullopt) override;
+		[[nodiscard]] LogicalGraphMutationBatchResult executeLogicalGraphMutationBatchWithPropertyPatches(
+			LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
+			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+			const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control = {}) override;
 
 	private:
 		struct NodeState {
@@ -62,13 +66,28 @@ namespace graph::storage {
 
 		class Snapshot;
 		class VectorSnapshot;
+		// Save only owners touched by one statement, once per owner. An empty
+		// entry records absence so rollback removes a newly materialized owner.
+		struct StatementUndo {
+			std::map<uint64_t, std::optional<NodeState>> nodes;
+			std::map<uint64_t, std::optional<EdgeState>> edges;
+		};
+		void rememberNode(StatementUndo &undo, uint64_t nodeId) const;
+		void rememberEdge(StatementUndo &undo, uint64_t edgeId) const;
+		void restoreStatement(StatementUndo &undo) noexcept;
+		[[nodiscard]] LogicalGraphMutationBatchResult executeStagedBatch(
+			const LogicalGraphMutationBatch &visibleBatch, std::optional<LogicalGraphMutationFence> expectedFence,
+			const LogicalGraphMutationBatch *patchCompanion = nullptr,
+			std::vector<LogicalGraphPropertyPatchRequest> patches = {}, size_t entryWork = 0U,
+			const LogicalGraphMutationReadControl &control = {});
 
 		[[nodiscard]] LogicalGraphReadSnapshot &baseSnapshot() const;
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> baseFence() const;
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> overlayFence() const;
 		[[nodiscard]] NodeState &ensureNode(uint64_t nodeId);
 		[[nodiscard]] EdgeState &ensureEdge(uint64_t edgeId);
-		void applyBatch(const LogicalGraphMutationBatch &batch, const LogicalGraphMutationBatchResult &result);
+		void applyBatch(const LogicalGraphMutationBatch &batch, const LogicalGraphMutationBatchResult &result,
+			StatementUndo &undo);
 		[[nodiscard]] bool hasVisibleIncidentEdge(uint64_t nodeId) const;
 		[[nodiscard]] bool isNodeVisible(uint64_t nodeId) const;
 		[[nodiscard]] bool isEdgeVisible(const LogicalGraphEdge &edge, uint64_t edgeId) const;
