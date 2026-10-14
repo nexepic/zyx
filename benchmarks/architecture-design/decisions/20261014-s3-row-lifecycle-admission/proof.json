@@ -1,0 +1,30 @@
+{
+  "status": "accepted",
+  "item": "S3.2",
+  "native_layout": "ROW",
+  "column_container_candidate": "rejected",
+  "default_enabled": false,
+  "selected_tests": 129,
+  "new_cases": 8,
+  "io_costs": [
+    {
+      "variant": 0,
+      "point": 245760,
+      "presence": 237568,
+      "full": 827392,
+      "file": 2228224
+    },
+    {
+      "variant": 1,
+      "point": 180224,
+      "presence": 172032,
+      "full": 843776,
+      "file": 2228224
+    }
+  ],
+  "io_includes_native_metadata": true,
+  "performance_timing": false,
+  "latency_or_steady_state_acceptance": false,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s3-row-lifecycle-admission",
+  "test_sha256": "afd29fb4070bef61b77b9dd4821eea52a4d0227f23e238e84ff79e427d53bd6e"
+}

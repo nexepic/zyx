@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+#include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
 
 #include <algorithm>
 #include <array>
@@ -2011,6 +2012,7 @@ namespace graph::storage {
 						"Entity Property root exceeds the inline page limit but has no LargeValue placement");
 			}
 			const std::vector<std::byte> largeValuePayload = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
+			const auto compression = PropertyRowChunkPolicy::select(largeValuePayload, options.large_value_compression, options.adaptive_row_chunks);
 			const std::optional<LargeValueRef> reused = large_values_->findContentDuplicate(
 					snapshot, largeValuePayload, LargeValueKind::LVK_BYTES, RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE,
 					options.maximum_large_value_dedup_candidates);
@@ -2019,7 +2021,7 @@ namespace graph::storage {
 									 : large_values_->planReference(nextLargeValueId, Generation(1U), largeValuePayload,
 																  LargeValueKind::LVK_BYTES,
 																	  RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE,
-																	  options.large_value_compression);
+																	  compression);
 			EntityPropertyLargeValueReference storedReference;
 			storedReference.owner_entity_id = root.owner_entity_id;
 			storedReference.owner_entity_type = root.owner_entity_type;
@@ -2035,12 +2037,12 @@ namespace graph::storage {
 						 .last_data_slot = options.last_slot,
 						 .first_manifest_slot = options.first_slot,
 						 .last_manifest_slot = options.last_slot,
-						 .compression = options.large_value_compression,
+						 .compression = compression,
 						 .extent_class = LargeValueExtentClass::LVEC_32K,
 						 .planned_data_page_count = large_values_->plannedDataPageCount(
-								 largeValuePayload, options.large_value_compression, LargeValueExtentClass::LVEC_32K),
+								 largeValuePayload, compression, LargeValueExtentClass::LVEC_32K),
 						 .planned_manifest_page_count = large_values_->plannedManifestPageCount(
-								 largeValuePayload, options.large_value_compression, LargeValueExtentClass::LVEC_32K)});
+								 largeValuePayload, compression, LargeValueExtentClass::LVEC_32K)});
 			}
 			// ZYX_COV_EXCL_NEXT: the fixed LargeValue reference is smaller than an empty slot capacity.
 			if (encoded.size() > maximumBytes) {

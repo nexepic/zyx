@@ -33,6 +33,7 @@ namespace graph::storage {
 		uint64_t page_owner_id = 0;
 		LargeValueCompressionOptions large_value_compression{};
 		size_t maximum_large_value_dedup_candidates = RSS_LARGE_VALUE_DEFAULT_MAX_DEDUP_CANDIDATES;
+		bool adaptive_row_chunks = false;
 	};
 
 	// All enum members carry a prefix to remain safe on Windows builds.

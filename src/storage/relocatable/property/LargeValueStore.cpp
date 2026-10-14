@@ -91,7 +91,7 @@ namespace graph::storage {
 		}
 
 		void validateCompressionOptions(const LargeValueCompressionOptions &options) {
-			if (options.minimum_savings_percent > 100U || options.zstd_level < 1 || options.zstd_level > 22 ||
+			if (options.logical_chunk_ends.size() > 4096U || options.minimum_savings_percent > 100U || options.zstd_level < 1 || options.zstd_level > 22 ||
 				(options.codec != LargeValueCodec::LVC_RAW && options.codec != LargeValueCodec::LVC_LZ4 &&
 				 options.codec != LargeValueCodec::LVC_ZSTD)) {
 				fail(FormatError::FERR_INVALID_HEADER, "LargeValue compression policy is invalid");
@@ -413,17 +413,49 @@ namespace graph::storage {
 			return options.codec;
 		}
 
+		void validateChunkEnds(const LargeValueCompressionOptions &options, uint64_t size) {
+			uint64_t previous = 0U;
+			if (options.logical_chunk_ends.size() > 4096U) fail(FormatError::FERR_INVALID_HEADER, "LargeValue chunk-boundary count exceeds its limit");
+			for (uint64_t end : options.logical_chunk_ends) {
+				if (end <= previous || end > size) fail(FormatError::FERR_INVALID_HEADER, "LargeValue chunk boundaries are not ordered bounded offsets");
+				previous = end;
+			}
+		}
+
+		[[nodiscard]] uint64_t nextChunkBytes(uint64_t size, uint64_t offset, uint64_t target,
+			const LargeValueCompressionOptions &options) {
+			const auto next = std::ranges::upper_bound(options.logical_chunk_ends, offset);
+			const uint64_t end = next == options.logical_chunk_ends.end() ? size : *next;
+			return std::min(target, end - offset);
+		}
+
+		[[nodiscard]] std::pair<uint64_t, uint32_t> chunkRange(size_t ordinal, uint64_t size, uint64_t target,
+			const LargeValueCompressionOptions &options) {
+			uint64_t begin = 0U;
+			for (size_t segment = 0U; segment <= options.logical_chunk_ends.size(); ++segment) {
+				const uint64_t end = segment == options.logical_chunk_ends.size() ? size : options.logical_chunk_ends[segment];
+				const uint64_t span = end - begin;
+				const uint64_t count = span / target + static_cast<uint64_t>(span % target != 0U);
+				if (ordinal < count) {
+					const uint64_t offset = begin + static_cast<uint64_t>(ordinal) * target;
+					return {offset, static_cast<uint32_t>(std::min(target, end - offset))};
+				}
+				ordinal -= static_cast<size_t>(count); begin = end;
+			}
+			fail(FormatError::FERR_INVALID_STATE, "LargeValue chunk ordinal exceeds its planned ranges");
+		}
+
 		[[nodiscard]] std::vector<PlannedChunk> planChunks(std::span<const std::byte> bytes,
 														   const LargeValueCompressionOptions &compression,
 														   LargeValueExtentClass extentClass) {
+			validateChunkEnds(compression, bytes.size());
 			std::vector<PlannedChunk> chunks;
 			const auto append = [&chunks](PlannedChunk &&chunk) { chunks.push_back(std::move(chunk)); };
 			const uint64_t targetBytes = std::min<uint64_t>(extentBytes(extentClass), maximumChunkStoredBytes());
 			size_t sourceOffset = 0U;
 			uint64_t logicalOffset = 0U;
 			while (sourceOffset < bytes.size()) {
-				const size_t remaining = bytes.size() - sourceOffset;
-				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
+				const uint64_t chunkBytes = nextChunkBytes(bytes.size(), sourceOffset, targetBytes, compression);
 				const uint64_t nextOffset = logicalOffset + chunkBytes;
 			if (nextOffset < logicalOffset || chunks.size() >= std::numeric_limits<uint32_t>::max()) { // reaching the chunk-ordinal limit needs at least 64 TiB of 16 KiB input and belongs to the scale gate, not a unit test.
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
@@ -445,15 +477,16 @@ namespace graph::storage {
 		template <typename Visitor>
 		void visitPlannedChunks(std::span<const std::byte> bytes, const LargeValueCompressionOptions &compression,
 							   LargeValueExtentClass extentClass, Visitor &&visit) {
+			validateChunkEnds(compression, bytes.size());
+			size_t ordinal = 0U;
 			size_t sourceOffset = 0U;
 			uint64_t logicalOffset = 0U;
 			const uint64_t targetBytes = std::min<uint64_t>(extentBytes(extentClass), maximumChunkStoredBytes());
 			while (sourceOffset < bytes.size()) {
-				const size_t remaining = bytes.size() - sourceOffset;
-				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
+				const uint64_t chunkBytes = nextChunkBytes(bytes.size(), sourceOffset, targetBytes, compression);
 				const uint64_t nextOffset = logicalOffset + chunkBytes;
 			if (nextOffset < logicalOffset || // reaching the chunk-ordinal limit needs at least 64 TiB of 16 KiB input and belongs to the scale gate, not a unit test.
-					sourceOffset / static_cast<size_t>(targetBytes) >= std::numeric_limits<uint32_t>::max()) {
+					ordinal >= std::numeric_limits<uint32_t>::max()) {
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
 				}
 				const uint32_t uncompressedBytes = static_cast<uint32_t>(chunkBytes);
@@ -462,7 +495,7 @@ namespace graph::storage {
 				const uint32_t storedBytes = static_cast<uint32_t>(stored.size());
 				visit(StreamedChunkPlan{selectedCodec(source, compression, stored), pageCountForBytes(storedBytes)});
 				sourceOffset += static_cast<size_t>(chunkBytes);
-				logicalOffset = nextOffset;
+				logicalOffset = nextOffset; ++ordinal;
 			}
 		}
 
@@ -940,11 +973,10 @@ namespace graph::storage {
 		const uint64_t extentBytesForChunks =
 				std::min<uint64_t>(extentBytes(request.extent_class), maximumChunkStoredBytes());
 		const auto chunkLogicalBytes = [&](size_t ordinal) {
-			const uint64_t offset = static_cast<uint64_t>(ordinal) * extentBytesForChunks;
-			return static_cast<uint32_t>(std::min<uint64_t>(request.logical_bytes.size() - offset, extentBytesForChunks));
+			return chunkRange(ordinal, request.logical_bytes.size(), extentBytesForChunks, request.compression).second;
 		};
 		const auto chunkLogicalOffset = [&](size_t ordinal) {
-			return static_cast<uint64_t>(ordinal) * extentBytesForChunks;
+			return chunkRange(ordinal, request.logical_bytes.size(), extentBytesForChunks, request.compression).first;
 		};
 
 		size_t dataPageOrdinal = 0U;
