@@ -200,5 +200,29 @@ TEST(ResourceCoordinatorTest, OwnedHierarchyRejectsNullOwners) {
 	EXPECT_THROW(ResourceAccount(std::shared_ptr<DatabaseResourceBudget>{},ResourceClass::RCK_QUERY,10U),std::invalid_argument);
 	EXPECT_THROW(ResourceLease(std::shared_ptr<ResourceAccount>{}),std::invalid_argument);
 }
+TEST(ResourceCoordinatorTest, QueryPressureCannotConsumeProtectedMaintenanceFloor) {
+	auto limits=ResourceLimits::uniform(100U);limits.protected_maintenance_floor=20U;
+	ProcessResourceBudget process(limits);DatabaseResourceBudget database(process,ResourceLimits::uniform(100U));
+	ResourceAccount query(database,ResourceClass::RCK_QUERY,100U),maintenance(database,ResourceClass::RCK_MAINTENANCE,100U);
+	ResourceLease foreground(query),background(maintenance);foreground.set(80U);
+	EXPECT_FALSE(foreground.trySet(81U));EXPECT_EQ(process.usage().total,80U);
+	background.set(20U);EXPECT_EQ(process.usage().total,100U);
+	background.reset();EXPECT_FALSE(foreground.trySet(81U));
+	foreground.set(70U);background.set(30U);EXPECT_EQ(process.usage().total,100U);
+	limits.protected_maintenance_floor=101U;EXPECT_THROW(ProcessResourceBudget invalid(limits),std::invalid_argument);
+}
+TEST(ResourceCoordinatorTest, DatabaseAndQuerySlotsRemainHeldBySharedAccountLeases) {
+	auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(100U),1U);
+	auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(100U),1U);
+	auto account=std::make_shared<ResourceAccount>(database,ResourceClass::RCK_QUERY,100U);
+	{
+		ResourceLease retained(account);retained.set(10U);account.reset();
+		EXPECT_THROW(ResourceAccount denied(*database,ResourceClass::RCK_QUERY,100U),ResourceAdmissionDenied);
+		database.reset();EXPECT_THROW(DatabaseResourceBudget denied(process,ResourceLimits::uniform(100U)),ResourceAdmissionDenied);
+		EXPECT_EQ(process->usage().total,10U);
+	}
+	EXPECT_EQ(process->usage().total,0U);
+	EXPECT_NO_THROW(DatabaseResourceBudget replacement(process,ResourceLimits::uniform(100U)));
+}
 } // namespace
 } // namespace graph::query::execution::detail

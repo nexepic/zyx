@@ -29,10 +29,12 @@ public:
 		~Session(){abandon();}
 		void acquire(size_t bytes) {
 			if(!owner_)throw std::logic_error("query scratch disk session is finished");
-			std::lock_guard lock(owner_->mutex_);
+			std::unique_lock lock(owner_->mutex_);
 			auto &domain=owner_->domains_[slot_];
-			if(bytes>maximum_-bytes_ || bytes>domain.maximum-domain.bytes || bytes>owner_->maximum_-owner_->bytes_)
+			if(bytes>maximum_-bytes_ || bytes>domain.maximum-domain.bytes || bytes>owner_->maximum_-owner_->bytes_){
+				lock.unlock();
 				throw std::runtime_error("query scratch exceeded hierarchical disk quota");
+			}
 			bytes_+=bytes;domain.bytes+=bytes;owner_->bytes_+=bytes;
 		}
 		// Call only after durable reclamation or before any IO has begun.
@@ -70,28 +72,36 @@ public:
 		if(identity.empty() || databaseMaximum==0 || databaseMaximum>maximum_ || queryMaximum==0 || queryMaximum>databaseMaximum)
 			throw std::invalid_argument("invalid query scratch disk domain limits");
 		auto owner=shared_from_this();
-		std::lock_guard lock(mutex_);
+		std::unique_lock lock(mutex_);
 		size_t slot=domains_.size(),empty=domains_.size();
 		for(size_t i=0;i<domains_.size();++i){
 			if(domains_[i].identity==identity){slot=i;break;}
 			if(domains_[i].identity.empty())empty=i;
 		}
 		if(slot==domains_.size()){
-			if(empty==domains_.size())throw std::runtime_error("query scratch disk domain slots exhausted");
+			if(empty==domains_.size()){
+				lock.unlock();throw std::runtime_error("query scratch disk domain slots exhausted");
+			}
 			slot=empty;domains_[slot].identity=std::move(identity);domains_[slot].maximum=databaseMaximum;
 		}
 		auto &domain=domains_[slot];
-		if(domain.maximum!=databaseMaximum)throw std::invalid_argument("query scratch database disk quota differs between owners");
-		if(domain.sessions>=maximum_sessions_)throw std::runtime_error("query scratch session slots exhausted");
+		if(domain.maximum!=databaseMaximum){
+			lock.unlock();throw std::invalid_argument("query scratch database disk quota differs between owners");
+		}
+		if(domain.sessions>=maximum_sessions_){
+			lock.unlock();throw std::runtime_error("query scratch session slots exhausted");
+		}
 		++domain.sessions;
 		return Session(std::move(owner),slot,queryMaximum);
 	}
 	// Caller holds the exclusive scratch-file recovery lease and has already
 	// authenticated/reclaimed every orphan. A failed recovery must not call this.
 	void recovered(const std::string &identity) {
-		std::lock_guard lock(mutex_);
+		std::unique_lock lock(mutex_);
 		for(auto &domain:domains_)if(domain.identity==identity){
-			if(domain.sessions!=0)throw std::logic_error("query scratch disk recovery has live sessions");
+			if(domain.sessions!=0){
+				lock.unlock();throw std::logic_error("query scratch disk recovery has live sessions");
+			}
 			bytes_-=domain.orphan_bytes;domain.bytes-=domain.orphan_bytes;domain.orphan_bytes=0;
 			if(domain.bytes==0)domain.identity.clear();
 			return;

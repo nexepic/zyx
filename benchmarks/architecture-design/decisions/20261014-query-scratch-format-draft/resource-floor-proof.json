@@ -1,0 +1,41 @@
+{
+  "status": "in_progress_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "current_source_affected_tests": {
+    "tests": 1061,
+    "suites": 49,
+    "failures": 0
+  },
+  "focused_tests": {
+    "tests": 35,
+    "suites": 5,
+    "failures": 0
+  },
+  "real_process_crash_recovery_repetitions": 20,
+  "floor_and_memory_slots": "private_coordinator_foundation_not_native_memory_integration",
+  "changes": [
+    "configured_process_database_maintenance_floor",
+    "finite_database_and_query_account_slots",
+    "shared_leases_retain_domain_and_query_slots",
+    "disk_and_memory_denial_exceptions_constructed_after_resource_unlock"
+  ],
+  "evidence": {
+    "benchmarks/architecture-design/results/20261014-query-resource-floor/zyx-resource-scratch-current-matrix.log": {
+      "sha256": "b6e39b7b514c17081babd80d737266e2c1b924fe0be14a94d752a90f10dceb2a"
+    },
+    "benchmarks/architecture-design/results/20261014-query-resource-floor/zyx-resource-scratch-current-matrix.xml": {
+      "sha256": "cc18e5f1ccf93adb36495cf910c44479ab4b04c5d77e9ac7f6915ef756105562"
+    },
+    "benchmarks/architecture-design/results/20261014-query-resource-floor/zyx-resource-floor-tests.log": {
+      "sha256": "a43d6833b0f7589bb0ee49a705eb5cee3591bb70001d55dc68fec59ee9e0d159"
+    },
+    "benchmarks/architecture-design/results/20261014-query-resource-floor/zyx-resource-floor-tests.xml": {
+      "sha256": "aa9fc032941114eaf3102127b80f9302bbf53023adbf90f9271f1604fde11aec"
+    },
+    "benchmarks/architecture-design/results/20261014-query-resource-floor/zyx-scratch-crash-current-repetitions.json": {
+      "sha256": "2256359ee99ec9f38f711d50531d0e82a93e4611613781946fb7a48c04706677"
+    }
+  }
+}
