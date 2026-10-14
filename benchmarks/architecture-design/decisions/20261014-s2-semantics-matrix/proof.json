@@ -1,0 +1,48 @@
+{
+  "status": "accepted",
+  "item": "S2.4",
+  "selected_tests": {
+    "bound-expression": 11,
+    "bound-native": 8,
+    "column-layout-runtime": 222,
+    "s23-consumer": 350,
+    "s24-native": 7,
+    "focused": 109
+  },
+  "total_tests": 707,
+  "native_commands": 916,
+  "native_families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "performance_timing": false,
+  "budget_baseline_commit": "a487f7c7",
+  "kuzu_default_semantics": "WALK",
+  "kuzu_equivalent_semantics": "TRAIL",
+  "kuzu_equivalent_rows": 7,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s2-semantics-matrix",
+  "sha256": {
+    "focused.log": "b33b3b6dedb620d26284acf84d161af38e2f94976da3c9956451df08c800b169",
+    "registration.json": "61e4efae8c3f8f3ad1fc2fd84c7553cc88c6f0fb3bd4ded33ad1520f8c0e9698",
+    "s23-consumer.log": "07444466db0d1ed219910d9210307a785b0c62a9c5203612f6b18a8061843258",
+    "kuzu-trails.py": "6c66c20140b82da480d40f85425ddeb773ee99da51d716ce10fce3860d654bdd",
+    "column-layout-runtime.log": "51ffaba155888713079023431250b8e490474744c0b94ee069ea540336f0d02b",
+    "report.json": "d2ca1f038c9b32d42eb28f0e9a4431c5b52070fd68bf94b7a974c43a87baab28",
+    "pre-change-budget-failure.log": "b1c4711a3332b1708ccb34bbdd0765348feddac70b1eb49165787d4b5a91c4c1",
+    "bound-native.log": "806e0709d03255c41c93cd7222ee92e158aeba1b64f8fd81b76a07bf8d419a9b",
+    "bound-expression.log": "221c6de0cb7f7089d221cbd9c74ac18f0167b5da9e9cfd8dffa85cb9a15e9b22",
+    "trace.json": "5ee7c755826132156e534f42bb9b65a9f8eb1f85ca8c2a8b1dcc0188c0a8c385",
+    "s24-native.log": "f895766397594bbd926bf5b5f6b33209849c7c08abb9b7bb1e69b69143ee3353"
+  }
+}

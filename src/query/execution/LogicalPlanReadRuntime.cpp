@@ -8520,7 +8520,7 @@ namespace graph::query::execution {
 
 			struct FrontierPath {
 				uint64_t current_node_id = 0U;
-				std::vector<uint64_t> visited_node_ids;
+				std::vector<uint64_t> visited_edge_ids;
 			};
 			struct AdjacentRecord {
 				uint64_t source_node_id = 0U;
@@ -8530,7 +8530,7 @@ namespace graph::query::execution {
 				bool operator==(const AdjacentRecord &) const = default;
 			};
 			const auto pathBytes = [](const FrontierPath &path) {
-				return checkedSizeMul(path.visited_node_ids.capacity(), sizeof(uint64_t),
+				return checkedSizeMul(path.visited_edge_ids.capacity(), sizeof(uint64_t),
 									  "logical-plan variable-length frontier size overflowed");
 			};
 			const auto incrementResult = [&](uint64_t &resultCount) {
@@ -8578,8 +8578,9 @@ namespace graph::query::execution {
 				}
 				FrontierPath path;
 				path.current_node_id = sourceId;
-				path.visited_node_ids.reserve(1U);
-				path.visited_node_ids.push_back(sourceId);
+				path.visited_edge_ids.reserve(1U);
+				// Relationship identity, rather than Node identity, constrains a trail.
+				// Retain one bounded slot for the first expansion; no source Node is marked.
 				const size_t pathPayloadBytes = pathBytes(path);
 				const size_t previousCapacity = frontier.capacity();
 				frontier.push_back(std::move(path));
@@ -8796,8 +8797,8 @@ namespace graph::query::execution {
 					const auto last = std::ranges::upper_bound(adjacency, path.current_node_id, {},
 															   &AdjacentRecord::source_node_id);
 					for (auto candidate = first; candidate != last; ++candidate) {
-						if (std::ranges::find(path.visited_node_ids, candidate->target_node_id) !=
-							path.visited_node_ids.end()) {
+						if (std::ranges::find(path.visited_edge_ids, candidate->edge_id) !=
+							path.visited_edge_ids.end()) {
 							continue;
 						}
 						const auto target = std::ranges::lower_bound(targetNodeIds, candidate->target_node_id);
@@ -8813,10 +8814,10 @@ namespace graph::query::execution {
 						}
 						FrontierPath next;
 						next.current_node_id = candidate->target_node_id;
-						next.visited_node_ids.reserve(path.visited_node_ids.size() + 1U);
-						next.visited_node_ids.insert(next.visited_node_ids.end(), path.visited_node_ids.begin(),
-													 path.visited_node_ids.end());
-						next.visited_node_ids.push_back(candidate->target_node_id);
+						next.visited_edge_ids.reserve(path.visited_edge_ids.size() + 1U);
+						next.visited_edge_ids.insert(next.visited_edge_ids.end(), path.visited_edge_ids.begin(),
+													 path.visited_edge_ids.end());
+						next.visited_edge_ids.push_back(candidate->edge_id);
 						const size_t nextPathBytes = pathBytes(next);
 						const size_t previousCapacity = nextFrontier.capacity();
 						nextFrontier.push_back(std::move(next));
@@ -14250,8 +14251,8 @@ namespace graph::query::execution {
 						const storage::LogicalGraphNode source =
 								sourceNeedsPredicate ? readPredicateNode(sourceId, sourcePredicateBytes)
 													 : patternSourceIdentity(state, sourceBinding);
-						std::unordered_set<uint64_t> pathNodes;
-						pathNodes.insert(source.node_id);
+						detail::BudgetMemoryResource pathIdentityMemory(state.shared.materialized_budget);
+						std::pmr::unordered_set<uint64_t> pathEdges(&pathIdentityMemory);
 						std::vector<storage::LogicalGraphNode> pathNodeRecords{source};
 						// A variable-length topology traversal does not need a complete
 						// endpoint Node when no target label/Property predicate exists. Keep
@@ -14657,10 +14658,10 @@ namespace graph::query::execution {
 										return true;
 									}
 								}
-								if (pathNodes.contains(target.node_id)) {
+								if (pathEdges.contains(edge.topology.edge_id)) {
 									return true;
 								}
-								pathNodes.insert(target.node_id);
+								pathEdges.insert(edge.topology.edge_id);
 								if (edge.reference.has_value()) {
 									pathEdgeRefs.push_back(*edge.reference);
 								} else {
@@ -14677,7 +14678,7 @@ namespace graph::query::execution {
 								} else {
 									pathEdgeRecords.pop_back();
 								}
-								pathNodes.erase(target.node_id);
+								pathEdges.erase(edge.topology.edge_id);
 								return completed;
 							});
 						};
