@@ -1,0 +1,5 @@
+# S4.3 acceptance
+
+Accept graph semantics/fault verification for the admitted key-only/master path. A new actual native lifecycle history verifies parallel edges, a self-loop, both directions, staged overlay deletion/creation, atomic publication, repeated old-session traversal, fresh snapshots, integrity and reopen. Transaction base snapshots deliberately remain pinned; read-your-writes goes through LogicalGraphTransactionOverlay. Candidate valid-byte disagreement checks do not masquerade as production corruption tests.
+
+The 208-test selected matrix includes adjacency codecs/range/continuation/cache/overlay merger, page-backed adapters, bounded native sessions, authoritative integrity corruption checks and native transaction publication faults (short writes/ENOSPC/metadata/root/sync). Existing integrity tests reject omitted membership and wrong endpoints despite valid encoding, foreign owners and malformed sibling/separator/restart paths. Bound native trail tests retain parallel edges/self-loops and prohibit edge reuse. No unsupported covering layout is enabled, no hardware power-loss simulation is claimed, and S4.4 benchmarks remain pending.
