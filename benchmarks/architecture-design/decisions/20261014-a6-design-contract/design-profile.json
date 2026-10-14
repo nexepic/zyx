@@ -122,5 +122,15 @@
   "persistent_format_change": false,
   "driver_abi_change": false,
   "full_suite": false,
-  "benchmark_run": false
+  "benchmark_run": false,
+  "foundation_implemented": [
+    "three_level_atomic_memory_admission",
+    "strong_owner_lease_lifetime",
+    "configured_protected_maintenance_floor",
+    "finite_database_and_query_slots"
+  ],
+  "fixed_ledger_stage_mapping": {
+    "native_global_resources_and_spill": "S5.3",
+    "resource_and_scratch_fault_matrix": "S5.4"
+  }
 }

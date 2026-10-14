@@ -16,6 +16,7 @@ inline constexpr size_t RESOURCE_CLASS_COUNT = static_cast<size_t>(ResourceClass
 struct ResourceLimits {
 	size_t total;
 	std::array<size_t, RESOURCE_CLASS_COUNT> classes;
+	size_t protected_maintenance_floor = 0U;
 	static ResourceLimits uniform(size_t bytes) {
 		ResourceLimits limits{bytes, {}};
 		limits.classes.fill(bytes);
@@ -23,6 +24,9 @@ struct ResourceLimits {
 	}
 	void validate() const {
 		if (total == 0U) throw std::invalid_argument("resource total must be positive");
+		if (protected_maintenance_floor > total ||
+			protected_maintenance_floor > classes[static_cast<size_t>(ResourceClass::RCK_MAINTENANCE)])
+			throw std::invalid_argument("protected maintenance floor exceeds resource limits");
 		for (size_t maximum : classes)
 			if (maximum > total) throw std::invalid_argument("resource class limit exceeds total");
 	}
@@ -43,7 +47,11 @@ class ResourceLease;
 // allocation, eviction or I/O execute while it is held.
 class ProcessResourceBudget final {
 public:
-	explicit ProcessResourceBudget(ResourceLimits limits) : limits_(limits) { limits_.validate(); }
+	explicit ProcessResourceBudget(ResourceLimits limits, size_t maximumDatabases = 64U)
+		: limits_(limits), maximum_databases_(maximumDatabases) {
+		limits_.validate();
+		if (maximumDatabases == 0U) throw std::invalid_argument("resource database slots must be positive");
+	}
 	ProcessResourceBudget(const ProcessResourceBudget &) = delete;
 	ProcessResourceBudget &operator=(const ProcessResourceBudget &) = delete;
 	[[nodiscard]] ResourceUsage usage() const { std::lock_guard lock(mutex_); return usage_; }
@@ -54,15 +62,25 @@ private:
 	const ResourceLimits limits_;
 	mutable std::mutex mutex_;
 	ResourceUsage usage_;
+	const size_t maximum_databases_;
+	size_t databases_ = 0U;
 };
 class DatabaseResourceBudget final {
 public:
-	DatabaseResourceBudget(ProcessResourceBudget &process, ResourceLimits limits) : process_(process), limits_(limits) {
+	DatabaseResourceBudget(ProcessResourceBudget &process, ResourceLimits limits, size_t maximumQueries = 64U)
+		: process_(process), limits_(limits), maximum_queries_(maximumQueries) {
 		limits_.validate();
 		if (limits_.total > process.limits_.total) throw std::invalid_argument("database resource total exceeds process total");
+		if (maximumQueries == 0U) throw std::invalid_argument("resource query slots must be positive");
+		std::unique_lock lock(process_.mutex_);
+		if (process_.databases_ == process_.maximum_databases_) {
+			lock.unlock();throw ResourceAdmissionDenied();
+		}
+		++process_.databases_;
 	}
-	DatabaseResourceBudget(std::shared_ptr<ProcessResourceBudget> process, ResourceLimits limits)
-		: DatabaseResourceBudget(requireOwner(process), limits) { process_owner_ = std::move(process); }
+	DatabaseResourceBudget(std::shared_ptr<ProcessResourceBudget> process, ResourceLimits limits, size_t maximumQueries = 64U)
+		: DatabaseResourceBudget(requireOwner(process), limits, maximumQueries) { process_owner_ = std::move(process); }
+	~DatabaseResourceBudget() { std::lock_guard lock(process_.mutex_); --process_.databases_; }
 	DatabaseResourceBudget(const DatabaseResourceBudget &) = delete;
 	DatabaseResourceBudget &operator=(const DatabaseResourceBudget &) = delete;
 	[[nodiscard]] ResourceUsage usage() const { std::lock_guard lock(process_.mutex_); return usage_; }
@@ -77,6 +95,8 @@ private:
 	ProcessResourceBudget &process_;
 	const ResourceLimits limits_;
 	ResourceUsage usage_;
+	const size_t maximum_queries_;
+	size_t queries_ = 0U;
 };
 
 // Every lease shares one account quota: splitting a lease cannot multiply the
@@ -88,9 +108,21 @@ public:
 		: database_(database), kind_(static_cast<size_t>(kind)), maximum_(maximum) {
 		if (kind_ >= RESOURCE_CLASS_COUNT || maximum == 0U || maximum > database.limits_.total)
 			throw std::invalid_argument("resource account requires a valid class and finite quota");
+		if (kind_ == static_cast<size_t>(ResourceClass::RCK_QUERY)) {
+			std::unique_lock lock(database_.process_.mutex_);
+			if (database_.queries_ == database_.maximum_queries_) {
+				lock.unlock();throw ResourceAdmissionDenied();
+			}
+			++database_.queries_;
+		}
 	}
 	ResourceAccount(std::shared_ptr<DatabaseResourceBudget> database, ResourceClass kind, size_t maximum)
 		: ResourceAccount(requireOwner(database), kind, maximum) { database_owner_ = std::move(database); }
+	~ResourceAccount() {
+		if (kind_ == static_cast<size_t>(ResourceClass::RCK_QUERY)) {
+			std::lock_guard lock(database_.process_.mutex_); --database_.queries_;
+		}
+	}
 	ResourceAccount(const ResourceAccount &) = delete;
 	ResourceAccount &operator=(const ResourceAccount &) = delete;
 	[[nodiscard]] size_t used() const { std::lock_guard lock(database_.process_.mutex_); return used_; }
@@ -135,6 +167,12 @@ public:
 		const size_t kind = account_->kind_;
 		if (next > bytes_) {
 			const size_t delta = next - bytes_;
+			const size_t maintenance = static_cast<size_t>(ResourceClass::RCK_MAINTENANCE);
+			if (kind != maintenance &&
+				(delta > database.limits_.total - database.limits_.protected_maintenance_floor -
+					(database.usage_.total - database.usage_.classes[maintenance]) ||
+				 delta > process.limits_.total - process.limits_.protected_maintenance_floor -
+					(process.usage_.total - process.usage_.classes[maintenance]))) return false;
 			if (delta > account_->maximum_ - account_->used_ ||
 				delta > database.limits_.total - database.usage_.total ||
 				delta > process.limits_.total - process.usage_.total ||
