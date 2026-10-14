@@ -1,0 +1,23 @@
+{
+  "baseline": "884ffcf2c2512176c93f87339432ae2d507fc752",
+  "status": "S1.6_accepted_design_S2_S5_pending",
+  "accepted": 6,
+  "total": 34,
+  "percent": 17.6,
+  "tests": {
+    "foundation_and_A1": 82,
+    "runtime": 222,
+    "overlap": 26,
+    "distinct": 278,
+    "new_resource_foundation": 7,
+    "all_pass": true
+  },
+  "full_suite": false,
+  "benchmark": false,
+  "kuzu_comparison": false,
+  "runtime_global_resource_coordination": false,
+  "query_spill": false,
+  "persistent_format_change": false,
+  "driver_abi_change": false,
+  "commit_push": "authorized_checkpoint_after_S1.6_acceptance"
+}

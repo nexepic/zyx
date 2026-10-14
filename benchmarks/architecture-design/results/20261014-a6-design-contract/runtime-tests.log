@@ -1,0 +1,465 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 222 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 159 tests from LogicalPlanDirectEdgeRuntimeTest
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NodePredicateBufferLeavesRoomForHeapPayloadsAcrossManyBatches
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NodePredicateBufferLeavesRoomForHeapPayloadsAcrossManyBatches (4 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NodePredicateSplitPreservesScanOrderMissingCellsAndCancellation (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PropertyColumnLastConsumerPreservesRepeatedEntityPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PropertyColumnLastConsumerPreservesRepeatedEntityPayloads (3 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CompleteNodeAndEdgeCachesShareTheExecutionBudgetAndReuseRecords
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CompleteNodeAndEdgeCachesShareTheExecutionBudgetAndReuseRecords (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AppliesSourceEdgeAndTargetPredicatesWithoutAdjacencyDescent
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AppliesSourceEdgeAndTargetPredicatesWithoutAdjacencyDescent (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgePredicatesOnAnchoredReferencePages
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgePredicatesOnAnchoredReferencePages (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsOversizedAnchoredEdgePredicateBatchBeforeFullEdgeRead
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsOversizedAnchoredEdgePredicateBatchBeforeFullEdgeRead (4 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesEveryEdgePredicateAndPreservesSelectedValues
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesEveryEdgePredicateAndPreservesSelectedValues (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DeduplicatesPropertyReadsButPreservesDuplicateEdgeRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DeduplicatesPropertyReadsButPreservesDuplicateEdgeRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SplitsLargeEdgeProjectionIntoBoundedBatches
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SplitsLargeEdgeProjectionIntoBoundedBatches (17 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgeFilterPropertyAndReusesItForProjection
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgeFilterPropertyAndReusesItForProjection (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.GlobalEdgePropertyPathDoesNotScanUnconstrainedSources
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.GlobalEdgePropertyPathDoesNotScanUnconstrainedSources (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.GlobalEdgePropertyPathFailsClosedForMissingSourceEndpoint
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.GlobalEdgePropertyPathFailsClosedForMissingSourceEndpoint (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesMultiplePropertiesFromOneFilterExpression
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesMultiplePropertiesFromOneFilterExpression (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesDeferredEdgeProjectionAcrossTheTraversal
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesDeferredEdgeProjectionAcrossTheTraversal (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.EnforcesMaterializedByteBoundForLargeSelectedProperties
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.EnforcesMaterializedByteBoundForLargeSelectedProperties (4 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsOversizedSelectedEdgePredicateBatchBeforeOutputMaterialization
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsOversizedSelectedEdgePredicateBatchBeforeOutputMaterialization (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.EnforcesMaterializedByteBoundAtPublicEntityResultBoundary
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.EnforcesMaterializedByteBoundAtPublicEntityResultBoundary (1 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RawNodeResultPreflightsItsCompletePayloadBeforePublication
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RawNodeResultPreflightsItsCompletePayloadBeforePublication (1 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RawEdgeResultPreflightsItsCompletePayloadBeforePublication
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RawEdgeResultPreflightsItsCompletePayloadBeforePublication (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CachedNodeReferenceResultPreservesPayloadAndRejectsDuplicates
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CachedNodeReferenceResultPreservesPayloadAndRejectsDuplicates (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CachedEdgeReferenceResultPreservesPayloadAndRejectsDuplicates
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CachedEdgeReferenceResultPreservesPayloadAndRejectsDuplicates (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.OversizedEdgeReferenceFallbackPreservesCompleteResult
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.OversizedEdgeReferenceFallbackPreservesCompleteResult (13 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ShapedReferenceSourceAdmissionRejectsBeforePayloadCopy
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ShapedReferenceSourceAdmissionRejectsBeforePayloadCopy (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsShareSourceAndRetainedBatchBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PatternNamedColumnsShareSourceAndRetainedBatchBudget (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReusesQueryBoundEdgeMaterializationForRepeatedIntrospection
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReusesQueryBoundEdgeMaterializationForRepeatedIntrospection (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesEntityMetadataForRepeatedIntrospectionExpressions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesEntityMetadataForRepeatedIntrospectionExpressions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SplitsMetadataPrefetchWhenSourceAndRowCopiesExceedBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SplitsMetadataPrefetchWhenSourceAndRowCopiesExceedBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinAndOptionalMatchRetainEntityMetadataCaches
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinAndOptionalMatchRetainEntityMetadataCaches (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.InvalidatesEntityMetadataWhenUnwindRebindsAnEntityVariable
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.InvalidatesEntityMetadataWhenUnwindRebindsAnEntityVariable (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsRelationshipReferenceWithStaleTypeToken
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsRelationshipReferenceWithStaleTypeToken (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DoesNotCacheMaterializedEdgesBeyondTheByteBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DoesNotCacheMaterializedEdgesBeyondTheByteBudget (3 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowedUnwindKeepsEntityScalarConversionAndSuppression
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowedUnwindKeepsEntityScalarConversionAndSuppression (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SubqueryOuterAndImportedRowsShareTheExecutionBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SubqueryOuterAndImportedRowsShareTheExecutionBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.UnitSubqueryReleasesImportedRowsBeforeDownstreamSort
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.UnitSubqueryReleasesImportedRowsBeforeDownstreamSort (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NestedSortPrefetchesOuterPropertyAndTransfersRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterBetweenSortsTransfersSelectedRowReservations (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ProjectBetweenSortsTransfersProjectedRowReservations (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DistinctProjectBetweenSortsReleasesDuplicateRowReservations
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DistinctProjectBetweenSortsReleasesDuplicateRowReservations (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SortPreservesProjectedFilteredRowsWithoutOuterPrefetch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SortReceivesWindowedRowsThroughSkipAndLimit
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SortReceivesWindowedRowsThroughSkipAndLimit (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SortAdmitsExpandedRowsWhileUnwindRetainsItsInputCharge (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.OwnedSubqueryReturnsPreserveLargePayloadDuplicatesAndVisitorStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.OwnedSubqueryReturnsPreserveLargePayloadDuplicatesAndVisitorStop (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CorrelatedSubqueryAdmitsCombinedOutputBesideLiveImports
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CorrelatedSubqueryAdmitsCombinedOutputBesideLiveImports (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinBatchBudgetStillRejectsOversizedRowsDiscardedBySkip
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinBatchBudgetStillRejectsOversizedRowsDiscardedBySkip (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NestedJoinAndOptionalBuffersShareTheExecutionBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NestedJoinAndOptionalBuffersShareTheExecutionBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinChargesBufferedRowsOnceAndStillEnforcesItsByteBound
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinChargesBufferedRowsOnceAndStillEnforcesItsByteBound (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinAndOptionalAdmitCombinedRowsWithRetainedPatternBytes
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinAndOptionalAdmitCombinedRowsWithRetainedPatternBytes (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TwoHopMergedTargetsFilterBeforeEnforcingMultiplicityRowBound
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TwoHopMergedTargetsFilterBeforeEnforcingMultiplicityRowBound (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFinalEdgesAggregateWithinBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TwoHopParallelFirstEdgesUseDistinctEndpointGatherWithinBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TwoHopLabelCardinalityFailureCanRetryAtEitherHop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TwoHopLabelCardinalityFailureCanRetryAtEitherHop (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TwoHopCountBudgetFailureCanRetryWithParallelEdgeMultiplicity
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TwoHopCountBudgetFailureCanRetryWithParallelEdgeMultiplicity (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AggregateKeepsInputChargeWhileGrowingGroupsButStreamsCountOnly
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AggregateKeepsInputChargeWhileGrowingGroupsButStreamsCountOnly (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AggregateChargesGroupVectorGrowthPeak
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AggregateChargesGroupVectorGrowthPeak (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowedCountPredicatesPreserveLiteralTypesDuplicatesAndContradictions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowedCountPredicatesPreserveLiteralTypesDuplicatesAndContradictions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DirectCountRejectsCorruptedColumnsBeforeBytePressureRetries
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DirectCountRejectsCorruptedColumnsBeforeBytePressureRetries (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredCountAdmitsTargetColumnsBeforeCopyingPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredCountAdmitsTargetColumnsBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DirectFilteredCountSplitsSharedPropertyScratchAndRejectsOversizedCells
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DirectFilteredCountSplitsSharedPropertyScratchAndRejectsOversizedCells (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AggregatesNodePropertiesThroughOneSelectedColumnBatch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AggregatesNodePropertiesThroughOneSelectedColumnBatch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CountPropertyFallbackExcludesNullAndAvoidsExtraEntityReads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CountPropertyFallbackExcludesNullAndAvoidsExtraEntityReads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.GroupedMixedCountOmitsPayloadOnlyWithNonNullCapability
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.GroupedMixedCountOmitsPayloadOnlyWithNonNullCapability (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CountUsesProjectedPropertyColumnBeforeEntityProbe
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CountUsesProjectedPropertyColumnBeforeEntityProbe (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesSafeSubsetOfMixedAggregateExpressions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesSafeSubsetOfMixedAggregateExpressions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SharesOneBatchAcrossGroupedAndMultipleAggregatePropertyExpressions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SharesOneBatchAcrossGroupedAndMultipleAggregatePropertyExpressions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AggregatesEdgePropertiesThroughOneSelectedColumnBatch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AggregatesEdgePropertiesThroughOneSelectedColumnBatch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CountsEdgePropertyMatchesThroughSortedColumnsWithoutRowMaterialization
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CountsEdgePropertyMatchesThroughSortedColumnsWithoutRowMaterialization (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FusesFilteredEdgeCountIntoTheSelectedColumnScan
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FusesFilteredEdgeCountIntoTheSelectedColumnScan (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilteredEdgeCountValidatesEndpointsOnceAndFailsClosed
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilteredEdgeCountValidatesEndpointsOnceAndFailsClosed (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ShortCircuitsContradictoryInlineAndFilterEdgeCounts
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ShortCircuitsContradictoryInlineAndFilterEdgeCounts (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CountsUnconstrainedEdgesThroughReferencesWithoutTypeMaterialization
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CountsUnconstrainedEdgesThroughReferencesWithoutTypeMaterialization (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DoesNotMaterializeUnboundTopologyOnlyTargetNodes
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DoesNotMaterializeUnboundTopologyOnlyTargetNodes (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsAnUnknownNativeRelationshipTypeBeforeScanningEdges
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsAnUnknownNativeRelationshipTypeBeforeScanningEdges (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DoesNotApplyDirectNodeCountWhenAParameterPredicateFiltersTheScan
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DoesNotApplyDirectNodeCountWhenAParameterPredicateFiltersTheScan (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.EnforcesGlobalAndPerSourceEdgeBounds
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.EnforcesGlobalAndPerSourceEdgeBounds (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AcceptsUnorderedPhysicalTopologyAndHonorsEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AcceptsUnorderedPhysicalTopologyAndHonorsEarlyStop (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.LimitStopsTopologyOnlyDirectTraversalBeforeReadAhead
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.LimitStopsTopologyOnlyDirectTraversalBeforeReadAhead (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsAnUnincrementableGlobalEdgeBound
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsAnUnincrementableGlobalEdgeBound (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchAdjacencyCountPreservesDirectionAndSelfLoopSemantics
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchAdjacencyCountPreservesDirectionAndSelfLoopSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchAdjacencyCountAppliesTypeLabelsAndEndpointLiveness
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchAdjacencyCountAppliesTypeLabelsAndEndpointLiveness (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencySkipsTargetIoAfterEdgePredicatesRejectTheBatch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencySkipsTargetIoAfterEdgePredicatesRejectTheBatch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsInvalidTargetPropertyDefinitions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsInvalidTargetPropertyDefinitions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyTreatsTargetLabelMissAsAFilter
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyTreatsTargetLabelMissAsAFilter (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsMissingEndpointsAndBatchCardinalityChanges
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsMissingEndpointsAndBatchCardinalityChanges (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsCorruptedSelectedColumnCardinality
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.NativeAdjacencyRejectsCorruptedSelectedColumnCardinality (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredCountReservesOnlyDemandedPendingCapacity
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredCountReservesOnlyDemandedPendingCapacity (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredLabelBitsRejectMalformedProbeAndRetryReferenceSource
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredLabelBitsRejectMalformedProbeAndRetryReferenceSource (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredLabelsRemainCorrectBeyondOptionalCacheLimit
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredLabelsRemainCorrectBeyondOptionalCacheLimit (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredPropertiesRemainCorrectBeyondOptionalCacheLimit
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredPropertiesRemainCorrectBeyondOptionalCacheLimit (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AnchoredPropertiesBorrowLongDuplicateKeysWithinBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AnchoredPropertiesBorrowLongDuplicateKeysWithinBudget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AggregateObjectAdmissionRejectsBeforeScanningAndAllowsFreshExecution
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AggregateObjectAdmissionRejectsBeforeScanningAndAllowsFreshExecution (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgePropertySortKeysBeforeOrdering
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesEdgePropertySortKeysBeforeOrdering (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AdmitsDirectTraversalEdgePropertyColumnsBeforeCopyingPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AdmitsDirectTraversalEdgePropertyColumnsBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AdmitsDirectTraversalTargetColumnsBeforeCopyingPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AdmitsDirectTraversalTargetColumnsBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AdmitsConstrainedSourceColumnsBeforeCopyingPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AdmitsConstrainedSourceColumnsBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesAdjacentTargetPropertyPredicatesByReferencePage
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesAdjacentTargetPropertyPredicatesByReferencePage (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AdmitsAdjacentTargetColumnsBeforeCopyingPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AdmitsAdjacentTargetColumnsBeforeCopyingPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReservesAdjacentTargetColumnFramesBeforeReadingMissingProperties
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReservesAdjacentTargetColumnFramesBeforeReadingMissingProperties (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReservesAdjacentEdgeColumnFramesBeforeReadingMissingProperties
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReservesAdjacentEdgeColumnFramesBeforeReadingMissingProperties (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.AccountsPendingReferencesForConstrainedSourceTraversal
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.AccountsPendingReferencesForConstrainedSourceTraversal (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesSafeSubsetOfMixedSortKeys
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesSafeSubsetOfMixedSortKeys (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityReferencesAndPreservesProperties
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityReferencesAndPreservesProperties (9 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEdgeEntityReferencesUnderSharedBudget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEdgeEntityReferencesUnderSharedBudget (9 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesDeferredNodeSortKeysBeforeQueryResultMaterialization
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesDeferredNodeSortKeysBeforeQueryResultMaterialization (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityProjectionAcrossNodeRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityProjectionAcrossNodeRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesImportedPropertiesAcrossReadOnlyCorrelatedSubqueryRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesImportedPropertiesAcrossReadOnlyCorrelatedSubqueryRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesImportedListPropertiesForCorrelatedSubqueryUnwind
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesImportedListPropertiesForCorrelatedSubqueryUnwind (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteImportedEntityAcrossReadOnlyCorrelatedSubqueryRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteImportedEntityAcrossReadOnlyCorrelatedSubqueryRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CallSubqueryCarriesEntityMetadataCachesAcrossImportedAndReturnedAliases
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CallSubqueryCarriesEntityMetadataCachesAcrossImportedAndReturnedAliases (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityPayloadAfterJoinAndOptionalMatch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityPayloadAfterJoinAndOptionalMatch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityFilterPredicateAcrossNodeRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityFilterPredicateAcrossNodeRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityKeysFilterAndPreservesDuplicateRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityKeysFilterAndPreservesDuplicateRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CompleteEntityFilterTreatsNullPredicateAsUnknown
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CompleteEntityFilterTreatsNullPredicateAsUnknown (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CompleteEntityFilterStopsAtTheVisitorBoundary
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CompleteEntityFilterStopsAtTheVisitorBoundary (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityAggregateArguments
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityAggregateArguments (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesSelectedPropertyAndCompleteEntityWithinOneAggregateExpression
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesSelectedPropertyAndCompleteEntityWithinOneAggregateExpression (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.KeepsSafeCompleteEntityAggregateBatchBesideExistsExpression
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.KeepsSafeCompleteEntityAggregateBatchBesideExistsExpression (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityInsideCaseBesideNestedExistsScope
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesCompleteEntityInsideCaseBesideNestedExistsScope (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesGroupedAggregateWithCompleteEntityArguments
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesGroupedAggregateWithCompleteEntityArguments (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PreservesReversedPropertyComparisonSemantics
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PreservesReversedPropertyComparisonSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesAllSourcePredicateColumnsInOneSortedRead
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesAllSourcePredicateColumnsInOneSortedRead (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.TransfersSourcePredicateColumnIntoDownstreamRowCache
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.TransfersSourcePredicateColumnIntoDownstreamRowCache (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesNodeScanPredicateColumnsBeforeRowMaterialization
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesNodeScanPredicateColumnsBeforeRowMaterialization (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesPropertyProjectionDirectlyOverNodeScan
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesPropertyProjectionDirectlyOverNodeScan (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FlushesSelectedPropertyRowsBeforeTheByteBudgetIsExceeded
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FlushesSelectedPropertyRowsBeforeTheByteBudgetIsExceeded (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.SplitsVariablePropertyPayloadBatchesAndPreservesEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.SplitsVariablePropertyPayloadBatchesAndPreservesEarlyStop (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PrefetchRetriesRetainPendingRowsAndPreservePartialCachesAndOrder (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PendingPrefetchRowsRemainChargedWhileRetryEnrichesOneRow (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PropertyPrefetchTransfersItsChargeBeforeSortAndVisitorCancellation (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReservesCrossRowPropertyColumnFramesBeforeReading
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReservesCrossRowPropertyColumnFramesBeforeReading (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsMalformedPropertyColumnsBeforeBudgetRetries
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsMalformedPropertyColumnsBeforeBudgetRetries (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.DeduplicatesComplexProjectionPropertyRequestsInOneBatch
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.DeduplicatesComplexProjectionPropertyRequestsInOneBatch (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesPropertySubsetOfMixedProjection
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesPropertySubsetOfMixedProjection (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesNodeListPropertiesBeforeUnwindExpansion
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesNodeListPropertiesBeforeUnwindExpansion (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.PublicVisitorKeepsUnwindPropertyReadAheadDisabled
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.PublicVisitorKeepsUnwindPropertyReadAheadDisabled (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReusesSelectedPropertiesAcrossEntityAliasProjections
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReusesSelectedPropertiesAcrossEntityAliasProjections (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RenamedIdentityProjectionPreservesEntityMetadataCache
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RenamedIdentityProjectionPreservesEntityMetadataCache (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesMapProjectionPropertySelectorsWithNestedPropertyExpressions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesMapProjectionPropertySelectorsWithNestedPropertyExpressions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BatchesDynamicListLiteralPropertyExpressions
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BatchesDynamicListLiteralPropertyExpressions (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReportsPrefetchMovesWithoutChangingProjectionValues
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReportsPrefetchMovesWithoutChangingProjectionValues (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowsRepeatedOwnerColumnsWhilePreservingBagRows
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowsRepeatedOwnerColumnsWhilePreservingBagRows (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowedWideColumnsOwnEscapedResultsAndReleaseOnEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowedWideColumnsOwnEscapedResultsAndReleaseOnEarlyStop (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowsMultipleNodeColumnsPreservingOrderMissingAndNull
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowsMultipleNodeColumnsPreservingOrderMissingAndNull (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowsAggregateNodeColumnsPreservingGroupsAndBagMultiplicity
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowsAggregateNodeColumnsPreservingGroupsAndBagMultiplicity (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowedAggregateColumnsIgnoreMissingAndNullValues
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowedAggregateColumnsIgnoreMissingAndNullValues (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopTopologyPreservesStreamingOrderAndBag (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopLimitDoesNotValidateALaterDanglingTarget
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.CollectedTwoHopLimitDoesNotValidateALaterDanglingTarget (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReleasesReferenceTargetScratchAcrossRejectedLabelBatchesAndFailure
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReleasesReferenceTargetScratchAcrossRejectedLabelBatchesAndFailure (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.BorrowedColumnOutputCopiesReportRetainedBytesAndOwnTheirValues
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.BorrowedColumnOutputCopiesReportRetainedBytesAndOwnTheirValues (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.GenericMapPropertyCopiesAreOwnedAndReportRetainedPayloads
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.GenericMapPropertyCopiesAreOwnedAndReportRetainedPayloads (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsPreserveEscapedCachesAndBagOrder
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsPreserveEscapedCachesAndBagOrder (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsKeepNullAndMissingPredicateSemantics
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsKeepNullAndMissingPredicateSemantics (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.JoinFilterPushdownPreservesScalarBagNullsAndEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.JoinFilterPushdownPreservesScalarBagNullsAndEarlyStop (5 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReversedSingleHopAnchorPreservesDirectionalBagsAndEarlyStop (2 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsTargetLabelsBeforeMaterializingTypedEdgePredicates
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsTargetLabelsBeforeMaterializingTypedEdgePredicates (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsMissingTypedTopologyEndpointBeforeReadingEdgeProperties
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsMissingTypedTopologyEndpointBeforeReadingEdgeProperties (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.RejectsDuplicateTopologyBeforeReadingEdgePropertiesAndRetries
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.RejectsDuplicateTopologyBeforeReadingEdgePropertiesAndRetries (0 ms)
+[ RUN      ] LogicalPlanDirectEdgeRuntimeTest.ReferenceTraversalRejectsMissingEndpointBeforePropertyColumns
+[       OK ] LogicalPlanDirectEdgeRuntimeTest.ReferenceTraversalRejectsMissingEndpointBeforePropertyColumns (0 ms)
+[----------] 159 tests from LogicalPlanDirectEdgeRuntimeTest (115 ms total)
+
+[----------] 15 tests from SelectionVectorTest
+[ RUN      ] SelectionVectorTest.BitmapBudgetAdmissionPrecedesAllocationAndRefundsActualCapacity
+[       OK ] SelectionVectorTest.BitmapBudgetAdmissionPrecedesAllocationAndRefundsActualCapacity (0 ms)
+[ RUN      ] SelectionVectorTest.FailedUpstreamAllocationRefundsAdmissionAndCanRetry
+[       OK ] SelectionVectorTest.FailedUpstreamAllocationRefundsAdmissionAndCanRetry (0 ms)
+[ RUN      ] SelectionVectorTest.CopiesPreserveBudgetResourceAndDoNotShareRejectedBits
+[       OK ] SelectionVectorTest.CopiesPreserveBudgetResourceAndDoNotShareRejectedBits (0 ms)
+[ RUN      ] SelectionVectorTest.FailedCopyAssignmentPreservesDestinationAndItsAllocator
+[       OK ] SelectionVectorTest.FailedCopyAssignmentPreservesDestinationAndItsAllocator (0 ms)
+[ RUN      ] SelectionVectorTest.MoveConstructionAndSameResourceAssignmentTransferChargesAndEmptySource
+[       OK ] SelectionVectorTest.MoveConstructionAndSameResourceAssignmentTransferChargesAndEmptySource (0 ms)
+[ RUN      ] SelectionVectorTest.CrossResourceMovePreservesAllocatorsAndRetainedSourceCapacityAccounting
+[       OK ] SelectionVectorTest.CrossResourceMovePreservesAllocatorsAndRetainedSourceCapacityAccounting (0 ms)
+[ RUN      ] SelectionVectorTest.FailedCrossResourceMovePreservesBothSelectionsAndBudgets
+[       OK ] SelectionVectorTest.FailedCrossResourceMovePreservesBothSelectionsAndBudgets (0 ms)
+[ RUN      ] SelectionVectorTest.EmptyBitmapsNeedNoAllocationAndNullResourcesRejectBeforeUse
+[       OK ] SelectionVectorTest.EmptyBitmapsNeedNoAllocationAndNullResourcesRejectBeforeUse (0 ms)
+[ RUN      ] SelectionVectorTest.StartsWithAllRowsSelectedAndSupportsWordBoundaries
+[       OK ] SelectionVectorTest.StartsWithAllRowsSelectedAndSupportsWordBoundaries (0 ms)
+[ RUN      ] SelectionVectorTest.RejectAllClearsEveryPosition
+[       OK ] SelectionVectorTest.RejectAllClearsEveryPosition (0 ms)
+[ RUN      ] SelectionVectorTest.RejectsOutOfRangePositions
+[       OK ] SelectionVectorTest.RejectsOutOfRangePositions (0 ms)
+[ RUN      ] SelectionVectorTest.SupportsEmptyBatch
+[       OK ] SelectionVectorTest.SupportsEmptyBatch (0 ms)
+[ RUN      ] SelectionVectorTest.SupportsComposableSelectionAndSelectedIteration
+[       OK ] SelectionVectorTest.SupportsComposableSelectionAndSelectedIteration (0 ms)
+[ RUN      ] SelectionVectorTest.RejectsMismatchedIntersection
+[       OK ] SelectionVectorTest.RejectsMismatchedIntersection (0 ms)
+[ RUN      ] SelectionVectorTest.StopsSelectedIterationAtTheFirstRejectedContinuation
+[       OK ] SelectionVectorTest.StopsSelectedIterationAtTheFirstRejectedContinuation (0 ms)
+[----------] 15 tests from SelectionVectorTest (0 ms total)
+
+[----------] 11 tests from PrimitiveColumnFilterTest
+[ RUN      ] PrimitiveColumnFilterTest.IntegerComparisonsPreserveFullPrecisionAndNullSemantics
+[       OK ] PrimitiveColumnFilterTest.IntegerComparisonsPreserveFullPrecisionAndNullSemantics (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.FloatingComparisonsPreserveNanInfinityAndSignedZeroOrdering
+[       OK ] PrimitiveColumnFilterTest.FloatingComparisonsPreserveNanInfinityAndSignedZeroOrdering (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.BooleanComparisonsUseContiguousByteValues
+[       OK ] PrimitiveColumnFilterTest.BooleanComparisonsUseContiguousByteValues (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.MultipleConditionsIntersectWithoutReselectingEarlierRejectedRows
+[       OK ] PrimitiveColumnFilterTest.MultipleConditionsIntersectWithoutReselectingEarlierRejectedRows (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.MixedTypesAndCrossTypeConstantsDeclineWithoutChangingSelection
+[       OK ] PrimitiveColumnFilterTest.MixedTypesAndCrossTypeConstantsDeclineWithoutChangingSelection (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.EmptyPredicatesAndAllNullColumnsNeedNoTypedAllocation
+[       OK ] PrimitiveColumnFilterTest.EmptyPredicatesAndAllNullColumnsNeedNoTypedAllocation (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.NonNullConditionWorksWithoutAnExpectedValue
+[       OK ] PrimitiveColumnFilterTest.NonNullConditionWorksWithoutAnExpectedValue (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.SharedBudgetPressureDeclinesAndKeepsOtherOwnersCharged
+[       OK ] PrimitiveColumnFilterTest.SharedBudgetPressureDeclinesAndKeepsOtherOwnersCharged (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.AllocationFailuresPropagateWithoutPublishingSelectionAndRefundCapacity
+[       OK ] PrimitiveColumnFilterTest.AllocationFailuresPropagateWithoutPublishingSelectionAndRefundCapacity (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.CancellationEscapesDuringPreparationAndFilteringAndRefundsOwnedMemory
+[       OK ] PrimitiveColumnFilterTest.CancellationEscapesDuringPreparationAndFilteringAndRefundsOwnedMemory (0 ms)
+[ RUN      ] PrimitiveColumnFilterTest.InvalidDescriptorsAndShapeFailBeforeChangingSelection
+[       OK ] PrimitiveColumnFilterTest.InvalidDescriptorsAndShapeFailBeforeChangingSelection (0 ms)
+[----------] 11 tests from PrimitiveColumnFilterTest (0 ms total)
+
+[----------] 11 tests from BoundNodeColumnPredicatesTest
+[ RUN      ] BoundNodeColumnPredicatesTest.BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys
+[       OK ] BoundNodeColumnPredicatesTest.BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.UnboundedRangesStillRejectMissingAndNullValues
+[       OK ] BoundNodeColumnPredicatesTest.UnboundedRangesStillRejectMissingAndNullValues (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.MixedNumericTypesUseExistingVariantOrderingWithoutCoercion
+[       OK ] BoundNodeColumnPredicatesTest.MixedNumericTypesUseExistingVariantOrderingWithoutCoercion (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.InvalidBindingsAndAllocationFailureRefundAllMetadata
+[       OK ] BoundNodeColumnPredicatesTest.InvalidBindingsAndAllocationFailureRefundAllMetadata (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected
+[       OK ] BoundNodeColumnPredicatesTest.CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults
+[       OK ] BoundNodeColumnPredicatesTest.RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution
+[       OK ] BoundNodeColumnPredicatesTest.RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity
+[       OK ] BoundNodeColumnPredicatesTest.ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair
+[       OK ] BoundNodeColumnPredicatesTest.MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.ReusedPlanHandlesNullParametersAndChangingPropertyTypes
+[       OK ] BoundNodeColumnPredicatesTest.ReusedPlanHandlesNullParametersAndChangingPropertyTypes (0 ms)
+[ RUN      ] BoundNodeColumnPredicatesTest.RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget
+[       OK ] BoundNodeColumnPredicatesTest.RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget (5 ms)
+[----------] 11 tests from BoundNodeColumnPredicatesTest (6 ms total)
+
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows
+[       OK ] LogicalPlanNodeColumnAggregateTest.FiltersAndAggregatesOneColumnWithoutMaterializingInputRows (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath
+[       OK ] LogicalPlanNodeColumnAggregateTest.MixedNumericNullAndMissingInputsMatchTheScalarPath (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyAndNullParameterInputsStillEmitOneAggregateRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctAggregatesKeepTheExistingConsumer (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry
+[       OK ] LogicalPlanNodeColumnAggregateTest.IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch
+[       OK ] LogicalPlanNodeColumnAggregateTest.NumericTypeInferenceIsLocalToEachSourceBatch (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery
+[       OK ] LogicalPlanNodeColumnAggregateTest.WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults
+[       OK ] LogicalPlanNodeColumnAggregateTest.ReplacingAWideExtremumWithAShortValuePreservesOwningResults (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow
+[       OK ] LogicalPlanNodeColumnAggregateTest.EmptyNullAndMissingExtremaEmitOneNullResultRow (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates
+[       OK ] LogicalPlanNodeColumnAggregateTest.OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates (12 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure
+[       OK ] LogicalPlanNodeColumnAggregateTest.AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder
+[       OK ] LogicalPlanNodeColumnAggregateTest.CollectionsAndStatisticsConsumeColumnsInPhysicalOrder (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics
+[       OK ] LogicalPlanNodeColumnAggregateTest.PercentileColumnsUseValidatedParametersAndScalarSemantics (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution
+[       OK ] LogicalPlanNodeColumnAggregateTest.ExtendedAggregateFailuresPermitFreshExecution (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn
+[       OK ] LogicalPlanNodeColumnAggregateTest.StandardDeviationUsesOneSharedTypedColumn (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches
+[       OK ] LogicalPlanNodeColumnAggregateTest.DeviationStateSpansIntegerAndDoubleSourceBatches (1 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent (0 ms)
+[ RUN      ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure
+[       OK ] LogicalPlanNodeColumnAggregateTest.NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure (0 ms)
+[----------] 26 tests from LogicalPlanNodeColumnAggregateTest (21 ms total)
+
+[----------] Global test environment tear-down
+[==========] 222 tests from 5 test suites ran. (143 ms total)
+[  PASSED  ] 222 tests.
