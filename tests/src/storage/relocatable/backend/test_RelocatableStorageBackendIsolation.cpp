@@ -1,3 +1,6 @@
+#include <barrier>
+#include <thread>
+#include <atomic>
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
 using namespace relocatable_storage_backend_test;
@@ -135,4 +138,25 @@ TEST_F(RelocatableStorageBackendTest, IsolationDisjointWritesOnSharedPropertyPag
 	EXPECT_EQ(durable->readNodeProperty(ids[0], "value"), PropertyValue(11));
 	EXPECT_EQ(durable->readNodeProperty(ids[1], "value"), PropertyValue(22));
 	durable.reset(); reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, IsolationSimultaneousCommitHasOneWinnerAndExplicitFreshRetry) {
+	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(options);backend.open();
+	const auto ids=backend.createLogicalNodes({{{"Race"},{{"value",PropertyValue(0)}}},{{"Race"},{{"value",PropertyValue(0)}}}});
+	auto reader=backend.beginLogicalGraphTransaction(true);
+	auto first=backend.beginLogicalGraphTransaction(false),second=backend.beginLogicalGraphTransaction(false);
+	(void)first->stageMutationBatch(isolationSet(ids[0],"value",PropertyValue(11)));
+	(void)second->stageMutationBatch(isolationSet(ids[1],"value",PropertyValue(22)));
+	std::barrier start(3);std::atomic<int> committed{0},conflicted{0},unexpected{0};
+	const auto commit=[&](auto *transaction){start.arrive_and_wait();try{(void)transaction->commit();++committed;}catch(const LogicalGraphMutationConflict &){++conflicted;}catch(...){++unexpected;}};
+	std::thread a(commit,first.get()),b(commit,second.get());start.arrive_and_wait();a.join();b.join();
+	EXPECT_EQ(committed,1);EXPECT_EQ(conflicted,1);EXPECT_EQ(unexpected,0);
+	for(auto id:ids)EXPECT_EQ(reader->readSnapshot().readNodeProperty(id,"value"),PropertyValue(0));
+	const bool firstLost=first->state()==LogicalGraphTransactionState::LGTTS_CONFLICTED;
+	auto &loser=firstLost?first:second;EXPECT_THROW(static_cast<void>(loser->commit()),std::logic_error);
+	auto retry=backend.beginLogicalGraphTransaction(false);
+	(void)retry->stageMutationBatch(isolationSet(ids[firstLost?0:1],"value",PropertyValue(firstLost?11:22)));(void)retry->commit();
+	auto fresh=backend.openLogicalGraphReadSnapshot();EXPECT_EQ(fresh->readNodeProperty(ids[0],"value"),PropertyValue(11));EXPECT_EQ(fresh->readNodeProperty(ids[1],"value"),PropertyValue(22));
+	fresh.reset();(void)reader->commit();EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
 }
