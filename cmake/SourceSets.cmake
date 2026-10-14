@@ -400,6 +400,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/apps/test_CompareBenchmarkObservation.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundSlotRegistry.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundPropertyBindings.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundColumnLayout.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundProjectionReferences.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrimitiveColumnFilter.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_BoundNodeColumnPredicates.cpp"

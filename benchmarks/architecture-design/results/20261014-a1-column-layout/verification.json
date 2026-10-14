@@ -1,0 +1,20 @@
+{
+  "baseline": "884ffcf2c2512176c93f87339432ae2d507fc752",
+  "status": "verified_partial_S2",
+  "accepted": 5,
+  "total": 34,
+  "percent": 14.7,
+  "tests": {
+    "component": 75,
+    "runtime": 222,
+    "overlap": 26,
+    "distinct": 271,
+    "new": 7,
+    "all_pass": true
+  },
+  "full_suite": false,
+  "benchmark": false,
+  "kuzu_comparison": false,
+  "all_operator_migration": false,
+  "commit_push": "not_performed_no_acceptance_increase"
+}
