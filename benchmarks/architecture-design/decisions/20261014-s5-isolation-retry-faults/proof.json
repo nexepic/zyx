@@ -1,0 +1,42 @@
+{
+  "item": "S5.2",
+  "status": "accepted",
+  "selected_matrix_tests": 208,
+  "full_suite": false,
+  "performance_timing": false,
+  "format_change": false,
+  "driver_abi_change": false,
+  "local_evidence": "benchmarks/architecture-design/results/20261014-s4-s5-validation",
+  "sha256": {
+    "zyx-s4-selected-tests.log": "af61f52ed980e40d6122756faccdd76ad3a4c44aa5270578d986171998cced00",
+    "zyx-s4-selected.xml": "8dc6463cf0fe3409cbd83718542ee7d2c3ecb2ee0e442b8e75362f3f48d85c61",
+    "zyx-s4-selected-link-command.txt": "235f0af9b0024b44d36e58840b4bd205aa66d48c0a72eecaccbaef72127c5a84",
+    "zyx-s5-isolation-races.log": "36af94da01bb7903dfa4801fcd025ba339346b1ba0f5a7a0918941a6265be1f8",
+    "native-registration.json": "862ad6d81992ca1ce8493092d7e90757d8aefa96355f66246932047a8a136873",
+    "native-report.json": "105525809ffa4dd9f9425c7016d88f8b0c0a74a869524f276501319b888fd9e3",
+    "native-trace.json": "82ec543850d7406fbc7caa8fc5738d4ef742723b6386231c566355b2b382296e",
+    "src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp": "e1c542802c51796bbca6cfdc2ad2a986ebf30b5493a3e973cefe235b5abd159d",
+    "tests/src/storage/relocatable/backend/test_RelocatableStorageBackendIsolation.cpp": "aee8f48a32cf2c4d3068c869dad3a935a41f54a6f590388aa37a12f4a3e00d64",
+    "tests/src/storage/relocatable/backend/test_RelocatableGraphTraversalLifecycle.cpp": "1ecc9dd4d293650295c626a4f26efe4dcdafdfd36aae4b02f4c9dffb50e25745"
+  },
+  "simultaneous_commit_histories": 20,
+  "native_correctness_operations": 916,
+  "native_workload_families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "baseline_accepted": 11,
+  "final_accepted": 21,
+  "milestone_completed": 10
+}

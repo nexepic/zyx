@@ -1,0 +1,7 @@
+# S5.2 acceptance
+
+Accept isolation/retry/fault verification for the currently promised pinned-snapshot and conservative optimistic-fence contract. A new simultaneous native two-thread commit history starts two transactions at one base, stages disjoint property writes and races commits behind a barrier: exactly one commits, one conflicts, old readers retain both original values, the conflicted transaction cannot be recommitted, and a fresh explicit retry preserves both updates. Twenty fresh histories pass; unexpected exceptions are counted separately and must be zero.
+
+The final 208-test matrix also includes the five isolation histories (write skew, phantom/range, endpoint deletion, unique constraint, actual shared property page), transaction validation/publication fault modules, old pins, rollback, indeterminate sync/reopen and explicit retry. This does not accept finer-grained validation or automatic latest-page rebase (S5.1), general serializable isolation, independent writable owners/processes or automatic callback replay. Resource/spill and steady-state acceptance S5.3–S5.5 remain pending.
+
+Fresh current-source native correctness smoke passes 916 operations across all 13 families without performance timing. The requested ten-item milestone is complete: S2.2, S2.3, S2.4, S3.2, S3.3, S3.4, S4.1, S4.2, S4.3 and S5.2. The authoritative ledger advances from 11/34 to 21/34 (61.8%); the historical optimization table is unchanged.
