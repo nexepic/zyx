@@ -1,0 +1,16 @@
+{
+  "item": "S4.3",
+  "status": "accepted",
+  "selected_matrix_tests": 208,
+  "full_suite": false,
+  "performance_timing": false,
+  "format_change": false,
+  "driver_abi_change": false,
+  "local_evidence": "benchmarks/architecture-design/results/20261014-s4-s5-validation",
+  "sha256": {
+    "zyx-s4-selected-tests.log": "af61f52ed980e40d6122756faccdd76ad3a4c44aa5270578d986171998cced00",
+    "zyx-s4-selected.xml": "8dc6463cf0fe3409cbd83718542ee7d2c3ecb2ee0e442b8e75362f3f48d85c61",
+    "zyx-s4-selected-link-command.txt": "235f0af9b0024b44d36e58840b4bd205aa66d48c0a72eecaccbaef72127c5a84",
+    "zyx-s5-isolation-races.log": "36af94da01bb7903dfa4801fcd025ba339346b1ba0f5a7a0918941a6265be1f8"
+  }
+}
