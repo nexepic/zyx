@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <optional>
 #include "query/execution/FixedWidthBatch.hpp"
 
 using graph::query::execution::MaterializedByteBudget;
@@ -135,5 +136,118 @@ TEST(FixedWidthBatchTest, UpstreamFailureInLaterColumnRollsBackAndSupportsRetry)
 	EXPECT_EQ(batch.column<0>().value(0), 2);
 	EXPECT_FALSE(batch.column<1>().value(0));
 	batch.release();
+	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(FixedWidthBatchTest, RowDescriptorsPreserveOrderedTypedValuesAndNullMissingStates) {
+	MaterializedByteBudget budget(1024U);
+	FixedWidthBatch<int64_t, double, bool> batch(2U, budget);
+	batch.append(TypedCell<int64_t>::withValue(7), TypedCell<double>::null(), TypedCell<bool>::missing());
+	batch.append(TypedCell<int64_t>::withValue(7), TypedCell<double>::withValue(2.5), TypedCell<bool>::withValue(true));
+	const auto first = batch.rowId(0U), second = batch.rowId(1U);
+	EXPECT_EQ(first.owner, second.owner);
+	EXPECT_EQ(first.incarnation, second.incarnation);
+	EXPECT_NE(first.index, second.index); // Duplicate values remain separate logical rows.
+	EXPECT_EQ(batch.cell<0>(first).value(), 7);
+	EXPECT_EQ(batch.cell<1>(first).state(), ColumnCellState::CCS_NULL);
+	EXPECT_EQ(batch.cell<2>(first).state(), ColumnCellState::CCS_MISSING);
+	EXPECT_EQ(batch.cell<1>(second).value(), 2.5);
+	EXPECT_TRUE(batch.cell<2>(second).value());
+	EXPECT_THROW(static_cast<void>(batch.cell<1>(first).value()), std::logic_error);
+	EXPECT_THROW(static_cast<void>(batch.rowId(2U)), std::out_of_range);
+	auto outOfRange = first;
+	outOfRange.index = 2U;
+	EXPECT_THROW(static_cast<void>(batch.cell<0>(outOfRange)), std::out_of_range);
+}
+
+TEST(FixedWidthBatchTest, SuccessfulAppendInvalidatesPriorDescriptorsWithoutChangingTheirValues) {
+	MaterializedByteBudget budget(1024U);
+	FixedWidthBatch<int64_t> batch(2U, budget);
+	batch.append(TypedCell<int64_t>::withValue(4));
+	const auto old = batch.rowId(0U);
+	batch.append(TypedCell<int64_t>::withValue(9));
+	EXPECT_THROW(static_cast<void>(batch.cell<0>(old)), std::invalid_argument);
+	EXPECT_EQ(batch.cell<0>(batch.rowId(0U)).value(), 4);
+	EXPECT_EQ(batch.cell<0>(batch.rowId(1U)).value(), 9);
+	const auto full = batch.rowId(0U);
+	EXPECT_THROW(batch.append(TypedCell<int64_t>::withValue(11)), std::runtime_error);
+	EXPECT_EQ(batch.cell<0>(full).value(), 4); // Row-limit rejection did not touch buffers.
+}
+
+TEST(FixedWidthBatchTest, FailedLaterColumnGrowthInvalidatesHandlesButKeepsPublishedRows) {
+	MaterializedByteBudget budget(20U);
+	FixedWidthBatch<bool, int64_t> batch(3U, budget);
+	batch.append(TypedCell<bool>::null(), TypedCell<int64_t>::withValue(5));
+	const auto old = batch.rowId(0U);
+	EXPECT_THROW(batch.append(TypedCell<bool>::withValue(true), TypedCell<int64_t>::withValue(6)), std::runtime_error);
+	EXPECT_EQ(batch.size(), 1U);
+	EXPECT_THROW(static_cast<void>(batch.cell<1>(old)), std::invalid_argument);
+	EXPECT_EQ(batch.cell<0>(batch.rowId(0U)).state(), ColumnCellState::CCS_NULL);
+	EXPECT_EQ(batch.cell<1>(batch.rowId(0U)).value(), 5);
+}
+
+TEST(FixedWidthBatchTest, ClearAndReleaseNeverRevalidateOldDescriptorsWhenIndicesAreReused) {
+	MaterializedByteBudget budget(1024U);
+	FixedWidthBatch<int64_t> batch(1U, budget);
+	batch.append(TypedCell<int64_t>::withValue(1));
+	const auto first = batch.rowId(0U);
+	const auto charged = budget.used();
+	batch.clear();
+	EXPECT_EQ(budget.used(), charged);
+	batch.append(TypedCell<int64_t>::withValue(2));
+	const auto second = batch.rowId(0U);
+	EXPECT_EQ(first.owner, second.owner);
+	EXPECT_THROW(static_cast<void>(batch.cell<0>(first)), std::invalid_argument);
+	batch.release();
+	EXPECT_EQ(budget.used(), 0U);
+	batch.append(TypedCell<int64_t>::withValue(3));
+	EXPECT_THROW(static_cast<void>(batch.cell<0>(first)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(batch.cell<0>(second)), std::invalid_argument);
+	EXPECT_EQ(batch.cell<0>(batch.rowId(0U)).value(), 3);
+}
+
+TEST(FixedWidthBatchTest, ForeignOwnersIncludingDifferentColumnTypesRejectDescriptors) {
+	MaterializedByteBudget budget(1024U);
+	FixedWidthBatch<int64_t> first(1U, budget), second(1U, budget);
+	FixedWidthBatch<bool> third(1U, budget);
+	first.append(TypedCell<int64_t>::withValue(1));
+	second.append(TypedCell<int64_t>::withValue(2));
+	third.append(TypedCell<bool>::withValue(true));
+	const auto row = first.rowId(0U);
+	EXPECT_NE(row.owner, second.rowId(0U).owner);
+	EXPECT_NE(row.owner, third.rowId(0U).owner);
+	EXPECT_THROW(static_cast<void>(second.cell<0>(row)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(third.cell<0>(row)), std::invalid_argument);
+	auto invalid = row;
+	invalid.owner = 0U;
+	EXPECT_THROW(static_cast<void>(first.cell<0>(invalid)), std::invalid_argument);
+	invalid = row;
+	invalid.incarnation = 0U;
+	EXPECT_THROW(static_cast<void>(first.cell<0>(invalid)), std::invalid_argument);
+}
+
+TEST(FixedWidthBatchTest, OwnersReconstructedAtTheSameAddressRejectOldDescriptors) {
+	MaterializedByteBudget budget(1024U);
+	std::optional<FixedWidthBatch<int64_t>> owner;
+	owner.emplace(1U, budget);
+	owner->append(TypedCell<int64_t>::withValue(1));
+	const auto old = owner->rowId(0U);
+	const void *address = &*owner;
+	owner.reset();
+	EXPECT_EQ(budget.used(), 0U);
+	owner.emplace(1U, budget);
+	EXPECT_EQ(address, &*owner);
+	owner->append(TypedCell<int64_t>::withValue(2));
+	EXPECT_THROW(static_cast<void>(owner->cell<0>(old)), std::invalid_argument);
+	EXPECT_EQ(owner->cell<0>(owner->rowId(0U)).value(), 2);
+}
+
+TEST(FixedWidthBatchTest, PhysicalRowsRequirePositiveUint32LimitsWithoutAllocating) {
+	MaterializedByteBudget budget(1024U);
+	EXPECT_THROW((FixedWidthBatch<int64_t>(0U, budget)), std::invalid_argument);
+	if constexpr (sizeof(size_t) > sizeof(uint32_t)) {
+		const size_t tooMany = static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) + 1U;
+		EXPECT_THROW((FixedWidthBatch<int64_t>(tooMany, budget)), std::invalid_argument);
+	}
 	EXPECT_EQ(budget.used(), 0U);
 }

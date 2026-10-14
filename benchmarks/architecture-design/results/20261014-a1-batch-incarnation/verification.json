@@ -1,0 +1,23 @@
+{
+  "baseline": "884ffcf2c2512176c93f87339432ae2d507fc752",
+  "status": "verified_partial_S2",
+  "accepted": 5,
+  "total": 34,
+  "percent": 14.7,
+  "tests": {
+    "numeric_and_fixed": 68,
+    "runtime": 222,
+    "overlap": 26,
+    "distinct": 264,
+    "new": 10,
+    "all_pass": true
+  },
+  "platform": "Linux C++20",
+  "full_suite": false,
+  "benchmark": false,
+  "kuzu_comparison": false,
+  "complete_batch_envelope": false,
+  "all_operator_migration": false,
+  "counter_exhaustion_stress_test": false,
+  "commit_push": "not_performed_no_acceptance_increase"
+}
