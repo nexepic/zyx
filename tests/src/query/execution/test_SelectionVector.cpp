@@ -4,12 +4,167 @@
  */
 
 #include <cstddef>
+#include <memory_resource>
 #include <vector>
 #include <gtest/gtest.h>
 
 #include "graph/query/execution/SelectionVector.hpp"
+#include "query/execution/BudgetMemoryResource.hpp"
 
 using graph::query::execution::SelectionVector;
+using graph::query::execution::MaterializedByteBudget;
+using graph::query::execution::MaterializedByteLimitExceeded;
+using graph::query::execution::MaterializedByteReservation;
+using graph::query::execution::detail::BudgetMemoryResource;
+
+namespace {
+class BitmapAllocator final : public std::pmr::memory_resource {
+public:
+	size_t calls = 0U;
+	size_t live_bytes = 0U;
+	bool fail = false;
+private:
+	void *do_allocate(size_t bytes, size_t alignment) override {
+		++calls;
+		if (fail) throw std::bad_alloc();
+		void *value = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+		live_bytes += bytes;
+		return value;
+	}
+	void do_deallocate(void *value, size_t bytes, size_t alignment) override {
+		std::pmr::new_delete_resource()->deallocate(value, bytes, alignment);
+		live_bytes -= bytes;
+	}
+	bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST(SelectionVectorTest, BitmapBudgetAdmissionPrecedesAllocationAndRefundsActualCapacity) {
+	MaterializedByteBudget budget(24U);
+	MaterializedByteReservation other(&budget);
+	other.set(8U);
+	BitmapAllocator allocator;
+	BudgetMemoryResource memory(budget, &allocator);
+	EXPECT_THROW((SelectionVector(129U, &memory)), MaterializedByteLimitExceeded);
+	EXPECT_EQ(allocator.calls, 0U);
+	EXPECT_EQ(budget.used(), 8U);
+	{
+		SelectionVector selection(65U, &memory);
+		EXPECT_EQ(budget.used(), 8U + selection.storageBytes());
+		EXPECT_EQ(allocator.live_bytes, selection.storageBytes());
+		selection.rejectAll();
+		EXPECT_EQ(budget.used(), 24U); // Filtering does not refund retained storage.
+	}
+	EXPECT_EQ(budget.used(), 8U);
+	EXPECT_EQ(allocator.live_bytes, 0U);
+}
+
+TEST(SelectionVectorTest, FailedUpstreamAllocationRefundsAdmissionAndCanRetry) {
+	MaterializedByteBudget budget(64U);
+	BitmapAllocator allocator;
+	BudgetMemoryResource memory(budget, &allocator);
+	allocator.fail = true;
+	EXPECT_THROW((SelectionVector(65U, &memory)), std::bad_alloc);
+	EXPECT_EQ(budget.used(), 0U);
+	allocator.fail = false;
+	{ SelectionVector retry(65U, &memory); EXPECT_EQ(retry.selectedCount(), 65U); }
+	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(SelectionVectorTest, CopiesPreserveBudgetResourceAndDoNotShareRejectedBits) {
+	MaterializedByteBudget budget(64U);
+	BudgetMemoryResource memory(budget);
+	{
+		SelectionVector original(65U, &memory);
+		original.reject(64U);
+		SelectionVector copied(original);
+		EXPECT_EQ(budget.used(), original.storageBytes() + copied.storageBytes());
+		original.reject(0U);
+		EXPECT_TRUE(copied.includes(0U));
+		copied.select(64U);
+		EXPECT_FALSE(original.includes(64U));
+		EXPECT_EQ(copied.selectedCount(), 65U);
+	}
+	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(SelectionVectorTest, FailedCopyAssignmentPreservesDestinationAndItsAllocator) {
+	MaterializedByteBudget sourceBudget(64U), targetBudget(16U);
+	BudgetMemoryResource sourceMemory(sourceBudget), targetMemory(targetBudget);
+	SelectionVector source(130U, &sourceMemory), target(65U, &targetMemory);
+	target.reject(0U);
+	EXPECT_THROW(target = source, MaterializedByteLimitExceeded);
+	EXPECT_EQ(target.size(), 65U);
+	EXPECT_EQ(target.selectedCount(), 64U);
+	EXPECT_FALSE(target.includes(0U));
+	EXPECT_EQ(targetBudget.used(), target.storageBytes());
+	EXPECT_EQ(source.selectedCount(), 130U);
+}
+
+TEST(SelectionVectorTest, MoveConstructionAndSameResourceAssignmentTransferChargesAndEmptySource) {
+	MaterializedByteBudget budget(64U);
+	BitmapAllocator allocator;
+	BudgetMemoryResource memory(budget, &allocator);
+	{
+		SelectionVector source(65U, &memory);
+		source.reject(64U);
+		const auto calls = allocator.calls;
+		SelectionVector moved(std::move(source));
+		EXPECT_EQ(allocator.calls, calls);
+		EXPECT_TRUE(source.empty());
+		EXPECT_EQ(source.selectedCount(), 0U);
+		EXPECT_TRUE(source.noneSelected());
+		SelectionVector target(1U, &memory);
+		target = std::move(moved);
+		EXPECT_EQ(target.size(), 65U);
+		EXPECT_EQ(target.selectedCount(), 64U);
+		EXPECT_TRUE(moved.empty());
+		EXPECT_EQ(budget.used(), target.storageBytes());
+	}
+	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(SelectionVectorTest, CrossResourceMovePreservesAllocatorsAndRetainedSourceCapacityAccounting) {
+	MaterializedByteBudget sourceBudget(64U), targetBudget(64U);
+	BudgetMemoryResource sourceMemory(sourceBudget), targetMemory(targetBudget);
+	{
+		SelectionVector source(65U, &sourceMemory), target(1U, &targetMemory);
+		source.reject(64U);
+		target = std::move(source);
+		EXPECT_EQ(target.size(), 65U);
+		EXPECT_FALSE(target.includes(64U));
+		EXPECT_TRUE(source.empty());
+		EXPECT_TRUE(source.noneSelected());
+		EXPECT_EQ(sourceBudget.used(), source.storageBytes());
+		EXPECT_EQ(targetBudget.used(), target.storageBytes());
+	}
+	EXPECT_EQ(sourceBudget.used(), 0U);
+	EXPECT_EQ(targetBudget.used(), 0U);
+}
+
+TEST(SelectionVectorTest, FailedCrossResourceMovePreservesBothSelectionsAndBudgets) {
+	MaterializedByteBudget sourceBudget(64U), targetBudget(8U);
+	BudgetMemoryResource sourceMemory(sourceBudget), targetMemory(targetBudget);
+	SelectionVector source(65U, &sourceMemory), target(1U, &targetMemory);
+	source.reject(64U);
+	EXPECT_THROW(target = std::move(source), MaterializedByteLimitExceeded);
+	EXPECT_EQ(source.size(), 65U);
+	EXPECT_EQ(source.selectedCount(), 64U);
+	EXPECT_EQ(target.size(), 1U);
+	EXPECT_EQ(target.selectedCount(), 1U);
+	EXPECT_EQ(sourceBudget.used(), source.storageBytes());
+	EXPECT_EQ(targetBudget.used(), target.storageBytes());
+}
+
+TEST(SelectionVectorTest, EmptyBitmapsNeedNoAllocationAndNullResourcesRejectBeforeUse) {
+	MaterializedByteBudget budget(1U);
+	BitmapAllocator allocator;
+	BudgetMemoryResource memory(budget, &allocator);
+	SelectionVector empty(0U, &memory);
+	EXPECT_EQ(allocator.calls, 0U);
+	EXPECT_EQ(budget.used(), 0U);
+	EXPECT_THROW((SelectionVector(1U, nullptr)), std::invalid_argument);
+}
 
 TEST(SelectionVectorTest, StartsWithAllRowsSelectedAndSupportsWordBoundaries) {
 	SelectionVector selection(65U);
