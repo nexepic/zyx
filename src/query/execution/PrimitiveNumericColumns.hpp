@@ -4,6 +4,7 @@
 #include <limits>
 #include <span>
 #include <vector>
+#include <variant>
 
 #include "graph/query/execution/LogicalAggregateAccumulator.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
@@ -33,7 +34,7 @@ class PrimitiveNumericColumns final {
 public:
 	explicit PrimitiveNumericColumns(MaterializedByteBudget &budget,
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
-		: memory_(budget, upstream), columns_(&memory_) {
+		: memory_(budget, upstream), columns_(&memory_), budget_(&budget) {
 		if (!upstream) throw std::invalid_argument("numeric columns require an allocator");
 	}
 	PrimitiveNumericColumns(const PrimitiveNumericColumns &) = delete;
@@ -114,6 +115,27 @@ public:
 	}
 
 	[[nodiscard]] NumericColumnKind kind(size_t column) const { return columns_.at(column).kind; }
+	[[nodiscard]] size_t size() const noexcept { return rows_; }
+	[[nodiscard]] size_t columnCount() const noexcept { return columns_.size(); }
+	[[nodiscard]] const MaterializedByteBudget *budgetDomain() const noexcept { return budget_; }
+	[[nodiscard]] BatchRowId borrowVersion() const {
+		if (!prepared_) throw std::logic_error("numeric batch has no published rows");
+		return identity_.row(0U);
+	}
+	void validateBorrowVersion(BatchRowId version) const {
+		identity_.validate(version);
+		if (!prepared_) throw std::logic_error("numeric batch has no published rows");
+	}
+	using BorrowedCell = std::variant<std::monostate, int64_t, double, const PropertyValue *>;
+	[[nodiscard]] BorrowedCell cell(size_t column, BatchRowId descriptor) const {
+		validateBorrowVersion(descriptor);
+		if (descriptor.index >= rows_) throw std::out_of_range("numeric cell exceeds its published rows");
+		const auto &values = columns_.at(column); const size_t row = descriptor.index;
+		if (values.source->at(row).getType() == PropertyType::NULL_TYPE) return std::monostate{};
+		if (values.kind == NumericColumnKind::NCK_INTEGER) return values.integers.at(row);
+		if (values.kind == NumericColumnKind::NCK_DOUBLE) return values.doubles.at(row);
+		return &values.source->at(row); // Declared owning-PropertyValue source adapter.
+	}
 	void release() noexcept {
 		identity_.invalidate();
 		prepared_ = false;
@@ -184,6 +206,7 @@ private:
 	bool prepared_ = false;
 	BudgetMemoryResource memory_;
 	std::pmr::vector<Column> columns_;
+	const MaterializedByteBudget *budget_;
 };
 
 } // namespace graph::query::execution::detail

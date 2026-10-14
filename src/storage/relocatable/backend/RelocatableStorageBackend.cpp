@@ -2800,6 +2800,21 @@ namespace graph::storage {
 		return fence;
 	}
 
+	LogicalGraphSchemaIdentity RelocatableStorageBackend::makeLogicalGraphSchemaIdentity(const Superblock &superblock) {
+		const auto fence = makeLogicalGraphMutationFence(superblock);
+		const auto &catalog = superblock.index_root_directory_root;
+		const auto &pages = superblock.page_directory_root;
+		return LogicalGraphSchemaIdentity{fence.backend_token, fence.format_token,
+			{catalog.physical_slot.value(), static_cast<uint64_t>(catalog.frame_index), catalog.generation.value(),
+			 pages.physical_slot.value(), static_cast<uint64_t>(pages.frame_index), pages.generation.value()}, 0U, 0U};
+	}
+
+	std::optional<LogicalGraphSchemaIdentity> RelocatableStorageBackend::logicalPlanCacheIdentity() const {
+		requireOpen();
+		const auto pin = metadata_->openSnapshot();
+		return makeLogicalGraphSchemaIdentity(pin.superblock());
+	}
+
 	void RelocatableStorageBackend::requireNoIndeterminateWrite() const {
 		if (requires_reopen_after_indeterminate_write_.load(std::memory_order_acquire)) {
 			throw std::logic_error("relocatable write outcome is indeterminate; close and reopen the backend before "

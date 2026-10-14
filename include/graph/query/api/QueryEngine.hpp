@@ -139,6 +139,8 @@ namespace graph::query {
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
 		concurrent::ThreadPool *threadPool_ = nullptr;
 		cache::PlanCache planCache_;
+		std::optional<storage::LogicalGraphSchemaIdentity> planCacheIdentity_;
+		bool planCacheIdentityInitialized_ = false;
 
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);
 

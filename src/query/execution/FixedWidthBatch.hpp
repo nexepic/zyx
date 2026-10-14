@@ -68,7 +68,7 @@ class FixedWidthBatch final {
 public:
 	FixedWidthBatch(size_t maximumRows, MaterializedByteBudget &budget,
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
-		: maximum_rows_(checkedMaximumRows(maximumRows)), columns_(maximumRows, budget, upstream) {}
+		: maximum_rows_(checkedMaximumRows(maximumRows)), columns_(maximumRows, budget, upstream), budget_(&budget) {}
 	FixedWidthBatch(const FixedWidthBatch &) = delete;
 	FixedWidthBatch &operator=(const FixedWidthBatch &) = delete;
 	FixedWidthBatch(FixedWidthBatch &&) = delete;
@@ -76,6 +76,9 @@ public:
 
 	[[nodiscard]] size_t size() const noexcept { return rows_; }
 	[[nodiscard]] size_t maximumRows() const noexcept { return maximum_rows_; }
+	[[nodiscard]] const MaterializedByteBudget *budgetDomain() const noexcept { return budget_; }
+	[[nodiscard]] BatchRowId borrowVersion() const { return identity_.row(0U); }
+	void validateBorrowVersion(BatchRowId version) const { identity_.validate(version); }
 	[[nodiscard]] static constexpr size_t columnCount() noexcept { return sizeof...(Ts); }
 	[[nodiscard]] BatchRowId rowId(size_t index) const {
 		if (index >= rows_) throw std::out_of_range("batch row descriptor is outside its published rows");
@@ -138,6 +141,7 @@ private:
 	size_t rows_ = 0U;
 	BatchIdentity identity_;
 	FixedWidthColumns<Ts...> columns_;
+	const MaterializedByteBudget *budget_;
 };
 
 } // namespace graph::query::execution::detail
