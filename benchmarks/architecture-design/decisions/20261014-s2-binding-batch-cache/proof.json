@@ -1,0 +1,71 @@
+{
+  "status": "accepted",
+  "item": "S2.1",
+  "base_commit": "5698ca9123d5af2641b0790050a8473f87f70951",
+  "selected_tests": {
+    "bound_expression": 10,
+    "batch_envelope": 62,
+    "runtime": 222,
+    "native_integration": 4,
+    "cache_boundary": 60,
+    "total": 358
+  },
+  "test_logs": {
+    "bound-expression": "202bb27668e6682adbfbc2be4b4e6a3104c82f5dba2cbdfb91f15f08bc60ca8e",
+    "batch-envelope": "d3e7e7bf8c7b03e56976ab5792329ffb321c93a4ad1c3be9e705f8147f2f006a",
+    "column-layout-runtime": "4f2fa65f227ffea078e9bbf81b30b747ec5994e10dd7d552df234bec0b03db87",
+    "bound-native": "3a18e024d53c568b50c0b3497194f9a7fc6ea662c49ee1376338ab68da23a4fa",
+    "cache-boundary": "6076fadbafb7e2c86f19d1c895373280f3d16659182d4ec5da395b7166c3f5d2"
+  },
+  "native": {
+    "operations": 916,
+    "families": [
+      "point",
+      "scan",
+      "traversal",
+      "aggregate",
+      "sort",
+      "parameters",
+      "dynamic",
+      "wide_large",
+      "write",
+      "mixed",
+      "snapshot",
+      "maintenance",
+      "budget"
+    ],
+    "full_results_checked": true,
+    "performance_timing": false,
+    "worker_sha256": "7fd5a13613bf962b1af4adab02d7e4e610f21b8709f54d4770f28d5c9b081926",
+    "report_sha256": "d1328541b520fc8e56ddb98969ab9d969b899e797374239ffa2fd5440bfd9fc7",
+    "trace_sha256": "9e5b42164b17e7b167fa535ba9e19d97048c031ee5d2a7afde87e6644d7a8548"
+  },
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "247d6fab7016379d4bd01fdb82f3e2254ef5fc3a4ca32b4783892adb68232093",
+    "include/graph/query/api/QueryEngine.hpp": "6524aee058bf736c16ae5e9cb65df3f8c3162cd3b7a4ec4aa83f96984628836a",
+    "include/graph/storage/LogicalGraphRead.hpp": "8c638469e81edef96dd92c97278abc7eda5961367d3a710ff08a2ea49384623c",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "e9d2b0be7efd5e31681a23a8cd0e95eed89c2305759b78affd2814f80314db0d",
+    "src/query/api/QueryEngine.cpp": "43233f9a5eb4315dfec6ef274756df3c8e51ff6a66829afa7cba1fc825365d9e",
+    "src/query/execution/BatchEnvelope.hpp": "82e769dc9bc6c918ebc9ba8ec97253afab6b41064760a4aedda0d208d29ec06d",
+    "src/query/execution/BoundColumnLayout.hpp": "b08f74b871ea48a2d4fb6141124d55e2d84e78e497a36b121f4dadb1144d90f7",
+    "src/query/execution/BoundExecutionProgram.hpp": "a67a9dc782873a0a63f8a9dc45fa8b0bab446aa915380fee34e0c840713ce525",
+    "src/query/execution/BoundExpressionInputs.hpp": "bf02bbe9b4f762f3ac5df628a78c772eee696287673dc1f9a3ccde0816ad0b81",
+    "src/query/execution/DynamicValueArena.hpp": "166674f6c04981d5dcab27e4f28936c27f70470de2b64f18b6ce35b57ceeac12",
+    "src/query/execution/EntityRefColumn.hpp": "b7b7a4eacd8a5dc5e20e5da98710ee0d9bad359a94ab4c318503e236fd46b0b1",
+    "src/query/execution/FixedWidthBatch.hpp": "5e219609b106570fe1b216f8cc5f4f505a044abfa1a4ff6033437ca2f1982083",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "b860fec1cc902640506b222f6b7a197182d18b22de695b80a9c444b7bb763952",
+    "src/query/execution/PrimitiveNumericColumns.hpp": "8660a887da16e41a9024a0d9f949e940c1dea28a39ef14a7c6430b45c25634ad",
+    "src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp": "86c0d6ea49934f8c4dfd8a100fea91c89316a3813bd9ae7a494c956e409718d7",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "5936af32bf5720f123c2115c6d5c22438c3aeee227db03319d342372f26d65aa"
+  },
+  "local_raw_evidence": "benchmarks/architecture-design/results/20261014-s2-binding-batch-cache",
+  "full_suite_run": false,
+  "performance_comparison_run": false,
+  "physical_plan_cache_enabled": false,
+  "pending_items": [
+    "S2.2",
+    "S2.3",
+    "S2.4",
+    "S2.5"
+  ]
+}

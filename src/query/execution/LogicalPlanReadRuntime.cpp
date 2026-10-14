@@ -11,6 +11,9 @@
 #include "query/execution/GuardedIdGather.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
 #include "query/execution/BoundProjectionReferences.hpp"
+#include "query/execution/BoundExecutionProgram.hpp"
+#include "query/execution/BoundExpressionInputs.hpp"
+#include "query/execution/BatchEnvelope.hpp"
 #include "query/execution/BoundColumnLayout.hpp"
 #include "query/execution/BoundNodeColumnPredicates.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
@@ -162,12 +165,14 @@ namespace graph::query::execution {
 			// boundary more than once (for example, a repeated path or projection).
 			std::pmr::unordered_map<uint64_t, storage::LogicalGraphEdge> edge_cache{&entity_cache_memory};
 			size_t materialized_cache_bytes = 0U;
+			std::optional<detail::BoundExecutionProgram> bound_program{};
 		};
 
 		struct ExecutionTaskState {
 			LogicalPlanReadRuntimeStats stats;
 			const LogicalPlanReadRow *injected_row = nullptr;
 			const ScopedPropertyColumns *property_columns = nullptr;
+			detail::BoundExpressionInputs *bound_inputs = nullptr;
 		};
 
 		// A task borrows query resources; scoped input/column views never become
@@ -176,6 +181,21 @@ namespace graph::query::execution {
 		struct ExecutionState {
 			ExecutionSharedState &shared;
 			ExecutionTaskState task;
+		};
+
+		class ScopedBoundInputs final {
+		public:
+			ScopedBoundInputs(ExecutionState &state, std::optional<detail::BoundExpressionInputs> &inputs,
+				const LogicalPlanReadRow &row) : state_(state), previous_(state.task.bound_inputs) {
+				if (inputs) { binding_.emplace(*inputs, row); state_.task.bound_inputs = &*inputs; }
+			}
+			~ScopedBoundInputs() { state_.task.bound_inputs = previous_; }
+			ScopedBoundInputs(const ScopedBoundInputs &) = delete;
+			ScopedBoundInputs &operator=(const ScopedBoundInputs &) = delete;
+		private:
+			ExecutionState &state_;
+			detail::BoundExpressionInputs *previous_;
+			std::optional<detail::BoundExpressionInputs::RowBinding> binding_;
 		};
 
 		using ExecutionFinalizer = std::function<void(ExecutionState &, bool)>;
@@ -3079,6 +3099,20 @@ namespace graph::query::execution {
 				case ExpressionType::VARIABLE_REFERENCE:
 				case ExpressionType::PROPERTY_ACCESS: {
 					const auto &reference = dynamic_cast<const expressions::VariableReferenceExpression &>(expression);
+					if (state.task.bound_inputs && state.task.bound_inputs->usesRow(row)) {
+						const auto *instruction = state.task.bound_inputs->instruction(expression);
+						const auto *value = instruction ? state.task.bound_inputs->value(*instruction) : nullptr;
+						if (value && instruction->kind == detail::BoundInputKind::BIK_VALUE) {
+							debug::PerfTrace::addValue("logical_plan.bound_expression.slot_reads", 1); return *value;
+						}
+						if (value && instruction->kind == detail::BoundInputKind::BIK_PROPERTY) {
+							const auto property = state.task.bound_inputs->property(*instruction, state.shared.snapshot);
+							if (property && (property->source != *instruction->source || property->key != reference.getPropertyName()))
+								throw std::logic_error("bound property descriptor disagrees with its expression");
+							debug::PerfTrace::addValue("logical_plan.bound_expression.property_reads", 1);
+							return readProperty(state.shared.snapshot, row, reference.getVariableName(), reference.getPropertyName(), state, value);
+						}
+					}
 					if (reference.hasProperty()) {
 						// A WITH/RETURN projection without AS keeps the expression text as
 						// its column name (for example `WITH n.value`). Resolve that
@@ -3098,11 +3132,24 @@ namespace graph::query::execution {
 						throw std::runtime_error("logical-plan parameter evaluation requires a QueryContext");
 					}
 					const auto &parameter = dynamic_cast<const expressions::ParameterExpression &>(expression);
-					const auto found = state.shared.context->parameters.find(parameter.getParameterName());
-					if (found == state.shared.context->parameters.end()) {
+					const PropertyValue *value = nullptr;
+					if (state.task.bound_inputs && state.task.bound_inputs->usesRow(row)) {
+						const auto *input = state.task.bound_inputs->instruction(expression);
+						if (input && input->kind == detail::BoundInputKind::BIK_PARAMETER)
+							value = state.task.bound_inputs->parameter(*input, state.shared.context);
+					}
+					if (!value) {
+						const auto found = state.shared.context->parameters.find(parameter.getParameterName());
+						if (found != state.shared.context->parameters.end()) value = &found->second;
+					}
+					if (!value) {
 						throw std::runtime_error("logical-plan read runtime could not resolve a query parameter");
 					}
-					return found->second;
+					if (value->getType() == PropertyType::STRING || value->getType() == PropertyType::LIST || value->getType() == PropertyType::MAP || value->getType() == PropertyType::BYTES) {
+						MaterializedByteReservation copyBytes(&state.shared.materialized_budget);
+						return copyReservedPropertyValue(*value, state, copyBytes);
+					}
+					return *value;
 				}
 				case ExpressionType::EXPR_LIST_LITERAL: {
 					const auto &list = dynamic_cast<const expressions::ListLiteralExpression &>(expression);
@@ -11603,6 +11650,10 @@ namespace graph::query::execution {
 										 const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver,
 										 const NodeColumnReceiver *columnReceiver) {
 			checkGuard(state);
+			if (state.shared.bound_program) {
+				state.shared.bound_program->validateSnapshot(state.shared.snapshot);
+				(void) state.shared.bound_program->view(state.shared.bound_program->id(op));
+			}
 			switch (op.getType()) {
 				case logical::LogicalOpType::LOP_SINGLE_ROW: {
 					if (!op.getChildren().empty()) { // ZYX_COV_EXCL_LINE: LogicalSingleRow is a concrete leaf and
@@ -11882,8 +11933,17 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan Filter has no predicate");
 					}
 					const logical::LogicalOperator &filterChild = requireOnlyChild(filter);
+					std::optional<detail::BoundExpressionInputs> boundInputs;
+					if (state.shared.bound_program) {
+						const expressions::Expression *predicate = filter.getPredicate().get();
+						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op),
+							std::span<const expressions::Expression *const>(&predicate, 1U), state.shared.snapshot,
+							state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
+					}
 					const auto acceptFilteredRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
-						const PropertyValue result = evaluateScalarExpression(*filter.getPredicate(), row, state);
+						PropertyValue result;
+						{ ScopedBoundInputs scopedInputs(state, boundInputs, row);
+							result = evaluateScalarExpression(*filter.getPredicate(), row, state); }
 						if (booleanOrNull(result) != true)
 							return true;
 						if (chargedReceiver != nullptr) {
@@ -11979,10 +12039,18 @@ namespace graph::query::execution {
 					const bool canForwardIdentity = identityReference != nullptr && !identityReference->hasProperty();
 					const logical::LogicalOperator &projectChild = requireOnlyChild(project);
 					std::optional<detail::BoundProjectionReferences> boundReferences;
+					std::optional<detail::BoundExpressionInputs> boundInputs;
+					if (state.shared.bound_program) {
+						std::pmr::vector<const expressions::Expression *> expressionInputs(&distinctMemory);
+						expressionInputs.reserve(items.size());
+						for (const auto &item : items) expressionInputs.push_back(item.expression.get());
+						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op), expressionInputs,
+							state.shared.snapshot, state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
+					}
 					// Single-item ownership forwarding stays on its existing path. The
 					// transition adapter benefits repeated direct references in wider
 					// projections without charging constant-only expressions for slots.
-					if (items.size() > 1U && std::ranges::any_of(items, [](const auto &item) {
+					if (!state.shared.bound_program && items.size() > 1U && std::ranges::any_of(items, [](const auto &item) {
 						return dynamic_cast<const expressions::VariableReferenceExpression *>(item.expression.get()) != nullptr;
 					})) {
 						MaterializedByteReservation inputNamesBytes(&state.shared.materialized_budget);
@@ -12095,6 +12163,7 @@ namespace graph::query::execution {
 						LogicalPlanReadRow projected;
 						projected.values.reserve(items.size());
 						{
+							ScopedBoundInputs scopedInputs(state, boundInputs, row);
 							std::optional<detail::BoundProjectionReferences::RowBinding> inputSlots;
 							if (boundReferences) inputSlots.emplace(*boundReferences, row);
 							size_t itemIndex = 0U;
@@ -12322,6 +12391,15 @@ namespace graph::query::execution {
 					const auto &groupExpressions = aggregate.getGroupByExprs();
 					const auto &groupAliases = aggregate.getGroupByAliases();
 					const auto &aggregations = aggregate.getAggregations();
+					std::optional<detail::BoundExpressionInputs> boundInputs;
+					if (state.shared.bound_program) {
+						detail::BudgetMemoryResource bindingMemory(state.shared.materialized_budget);
+						std::pmr::vector<const expressions::Expression *> expressionInputs(&bindingMemory);
+						for (const auto &expression : groupExpressions) expressionInputs.push_back(expression.get());
+						for (const auto &item : aggregations) expressionInputs.push_back(item.argument.get());
+						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op), expressionInputs,
+							state.shared.snapshot, state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
+					}
 					if (aggregations.empty() || groupAliases.size() > groupExpressions.size()) {
 						throw std::invalid_argument("logical-plan Aggregate has an invalid shape");
 					}
@@ -12594,6 +12672,33 @@ namespace graph::query::execution {
 									numericColumns.release();
 									numericPrepared = false;
 								}
+								std::optional<detail::BatchEnvelope> envelope;
+								if (numericPrepared && aggregateInputLayout && state.shared.bound_program) {
+									try {
+										numericStateHeadroom.set(numericStateBytes);
+										detail::BudgetMemoryResource metadataMemory(state.shared.materialized_budget);
+										std::pmr::vector<detail::BatchColumnSource> sources(&metadataMemory);
+										std::pmr::vector<uint32_t> selectedRows(&metadataMemory);
+										std::pmr::vector<uint64_t> sourceOrdinals(&metadataMemory);
+										for (size_t column = 0U; column < numericColumns.columnCount(); ++column) {
+											checkGuard(state); sources.push_back(detail::BatchColumnSource::numeric(numericColumns, column));
+										}
+										for (size_t row = 0U; row < selection.size(); ++row) { checkGuard(state); sourceOrdinals.push_back(row); }
+										for (size_t row : originalOrdinals) if (selection.includes(row)) {
+											checkGuard(state); selectedRows.push_back(static_cast<uint32_t>(row));
+										}
+										envelope.emplace(state.shared.bound_program->root().program, *aggregateInputLayout, state.shared.snapshot,
+											state.shared.bounds.maximum_rows, state.shared.materialized_budget);
+										envelope->publish(keys, sources, selection.size(), selectedRows, sourceOrdinals, [&] { checkGuardNow(state); });
+										debug::PerfTrace::addValue("logical_plan.batch_envelope.published", 1);
+									} catch (const MaterializedByteLimitExceeded &) {
+										envelope.reset(); debug::PerfTrace::addValue("logical_plan.batch_envelope.admission_fallback", 1);
+									}
+									numericStateHeadroom.reset();
+								}
+								const auto numericRow = [&](size_t column, size_t ordinal) {
+									return envelope ? envelope->sourceRow(aggregateInputLayout->column(column), envelope->rowId(ordinal)) : numericColumns.rowId(ordinal);
+								};
 								for (const size_t ordinal : originalOrdinals) {
 									checkGuard(state);
 									if (!selection.includes(ordinal)) continue;
@@ -12609,7 +12714,7 @@ namespace graph::query::execution {
 											// Count and numeric sums retain no variable payload. Keep
 											// their typed loop free of retention probes and copy guards.
 											if (aggregateColumnBindings[index] == rowCountBinding) accumulator.updateRow();
-											else if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericColumns.rowId(ordinal));
+											else if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericRow(aggregateColumnBindings[index], ordinal));
 											else accumulator.update(columns[aggregateColumnBindings[index]][ordinal]);
 											continue;
 										}
@@ -12622,13 +12727,14 @@ namespace graph::query::execution {
 											catch (const MaterializedByteLimitExceeded &) { admissionRejected = true; throw; }
 										};
 										try {
-											if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericColumns.rowId(ordinal), admit);
+											if (numericPrepared) numericColumns.update(accumulator, functions[index], aggregateColumnBindings[index], numericRow(aggregateColumnBindings[index], ordinal), admit);
 											else accumulator.updateAdmitted(columns[aggregateColumnBindings[index]][ordinal], admit);
 										} catch (const MaterializedByteLimitExceeded &) {
 											if (!admissionRejected || !numericPrepared) throw;
 											// Extremum copying has not published state on admission failure.
 											// Drop optional buffers and retry only this update, never rows
 											// already counted or accumulated. Guard failures still escape.
+											envelope.reset();
 											numericColumns.release();
 											numericPrepared = false;
 											updateScratch.reset();
@@ -12649,6 +12755,7 @@ namespace graph::query::execution {
 					}
 					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
 														 MaterializedByteReservation inputRowBytes) {
+						ScopedBoundInputs scopedInputs(state, boundInputs, row);
 						if (countOnlyAggregate) {
 							inputRowBytes.reset();
 						} else if (inputRowBytes.bytes() == 0U) {
@@ -16315,6 +16422,10 @@ namespace graph::query::execution {
 				allowCrossRowEntityBatches, residentOutputBatchBytes};
 			ExecutionState state{shared, {}};
 			try {
+				// Token/physical binding requires an authenticated reader domain.
+				// Readers without that capability retain the charged semantic row adapter.
+				if (snapshot.bindingSchemaIdentity())
+					shared.bound_program.emplace(root, snapshot, shared.materialized_budget, [&] { checkGuardNow(state); });
 				static_cast<void>(visitOperator(root, state, [&](LogicalPlanReadRow row) {
 					if (state.task.stats.rows_emitted ==
 						bounds.maximum_rows) { // ZYX_COV_EXCL_LINE: this visitor returns false with the

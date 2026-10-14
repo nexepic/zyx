@@ -33,7 +33,7 @@ public:
 	BoundColumnLayout(std::span<const std::string> names, MaterializedByteBudget &budget,
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource(),
 		const std::function<void()> &checkpoint = {})
-		: memory_(budget, upstream), names_(&memory_) {
+		: memory_(budget, upstream), names_(&memory_), budget_(&budget) {
 		if (!upstream || names.size() > (std::numeric_limits<uint32_t>::max)())
 			throw std::invalid_argument("column layout requires a valid allocator and uint32 column count");
 		const auto guard = [&] { if (checkpoint) checkpoint(); };
@@ -53,6 +53,7 @@ public:
 	BoundColumnLayout(BoundColumnLayout &&) = delete;
 	BoundColumnLayout &operator=(BoundColumnLayout &&) = delete;
 	[[nodiscard]] size_t size() const noexcept { return names_.size(); }
+	[[nodiscard]] const MaterializedByteBudget *budgetDomain() const noexcept { return budget_; }
 	[[nodiscard]] BoundColumnId column(size_t index) const {
 		(void) names_.at(index);
 		return {static_cast<uint32_t>(index), identity_.row(0U).owner};
@@ -77,6 +78,7 @@ private:
 	BatchIdentity identity_;
 	BudgetMemoryResource memory_;
 	std::pmr::vector<std::pmr::string> names_;
+	const MaterializedByteBudget *budget_;
 };
 
 } // namespace graph::query::execution::detail

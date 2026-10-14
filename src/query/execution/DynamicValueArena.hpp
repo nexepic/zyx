@@ -39,7 +39,7 @@ public:
 	DynamicValueArena(DynamicValueLimits limits, MaterializedByteBudget &budget,
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
 		: limits_(limits), memory_(budget, upstream), values_(&memory_), bytes_(&memory_),
-		  children_(&memory_), entries_(&memory_), durations_(&memory_), roots_(&memory_) {
+		  children_(&memory_), entries_(&memory_), durations_(&memory_), roots_(&memory_), budget_(&budget) {
 		if (!upstream || limits.values == 0U || limits.depth == 0U || limits.depth > 256U)
 			throw std::invalid_argument("dynamic arena requires bounded values/depth and an allocator");
 	}
@@ -49,6 +49,9 @@ public:
 	DynamicValueArena &operator=(DynamicValueArena &&) = delete;
 	[[nodiscard]] size_t size() const noexcept { return published_values_; }
 	[[nodiscard]] size_t rootCount() const noexcept { return published_roots_; }
+	[[nodiscard]] const MaterializedByteBudget *budgetDomain() const noexcept { return budget_; }
+	[[nodiscard]] BatchRowId borrowVersion() const { return identity_.row(0U); }
+	void validateBorrowVersion(BatchRowId version) const { identity_.validate(version); }
 	[[nodiscard]] size_t storageBytes() const noexcept {
 		return values_.capacity() * sizeof(Value) + bytes_.capacity() + children_.capacity() * sizeof(uint64_t) +
 			entries_.capacity() * sizeof(Entry) + durations_.capacity() * sizeof(TemporalDuration) + roots_.capacity() * sizeof(uint64_t);
@@ -274,5 +277,6 @@ private:
 	std::pmr::vector<Entry> entries_;
 	std::pmr::vector<TemporalDuration> durations_;
 	std::pmr::vector<uint64_t> roots_;
+	const MaterializedByteBudget *budget_;
 };
 } // namespace graph::query::execution::detail

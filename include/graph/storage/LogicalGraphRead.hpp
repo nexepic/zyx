@@ -1129,6 +1129,10 @@ namespace graph::storage {
 		virtual ~LogicalGraphReadBackend() = default;
 
 		[[nodiscard]] virtual std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const = 0;
+
+		// Optional bounded metadata observation for unbound logical IR caches.
+		// It must not open a logical graph snapshot or scan graph data.
+		[[nodiscard]] virtual std::optional<LogicalGraphSchemaIdentity> logicalPlanCacheIdentity() const { return std::nullopt; }
 	};
 
 	// The planning boundary receives only small snapshot-safe cardinalities. It

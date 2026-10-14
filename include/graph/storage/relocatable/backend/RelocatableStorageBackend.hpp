@@ -248,6 +248,7 @@ namespace graph::storage {
 		// relocatable encoding compares graph-visible root identities exactly, while
 		// deliberately excluding allocator high-water marks and token registries.
 		[[nodiscard]] static LogicalGraphMutationFence makeLogicalGraphMutationFence(const Superblock &superblock);
+		[[nodiscard]] static LogicalGraphSchemaIdentity makeLogicalGraphSchemaIdentity(const Superblock &superblock);
 		// The format-independent direct-write bridge resolves logical names before
 		// pinning the graph transaction, then publishes each complete batch in one
 		// metadata COW generation. It intentionally does not expose physical write
@@ -346,6 +347,7 @@ namespace graph::storage {
 		}
 		[[nodiscard]] std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override;
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
+		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> logicalPlanCacheIdentity() const override;
 		[[nodiscard]] std::optional<LogicalGraphCardinalityStatistics>
 		readLogicalGraphCardinalityStatistics() const override;
 		[[nodiscard]] std::optional<uint64_t>

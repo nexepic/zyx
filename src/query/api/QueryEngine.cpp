@@ -468,6 +468,9 @@ namespace graph::query {
 	QueryEngine::~QueryEngine() = default;
 
 	void QueryEngine::resetEphemeralState() noexcept {
+		planCache_.clear();
+		planCacheIdentity_.reset();
+		planCacheIdentityInitialized_ = false;
 		if (logicalProjectionCatalog_) {
 			static_cast<void>(logicalProjectionCatalog_->dropAll());
 		}
@@ -489,10 +492,21 @@ namespace graph::query {
 	}
 
 	QueryPlan QueryEngine::buildPlan(const std::string &query, const Language lang) {
-		// Try plan cache first
+		// Cache only unbound logical IR; executable slots, parameters and page
+		// references are always rebuilt against the execution snapshot.
+		const auto refreshCacheIdentity = [&]() {
+			const auto observed = logicalBackend_ ? logicalBackend_->logicalPlanCacheIdentity() : std::nullopt;
+			if (planCacheIdentityInitialized_ && observed != planCacheIdentity_) {
+				planCache_.clear();
+			}
+			planCacheIdentity_ = observed;
+			planCacheIdentityInitialized_ = true;
+		};
 		auto cached = planCache_.get(query);
 		if (cached) {
-			return std::move(*cached);
+			const auto previousIdentity = planCacheIdentity_;
+			refreshCacheIdentity();
+			if (previousIdentity == planCacheIdentity_) return std::move(*cached);
 		}
 
 		// Cache miss: parse to logical plan
@@ -500,6 +514,9 @@ namespace graph::query {
 		auto plan = parser->parseToLogical(query);
 
 		if (plan.root) {
+			const bool cacheable = plan.cacheable && !isLogicalExplainPlan(*plan.root);
+			if (cacheable) refreshCacheIdentity();
+			const auto compilationIdentity = planCacheIdentity_;
 			if (plan.optimizable) {
 				optimization::LogicalOptimizerOptions optimizerOptions;
 				optimizerOptions.allow_read_traversal_anchor = !plan.mutatesData && !plan.mutatesSchema;
@@ -519,8 +536,11 @@ namespace graph::query {
 				planCache_.clear();
 			}
 
-			if (plan.cacheable) {
-				planCache_.put(query, plan);
+			if (cacheable) {
+				refreshCacheIdentity();
+				// Concurrent publication cannot stamp older optimizer observations
+				// with a newer identity. Execute the unbound IR without caching it.
+				if (compilationIdentity == planCacheIdentity_) planCache_.put(query, plan);
 			}
 		}
 
