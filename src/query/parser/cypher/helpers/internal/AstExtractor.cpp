@@ -19,6 +19,7 @@
  **/
 
 #include "../AstExtractor.hpp"
+#include "../SymbolicName.hpp"
 
 namespace graph::parser::cypher::helpers {
 
@@ -61,7 +62,7 @@ std::string AstExtractor::extractPropertyKeyFromExpr(CypherParser::PropertyExpre
 	// Case A: n.age (with DOTs)
 	if (!ctx->propertyKeyName().empty()) {
 		// Return the last part (the key)
-		return ctx->propertyKeyName().back()->getText();
+		return normalizeSymbolicName(ctx->propertyKeyName().back()->getText());
 	}
 
 	// Case B: age (legacy or simplified syntax - no DOTs)
@@ -157,7 +158,7 @@ std::unordered_map<std::string, PropertyValue> AstExtractor::extractProperties(
 
 	// Parse each key-value pair
 	for (size_t i = 0; i < keys.size(); ++i) {
-		std::string key = keys[i]->getText();
+		std::string key = normalizeSymbolicName(keys[i]->getText());
 		// Use the provided evaluator to convert expression to PropertyValue
 		props[key] = evaluator(exprs[i]);
 	}

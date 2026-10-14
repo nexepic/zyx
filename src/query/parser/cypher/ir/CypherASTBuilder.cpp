@@ -11,6 +11,7 @@
 #include "graph/query/ir/CypherASTBuilder.hpp"
 #include "helpers/ExpressionBuilder.hpp"
 #include "helpers/AstExtractor.hpp"
+#include "helpers/SymbolicName.hpp"
 #include "generated/CypherParser.h"
 #include "generated/CypherLexer.h"
 #include "graph/query/expressions/Expression.hpp"
@@ -21,6 +22,7 @@ namespace graph::query::ir {
 
 using graph::parser::cypher::helpers::ExpressionBuilder;
 using graph::parser::cypher::helpers::AstExtractor;
+using graph::parser::cypher::helpers::normalizeSymbolicName;
 
 namespace {
 
@@ -106,7 +108,7 @@ NodePatternAST extractNodePattern(CypherParser::NodePatternContext* nodePat) {
 		auto keys = mapLit->propertyKeyName();
 		auto exprs = mapLit->expression();
 		for (size_t i = 0; i < keys.size(); ++i) {
-			std::string key = keys[i]->getText();
+			std::string key = normalizeSymbolicName(keys[i]->getText());
 			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
 				node.properties.emplace_back(key, litVal);
@@ -135,7 +137,7 @@ NodePatternAST extractCreateNodePattern(CypherParser::NodePatternContext* nodePa
 		auto keys = mapLit->propertyKeyName();
 		auto exprs = mapLit->expression();
 		for (size_t i = 0; i < keys.size(); ++i) {
-			std::string key = keys[i]->getText();
+			std::string key = normalizeSymbolicName(keys[i]->getText());
 			PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 			if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
 				node.properties.emplace_back(key, litVal);
@@ -177,7 +179,7 @@ RelationshipPatternAST extractRelationshipPattern(CypherParser::RelationshipPatt
 			auto keys = mapLit->propertyKeyName();
 			auto exprs = mapLit->expression();
 			for (size_t i = 0; i < keys.size(); ++i) {
-				std::string key = keys[i]->getText();
+				std::string key = normalizeSymbolicName(keys[i]->getText());
 				PropertyValue litVal = ExpressionBuilder::evaluateLiteralExpression(exprs[i]);
 				if (litVal.getType() != PropertyType::NULL_TYPE || exprs[i]->getText() == "null") {
 					rel.properties[key] = litVal;
@@ -423,7 +425,7 @@ RemoveClause CypherASTBuilder::buildRemoveClause(void* ctx) {
 		if (item->propertyExpression()) {
 			ri.type = RemoveItemType::RIT_PROPERTY;
 			ri.variable = item->propertyExpression()->atom()->getText();
-			ri.key = item->propertyExpression()->propertyKeyName(0)->getText();
+			ri.key = normalizeSymbolicName(item->propertyExpression()->propertyKeyName(0)->getText());
 		} else {
 			ri.type = RemoveItemType::RIT_LABEL;
 			ri.variable = AstExtractor::extractVariable(item->variable());

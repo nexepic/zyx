@@ -19,6 +19,7 @@
  **/
 
 #include "../ExpressionBuilder.hpp"
+#include "../SymbolicName.hpp"
 
 #include <limits>
 #include <stdexcept>
@@ -41,29 +42,6 @@
 
 namespace graph::parser::cypher::helpers {
 
-namespace {
-
-// Cypher permits escaped symbolic names in backticks.  Keep the logical name
-// independent from its source spelling so a projected alias can be referenced
-// consistently in a later clause.
-std::string normalizeSymbolicName(std::string value) {
-	if (value.size() < 2U || value.front() != '`' || value.back() != '`') {
-		return value;
-	}
-	std::string normalized;
-	normalized.reserve(value.size() - 2U);
-	for (size_t index = 1U; index + 1U < value.size(); ++index) {
-		if (value[index] == '`' && index + 1U < value.size() - 1U && value[index + 1U] == '`') {
-			normalized.push_back('`');
-			++index;
-		} else {
-			normalized.push_back(value[index]);
-		}
-	}
-	return normalized;
-}
-
-} // namespace
 using namespace graph::query::expressions;
 
 // ============================================================================
