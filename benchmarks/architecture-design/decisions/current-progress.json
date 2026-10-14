@@ -15,11 +15,12 @@
     "S2.4",
     "S3.1",
     "S3.2",
-    "S3.3"
+    "S3.3",
+    "S3.4"
   ],
-  "accepted": 16,
+  "accepted": 17,
   "total": 34,
-  "percent": 47.1,
+  "percent": 50.0,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -37,9 +38,9 @@
       "percent": 80
     },
     "S3": {
-      "accepted": 3,
+      "accepted": 4,
       "total": 5,
-      "percent": 60
+      "percent": 80
     },
     "S4": {
       "accepted": 0,
@@ -58,7 +59,7 @@
     }
   },
   "S3.1": "accepted",
-  "commit_push": "authorized_checkpoint_after_S3.3_acceptance",
+  "commit_push": "authorized_checkpoint_after_S3.4_acceptance",
   "S1.1": "accepted_design",
   "S1.6": "accepted_design",
   "S1.5": "accepted_design",
@@ -88,14 +89,16 @@
       "S2.3",
       "S2.4",
       "S3.2",
-      "S3.3"
+      "S3.3",
+      "S3.4"
     ],
-    "completed": 5,
+    "completed": 6,
     "status": "in_progress"
   },
   "S2.2": "accepted",
   "S2.3": "accepted",
   "S2.4": "accepted",
   "S3.2": "accepted",
-  "S3.3": "accepted"
+  "S3.3": "accepted",
+  "S3.4": "accepted"
 }
