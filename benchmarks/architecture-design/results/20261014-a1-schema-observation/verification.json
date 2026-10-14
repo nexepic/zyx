@@ -1,0 +1,16 @@
+{
+  "base_commit": "646298aeaf6c503fb0e17a3a5c8c803903500b73",
+  "working_tree_source": true,
+  "passed": 78,
+  "suites": 3,
+  "full_suite": false,
+  "benchmark": false,
+  "S1.1": "in_progress",
+  "accepted": 4,
+  "total": 34,
+  "percent": 11.8,
+  "schema_observation": "index_root_directory_and_page_directory",
+  "independent_schema_epoch": false,
+  "physical_plan_cache_enabled": false,
+  "commit_push": "deferred_until_acceptance_increases"
+}

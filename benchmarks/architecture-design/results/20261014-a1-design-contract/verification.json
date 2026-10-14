@@ -1,0 +1,17 @@
+{
+  "base_commit": "646298aeaf6c503fb0e17a3a5c8c803903500b73",
+  "distinct_passed": 207,
+  "a1_passed": 127,
+  "binding_passed": 103,
+  "intersection": 23,
+  "full_suite": false,
+  "benchmark": false,
+  "S1.1": "accepted_design",
+  "S2": "pending_production",
+  "physical_cache_enabled": false,
+  "arena_grouped_general_compiler": "not_implemented",
+  "platform": "Linux_Cpp20",
+  "accepted": 5,
+  "total": 34,
+  "percent": 14.7
+}

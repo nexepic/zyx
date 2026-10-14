@@ -137,5 +137,37 @@ TEST(LogicalGraphTransactionOverlayUndoTest, SingleTargetUndoDoesNotRetainUnrela
 	EXPECT_EQ(snapshot->readEdgeShaped(edge, {.all_properties = true}).properties.front().value, wide);
 }
 
+TEST(LogicalGraphTransactionOverlayUndoTest, LegacySnapshotsExplicitlyDeclineSchemaIdentity) {
+	InMemoryLogicalTransaction transaction;
+	EXPECT_FALSE(transaction.readSnapshot().bindingSchemaIdentity());
+	LogicalGraphTransactionOverlay overlay(transaction);
+	auto snapshot = overlay.openLogicalGraphReadSnapshot();
+	auto vectorSnapshot = overlay.openLogicalGraphVectorSearchSnapshot();
+	EXPECT_FALSE(snapshot->bindingSchemaIdentity());
+	EXPECT_FALSE(vectorSnapshot->bindingSchemaIdentity());
+	overlay.replaceLogicalNodeProperties({{1U, {{"rank", PropertyValue(1)}}}});
+	EXPECT_FALSE(snapshot->bindingSchemaIdentity());
+	EXPECT_FALSE(vectorSnapshot->bindingSchemaIdentity());
+	transaction.rollback();
+	EXPECT_THROW(static_cast<void>(snapshot->bindingSchemaIdentity()), std::logic_error);
+}
+
+TEST(LogicalGraphTransactionOverlayUndoTest, InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback) {
+	InMemoryLogicalTransaction transaction;
+	auto &base = static_cast<InMemoryLogicalSnapshot &>(transaction.readSnapshot());
+	LogicalGraphTransactionOverlay overlay(transaction);
+	auto snapshot = overlay.openLogicalGraphReadSnapshot();
+	auto vectorSnapshot = overlay.openLogicalGraphVectorSearchSnapshot();
+	base.schema_identity = LogicalGraphSchemaIdentity{};
+	EXPECT_THROW(static_cast<void>(snapshot->bindingSchemaIdentity()), std::logic_error);
+	EXPECT_THROW(static_cast<void>(vectorSnapshot->bindingSchemaIdentity()), std::logic_error);
+	base.schema_identity = LogicalGraphSchemaIdentity{1U, 2U, {}, 0U, 1U};
+	EXPECT_THROW(static_cast<void>(snapshot->bindingSchemaIdentity()), std::logic_error);
+	base.schema_identity = LogicalGraphSchemaIdentity{1U, 2U, {}, 7U, 1U};
+	// A well-formed mutable source is explicitly unsupported as a pinned base.
+	EXPECT_FALSE(snapshot->bindingSchemaIdentity());
+	EXPECT_FALSE(vectorSnapshot->bindingSchemaIdentity());
+}
+
 } // namespace
 } // namespace graph::storage

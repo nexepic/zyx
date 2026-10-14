@@ -1,0 +1,202 @@
+{
+  "scope": "S1.1_design_not_S2_production_acceptance",
+  "physical_cache": {
+    "initial": "disabled",
+    "logical_cache": "existing_query_plan_clone",
+    "future_required_keys": [
+      "database_reader_domain",
+      "semantic_profile",
+      "sealed_layout",
+      "capabilities",
+      "parameter_specialization",
+      "authenticated_schema_observation"
+    ],
+    "independent_persistent_schema_epoch": "not_implemented"
+  },
+  "program": {
+    "owner": "query_owned_QueryPlan_root",
+    "mutability": "sealed_read_only",
+    "program_id": "uint64_nonreused",
+    "ordinals": "uint32_checked",
+    "tables": [
+      "operators",
+      "children",
+      "layouts",
+      "slots",
+      "expressions",
+      "pipelines",
+      "output_names"
+    ],
+    "forbidden": [
+      "snapshot_page_address",
+      "parameter_values",
+      "mutable_cursor",
+      "selection",
+      "aggregator",
+      "result_rows"
+    ]
+  },
+  "bindings": {
+    "slot": "BoundSlotId_uint32_index_uint64_plan",
+    "scope": "BoundScopeId_uint32_index_uint64_plan",
+    "property": "BoundPropertyId_uint32_index_uint64_program",
+    "property_implementation": "BoundPropertyBindings",
+    "property_keys": "owned_PMR_strings",
+    "token": "optional_uint32_nonzero",
+    "missing_token": "name_access_not_null_or_absence",
+    "unresolved_variable": "deferred_original_semantic_evaluation",
+    "unsupported_schema_reader": "explicit_charged_name_adapter"
+  },
+  "schema_observation": {
+    "database_format": "uint64_domains",
+    "catalog_tokens": "six_uint64_index_root_directory_and_page_directory",
+    "overlay": "uint64_view_token_and_revision",
+    "conservative_data_invalidation": true,
+    "data_fence_replacement": false
+  },
+  "batch": {
+    "status": "target_envelope_not_implemented",
+    "layout_names": [
+      "PBL_FLAT",
+      "PBL_GROUPED",
+      "PBL_LEGACY_ROWS"
+    ],
+    "initial_enabled": [
+      "PBL_FLAT",
+      "declared_legacy_adapters"
+    ],
+    "program_layout": "uint64_program_and_uint32_layout_ordinal",
+    "source": "uint64_query_data_snapshot_owner",
+    "owner_incarnation": "uint64_nonreused_owner_uint64_checked_incarnation",
+    "row_column_counts": "uint32_checked_configuration_and_byte_bounds",
+    "selection": "uint64_bitmap",
+    "view_invalidation": [
+      "append",
+      "reserve",
+      "truncate",
+      "clear",
+      "release",
+      "destruction"
+    ],
+    "fixed_columns": [
+      "int64",
+      "double",
+      "uint8_bool"
+    ],
+    "cell_state": "uint8_CCS_MISSING_CCS_NULL_CCS_VALUE",
+    "entity_column": "existing_EntityRef_kind_ID_with_query_snapshot_owner"
+  },
+  "dynamic_owner": {
+    "status": "target_A1_A6_arena_not_implemented",
+    "allocator": "query_budget_PMR",
+    "tag": "existing_PropertyType_uint8",
+    "state": "separate_uint8_cell_state",
+    "inline_bits": "uint64_bool_int64_double_Date_epochDays_Datetime_epochMillis",
+    "scalar_bit_transfer": "checked_integer_conversion_or_Cpp20_bit_cast_no_unaligned_pointer_cast",
+    "bytes": "PMR_byte_buffer_uint64_offset_length_STRING_and_BYTES_distinct",
+    "lists": "uint64_first_child_count_into_value_descriptor_table",
+    "maps": "uint64_first_entry_count_into_map_entry_table_key_byte_range_and_value_index",
+    "durations": "typed_PMR_TemporalDuration_array_preserving_months_days_nanos_int64",
+    "nonordinary_tags": [
+      "UNKNOWN",
+      "COMPOSITE"
+    ],
+    "validation": [
+      "checked_offsets_ranges",
+      "owner_incarnation",
+      "depth_elements_bytes",
+      "typed_payload_bounds"
+    ],
+    "transition": "declared_PropertyValue_adapter_same_query_limits_not_complete_allocator_acceptance"
+  },
+  "grouped": {
+    "status": "prototype_contract_disabled_in_first_version",
+    "parent_count": "uint32_per_batch",
+    "child_count": "uint32_per_branch_batch",
+    "offsets": "uint64_P_plus_1_monotonic_final_equals_child_count",
+    "group_identity": "query_operator_group_not_EntityId",
+    "dependencies": "explicit_parent_child_correlation_and_branch_dependency",
+    "multiplicity": "positive_uint64_checked_logical_work_admission",
+    "optional": "one_null_extension_retaining_parent_multiplicity",
+    "float_aggregate": "original_order_repeat_no_weighting_or_reassociation",
+    "initial_expansion": [
+      "DISTINCT",
+      "group_by",
+      "join",
+      "optional",
+      "subquery",
+      "path",
+      "sort",
+      "skip",
+      "limit",
+      "owning_output"
+    ],
+    "experiments": [
+      "parent_fanout",
+      "correlated_branches",
+      "independent_branches",
+      "multi_hop",
+      "supernode",
+      "empty_null_children",
+      "duplicates_self_parallel_edges",
+      "paths_order_limits_subqueries",
+      "wide_parent"
+    ],
+    "performance_window": "final_only"
+  },
+  "state_owners": {
+    "immutable_program": [
+      "IR",
+      "layouts",
+      "instructions",
+      "algorithms",
+      "pipelines"
+    ],
+    "query_shared": [
+      "snapshot_pin",
+      "context_cancel",
+      "budget",
+      "charged_cache_output",
+      "global_work_first_error"
+    ],
+    "task_local": [
+      "cursor",
+      "batch_selection_arena",
+      "correlated_input",
+      "accumulators_stats"
+    ],
+    "blocking_operator": [
+      "build_groups_sort_keys",
+      "merge_finalize"
+    ],
+    "public_output": [
+      "owning_values_entities_paths"
+    ]
+  },
+  "initial_execution": {
+    "threads": 1,
+    "jit": false,
+    "parallel_prerequisites": [
+      "coordinated_global_budget_work",
+      "cache_access",
+      "first_error_cancel",
+      "reader_pin_safety",
+      "checked_stats_merge",
+      "stable_output",
+      "floating_order"
+    ]
+  },
+  "algorithms": {
+    "scan_filter_project": "shaped_authenticated_access_flat_selection_typed_dynamic",
+    "aggregate_distinct": "existing_accumulators_complete_tuple_charged_hash_groups",
+    "join_optional": "existing_shared_binding_key_bounded_hash_build_probe_precise_compatibility",
+    "sort": "existing_comparator_bounded_blocking_row_key",
+    "top_k": "only_proven_equivalent_sort_limit",
+    "unwind_procedure_subquery_path": "flat_explicit_charged_adapters",
+    "mutation_read": "same_evaluator_snapshot_A2_preflight_no_post_publication_replay"
+  },
+  "resource_acceptance": "S2_and_S5_pending_real_capacity_allocation_decoder_nested_fixed_owner_guards",
+  "persistent_format_change": false,
+  "driver_abi_change": false,
+  "benchmark_run": false
+}

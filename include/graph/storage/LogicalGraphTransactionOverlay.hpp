@@ -84,6 +84,7 @@ namespace graph::storage {
 		[[nodiscard]] LogicalGraphReadSnapshot &baseSnapshot() const;
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> baseFence() const;
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> overlayFence() const;
+		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> overlaySchemaIdentity() const;
 		[[nodiscard]] NodeState &ensureNode(uint64_t nodeId);
 		[[nodiscard]] EdgeState &ensureEdge(uint64_t edgeId);
 		void applyBatch(const LogicalGraphMutationBatch &batch, const LogicalGraphMutationBatchResult &result,
@@ -93,6 +94,7 @@ namespace graph::storage {
 		[[nodiscard]] bool isEdgeVisible(const LogicalGraphEdge &edge, uint64_t edgeId) const;
 
 		LogicalGraphTransaction &transaction_;
+		const uint64_t view_token_;
 		std::map<uint64_t, NodeState> nodes_;
 		std::map<uint64_t, EdgeState> edges_;
 		// Base-snapshot presence is immutable for this transaction. Cache it so a

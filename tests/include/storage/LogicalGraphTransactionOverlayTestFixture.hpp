@@ -467,6 +467,10 @@ namespace graph::storage::transaction_overlay_test {
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
 			return return_no_mutation_fence ? std::nullopt : std::optional<LogicalGraphMutationFence>(fence);
 		}
+		std::optional<LogicalGraphSchemaIdentity> schema_identity;
+		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> bindingSchemaIdentity() const override {
+			return schema_identity;
+		}
 	};
 
 	class InMemoryVectorSnapshot final : public LogicalGraphVectorSearchSnapshot {
