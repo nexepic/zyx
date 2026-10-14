@@ -26,7 +26,7 @@ namespace graph::storage {
 	// Version 30 removes retired Property and direct Vector-adjacency roots.
 	// Earlier layouts are deliberately unsupported rather than silently
 	// migrated or reinterpreted.
-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = 30;
+	constexpr uint16_t RSS_SUPERBLOCK_VERSION = 31;
 	constexpr uint32_t RSS_SUPERBLOCK_BYTES = RSS_PAGE_SIZE;
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = 336;
 	// Crash injection must leave this checksum untouched so a torn inactive

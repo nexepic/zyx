@@ -123,6 +123,7 @@ namespace graph::storage {
 		// retaining every encoded fragment would defeat streaming ingest.
 		size_t maximum_batch_fragments = 64U;
 		uint16_t maximum_manifest_depth = 8U;
+		SegmentKind scratch_kind = SegmentKind::SGK_BULK_SCRATCH;
 	};
 
 	struct NativeBulkRunStreamingOptions {

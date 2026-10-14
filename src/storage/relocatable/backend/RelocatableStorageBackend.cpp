@@ -613,6 +613,55 @@ namespace graph::storage {
 			return 1U;
 		}
 
+		class NativeQueryScratchSession final : public LogicalQueryScratchSession {
+		public:
+			NativeQueryScratchSession(RelocatableStorageBackend &backend,std::unique_ptr<NativeBulkRunStore> store,
+				std::shared_ptr<NativeBulkSessionLease> lease,std::function<void()> refund,uint64_t owner,size_t bytes,size_t fragments)
+				:backend_(backend),store_(std::move(store)),lease_(std::move(lease)),refund_(std::move(refund)),owner_(owner),maximum_bytes_(bytes),maximum_fragments_(fragments) {}
+			~NativeQueryScratchSession() override {
+				try {finish();} catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();releasePermit();}
+			}
+			uint64_t write(std::span<const std::byte> bytes) override {
+				requireActive();
+				if(bytes.empty() || bytes.size()>maximumFragmentBytes() || locations_.size()>=maximum_fragments_ ||
+					RSS_SEGMENT_SIZE>maximum_bytes_-used_bytes_)
+					throw std::runtime_error("query scratch exceeded its fragment or disk bound");
+				// Install bookkeeping before IO so a post-publication allocation failure
+				// cannot lose the only live cleanup route.
+				auto [position,inserted]=locations_.emplace(0U,NativeBulkRunFragmentLocation{});
+				if(!inserted)throw std::logic_error("query scratch session cannot publish concurrently");
+				try {auto gate=backend_.acquireNativePublicationGate();position->second=store_->writeOpaquePayload(owner_,std::vector<std::byte>(bytes.begin(),bytes.end()),backend_.nextNativeBulkScratchCheckpointLsn());}
+				catch(...) {locations_.erase(position);backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
+				const uint64_t id=position->second.segment_id.value();auto node=locations_.extract(position);node.key()=id;locations_.insert(std::move(node));
+				used_bytes_+=RSS_SEGMENT_SIZE;return id;
+			}
+			std::vector<std::byte> read(uint64_t id) override {
+				requireActive();const auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch handle is stale or foreign");
+				const auto reader=store_->openOpaquePayloadReader();return reader(position->second);
+			}
+			void release(uint64_t id) override {
+				requireActive();auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch release handle is stale or foreign");
+				auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;
+			}
+			void finish() override {
+				if(!refund_)return;
+				if(backend_.hasIndeterminateWriteOutcome() && !locations_.empty())throw std::logic_error("query scratch cleanup requires writable recovery");
+				while(!locations_.empty()) {
+					std::array<NativeBulkRunFragmentLocation,64U> batch;size_t count=0U;
+					for(const auto &[id,location]:locations_){if(count==batch.size())break;batch[count++]=location;}
+					auto gate=backend_.acquireNativePublicationGate();store_->releaseBatch(std::span(batch).first(count),backend_.nextNativeBulkScratchCheckpointLsn());
+					for(size_t i=0;i<count;++i)locations_.erase(locations_.begin());used_bytes_-=count*RSS_SEGMENT_SIZE;
+				}
+				releasePermit();
+			}
+			size_t maximumFragmentBytes() const override {return store_->maximumFragmentBytes();}
+		private:
+			void requireActive() const {if(!refund_)throw std::logic_error("query scratch session is finished");if(backend_.hasIndeterminateWriteOutcome())throw std::logic_error("query scratch requires database reopen after uncertain IO");}
+			void releasePermit(){if(refund_){auto refund=std::move(refund_);refund();lease_.reset();}}
+			RelocatableStorageBackend &backend_;std::unique_ptr<NativeBulkRunStore> store_;std::shared_ptr<NativeBulkSessionLease> lease_;std::function<void()> refund_;
+			uint64_t owner_;size_t maximum_bytes_,maximum_fragments_,used_bytes_=0U;std::map<uint64_t,NativeBulkRunFragmentLocation> locations_;
+		};
+
 		class RelocatableLogicalGraphTransaction final : public LogicalGraphTransaction,
 														 public LogicalGraphTransactionVectorSnapshotProvider,
 														 public LogicalGraphBoundedBulkEdgeTransaction {
@@ -2500,6 +2549,12 @@ namespace graph::storage {
 															   PhysicalSlotId(std::numeric_limits<uint64_t>::max()),
 															   RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 64U};
 					NativeBulkRunStore(*physical_, *metadata_, scratchOptions).reclaimUnpublishedOnOpen(scratchRecoveryLsn);
+					auto queryOptions=scratchOptions;queryOptions.scratch_kind=SegmentKind::SGK_QUERY_SCRATCH;
+					MetadataSnapshotPin queryRecoverySnapshot=metadata_->openSnapshot();
+					if(queryRecoverySnapshot.superblock().checkpoint_lsn.value()==std::numeric_limits<uint64_t>::max())throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,"query scratch recovery cannot advance its checkpoint");
+					const auto queryRecoveryLsn=LogSequenceNumber(queryRecoverySnapshot.superblock().checkpoint_lsn.value()+1U);queryRecoverySnapshot.release();
+					NativeBulkRunStore(*physical_,*metadata_,queryOptions).reclaimUnpublishedOnOpen(queryRecoveryLsn);
+
 					// Reclaim any allocator-free suffix left by an interrupted metadata or
 					// segment publication after authoritative Catalog recovery.
 					const RelocatableTailTruncationResult tail = metadata_->truncateReleasedTail();
@@ -2766,6 +2821,9 @@ namespace graph::storage {
 		if (!isOpen()) {
 			return;
 		}
+		{std::lock_guard lock(query_scratch_registry_mutex_);if(query_scratch_sessions_!=0U)
+			throw std::logic_error("cannot close the native backend while query scratch sessions are active");}
+
 		const bool maintenanceWasRunning =
 				maintenance_ != nullptr &&
 				maintenance_->metrics().loop.state == RelocatableMaintenanceLoopState::VMLS_RUNNING;
@@ -2970,6 +3028,24 @@ namespace graph::storage {
 				*physical_, *metadata_,
 				NativeBulkRunStoreOptions{PhysicalSlotId(1U), PhysicalSlotId(std::numeric_limits<uint64_t>::max()),
 										  RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 64U, 8U});
+	}
+
+	std::unique_ptr<LogicalQueryScratchSession> RelocatableStorageBackend::openNativeQueryScratchSession(size_t bytes,size_t fragments) {
+		requireOpen();requireNoIndeterminateWrite();if(isReadOnly() || !options_.query_scratch_enabled)return nullptr;
+		if(bytes<RSS_SEGMENT_SIZE || fragments==0U || fragments>4096U)throw std::invalid_argument("query scratch requires finite disk and handle bounds");
+		std::shared_ptr<NativeBulkSessionLease> lease;
+		{std::lock_guard lock(query_scratch_registry_mutex_);
+			if(!query_scratch_lease_){auto exclusive=tryAcquireNativeBulkSessionLease();if(!exclusive)throw std::runtime_error("query scratch is unavailable while another scratch owner holds the file lease");query_scratch_lease_=std::move(exclusive);}
+			lease=query_scratch_lease_;++query_scratch_sessions_;
+		}
+		auto refund=[this]{std::lock_guard lock(query_scratch_registry_mutex_);if(--query_scratch_sessions_==0U)query_scratch_lease_.reset();};
+		try {
+			uint64_t owner;
+			{auto gate=acquireNativePublicationGate();owner=metadata_->allocateLogicalNodeId(nextNativeBulkScratchCheckpointLsn());}
+			auto options=NativeBulkRunStoreOptions{PhysicalSlotId(1U),PhysicalSlotId(std::numeric_limits<uint64_t>::max()),RSS_SEGMENT_SIZE-RSS_ENVELOPE_BYTES,64U,8U,SegmentKind::SGK_QUERY_SCRATCH};
+			auto store=std::make_unique<NativeBulkRunStore>(*physical_,*metadata_,options);
+			return std::make_unique<NativeQueryScratchSession>(*this,std::move(store),std::move(lease),refund,owner,bytes,fragments);
+		}catch(...){refund();throw;}
 	}
 
 	Generation RelocatableStorageBackend::currentNativeMetadataGeneration() const {

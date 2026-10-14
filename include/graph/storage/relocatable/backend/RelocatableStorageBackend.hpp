@@ -39,6 +39,7 @@
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
 #include "graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
+#include "graph/storage/LogicalQueryScratch.hpp"
 #include "graph/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/schema/TokenDefinition.hpp"
@@ -92,6 +93,8 @@ namespace graph::storage {
 		bool verify_integrity_on_open = false;
 		// Cost-admitted ROW chunk placement; callers can retain uniform chunks.
 		bool adaptive_property_row_chunks = true;
+		// Internal query-only permission, independent of graph write permissions.
+		bool query_scratch_enabled = false;
 		// The immutable schema registry is loaded once when a writable backend
 		// opens. Keep this bounded so a malformed file cannot force an unbounded
 		// allocation before the graph-write boundary is established.
@@ -296,6 +299,9 @@ namespace graph::storage {
 		// cleanup so another process cannot publish overlapping allocator state.
 		[[nodiscard]] std::unique_ptr<NativeBulkSessionLease> tryAcquireNativeBulkSessionLease();
 		[[nodiscard]] std::unique_ptr<NativeBulkRunStore> createNativeBulkRunStore();
+		[[nodiscard]] bool nativeQueryScratchEnabled() const {return options_.query_scratch_enabled && !isReadOnly();}
+		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openNativeQueryScratchSession(size_t maximumDiskBytes,size_t maximumFragments);
+
 		[[nodiscard]] Generation currentNativeMetadataGeneration() const;
 		[[nodiscard]] LogicalGraphMutationFence currentNativeLogicalGraphMutationFence() const;
 		// Internal transaction bridge; callers must not expose reads before choosing
@@ -654,6 +660,9 @@ namespace graph::storage {
 		// serializes typed page relocation with the generation that created its
 		// logical Entity/Property/Index references.
 		mutable std::mutex native_publication_mutex_;
+		std::mutex query_scratch_registry_mutex_;
+		std::shared_ptr<NativeBulkSessionLease> query_scratch_lease_;
+		size_t query_scratch_sessions_ = 0U;
 		// Scratch owners are process-local identities. Unpublished entries are
 		// reclaimed on writable reopen, so this never becomes database state.
 		std::atomic<uint64_t> next_bulk_scratch_owner_id_{1U};

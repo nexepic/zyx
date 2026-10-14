@@ -1412,6 +1412,13 @@ namespace graph::storage {
 													   LogSequenceNumber checkpointLsn,
 													   const MetadataPublishOptions &options = {});
 
+		// Only graph-unreachable query segments with quiesced private readers.
+		// Authenticates kind/owner/generation and rejects public page/extent routes.
+		// Ordinary snapshot pins never authorize or prevent this private release.
+		[[nodiscard]] Superblock releaseQueryScratchSegments(
+			std::span<const CatalogSegmentRetirementRequest>, uint64_t owner,
+			LogSequenceNumber, const MetadataPublishOptions &options = {});
+
 		// Releases a retired slot only after every process-local metadata snapshot
 		// has been released. The retired Catalog history remains diagnostic-only.
 		[[nodiscard]] Superblock releaseRetiredCatalogSegment(SegmentId segmentId, Generation expectedGeneration,

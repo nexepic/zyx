@@ -44,7 +44,7 @@ namespace graph::storage {
 		}
 
 		bool isValidSegmentKind(uint16_t rawKind) {
-			return rawKind <= static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH);
+			return rawKind <= static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH);
 		}
 
 		bool isValidSegmentState(uint16_t rawState) {
