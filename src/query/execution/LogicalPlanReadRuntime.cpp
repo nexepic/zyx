@@ -11,6 +11,7 @@
 #include "query/execution/GuardedIdGather.hpp"
 #include "query/execution/BudgetMemoryResource.hpp"
 #include "query/execution/BoundProjectionReferences.hpp"
+#include "query/execution/BoundColumnLayout.hpp"
 #include "query/execution/BoundNodeColumnPredicates.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
@@ -12474,6 +12475,7 @@ namespace graph::query::execution {
 					std::pmr::vector<size_t> aggregateColumnBindings(&aggregateIndexMemory);
 					std::optional<NodeColumnReceiver> aggregateColumnReceiver;
 					bool aggregateColumnsBound = false;
+					std::optional<detail::BoundColumnLayout> aggregateInputLayout;
 					const size_t rowCountBinding = std::numeric_limits<size_t>::max();
 					bool columnAggregateEligible = groupExpressions.empty() && !countOnlyAggregate &&
 						state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
@@ -12528,6 +12530,15 @@ namespace graph::query::execution {
 						aggregateColumnReceiver.emplace(NodeColumnReceiver{aggregateColumnKeys,
 							[&](std::span<const std::string> keys, std::span<const std::vector<PropertyValue>> columns,
 								const SelectionVector &selection, std::span<const size_t> originalOrdinals) {
+								if (columns.size() != keys.size()) throw std::logic_error("aggregate column input changed its width");
+								for (const auto &column : columns) {
+									checkGuard(state);
+									if (column.size() != selection.size()) throw std::logic_error("aggregate column input changed its row count");
+								}
+								for (size_t ordinal : originalOrdinals) {
+									checkGuard(state);
+									if (ordinal >= selection.size()) throw std::logic_error("aggregate column input has an invalid row ordinal");
+								}
 								if (!aggregateColumnsBound) {
 									for (auto &binding : aggregateColumnBindings) {
 										if (binding == rowCountBinding) continue;
@@ -12535,7 +12546,19 @@ namespace graph::query::execution {
 										if (found == keys.end()) throw std::logic_error("aggregate input column was not produced");
 										binding = static_cast<size_t>(found - keys.begin());
 									}
+									try {
+										aggregateInputLayout.emplace(keys, state.shared.materialized_budget,
+											std::pmr::get_default_resource(), [&] { checkGuard(state); });
+									} catch (const MaterializedByteLimitExceeded &) {
+										// Optional name metadata declines before any aggregate effects.
+									}
 									aggregateColumnsBound = true;
+								}
+								if (aggregateInputLayout) aggregateInputLayout->validate(keys);
+								else for (size_t index = 0U; index < aggregations.size(); ++index) {
+									if (aggregateColumnBindings[index] == rowCountBinding) continue;
+									const auto &reference = static_cast<const expressions::VariableReferenceExpression &>(*aggregations[index].argument);
+									detail::validateColumnBinding(keys, aggregateColumnBindings[index], reference.getPropertyName());
 								}
 								detail::PrimitiveNumericColumns numericColumns(state.shared.materialized_budget);
 								MaterializedByteReservation numericStateHeadroom(&state.shared.materialized_budget);
@@ -12794,6 +12817,7 @@ namespace graph::query::execution {
 					// Release lookup nodes and buckets before downstream output is
 					// admitted. Per-group DISTINCT keys live until their group is consumed.
 					aggregateColumnReceiver.reset();
+					aggregateInputLayout.reset();
 					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
 					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
 					decltype(groupIndexes){&aggregateIndexMemory}.swap(groupIndexes);
