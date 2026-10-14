@@ -1,0 +1,80 @@
+{
+  "kuzu_version": "0.11.3",
+  "performance_timing": false,
+  "cases": [
+    {
+      "semantics": "default",
+      "query": "MATCH p=(a:Binding {id:1})-[:STEP*1..2]->(b:Binding) RETURN b.id AS id,length(p) AS hops ORDER BY hops,id",
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "row_count": 8
+    },
+    {
+      "semantics": "relationship_unique",
+      "query": "MATCH p=(a:Binding {id:1})-[:STEP*TRAIL 1..2]->(b:Binding) RETURN b.id AS id,length(p) AS hops ORDER BY hops,id",
+      "rows": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          2
+        ]
+      ],
+      "row_count": 7
+    }
+  ]
+}

@@ -576,15 +576,26 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathRetainsNodesWhileAdmit
 	LogicalPlanReadRuntime runtime(backend);
 	auto root = makeShortestPathRoot("Start", "End", "R", expressions::PatternDirection::PAT_OUTGOING, 1, 2, false);
 	auto limited = bounds();
-	// Identity authentication no longer retains complete BFS endpoint copies.
-	// Keep the limit between the Node source and the combined Node/Edge sources.
-	limited.maximum_materialized_bytes = 9000U;
-	try {
-		static_cast<void>(runtime.executeToQueryResult(*root, limited));
-		FAIL() << "the retained Node and Edge source batches must share the budget";
-	} catch (const std::runtime_error &error) {
-		EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+	// Find the actual source-admission boundary instead of assuming container
+	// sizes and upstream ownership overhead are identical across STL/platforms.
+	// The 1200-byte Edge payload gives a wider interval than this 128-byte step.
+	bool rejectedEdgeBeforeCopy = false;
+	for (size_t bytes = 4096U; bytes < 16000U; bytes += 128U) {
+		*faults.node_shaped_completed_read_count = 0U;
+		*faults.edge_shaped_admission_read_count = 0U;
+		*faults.edge_shaped_batch_read_count = 0U;
+		limited.maximum_materialized_bytes = bytes;
+		try {
+			static_cast<void>(runtime.executeToQueryResult(*root, limited));
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "shared materialization exceeded its byte bound");
+			if (*faults.node_shaped_completed_read_count > 0U && *faults.edge_shaped_admission_read_count > 0U &&
+				*faults.edge_shaped_batch_read_count == 0U) {
+				rejectedEdgeBeforeCopy = true; break;
+			}
+		}
 	}
+	ASSERT_TRUE(rejectedEdgeBeforeCopy) << "retained Node and Edge sources must share admission before Edge copies";
 	EXPECT_GT(*faults.node_shaped_completed_read_count, 0U);
 	EXPECT_GT(*faults.edge_shaped_admission_read_count, 0U);
 	EXPECT_EQ(*faults.edge_shaped_batch_read_count, 0U);
