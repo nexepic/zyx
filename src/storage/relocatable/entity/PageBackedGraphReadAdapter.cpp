@@ -2096,14 +2096,32 @@ namespace graph::storage {
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 						"page-backed batch adjacency traversal returned a duplicate Edge");
 			}
+			// Capture cache hits before any session mutation can evict them. Keep the
+			// complete ordinal matrix alive through callbacks and gather only misses.
 			admit(gatherBytes, edgeIds.size(), sizeof(std::optional<EdgeEntityRecord>));
-			const std::vector<std::optional<EdgeEntityRecord>> records = entities_.readEdgesSorted(snapshot, edgeIds,
-				[&](size_t bytes) { admit(gatherBytes, bytes, 1U); });
-			const size_t workingBytes = admit(gatherBytes, records.capacity(), sizeof(std::optional<EdgeEntityRecord>));
-			if (records.size() != edgeIds.size()) {
-				throwAdapterError(FormatError::FERR_INVALID_STATE,
-						"page-backed batch adjacency traversal changed Edge cardinality");
+			std::vector<std::optional<EdgeEntityRecord>> records(edgeIds.size());
+			const size_t recordBytes = admit(gatherBytes, records.capacity(), sizeof(records.front()));
+			admit(recordBytes, edgeIds.size(), sizeof(uint64_t));
+			std::vector<uint64_t> missingIds;
+			missingIds.reserve(edgeIds.size());
+			for (size_t i = 0; i < edgeIds.size(); ++i) {
+				records[i] = active.edge(edgeIds[i]);
+				if (!records[i]) missingIds.push_back(edgeIds[i]);
 			}
+			const size_t baseBytes = admit(recordBytes, missingIds.capacity(), sizeof(uint64_t));
+			if (!missingIds.empty()) {
+				admit(baseBytes, missingIds.size(), sizeof(std::optional<EdgeEntityRecord>));
+				const auto missingRecords = entities_.readEdgesSorted(snapshot, missingIds,
+					[&](size_t bytes) { admit(baseBytes, bytes, 1U); });
+				admit(baseBytes, missingRecords.capacity(), sizeof(std::optional<EdgeEntityRecord>));
+				if (missingRecords.size() != missingIds.size()) {
+					throwAdapterError(FormatError::FERR_INVALID_STATE,
+						"page-backed batch adjacency traversal changed Edge cardinality");
+				}
+				size_t missing = 0U;
+				for (auto &record : records) if (!record) record = missingRecords[missing++];
+			}
+			const size_t workingBytes = baseBytes;
 			for (const auto &[nodeId, edgeId]: keys) {
 				admit(workingBytes, 0U, 0U);
 				const auto position = std::ranges::lower_bound(edgeIds, edgeId);
@@ -2148,8 +2166,8 @@ namespace graph::storage {
 						try {
 							// The old key buffer is gone before gather/record allocation.
 							// Admit that future frame separately from the reserve overlap.
-							admit(0U, next, sizeof(keys.front()) + sizeof(uint64_t) +
-								sizeof(std::optional<EdgeEntityRecord>) + sizeof(std::optional<EntityPageLocation>) + sizeof(size_t));
+							admit(0U, next, sizeof(keys.front()) + 2U * sizeof(uint64_t) +
+								2U * sizeof(std::optional<EdgeEntityRecord>) + sizeof(std::optional<EntityPageLocation>) + sizeof(size_t));
 						} catch (const LogicalGraphBufferPressure &) {
 							if (keys.empty()) throw;
 							if (!flush()) return false;
