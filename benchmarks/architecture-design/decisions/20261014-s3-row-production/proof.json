@@ -1,0 +1,40 @@
+{
+  "status": "accepted",
+  "item": "S3.3",
+  "native_layout": "ROW",
+  "default_enabled": true,
+  "selected_tests": {
+    "row-chunk-regression": 130,
+    "s24-native": 7,
+    "bound-native": 8
+  },
+  "total_tests": 145,
+  "native_commands": 916,
+  "native_families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "performance_timing": false,
+  "format_change": false,
+  "driver_abi_change": false,
+  "raw_local_evidence": "benchmarks/architecture-design/results/20261014-s3-row-production",
+  "sha256": {
+    "registration.json": "4887f5838509c88d3aa52a37213ed61376d877466ee09522566a22efa0b90198",
+    "report.json": "12d97154523e47aae7436fce89db73d95da4d38074ce71ad54ca6bc9733780c2",
+    "bound-native.log": "94daad47d18e10383edb16ca71cbf84d5d27ab1d0f29f3d9b28fe33bd15677dd",
+    "row-chunk-regression.log": "31d9042d1a550d39bef80b58e4e5c940604b48b332380135d64436cfb3ed9f0e",
+    "trace.json": "9eaa8783e535208807adddc8f488fad51b67b54236a743c5c3c39b1b46f9a1e9",
+    "s24-native.log": "4748c8fb4ef511708f26a8d3ea940d751270d761a75b56da8dceb1ef8cae8b94"
+  }
+}

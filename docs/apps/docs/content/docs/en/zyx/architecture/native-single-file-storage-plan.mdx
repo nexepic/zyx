@@ -428,7 +428,7 @@ The integrity scanner cross-validates that every nonempty Node overflow referenc
 
 ## 10. Property Store
 
-> This section combines current owner identity with target layouts. Large owner collections can still be encoded as a whole; per-key updates in 10.2 are not an existing guarantee. A2/A3 own future mutation/layout decisions. Retain current format until prototype admission.
+> Current native writes support per-key set/remove and final-state folding. Large ROW owner collections can still be re-encoded as a whole, so this does not guarantee unrelated large bytes avoid rewrite. Section 10.2 retains target representations. The admitted production ROW placement policy is specified in 10.4; MIXED/column-group authority remains rejected until its separate native lifecycle and format gates pass.
 
 ### 10.1 Property identity
 
@@ -454,6 +454,12 @@ Updating one key must not copy the complete Property collection. Slotted pages n
 ### 10.3 Property Directory cache
 
 Placement caches must not be globally invalidated by every database generation. Use per-pool/per-shard versions, a persistent free-space class index, and incremental updates.
+
+### 10.4 Admitted production ROW placement
+
+The native backend defaults `adaptive_property_row_chunks` to true for newly materialized owner collections. `PropertyRowChunkPolicy` retains canonical sorted token/value bytes and the owner-keyed Property Directory as the sole authority. Eligible RAW roots use bounded logical cuts after a large entry's token/value header and after its body, keeping adjacent small fields together. The general page-cost rule requires smaller first-use chunks and at most 5% additional estimated data/Manifest/directory/catalog allocation. At most 2048 fields and 4096 cut points participate. Compressed, small, over-wide or non-admitted roots retain ordinary ROW placement; no fields are discarded.
+
+Existing referenced values and content dedup hits keep their immutable layout. There is no automatic repacking, extra canonical copy or new persistent group/token namespace. Generic streamed/bulk callers may retain uniform extents; the reader accepts both explicit-offset layouts. Chunk cuts are transient writer policy, not a serialized codec flag. Snapshot authentication, actual-key enumeration, derived-index maintenance, COW publication and reachability retirement are unchanged. Full owner replacement can still write large unrelated bytes; O3/O5 and steady-state acceptance remain pending.
 
 ## 11. Generic LargeValue
 
@@ -531,7 +537,7 @@ LargeValue creation and the Property reference must be published in one transact
 
 ### 11.2 Chunking and compression
 
-- Start with a 32 KiB chunk and tune within 16–64 KiB using benchmarks.
+- Uniform generic extents retain their configured 16/32/64/128 KiB classes. Manifests record explicit contiguous offsets and lengths; final or requested boundary chunks may be smaller. Native Property ROW roots use the admitted bounded policy in 10.4. Tune comparative latency/resource choices only at the final performance gate.
 - Usually do not compress very small values.
 - Prefer LZ4 or Zstd for code, JSON, SQL, and logs.
 - Keep already-compressed PNG, JPEG, ZIP, and similar formats raw by default.

@@ -1,4 +1,5 @@
 #include <iostream>
+#include "graph/query/api/QueryEngine.hpp"
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
 using namespace relocatable_storage_backend_test;
@@ -77,4 +78,20 @@ TEST_F(RelocatableStorageBackendTest, RowChunkPrototypeMeasuresCompleteNativePag
 	}
 	EXPECT_LT(results[1].point,results[0].point);EXPECT_LT(results[1].presence,results[0].presence);
 	EXPECT_LE(results[1].file,results[0].file+results[0].file/20U);
+}
+
+TEST_F(RelocatableStorageBackendTest, DefaultNativeProductionRowChunksServeScanAggregateMutationAndOwnedOutput) {
+	materializeNativeDatabase(); graph::Database database(data_path_.string());database.open();
+	auto backend=std::dynamic_pointer_cast<RelocatableStorageBackend>(database.getStorageBackend());ASSERT_NE(backend,nullptr);
+	EXPECT_TRUE(backend->options().adaptive_property_row_chunks);
+	auto engine=database.getQueryEngine();graph::query::QueryContext context;
+	context.parameters.emplace("body",PropertyValue(std::string(256U*1024U,'x')));
+	engine->execute("CREATE (:ProductionChunk {body:$body,rank:7}),(:ProductionChunk {rank:8})",context);
+	const auto summed=engine->execute("MATCH (n:ProductionChunk) RETURN sum(n.rank) AS total,count(n.body) AS bodies");
+	ASSERT_EQ(summed.rowCount(),1U);EXPECT_EQ(summed.getRows().front().at("total").asPrimitive(),PropertyValue(15));
+	EXPECT_EQ(summed.getRows().front().at("bodies").asPrimitive(),PropertyValue(1));
+	const auto changed=engine->execute("MATCH (n:ProductionChunk {rank:7}) SET n.rank=9 RETURN n.body AS body,n.rank AS rank");
+	ASSERT_EQ(changed.rowCount(),1U);EXPECT_EQ(changed.getRows().front().at("rank").asPrimitive(),PropertyValue(9));
+	database.close();EXPECT_EQ(changed.getRows().front().at("body").asPrimitive(),context.parameters.at("body"));
+	database.open();EXPECT_EQ(database.getQueryEngine()->execute("MATCH (n:ProductionChunk) RETURN sum(n.rank) AS total").getRows().front().at("total").asPrimitive(),PropertyValue(17));database.close();
 }

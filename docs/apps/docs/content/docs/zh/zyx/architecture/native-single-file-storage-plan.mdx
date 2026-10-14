@@ -434,7 +434,7 @@ integrity scanner 必须交叉验证：每个非空 Node overflow reference 恰�
 
 ## 10. Property Store
 
-> 本节混合现行 owner 身份与待实现布局目标。当前大 owner 集合仍可能整体编码，不能把 10.2 的按键更新目标当作现有保证。A2/A3 决定后续修改合同和布局，原型未准入前保留当前格式。
+> 当前原生写者支持逐键 set/remove 和最终状态折叠，但大的 ROW owner 集合仍可能整体重编码，不保证无关大字段字节免于重写。10.2 保留目标表示；获准生产 ROW 放置策略见 10.4。MIXED/列组权威仍被拒绝，须独立通过原生生命周期及格式门禁。
 
 ### 10.1 Property identity
 
@@ -460,6 +460,12 @@ Property identity 统一为：
 ### 10.3 Property Directory cache
 
 placement cache 不能按全局数据库 generation 全量失效。使用 per-pool/per-shard version、free-space class index 和增量更新。
+
+### 10.4 获准生产 ROW 放置
+
+原生后端对新物化的 owner 集合默认启用 `adaptive_property_row_chunks`。`PropertyRowChunkPolicy` 保留按 token 排序的规范字节和唯一权威 owner-keyed Property Directory。合格 RAW 根在大字段 token/值头之后及字段体之后设置有界逻辑切点，相邻小字段仍共享 chunk。通用页成本规则要求首次使用 chunk 更小，数据/Manifest/目录/catalog 估计分配增加不超过 5%。最多 2048 字段和 4096 切点参与；压缩、小集合、过宽或成本不合格时保持普通 ROW，不丢字段。
+
+已有引用值及内容去重命中保留不可变布局，不自动重打包、不增加规范副本或持久 group/token 命名空间。通用流式/批量调用者可继续使用均匀 extent，reader 接受两种显式偏移布局。切点只是写者临时策略，不是新增序列化 codec 标志。快照认证、实际键枚举、派生索引维护、COW 发布和可达性退役不变。完整 owner 替换仍可能写入无关大字段字节；O3/O5 及稳态验收仍待完成。
 
 ## 11. 通用 LargeValue
 
@@ -533,7 +539,7 @@ LargeValue 创建和 Property reference 必须在同一事务中发布。
 
 ### 11.2 分块和压缩
 
-- 默认 chunk 建议从 32 KiB 开始，范围可调为 16–64 KiB；
+- 通用均匀 extent 保留已配置的 16/32/64/128 KiB 类；Manifest 保存显式连续偏移与长度，最后一个或显式切点 chunk 可以更小。原生 Property ROW 使用 10.4 的有界准入策略，比较延迟/资源调优留到最终性能门禁；
 - 很小的值通常不压缩；
 - 代码、JSON、SQL、日志优先使用 LZ4 或 Zstd；
 - PNG、JPEG、ZIP 等已压缩格式默认保存 raw；
