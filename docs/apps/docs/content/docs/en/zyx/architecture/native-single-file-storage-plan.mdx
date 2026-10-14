@@ -901,3 +901,11 @@ Public capabilities/consumers are tracked in the [capability matrix](native-capa
 ## 19. Historical records
 
 The complete previous specification, including old Sections 18–23, stage records and intermediate percentages, plus the completed P0–P7 optimization plan are byte-preserved at `benchmarks/architecture-design/archive/20261011-completed-optimization/en/`. The parent `manifest.json` records provenance and SHA-256. Earlier alternatives are in `20261009-superseded-plans/`. These are audit evidence, not implementation plans; raw benchmark evidence remains available.
+
+### Current admitted batch traversal (2026-10-14)
+
+The production path retains the 17-byte global key-only tree and authoritative Edge records. For a sorted batch of source Nodes, the adapter gathers bounded Edge IDs, captures already verified masters from the snapshot-bound `NativeReadSession`, and reads only missing masters through the typed Entity-directory batch cursor. It restores original adjacency order and validates the endpoint before every callback, including cache hits. Captured records remain valid if a callback evicts the bounded session cache. Admission includes the captured record matrix, missing-ID buffer, temporary master batch and cursor buffers; pressure can reduce the logical batch.
+
+No persisted codec, reserved index identity, root or Driver ABI changes. First encounters still verify masters; this does not eliminate master IO for cold traversal. A query-owned session cannot cross metadata generations. External corruption on an already cached page is discovered on subsequent authenticated loading or explicit integrity verification, rather than by rereading every cached master.
+
+The covered-u64-leaf/shared-topology and shared segmented-block laboratory candidates are rejected for production admission: their native carriers are readable and snapshot-safe, but they have no atomic graph route, dual-direction mutation/reachability retirement integration or demonstrated end-to-end threshold win. Keep the existing layout until those gates pass. Candidate details and correctness evidence are recorded under `benchmarks/architecture-design/decisions/20261014-s4-candidate-comparison`. Final timing and steady-state read/write/space acceptance remain separate S4.4 work.

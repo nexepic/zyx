@@ -1,0 +1,5 @@
+# S4.2 acceptance
+
+Admit the existing global key-only adjacency tree plus authenticated masters. Production multi-node traversal now captures snapshot-bound session cache hits, gathers only misses, retains captured records through callback cache eviction, restores adjacency order and checks endpoints before callbacks. All new buffers and read overlap are admitted before allocation, including growth/fallback estimates. Persisted format and Driver ABI are unchanged. Cold reads still verify masters; cache reuse does not promise detection of subsequent external corruption until authenticated loading/integrity verification. The bilingual traversal and storage-plan contracts record this admitted path and rejected candidates.
+
+Selected matrix: 208 tests pass. Structural diagnostics prove repeated warm traversal issues no master batch and a fresh session gathers both masters. Original semantics, cache eviction, admission, bounds and early stop are covered. S4.4 timing and steady-state acceptance remain pending; additional cold-buffer cost is explicitly bounded rather than claimed as a performance win.
