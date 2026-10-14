@@ -1,0 +1,61 @@
+{
+  "counts": {
+    "authored": 87000,
+    "follows": 511000,
+    "has_tag": 174000,
+    "posts": 87000,
+    "tags": 3000,
+    "users": 73000
+  },
+  "files": {
+    "authored.csv": {
+      "bytes": 2349016,
+      "sha256": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e"
+    },
+    "follows.csv": {
+      "bytes": 13797016,
+      "sha256": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999"
+    },
+    "has_tag.csv": {
+      "bytes": 4524016,
+      "sha256": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9"
+    },
+    "posts.csv": {
+      "bytes": 2939689,
+      "sha256": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19"
+    },
+    "tags.csv": {
+      "bytes": 49899,
+      "sha256": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b"
+    },
+    "users.csv": {
+      "bytes": 2173962,
+      "sha256": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+    }
+  },
+  "scale": "holdout",
+  "schema": {
+    "Post": {
+      "created_at": "int64",
+      "id": "string",
+      "score": "double"
+    },
+    "Tag": {
+      "id": "string",
+      "rank": "int64"
+    },
+    "User": {
+      "age": "int64",
+      "country": "string",
+      "id": "string",
+      "score": "double"
+    },
+    "relationships": {
+      "AUTHORED": "weight:int64",
+      "FOLLOWS": "weight:int64",
+      "HAS_TAG": "weight:int64"
+    }
+  },
+  "seed": 314159,
+  "topology": "directed ring; each outgoing hop is a distinct edge; self-loops/multiplicity retained"
+}

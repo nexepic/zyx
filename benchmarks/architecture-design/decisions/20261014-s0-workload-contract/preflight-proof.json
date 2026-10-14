@@ -1,0 +1,155 @@
+{
+  "native": {
+    "engine": "zyx-native",
+    "profile": "smoke",
+    "seed": 42,
+    "families": [
+      "point",
+      "scan",
+      "traversal",
+      "aggregate",
+      "sort",
+      "parameters",
+      "dynamic",
+      "wide_large",
+      "write",
+      "mixed",
+      "snapshot",
+      "maintenance",
+      "budget"
+    ],
+    "operations": 916,
+    "full_results_checked": true,
+    "performance_timing": false,
+    "maintenance_windows": [
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 186990592,
+        "write_bytes": 2686400
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39272448,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39272448,
+        "write_bytes": 762176
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39272448,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39272448,
+        "write_bytes": 762176
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39477248,
+        "write_bytes": 787072
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39600128,
+        "write_bytes": 778688
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39596032,
+        "write_bytes": 778752
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39600128,
+        "write_bytes": 778816
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45481984,
+        "read_bytes": 39596032,
+        "write_bytes": 778752
+      }
+    ],
+    "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+    "binary_sha256": "3efb5f737e2c0d8bda53169005f9fd45cc7e1135d23ae38175fc4e5168cbbe3b",
+    "trace_sha256": "8b7b56f1c57a25607a73a78a183fbc2b570209603ed9143d07ba475e1cea9294"
+  },
+  "kuzu": {
+    "engine": "kuzu",
+    "version": "0.11.3",
+    "seed": 42,
+    "profile": "smoke",
+    "operations": 603,
+    "performance_timing": false,
+    "full_results_checked": true,
+    "families": [
+      "point",
+      "scan",
+      "traversal",
+      "aggregate",
+      "sort",
+      "parameters",
+      "wide_large",
+      "write",
+      "mixed",
+      "snapshot",
+      "maintenance"
+    ],
+    "maintenance_windows": [
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      },
+      {
+        "file_bytes": 18620416
+      }
+    ],
+    "not_equivalent": {
+      "dynamic": "fixed-schema tables cannot preserve arbitrary missing-key identity",
+      "fence_interleaving": "native conservative fence errors differ; ordinary mixed workload is tested",
+      "page_reclaim": "native journal/reclaimer/pin identity is engine-specific; old views and churn are tested",
+      "budget": "native charged-byte/physical-readonly scratch contract is engine-specific"
+    },
+    "trace_sha256": "9be365a87414e0ef4dbc72c46fbd19ae3dc291c47342106a14e8e79a4a9ff5ca"
+  },
+  "full_scale_executed": false,
+  "performance_executed": false,
+  "selected_python_tests": 15,
+  "selected_native_parser_tests": 292
+}

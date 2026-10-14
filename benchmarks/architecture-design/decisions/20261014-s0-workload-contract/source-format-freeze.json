@@ -1,0 +1,182 @@
+{
+  "platform": "Linux x86_64 correctness smoke; formal ARM64 comparison still final-window only",
+  "source_sha256": {
+    "benchmarks/graphdb-comparison/dataset/generate.py": "052b80c156b6e507dbceddf9b128136c1741dd1c041f4b81429a4eeb51c5a77d",
+    "benchmarks/graphdb-comparison/runner/workload_preflight.py": "dfe39f712b8ad3d02d3778110732aa075a311b5bf78a6aee914acdc89f9b5da6",
+    "benchmarks/graphdb-comparison/workload-contract/native-worker.cpp": "5b1c36991c57d588260cf28a99243e54ed17e6cb34a093ea42334b37440230e5",
+    "include/graph/storage/relocatable/format/Format.hpp": "1f290a90fda7d5db6842cad3556c951eacbdd9e862e3744cb7e5167cbf0e9eea",
+    "include/graph/storage/relocatable/format/Superblock.hpp": "016e1a6f2db131e0b412af02b29055e2d0b40fb4a5c9209637ddfbbc4772b741"
+  },
+  "codec_versions_from_source": [
+    {
+      "header": "include/graph/storage/relocatable/allocation/AllocatorPage.hpp",
+      "constant": "RSS_ALLOCATOR_PAGE_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/allocation/SharedPagePool.hpp",
+      "constant": "RSS_SHARED_PAGE_POOL_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/allocation/SharedPagePool.hpp",
+      "constant": "RSS_PAGE_OWNER_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/allocation/SlottedPage.hpp",
+      "constant": "RSS_SLOTTED_PAGE_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/entity/EntityLabelSet.hpp",
+      "constant": "RSS_ENTITY_LABEL_SET_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/entity/EntityPage.hpp",
+      "constant": "RSS_ENTITY_PAGE_VERSION",
+      "version": 4
+    },
+    {
+      "header": "include/graph/storage/relocatable/format/Format.hpp",
+      "constant": "RSS_FORMAT_VERSION",
+      "version": 4
+    },
+    {
+      "header": "include/graph/storage/relocatable/format/Superblock.hpp",
+      "constant": "RSS_SUPERBLOCK_VERSION",
+      "version": 30
+    },
+    {
+      "header": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "constant": "RSS_BTREE_PAGE_VERSION",
+      "version": 3
+    },
+    {
+      "header": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "constant": "RSS_BTREE_ENTRY_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/index/BTreePage.hpp",
+      "constant": "RSS_BTREE_PACKED_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/index/NativeBulkRun.hpp",
+      "constant": "RSS_NATIVE_BULK_RUN_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/index/NativeBulkRun.hpp",
+      "constant": "RSS_NATIVE_BULK_RUN_MANIFEST_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/CatalogPage.hpp",
+      "constant": "RSS_CATALOG_PAGE_VERSION",
+      "version": 4
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/CatalogRadix.hpp",
+      "constant": "RSS_CATALOG_RADIX_PAGE_VERSION",
+      "version": 4
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/CatalogRadix.hpp",
+      "constant": "RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION",
+      "version": 5
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/LocationDirectory.hpp",
+      "constant": "RSS_LOCATION_LEAF_VERSION",
+      "version": 3
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/MetadataPagePool.hpp",
+      "constant": "RSS_METADATA_PAGE_POOL_VERSION",
+      "version": 4
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/MetadataPageRoute.hpp",
+      "constant": "RSS_METADATA_PAGE_ROUTE_LEAF_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/PageDirectoryBootstrap.hpp",
+      "constant": "RSS_PAGE_DIRECTORY_BOOTSTRAP_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/metadata/StateRecord.hpp",
+      "constant": "RSS_STATE_RECORD_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "constant": "RSS_LARGE_VALUE_REF_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "constant": "RSS_LARGE_VALUE_MANIFEST_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/LargeValue.hpp",
+      "constant": "RSS_LARGE_VALUE_DATA_PAGE_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "constant": "RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION",
+      "version": 2
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "constant": "RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION",
+      "version": 3
+    },
+    {
+      "header": "include/graph/storage/relocatable/property/PropertyCollectionRoot.hpp",
+      "constant": "RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/schema/IndexDefinition.hpp",
+      "constant": "RSS_INDEX_DEFINITION_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/schema/TokenDefinition.hpp",
+      "constant": "RSS_TOKEN_DEFINITION_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/vector/VectorAdjacency.hpp",
+      "constant": "RSS_VECTOR_ADJACENCY_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/vector/VectorCodebook.hpp",
+      "constant": "RSS_VECTOR_CODEBOOK_VERSION",
+      "version": 3
+    },
+    {
+      "header": "include/graph/storage/relocatable/vector/VectorCodebookExtent.hpp",
+      "constant": "RSS_VECTOR_CODEBOOK_EXTENT_VERSION",
+      "version": 1
+    },
+    {
+      "header": "include/graph/storage/relocatable/vector/VectorManifestPage.hpp",
+      "constant": "RSS_VECTOR_MANIFEST_VERSION",
+      "version": 8
+    },
+    {
+      "header": "include/graph/storage/relocatable/vector/VectorPage.hpp",
+      "constant": "RSS_VECTOR_PAGE_VERSION",
+      "version": 3
+    }
+  ]
+}

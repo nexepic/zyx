@@ -155,6 +155,10 @@ if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     set_target_properties(zyx_compare_bench PROPERTIES OUTPUT_NAME zyx-compare-bench)
     target_link_libraries(zyx_compare_bench PRIVATE zyx::core)
 
+    add_executable(zyx_workload_contract_worker benchmarks/graphdb-comparison/workload-contract/native-worker.cpp)
+    set_target_properties(zyx_workload_contract_worker PROPERTIES OUTPUT_NAME zyx-workload-contract-worker)
+    target_link_libraries(zyx_workload_contract_worker PRIVATE zyx::core)
+
     add_executable(zyx_vector_calibrate apps/vector_calibration/main.cpp)
     set_target_properties(zyx_vector_calibrate PROPERTIES OUTPUT_NAME zyx-vector-calibrate)
     target_link_libraries(zyx_vector_calibrate PRIVATE zyx::core)
