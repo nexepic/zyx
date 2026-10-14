@@ -90,6 +90,8 @@ namespace graph::storage {
 		// Full integrity scans are deliberately opt-in: they are O(database size)
 		// and belong to cutover, repair, and operator verification workflows.
 		bool verify_integrity_on_open = false;
+		// Prototype opt-in until native lifecycle/page-cost admission is accepted.
+		bool adaptive_property_row_chunks = false;
 		// The immutable schema registry is loaded once when a writable backend
 		// opens. Keep this bounded so a malformed file cannot force an unbounded
 		// allocation before the graph-write boundary is established.

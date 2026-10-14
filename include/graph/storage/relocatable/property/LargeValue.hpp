@@ -122,6 +122,9 @@ namespace graph::storage {
 		uint8_t minimum_savings_percent = RSS_LARGE_VALUE_DEFAULT_MIN_SAVINGS_PERCENT;
 		int zstd_level = RSS_LARGE_VALUE_DEFAULT_ZSTD_LEVEL;
 		bool allow_raw_fallback = true;
+		// Transient requested logical cut points; manifests already store explicit
+		// contiguous offsets/lengths. Never serialized as a new codec or root kind.
+		std::vector<uint64_t> logical_chunk_ends{};
 
 		constexpr bool operator==(const LargeValueCompressionOptions &) const = default;
 	};

@@ -2577,6 +2577,7 @@ namespace graph::storage {
 				}
 				NativeGraphWritePlannerOptions graphWriteOptions;
 				graphWriteOptions.maximum_adjacency_read_edges = options_.maximum_adjacency_read_edges;
+				graphWriteOptions.property_roots.adaptive_row_chunks = options_.adaptive_property_row_chunks;
 				native_graph_write_planner_ = std::make_unique<NativeGraphWritePlanner>(
 						*metadata_, *native_entities_, *native_labels_, *properties_, *btree_pages_, graphWriteOptions);
 				const NativeGraphMutationExecutorOptions nativeMutationOptions{
@@ -3037,6 +3038,7 @@ namespace graph::storage {
 
 		NativeGraphWritePlannerOptions graphWriteOptions;
 		graphWriteOptions.maximum_adjacency_read_edges = options_.maximum_adjacency_read_edges;
+		graphWriteOptions.property_roots.adaptive_row_chunks = options_.adaptive_property_row_chunks;
 		native_graph_write_planner_ = std::make_unique<NativeGraphWritePlanner>(
 				*metadata_, *native_entities_, *native_labels_, *properties_, *btree_pages_, graphWriteOptions);
 		const NativeGraphMutationExecutorOptions nativeMutationOptions{
