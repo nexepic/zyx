@@ -20,11 +20,12 @@
     "S4.1",
     "S4.2",
     "S4.3",
-    "S5.2"
+    "S5.2",
+    "S5.1"
   ],
-  "accepted": 21,
+  "accepted": 22,
   "total": 34,
-  "percent": 61.8,
+  "percent": 64.7,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -52,9 +53,9 @@
       "percent": 75.0
     },
     "S5": {
-      "accepted": 1,
+      "accepted": 2,
       "total": 5,
-      "percent": 20.0
+      "percent": 40
     },
     "S6": {
       "accepted": 0,
@@ -63,7 +64,7 @@
     }
   },
   "S3.1": "accepted",
-  "commit_push": "authorized_checkpoint_after_S5.2_acceptance",
+  "commit_push": "authorized_checkpoint_after_S5.1_acceptance",
   "S1.1": "accepted_design",
   "S1.6": "accepted_design",
   "S1.5": "accepted_design",
@@ -112,5 +113,16 @@
   "S4.1": "accepted",
   "S4.2": "accepted",
   "S4.3": "accepted",
-  "S5.2": "accepted"
+  "S5.2": "accepted",
+  "S5.1": "accepted_bounded_protocol",
+  "continuation": {
+    "objective": "complete_all_34_items",
+    "baseline_accepted": 21,
+    "target_accepted": 34,
+    "completed_ids": [
+      "S5.1"
+    ],
+    "status": "in_progress",
+    "performance_window": "after_remaining_implementation"
+  }
 }

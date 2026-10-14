@@ -298,6 +298,11 @@ namespace graph::storage {
 		[[nodiscard]] std::unique_ptr<NativeBulkRunStore> createNativeBulkRunStore();
 		[[nodiscard]] Generation currentNativeMetadataGeneration() const;
 		[[nodiscard]] LogicalGraphMutationFence currentNativeLogicalGraphMutationFence() const;
+		// Internal transaction bridge; callers must not expose reads before choosing
+		// this bounded blind-write path. All other transactions retain their fence.
+		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeBlindNodePropertyReplacements(
+			const LogicalGraphMutationBatch &, const RelocatableReadSnapshot &, const LogicalGraphMutationFence &);
+
 		// Internal streamed-transaction bridge. It pauses a service before the
 		// caller takes the native publication gate, avoiding an in-flight worker
 		// deadlock on that same gate.
@@ -516,7 +521,8 @@ namespace graph::storage {
 		[[nodiscard]] LogicalGraphMutationBatchResult executeNativeMutationBatch(
 			const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 			const LogicalGraphMutationReadControl &control,
-			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries);
+			std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
+			const std::function<void(const MetadataSnapshotPin &)> &rebaseValidation = {});
 		void requireOpen() const;
 		void requireOwnedSnapshot(const RelocatableReadSnapshot &snapshot) const;
 		[[nodiscard]] std::string resolveNodeLabelToken(const MetadataSnapshotPin &snapshot,
