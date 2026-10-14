@@ -19,3 +19,5 @@ Capacity audit note: the new external-sort buffer opts into actual PMR capacity 
 The query scratch policy is disabled by default while admission remains unfinished; native tests explicitly opt in. The provider exposes enablement, so default/native physically read-only paths retain the established in-memory Sort implementation. The per-query default disk allowance is 128 MiB/1024 fragments, matching the registered target.
 
 Cleanup continuation: explicit single-fragment release and batch finish now fence the backend immediately on publication/IO failure, preserving the exception and cleanup routes for writable recovery. A new two-mode fault test verifies write denial, old graph pins, destructor permit refund and reopen integrity. This does not accept S5.4; its complete fault matrix remains pending.
+
+Resource continuation: shared-owner constructors now retain process → database → account → lease lifetime. Split, move and absorb preserve ownership, including transfer into a borrowed lease; null owners are rejected. Nine coordinator tests pass, including two new lifetime cases. This remains a foundation, not production global-budget or query-output integration.

@@ -174,5 +174,31 @@ TEST(ResourceCoordinatorTest, CheckedLimitsAndMaximumSizeAdmissionNeverWrap) {
 	b.set(1U);
 	EXPECT_EQ(process.usage().total, 1U);
 }
+TEST(ResourceCoordinatorTest, OwnedLeaseKeepsHierarchyAliveAfterDatabaseOwnerIsReleased) {
+	auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(100U));
+	auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(80U));
+	auto account=std::make_shared<ResourceAccount>(database,ResourceClass::RCK_QUERY,60U);
+	std::weak_ptr<ProcessResourceBudget> processLife=process;
+	std::weak_ptr<DatabaseResourceBudget> databaseLife=database;
+	std::weak_ptr<ResourceAccount> accountLife=account;
+	{
+		ResourceLease retained(account);retained.set(50U);
+		auto transferred=retained.splitOff(20U);
+		ResourceLease borrowed(*account);borrowed.absorb(std::move(transferred));
+		transferred=std::move(borrowed);
+		account.reset();database.reset();process.reset();
+		EXPECT_FALSE(processLife.expired());EXPECT_FALSE(databaseLife.expired());EXPECT_FALSE(accountLife.expired());
+		EXPECT_EQ(processLife.lock()->usage().total,50U);
+		retained.reset();EXPECT_EQ(processLife.lock()->usage().total,20U);
+		ResourceLease moved(std::move(transferred));moved.set(30U);
+		EXPECT_EQ(processLife.lock()->usage().total,30U);
+	}
+	EXPECT_TRUE(accountLife.expired());EXPECT_TRUE(databaseLife.expired());EXPECT_TRUE(processLife.expired());
+}
+TEST(ResourceCoordinatorTest, OwnedHierarchyRejectsNullOwners) {
+	EXPECT_THROW(DatabaseResourceBudget(std::shared_ptr<ProcessResourceBudget>{},ResourceLimits::uniform(10U)),std::invalid_argument);
+	EXPECT_THROW(ResourceAccount(std::shared_ptr<DatabaseResourceBudget>{},ResourceClass::RCK_QUERY,10U),std::invalid_argument);
+	EXPECT_THROW(ResourceLease(std::shared_ptr<ResourceAccount>{}),std::invalid_argument);
+}
 } // namespace
 } // namespace graph::query::execution::detail

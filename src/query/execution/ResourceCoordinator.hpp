@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory_resource>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <utility>
@@ -60,19 +61,27 @@ public:
 		limits_.validate();
 		if (limits_.total > process.limits_.total) throw std::invalid_argument("database resource total exceeds process total");
 	}
+	DatabaseResourceBudget(std::shared_ptr<ProcessResourceBudget> process, ResourceLimits limits)
+		: DatabaseResourceBudget(requireOwner(process), limits) { process_owner_ = std::move(process); }
 	DatabaseResourceBudget(const DatabaseResourceBudget &) = delete;
 	DatabaseResourceBudget &operator=(const DatabaseResourceBudget &) = delete;
 	[[nodiscard]] ResourceUsage usage() const { std::lock_guard lock(process_.mutex_); return usage_; }
 private:
 	friend class ResourceAccount;
 	friend class ResourceLease;
+	static ProcessResourceBudget &requireOwner(const std::shared_ptr<ProcessResourceBudget> &owner) {
+		if (!owner) throw std::invalid_argument("database resource requires process owner");
+		return *owner;
+	}
+	std::shared_ptr<ProcessResourceBudget> process_owner_;
 	ProcessResourceBudget &process_;
 	const ResourceLimits limits_;
 	ResourceUsage usage_;
 };
 
 // Every lease shares one account quota: splitting a lease cannot multiply the
-// query allowance. Lifetime order is process > database > account > leases.
+// query allowance. Borrowed owners require process > database > account > leases;
+// shared-owner constructors retain that hierarchy for escaped output leases.
 class ResourceAccount final {
 public:
 	ResourceAccount(DatabaseResourceBudget &database, ResourceClass kind, size_t maximum)
@@ -80,11 +89,18 @@ public:
 		if (kind_ >= RESOURCE_CLASS_COUNT || maximum == 0U || maximum > database.limits_.total)
 			throw std::invalid_argument("resource account requires a valid class and finite quota");
 	}
+	ResourceAccount(std::shared_ptr<DatabaseResourceBudget> database, ResourceClass kind, size_t maximum)
+		: ResourceAccount(requireOwner(database), kind, maximum) { database_owner_ = std::move(database); }
 	ResourceAccount(const ResourceAccount &) = delete;
 	ResourceAccount &operator=(const ResourceAccount &) = delete;
 	[[nodiscard]] size_t used() const { std::lock_guard lock(database_.process_.mutex_); return used_; }
 private:
 	friend class ResourceLease;
+	static DatabaseResourceBudget &requireOwner(const std::shared_ptr<DatabaseResourceBudget> &owner) {
+		if (!owner) throw std::invalid_argument("resource account requires database owner");
+		return *owner;
+	}
+	std::shared_ptr<DatabaseResourceBudget> database_owner_;
 	DatabaseResourceBudget &database_;
 	const size_t kind_, maximum_;
 	size_t used_ = 0U;
@@ -95,13 +111,16 @@ private:
 class ResourceLease final {
 public:
 	explicit ResourceLease(ResourceAccount &account) noexcept : account_(&account) {}
+	explicit ResourceLease(std::shared_ptr<ResourceAccount> account) : owner_(std::move(account)), account_(owner_.get()) {
+		if (!account_) throw std::invalid_argument("resource lease requires account owner");
+	}
 	~ResourceLease() { reset(); }
 	ResourceLease(const ResourceLease &) = delete;
 	ResourceLease &operator=(const ResourceLease &) = delete;
 	ResourceLease(ResourceLease &&other) noexcept
-		: account_(std::exchange(other.account_, nullptr)), bytes_(std::exchange(other.bytes_, 0U)) {}
+		: owner_(std::move(other.owner_)), account_(std::exchange(other.account_, nullptr)), bytes_(std::exchange(other.bytes_, 0U)) {}
 	ResourceLease &operator=(ResourceLease &&other) {
-		if (this != &other) { reset(); account_ = std::exchange(other.account_, nullptr); bytes_ = std::exchange(other.bytes_, 0U); }
+		if (this != &other) { reset(); owner_ = std::move(other.owner_); account_ = std::exchange(other.account_, nullptr); bytes_ = std::exchange(other.bytes_, 0U); }
 		return *this;
 	}
 	[[nodiscard]] size_t bytes() const noexcept { return bytes_; }
@@ -138,6 +157,7 @@ public:
 	[[nodiscard]] ResourceLease splitOff(size_t bytes) {
 		if (bytes > bytes_ || !account_) throw std::logic_error("invalid resource lease transfer");
 		ResourceLease result(*account_);
+		result.owner_ = owner_;
 		result.bytes_ = bytes;
 		bytes_ -= bytes;
 		return result;
@@ -146,9 +166,11 @@ public:
 		if (this == &other) return;
 		if (!account_ || account_ != other.account_) throw std::logic_error("resource transfer crosses account ownership");
 		if (other.bytes_ > (std::numeric_limits<size_t>::max)() - bytes_) throw std::overflow_error("resource transfer overflow");
+		if (!owner_) owner_ = other.owner_;
 		bytes_ += std::exchange(other.bytes_, 0U);
 	}
 private:
+	std::shared_ptr<ResourceAccount> owner_;
 	ResourceAccount *account_;
 	size_t bytes_ = 0U;
 };
