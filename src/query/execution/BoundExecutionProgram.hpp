@@ -31,11 +31,13 @@ public:
 		std::span<const BoundOperatorId> children;
 		std::span<const BoundSlotId> inputs, outputs;
 		BoundOperatorMode mode;
+		std::span<const BoundSlotId> declared_outputs;
 	};
 	template<class Guard>
 	BoundExecutionProgram(const logical::LogicalOperator &root, const storage::LogicalGraphReadSnapshot &snapshot,
 		MaterializedByteBudget &budget, Guard guard, BoundProgramLimits limits = {},
-		std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
+		std::pmr::memory_resource *upstream = std::pmr::get_default_resource(),
+		std::span<const std::string_view> injectedNames = {})
 		: limits_(limits), registry_(limits.slots, checkedScopeCount(limits.operators), limits.name_bytes, budget, upstream),
 		  memory_(budget, upstream), nodes_(&memory_), sources_(&memory_), active_(&memory_), budget_(budget),
 		  schema_(snapshot.bindingSchemaIdentity()), tokens_(snapshot.supportsPropertyTokenResolution()) {
@@ -43,6 +45,10 @@ public:
 			throw std::invalid_argument("bound program requires bounded operators and recursion");
 		if (schema_ && !schema_->isValid()) throw std::invalid_argument("bound program received an invalid schema identity");
 		std::pmr::vector<std::pmr::string> imports(&memory_);
+		for (const auto name : injectedNames) {
+			guard(); if (name.empty()) throw std::invalid_argument("injected input has an empty name");
+			imports.emplace_back(name);
+		}
 		root_ = compile(root, imports, 1U, guard);
 		registry_.seal(); active_.clear();
 		guard(); validateSnapshot(snapshot);
@@ -62,7 +68,7 @@ public:
 		if (descriptor.program != registry_.root().plan || descriptor.index >= nodes_.size())
 			throw std::invalid_argument("foreign or invalid bound operator descriptor");
 		const auto &node = nodes_[descriptor.index];
-		return {node.source, node.inputs_scope, node.outputs_scope, node.children, node.inputs, node.outputs, node.mode};
+		return {node.source, node.inputs_scope, node.outputs_scope, node.children, node.inputs, node.outputs, node.mode, node.declared_outputs};
 	}
 	[[nodiscard]] std::optional<BoundSlotId> input(BoundOperatorId op, std::string_view name) const {
 		return registry_.resolve(view(op).inputs_scope, name);
@@ -77,11 +83,11 @@ private:
 	struct Node {
 		Node(const logical::LogicalOperator *op, BoundScopeId inputsScope, BoundScopeId outputsScope,
 			std::pmr::memory_resource *memory) : source(op), inputs_scope(inputsScope), outputs_scope(outputsScope),
-			children(memory), inputs(memory), outputs(memory) {}
+			children(memory), inputs(memory), outputs(memory), declared_outputs(memory) {}
 		const logical::LogicalOperator *source;
 		BoundScopeId inputs_scope, outputs_scope;
 		std::pmr::vector<BoundOperatorId> children;
-		std::pmr::vector<BoundSlotId> inputs, outputs;
+		std::pmr::vector<BoundSlotId> inputs, outputs, declared_outputs;
 		BoundOperatorMode mode = BoundOperatorMode::BOM_ROW_ADAPTER;
 	};
 	static size_t checkedScopeCount(size_t operators) {
@@ -142,7 +148,12 @@ private:
 			bytes += name.capacity() + 1U;
 		}
 		temporary.set(bytes);
-		for (const auto &name : outputs) appendName(nodes_[ordinal], name, true);
+		for (const auto &name : outputs) {
+			guard(); if (declared_output_count_ == limits_.slots) throw std::length_error("bound program declared output limit exceeded");
+			appendName(nodes_[ordinal], name, true);
+			nodes_[ordinal].declared_outputs.push_back(*registry_.resolve(outputScope, name));
+			++declared_output_count_;
+		}
 		if (children.empty()) for (const auto &name : outputs) appendName(nodes_[ordinal], name, false);
 		if (subquery) {
 			for (const auto &name : subquery->getImportedVars())
@@ -168,5 +179,6 @@ private:
 	std::optional<storage::LogicalGraphSchemaIdentity> schema_;
 	bool tokens_;
 	BoundOperatorId root_{};
+	size_t declared_output_count_ = 0U;
 };
 }

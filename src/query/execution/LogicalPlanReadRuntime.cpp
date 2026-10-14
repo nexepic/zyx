@@ -5576,6 +5576,25 @@ namespace graph::query::execution {
 			return result;
 		}
 
+		[[nodiscard]] std::vector<std::string> boundOutputNames(const logical::LogicalOperator &op, ExecutionState &state,
+			MaterializedByteReservation &charge) {
+			if (!state.shared.bound_program) return op.getOutputVariables(); // explicit IR adapter
+			const auto &program = *state.shared.bound_program; program.validateSnapshot(state.shared.snapshot);
+			const auto outputs = program.view(program.id(op)).declared_outputs;
+			size_t bytes = checkedSizeMul(outputs.size(), sizeof(std::string), "bound output metadata overflowed");
+			const auto inlineCapacity = std::string{}.capacity();
+			for (const auto slot : outputs) {
+				checkGuardNow(state); const auto name = program.name(slot);
+				if (name.size() > inlineCapacity) bytes = checkedSizeAdd(bytes, name.size() + 1U, "bound output name overflowed");
+			}
+			charge.set(bytes);
+			std::vector<std::string> names; names.reserve(outputs.size());
+			for (const auto slot : outputs) { checkGuardNow(state); names.emplace_back(program.name(slot)); }
+			bytes = checkedSizeMul(names.capacity(), sizeof(std::string), "bound output capacity overflowed");
+			for (const auto &name : names) bytes = checkedSizeAdd(bytes, detail::dynamicStringBufferBytes(name), "bound output buffers overflowed");
+			charge.set(bytes); return names;
+		}
+
 		[[nodiscard]] LogicalPlanReadRow normalizeOutputRow(LogicalPlanReadRow row,
 															const std::vector<std::string> &columns) {
 			LogicalPlanReadRow normalized;
@@ -5611,7 +5630,7 @@ namespace graph::query::execution {
 		}
 
 		void mergeCompatibleRowCaches(LogicalPlanReadRow &destination, const LogicalPlanReadRow &source, ExecutionState &state,
-									  const std::unordered_set<std::string> *excludedAliases = nullptr) {
+									  const std::pmr::unordered_set<std::string_view> *excludedAliases = nullptr) {
 			const auto checkpoint = [&] { checkGuardNow(state); };
 			const auto includeAlias = [excludedAliases](const std::string &alias) {
 				return excludedAliases == nullptr || !excludedAliases->contains(alias);
@@ -5725,9 +5744,10 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] std::pmr::string bindingKey(const LogicalPlanReadRow &row,
-			const std::vector<std::string> &columns, std::pmr::memory_resource *memory) {
+			std::span<const std::string *const> columns, std::pmr::memory_resource *memory) {
 			std::pmr::string result{memory};
-			for (const std::string &column: columns) {
+			for (const auto *name: columns) {
+				const auto &column = *name;
 				const auto value = row.values.find(column);
 				if (value == row.values.end()) {
 					throw std::runtime_error("logical-plan runtime child did not bind a declared join variable");
@@ -12993,10 +13013,13 @@ namespace graph::query::execution {
 					if (left == nullptr || right == nullptr) {
 						throw std::invalid_argument("logical-plan Join requires two valid children");
 					}
-					const std::vector<std::string> leftColumns = left->getOutputVariables();
-					const std::vector<std::string> rightColumns = right->getOutputVariables();
-					const auto validateColumns = [](const std::vector<std::string> &columns) {
-						std::unordered_set<std::string> declaredColumns;
+					MaterializedByteReservation leftNameBytes(&state.shared.materialized_budget), rightNameBytes(&state.shared.materialized_budget);
+					const auto leftColumns = boundOutputNames(*left, state, leftNameBytes);
+					const auto rightColumns = boundOutputNames(*right, state, rightNameBytes);
+					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
+					auto *nameAllocator = state.shared.bound_program ? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource();
+					const auto validateColumns = [nameAllocator](const std::vector<std::string> &columns) {
+						std::pmr::unordered_set<std::string_view> declaredColumns(nameAllocator);
 						declaredColumns.reserve(columns.size());
 						for (const std::string &column: columns) {
 							if (column.empty() || !declaredColumns.insert(column).second) {
@@ -13012,16 +13035,16 @@ namespace graph::query::execution {
 							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
 							&state.shared.materialized_budget);
 					rightRows.reserve(state.shared.bounds.maximum_rows);
-					std::vector<std::string> sharedColumns;
+					std::pmr::vector<const std::string *> sharedColumns(nameAllocator);
 					sharedColumns.reserve(std::min(leftColumns.size(), rightColumns.size()));
-					std::unordered_set<std::string> rightColumnSet;
+					std::pmr::unordered_set<std::string_view> rightColumnSet(nameAllocator);
 					rightColumnSet.reserve(rightColumns.size());
 					for (const std::string &column: rightColumns) {
 						rightColumnSet.insert(column);
 					}
 					for (const std::string &column: leftColumns) {
 						if (rightColumnSet.contains(column)) {
-							sharedColumns.push_back(column);
+							sharedColumns.push_back(&column);
 						}
 					}
 					// Build a bounded hash index over shared bindings. A join with no
@@ -13125,18 +13148,21 @@ namespace graph::query::execution {
 					if (input == nullptr || pattern == nullptr) {
 						throw std::invalid_argument("logical-plan OptionalMatch requires two valid children");
 					}
-					const std::vector<std::string> inputColumns = input->getOutputVariables();
-					const std::vector<std::string> patternColumns = pattern->getOutputVariables();
-					std::unordered_set<std::string> inputColumnSet;
+					MaterializedByteReservation inputNameBytes(&state.shared.materialized_budget), patternNameBytes(&state.shared.materialized_budget);
+					const auto inputColumns = boundOutputNames(*input, state, inputNameBytes);
+					const auto patternColumns = boundOutputNames(*pattern, state, patternNameBytes);
+					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
+					auto *nameAllocator = state.shared.bound_program ? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource();
+					std::pmr::unordered_set<std::string_view> inputColumnSet(nameAllocator);
 					inputColumnSet.reserve(inputColumns.size());
 					for (const std::string &column: inputColumns) {
 						if (column.empty() || !inputColumnSet.insert(column).second) {
 							throw std::invalid_argument("logical-plan OptionalMatch input has invalid output columns");
 						}
 					}
-					std::unordered_set<std::string> patternColumnSet;
+					std::pmr::unordered_set<std::string_view> patternColumnSet(nameAllocator);
 					patternColumnSet.reserve(patternColumns.size());
-					std::vector<std::string> sharedColumns;
+					std::pmr::vector<const std::string *> sharedColumns(nameAllocator);
 					sharedColumns.reserve(std::min(inputColumns.size(), patternColumns.size()));
 					for (const std::string &column: patternColumns) {
 						if (column.empty() || !patternColumnSet.insert(column).second) {
@@ -13144,7 +13170,7 @@ namespace graph::query::execution {
 									"logical-plan OptionalMatch pattern has invalid output columns");
 						}
 						if (inputColumnSet.contains(column)) {
-							sharedColumns.push_back(column);
+							sharedColumns.push_back(&column);
 						}
 					}
 					for (const std::string &variable: optional.getRequiredVariables()) {
@@ -14663,6 +14689,13 @@ namespace graph::query::execution {
 					if (unwind.getAlias().empty()) {
 						throw std::invalid_argument("logical-plan UNWIND has an empty alias");
 					}
+					std::optional<detail::BoundExpressionInputs> boundInputs;
+					if (state.shared.bound_program && unwind.getListExpr()) {
+						const expressions::Expression *candidate = unwind.getListExpr().get();
+						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op),
+							std::span<const expressions::Expression *const>(&candidate, 1U), state.shared.snapshot,
+							state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
+					}
 					const auto expandRows = [&](LogicalPlanReadRow input, MaterializedByteReservation inputCharge) {
 						// One input may produce many output rows. Keep its existing charge
 						// until expansion ends; the receiving buffer admits each new row.
@@ -14706,7 +14739,8 @@ namespace graph::query::execution {
 								scalar = &list->getValue();
 							} else {
 								ownsEvaluated = true;
-								evaluated = evaluateExpression(*unwind.getListExpr(), input, state);
+								{ ScopedBoundInputs scopedInputs(state, boundInputs, input);
+								evaluated = evaluateExpression(*unwind.getListExpr(), input, state); }
 								scalar = std::get_if<PropertyValue>(&evaluated);
 								if (scalar == nullptr) {
 									// Entity expressions retain their existing scalar-ID conversion.
@@ -14790,6 +14824,13 @@ namespace graph::query::execution {
 					if (loadCsv.getRowVariable().empty() || !loadCsv.getUrlExpr()) {
 						throw std::invalid_argument("logical LOAD CSV requires a URI expression and row variable");
 					}
+					std::optional<detail::BoundExpressionInputs> boundInputs;
+					if (state.shared.bound_program) {
+						const expressions::Expression *candidate = loadCsv.getUrlExpr().get();
+						boundInputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(op),
+							std::span<const expressions::Expression *const>(&candidate, 1U), state.shared.snapshot,
+							state.shared.materialized_budget, [&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
+					}
 					const std::string &delimiter = loadCsv.getFieldTerminator();
 					if (delimiter.empty() || delimiter.size() > 8U ||
 						delimiter.find_first_of("\r\n\"") != std::string::npos) {
@@ -14810,7 +14851,9 @@ namespace graph::query::execution {
 						} else {
 							retainedSource.set(inputBytes);
 						}
-						const PropertyValue uri = scalarValue(evaluateExpression(*loadCsv.getUrlExpr(), input, state));
+						PropertyValue uri;
+						{ ScopedBoundInputs scopedInputs(state, boundInputs, input);
+							uri = scalarValue(evaluateExpression(*loadCsv.getUrlExpr(), input, state)); }
 						const size_t uriBytes = property_utils::getPropertyValueSize(uri);
 						const size_t inputAndUriBytes = checkedSizeAdd(retainedSource.bytes(), uriBytes,
 																	   "logical LOAD CSV retained size overflowed");
@@ -15106,12 +15149,16 @@ namespace graph::query::execution {
 					if (left == nullptr || right == nullptr) {
 						throw std::invalid_argument("logical-plan UNION requires two valid children");
 					}
-					const std::vector<std::string> columns = left->getOutputVariables();
-					if (columns.empty() || columns != right->getOutputVariables()) {
+					MaterializedByteReservation leftNameBytes(&state.shared.materialized_budget), rightNameBytes(&state.shared.materialized_budget);
+					const auto columns = boundOutputNames(*left, state, leftNameBytes);
+					const auto rightColumns = boundOutputNames(*right, state, rightNameBytes);
+					if (columns.empty() || columns != rightColumns) {
 						throw std::invalid_argument(
 								"logical-plan UNION children must declare the same nonempty output columns");
 					}
-					std::unordered_set<std::string> uniqueColumns;
+					detail::BudgetMemoryResource nameMemory(state.shared.materialized_budget);
+					std::pmr::unordered_set<std::string_view> uniqueColumns(state.shared.bound_program
+						? static_cast<std::pmr::memory_resource *>(&nameMemory) : std::pmr::get_default_resource());
 					uniqueColumns.reserve(columns.size());
 					for (const std::string &column: columns) {
 						if (column.empty() || !uniqueColumns.insert(column).second) {
@@ -15230,6 +15277,10 @@ namespace graph::query::execution {
 					}
 					size_t slotsPerRow = 0U;
 					if (rows.size() > 1U) {
+						std::optional<detail::BoundExpressionInputs> boundInputs;
+						if (state.shared.bound_program) boundInputs.emplace(*state.shared.bound_program,
+							state.shared.bound_program->id(op), sortCandidates, state.shared.snapshot, state.shared.materialized_budget,
+							[&] { checkGuardNow(state); }, std::pmr::get_default_resource(), state.shared.context);
 						slotsPerRow = checkedSizeMul(items.size(), sizeof(PropertyValue),
 													 "logical-plan Sort key-slot size overflowed");
 						size_t keySlotBytes =
@@ -15262,7 +15313,9 @@ namespace graph::query::execution {
 							size_t accountedRowBytes = logicalReadRowBytes(row.row, state.shared.context);
 							for (const logical::LogicalSortItem &item: items) {
 								checkGuard(state);
-								PropertyValue key = scalarValue(evaluateExpression(*item.expression, row.row, state));
+								PropertyValue key;
+								{ ScopedBoundInputs scopedInputs(state, boundInputs, row.row);
+									key = scalarValue(evaluateExpression(*item.expression, row.row, state)); }
 								const size_t keyBytes = retainedExpressionValueBytes(key, state);
 								const size_t currentRowBytes = logicalReadRowBytes(row.row, state.shared.context);
 								const size_t rowGrowth = currentRowBytes > accountedRowBytes ?
@@ -16430,6 +16483,18 @@ namespace graph::query::execution {
 			}
 		}
 
+		void bindInjectedProgram(const logical::LogicalOperator &root, ExecutionState &state, const LogicalPlanReadRow &row) {
+			if (!state.shared.snapshot.bindingSchemaIdentity()) return;
+			detail::BudgetMemoryResource memory(state.shared.materialized_budget);
+			std::pmr::vector<std::string_view> names(&memory);
+			for (const auto &[name, value] : row.values) { checkGuardNow(state); names.push_back(name); }
+			std::ranges::sort(names);
+			state.shared.bound_program.emplace(root, state.shared.snapshot, state.shared.materialized_budget,
+				[&] { checkGuardNow(state); }, detail::BoundProgramLimits{}, std::pmr::get_default_resource(),
+				std::span<const std::string_view>(names));
+			debug::PerfTrace::addValue("logical_plan.bound_inputs.imported_programs", 1);
+		}
+
 		[[nodiscard]] LogicalPlanReadRuntimeStats
 		executeOnSnapshot(storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
 						  const LogicalPlanReadRuntimeBounds &bounds, const FinalRowVisitor &visitor,
@@ -16839,6 +16904,7 @@ namespace graph::query::execution {
 		std::vector<uint64_t>().swap(nodeIds);
 		std::vector<uint64_t>().swap(edgeIds);
 		context.checkGuardNow();
+		bindInjectedProgram(root, state, refreshed);
 		const bool completed = visitOperator(root, state, [&](LogicalPlanReadRow row) {
 			if (state.task.stats.rows_emitted == bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan read runtime exceeded its row bound");
@@ -16860,9 +16926,19 @@ namespace graph::query::execution {
 		// Resolving an uncached Property collection touches durable storage, so
 		// expression-only evaluation enforces the same finite read limits as a plan.
 		validateBounds(bounds, true);
+		logical::LogicalSingleRow bindingRoot;
 		ExecutionSharedState shared{snapshot, bounds, &context, false, false};
 		ExecutionState state{shared, {}};
 		checkGuard(state);
+		bindInjectedProgram(bindingRoot, state, row);
+		std::optional<detail::BoundExpressionInputs> boundInputs;
+		if (shared.bound_program) {
+			const expressions::Expression *candidate = &expression;
+			boundInputs.emplace(*shared.bound_program, shared.bound_program->root(),
+				std::span<const expressions::Expression *const>(&candidate, 1U), snapshot, shared.materialized_budget,
+				[&] { checkGuardNow(state); }, std::pmr::get_default_resource(), &context);
+		}
+		ScopedBoundInputs scopedInputs(state, boundInputs, row);
 		return evaluateExpression(expression, row, state);
 	}
 
