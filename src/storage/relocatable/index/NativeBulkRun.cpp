@@ -397,7 +397,9 @@ namespace graph::storage {
 		const uint32_t recordCount = LittleEndianCodec::readU32(bytes, RECORD_COUNT_OFFSET);
 		const uint32_t recordBytes = LittleEndianCodec::readU32(bytes, RECORD_BYTES_OFFSET);
 		const uint64_t logicalBytes = LittleEndianCodec::readU64(bytes, LOGICAL_BYTES_OFFSET);
-		if (recordCount == 0U || logicalBytes != recordBytes || recordBytes != bytes.size() - RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
+		if (recordCount == 0U ||
+			recordCount > recordBytes / RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + 1U ||
+			logicalBytes != recordBytes || recordBytes != bytes.size() - RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable native bulk-run dimensions are invalid");
 		}
 		const std::span<const std::byte> records = bytes.subspan(RSS_NATIVE_BULK_RUN_HEADER_BYTES);
@@ -535,7 +537,8 @@ namespace graph::storage {
 			options_.first_slot > options_.last_slot || options_.maximum_fragment_bytes == 0U ||
 			options_.maximum_fragment_bytes > RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES ||
 			options_.maximum_batch_fragments == 0U ||
-			options_.maximum_manifest_depth == 0U) {
+			options_.maximum_manifest_depth == 0U ||
+			(options_.scratch_kind != SegmentKind::SGK_BULK_SCRATCH && options_.scratch_kind != SegmentKind::SGK_QUERY_SCRATCH)) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable native bulk-run store requires finite physical and fragment bounds");
 		}
@@ -601,7 +604,7 @@ namespace graph::storage {
 		for (size_t ordinal = 0U; ordinal < payloads.size(); ++ordinal) {
 			PhysicalSegmentAllocationRequest request;
 			request.segment_id = ids[ordinal];
-			request.kind = SegmentKind::SGK_BULK_SCRATCH;
+			request.kind = options_.scratch_kind;
 			request.owner_id = transactionId;
 			request.generation = Generation(1U);
 			request.payload = std::move(payloads[ordinal]);
@@ -651,7 +654,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable native bulk-run location is invalid");
 		}
 		const PhysicalSegmentContents contents = physical_.read(snapshot, location.segment_id);
-		const uint8_t invalid = static_cast<uint8_t>(contents.entry.kind != SegmentKind::SGK_BULK_SCRATCH) |
+		const uint8_t invalid = static_cast<uint8_t>(contents.entry.kind != options_.scratch_kind) |
 								static_cast<uint8_t>(contents.entry.owner_id != location.transaction_id) |
 								static_cast<uint8_t>(contents.entry.generation != location.generation);
 		if (invalid != 0U) {
@@ -1154,7 +1157,7 @@ namespace graph::storage {
 						 "relocatable native bulk-run release has an invalid or duplicate location");
 				}
 				const CatalogEntry entry = metadata_.findCatalog(snapshot, location.segment_id);
-				const uint8_t invalid = static_cast<uint8_t>(entry.kind != SegmentKind::SGK_BULK_SCRATCH) |
+				const uint8_t invalid = static_cast<uint8_t>(entry.kind != options_.scratch_kind) |
 										static_cast<uint8_t>(entry.owner_id != location.transaction_id) |
 										static_cast<uint8_t>(entry.generation != location.generation) |
 										static_cast<uint8_t>(entry.state != SegmentState::SGS_SEALED);
@@ -1162,12 +1165,23 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable native bulk-run release has a stale or foreign scratch location");
 				}
+				if (options_.scratch_kind == SegmentKind::SGK_QUERY_SCRATCH) {
+					// Verify envelope identity and payload checksum before disposal.
+					static_cast<void>(physical_.read(snapshot, location.segment_id));
+				}
+
 				requests.push_back({entry.segment_id, entry.generation});
 			}
 			snapshot.release();
 		} catch (...) {
 			snapshot.release();
 			throw;
+		}
+		if (options_.scratch_kind == SegmentKind::SGK_QUERY_SCRATCH) {
+			// Query callers have quiesced their private readers. The query-kind
+			// capability is independent of ordinary graph snapshot retirement.
+			static_cast<void>(metadata_.releaseQueryScratchSegments(requests, locations.front().transaction_id, checkpointLsn));
+			return;
 		}
 		static_cast<void>(metadata_.retireCatalogSegments(requests, checkpointLsn));
 		static_cast<void>(metadata_.reclaimRetiredPhysicalSlots(reclaimCheckpointLsn));
@@ -1185,7 +1199,8 @@ namespace graph::storage {
 			candidates.reserve(options_.maximum_batch_fragments);
 			metadata_.visitCatalogEntries(snapshot, [&candidates, this](const CatalogEntry &entry) {
 				if (candidates.size() < options_.maximum_batch_fragments &&
-					entry.kind == SegmentKind::SGK_BULK_SCRATCH &&
+					entry.kind == options_.scratch_kind &&
+					(options_.scratch_kind != SegmentKind::SGK_QUERY_SCRATCH || candidates.empty() || entry.owner_id == candidates.front().transaction_id) &&
 					entry.state == SegmentState::SGS_SEALED) {
 					candidates.push_back({entry.segment_id, entry.generation, entry.owner_id});
 				}

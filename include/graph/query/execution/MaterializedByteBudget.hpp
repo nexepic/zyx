@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory_resource>
 #include <stdexcept>
 #include <utility>
 
@@ -19,9 +20,9 @@ namespace graph::query::execution {
 
 	// Counts the sizes supplied by owners, not allocator capacity or RSS. Owners
 	// must keep this object alive until all their reservations have been released.
-	class MaterializedByteBudget final {
+	class MaterializedByteBudget final : public std::pmr::memory_resource {
 	public:
-		explicit MaterializedByteBudget(size_t maximumBytes) : maximum_bytes_(maximumBytes) {
+		explicit MaterializedByteBudget(size_t maximumBytes) : maximum_bytes_(maximumBytes), upstream_(std::pmr::get_default_resource()) {
 			if (maximumBytes == 0U) throw std::invalid_argument("materialized byte budget requires a positive limit");
 		}
 		MaterializedByteBudget(const MaterializedByteBudget &) = delete;
@@ -38,8 +39,18 @@ namespace graph::query::execution {
 			used_bytes_ = used_bytes_ - previousBytes + nextBytes;
 		}
 
+		void *do_allocate(size_t bytes,size_t alignment) override {
+			replace(0U,bytes);
+			try{return upstream_->allocate(bytes,alignment);}
+			catch(...){replace(bytes,0U);throw;}
+		}
+		void do_deallocate(void *pointer,size_t bytes,size_t alignment) override {
+			upstream_->deallocate(pointer,bytes,alignment);replace(bytes,0U);
+		}
+		bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override {return this==&other;}
 		size_t maximum_bytes_;
 		size_t used_bytes_ = 0U;
+		std::pmr::memory_resource *upstream_;
 	};
 
 	class MaterializedByteReservation final {
@@ -49,12 +60,13 @@ namespace graph::query::execution {
 		MaterializedByteReservation(const MaterializedByteReservation &) = delete;
 		MaterializedByteReservation &operator=(const MaterializedByteReservation &) = delete;
 		MaterializedByteReservation(MaterializedByteReservation &&other) noexcept :
-			budget_(std::exchange(other.budget_, nullptr)), bytes_(std::exchange(other.bytes_, 0U)) {}
+			budget_(std::exchange(other.budget_, nullptr)), bytes_(std::exchange(other.bytes_, 0U)), embedded_bytes_(std::exchange(other.embedded_bytes_,0U)) {}
 		MaterializedByteReservation &operator=(MaterializedByteReservation &&other) noexcept {
 			if (this != &other) {
 				reset();
 				budget_ = std::exchange(other.budget_, nullptr);
 				bytes_ = std::exchange(other.bytes_, 0U);
+				embedded_bytes_=std::exchange(other.embedded_bytes_,0U);
 			}
 			return *this;
 		}
@@ -66,12 +78,16 @@ namespace graph::query::execution {
 		}
 		// Transfer part of this owner's charge without changing the shared total.
 		[[nodiscard]] MaterializedByteReservation splitOff(size_t bytes) {
-			if (bytes > bytes_) throw std::logic_error("cannot transfer more materialized bytes than reserved");
-			MaterializedByteReservation transferred(budget_);
-			transferred.bytes_ = bytes;
-			bytes_ -= bytes;
-			return transferred;
+			const size_t embedded=embedded_bytes_>bytes_-std::min(bytes,bytes_)?embedded_bytes_-(bytes_-std::min(bytes,bytes_)):0U;
+			return splitOffAccounting(bytes,embedded);
 		}
+		[[nodiscard]] MaterializedByteReservation splitOffAccounting(size_t bytes,size_t embedded) {
+			if(bytes>bytes_ || embedded>embedded_bytes_ || embedded>bytes || embedded_bytes_-embedded>bytes_-bytes)
+				throw std::logic_error("invalid materialized accounting transfer");
+			MaterializedByteReservation result(budget_);result.bytes_=bytes;result.embedded_bytes_=embedded;
+			bytes_-=bytes;embedded_bytes_-=embedded;return result;
+		}
+
 		// Combine owners of the same allowance without refunding and re-admitting
 		// bytes while the corresponding values remain live.
 		void absorb(MaterializedByteReservation &&other) {
@@ -83,23 +99,32 @@ namespace graph::query::execution {
 				throw std::overflow_error("combined materialized reservation overflowed");
 			}
 			bytes_ += std::exchange(other.bytes_, 0U);
+			embedded_bytes_+=std::exchange(other.embedded_bytes_,0U);
 		}
 
 
 		void set(size_t bytes) {
-			if (budget_ != nullptr) budget_->replace(bytes_, bytes);
-			bytes_ = bytes;
+			setAccounting(bytes,std::min(embedded_bytes_,bytes));
 		}
+		// Logical size may include a parent already owned by a charged PMR vector.
+		// Keep the public size while charging that parent's storage exactly once.
+		void setAccounting(size_t bytes,size_t embedded) {
+			if(embedded>bytes)throw std::logic_error("embedded materialization exceeds logical size");
+			if(budget_)budget_->replace(bytes_-embedded_bytes_,bytes-embedded);
+			bytes_=bytes;embedded_bytes_=embedded;
+		}
+
 		void reset() noexcept {
-			if (budget_ != nullptr) budget_->replace(bytes_, 0U);
-			bytes_ = 0U;
+			if (budget_ != nullptr) budget_->replace(bytes_-embedded_bytes_, 0U);
+			bytes_ = 0U;embedded_bytes_=0U;
 		}
 		[[nodiscard]] bool wouldExceed(size_t nextBytes) const noexcept {
-			return budget_ != nullptr && nextBytes > bytes_ && nextBytes - bytes_ > budget_->available();
+			return budget_ != nullptr && nextBytes-std::min(embedded_bytes_,nextBytes)>bytes_-embedded_bytes_ && nextBytes-std::min(embedded_bytes_,nextBytes)-(bytes_-embedded_bytes_)>budget_->available();
 		}
 
 	private:
 		MaterializedByteBudget *budget_;
 		size_t bytes_ = 0U;
+		size_t embedded_bytes_ = 0U;
 	};
 }

@@ -105,7 +105,7 @@ namespace graph::storage {
 			const uint16_t rawState = static_cast<uint16_t>(entry.state);
 			const uint8_t invalidEnum =
 					static_cast<uint8_t>(rawKind < static_cast<uint16_t>(SegmentKind::SGK_ENTITY_PAGE_POOL)) |
-					static_cast<uint8_t>(rawKind > static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH)) |
+					static_cast<uint8_t>(rawKind > static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH)) |
 					static_cast<uint8_t>(rawState > static_cast<uint16_t>(SegmentState::SGS_OBSOLETE));
 			if (invalidEnum != 0U) {
 				throwCatalogTreeError(FormatError::FERR_INVALID_ENUM,

@@ -86,7 +86,7 @@ TEST(BoundedBatchTest, SharesLiveBytesAcrossOwnersAndRefundsClearAndDestruction)
 	{
 		MaterializedByteReservation source(&budget);
 		source.set(3U);
-		BoundedBatch<std::string> first(4U, 10U, [](const auto &value) { return value.size(); }, &budget);
+		BoundedBatch<std::string> first(4U, 10U, [](const auto &value) { return value.size(); }, &budget, false);
 		first.append("1234");
 		EXPECT_EQ(budget.used(), 7U);
 		EXPECT_TRUE(first.wouldExceedBytes("5678"));
@@ -94,7 +94,7 @@ TEST(BoundedBatchTest, SharesLiveBytesAcrossOwnersAndRefundsClearAndDestruction)
 		EXPECT_EQ(first.size(), 1U);
 		EXPECT_EQ(budget.used(), 7U);
 		{
-			BoundedBatch<std::string> second(4U, 10U, [](const auto &value) { return value.size(); }, &budget);
+			BoundedBatch<std::string> second(4U, 10U, [](const auto &value) { return value.size(); }, &budget, false);
 			second.append("abc");
 			EXPECT_EQ(budget.available(), 0U);
 			first.clear();
@@ -112,7 +112,7 @@ TEST(BoundedBatchTest, SharedRecalculationAndOwnershipTransferPreserveAccounting
 	MaterializedByteBudget budget(10U);
 	MaterializedByteReservation source(&budget);
 	source.set(7U);
-	BoundedBatch<std::string> batch(4U, 10U, [](const auto &value) { return value.size(); }, &budget);
+	BoundedBatch<std::string> batch(4U, 10U, [](const auto &value) { return value.size(); }, &budget, false);
 	batch.append("a");
 	batch.values().front() = "abcd";
 	EXPECT_THROW(batch.recalculateBytes(), std::runtime_error);
@@ -124,7 +124,7 @@ TEST(BoundedBatchTest, SharedRecalculationAndOwnershipTransferPreserveAccounting
 	batch.values().front() = "ab";
 	batch.recalculateBytes();
 	EXPECT_EQ(budget.used(), 2U);
-	BoundedBatch<std::string> receiver(4U, 10U, [](const auto &value) { return value.size(); }, &budget);
+	BoundedBatch<std::string> receiver(4U, 10U, [](const auto &value) { return value.size(); }, &budget, false);
 	receiver.append(batch.popBack());
 	EXPECT_TRUE(batch.empty());
 	EXPECT_EQ(batch.bytes(), 0U);
@@ -134,7 +134,7 @@ TEST(BoundedBatchTest, SharedRecalculationAndOwnershipTransferPreserveAccounting
 
 TEST(BoundedBatchTest, ChargedPopKeepsMovedValueInTheSharedBudget) {
 	graph::query::execution::MaterializedByteBudget budget(8U);
-	BoundedBatch<std::string> batch(3U, 8U, [](const std::string &value) { return value.size(); }, &budget);
+	BoundedBatch<std::string> batch(3U, 8U, [](const std::string &value) { return value.size(); }, &budget, false);
 	batch.append("aa");
 	batch.append("bbbb");
 	EXPECT_EQ(budget.used(), 6U);
@@ -155,8 +155,8 @@ TEST(BoundedBatchTest, ChargedAppendTransfersAnExistingRowWithoutDoubleCharge) {
 	using graph::query::execution::MaterializedByteBudget;
 	using graph::query::execution::MaterializedByteReservation;
 	MaterializedByteBudget budget(6U);
-	BoundedBatch<std::string> source(2U, 6U, [](const auto &value) { return value.size(); }, &budget);
-	BoundedBatch<std::string> destination(2U, 6U, [](const auto &value) { return value.size(); }, &budget);
+	BoundedBatch<std::string> source(2U, 6U, [](const auto &value) { return value.size(); }, &budget, false);
+	BoundedBatch<std::string> destination(2U, 6U, [](const auto &value) { return value.size(); }, &budget, false);
 	source.append("abcd");
 	destination.append("xy");
 	auto moved = source.popBackCharged();
@@ -222,7 +222,7 @@ TEST(BoundedBatchTest, FailedInsertionRefundsSharedReservation) {
 		Row(Row &&) { throw std::runtime_error("insertion failure"); }
 	};
 	graph::query::execution::MaterializedByteBudget budget(10U);
-	BoundedBatch<Row> batch(4U, 10U, [](const Row &) { return size_t{4U}; }, &budget);
+	BoundedBatch<Row> batch(4U, 10U, [](const Row &) { return size_t{4U}; }, &budget, false);
 	EXPECT_THROW(batch.append(Row{}), std::runtime_error);
 	EXPECT_TRUE(batch.empty());
 	EXPECT_EQ(batch.bytes(), 0U);
@@ -252,10 +252,10 @@ TEST(BoundedBatchTest, MoveConstructionEmptiesSourceAndRetainsItsSharedBudgetFor
 	using graph::query::execution::MaterializedByteBudget;
 	MaterializedByteBudget budget(10U);
 	{
-		BoundedBatch<std::string> source(3U, 10U, [](const std::string &value) { return value.size(); }, &budget);
+		BoundedBatch<std::string> source(3U, 10U, [](const std::string &value) { return value.size(); }, &budget, false);
 		source.append("abcdef");
 		BoundedBatch<std::string> moved(std::move(source));
-		EXPECT_EQ(moved.values(), (std::vector<std::string>{"abcdef"}));
+		EXPECT_TRUE(std::ranges::equal(moved.values(), std::vector<std::string>{"abcdef"}));
 		EXPECT_EQ(moved.bytes(), 6U);
 		EXPECT_TRUE(source.empty());
 		EXPECT_EQ(source.bytes(), 0U);
@@ -281,8 +281,8 @@ TEST(BoundedBatchTest, MoveAssignmentRefundsOldOwnerAndKeepsBothBatchesReusable)
 		MaterializedByteBudget first(10U);
 		MaterializedByteBudget second(10U);
 		{
-			BoundedBatch<std::string> source(3U, 10U, [](const std::string &value) { return value.size(); }, &first);
-			BoundedBatch<std::string> destination(1U, 3U, [](const std::string &value) { return value.size(); }, sameBudget ? &first : &second);
+			BoundedBatch<std::string> source(3U, 10U, [](const std::string &value) { return value.size(); }, &first, false);
+			BoundedBatch<std::string> destination(1U, 3U, [](const std::string &value) { return value.size(); }, sameBudget ? &first : &second, false);
 			source.append("abcdef");
 			destination.append("old");
 			destination = std::move(source);
@@ -298,7 +298,7 @@ TEST(BoundedBatchTest, MoveAssignmentRefundsOldOwnerAndKeepsBothBatchesReusable)
 			EXPECT_THROW(destination.append("x"), std::runtime_error);
 			auto *self = &destination;
 			destination = std::move(*self);
-			EXPECT_EQ(destination.values(), (std::vector<std::string>{"abcdef"}));
+			EXPECT_TRUE(std::ranges::equal(destination.values(), std::vector<std::string>{"abcdef"}));
 			EXPECT_EQ(first.used(), 10U);
 			source.clear();
 			destination.append("more");
@@ -324,16 +324,16 @@ TEST(BoundedBatchTest, FailedEstimatorCopyPreservesSourceDestinationAndReservati
 	using graph::query::execution::MaterializedByteBudget;
 	bool fail = false;
 	MaterializedByteBudget budget(10U);
-	BoundedBatch<std::string> source(3U, 10U, CopyFailingSizer(fail), &budget);
-	BoundedBatch<std::string> destination(1U, 3U, [](const std::string &value) { return value.size(); }, &budget);
+	BoundedBatch<std::string> source(3U, 10U, CopyFailingSizer(fail), &budget, false);
+	BoundedBatch<std::string> destination(1U, 3U, [](const std::string &value) { return value.size(); }, &budget, false);
 	source.append("abcdef");
 	destination.append("old");
 	fail = true;
 	EXPECT_THROW(static_cast<void>(BoundedBatch<std::string>(std::move(source))), std::runtime_error);
 	EXPECT_THROW(destination = std::move(source), std::runtime_error);
-	EXPECT_EQ(source.values(), (std::vector<std::string>{"abcdef"}));
+	EXPECT_TRUE(std::ranges::equal(source.values(), std::vector<std::string>{"abcdef"}));
 	EXPECT_EQ(source.bytes(), 6U);
-	EXPECT_EQ(destination.values(), (std::vector<std::string>{"old"}));
+	EXPECT_TRUE(std::ranges::equal(destination.values(), std::vector<std::string>{"old"}));
 	EXPECT_EQ(destination.bytes(), 3U);
 	EXPECT_EQ(destination.maximumRows(), 1U);
 	EXPECT_EQ(destination.maximumBytes(), 3U);
@@ -351,7 +351,7 @@ TEST(BoundedBatchTest, RecalculationAbsorbsEnrichmentWithoutChargingTwice) {
 	MaterializedByteBudget budget(6U);
 	{
 		BoundedBatch<std::string> batch(1U, 6U,
-			[](const std::string &value) { return value.size(); }, &budget);
+			[](const std::string &value) { return value.size(); }, &budget, false);
 		batch.append("abc");
 		MaterializedByteReservation enrichment(&budget);
 		enrichment.set(3U);
@@ -367,4 +367,36 @@ TEST(BoundedBatchTest, RecalculationAbsorbsEnrichmentWithoutChargingTwice) {
 		EXPECT_EQ(budget.used(), 6U);
 	}
 	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(BoundedBatchTest, CapacityOwnerRefundsOnlyAfterClearReleasesItsBuffer) {
+	graph::query::execution::MaterializedByteBudget budget(1024U);
+	{
+		BoundedBatch<std::string> batch(4U,1024U,[](const auto &value){return value.size();},&budget);
+		batch.append("abc");const auto slots=batch.values().capacity()*sizeof(std::string);
+		EXPECT_EQ(budget.used(),slots+3U);
+		batch.clear();EXPECT_EQ(batch.values().capacity(),0U);EXPECT_EQ(budget.used(),0U);
+	}
+	EXPECT_EQ(budget.used(),0U);
+}
+TEST(BoundedBatchTest, CapacityAdmissionFailureRefundsPayloadAndKeepsBatchReusable) {
+	graph::query::execution::MaterializedByteBudget budget(sizeof(std::string));
+	BoundedBatch<std::string> batch(4U,sizeof(std::string),[](const auto &value){return value.size();},&budget);
+	EXPECT_THROW(batch.append("x"),graph::query::execution::MaterializedByteLimitExceeded);
+	EXPECT_TRUE(batch.empty());EXPECT_EQ(batch.bytes(),0U);EXPECT_EQ(budget.used(),0U);
+	batch.append("");EXPECT_EQ(batch.size(),1U);EXPECT_EQ(budget.used(),sizeof(std::string));
+}
+
+TEST(BoundedBatchTest, CapacityMoveAcrossBudgetsTransfersTheAllocatorOwnerAndRefundsOldSlots) {
+	graph::query::execution::MaterializedByteBudget first(1024U),second(1024U);
+	{
+		BoundedBatch<std::string> source(3U,1024U,[](const auto &value){return value.size();},&first);
+		BoundedBatch<std::string> destination(3U,1024U,[](const auto &value){return value.size();},&second);
+		source.append("abcdef");destination.append("old");destination=std::move(source);
+		EXPECT_EQ(second.used(),0U);EXPECT_EQ(destination.values().get_allocator().resource(),&first);
+		const auto sourceSlots=destination.values().capacity()*sizeof(std::string);
+		EXPECT_EQ(first.used(),sourceSlots+6U);
+		source.append("x");EXPECT_EQ(first.used(),sourceSlots+7U+source.values().capacity()*sizeof(std::string));
+	}
+	EXPECT_EQ(first.used(),0U);EXPECT_EQ(second.used(),0U);
 }

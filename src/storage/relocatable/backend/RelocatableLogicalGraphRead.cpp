@@ -34,11 +34,16 @@ namespace graph::storage {
 		}
 	} // namespace
 
-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot {
+	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalQueryScratchProvider {
 	public:
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads) :
 			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()) {}
+
+		[[nodiscard]] bool queryScratchEnabled() const override {return backend_.nativeQueryScratchEnabled();}
+		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {
+			return const_cast<RelocatableStorageBackend &>(backend_).openNativeQueryScratchSession(bytes,fragments);
+		}
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
 				return readNodeShaped(nodeId, {.include_labels = true, .all_properties = true});

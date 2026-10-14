@@ -2633,6 +2633,32 @@ namespace graph::storage {
 		return batch.candidate();
 	}
 
+	Superblock RelocatableMetadataStore::releaseQueryScratchSegments(
+		std::span<const CatalogSegmentRetirementRequest> requests, uint64_t owner,
+		LogSequenceNumber checkpoint, const MetadataPublishOptions &options) {
+		if(requests.empty() || requests.size()>64U || owner==0U || !checkpoint.isValid())
+			throw FormatException(FormatError::FERR_INVALID_HEADER,"query scratch release requires bounded owner identities");
+		MetadataWriteGuard writer=beginWrite();const Superblock current=bootstrap_.recover();
+		std::vector<CatalogEntry> released;released.reserve(requests.size());std::set<uint64_t> ids;
+		for(const auto &request:requests){
+			const auto entry=catalog_.find(current,request.segment_id);
+			if(!ids.insert(entry.segment_id.value()).second || entry.kind!=SegmentKind::SGK_QUERY_SCRATCH ||
+				entry.owner_id!=owner || entry.generation!=request.expected_generation || entry.state!=SegmentState::SGS_SEALED ||
+				!allocator_.isAllocated(current,entry.physical_slot))
+				throw FormatException(FormatError::FERR_INVALID_STATE,"query scratch release rejects stale, foreign or user segments");
+			auto obsolete=entry;obsolete.state=SegmentState::SGS_OBSOLETE;released.push_back(obsolete);
+		}
+		// A corrupted registration must not turn public data into disposable scratch.
+		locations_.visitPages(current,[&](const PageLocation &page){if(ids.contains(page.segment_id.value()))
+			throw FormatException(FormatError::FERR_INVALID_STATE,"query scratch is reachable from a public Page Directory");});
+		locations_.visitExtents(current,[&](const ExtentLocation &extent){if(ids.contains(extent.segment_id.value()))
+			throw FormatException(FormatError::FERR_INVALID_STATE,"query scratch is reachable from a public Extent Directory");});
+		MetadataWriteBatch batch(metadata_page_pool_,current,checkpoint);
+		std::ranges::sort(released,{},&CatalogEntry::segment_id);catalog_.prepareUpsert(batch,released);
+		for(const auto &entry:released){batch.reserveDataSlot(entry.physical_slot);allocator_.prepareSetAllocated(batch,entry.physical_slot,false);}
+		publishBatch(batch,writer,options);return batch.candidate();
+	}
+
 	Superblock RelocatableMetadataStore::releaseRetiredCatalogSegment(SegmentId segmentId,
 																	  Generation expectedGeneration,
 																	  LogSequenceNumber checkpointLsn,

@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <memory_resource>
+#include <memory>
 
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 
@@ -33,9 +35,10 @@ namespace graph::query::execution {
 		};
 
 		BoundedBatch(size_t maximumRows, size_t maximumBytes, SizeFunction sizeFunction,
-				MaterializedByteBudget *sharedBudget = nullptr) :
-			maximum_rows_(maximumRows), maximum_bytes_(maximumBytes), size_function_(std::move(sizeFunction)),
-			reservation_(sharedBudget) {
+				MaterializedByteBudget *sharedBudget = nullptr, bool accountVectorCapacity = true,size_t embeddedObjectBytes=0U) :
+			maximum_rows_(maximumRows), maximum_bytes_(maximumBytes), embedded_object_bytes_(sharedBudget && accountVectorCapacity?embeddedObjectBytes:0U), size_function_(std::move(sizeFunction)),
+			reservation_(sharedBudget),
+				values_(sharedBudget && accountVectorCapacity ? static_cast<std::pmr::memory_resource *>(sharedBudget) : std::pmr::get_default_resource()) {
 			if (maximum_rows_ == 0U || maximum_bytes_ == 0U || !size_function_) {
 				throw std::invalid_argument("bounded batch requires positive limits and a size function");
 			}
@@ -59,9 +62,11 @@ namespace graph::query::execution {
 				clear(); // Destroy old values before refunding their reservation.
 				maximum_rows_ = other.maximum_rows_;
 				maximum_bytes_ = other.maximum_bytes_;
+				embedded_object_bytes_=other.embedded_object_bytes_;
 				size_function_ = std::move(estimator);
 				reservation_ = std::move(other.reservation_);
-				values_ = std::move(other.values_);
+				std::destroy_at(&values_);
+				std::construct_at(&values_,std::move(other.values_));
 				bytes_ = std::exchange(other.bytes_, 0U);
 				other.values_.clear();
 				other.reservation_ = reservation_.makeEmptyReservation();
@@ -74,8 +79,8 @@ namespace graph::query::execution {
 		[[nodiscard]] size_t bytes() const noexcept { return bytes_; }
 		[[nodiscard]] size_t maximumRows() const noexcept { return maximum_rows_; }
 		[[nodiscard]] size_t maximumBytes() const noexcept { return maximum_bytes_; }
-		[[nodiscard]] const std::vector<T> &values() const noexcept { return values_; }
-		[[nodiscard]] std::vector<T> &values() noexcept { return values_; }
+		[[nodiscard]] const std::pmr::vector<T> &values() const noexcept { return values_; }
+		[[nodiscard]] std::pmr::vector<T> &values() noexcept { return values_; }
 		[[nodiscard]] bool wouldExceedBytes(const T &value) const {
 			const size_t valueBytes = size_function_(value);
 			return valueBytes > maximum_bytes_ - std::min(bytes_, maximum_bytes_) ||
@@ -86,8 +91,11 @@ namespace graph::query::execution {
 			// Even an empty batch must not eagerly allocate slots for the entire
 			// row bound when the byte budget can only hold a small subset. Payload
 			// accounting remains the caller's size function's responsibility.
-			const size_t byteCapacity = maximum_bytes_ / sizeof(T);
-			values_.reserve(std::min({capacity, maximum_rows_, byteCapacity}));
+			auto *allocationBudget=dynamic_cast<MaterializedByteBudget *>(values_.get_allocator().resource());
+			const size_t byteCapacity=allocationBudget
+				? std::min(maximum_bytes_/(4U*sizeof(T)),allocationBudget->available()/(4U*sizeof(T)))
+				: maximum_bytes_/sizeof(T);
+			values_.reserve(std::min({capacity, maximum_rows_, byteCapacity,allocationBudget?size_t{64U}:capacity}));
 		}
 
 		void append(T value) {
@@ -98,11 +106,11 @@ namespace graph::query::execution {
 			if (valueBytes > maximum_bytes_ - std::min(bytes_, maximum_bytes_)) {
 				throw std::runtime_error("bounded batch exceeded its byte limit");
 			}
-			reservation_.set(bytes_ + valueBytes);
+			reservation_.setAccounting(bytes_ + valueBytes,(values_.size()+1U)*embedded_object_bytes_);
 			try {
 				values_.push_back(std::move(value));
 			} catch (...) {
-				reservation_.set(bytes_);
+				reservation_.setAccounting(bytes_,values_.size()*embedded_object_bytes_);
 				throw;
 			}
 			// Publish the accounting only after vector insertion succeeds; an
@@ -123,11 +131,12 @@ namespace graph::query::execution {
 			if (valueBytes > maximum_bytes_ - std::min(bytes_, maximum_bytes_)) {
 				throw std::runtime_error("bounded batch exceeded its byte limit");
 			}
-			reservation_.absorb(std::move(charge));
 			try {
+				reservation_.absorb(std::move(charge));
+				reservation_.setAccounting(bytes_+valueBytes,(values_.size()+1U)*embedded_object_bytes_);
 				values_.push_back(std::move(value));
 			} catch (...) {
-				reservation_.set(bytes_);
+				reservation_.setAccounting(bytes_,values_.size()*embedded_object_bytes_);
 				throw;
 			}
 			bytes_ += valueBytes;
@@ -142,8 +151,9 @@ namespace graph::query::execution {
 			if (valueBytes > bytes_) throw std::logic_error("bounded batch requires byte recalculation before pop");
 			T value = std::move(values_.back());
 			values_.pop_back();
+			if(values_.empty())releaseEmptyCapacity();
 			bytes_ -= valueBytes;
-			reservation_.set(bytes_);
+			reservation_.setAccounting(bytes_,values_.size()*embedded_object_bytes_);
 			return value;
 		}
 
@@ -155,8 +165,9 @@ namespace graph::query::execution {
 			if (valueBytes > bytes_) throw std::logic_error("bounded batch requires byte recalculation before pop");
 			T value = std::move(values_.back());
 			values_.pop_back();
+			if(values_.empty())releaseEmptyCapacity();
 			bytes_ -= valueBytes;
-			MaterializedByteReservation charge = reservation_.splitOff(valueBytes);
+			MaterializedByteReservation charge = reservation_.splitOffAccounting(valueBytes,embedded_object_bytes_);
 			return {std::move(charge), std::move(value)};
 		}
 
@@ -171,7 +182,7 @@ namespace graph::query::execution {
 				}
 				total += valueBytes;
 			}
-			reservation_.set(total);
+			reservation_.setAccounting(total,values_.size()*embedded_object_bytes_);
 			bytes_ = total;
 		}
 
@@ -184,17 +195,23 @@ namespace graph::query::execution {
 
 		void clear() noexcept {
 			values_.clear();
+			releaseEmptyCapacity();
 			reservation_.reset();
 			bytes_ = 0U;
 		}
 
 	private:
+		void releaseEmptyCapacity() noexcept {
+			if(dynamic_cast<MaterializedByteBudget *>(values_.get_allocator().resource())!=nullptr)
+				std::pmr::vector<T>(values_.get_allocator().resource()).swap(values_);
+		}
 		size_t maximum_rows_ = 0U;
 		size_t maximum_bytes_ = 0U;
+		size_t embedded_object_bytes_ = 0U;
 		SizeFunction size_function_;
 		// Values are destroyed before their reservation releases the charge.
 		MaterializedByteReservation reservation_;
-		std::vector<T> values_;
+		std::pmr::vector<T> values_;
 		size_t bytes_ = 0U;
 	};
 

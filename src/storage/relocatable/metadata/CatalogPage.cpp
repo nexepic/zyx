@@ -49,7 +49,7 @@ namespace graph::storage {
 
 		[[nodiscard]] bool isKnownSegmentKind(uint16_t rawKind) {
 			return rawKind >= static_cast<uint16_t>(SegmentKind::SGK_ENTITY_PAGE_POOL) &&
-				   rawKind <= static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH);
+				   rawKind <= static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH);
 		}
 
 		[[nodiscard]] bool isKnownSegmentState(uint16_t rawState) {

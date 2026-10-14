@@ -25,7 +25,7 @@ namespace graph::storage {
 		[[nodiscard]] bool isAllocatableKind(SegmentKind kind) {
 			const uint16_t raw = static_cast<uint16_t>(kind);
 			return raw >= static_cast<uint16_t>(SegmentKind::SGK_ENTITY_PAGE_POOL) &&
-				   raw <= static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH) &&
+				   raw <= static_cast<uint16_t>(SegmentKind::SGK_QUERY_SCRATCH) &&
 				   kind != SegmentKind::SGK_METADATA_PAGE_POOL;
 		}
 

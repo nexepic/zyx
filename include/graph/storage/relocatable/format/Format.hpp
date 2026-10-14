@@ -37,7 +37,7 @@ namespace graph::storage {
 	constexpr uint64_t RSS_FIRST_ALLOCATABLE_SEGMENT_ID = RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN + 1U;
 	constexpr uint32_t RSS_PAGE_POOL_FIRST_DATA_FRAME = 1;
 	constexpr uint32_t RSS_PAGE_POOL_DATA_FRAME_COUNT = RSS_SEGMENT_SIZE / RSS_PAGE_SIZE - 1U;
-	constexpr uint16_t RSS_FORMAT_VERSION = 4;
+	constexpr uint16_t RSS_FORMAT_VERSION = 5;
 	constexpr uint32_t RSS_SEGMENT_MAGIC = 0x4758595AU; // Little-endian bytes: ZYXG
 	constexpr uint32_t RSS_ENVELOPE_BYTES = 64;
 	// The 16-bit envelope field is constrained to the largest 8-byte-aligned value.
@@ -121,6 +121,8 @@ namespace graph::storage {
 		// public graph state and writable open reclaims every leftover fragment
 		// before exposing the backend to readers.
 		SGK_BULK_SCRATCH = 14,
+		// Query-owned, graph-unreachable scratch; never reclaimed as bulk scratch.
+		SGK_QUERY_SCRATCH = 15,
 	};
 
 	enum class SegmentState : uint16_t {
