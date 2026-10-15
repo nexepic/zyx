@@ -24,7 +24,7 @@
 namespace graph::parser::cypher::helpers {
 
 std::string AstExtractor::extractVariable(CypherParser::VariableContext *ctx) {
-	return ctx ? ctx->getText() : "";
+	return ctx ? normalizeSymbolicName(ctx->getText()) : "";
 }
 
 std::vector<std::string> AstExtractor::extractLabels(CypherParser::NodeLabelsContext *ctx) {

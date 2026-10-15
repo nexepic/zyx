@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
+
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 
 #include <algorithm>
@@ -224,7 +226,7 @@ namespace graph::storage {
 		return result;
 	}
 
-	SlottedPage::SlottedPage(std::vector<std::byte> bytes, Header header) :
+	SlottedPage::SlottedPage(utils::OwnedVector<std::byte> bytes, Header header) :
 		bytes_(std::move(bytes)), header_(std::move(header)) {}
 
 	SlottedPage::SlottedPage(SlottedPage &&other) noexcept {
@@ -251,7 +253,7 @@ namespace graph::storage {
 		Header header;
 		header.page_id = pageId;
 		header.page_generation = pageGeneration;
-		SlottedPage page(std::vector<std::byte>(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES), std::move(header));
+		SlottedPage page(utils::OwnedVector<std::byte>(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES), std::move(header));
 		page.refreshHeaderLocked();
 		return page;
 	}
@@ -269,13 +271,14 @@ namespace graph::storage {
 		return page;
 	}
 
-	SlottedPage SlottedPage::open(std::span<const std::byte> bytes) {
+	SlottedPage SlottedPage::open(std::span<const std::byte> bytes, std::shared_ptr<std::pmr::memory_resource> memory) {
 		if (bytes.size() != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
 			throwSlottedPageError(bytes.size() < RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES ? FormatError::FERR_BUFFER_TOO_SMALL
 																				  : FormatError::FERR_INVALID_HEADER,
 								  "relocatable slotted page has an invalid byte length");
 		}
-		std::vector<std::byte> copied(bytes.begin(), bytes.end());
+		utils::OwnedVector<std::byte> copied(bytes.begin(), bytes.end(),
+			memory ? utils::OwnedPmrAllocator<std::byte>(std::move(memory)) : utils::OwnedPmrAllocator<std::byte>());
 		const uint32_t expectedCrc = LittleEndianCodec::readU32(copied, PAGE_CRC_OFFSET);
 		LittleEndianCodec::writeU32(copied, PAGE_CRC_OFFSET, 0);
 		if (calculateCrc(copied) != expectedCrc) {
@@ -372,9 +375,10 @@ namespace graph::storage {
 		return page;
 	}
 
-	SlottedPage SlottedPage::open(const PageOwnerHeader &owner, std::span<const std::byte> bytes) {
+	SlottedPage SlottedPage::open(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+		std::shared_ptr<std::pmr::memory_resource> memory) {
 		validateSlottedPageOwner(owner);
-		SlottedPage page = open(bytes);
+		SlottedPage page = open(bytes, std::move(memory));
 		if (page.pageId() != owner.page_id || page.pageGeneration() != owner.generation) {
 			throwSlottedPageError(FormatError::FERR_INVALID_STATE,
 								  "relocatable slotted page header disagrees with its shared-pool owner");
@@ -423,7 +427,7 @@ namespace graph::storage {
 
 	std::vector<std::byte> SlottedPage::serialize() const {
 		std::scoped_lock lock(latch_);
-		return bytes_;
+		return {bytes_.begin(), bytes_.end()};
 	}
 
 	std::vector<SlottedSlotReference> SlottedPage::liveSlots() const {
@@ -472,12 +476,18 @@ namespace graph::storage {
 		return bytes_.capacity();
 	}
 
+	size_t SlottedPage::unaccountedReadBufferBytes() const {
+		std::scoped_lock lock(latch_);
+		return bytes_.get_allocator().owner() ? 0U : bytes_.capacity();
+	}
+
 	std::vector<std::byte> SlottedPage::read(const SlottedSlotReference &reference,
 			const std::function<void(size_t)> &bufferAdmission) const {
 		std::scoped_lock lock(latch_);
 		validateReferenceLocked(reference);
 		const Slot slot = readSlotLocked(reference.slot_id);
 		if (bufferAdmission) bufferAdmission(slot.value_bytes);
+        else detail::admitScopedPropertyVectorStorage<std::byte>(slot.value_bytes);
 		auto result = readLocked(reference);
 		if (bufferAdmission) bufferAdmission(result.capacity());
 		return result;

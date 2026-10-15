@@ -19,11 +19,17 @@
  **/
 
 #pragma once
+#include "graph/core/OwnedPropertyVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/OwnedSharedPtr.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include <memory>
 #include <string>
 #include <vector>
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/core/OwnedPropertyValue.hpp"
 
 namespace graph::query::expressions {
 
@@ -110,8 +116,12 @@ enum class UnaryOperatorType {
  * Expressions are immutable after construction (thread-safe).
  * All concrete expression types use std::unique_ptr for ownership of child expressions.
  */
-class Expression {
+class Expression : public utils::OwnedPmrObject {
 public:
+    static void *operator new(size_t bytes) {
+        return utils::OwnedPmrObject::operator new(bytes, utils::OwnedAllocationScope::owner());
+    }
+    using utils::OwnedPmrObject::operator delete;
 	virtual ~Expression() = default;
 
 	/**
@@ -150,11 +160,13 @@ public:
  */
 class LiteralExpression : public Expression {
 public:
-	explicit LiteralExpression(std::string value);
+	explicit LiteralExpression(utils::OwnedStdString value);
+    explicit LiteralExpression(const std::string &value) : LiteralExpression(utils::OwnedStdString(value)) {}
 	explicit LiteralExpression(int64_t value);
 	explicit LiteralExpression(double value);
 	explicit LiteralExpression(bool value);
-	explicit LiteralExpression(PropertyValue value);
+	explicit LiteralExpression(OwnedPropertyValue value);
+    explicit LiteralExpression(const PropertyValue &value) : LiteralExpression(OwnedPropertyValue(value)) {}
 	explicit LiteralExpression(); // NULL
 
 	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::LITERAL; }
@@ -178,11 +190,11 @@ public:
 	[[nodiscard]] const PropertyValue &getPropertyValue() const;
 
 private:
-	std::string stringValue_;
+	utils::OwnedStdString stringValue_;
 	int64_t integerValue_;
 	double doubleValue_;
 	bool booleanValue_;
-	PropertyValue propertyValue_;
+	OwnedPropertyValue propertyValue_;
 	enum class LiteralType { NULL_VAL, BOOLEAN, INTEGER, DOUBLE, STRING, PROPERTY_VALUE } literalType_;
 };
 
@@ -199,12 +211,12 @@ public:
 	/**
 	 * @brief Constructor for simple variable reference (e.g., 'n')
 	 */
-	explicit VariableReferenceExpression(std::string variableName);
+	explicit VariableReferenceExpression(utils::OwnedStdString variableName);
 
 	/**
 	 * @brief Constructor for property access (e.g., 'n.age')
 	 */
-	VariableReferenceExpression(std::string variableName, std::string propertyName);
+	VariableReferenceExpression(utils::OwnedStdString variableName, utils::OwnedStdString propertyName);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
 		return hasProperty_ ? ExpressionType::PROPERTY_ACCESS : ExpressionType::VARIABLE_REFERENCE;
@@ -219,9 +231,9 @@ public:
 	[[nodiscard]] const std::string &getPropertyName() const { return propertyName_; }
 
 private:
-	std::string variableName_;
+	utils::OwnedStdString variableName_;
 	bool hasProperty_;
-	std::string propertyName_;
+	utils::OwnedStdString propertyName_;
 };
 
 // ============================================================================
@@ -290,8 +302,8 @@ private:
  */
 class FunctionCallExpression : public Expression {
 public:
-	FunctionCallExpression(std::string functionName,
-	                       std::vector<std::unique_ptr<Expression>> arguments,
+	FunctionCallExpression(utils::OwnedStdString functionName,
+	                       utils::OwnedStdVector<std::unique_ptr<Expression>> arguments,
 	                       bool distinct = false);
 
 	[[nodiscard]] ExpressionType getExpressionType() const override { return ExpressionType::FUNCTION_CALL; }
@@ -306,8 +318,8 @@ public:
 	[[nodiscard]] bool isDistinct() const { return distinct_; }
 
 private:
-	std::string functionName_;
-	std::vector<std::unique_ptr<Expression>> arguments_;
+	utils::OwnedStdString functionName_;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> arguments_;
 	bool distinct_ = false;
 };
 
@@ -324,7 +336,7 @@ private:
  */
 class InExpression : public Expression {
 public:
-	InExpression(std::unique_ptr<Expression> value, std::vector<PropertyValue> listValues)
+	InExpression(std::unique_ptr<Expression> value, graph::OwnedPropertyVector listValues)
 		: value_(std::move(value)), listValues_(std::move(listValues)) {}
 
 	InExpression(std::unique_ptr<Expression> value, std::unique_ptr<Expression> listExpr)
@@ -343,7 +355,7 @@ public:
 
 private:
 	std::unique_ptr<Expression> value_;
-	std::vector<PropertyValue> listValues_;
+	graph::OwnedPropertyVector listValues_;
 	std::unique_ptr<Expression> listExpression_;
 };
 
@@ -356,6 +368,7 @@ private:
  * @brief Represents a WHEN...THEN branch in a CASE expression.
  */
 struct CaseBranch {
+    using OwnedHeapElement = void;
 	std::unique_ptr<Expression> whenExpression;
 	std::unique_ptr<Expression> thenExpression;
 
@@ -406,7 +419,7 @@ public:
 
 private:
 	std::unique_ptr<Expression> comparisonExpression_; // NULL for searched CASE
-	std::vector<CaseBranch> branches_;
+	utils::OwnedStdVector<CaseBranch> branches_;
 	std::unique_ptr<Expression> elseExpression_;
 };
 

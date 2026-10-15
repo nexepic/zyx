@@ -43,7 +43,7 @@ ProjectionBody buildProjectionBody(CypherParser::ProjectionBodyContext* body) {
 		for (auto item : items->projectionItem()) {
 			ProjectionItem pi;
 			auto exprAST = ExpressionBuilder::buildExpression(item->expression());
-			pi.expression = std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+			pi.expression = utils::shareOwned(std::move(exprAST));
 
 			if (item->K_AS()) {
 				pi.alias = AstExtractor::extractVariable(item->variable());
@@ -61,7 +61,7 @@ ProjectionBody buildProjectionBody(CypherParser::ProjectionBodyContext* body) {
 		for (auto item : sortItemList) {
 			SortItem si;
 			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
-			si.expression = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			si.expression = utils::shareOwned(std::move(expressionAST));
 
 			si.ascending = true;
 			if (item->K_DESC() || item->K_DESCENDING()) {
@@ -116,7 +116,7 @@ NodePatternAST extractNodePattern(CypherParser::NodePatternContext* nodePat) {
 				// Non-literal (e.g. $param) — store as expression for runtime evaluation
 				auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
 				node.propertyExpressions[key] =
-					std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+					utils::shareOwned(std::move(exprAST));
 			}
 		}
 	}
@@ -144,7 +144,7 @@ NodePatternAST extractCreateNodePattern(CypherParser::NodePatternContext* nodePa
 			} else {
 				auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
 				node.propertyExpressions[key] =
-					std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+					utils::shareOwned(std::move(exprAST));
 			}
 		}
 	}
@@ -186,7 +186,7 @@ RelationshipPatternAST extractRelationshipPattern(CypherParser::RelationshipPatt
 				} else {
 					auto exprAST = ExpressionBuilder::buildExpression(exprs[i]);
 					rel.propertyExpressions[key] =
-						std::shared_ptr<graph::query::expressions::Expression>(exprAST.release());
+						utils::shareOwned(std::move(exprAST));
 				}
 			}
 		}
@@ -270,7 +270,7 @@ WithClause CypherASTBuilder::buildWithClause(void* ctx) {
 
 	if (withCtx->where()) {
 		auto ast = ExpressionBuilder::buildExpression(withCtx->where()->expression());
-		clause.where = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		clause.where = utils::shareOwned(std::move(ast));
 	}
 
 	return clause;
@@ -297,7 +297,7 @@ MatchClause CypherASTBuilder::buildMatchClause(void* ctx) {
 
 	if (matchCtx->where()) {
 		auto ast = ExpressionBuilder::buildExpression(matchCtx->where()->expression());
-		clause.where = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		clause.where = utils::shareOwned(std::move(ast));
 	}
 
 	return clause;
@@ -313,7 +313,7 @@ UnwindClause CypherASTBuilder::buildUnwindClause(void* ctx) {
 
 	if (clause.literalList.empty()) {
 		auto ast = ExpressionBuilder::buildExpression(expr);
-		clause.expression = std::shared_ptr<graph::query::expressions::Expression>(ast.release());
+		clause.expression = utils::shareOwned(std::move(ast));
 	}
 
 	return clause;
@@ -359,7 +359,7 @@ CallClause CypherASTBuilder::buildInQueryCallClause(void* ctx) {
 		}
 		if (callCtx->yieldItems()->where()) {
 			auto expression = ExpressionBuilder::buildExpression(callCtx->yieldItems()->where()->expression());
-			clause.yieldWhere = std::shared_ptr<graph::query::expressions::Expression>(expression.release());
+			clause.yieldWhere = utils::shareOwned(std::move(expression));
 		}
 	}
 
@@ -630,7 +630,7 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 			std::string keyName = AstExtractor::extractPropertyKeyFromExpr(propExpr);
 
 			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
-			auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			auto exprShared = utils::shareOwned(std::move(expressionAST));
 
 			items.push_back({SetItemType::SIT_PROPERTY, varName, keyName, exprShared});
 		}
@@ -640,13 +640,13 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 
 			// Preserve the complete expression and evaluate it before applying fields.
 			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
-			auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			auto exprShared = utils::shareOwned(std::move(expressionAST));
 			items.push_back({SetItemType::SIT_MAP_MERGE, varName, "", exprShared});
 		}
 		else if (item->EQ()) {
 			const std::string varName = AstExtractor::extractVariable(item->variable());
 			auto expressionAST = ExpressionBuilder::buildExpression(item->expression());
-			auto exprShared = std::shared_ptr<graph::query::expressions::Expression>(expressionAST.release());
+			auto exprShared = utils::shareOwned(std::move(expressionAST));
 			items.push_back({SetItemType::SIT_MAP_REPLACE, varName, "", exprShared});
 		}
 		// Case 3: Label Assignment (n:Label)

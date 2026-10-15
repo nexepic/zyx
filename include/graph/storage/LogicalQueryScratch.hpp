@@ -4,12 +4,16 @@
 #include <memory>
 #include <span>
 #include <vector>
+#include <stdexcept>
+namespace graph::query::execution::detail { class ResourceAccount; }
 namespace graph::storage {
 // A query-only internal permission. No file path, allocator or physical identity
 // crosses this interface. A logical read may hold it on a writable native file;
 // physically read-only files never provide this capability.
 // Sessions are task-confined. Returned read bytes own their storage; callers
 // must quiesce private readers before releasing handles or finishing the owner.
+// read() returns a vector whose capacity does not exceed maximumFragmentBytes();
+// providers must bound allocation before constructing that returned byte owner.
 class LogicalQueryScratchSession {
 public:
 	virtual ~LogicalQueryScratchSession() = default;
@@ -24,5 +28,13 @@ public:
 	virtual ~LogicalQueryScratchProvider() = default;
 	[[nodiscard]] virtual bool queryScratchEnabled() const {return true;}
 	[[nodiscard]] virtual std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t maximumDiskBytes,size_t maximumFragments) const = 0;
+    // Query execution passes its existing owner. A provider must explicitly
+    // support this contract instead of silently opening a separate allowance.
+    [[nodiscard]] virtual std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(
+            size_t maximumDiskBytes, size_t maximumFragments,
+            std::shared_ptr<query::execution::detail::ResourceAccount> account) const {
+        if (account) throw std::logic_error("scratch provider does not support query memory ownership");
+        return openQueryScratchSession(maximumDiskBytes, maximumFragments);
+    }
 };
 }

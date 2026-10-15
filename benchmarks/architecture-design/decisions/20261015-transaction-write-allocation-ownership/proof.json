@@ -1,0 +1,40 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_native_tests": 159,
+  "additional_closed_domain_test": 1,
+  "distinct_selected_tests": 160,
+  "failures": 0,
+  "isolated_transaction_fault_cases": 4,
+  "closed_object_bytes": [
+    1640,
+    1640,
+    1640,
+    1640
+  ],
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "fa3030a769530043becc87ae523d6392ac6596ca489a8bfd0a2d557fe64ed741",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "dc6d14ebc37501007fe46185c0eb59579736bf7b75b57752e727bf4faefb09a0",
+    "include/graph/utils/OwnedPmrObject.hpp": "026472e82c274e1e1c7dc25e8a4b87c8a834d15320ea2cd1dcd42255b980a7cd",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "include/graph/query/execution/MaterializedByteBudget.hpp": "ce29753866ff9bef1ad7782c01a1b604b2682d363e246b67eabc6d5afc4d11de",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "tests/support/TransactionResourceFaultWorker.cpp": "7d1016d1f6615077eaa4521e55be4779b065a13d57e49d74b8ad0db558f5785e",
+    "scripts/test_transaction_resource_faults.py": "715a497c94ed41cddf8c35690e77035aac2ce18260c871483ff955271827d9e4"
+  },
+  "evidence_sha256": {
+    "native-tests.log": "05b8ccaf3e759417516ad603380ef0ea5a6a76946d369951d4ee85ec6ff4d3f4",
+    "native-tests.xml": "f737a6858cbc13e39b91933bec7fed08fe7feb2940014a1d7af6d6db06e02fc5",
+    "closed-domain.log": "ca4cecddbc91578451b7fddb50933b0f08bd6dddb368ec16ec5a5dfa5d89dcac",
+    "closed-domain.xml": "63cdf667602f67a83a8ef68aad359e7241e0d602b6e699a028ef5f4a33b047c8",
+    "module-recipe.py": "b7ad3a0474582c3bea3950a21128d1e0c513af3242b0cf39b36b19edea7b4094",
+    "transaction-faults.json": "3c7bf80b5654108035d5a98a72a13ca939d55edd59ff1a2d7c9dffa2c5aeb485",
+    "worker-build.log": "1d48e54629455e1a146bba7396ae3ee025cb63a3b928fc16cbf2e3bcab15abb1",
+    "link-command.txt": "4d19aa755d80d3a2031c3f8e17a6f75a88914d7db7367babeeb78dcec4da5a5d"
+  }
+}

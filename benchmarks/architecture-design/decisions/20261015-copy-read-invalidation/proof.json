@@ -1,0 +1,52 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1225,
+  "selected_suites": 51,
+  "module_failures": 0,
+  "negative_control_failures": 3371,
+  "negative_control_test_exit": 1,
+  "negative_control_added_sleeps": false,
+  "repeated_adjacency_churn_and_race_executions": 10,
+  "repeated_failures": 0,
+  "fault_evidence_before_copy_fix": "../20261015-protected-controls-and-scratch-handles/proof.json",
+  "current_source_exhaustive_fault_sweep": false,
+  "full_suite": false,
+  "performance_run": false,
+  "base_commit": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_sha256": {
+    "src/storage/relocatable/cache/BufferPool.cpp": "f5abf624a689179c7a7a26034d1c59a458044c3c57dd7bcab25cdf499aa03aff",
+    "src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": "dd825956614ed403ceeb5d0ffbeb902fb35d5f1f1066d741b7411b2c52e1505f",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "a0e2b3f94d8b8c73bea32027f14ff5a028144279ef2c21c47227e70536ee13c1"
+  },
+  "patch_sha256": "7b8e37a02334b3774ce980824275e024d716b2be4b05a525e371e75e158e105e",
+  "untracked_source_sha256": {
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "acfe960ae09ec689e4fc4f629115d6ea5e9e4db5a7c991bc1ec5c29f3159de70",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "scripts/test_transaction_resource_faults.py": "636c94cd609f094870140ef13e6358163579e4cfbae553635e6ad99a23f4a1ed",
+    "src/query/execution/ProcessResourceDomains.hpp": "c9d160c77e13206b06297ce682c0daa26a376ed10421e3d0526317bd688a3e27",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "cbf2db190b39920e708b92c88f9e0d4b694f7302b256ef7906b475622da3c3fb",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "cb941385feacd4fbd309abda6a26ff94b3505230a4a0d069c56f3ec73037b281",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "1bcb94182e46e7ee1aa1c32cfb574680583fc70ba93e8fbf04e722a00563d945",
+    "tests/support/TransactionResourceFaultWorker.cpp": "506aa2f87af287d5638718a444a0a1e772c4ac84dac72692570dcdcedee47246"
+  },
+  "evidence_sha256": {
+    "module-tests.log": "af883717358d98e85d1b28e197abdeecc058524e78b59e2a75677b404d1c186b",
+    "module-tests.xml": "d9084dcf7944c3ba271f17791e20b25f713fead91ea21a75b5a8bf495556f835",
+    "module-recipe.py": "b7ad3a0474582c3bea3950a21128d1e0c513af3242b0cf39b36b19edea7b4094",
+    "negative-control.log": "14dd0710bef1b382daec01bb534f0dcdc608db8c0139d9254c0869a43e81ff03",
+    "negative-control.py": "a3079539815d26a7469f90eabf11c05c60a345012914143fdff43d45d096c991",
+    "old-buffer-pool.cpp": "879c7f91eaeabe570cbdbcf1302e448210fda2f9d0a742e34b372db56e57bc17",
+    "repeated-tests.log": "2454713a1a7724c2be9b2f668e938893c6e53aacecb9b37b18019ade067e6c91",
+    "shared-pool-tests.log": "232044e65f8ed873d2852f4a338040a9a1d9ad46eac12d7269e366c458eecfdc"
+  }
+}

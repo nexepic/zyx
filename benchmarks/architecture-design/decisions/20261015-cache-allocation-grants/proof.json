@@ -1,0 +1,44 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "affected_selection": {
+    "tests": 190,
+    "suites": 18,
+    "failures": 0
+  },
+  "focused_cache_selection": {
+    "tests": 46,
+    "suites": 3,
+    "failures": 0
+  },
+  "distinct_tests": 192,
+  "full_suite": false,
+  "production_status": "PMR-backed page cache and plan-cache metadata accept an explicit allocator owner; native constructors still use the default uncoordinated resource. Prepaid grant policy and complete native cache/codebook/plan-node wiring remain pending.",
+  "source_sha256": {
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "975c13629cc62e9af30beb29a513cb0db367cf004be2d6f8c06afa25385c4b44",
+    "include/graph/storage/relocatable/cache/BufferPool.hpp": "022917c00c5a0b8de13f3b52ec2d36d7ba367d7ffe979c31c21dc9217da5e2a5",
+    "src/storage/relocatable/cache/BufferPool.cpp": "6006674f775120a4ee0e82dac5b4ced0dc04b460b70c0d720a81d422dd9af0f2",
+    "include/graph/query/cache/PlanCache.hpp": "01b2b9a3b90e2f5d5b03932c8c8ae38387706f9f848f22e6fafb86463c0e6288",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "7f9583263e65c4340e0ef6ce61d30b1800798af75164db9e4044a63b7a8b949c",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "64500d978a2180ee21034553956218f467ed70e63ba8c7e9a6093e86aa72ff31",
+    "tests/src/query/cache/test_PlanCache.cpp": "f8af41f5f796187632eedfbb7ab1da7068f3cc1d997f0027f0d81bdc19e632cc",
+    "cmake/SourceSets.cmake": "eb568bedfbcf2317141707f04d159907741069bffc2eb2f523f0330740958ead"
+  },
+  "evidence_sha256": {
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-prepaid-memory-tests.xml": "8de98aeaaab1298c06cf8b6366434e8d1292934b07a3765883b5ad48386db429",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-global-output-regression-tests.xml": "091ef189238ba9a910b3c9a57f901786aa1744cf3a492a4e59956f3fb8a22a97",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-prepaid-memory-tests.log": "8e0a454aa4e6754f1b7f781551344b365c4ca1ac939aa7b36fe180c2d8d15f67",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-global-output-regression.py": "46eb4f617270ef29ba11efdab3e531a2e46f687c729e2290ebaf9936cdd53629",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-cache-owner-regression.log": "d60409825660f80fe9500faf1e6f95f7d7f1f69e0f61ddc8763319558c55b009",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/link-command.txt": "e2cf7ed5574260a117fc4589488e1b05878177dea584cb5ab7ceb8e6c4c1092a",
+    "benchmarks/architecture-design/results/20261015-cache-allocation-grants/zyx-cache-metadata-regression.log": "1c92649e1a7c063c116e79307fdb7d63419eaa42cebea9f16aac9e6fa8ec62c9"
+  },
+  "archive": {
+    "path": "benchmarks/architecture-design/decisions/20261015-cache-allocation-grants/module-evidence.tar.gz",
+    "bytes": 13508,
+    "sha256": "4983a077ebda6e1e64b008d3d6931a643cf6931d396a0c53c458a834d6ed6504"
+  },
+  "no_performance_run": true
+}

@@ -6,6 +6,8 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -25,12 +27,12 @@ namespace graph::query::logical {
 class LogicalCreateConstraint : public LogicalOperator {
 public:
 	LogicalCreateConstraint(
-		std::string name,
-		std::string entityType,
-		std::string constraintType,
-		std::string label,
-		std::vector<std::string> properties,
-		std::string options)
+		utils::OwnedStdString name,
+		utils::OwnedStdString entityType,
+		utils::OwnedStdString constraintType,
+		utils::OwnedStdString label,
+		utils::OwnedStringVector properties,
+		utils::OwnedStdString options)
 		: name_(std::move(name))
 		, entityType_(std::move(entityType))
 		, constraintType_(std::move(constraintType))
@@ -43,6 +45,8 @@ public:
 	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {}; }
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override { return {}; }
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalCreateConstraint>(
@@ -69,12 +73,12 @@ public:
 	[[nodiscard]] const std::string &getOptions() const { return options_; }
 
 private:
-	std::string name_;
-	std::string entityType_;
-	std::string constraintType_;
-	std::string label_;
-	std::vector<std::string> properties_;
-	std::string options_;
+	utils::OwnedStdString name_;
+	utils::OwnedStdString entityType_;
+	utils::OwnedStdString constraintType_;
+	utils::OwnedStdString label_;
+	utils::OwnedStringVector properties_;
+	utils::OwnedStdString options_;
 };
 
 } // namespace graph::query::logical

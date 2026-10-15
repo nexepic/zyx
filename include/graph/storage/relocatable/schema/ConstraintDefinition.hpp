@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -54,12 +58,13 @@ namespace graph::storage {
 	// NODE KEY definition additionally uses its ID as the support-tree ID; the
 	// catalog is still separate from public index definitions and presentation.
 	struct ConstraintDefinition {
+        using OwnedHeapElement = void;
 		uint64_t constraint_id = 0U;
-		std::string name;
+		utils::OwnedStdString name;
 		ConstraintDefinitionEntityKind entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
 		ConstraintDefinitionKind kind = ConstraintDefinitionKind::CDK_UNIQUE;
 		uint64_t schema_token_id = 0U;
-		std::vector<std::string> property_names;
+		utils::OwnedStringVector property_names;
 		ConstraintDefinitionPropertyType property_type = ConstraintDefinitionPropertyType::CDPT_NONE;
 
 		bool operator==(const ConstraintDefinition &) const = default;

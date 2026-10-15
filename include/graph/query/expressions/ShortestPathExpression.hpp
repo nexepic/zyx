@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/PatternDirection.hpp"
@@ -24,9 +25,9 @@ namespace graph::query::expressions {
 class ShortestPathExpression : public Expression {
 public:
 	ShortestPathExpression(
-		std::string startVar,
-		std::string endVar,
-		std::string relType,
+		utils::OwnedStdString startVar,
+		utils::OwnedStdString endVar,
+		utils::OwnedStdString relType,
 		PatternDirection direction,
 		int minHops,
 		int maxHops,
@@ -65,9 +66,9 @@ public:
 	[[nodiscard]] bool isAll() const { return isAll_; }
 
 private:
-	std::string startVar_;
-	std::string endVar_;
-	std::string relType_;
+	utils::OwnedStdString startVar_;
+	utils::OwnedStdString endVar_;
+	utils::OwnedStdString relType_;
 	PatternDirection direction_;
 	int minHops_;
 	int maxHops_;

@@ -6,6 +6,10 @@
  **/
 
 #pragma once
+#include "graph/core/OwnedPropertyMap.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -30,14 +34,14 @@ namespace graph::query::logical {
 class LogicalTraversal : public LogicalOperator {
 public:
     LogicalTraversal(std::unique_ptr<LogicalOperator> child,
-                     std::string sourceVar,
-                     std::string edgeVar,
-                     std::string targetVar,
-                     std::string edgeType,
-                     std::string direction,
-                     std::vector<std::string> targetLabels = {},
-                     std::vector<std::pair<std::string, graph::PropertyValue>> targetProperties = {},
-                     std::unordered_map<std::string, graph::PropertyValue> edgeProperties = {})
+                     utils::OwnedStdString sourceVar,
+                     utils::OwnedStdString edgeVar,
+                     utils::OwnedStdString targetVar,
+                     utils::OwnedStdString edgeType,
+                     utils::OwnedStdString direction,
+                     utils::OwnedStringVector targetLabels = {},
+                     OwnedPropertyPredicates targetProperties = {},
+                     graph::OwnedPropertyMap edgeProperties = {})
         : child_(std::move(child))
         , sourceVar_(std::move(sourceVar))
         , edgeVar_(std::move(edgeVar))
@@ -64,6 +68,16 @@ public:
         std::vector<std::string> vars;
         if (child_) {
             vars = child_->getOutputVariables();
+        }
+        if (!edgeVar_.empty())   vars.push_back(edgeVar_);
+        if (!targetVar_.empty()) vars.push_back(targetVar_);
+        return vars;
+    }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+        if (child_) {
+            vars = child_->getOwnedOutputVariables();
         }
         if (!edgeVar_.empty())   vars.push_back(edgeVar_);
         if (!targetVar_.empty()) vars.push_back(targetVar_);
@@ -106,14 +120,14 @@ public:
 
 private:
     std::unique_ptr<LogicalOperator> child_;
-    std::string sourceVar_;
-    std::string edgeVar_;
-    std::string targetVar_;
-    std::string edgeType_;
-    std::string direction_;
-    std::vector<std::string> targetLabels_;
-    std::vector<std::pair<std::string, graph::PropertyValue>> targetProperties_;
-    std::unordered_map<std::string, graph::PropertyValue> edgeProperties_;
+    utils::OwnedStdString sourceVar_;
+    utils::OwnedStdString edgeVar_;
+    utils::OwnedStdString targetVar_;
+    utils::OwnedStdString edgeType_;
+    utils::OwnedStdString direction_;
+    utils::OwnedStringVector targetLabels_;
+    OwnedPropertyPredicates targetProperties_;
+    graph::OwnedPropertyMap edgeProperties_;
 };
 
 } // namespace graph::query::logical

@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "CypherParserImpl.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 namespace graph::parser::cypher {
 
@@ -137,6 +138,34 @@ TEST_F(CypherParserReuseTest, ParsesDiverseGrammarPaths) {
 	for (const std::string &query : queries) {
 		expectLogicalPlan(query);
 	}
+}
+
+
+TEST_F(CypherParserReuseTest, PreservesPrivateAllocationDenialAndRemainsReusable) {
+    auto memory = std::make_shared<query::execution::MaterializedByteBudget>(1U);
+    {
+        utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(static_cast<void>(parser->parseToLogical("RETURN 42 AS value")),
+            query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    expectLogicalPlan("UNWIND [1, 2, 3] AS item RETURN item + 1 AS value");
+}
+
+namespace {
+class RejectOperatorAllocation final : public std::pmr::memory_resource {
+    void *do_allocate(size_t, size_t) override { throw std::bad_alloc(); }
+    void do_deallocate(void *, size_t, size_t) override {}
+    bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+TEST_F(CypherParserReuseTest, PreservesBadAllocInsteadOfAllocatingAWrappedDiagnostic) {
+    auto memory = std::make_shared<RejectOperatorAllocation>();
+    {
+        utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(static_cast<void>(parser->parseToLogical("RETURN 42 AS value")), std::bad_alloc);
+    }
+    expectLogicalPlan("RETURN 42 AS value");
 }
 
 } // namespace graph::parser::cypher

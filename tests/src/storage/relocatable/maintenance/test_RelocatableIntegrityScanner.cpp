@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Node.hpp"
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
@@ -1736,4 +1737,39 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsDerivedAdjacencyMappingAndRecordC
 	const SlottedPage missingVector = derivedPage({702U, {}});
 	replaceAdjacency(missingVector);
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTest, WorkspaceQuotaDenialPreservesFileAndReleasesEveryAdmittedNode) {
+    using namespace graph::query::execution::detail;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    static_cast<void>(writeMultiLevelLargeValue(io, *metadata));
+    const auto expected = RelocatableIntegrityScanner(io, *metadata).scan();
+    const auto generation = metadata->openSnapshot().superblock().generation;
+    const auto before = io->stats();
+    const auto fileBytes = std::filesystem::file_size(path);
+    constexpr size_t maximum = 16U * 1024U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_MAINTENANCE, maximum);
+    {
+        auto tiny = std::make_shared<PrepaidMemoryResource>(account, 256U, std::pmr::new_delete_resource());
+        EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *metadata, tiny).scan()), ResourceAdmissionDenied);
+        EXPECT_GT(tiny->denials(), 0U);
+        EXPECT_EQ(tiny->used(), 0U);
+        EXPECT_EQ(account->used(), 256U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    {
+        auto workspace = std::make_shared<PrepaidMemoryResource>(account, maximum, std::pmr::new_delete_resource());
+        EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata, workspace).scan(), expected);
+        EXPECT_GT(workspace->peakAdmitted(), 256U);
+        EXPECT_EQ(workspace->used(), 0U);
+        EXPECT_EQ(account->used(), maximum);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(metadata->openSnapshot().superblock().generation, generation);
+    EXPECT_EQ(io->stats().write_calls, before.write_calls);
+    EXPECT_EQ(io->stats().reserve_calls, before.reserve_calls);
+    EXPECT_EQ(io->stats().sync_calls, before.sync_calls);
+    EXPECT_EQ(std::filesystem::file_size(path), fileBytes);
 }

@@ -170,6 +170,9 @@ namespace graph::storage {
 		[[nodiscard]] Superblock releaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
 														 LogSequenceNumber checkpointLsn,
 														 const MetadataPublishOptions &options = {});
+        [[nodiscard]] std::optional<Superblock> tryReleaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
+														 LogSequenceNumber checkpointLsn,
+														 const MetadataPublishOptions &options = {});
 
 	private:
 		friend class BTreePageStore;

@@ -51,3 +51,41 @@ TEST_F(SystemCatalogTest, IndexEnumerationRejectsLeafValuesDisagreeingWithTheEnc
  { auto snapshot = metadata_->openSnapshot();
    EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException); }
 }
+
+TEST_F(SystemCatalogTest, DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid) {
+    BTreePageStore indexes(*slotted_pages_, *metadata_); SystemCatalog catalog(indexes, *metadata_);
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, systemCatalogFixturePlannerOptions());
+    {
+        auto tx = planner.beginTransaction(); auto session = catalog.beginWrite(tx);
+        for (size_t index = 0U; index < 65U; ++index) {
+            IndexDefinition definition;
+            definition.name = "index_" + std::to_string(index);
+            definition.kind = IndexDefinitionKind::IDK_PROPERTY;
+            definition.property_names.emplace_back("property_" + std::to_string(index));
+            static_cast<void>(session.createIndexDefinition(definition));
+        }
+        session.finish(); ASSERT_TRUE(tx.commit().committed());
+    }
+    auto old = metadata_->openSnapshot();
+    const auto definitions = catalog.readIndexDefinitions(old, 128U);
+    ASSERT_EQ(definitions.size(), 65U);
+    const auto keyFor = [](const IndexDefinition &definition) {
+        std::vector<std::byte> key{std::byte{6U}};
+        for (int shift = 56; shift >= 0; shift -= 8)
+            key.push_back(static_cast<std::byte>((definition.index_id >> shift) & 0xffU));
+        const auto encoded = IndexDefinitionCodec::encode(definition);
+        key.insert(key.end(), encoded.begin(), encoded.end()); return key;
+    };
+    auto conflicting = definitions.back(); conflicting.name = definitions.front().name;
+    {
+        auto tx = planner.beginTransaction();
+        tx.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, keyFor(definitions.back()));
+        tx.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, keyFor(conflicting), conflicting.index_id);
+        ASSERT_TRUE(tx.commit().committed());
+    }
+    {
+        auto current = metadata_->openSnapshot();
+        EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(current, 128U)), FormatException);
+    }
+    EXPECT_EQ(catalog.readIndexDefinitions(old, 128U).size(), 65U);
+}

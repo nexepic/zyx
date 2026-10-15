@@ -14,6 +14,8 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
@@ -74,8 +76,8 @@ namespace graph::storage {
 												 const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		VectorCodebookReachabilityReclaimReport report;
-		std::vector<ExtentRetirement> retirementPlan;
-		std::vector<CatalogEntry> retiredCodebooks;
+		utils::OwnedVector<ExtentRetirement> retirementPlan;
+		utils::OwnedVector<CatalogEntry> retiredCodebooks;
 		uint64_t plannedCodebookRetirements = 0U;
 		Superblock scanned;
 
@@ -83,7 +85,7 @@ namespace graph::storage {
 		try {
 			scanned = snapshot.superblock();
 			report.scanned_generation = scanned.generation;
-			std::set<uint64_t> relocatedSourceSegments;
+			utils::OwnedSet<uint64_t> relocatedSourceSegments;
 			metadata_.visitRetireQueueEntries(snapshot, [&](const RetireQueueEntry &entry) {
 				if (report.retire_queue_entries == options.maximum_retire_queue_entries) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -96,7 +98,7 @@ namespace graph::storage {
 						 "relocatable Vector Codebook reclamation found duplicate pending relocation sources");
 				}
 			});
-			std::map<uint64_t, Generation> reachableCodebooks;
+			utils::OwnedMap<uint64_t, Generation> reachableCodebooks;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &location) {
 				if (report.vector_manifests == options.maximum_vector_manifests) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -120,7 +122,7 @@ namespace graph::storage {
 				VectorCodebookExtentHeader header;
 				bool has_relocated_source = false;
 			};
-			std::map<uint64_t, std::vector<ScannedCodebookExtent>> scannedCodebooks;
+			utils::OwnedMap<uint64_t, utils::OwnedVector<ScannedCodebookExtent>> scannedCodebooks;
 			metadata_.visitExtentLocations(snapshot, [&](const ExtentLocation &location) {
 				if (report.extent_locations == options.maximum_extent_locations) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -249,8 +251,12 @@ namespace graph::storage {
 			std::ranges::sort(retiredCodebooks, {}, &CatalogEntry::segment_id);
 			for (const CatalogEntry &codebook: retiredCodebooks) {
 				const LogSequenceNumber publicationLsn = hasPublished ? nextCheckpointLsn(published) : checkpointLsn;
-				published = metadata_.releaseRetiredCatalogSegment(codebook.segment_id, codebook.generation,
-																   publicationLsn, publishOptions);
+				// A reader can register after the advisory snapshot-count check.
+				// Defer under the metadata writer guard instead of faulting maintenance.
+				auto released = metadata_.tryReleaseRetiredCatalogSegment(codebook.segment_id, codebook.generation,
+						publicationLsn, publishOptions);
+				if (!released.has_value()) break;
+				published = *released;
 				hasPublished = true;
 				++report.codebook_extents_released;
 			}

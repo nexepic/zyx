@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -20,9 +21,9 @@ class LogicalLoadCsv : public LogicalOperator {
 public:
 	LogicalLoadCsv(std::unique_ptr<LogicalOperator> child,
 	               std::shared_ptr<graph::query::expressions::Expression> urlExpr,
-	               std::string rowVariable,
+	               utils::OwnedStdString rowVariable,
 	               bool withHeaders = false,
-	               std::string fieldTerminator = ",")
+	               utils::OwnedStdString fieldTerminator = ",")
 		: child_(std::move(child)), urlExpr_(std::move(urlExpr)),
 		  rowVariable_(std::move(rowVariable)), withHeaders_(withHeaders),
 		  fieldTerminator_(std::move(fieldTerminator)) {}
@@ -36,6 +37,12 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
+		vars.push_back(rowVariable_);
+		return vars;
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		auto vars = child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
 		vars.push_back(rowVariable_);
 		return vars;
 	}
@@ -68,9 +75,9 @@ public:
 private:
 	std::unique_ptr<LogicalOperator> child_;
 	std::shared_ptr<graph::query::expressions::Expression> urlExpr_;
-	std::string rowVariable_;
+	utils::OwnedStdString rowVariable_;
 	bool withHeaders_;
-	std::string fieldTerminator_;
+	utils::OwnedStdString fieldTerminator_;
 };
 
 } // namespace graph::query::logical

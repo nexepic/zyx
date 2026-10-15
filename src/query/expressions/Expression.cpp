@@ -27,7 +27,7 @@ namespace graph::query::expressions {
 // LiteralExpression Implementation
 // ============================================================================
 
-LiteralExpression::LiteralExpression(std::string value)
+LiteralExpression::LiteralExpression(utils::OwnedStdString value)
 	: stringValue_(std::move(value)), integerValue_(0), doubleValue_(0.0), booleanValue_(false),
 	  propertyValue_(), literalType_(LiteralType::STRING) {}
 
@@ -43,7 +43,7 @@ LiteralExpression::LiteralExpression(bool value)
 	: stringValue_(), integerValue_(0), doubleValue_(0.0), booleanValue_(value),
 	  propertyValue_(), literalType_(LiteralType::BOOLEAN) {}
 
-LiteralExpression::LiteralExpression(PropertyValue value)
+LiteralExpression::LiteralExpression(OwnedPropertyValue value)
 	: stringValue_(), integerValue_(0), doubleValue_(0.0), booleanValue_(false),
 	  propertyValue_(std::move(value)), literalType_(LiteralType::PROPERTY_VALUE) {}
 
@@ -145,11 +145,11 @@ const PropertyValue &LiteralExpression::getPropertyValue() const {
 // VariableReferenceExpression Implementation
 // ============================================================================
 
-VariableReferenceExpression::VariableReferenceExpression(std::string variableName)
+VariableReferenceExpression::VariableReferenceExpression(utils::OwnedStdString variableName)
 	: variableName_(std::move(variableName)), hasProperty_(false), propertyName_() {}
 
-VariableReferenceExpression::VariableReferenceExpression(std::string variableName,
-                                                          std::string propertyName)
+VariableReferenceExpression::VariableReferenceExpression(utils::OwnedStdString variableName,
+                                                          utils::OwnedStdString propertyName)
 	: variableName_(std::move(variableName)), hasProperty_(true), propertyName_(std::move(propertyName)) {}
 
 void VariableReferenceExpression::accept(ExpressionVisitor &visitor) {
@@ -232,8 +232,8 @@ std::unique_ptr<Expression> UnaryOpExpression::clone() const {
 // FunctionCallExpression Implementation
 // ============================================================================
 
-FunctionCallExpression::FunctionCallExpression(std::string functionName,
-                                               std::vector<std::unique_ptr<Expression>> arguments,
+FunctionCallExpression::FunctionCallExpression(utils::OwnedStdString functionName,
+                                               utils::OwnedStdVector<std::unique_ptr<Expression>> arguments,
                                                bool distinct)
 	: functionName_(std::move(functionName)), arguments_(std::move(arguments)), distinct_(distinct) {}
 
@@ -257,7 +257,7 @@ std::string FunctionCallExpression::toString() const {
 }
 
 std::unique_ptr<Expression> FunctionCallExpression::clone() const {
-	std::vector<std::unique_ptr<Expression>> clonedArgs;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> clonedArgs;
 	clonedArgs.reserve(arguments_.size());
 	for (const auto &arg : arguments_) {
 		clonedArgs.push_back(arg->clone());

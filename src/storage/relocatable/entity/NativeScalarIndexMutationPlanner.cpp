@@ -104,7 +104,7 @@ namespace graph::storage {
 	} // namespace
 
 	NativeScalarIndexMutationPlanner::NativeScalarIndexMutationPlanner(
-			RelocatableMetadataStore &metadata, BTreePageStore &indexes, std::vector<IndexDefinition> definitions,
+			RelocatableMetadataStore &metadata, BTreePageStore &indexes, utils::OwnedStdVector<IndexDefinition> definitions,
 			NativePropertyKeyTokenResolver propertyKeyTokens) :
 		metadata_(metadata), indexes_(indexes), definitions_(std::move(definitions)),
 		property_key_tokens_(std::move(propertyKeyTokens)) {

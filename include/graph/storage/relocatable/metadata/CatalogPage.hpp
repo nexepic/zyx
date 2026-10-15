@@ -10,6 +10,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedVector.hpp"
 
 #include <array>
 #include <cstddef>
@@ -37,7 +38,7 @@ namespace graph::storage {
 		SegmentId maximum_segment_id{};
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
-		std::vector<CatalogEntry> entries;
+		utils::OwnedVector<CatalogEntry> entries;
 	};
 
 	class CatalogLeafPageCodec {

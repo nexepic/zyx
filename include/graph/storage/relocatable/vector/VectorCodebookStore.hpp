@@ -14,6 +14,7 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <mutex>
 #include <span>
 #include <vector>
@@ -21,6 +22,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebook.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebookExtent.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 namespace graph::storage {
 
@@ -44,8 +46,14 @@ namespace graph::storage {
 
 	struct VectorCodebook {
 		VectorCodebookHeader header;
-		std::vector<std::byte> payload;
+        std::vector<std::byte, utils::OwnedPmrAllocator<std::byte>> payload;
 
+        VectorCodebook() = default;
+        VectorCodebook(VectorCodebookHeader value, std::span<const std::byte> bytes,
+                       std::shared_ptr<std::pmr::memory_resource> owner = {})
+            : header(value), payload(bytes.begin(), bytes.end(), utils::OwnedPmrAllocator<std::byte>(std::move(owner))) {}
+        VectorCodebook(VectorCodebookHeader value, std::shared_ptr<std::pmr::memory_resource> owner)
+            : header(value), payload(utils::OwnedPmrAllocator<std::byte>(std::move(owner))) {}
 		bool operator==(const VectorCodebook &) const = default;
 	};
 
@@ -84,7 +92,8 @@ namespace graph::storage {
 	class VectorCodebookStore final {
 	public:
 		VectorCodebookStore(PhysicalSegmentAllocator &segments, RelocatableMetadataStore &metadata,
-							size_t maximumCacheBytes = 0U, size_t maximumCacheEntries = 0U);
+							size_t maximumCacheBytes = 0U, size_t maximumCacheEntries = 0U,
+                            std::shared_ptr<std::pmr::memory_resource> cacheMemoryOwner = {});
 		[[nodiscard]] bool usesMetadataStore(const RelocatableMetadataStore &metadata) const {
 			return &metadata_ == &metadata && segments_.usesMetadataStore(metadata);
 		}
@@ -138,9 +147,10 @@ namespace graph::storage {
 
 		struct CacheEntry {
 			std::shared_ptr<const VectorCodebook> codebook;
-			std::list<CacheKey>::iterator recency;
+			std::pmr::list<CacheKey>::iterator recency;
 		};
 
+		bool evictCacheEntryLocked() const;
 		[[nodiscard]] std::vector<std::byte> readDataExtent(const MetadataSnapshotPin &snapshot,
 															const VectorCodebookManifest &manifest,
 															const VectorCodebookManifestEntry &entry,
@@ -151,8 +161,10 @@ namespace graph::storage {
 		size_t maximum_cache_entries_ = 0U;
 		mutable size_t cached_payload_bytes_ = 0U;
 		mutable std::mutex cache_mutex_;
-		mutable std::list<CacheKey> cache_recency_;
-		mutable std::map<CacheKey, CacheEntry> cache_;
+		// Own the allocator until both metadata containers have been destroyed.
+		std::shared_ptr<std::pmr::memory_resource> cache_memory_owner_;
+		mutable std::pmr::list<CacheKey> cache_recency_;
+		mutable std::pmr::map<CacheKey, CacheEntry> cache_;
 	};
 
 } // namespace graph::storage

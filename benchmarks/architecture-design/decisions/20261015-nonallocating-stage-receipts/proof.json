@@ -1,0 +1,91 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 118,
+  "selected_suites": 5,
+  "module_failures": 0,
+  "prior_full_module_selection": 1304,
+  "current_allocation_sweeps": {
+    "stage": {
+      "baseline": 6,
+      "tested": 6,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline": 3923,
+      "tested": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline": 17,
+      "tested": 17,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline": 10,
+      "tested": 10,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline": 21,
+      "tested": 21,
+      "exhaustive": true
+    }
+  },
+  "legacy_cases": 4,
+  "process_crash_cycles": 32,
+  "crash_recovered_file_sizes": [
+    1572864
+  ],
+  "fault_failures": 0,
+  "no_elide_fixed_exhaustive_creation_points": 10,
+  "no_elide_fixed_exhaustive_overlay_creation_points": 21,
+  "no_elide_negative_native_fault": 10,
+  "no_elide_negative_overlay_fault": 21,
+  "full_suite": false,
+  "performance_run": false,
+  "base_commit": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_sha256": {
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "f5086aac6fc2c6e020c566aba559c7d5b564ee018ebdcbd30cfbc1ef5b385069",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "5eb099861642b72512b0ebbc6dd3ad982fc20932ce1fc269b38f988031194822",
+    "tests/support/TransactionResourceFaultWorker.cpp": "83b27864a9c58caf938b49af6d06159e5b95d25f78354879e6b88c4223f4079e",
+    "scripts/test_transaction_resource_faults.py": "7103012c1120767b8a8f4e8013ed2df3a837552e9d87a8c1e058944322fe7da0"
+  },
+  "patch_sha256": "b14b7c047d57e80f2562d7929d9a482c1ca2434b0f8db85527db38f48b846a4e",
+  "untracked_source_sha256": {
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "acfe960ae09ec689e4fc4f629115d6ea5e9e4db5a7c991bc1ec5c29f3159de70",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "include/graph/storage/LogicalGraphTransactionMemoryProvider.hpp": "276c1dc5696b09dd704b2b9619bc742258e01fb838744a5efaf964c7b277993a",
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "scripts/test_transaction_resource_faults.py": "7103012c1120767b8a8f4e8013ed2df3a837552e9d87a8c1e058944322fe7da0",
+    "src/query/execution/ProcessResourceDomains.hpp": "c9d160c77e13206b06297ce682c0daa26a376ed10421e3d0526317bd688a3e27",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "cbf2db190b39920e708b92c88f9e0d4b694f7302b256ef7906b475622da3c3fb",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "cb941385feacd4fbd309abda6a26ff94b3505230a4a0d069c56f3ec73037b281",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "666c2e4153c9d362f73b3fa5b40f79c733d989489e97c6002bd9a581cbb0f0cd",
+    "tests/support/TransactionResourceFaultWorker.cpp": "83b27864a9c58caf938b49af6d06159e5b95d25f78354879e6b88c4223f4079e"
+  },
+  "evidence_sha256": {
+    "no-elide.log": "47ff99504ebcbea442e16bd2dc0d724b95c43c2b8fe1c879bc9a220b8b07373d",
+    "negative-native.log": "b990264771bc66f883603bd962aaca71d039250809bf6b36d0c542120afdd3b1",
+    "source.patch": "b14b7c047d57e80f2562d7929d9a482c1ca2434b0f8db85527db38f48b846a4e",
+    "current-faults.json": "f6ba7706beedceb9d80d4f6d6a384ac7c90e0bd3d67d8d76f4b33ea130bace95",
+    "fixed-no-elide-creation.json": "c62d9d6426e654df8a607239c1825ebd43ce43db6fd20048b15898194d521ebc",
+    "no-elide-reproduction.py": "7c3a9ba44046462216631124a3b8bfe8ad400c039618edc0eaa0780f133b14a8",
+    "current-faults.log": "d7c026822dabec2022fda490ee0941ce73ab41f94be22c13ef430d06e241d251",
+    "module-tests.log": "da3290cf80454c68a30c283fa48335d018642f3fffdd607ed4dea277fc46b2e0",
+    "module-recipe.py": "f8c9fb3f381fa44343629452b9089ad09c051ce6373612a872de021035cad880",
+    "fixed-no-elide-overlay-creation.json": "8dd569a4dab00783cceac7dcfe6b603be8bd41d1bed6f3b780ceb6c8c127eac4",
+    "old-backend.cpp": "3ade9607a33ea9355c982fc07bd7a8a80e59d335d12a56cb7da496b3ee55c22a",
+    "old-overlay.cpp": "54fe7587bd43b9cea3a2146fd718597a141254a2a2cb923cd364e1d2d8adf354",
+    "no-elide-manifest.json": "2fa4e5fa1a9f4b2b43065374803cf445ed1e0ff35e13595dc61665df41cd25f5",
+    "negative-overlay.log": "b695fedc94b2cda03219a0b40af1981038d538eed905c634821a112157a1d1de"
+  }
+}

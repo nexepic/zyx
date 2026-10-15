@@ -1,0 +1,373 @@
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 170 tests from 9 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from GuardedPropertyCopyTest
+[ RUN      ] GuardedPropertyCopyTest.CancelsNestedCopyWithoutChangingSourceAndRetries
+[       OK ] GuardedPropertyCopyTest.CancelsNestedCopyWithoutChangingSourceAndRetries (3 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsLargeScalarBuffersAndRetriesExactPayloads
+[       OK ] GuardedPropertyCopyTest.CancelsLargeScalarBuffersAndRetriesExactPayloads (1 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsLargeMapKeyCopyAndPreservesEmbeddedNullsOnRetry
+[       OK ] GuardedPropertyCopyTest.CancelsLargeMapKeyCopyAndPreservesEmbeddedNullsOnRetry (0 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsWideStringVectorAndRetriesInOriginalOrder
+[       OK ] GuardedPropertyCopyTest.CancelsWideStringVectorAndRetriesInOriginalOrder (2 ms)
+[ RUN      ] GuardedPropertyCopyTest.EntityCopiesCancelWithoutChangingIdentityOrPayloadAndRetry
+[       OK ] GuardedPropertyCopyTest.EntityCopiesCancelWithoutChangingIdentityOrPayloadAndRetry (4 ms)
+[ RUN      ] GuardedPropertyCopyTest.RowCopiesPreserveAllCachesAndCancelWithoutChangingSource
+[       OK ] GuardedPropertyCopyTest.RowCopiesPreserveAllCachesAndCancelWithoutChangingSource (27 ms)
+[ RUN      ] GuardedPropertyCopyTest.PathCopiesCancelInsideNestedEntityAndRetryReferences
+[       OK ] GuardedPropertyCopyTest.PathCopiesCancelInsideNestedEntityAndRetryReferences (5 ms)
+[ RUN      ] GuardedPropertyCopyTest.RejectsExcessiveNestingAndCopiesTheDepthBoundary
+[       OK ] GuardedPropertyCopyTest.RejectsExcessiveNestingAndCopiesTheDepthBoundary (0 ms)
+[----------] 8 tests from GuardedPropertyCopyTest (45 ms total)
+
+[----------] 1 test from PageBackedGraphNameResolverContractTest
+[ RUN      ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface
+[       OK ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface (0 ms)
+[----------] 1 test from PageBackedGraphNameResolverContractTest (0 ms total)
+
+[----------] 9 tests from NativeReadSessionTest
+[ RUN      ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames
+[       OK ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets
+[       OK ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound
+[       OK ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded
+[       OK ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound
+[       OK ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound (0 ms)
+[ RUN      ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder
+[       OK ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder (0 ms)
+[ RUN      ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget
+[       OK ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget (3 ms)
+[ RUN      ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap
+[       OK ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap (8 ms)
+[ RUN      ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry
+[       OK ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry (0 ms)
+[----------] 9 tests from NativeReadSessionTest (13 ms total)
+
+[----------] 28 tests from PageBackedGraphReadAdapterTest
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations
+[       OK ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations (4 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity
+[       OK ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs
+[       OK ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs (21 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse
+[       OK ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse (19 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot (29 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties
+[       OK ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties (16 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession
+[       OK ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession
+[       OK ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession (14 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity (32 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity (24 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties
+[       OK ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties (22 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship
+[       OK ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship (15 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary
+[       OK ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary (31 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds
+[       OK ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds (26 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly
+[       OK ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly (21 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches
+[       OK ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches (35 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch
+[       OK ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch (58 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords
+[       OK ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap
+[       OK ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap (15 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories
+[       OK ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories (1 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable
+[       OK ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning
+[       OK ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning (5 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads
+[       OK ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads (12 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry
+[       OK ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry (14 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch
+[       OK ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch (22 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch
+[       OK ] PageBackedGraphReadAdapterTest.VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch (12 ms)
+[----------] 28 tests from PageBackedGraphReadAdapterTest (509 ms total)
+
+[----------] 10 tests from RelocatablePropertyValueInspectionTest
+[ RUN      ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue
+[       OK ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission
+[       OK ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission (1 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation
+[       OK ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation (5 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime
+[       OK ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime (3 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints
+[       OK ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens
+[       OK ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation
+[       OK ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation (3 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget
+[       OK ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget (3 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial
+[       OK ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor
+[       OK ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor (2 ms)
+[----------] 10 tests from RelocatablePropertyValueInspectionTest (18 ms total)
+
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount
+[       OK ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip
+[       OK ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip (14 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting (2 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload (0 ms)
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest (17 ms total)
+
+[----------] 23 tests from LogicalGraphPropertyPatchTest
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt
+[       OK ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit
+[       OK ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission
+[       OK ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues
+[       OK ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback
+[       OK ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement
+[       OK ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList
+[       OK ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges
+[       OK ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging
+[       OK ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets
+[       OK ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch
+[       OK ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder
+[       OK ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds
+[       OK ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement
+[       OK ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary
+[       OK ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether
+[       OK ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission
+[       OK ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission (0 ms)
+[----------] 23 tests from LogicalGraphPropertyPatchTest (1 ms total)
+
+[----------] 72 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.RepeatedRawPropertyStatementsRetainOnlyChangedNodeAndEdgeFields
+[       OK ] RelocatableStorageBackendTest.RepeatedRawPropertyStatementsRetainOnlyChangedNodeAndEdgeFields (407 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyStagingFoldsLastOperationAcrossSetsRemovalsAndTypes
+[       OK ] RelocatableStorageBackendTest.RawPropertyStagingFoldsLastOperationAcrossSetsRemovalsAndTypes (134 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompleteReplacementResetsRawFieldsAndFollowingPatchPreservesStoredNull
+[       OK ] RelocatableStorageBackendTest.CompleteReplacementResetsRawFieldsAndFollowingPatchPreservesStoredNull (131 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompleteThenRawThenCompleteThenRawKeepsOnlyTheLastFullMap
+[       OK ] RelocatableStorageBackendTest.CompleteThenRawThenCompleteThenRawKeepsOnlyTheLastFullMap (132 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyStagingFoldsCreatedOrdinalsAndLaterProvisionalReferences
+[       OK ] RelocatableStorageBackendTest.RawPropertyStagingFoldsCreatedOrdinalsAndLaterProvisionalReferences (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.InvalidRawPropertyStagePreservesEarlierFieldsAndActiveTransaction
+[       OK ] RelocatableStorageBackendTest.InvalidRawPropertyStagePreservesEarlierFieldsAndActiveTransaction (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.FailedCreatedSourceAdmissionDoesNotReplaceEarlierCreationFields
+[       OK ] RelocatableStorageBackendTest.FailedCreatedSourceAdmissionDoesNotReplaceEarlierCreationFields (101 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyWorkBoundOverflowRejectsOnlyTheNewStatement
+[       OK ] RelocatableStorageBackendTest.RawPropertyWorkBoundOverflowRejectsOnlyTheNewStatement (142 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawOnlyPropertyTransactionConflictsWithAnInterveningWriter
+[       OK ] RelocatableStorageBackendTest.RawOnlyPropertyTransactionConflictsWithAnInterveningWriter (151 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyCommitSourceBoundFailurePublishesNeitherFieldsNorLabels
+[       OK ] RelocatableStorageBackendTest.RawPropertyCommitSourceBoundFailurePublishesNeitherFieldsNorLabels (147 ms)
+[ RUN      ] RelocatableStorageBackendTest.CancellationAtEveryRawStagingCheckpointRestoresOverlayAndPriorTransactionFields
+[       OK ] RelocatableStorageBackendTest.CancellationAtEveryRawStagingCheckpointRestoresOverlayAndPriorTransactionFields (6756 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawOnlyStagingRejectsStreamingModeMixAndReadOnlyBeforeMutation
+[       OK ] RelocatableStorageBackendTest.RawOnlyStagingRejectsStreamingModeMixAndReadOnlyBeforeMutation (139 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyRestorationPreservesRootsAndDoesNotCreateRemovedTemporaryTokens
+[       OK ] RelocatableStorageBackendTest.RawPropertyRestorationPreservesRootsAndDoesNotCreateRemovedTemporaryTokens (138 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix
+[       OK ] RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix (159 ms)
+[ RUN      ] RelocatableStorageBackendTest.CancellingAdmittedInputCopyRefundsItsPrivatePayloadAndRetainsEarlierFields
+[       OK ] RelocatableStorageBackendTest.CancellingAdmittedInputCopyRefundsItsPrivatePayloadAndRetainsEarlierFields (122 ms)
+[ RUN      ] RelocatableStorageBackendTest.CanonicalRawPropertyPlanningBudgetDenialRollsBackBeforeGraphPublication
+[       OK ] RelocatableStorageBackendTest.CanonicalRawPropertyPlanningBudgetDenialRollsBackBeforeGraphPublication (136 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedWidePropertyStatementsRetainOneFinalCollectionPerEntity
+[       OK ] RelocatableStorageBackendTest.RepeatedWidePropertyStatementsRetainOneFinalCollectionPerEntity (295 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitCypherTransactionKeepsIntermediateVisibilityAndUsesNativeFinalPatches
+[       OK ] RelocatableStorageBackendTest.ExplicitCypherTransactionKeepsIntermediateVisibilityAndUsesNativeFinalPatches (202 ms)
+[ RUN      ] RelocatableStorageBackendTest.LaterDetachDeleteDiscardsEarlierPersistedEdgePropertyChanges
+[       OK ] RelocatableStorageBackendTest.LaterDetachDeleteDiscardsEarlierPersistedEdgePropertyChanges (231 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitPropertyTransactionFinalSyncFailureIsIndeterminateUntilReopen
+[       OK ] RelocatableStorageBackendTest.ExplicitPropertyTransactionFinalSyncFailureIsIndeterminateUntilReopen (195 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitCompleteReplacementRetainsItsStoredNullField
+[       OK ] RelocatableStorageBackendTest.ExplicitCompleteReplacementRetainsItsStoredNullField (165 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionFoldsFinalNodeAndEdgePatchesIntoNativePublication
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionFoldsFinalNodeAndEdgePatchesIntoNativePublication (359 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionCompleteMapReplacementStillRemovesUnspecifiedFields
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionCompleteMapReplacementStillRemovesUnspecifiedFields (157 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionUnchangedReplacementStillDetectsInterveningWriter
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionUnchangedReplacementStillDetectsInterveningWriter (156 ms)
+[ RUN      ] RelocatableStorageBackendTest.CypherSetAndRemoveReachNativePropertyPatchConsumer
+[       OK ] RelocatableStorageBackendTest.CypherSetAndRemoveReachNativePropertyPatchConsumer (191 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePropertyPatchDispatchRejectsStaleFenceAndKeepsUnspecifiedFields
+[       OK ] RelocatableStorageBackendTest.NativePropertyPatchDispatchRejectsStaleFenceAndKeepsUnspecifiedFields (163 ms)
+[ RUN      ] RelocatableStorageBackendTest.CreatedPropertyPatchesFoldIntoNativeCreationAndSurviveReopen
+[       OK ] RelocatableStorageBackendTest.CreatedPropertyPatchesFoldIntoNativeCreationAndSurviveReopen (178 ms)
+[ RUN      ] RelocatableStorageBackendTest.PersistedPropertyPatchAdmissionFailureAllowsRetryAndPreservesOldLargeValueSnapshot
+[       OK ] RelocatableStorageBackendTest.PersistedPropertyPatchAdmissionFailureAllowsRetryAndPreservesOldLargeValueSnapshot (206 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPatchUniqueFailureRollsBackAllTargetsAndCompanionLabels
+[       OK ] RelocatableStorageBackendTest.PropertyPatchUniqueFailureRollsBackAllTargetsAndCompanionLabels (243 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose
+[       OK ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose (160 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting
+[       OK ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting (154 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge
+[       OK ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge (80 ms)
+[ RUN      ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains
+[       OK ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain (79 ms)
+[ RUN      ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback
+[       OK ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases
+[       OK ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners
+[       OK ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners (1242 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry
+[       OK ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry (248 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+[       OK ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose (218 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions
+[       OK ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions (60 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge
+[       OK ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge (65 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge
+[       OK ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge (94 ms)
+[ RUN      ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement
+[       OK ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction
+[       OK ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction (76 ms)
+[ RUN      ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry
+[       OK ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry (77 ms)
+[ RUN      ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner
+[       OK ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession
+[       OK ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession (111 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext
+[       OK ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext (199 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback (117 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit
+[       OK ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit (162 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes
+[       OK ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes (134 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction (109 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry (119 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant (56 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan (166 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot (170 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (163 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit (519 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection (110 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease
+[       OK ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease (2184 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites
+[       OK ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication (268 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund
+[       OK ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund (224 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain (79 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile
+[       OK ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction (131 ms)
+[----------] 72 tests from RelocatableStorageBackendTest (20413 ms total)
+
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating
+[       OK ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft
+[       OK ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo
+[       OK ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges
+[       OK ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop
+[       OK ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners
+[       OK ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity
+[       OK ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback
+[       OK ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback (0 ms)
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 170 tests from 9 test suites ran. (21022 ms total)
+[  PASSED  ] 170 tests.

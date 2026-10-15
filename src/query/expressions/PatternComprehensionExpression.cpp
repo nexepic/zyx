@@ -12,15 +12,15 @@
 namespace graph::query::expressions {
 
 PatternComprehensionExpression::PatternComprehensionExpression(
-	std::string pattern,
-	std::string sourceVar,
-	std::string targetVar,
-	std::string relType,
-	std::string targetLabel,
+	utils::OwnedStdString pattern,
+	utils::OwnedStdString sourceVar,
+	utils::OwnedStdString targetVar,
+	utils::OwnedStdString relType,
+	utils::OwnedStdString targetLabel,
 	PatternDirection direction,
 	std::unique_ptr<Expression> mapExpr,
 	std::unique_ptr<Expression> whereExpr,
-	std::string relationshipVar
+	utils::OwnedStdString relationshipVar
 )
 	: pattern_(std::move(pattern))
 	, sourceVar_(std::move(sourceVar))
@@ -70,8 +70,8 @@ std::unique_ptr<Expression> PatternComprehensionExpression::clone() const {
 
 
 PatternComprehensionExpression::PatternComprehensionExpression(
-	std::string pattern,
-	std::string variable,
+	utils::OwnedStdString pattern,
+	utils::OwnedStdString variable,
 	std::unique_ptr<Expression> mapExpr,
 	std::unique_ptr<Expression> whereExpr
 )

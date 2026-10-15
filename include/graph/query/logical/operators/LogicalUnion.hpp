@@ -51,6 +51,11 @@ public:
         return left_ ? left_->getOutputVariables() : std::vector<std::string>{};
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        // Both branches must project the same columns; return from the left side.
+        return left_ ? left_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+    }
+
     [[nodiscard]] std::string toString() const override {
         return all_ ? "UnionAll" : "Union";
     }

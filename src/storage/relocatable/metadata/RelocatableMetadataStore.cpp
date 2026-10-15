@@ -15,6 +15,7 @@
 #include <array>
 #include <bit>
 #include <limits>
+#include <iterator>
 #include <map>
 #include <ranges>
 #include <set>
@@ -38,6 +39,44 @@ namespace graph::storage {
 
 	namespace {
 
+        using LogicalIdCapabilityMap = std::pmr::map<uint64_t, uint64_t>;
+        struct PreparedLogicalIdCapabilities {
+            LogicalIdCapabilityMap nodes;
+            LogicalIdCapabilityMap edges;
+            explicit PreparedLogicalIdCapabilities(std::pmr::memory_resource *memory) : nodes(memory), edges(memory) {}
+        };
+        // Prepare both kinds atomically. No allocating map insertion may follow
+        // durable namespace publication or expose only half a returned lease.
+        PreparedLogicalIdCapabilities prepareLogicalIdCapabilities(
+                std::span<const NativeGraphLogicalIdLeaseRange> nodes,
+                std::span<const NativeGraphLogicalIdLeaseRange> edges,
+                const LogicalIdCapabilityMap &outstandingNodes,
+                const LogicalIdCapabilityMap &outstandingEdges, const char *message) {
+            PreparedLogicalIdCapabilities prepared(outstandingNodes.get_allocator().resource());
+            const auto overlaps = [](const LogicalIdCapabilityMap &entries, uint64_t first, uint64_t last) {
+                const auto next = entries.lower_bound(first);
+                if (next != entries.end() && next->first <= last) return true;
+                if (next == entries.begin()) return false;
+                const auto previous = std::prev(next);
+                return previous->second != 0U && previous->first + previous->second - 1U >= first;
+            };
+            const auto prepare = [&](std::span<const NativeGraphLogicalIdLeaseRange> ranges,
+                                     const LogicalIdCapabilityMap &outstanding, LogicalIdCapabilityMap &target) {
+                for (const auto &range : ranges) {
+                    if (range.first_id == 0U || range.count == 0U ||
+                        range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id)
+                        throw FormatException(FormatError::FERR_INVALID_STATE, message);
+                    const auto last = range.first_id + range.count - 1U;
+                    if (overlaps(outstanding, range.first_id, last) || overlaps(target, range.first_id, last))
+                        throw FormatException(FormatError::FERR_INVALID_STATE, message);
+                    target.emplace(range.first_id, range.count);
+                }
+            };
+            prepare(nodes, outstandingNodes, prepared.nodes);
+            prepare(edges, outstandingEdges, prepared.edges);
+            return prepared;
+        }
+
 		// This primitive only retires Page Directory routes. Its callers support the
 		// four derived page-pool families whose owners need no other directory update.
 		[[nodiscard]] bool matchesPageDirectoryOnlyPoolOwnerKind(SegmentKind poolKind, PageOwnerKind ownerKind) {
@@ -58,18 +97,22 @@ namespace graph::storage {
 	} // namespace
 
 	RelocatableMetadataStore::RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current,
-													   bool readOnly) :
+													   bool readOnly, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) :
 		io_(std::move(io)), bootstrap_(io_), pages_(io_, current),
 		metadata_page_pool_(io_, current,
 							readOnly ? MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY
 									 : MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER),
 		catalog_(pages_, metadata_page_pool_), locations_(pages_, metadata_page_pool_),
 		allocator_(pages_, metadata_page_pool_), pool_ownership_(catalog_, allocator_, metadata_page_pool_, readOnly),
-		snapshots_(bootstrap_), retirement_(catalog_, locations_, snapshots_),
+		snapshots_(bootstrap_, {}, std::move(memoryOwner), std::move(controlOwner)), retirement_(catalog_, locations_, snapshots_),
 		reservation_coordinator_(catalog_, allocator_, locations_),
 		segment_retirement_coordinator_(catalog_, allocator_, locations_, retirement_),
 		segment_relocation_coordinator_(catalog_, allocator_, locations_, retirement_),
-		retire_queue_reclaimer_(catalog_, allocator_, locations_, retirement_), read_only_(readOnly) {
+		retire_queue_reclaimer_(catalog_, allocator_, locations_, retirement_),
+        lease_memory_owner_(std::move(leaseMemoryOwner)),
+        outstanding_node_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
+        outstanding_edge_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
+        read_only_(readOnly) {
 		pool_ownership_.restoreCatalogOwnership(current);
 		pool_ownership_.verifyAfterOpen(current);
 	}
@@ -85,19 +128,25 @@ namespace graph::storage {
 	}
 
 	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::initializeNew(std::shared_ptr<StorageIO> io,
-																					  const Superblock &initial) {
+																					  const Superblock &initial, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (memoryOwner) allocation.emplace(memoryOwner);
 		initializeRelocatableMetadataFile(io, initial);
-		return open(std::move(io));
+		return open(std::move(io), std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner));
 	}
 
-	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::open(std::shared_ptr<StorageIO> io) {
+	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::open(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (memoryOwner) allocation.emplace(memoryOwner);
 		const Superblock current = recoverRelocatableMetadataSuperblock(io);
-		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, false));
+		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, false, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner)));
 	}
 
-	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::openReadOnly(std::shared_ptr<StorageIO> io) {
+	std::unique_ptr<RelocatableMetadataStore> RelocatableMetadataStore::openReadOnly(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (memoryOwner) allocation.emplace(memoryOwner);
 		const Superblock current = recoverRelocatableMetadataSuperblock(io);
-		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, true));
+		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, true, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner)));
 	}
 
 	MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const { return snapshots_.openSnapshot(); }
@@ -152,6 +201,11 @@ namespace graph::storage {
 		if (edgeCount != 0U) {
 			lease.edges = {batch.allocateLogicalEdgeIdRange(edgeCount), edgeCount};
 		}
+        auto prepared = prepareLogicalIdCapabilities(
+            nodeCount == 0U ? std::span<const NativeGraphLogicalIdLeaseRange>{} : std::span(&lease.nodes, 1U),
+            edgeCount == 0U ? std::span<const NativeGraphLogicalIdLeaseRange>{} : std::span(&lease.edges, 1U),
+            outstanding_node_id_leases_, outstanding_edge_id_leases_,
+            "native graph logical-ID lease capability overlaps an outstanding lease");
 		// Leasing changes only durable high-water marks; it must not create a
 		// metadata-pool ownership transition or perturb graph-visible roots. A
 		// bootstrap header still advances so the candidate generation retains a
@@ -159,11 +213,10 @@ namespace graph::storage {
 		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		if ((nodeCount != 0U && !outstanding_node_id_leases_.emplace(lease.nodes.first_id, lease.nodes.count).second) ||
-			(edgeCount != 0U && !outstanding_edge_id_leases_.emplace(lease.edges.first_id, lease.edges.count).second)) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "native graph logical-ID lease capability overlaps an outstanding lease");
-		}
+        // The lease mutex excludes intervening registrations; these maps use
+        // equal std allocators and transfer their prepared nodes without allocation.
+        outstanding_node_id_leases_.merge(prepared.nodes);
+        outstanding_edge_id_leases_.merge(prepared.edges);
 		lease.superblock = batch.candidate();
 		return lease;
 	}
@@ -201,23 +254,18 @@ namespace graph::storage {
 		NativeGraphLogicalIdReservation result;
 		take(available_node_ids_, remainingNodes, result.node_ranges);
 		take(available_edge_ids_, remainingEdges, result.edge_ranges);
-		const auto registerOutstanding = [this](const NativeGraphLogicalIdReservation &reservation) {
-			const auto registerRanges = [](std::map<uint64_t, uint64_t> &outstanding,
-										   std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
-				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
-					if (range.first_id == 0U || range.count == 0U ||
-						range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id ||
-						!outstanding.emplace(range.first_id, range.count).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "native graph logical-ID acquisition overlaps an outstanding lease");
-					}
-				}
-			};
-			registerRanges(outstanding_node_id_leases_, reservation.node_ranges);
-			registerRanges(outstanding_edge_id_leases_, reservation.edge_ranges);
-		};
+        const auto prepareOutstanding = [this](const NativeGraphLogicalIdReservation &reservation) {
+            return prepareLogicalIdCapabilities(reservation.node_ranges, reservation.edge_ranges,
+                outstanding_node_id_leases_, outstanding_edge_id_leases_,
+                "native graph logical-ID acquisition overlaps an outstanding lease");
+        };
+        const auto registerPrepared = [this](PreparedLogicalIdCapabilities &prepared) {
+            outstanding_node_id_leases_.merge(prepared.nodes);
+            outstanding_edge_id_leases_.merge(prepared.edges);
+        };
 		if (remainingNodes == 0U && remainingEdges == 0U) {
-			registerOutstanding(result);
+            auto prepared = prepareOutstanding(result);
+            registerPrepared(prepared);
 			return result;
 		}
 		const uint64_t requestedNodes = remainingNodes == 0U ? 0U : std::max(remainingNodes, minimumLeaseBlockSize);
@@ -238,18 +286,17 @@ namespace graph::storage {
 		if (requestedEdges != 0U) {
 			static_cast<void>(batch.allocateLogicalEdgeIdRange(requestedEdges));
 		}
-		prepareBootstrapRoutes(batch);
-		batch.publish(bootstrap_);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		if (remainingNodes != 0U) {
-			available_node_ids_ = {current.next_logical_node_id, requestedNodes};
-			take(available_node_ids_, remainingNodes, result.node_ranges);
-		}
-		if (remainingEdges != 0U) {
-			available_edge_ids_ = {current.next_logical_edge_id, requestedEdges};
-			take(available_edge_ids_, remainingEdges, result.edge_ranges);
-		}
-		registerOutstanding(result);
+        NativeGraphLogicalIdLeaseRange nextAvailableNodes{current.next_logical_node_id, requestedNodes};
+        NativeGraphLogicalIdLeaseRange nextAvailableEdges{current.next_logical_edge_id, requestedEdges};
+        if (remainingNodes != 0U) take(nextAvailableNodes, remainingNodes, result.node_ranges);
+        if (remainingEdges != 0U) take(nextAvailableEdges, remainingEdges, result.edge_ranges);
+        auto prepared = prepareOutstanding(result);
+        prepareBootstrapRoutes(batch);
+        batch.publish(bootstrap_);
+        snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+        if (requestedNodes != 0U) available_node_ids_ = nextAvailableNodes;
+        if (requestedEdges != 0U) available_edge_ids_ = nextAvailableEdges;
+        registerPrepared(prepared);
 		return result;
 	}
 
@@ -259,7 +306,7 @@ namespace graph::storage {
 			return true;
 		}
 		std::lock_guard leaseLock(logical_id_lease_mutex_);
-		const auto validateRanges = [](const std::map<uint64_t, uint64_t> &outstanding,
+		const auto validateRanges = [](const std::pmr::map<uint64_t, uint64_t> &outstanding,
 									   std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
 			std::set<uint64_t> firstIds;
 			for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
@@ -286,9 +333,15 @@ namespace graph::storage {
 
 	void RelocatableMetadataStore::abandonNativeGraphLogicalIdReservation(
 			const NativeGraphLogicalIdReservation &reservation) noexcept {
+        abandonNativeGraphLogicalIdReservation(reservation.node_ranges, reservation.edge_ranges);
+    }
+
+    void RelocatableMetadataStore::abandonNativeGraphLogicalIdReservation(
+            std::span<const NativeGraphLogicalIdLeaseRange> nodes,
+            std::span<const NativeGraphLogicalIdLeaseRange> edges) noexcept {
 		try {
 			std::lock_guard leaseLock(logical_id_lease_mutex_);
-			const auto abandonRanges = [](std::map<uint64_t, uint64_t> &outstanding,
+			const auto abandonRanges = [](std::pmr::map<uint64_t, uint64_t> &outstanding,
 										  std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
 					const auto iterator = outstanding.find(range.first_id);
@@ -297,8 +350,8 @@ namespace graph::storage {
 					}
 				}
 			};
-			abandonRanges(outstanding_node_id_leases_, reservation.node_ranges);
-			abandonRanges(outstanding_edge_id_leases_, reservation.edge_ranges);
+			abandonRanges(outstanding_node_id_leases_, nodes);
+			abandonRanges(outstanding_edge_id_leases_, edges);
 		} catch (...) {
 			// Rollback is best-effort only for an in-memory capability. Reuse still
 			// cannot occur after process restart because durable high-water marks only advance.
@@ -2663,14 +2716,21 @@ namespace graph::storage {
 																	  Generation expectedGeneration,
 																	  LogSequenceNumber checkpointLsn,
 																	  const MetadataPublishOptions &options) {
+        auto result = tryReleaseRetiredCatalogSegment(segmentId, expectedGeneration, checkpointLsn, options);
+        if (!result) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable retired slot release is blocked by a snapshot that can resolve the retired slot");
+        return *result;
+    }
+
+	std::optional<Superblock> RelocatableMetadataStore::tryReleaseRetiredCatalogSegment(SegmentId segmentId,
+																	  Generation expectedGeneration,
+																	  LogSequenceNumber checkpointLsn,
+																	  const MetadataPublishOptions &options) {
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
 		const RetireQueueEntry retirement =
 				segment_retirement_coordinator_.validateRetiredRelease(current, segmentId, expectedGeneration);
 		if (retirement_.isVisibleToActiveSnapshot(writer, retirement)) {
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"relocatable retired slot release is blocked by a snapshot that can resolve the retired slot");
+            return std::nullopt;
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		segment_retirement_coordinator_.prepareRetiredRelease(batch, retirement);
@@ -2714,14 +2774,21 @@ namespace graph::storage {
 																	   Generation expectedGeneration,
 																	   LogSequenceNumber checkpointLsn,
 																	   const MetadataPublishOptions &options) {
+        auto result = tryReleaseRelocatedCatalogSource(segmentId, expectedGeneration, checkpointLsn, options);
+        if (!result) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable relocated source release is blocked by a snapshot that can resolve the source");
+        return *result;
+    }
+
+	std::optional<Superblock> RelocatableMetadataStore::tryReleaseRelocatedCatalogSource(SegmentId segmentId,
+																	   Generation expectedGeneration,
+																	   LogSequenceNumber checkpointLsn,
+																	   const MetadataPublishOptions &options) {
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
 		const RetireQueueEntry retirement =
 				segment_relocation_coordinator_.validateRelocatedSourceRelease(current, segmentId, expectedGeneration);
 		if (retirement_.isVisibleToActiveSnapshot(writer, retirement)) {
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"relocatable relocated source release is blocked by a snapshot that can resolve the source");
+            return std::nullopt;
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		segment_relocation_coordinator_.prepareRelocatedSourceRelease(batch, retirement);
@@ -3968,13 +4035,15 @@ namespace graph::storage {
 	}
 
 	std::unique_ptr<RelocatableMetadataStore>
-	RelocatableMetadataStore::initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial) {
+	RelocatableMetadataStore::initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) {
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (memoryOwner) allocation.emplace(memoryOwner);
 		if (!initial.checkpoint_lsn.isValid() ||
 			initial.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable complete initialization requires a non-terminal checkpoint LSN");
 		}
-		auto metadata = initializeNew(std::move(io), initial);
+		auto metadata = initializeNew(std::move(io), initial, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner));
 		static_cast<void>(metadata->convergeInitialBootstrap(LogSequenceNumber(initial.checkpoint_lsn.value() + 1U)));
 		return metadata;
 	}

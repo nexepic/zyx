@@ -188,6 +188,8 @@ route identity、reference generation、visibility fence 和 target page identit
 只是内部物理 plumbing，绝不作为该 resolver 接受的值。这样数值相同的 `PageId` 与 `MetadataPageId` 仍彼此独立，既不会递归
 路由，也不会把 data-directory entry 解释为 metadata。
 
+2026-10-15 解码元数据读取契约：缓存视图不可变，编码器在准入前校验 ID 严格排序。有效 ID 的 `(id - 1) / leaf_capacity` 单调，因此检查首尾即可证明每条记录均属于选中的叶序号；该捷径仅用于解码后的只读视图，可变 COW 校验继续扫描全部条目。单点及批量元数据路由查找均在返回命中前检查叶页 ID 范围，不能因命中前部记录而漏掉后部错误路由。这会比原单点查找更早拒绝损坏尾部，不改变有效查询结果或磁盘格式。CRC、代际、可见性、目录类型、所选物理引用及 IO 变更纪元失效机制仍必须执行。
+
 在迁移开始前，恢复与 evacuation 必须对同一 Superblock 当前可达的全部 metadata radix、internal 和 leaf page 执行逻辑
 `PageId` 非空且全局唯一校验；重复身份或无效身份必须在 publication 前 fail closed，不能通过重新分配新 ID 掩盖损坏。
 
@@ -917,3 +919,21 @@ storage/relocatable/maintenance/
 持久化 codec、保留索引身份、根和 Driver ABI 不变。首次遇到的边仍验证主记录，冷遍历的主记录 IO 并未消除。查询会话不能跨元数据代际复用。对于已缓存页面上的外部破坏，在后续认证加载或显式完整性验证时发现，而不是每次重读已缓存主记录。
 
 覆盖 u64 叶值/共享拓扑载体和共享分段块实验候选暂不接入生产：原生载体可读取并保持旧快照，但尚无图的原子路由、双向变更与可达性退休集成，也未证明端到端优化阈值达标。通过这些门槛前保留现有布局。候选细节和正确性证据记录在 `benchmarks/architecture-design/decisions/20261014-s4-candidate-comparison`。最终计时与稳态读写/空间验收仍属于独立的 S4.4 工作。
+
+2026-10-15 实现说明：`RelocatableStorageBackendOptions::maximum_integrity_workspace_bytes` 默认 8 MiB，控制每次完整性检查的 MAINTENANCE 额度。检查可以明确因资源准入失败而退出，不写入数据库；调用方可在数据库/进程类别上限内选择更大的有限额度。扫描作用域使用调用方拥有的缓冲区，保留脏页命中的可见性，并绕过解码缓存准入。数据库和进程默认维护保留量均为 16 MiB。这尚未约束全部维护任务或持久退休积压。
+
+2026-10-15 文件准入：原生 `maximum_database_file_bytes` 默认 1 TiB，在可写句柄打开期间不可更改。同一物理数据库的并行可写别名必须配置相同上限；只读句柄可检查更大的文件，不会提高可写上限。每个完整 I/O 范围均先检查容量，包括批量写入及私有 scratch。容量拒绝仍遵守既有的原子发布与恢复语义；旧快照及不可达 LargeValue 仍可能要求显式有界回收后才能复用写入空间。该上限约束文件逻辑长度，不保证维护保留空间或文件系统实际分配量。
+
+2026-10-15：`maximum_reclaim_workspace_bytes` 默认 8 MiB，控制三种显式回收入口及每次后台维护执行的 MAINTENANCE 额度；必须为正数。后台申请失败时先延后，归还额度后重试，申请在发布锁外完成。该额度覆盖拥有资源的工作表/退休计划和页副本，尚不覆盖全部公共容器及嵌套 codec/schema 负载。
+
+2026-10-15：`maximum_reclaim_workspace_bytes` 也用于 scratch release/finish 的受保护清理。清理在发布锁外准入，不消耗已满的 CACHE 额度；没有片段时不申请工作区。准入失败可以在归还维护额度后用相同句柄重试，实际 IO 不确定性仍须恢复。
+
+2026-10-15 嵌套写负载检查点：普通暂存和规范化批次/增量在私有标准负载复制前准入，转移保留 WRITE 租约，消费输入在工作区退款前释放。最终 63 项相关模块测试及 583 个独立故障/堆/恢复案例通过，反证构建证明了提前退款漏洞。overlay/undo 嵌套数据、快照源物化及其他私有工作区仍需补齐。**没有新增阶段验收：22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-admitted-mutation-payloads/`。
+
+2026-10-15 overlay 负载检查点：保留 Node/Edge 与 undo 副本提前准入嵌套 WRITE 缓冲区；替换工作区排序借用指针，移除中间深拷贝，回滚直接交换 owner。103 项相关测试及 579 个独立故障/堆案例通过，含 12 个 overlay 所有权观测阶段。源物化、规范化/API 及其他私有工作区仍需补齐。**没有整阶段验收：22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-overlay-nested-payloads/`。
+
+2026-10-15 解码前基础：无分配完整规范形状检查后调用可选准入入口；解码字符串移动到 owner，map 键顺序校验借用输入。113 项定向模块测试及 113 个独立故障/结构/堆案例通过，包括禁止所有 C++ 堆分配时检查/取消/拒绝 1,025 个值。编码形状计数不等于解码堆容量，原生源/规范化负载所有权及其他工作区仍待补齐。**仍为 22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-predecode-shape-admission/`。
+
+2026-10-15 标量源读取检查点：完整 Node/Edge 读取移动本地拥有的记录，重复检查用有归属的 PMR 哈希表借用输出名称，并保留快照分配上下文。151 项模块测试及 103 个独立故障/codec/复制案例通过。反证构建证明每个实体的大字符串分配由两次变一次，这是分配计数而非性能计时。源/规范化负载及其他工作区所有权仍待补齐。**仍为 22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-move-owned-source-materialization/`。
+
+2026-10-15 计划对象与缓存归属：原生编译/命中计划节点共享 QUERY 账户，缓存对象/索引/文本接入 CACHE；索引借用一份拥有的查询文本。590 项相关模块及 12 项生命周期测试通过，最终索引版本 100 个独立案例通过；历史索引版本另有 868 案例和 32 轮恢复证据。内部 IR 载荷等仍待治理。**仍为 22/34（64.7%），无新增阶段验收。** Evidence: `benchmarks/architecture-design/decisions/20261015-native-plan-object-ownership/`.

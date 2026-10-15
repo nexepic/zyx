@@ -212,6 +212,10 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
     add_executable(zyx_query_scratch_crash_worker EXCLUDE_FROM_ALL
         tests/support/QueryScratchCrashWorker.cpp)
     target_link_libraries(zyx_query_scratch_crash_worker PRIVATE zyx::core)
+    # Explicit process isolation for replacement-new fault injection.
+    add_executable(zyx_transaction_resource_fault_worker EXCLUDE_FROM_ALL
+        tests/support/TransactionResourceFaultWorker.cpp)
+    target_link_libraries(zyx_transaction_resource_fault_worker PRIVATE zyx::core)
     add_executable(zyx_test_suite ${ZYX_TEST_SOURCES})
     target_include_directories(zyx_test_suite
         PRIVATE

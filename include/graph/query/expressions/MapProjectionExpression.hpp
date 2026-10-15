@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include <memory>
@@ -29,12 +30,31 @@ enum class MapProjectionItemType {
  * @brief A single item in a map projection
  */
 struct MapProjectionItem {
+    using OwnedHeapElement = void;
 	MapProjectionItemType type;
-	std::string key;
+	utils::OwnedStdString key;
 	std::unique_ptr<Expression> expression; // only for MPROP_LITERAL
 
-	MapProjectionItem(MapProjectionItemType t, std::string k, std::unique_ptr<Expression> expr = nullptr)
+	MapProjectionItem(MapProjectionItemType t, utils::OwnedStdString k, std::unique_ptr<Expression> expr = nullptr)
 		: type(t), key(std::move(k)), expression(std::move(expr)) {}
+
+    MapProjectionItem(const MapProjectionItem &source)
+        : type(source.type), key(source.key), expression(source.expression ? source.expression->clone() : nullptr) {}
+    MapProjectionItem(MapProjectionItem &&) = default;
+    MapProjectionItem &operator=(const MapProjectionItem &source) {
+        if (this != &source) {
+            MapProjectionItem copy(source);
+            std::swap(type, copy.type); key.swap(copy.key); expression.swap(copy.expression);
+        }
+        return *this;
+    }
+    MapProjectionItem &operator=(MapProjectionItem &&source) {
+        if (this != &source) {
+            MapProjectionItem moved(std::move(source));
+            std::swap(type, moved.type); key.swap(moved.key); expression.swap(moved.expression);
+        }
+        return *this;
+    }
 
 	MapProjectionItem clone() const {
 		return MapProjectionItem(type, key, expression ? expression->clone() : nullptr);
@@ -47,12 +67,12 @@ struct MapProjectionItem {
  */
 class MapProjectionExpression : public Expression {
 public:
-	MapProjectionExpression(std::string variable, std::vector<MapProjectionItem> items)
+	MapProjectionExpression(utils::OwnedStdString variable, utils::OwnedStdVector<MapProjectionItem> items)
 		: variable_(std::move(variable)), items_(std::move(items)) {}
 
 	// A map literal shares the expression-owned item representation used by a
 	// projection, but deliberately has no source binding to dereference.
-	explicit MapProjectionExpression(std::vector<MapProjectionItem> items)
+	explicit MapProjectionExpression(utils::OwnedStdVector<MapProjectionItem> items)
 		: items_(std::move(items)), is_map_literal_(true) {}
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
@@ -83,7 +103,7 @@ public:
 	}
 
 	[[nodiscard]] std::unique_ptr<Expression> clone() const override {
-		std::vector<MapProjectionItem> clonedItems;
+		utils::OwnedStdVector<MapProjectionItem> clonedItems;
 		clonedItems.reserve(items_.size());
 		for (const auto& item : items_) {
 			clonedItems.push_back(item.clone());
@@ -99,8 +119,8 @@ public:
 	[[nodiscard]] bool isMapLiteral() const { return is_map_literal_; }
 
 private:
-	std::string variable_;
-	std::vector<MapProjectionItem> items_;
+	utils::OwnedStdString variable_;
+	utils::OwnedStdVector<MapProjectionItem> items_;
 	bool is_map_literal_ = false;
 };
 

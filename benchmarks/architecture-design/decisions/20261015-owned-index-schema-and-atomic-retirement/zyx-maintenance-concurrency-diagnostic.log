@@ -1,0 +1,77 @@
+Running main() from ./googletest/src/gtest_main.cc
+
+Repeating all tests (iteration 1) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (761 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (761 ms total)
+
+[==========] 1 test from 1 test suite ran. (761 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 2) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_RelocatableMaintenanceService.cpp:494: Failure
+Failed
+maintenance task failed: relocatable retired slot release is blocked by a snapshot that can resolve the retired slot
+
+/workspace/zyx/tests/src/storage/relocatable/maintenance/test_RelocatableMaintenanceService.cpp:498: Failure
+Value of: drained
+  Actual: false
+Expected: true
+state=4 completed=19 deferred=0 failed=1 queued=0 pins=0 retained=0
+
+[  FAILED  ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (10601 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (10601 ms total)
+
+[==========] 1 test from 1 test suite ran. (10601 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+
+ 1 FAILED TEST
+
+Repeating all tests (iteration 3) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (754 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (754 ms total)
+
+[==========] 1 test from 1 test suite ran. (754 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 4) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (785 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (785 ms total)
+
+[==========] 1 test from 1 test suite ran. (785 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 5) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (777 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (777 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (777 ms total)
+[  PASSED  ] 1 test.

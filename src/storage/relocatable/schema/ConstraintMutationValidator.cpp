@@ -224,10 +224,10 @@ namespace graph::storage {
 			failFormat(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					   "relocatable constraint validation definition count overflows its bound");
 		}
-		std::vector<ConstraintDefinition> allDefinitions;
+		utils::OwnedStdVector<ConstraintDefinition> allDefinitions;
 		allDefinitions.reserve(definitions.size() + additionalDefinitions.size());
-		allDefinitions.insert(allDefinitions.end(), definitions.begin(), definitions.end());
-		allDefinitions.insert(allDefinitions.end(), additionalDefinitions.begin(), additionalDefinitions.end());
+		for (const auto &definition : definitions) allDefinitions.push_back(definition);
+		for (const auto &definition : additionalDefinitions) allDefinitions.push_back(definition);
 
 		const bool canUseAffectedEntityPlanner = additionalDefinitions.empty();
 		if (canUseAffectedEntityPlanner) {

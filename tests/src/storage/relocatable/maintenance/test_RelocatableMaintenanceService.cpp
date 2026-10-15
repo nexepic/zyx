@@ -26,6 +26,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedVector.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
@@ -485,7 +487,19 @@ TEST_F(RelocatableMaintenanceServiceTest, BoundsSpaceDuringConcurrentReadersWrit
 		if (!waitUntil([&] { return service.metrics().loop.completed_tasks == PAGE_COUNT; })) {
 			stopReader.store(true, std::memory_order_release);
 			reader.join();
-			ASSERT_TRUE(waitUntil([&] { return service.metrics().loop.completed_tasks == PAGE_COUNT; }));
+            const bool drained = waitUntil([&] { return service.metrics().loop.completed_tasks == PAGE_COUNT; });
+            if (!drained) {
+                if (const auto failure = service.lastFailure()) {
+                    try { std::rethrow_exception(failure); }
+                    catch (const std::exception &error) { ADD_FAILURE() << "maintenance task failed: " << error.what(); }
+                }
+            }
+            const auto finalMetrics = service.metrics();
+            ASSERT_TRUE(drained) << "state=" << static_cast<unsigned>(finalMetrics.loop.state)
+                << " completed=" << finalMetrics.loop.completed_tasks << " deferred=" << finalMetrics.loop.deferred_attempts
+                << " failed=" << finalMetrics.loop.failed_tasks << " queued=" << finalMetrics.loop.queued_tasks
+                << " pins=" << metadata->activeSnapshotCount()
+                << " retained=" << finalMetrics.property_pages.tracked_retained_generations;
 		} else {
 			stopReader.store(true, std::memory_order_release);
 			reader.join();
@@ -1475,4 +1489,50 @@ TEST_F(RelocatableMaintenanceServiceTest, RejectsEveryNonmonotonicVectorDebtCurs
 		EXPECT_EQ(afterIndexId, 0U);
 		return RelocatableVectorRebuildDebtScan{0U, 0U, 1U, false};
 	});
+}
+
+TEST_F(RelocatableMaintenanceServiceTest, WorkspaceAdmissionDefersBeforePublicationAndScopesOwnedBuffers) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+    PhysicalSegmentAllocator physical(io_, *metadata);
+    SlottedPagePool pages(io_, *metadata);
+    BTreePageStore btreePages(pages, *metadata);
+    VectorPageStore vectorPages(io_, *metadata);
+    VectorManifestStore vectorManifests(io_, *metadata);
+    EntityPageStore entities(io_, *metadata);
+    VectorCodebookStore codebooks(physical, *metadata);
+    LargeValueStore largeValues(io_, *metadata);
+    std::mutex publicationMutex;
+    std::atomic<bool> admit{false}, beforePublication{true}, scopedBuffers{false};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    RelocatableMaintenanceOptions options;
+    options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+    const auto generation = metadata->openSnapshot().superblock().generation;
+    RelocatableMaintenanceService service(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
+        largeValues, physical, *metadata, publicationMutex, options, {}, {},
+        [&](uint64_t) {
+            graph::utils::OwnedVector<uint64_t> values;
+            values.resize(64U);
+            scopedBuffers.store(values.get_allocator().resource() == memory.get() && memory->used() >= 512U &&
+                StorageIO::SequentialReadScope::activeFor(*io_), std::memory_order_release);
+            return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED, 0U, 0U};
+        }, {}, {}, [&]() -> std::unique_ptr<RelocatableMaintenanceWorkspace> {
+            if (publicationMutex.try_lock()) publicationMutex.unlock();
+            else beforePublication.store(false, std::memory_order_release);
+            if (!admit.load(std::memory_order_acquire)) return {};
+            return std::unique_ptr<RelocatableMaintenanceWorkspace>(new (memory) RelocatableMaintenanceWorkspace(io_, memory));
+        });
+    EXPECT_GT(service.enqueueVectorBaseRebuild(7U), 0U);
+    service.start();
+    ASSERT_TRUE(waitUntil([&] { return service.metrics().loop.deferred_attempts >= 2U; }));
+    EXPECT_EQ(service.metrics().loop.failed_tasks, 0U);
+    EXPECT_EQ(metadata->openSnapshot().superblock().generation, generation);
+    admit.store(true, std::memory_order_release);
+    ASSERT_TRUE(waitUntil([&] { return service.metrics().loop.completed_tasks == 1U; }));
+    service.stop();
+    EXPECT_TRUE(beforePublication.load(std::memory_order_acquire));
+    EXPECT_TRUE(scopedBuffers.load(std::memory_order_acquire));
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_FALSE(graph::utils::OwnedAllocationScope::active());
+    EXPECT_FALSE(StorageIO::SequentialReadScope::activeFor(*io_));
+    EXPECT_EQ(service.metrics().loop.failed_tasks, 0U);
 }

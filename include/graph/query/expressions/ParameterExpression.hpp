@@ -4,6 +4,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include <string>
@@ -18,7 +19,7 @@ namespace graph::query::expressions {
  */
 class ParameterExpression : public Expression {
 public:
-	explicit ParameterExpression(std::string paramName)
+	explicit ParameterExpression(utils::OwnedStdString paramName)
 		: paramName_(std::move(paramName)) {}
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
@@ -39,7 +40,7 @@ public:
 	}
 
 private:
-	std::string paramName_;
+	utils::OwnedStdString paramName_;
 };
 
 } // namespace graph::query::expressions

@@ -153,6 +153,8 @@ namespace graph::storage {
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.catalog");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.catalog", 1);
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
 		CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -340,7 +342,9 @@ namespace graph::storage {
 				break;
 			}
 			case RSS_CATALOG_PAGE_MAGIC: {
-				CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
+		        std::optional<utils::OwnedAllocationScope> allocation;
+        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+		CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
 				page.generation = batch.generation();
 				page.committed_lsn = batch.checkpointLsn();
 				writeCatalogLeaf(destination, page);
@@ -354,7 +358,9 @@ namespace graph::storage {
 				break;
 			}
 			case RSS_LOCATION_LEAF_MAGIC: {
-				LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
+		        std::optional<utils::OwnedAllocationScope> allocation;
+        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+		LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
 				page.generation = batch.generation();
 				page.committed_lsn = batch.checkpointLsn();
 				writeLocationLeaf(destination, page);
@@ -498,6 +504,8 @@ namespace graph::storage {
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.location");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.location", 1);
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
 		LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -526,6 +534,8 @@ namespace graph::storage {
 		const auto bytes = readPage(reference, hint);
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.route_leaf");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.route_leaf", 1);
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
 		MetadataPageRouteLeafPage page = MetadataPageRouteLeafCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -534,6 +544,36 @@ namespace graph::storage {
 		if (readContext != nullptr) readContext->put(reference, page, page.routes.capacity() * sizeof(page.routes.front()));
 		return page;
 	}
+
+    DecodedMetadataPageView<CatalogLeafPage>
+    MetadataPageFile::readCatalogLeafView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<CatalogLeafPage>(reference))
+                return DecodedMetadataPageView<CatalogLeafPage>(std::move(page));
+        }
+        return DecodedMetadataPageView<CatalogLeafPage>(readCatalogLeaf(reference, hint));
+    }
+
+    DecodedMetadataPageView<LocationLeafPage>
+    MetadataPageFile::readLocationLeafView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<LocationLeafPage>(reference))
+                return DecodedMetadataPageView<LocationLeafPage>(std::move(page));
+        }
+        return DecodedMetadataPageView<LocationLeafPage>(readLocationLeaf(reference, hint));
+    }
+
+    DecodedMetadataPageView<MetadataPageRouteLeafPage>
+    MetadataPageFile::readMetadataPageRouteLeafView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<MetadataPageRouteLeafPage>(reference))
+                return DecodedMetadataPageView<MetadataPageRouteLeafPage>(std::move(page));
+        }
+        return DecodedMetadataPageView<MetadataPageRouteLeafPage>(readMetadataPageRouteLeaf(reference, hint));
+    }
 
 	void MetadataPageFile::writePageDirectoryBootstrap(PhysicalPageRef reference,
 													   const PageDirectoryBootstrap &bootstrap) const {

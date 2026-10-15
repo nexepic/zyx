@@ -1,0 +1,9 @@
+# Overlay and undo node ownership
+
+An optional LogicalGraphTransactionMemoryProvider supplies a shared retained WRITE resource without changing the existing transaction boundary’s virtual layout. Native transactions implement it. Overlays retain the owner before their PMR maps; node/edge state nodes, persisted visibility nodes, statement-undo nodes, patch target validation and detach-dedup nodes use it. Other backends retain their permanent new/delete allocation behavior. Nested Node/Edge strings, vectors and PropertyValue payloads remain outside this metadata change.
+
+Tests exhaust shared WRITE admission, verify undo rejection preserves the prior visible and durable statement, and verify a rejected creation undo can retry with the same preview identity. An overlay that outlives native rollback keeps its map charge until its destruction. Existing statement rollback still swaps saved owners without allocating.
+
+The current-source affected selection passes 1,304 tests in 53 suites, including generic overlay semantics/undo/vector/exact-candidate tests. The isolated worker additionally checks all 17 normal-trace overlay-stage allocation positions, preserving visible and reopened complete Property values, plus four legacy OOM/retention cases. Production/benchmark binaries have no replacement global new/delete. The harness adds overlay/all phase selection; earlier stage/commit choices remain compatible.
+
+A subsequent audit identified const local staging receipts whose return can copy if NRVO is disabled. This checkpoint precedes fixing/testing that separate path. It is not final source acceptance. Other WRITE/private COW/nested payloads, maintenance/backlog and partitioned operators remain outstanding. No fixed delivery is newly accepted: 22/34 (64.7%). No full unit suite or performance campaign was run.

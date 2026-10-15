@@ -20,6 +20,7 @@
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/property/LargeValue.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 namespace graph::storage {
 	class PropertyCollectionRootStore;
@@ -173,7 +174,7 @@ namespace graph::storage {
 			RangeReadCache(RangeReadCache &&) noexcept = default;
 			RangeReadCache &operator=(RangeReadCache &&) noexcept = default;
 			[[nodiscard]] size_t retainedBytes() const { return raw_.capacity(); }
-			void clear() { valid_ = false; std::vector<std::byte>().swap(raw_); }
+			void clear() { valid_ = false; utils::OwnedVector<std::byte>(raw_.get_allocator()).swap(raw_); }
 		private:
 			friend class LargeValueStore;
 			bool valid_ = false;
@@ -184,7 +185,7 @@ namespace graph::storage {
 			LargeValueId value_id_{};
 			Generation generation_{};
 			LargeValueChunk chunk_{};
-			std::vector<std::byte> raw_;
+			utils::OwnedVector<std::byte> raw_;
 		};
 		[[nodiscard]] std::vector<std::byte> readRangeFromManifestCached(const MetadataSnapshotPin &snapshot,
 			const LargeValueManifest &manifest, uint64_t offset, uint64_t length, RangeReadCache &cache,
@@ -258,7 +259,7 @@ namespace graph::storage {
 												  const LargeValueManifest &root, PageId pageId,
 												  BufferPoolReadHint hint,
 				const std::function<void(size_t)> &bufferAdmission = {}) const;
-		[[nodiscard]] std::vector<std::byte> readRawChunk(const MetadataSnapshotPin &snapshot,
+		[[nodiscard]] utils::OwnedVector<std::byte> readRawChunk(const MetadataSnapshotPin &snapshot,
 												  const LargeValueManifest &manifest,
 												  const LargeValueChunk &chunk, BufferPoolReadHint firstPageHint,
 				const std::function<void(size_t)> &bufferAdmission = {}) const;

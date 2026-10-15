@@ -1,0 +1,123 @@
+Running main() from ./googletest/src/gtest_main.cc
+
+Repeating all tests (iteration 1) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (720 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (720 ms total)
+
+[==========] 1 test from 1 test suite ran. (720 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 2) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (778 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (778 ms total)
+
+[==========] 1 test from 1 test suite ran. (778 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 3) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (767 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (767 ms total)
+
+[==========] 1 test from 1 test suite ran. (767 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 4) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (758 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (758 ms total)
+
+[==========] 1 test from 1 test suite ran. (758 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 5) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (863 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (863 ms total)
+
+[==========] 1 test from 1 test suite ran. (863 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 6) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (792 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (792 ms total)
+
+[==========] 1 test from 1 test suite ran. (792 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 7) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (812 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (812 ms total)
+
+[==========] 1 test from 1 test suite ran. (812 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 8) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (811 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (811 ms total)
+
+[==========] 1 test from 1 test suite ran. (811 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 9) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (787 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (787 ms total)
+
+[==========] 1 test from 1 test suite ran. (787 ms total)
+[  PASSED  ] 1 test.
+
+Repeating all tests (iteration 10) . . .
+
+Note: Google Test filter = RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[==========] Running 1 test from 1 test suite.
+[----------] 1 test from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (850 ms)
+[----------] 1 test from RelocatableMaintenanceServiceTest (850 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (850 ms total)
+[  PASSED  ] 1 test.

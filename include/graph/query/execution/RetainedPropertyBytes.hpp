@@ -19,12 +19,15 @@ inline size_t multiplyPropertyBufferBytes(size_t count, size_t width) {
 
 inline size_t propertyHeapBufferBytes(const PropertyValue &value);
 
+// Default-allocator table metadata. MSVC uses a list sentinel and two bucket
+// iterators per bucket; GCC/libc++ use one bucket pointer and linked hash nodes.
+// Node width is a conservative alignment bound, not malloc/RSS overhead.
+inline size_t propertyMapStructuralHeapBufferBytes(const PropertyValue::MapType &map) {
+    return standardUnorderedMapStructuralHeapBytes(map);
+}
+
 inline size_t propertyMapHeapBufferBytes(const PropertyValue::MapType &map) {
-	size_t total = multiplyPropertyBufferBytes(map.bucket_count(), sizeof(void *));
-	// Node allocator metadata is estimated; buckets and payload capacities are observed.
-	constexpr size_t nodeBytes = sizeof(PropertyValue::MapType::value_type) + 2U * sizeof(void *) +
-		alignof(PropertyValue::MapType::value_type) - 1U;
-	total = addPropertyBufferBytes(total, multiplyPropertyBufferBytes(map.size(), nodeBytes));
+    size_t total = propertyMapStructuralHeapBufferBytes(map);
 	for (const auto &[key, element] : map) {
 		total = addPropertyBufferBytes(total, dynamicStringBufferBytes(key));
 		total = addPropertyBufferBytes(total, propertyHeapBufferBytes(element));
@@ -36,9 +39,9 @@ inline size_t propertyMapHeapBufferBytes(const PropertyValue::MapType &map) {
 inline size_t propertyHeapBufferBytes(const PropertyValue &value) {
 	const auto &variant = value.getVariant();
 	if (const auto *text = std::get_if<std::string>(&variant)) return dynamicStringBufferBytes(*text);
-	if (const auto *bytes = std::get_if<PropertyValue::Bytes>(&variant)) return bytes->capacity();
+	if (const auto *bytes = std::get_if<PropertyValue::Bytes>(&variant)) return standardVectorHeapBufferBytes(*bytes);
 	if (const auto *list = std::get_if<std::vector<PropertyValue>>(&variant)) {
-		size_t total = multiplyPropertyBufferBytes(list->capacity(), sizeof(PropertyValue));
+		size_t total = standardVectorHeapBufferBytes(*list);
 		for (const auto &element : *list) total = addPropertyBufferBytes(total, propertyHeapBufferBytes(element));
 		return total;
 	}
@@ -61,7 +64,7 @@ inline PropertyBufferEstimates propertyBufferEstimatesGuarded(
 	}
 	const auto &variant = value.getVariant();
 	if (const auto *list = std::get_if<std::vector<PropertyValue>>(&variant)) {
-		PropertyBufferEstimates bytes{sizeof(uint32_t), multiplyPropertyBufferBytes(list->capacity(), sizeof(PropertyValue))};
+		PropertyBufferEstimates bytes{sizeof(uint32_t), standardVectorHeapBufferBytes(*list)};
 		for (const auto &element : *list) {
 			const auto child = propertyBufferEstimatesGuarded(element, checkpoint, untilCheckpoint);
 			bytes.logicalBytes = addPropertyBufferBytes(bytes.logicalBytes, child.logicalBytes);
@@ -70,11 +73,7 @@ inline PropertyBufferEstimates propertyBufferEstimatesGuarded(
 		return bytes;
 	}
 	if (const auto *map = std::get_if<PropertyValue::MapType>(&variant)) {
-		constexpr size_t nodeBytes = sizeof(PropertyValue::MapType::value_type) + 2U * sizeof(void *) +
-			alignof(PropertyValue::MapType::value_type) - 1U;
-		PropertyBufferEstimates bytes{sizeof(uint32_t), addPropertyBufferBytes(
-			multiplyPropertyBufferBytes(map->bucket_count(), sizeof(void *)),
-			multiplyPropertyBufferBytes(map->size(), nodeBytes))};
+        PropertyBufferEstimates bytes{sizeof(uint32_t), propertyMapStructuralHeapBufferBytes(*map)};
 		for (const auto &[key, element] : *map) {
 			const auto child = propertyBufferEstimatesGuarded(element, checkpoint, untilCheckpoint);
 			bytes.logicalBytes = addPropertyBufferBytes(bytes.logicalBytes,
@@ -106,11 +105,7 @@ inline size_t retainedPropertyMapBytes(const PropertyValue::MapType &map, Checkp
 	checkpoint();
 	size_t untilCheckpoint = 256U;
 	size_t logicalBytes = sizeof(map);
-	constexpr size_t nodeBytes = sizeof(PropertyValue::MapType::value_type) + 2U * sizeof(void *) +
-		alignof(PropertyValue::MapType::value_type) - 1U;
-	size_t heapBytes = addPropertyBufferBytes(sizeof(map), addPropertyBufferBytes(
-		multiplyPropertyBufferBytes(map.bucket_count(), sizeof(void *)),
-		multiplyPropertyBufferBytes(map.size(), nodeBytes)));
+    size_t heapBytes = addPropertyBufferBytes(sizeof(map), propertyMapStructuralHeapBufferBytes(map));
 	for (const auto &[key, value] : map) {
 		const auto child = propertyBufferEstimatesGuarded(value, checkpoint, untilCheckpoint);
 		logicalBytes = addPropertyBufferBytes(logicalBytes, addPropertyBufferBytes(

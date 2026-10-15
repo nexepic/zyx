@@ -1,0 +1,73 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 120,
+  "selected_suites": 6,
+  "module_failures": 0,
+  "lease_fault_sweeps": {
+    "lease-reserve": {
+      "points": 163,
+      "exhaustive": true
+    },
+    "lease-cached": {
+      "points": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "points": 169,
+      "exhaustive": true
+    }
+  },
+  "legacy_cases": 4,
+  "fault_failures": 0,
+  "old_negative_faults": {
+    "reserve": 162,
+    "cached": 3,
+    "fresh": 168
+  },
+  "capability_map_allocations_coordinated": false,
+  "full_suite": false,
+  "performance_run": false,
+  "base_commit": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_sha256": {
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "a3424831a1edfd304f7abd09f0443fd8810bd66ebad8cc15555768f1b04a0725",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "07053512aacbc80e9d947103223b7b80e259901f83e4ebd28077c392d002cf07",
+    "tests/support/TransactionResourceFaultWorker.cpp": "d07f624c67663d5bddd1076cbedd44cf39661013711a2cc08ea589779e2cbb8d",
+    "scripts/test_transaction_resource_faults.py": "59d605ec4046a038fdbb628088a25468a97b0a6b95c360c3079f638890fc3278"
+  },
+  "patch_sha256": "af8892d7545a7fd8f693ee9a085b0778d41627703bb962fa4cfdb44f3591cebe",
+  "untracked_source_sha256": {
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "acfe960ae09ec689e4fc4f629115d6ea5e9e4db5a7c991bc1ec5c29f3159de70",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "include/graph/storage/LogicalGraphTransactionMemoryProvider.hpp": "276c1dc5696b09dd704b2b9619bc742258e01fb838744a5efaf964c7b277993a",
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "scripts/test_transaction_resource_faults.py": "59d605ec4046a038fdbb628088a25468a97b0a6b95c360c3079f638890fc3278",
+    "src/query/execution/ProcessResourceDomains.hpp": "c9d160c77e13206b06297ce682c0daa26a376ed10421e3d0526317bd688a3e27",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "cbf2db190b39920e708b92c88f9e0d4b694f7302b256ef7906b475622da3c3fb",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "cb941385feacd4fbd309abda6a26ff94b3505230a4a0d069c56f3ec73037b281",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "666c2e4153c9d362f73b3fa5b40f79c733d989489e97c6002bd9a581cbb0f0cd",
+    "tests/support/TransactionResourceFaultWorker.cpp": "d07f624c67663d5bddd1076cbedd44cf39661013711a2cc08ea589779e2cbb8d"
+  },
+  "evidence_sha256": {
+    "negative-reproduction.py": "d4136ab57ed5c697e5d68b81163f4890dc7d22b05ba1fb739e7ddeb5f2294093",
+    "lease-faults.log": "9b854fe086fa5019084182104ea1d4ff19948907365a26e5378ff7b8cbe4e10f",
+    "lease-faults.json": "4aef939cbba7ecb54880f2a53cf36e9792b43be484c1ae0c1048b25324fb053f",
+    "negative.log": "1dd0dc957fdfe8d3123d77e266bd035c615fee68fa97baa5cd28602f3839f1a9",
+    "old-metadata.cpp": "25b140592c09da4d23796aeeaadfe4fc2297099917718320e3d2d9d848fe7109",
+    "source.patch": "af8892d7545a7fd8f693ee9a085b0778d41627703bb962fa4cfdb44f3591cebe",
+    "negative-reserve.log": "69ad69f93297162e2872abe8ec9b77b6fd844da7370e0b56fb6f64d5a531ee23",
+    "negative-cached.log": "e6850aae5d028f3f3c48ff827f4257f7ba0faa233d2f5e60d5e284be869c8375",
+    "module-tests.log": "7296051a423a6717645bf74554c3aeb6d9009ee6072eac5293231aeee53e0b2b",
+    "negative-fresh.log": "e679179035258fa32e5d9018f26bf01f1269e8d886e74cf3a91e1db880faa7d4",
+    "module-recipe.py": "7bd7811e9bdfdda7c2ba27bb6b0d640f6cc704d97286f77ab0bf18382837b420",
+    "metadata-header-at-checkpoint.hpp": "07053512aacbc80e9d947103223b7b80e259901f83e4ebd28077c392d002cf07"
+  }
+}

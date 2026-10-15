@@ -1,0 +1,283 @@
+{
+  "status": "completed_read_campaign_not_full_S0.3_acceptance",
+  "source_head": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_worktree_status": "",
+  "source_manifest_sha256": "fca14597da0930ae630853648fabdf1db40b109f07e0b2000169396a0b08f384",
+  "source_files": 1905,
+  "control_binary_sha256": "85493f42460693ca22b637e5a8117a6478aed21b88e3d553a3045a298f23958f",
+  "control_directory": "/workspace/zyx-optimization-control-20261015",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "build_type": "Release",
+  "compiler": "clang++-19",
+  "kuzu": "0.11.3",
+  "seed": 42,
+  "scale": "medium",
+  "threads_per_query": 1,
+  "warmups": 3,
+  "samples_per_workload_per_process": 10,
+  "target_independent_rounds": 3,
+  "instrumentation": false,
+  "full_group_and_topk_observation": true,
+  "cgroup": {
+    "memory.max": "17179869184",
+    "cpu.max": "400000 100000"
+  },
+  "results": "benchmarks/architecture-design/results/20261015-before-optimization",
+  "scope": "Read baseline before new production edits; full S0.3 workload/resource acceptance remains pending. Do not combine with historical macOS or ARM64 measurements. Kuzu uses adapter defaults for buffer-pool memory; equal query threads do not establish equal memory admission.",
+  "completed_rounds": [
+    1,
+    2,
+    3
+  ],
+  "round1_status": {
+    "scan": {
+      "failure_count": 0,
+      "quality_failure_count": 0
+    },
+    "indexed": {
+      "failure_count": 0,
+      "quality_failure_count": 0
+    },
+    "retrieval": {
+      "failure_count": 0,
+      "quality_failure_count": 0
+    }
+  },
+  "round1_evidence": {
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/resources.json": {
+      "sha256": "dd6cd089e1951f3ccc7c9efeda2d13ce7692da32c210cfe1bb3dadffb8eaaa17",
+      "bytes": 462
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/operation_summary.md": {
+      "sha256": "0138ff5ecfebdfad9ce7e4a8c6f36c9095472fd3c23a76b608556814f042f772",
+      "bytes": 2100
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/comparison.csv": {
+      "sha256": "6b3797adc1f1d1562c6bfffa449fcce1e7dc20f33ddb786b4ffa440ba0c93fde",
+      "bytes": 1975
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/environment.json": {
+      "sha256": "04806f62b8cf842e2189cd927c937db4de85a9f37a70eee0b62c2710f5e11e10",
+      "bytes": 3689
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/profile_summary.md": {
+      "sha256": "bc1b8fab7b917dc90ab18d9f3d9da5df9a65631e9b2677587b16cd67710cafd1",
+      "bytes": 984
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/raw.jsonl": {
+      "sha256": "5895ef08a6065d2f2b52f7cdc74fe57966c0bc5fff1279098c5a3872e4b46b6d",
+      "bytes": 98291
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/summary.md": {
+      "sha256": "14794e60f2f07e755463e43888f324ec242d00b158adf0cb1c8a72fbdc60c5a6",
+      "bytes": 4296
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/dataset-hashes.json": {
+      "sha256": "d9e556ba6ebc14b925d8a93a81c3e23dc0750332334baf508022b9309d614d84",
+      "bytes": 594
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/operation_summary.csv": {
+      "sha256": "39d1c55e8773447aa28b7678ae2dea0cecf44a058a6d40b8dbe43966c27704d0",
+      "bytes": 1367
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/profile_summary.csv": {
+      "sha256": "7a4f6384be6d8dbbe9f2e9668623732979df7a3d71a4ce2707a65a6d25067ba7",
+      "bytes": 176
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/phase_category_summary.csv": {
+      "sha256": "96162e03df92f77cc17b1351107508568455988e219611d077d9a4917bce4a80",
+      "bytes": 156
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/run_status.json": {
+      "sha256": "1104e805f4d740adcc837a592b66fdd33173240e35e6178562dac874f7ee1e00",
+      "bytes": 55
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/phase_category_summary.md": {
+      "sha256": "b3464cab9eb0964d5f296562953ee93d33755309584812e9a1dc4185186f139e",
+      "bytes": 907
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/comparison.md": {
+      "sha256": "f96916b8c7eed4f7a266d2c8e2410984c590b691b7b0523ecd380cac6f26bbbc",
+      "bytes": 2251
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/full-result-correctness.json": {
+      "sha256": "139f357811e32e68fbace869d9974a93d44209c54b6b5093c541c6d78aee4ffc",
+      "bytes": 119
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/errors.jsonl": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/quality_gates.json": {
+      "sha256": "d9877a368eabbc6b2adf9f7db208a05f83b60441516803bc7ae894ec2775356e",
+      "bytes": 1253
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/correctness.json": {
+      "sha256": "84fd0dba95017c0e8ba7f8fc00a06fdfe6bcb3743cc44817907eee1a2f2ee709",
+      "bytes": 518
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/scan/summary.csv": {
+      "sha256": "f793b8e9f71eb24887a45f1268266e01a93b6a1838ec739cc732dccbb61abe52",
+      "bytes": 3295
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/resources.json": {
+      "sha256": "b69200ae2d777347bc1ee9e8ce629ead987a9aae2011b03740b3a50232871ff6",
+      "bytes": 462
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/operation_summary.md": {
+      "sha256": "5a2d939863eb97413562eae9e6b955b2b30d3725c18e64606e9a60e5cc461978",
+      "bytes": 1330
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/comparison.csv": {
+      "sha256": "35ee090ce1cda292b2aa47ed8763158e5449b11179bcc0955c1db00c8132c01a",
+      "bytes": 1127
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/environment.json": {
+      "sha256": "c308627f5aeeb932e17106f5ba8d51bc47743c0223544ac4bea22f32a92b96b8",
+      "bytes": 3616
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/profile_summary.md": {
+      "sha256": "bc1b8fab7b917dc90ab18d9f3d9da5df9a65631e9b2677587b16cd67710cafd1",
+      "bytes": 984
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/raw.jsonl": {
+      "sha256": "1ade2ef363917d5fb0ffbbd607df9c15768666c9f9593ffb59fa313bd10eba4a",
+      "bytes": 33087
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/summary.md": {
+      "sha256": "2f9718678b17c05350a4dafae950e20cdbc84b5ef34d01cca18acca093334744",
+      "bytes": 2460
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/dataset-hashes.json": {
+      "sha256": "d9e556ba6ebc14b925d8a93a81c3e23dc0750332334baf508022b9309d614d84",
+      "bytes": 594
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/operation_summary.csv": {
+      "sha256": "df3953c277ec04079d571f7e60ffe5099a4c9e919d720ad881edc03405a046b4",
+      "bytes": 607
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/profile_summary.csv": {
+      "sha256": "7a4f6384be6d8dbbe9f2e9668623732979df7a3d71a4ce2707a65a6d25067ba7",
+      "bytes": 176
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/phase_category_summary.csv": {
+      "sha256": "96162e03df92f77cc17b1351107508568455988e219611d077d9a4917bce4a80",
+      "bytes": 156
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/run_status.json": {
+      "sha256": "1104e805f4d740adcc837a592b66fdd33173240e35e6178562dac874f7ee1e00",
+      "bytes": 55
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/phase_category_summary.md": {
+      "sha256": "b3464cab9eb0964d5f296562953ee93d33755309584812e9a1dc4185186f139e",
+      "bytes": 907
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/comparison.md": {
+      "sha256": "d9ea75412b48aa17fe814dd2e29fed4170a4b09bab5fd147b5f6fd2b076fa167",
+      "bytes": 1619
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/full-result-correctness.json": {
+      "sha256": "139f357811e32e68fbace869d9974a93d44209c54b6b5093c541c6d78aee4ffc",
+      "bytes": 119
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/errors.jsonl": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/quality_gates.json": {
+      "sha256": "d9877a368eabbc6b2adf9f7db208a05f83b60441516803bc7ae894ec2775356e",
+      "bytes": 1253
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/correctness.json": {
+      "sha256": "98cef5876d6eed6fc8451dc5980e6618e8b05cd52923c7c974696d54bf425e3c",
+      "bytes": 357
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/retrieval/summary.csv": {
+      "sha256": "5c5f95ecdc756e0cdb6e0b6bd65a57b9e0e853feae7a968292c31403d3f46c7e",
+      "bytes": 1749
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/resources.json": {
+      "sha256": "54acec738fa71d7de556689c7b0056af0ef5717c7bc83e1976c1f1d2761960de",
+      "bytes": 462
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/operation_summary.md": {
+      "sha256": "c162ccfb0712d026ddba6ce930f6e3676e77d9f1eb4a672f941f015742909250",
+      "bytes": 1229
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/comparison.csv": {
+      "sha256": "b6d97a080ec633ddb87a452339d5b9e14ac6c69817e464b83245606eaa874e00",
+      "bytes": 611
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/environment.json": {
+      "sha256": "3748e3f21b3ad8612c08b90aaba209d61d2ecfa51678e677b2fd149ee7f35b16",
+      "bytes": 3494
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/profile_summary.md": {
+      "sha256": "bc1b8fab7b917dc90ab18d9f3d9da5df9a65631e9b2677587b16cd67710cafd1",
+      "bytes": 984
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/raw.jsonl": {
+      "sha256": "5ffb2fdca9e74e31606aaa07b056a262054b75ec60b77556cee79a3c6e8ce232",
+      "bytes": 15386
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/summary.md": {
+      "sha256": "8cfb9ce5543d71b74720b72fe006ce31cb234c0d011584752a87d29149b1fa75",
+      "bytes": 1472
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/dataset-hashes.json": {
+      "sha256": "d9e556ba6ebc14b925d8a93a81c3e23dc0750332334baf508022b9309d614d84",
+      "bytes": 594
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/operation_summary.csv": {
+      "sha256": "6c5d0e391034a353fe836fb2650cbdb7c7b8b8567146aaa1c2ebac42f4f72541",
+      "bytes": 516
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/profile_summary.csv": {
+      "sha256": "7a4f6384be6d8dbbe9f2e9668623732979df7a3d71a4ce2707a65a6d25067ba7",
+      "bytes": 176
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/phase_category_summary.csv": {
+      "sha256": "96162e03df92f77cc17b1351107508568455988e219611d077d9a4917bce4a80",
+      "bytes": 156
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/run_status.json": {
+      "sha256": "1104e805f4d740adcc837a592b66fdd33173240e35e6178562dac874f7ee1e00",
+      "bytes": 55
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/phase_category_summary.md": {
+      "sha256": "b3464cab9eb0964d5f296562953ee93d33755309584812e9a1dc4185186f139e",
+      "bytes": 907
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/comparison.md": {
+      "sha256": "ef218332ddf6611c2d0ee3e5281e2fae0d2f36c627b71a8888ec708d807ea502",
+      "bytes": 1296
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/full-result-correctness.json": {
+      "sha256": "139f357811e32e68fbace869d9974a93d44209c54b6b5093c541c6d78aee4ffc",
+      "bytes": 119
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/errors.jsonl": {
+      "sha256": "57101088441427744e397585bf18621029175b656fd9b1faba62af5c41f38593",
+      "bytes": 623
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/quality_gates.json": {
+      "sha256": "2cce4831e113c9f04b8723db2d5ebbe21b7d411bd4bbd30d1deb7bda64f66cf5",
+      "bytes": 1271
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/correctness.json": {
+      "sha256": "79d522c928951f4c8a530cac09f8d4f53f0be6d67f4991f9f008eb6787cec4b1",
+      "bytes": 281
+    },
+    "benchmarks/architecture-design/results/20261015-before-optimization/medium-round-1/indexed/summary.csv": {
+      "sha256": "64e97e2f23b95d90c4422a83b7e7ce3caecba871a8c332b037114dae9ec49c50",
+      "bytes": 877
+    }
+  },
+  "three_round_execution_quality_failures": 0,
+  "archive": {
+    "path": "benchmarks/architecture-design/decisions/20261015-before-optimization/read-campaign-evidence.tar.gz",
+    "bytes": 86137,
+    "sha256": "c9f24548a35c73ab7b1a912d987fff582f6981d1f84dee3b558665373735ed83"
+  }
+}

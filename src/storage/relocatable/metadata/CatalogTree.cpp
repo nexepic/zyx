@@ -35,6 +35,8 @@ namespace graph::storage {
 
 		[[nodiscard]] bool sameSuperblock(const Superblock &left, const Superblock &right) { return left == right; }
 
+
+
 		void validateVisiblePage(Generation pageGeneration, LogSequenceNumber pageLsn, const Superblock &superblock,
 								 const char *message);
 
@@ -88,6 +90,21 @@ namespace graph::storage {
 				}
 			}
 		}
+
+        void validateDecodedLeafOrdinal(const DecodedMetadataPageView<CatalogLeafPage> &page, uint64_t expectedOrdinal) {
+            const auto &entries = page->entries;
+            if (entries.empty()) {
+                throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
+                    "a reachable relocatable Catalog leaf must not be empty");
+            }
+            // The codec validates strict ID order. leafOrdinal is monotonic,
+            // so its two extrema prove membership for every immutable entry.
+            if (leafOrdinal(entries.front().segment_id) != expectedOrdinal ||
+                leafOrdinal(entries.back().segment_id) != expectedOrdinal) {
+                throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
+                    "relocatable Catalog leaf does not match its radix route");
+            }
+        }
 
 		void validateVisiblePage(Generation pageGeneration, LogSequenceNumber pageLsn, const Superblock &superblock,
 								 const char *message) {
@@ -390,7 +407,7 @@ namespace graph::storage {
 									  "relocatable Catalog radix child reference is invalid");
 			}
 			return radixChild ? pages.readMetadataRadixUnresolved(reference).page_id
-							  : pages.readCatalogLeaf(reference).page_id;
+							  : pages.readCatalogLeafView(reference)->page_id;
 		}
 
 		void encodeLogicalChildren(CatalogRadixPage &page, MetadataPageFile &pages) {
@@ -510,11 +527,11 @@ namespace graph::storage {
 										  "relocatable Catalog traversal found a duplicate physical page reference");
 				}
 				if (node.level == 0U) {
-					const CatalogLeafPage leaf = pages.readCatalogLeaf(reference);
-					validateVisiblePage(leaf.generation, leaf.committed_lsn, superblock,
+					const auto leaf = pages.readCatalogLeafView(reference);
+					validateVisiblePage(leaf->generation, leaf->committed_lsn, superblock,
 										"relocatable Catalog traversal leaf is newer than its Superblock");
-					validateLeafOrdinal(leaf, childFirstLeafOrdinal);
-					for (const CatalogEntry &entry: leaf.entries) {
+					validateDecodedLeafOrdinal(leaf, childFirstLeafOrdinal);
+					for (const CatalogEntry &entry: leaf->entries) {
 						visitor(entry);
 					}
 					continue;
@@ -931,14 +948,14 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 			if (node.level == 0) {
-				const CatalogLeafPage leaf = pages_.readCatalogLeaf(*childReference);
-				validateVisiblePage(leaf.generation, leaf.committed_lsn, superblock,
+				const auto leaf = pages_.readCatalogLeafView(*childReference);
+				validateVisiblePage(leaf->generation, leaf->committed_lsn, superblock,
 									"relocatable Catalog leaf is newer than its Superblock");
-				validateLeafOrdinal(leaf, leafOrdinal(segmentId));
+				validateDecodedLeafOrdinal(leaf, leafOrdinal(segmentId));
 				const auto iterator = std::lower_bound(
-						leaf.entries.begin(), leaf.entries.end(), segmentId,
+						leaf->entries.begin(), leaf->entries.end(), segmentId,
 						[](const CatalogEntry &entry, SegmentId target) { return entry.segment_id < target; });
-				if (iterator == leaf.entries.end() || iterator->segment_id != segmentId) {
+				if (iterator == leaf->entries.end() || iterator->segment_id != segmentId) {
 					return std::nullopt;
 				}
 				return *iterator;
@@ -968,14 +985,14 @@ namespace graph::storage {
 		for (;;) {
 			const PhysicalPageRef &childReference = CatalogRadixPageCodec::childFor(node, segmentId);
 			if (node.level == 0) {
-				const CatalogLeafPage leaf = pages_.readCatalogLeaf(childReference);
-				validateVisiblePage(leaf.generation, leaf.committed_lsn, superblock,
+				const auto leaf = pages_.readCatalogLeafView(childReference);
+				validateVisiblePage(leaf->generation, leaf->committed_lsn, superblock,
 									"relocatable Catalog leaf is newer than its Superblock");
-				validateLeafOrdinal(leaf, leafOrdinal(segmentId));
+				validateDecodedLeafOrdinal(leaf, leafOrdinal(segmentId));
 				const auto iterator = std::lower_bound(
-						leaf.entries.begin(), leaf.entries.end(), segmentId,
+						leaf->entries.begin(), leaf->entries.end(), segmentId,
 						[](const CatalogEntry &entry, SegmentId target) { return entry.segment_id < target; });
-				if (iterator == leaf.entries.end() || iterator->segment_id != segmentId) {
+				if (iterator == leaf->entries.end() || iterator->segment_id != segmentId) {
 					throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
 										  "relocatable Catalog Segment ID is not present");
 				}

@@ -1,0 +1,86 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 694,
+  "isolated_cases_passed": 871,
+  "crash_cycles": 32,
+  "failures": 0,
+  "sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3941,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 18,
+      "tested_allocations": 18,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 13,
+      "tested_allocations": 13,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 22,
+      "tested_allocations": 22,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 26,
+      "tested_allocations": 26,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42255,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "source-materialization": {
+      "baseline_allocations": 947,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "normalized-patch": {
+      "baseline_allocations": 90,
+      "tested_allocations": 90,
+      "exhaustive": true
+    },
+    "plan-cache": {
+      "baseline_allocations": 25092,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "worker_sha256": "50f50a54f38c8fa713e9c5eb5b37c6cea7c1975bd38f26b67e8b3c5724659876",
+  "full_suite": false,
+  "performance_campaign": false,
+  "runtime_platform": "Linux clang19/libstdc++14"
+}

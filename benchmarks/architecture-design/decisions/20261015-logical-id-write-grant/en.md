@@ -1,0 +1,9 @@
+# Shared WRITE capability-table grant
+
+Native writable file opens acquire a shared, weakly registered prepaid WRITE grant of at most 256 KiB before metadata publication. Both outstanding logical-ID tables and prepared transfer tables use PMR with that same allocator. Their actual allocator requests consume local prepaid credit, including node/header metadata; node transfers allocate nothing. The metadata store retains the owner until every table is destroyed, so per-node erasure under publication never destroys/refunds the process grant. Physical readonly opens do not prepay this WRITE grant; embedding metadata-store callers without a supplied owner retain permanent new/delete behavior.
+
+The 128 MiB WRITE, 256 MiB database and 512 MiB process ceilings are unchanged. The additional idle admitted capacity is 0.25 MiB per writable file, shared by aliases, not 0.25 MiB per transaction or table. Unused prepaid capacity stays charged; these counters are not RSS. Existing exact transaction counters now distinguish this shared idle capacity from wrapper/payload charges; the wrapper’s 16 KiB upper bound is unchanged.
+
+Current-source affected modules pass 1,419 tests in 55 suites. New tests verify alias sharing, correct class and lifetime, no WRITE grant for physical readonly, and local capability exhaustion rejecting before file writes/generation changes or an indeterminate fence, followed by successful retry. All 163/4/169 lease allocation positions and four legacy cases pass; 32 same-file real crash/recovery cycles preserve readonly SHA and reusable quota, with recovered file size 1,572,864 bytes throughout. Only selected tests were built/run. No performance campaign was run.
+
+No new fixed acceptance: 22/34 (64.7%). Nested retained PropertyValue/string/vector buffers, other write/COW/overlay payload/workspace, maintenance/backlog and partitioned operators remain incomplete. No commit/push on fixed progress growth is claimed.

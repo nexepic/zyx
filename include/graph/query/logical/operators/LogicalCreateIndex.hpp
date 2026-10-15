@@ -6,6 +6,8 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -25,13 +27,13 @@ namespace graph::query::logical {
 class LogicalCreateIndex : public LogicalOperator {
 public:
 	// Single-property constructor
-	LogicalCreateIndex(std::string indexName, std::string label, std::string propertyKey)
+	LogicalCreateIndex(utils::OwnedStdString indexName, utils::OwnedStdString label, utils::OwnedStdString propertyKey)
 		: indexName_(std::move(indexName))
 		, label_(std::move(label))
 		, propertyKeys_({std::move(propertyKey)}) {}
 
 	// Multi-property (composite) constructor
-	LogicalCreateIndex(std::string indexName, std::string label, std::vector<std::string> propertyKeys)
+	LogicalCreateIndex(utils::OwnedStdString indexName, utils::OwnedStdString label, utils::OwnedStringVector propertyKeys)
 		: indexName_(std::move(indexName))
 		, label_(std::move(label))
 		, propertyKeys_(std::move(propertyKeys)) {}
@@ -41,6 +43,8 @@ public:
 	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {}; }
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override { return {}; }
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalCreateIndex>(indexName_, label_, propertyKeys_);
@@ -65,9 +69,9 @@ public:
 	[[nodiscard]] bool isComposite() const { return propertyKeys_.size() > 1; }
 
 private:
-	std::string indexName_;
-	std::string label_;
-	std::vector<std::string> propertyKeys_;
+	utils::OwnedStdString indexName_;
+	utils::OwnedStdString label_;
+	utils::OwnedStringVector propertyKeys_;
 };
 
 } // namespace graph::query::logical

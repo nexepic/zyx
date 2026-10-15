@@ -1,5 +1,7 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
 
 #include <limits>
 
@@ -403,4 +405,87 @@ TEST_F(RelocatableStorageBackendTest, RawPropertyRestorationPreservesRootsAndDoe
 	before.reset();
 	transaction.reset();
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix) {
+    materializeNativeDatabase();
+    RelocatableStorageBackend backend(writableStagingOptions(backendOptions())); backend.open();
+    const auto node = backend.createLogicalNodes({{{}, {{"keep", PropertyValue(7)}}}}).front();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    auto budget = std::dynamic_pointer_cast<graph::query::execution::MaterializedByteBudget>(dynamic_cast<LogicalGraphTransactionMemoryProvider &>(*transaction).retainedWriteMemory());
+    ASSERT_NE(budget, nullptr);
+    const auto empty = budget->used();
+    PropertyValue::MapType nested;
+    nested.emplace("text", PropertyValue(std::string(65536U, 'a')));
+    nested.emplace("bytes", PropertyValue(PropertyValue::Bytes(32768U, std::byte{0x42})));
+    const PropertyValue expected(std::move(nested));
+    static_cast<void>(transaction->stageMutationBatchWithPropertyPatches({},
+        {{stagingNode(node), {{"payload", expected}}, {}}}, 2U));
+    const auto retained = budget->used();
+    EXPECT_GE(retained - empty, 98304U);
+    {
+        graph::query::execution::MaterializedByteReservation pressure(budget.get());
+        pressure.set(budget->availableWithParent());
+        LogicalGraphMutationBatch candidate;
+        candidate.node_label_replacements.push_back({stagingNode(node), {std::string(8192U, 'x')}});
+        EXPECT_THROW(static_cast<void>(transaction->stageMutationBatch(std::move(candidate))),
+            graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_ACTIVE);
+    }
+    EXPECT_EQ(budget->used(), retained);
+    static_cast<void>(transaction->commit());
+    EXPECT_LT(budget->used(), 16384U);
+    EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNodeProperty(node, "payload"), expected);
+    transaction.reset(); EXPECT_EQ(budget->used(), 0U); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, CancellingAdmittedInputCopyRefundsItsPrivatePayloadAndRetainsEarlierFields) {
+    materializeNativeDatabase();
+    RelocatableStorageBackend backend(writableStagingOptions(backendOptions())); backend.open();
+    const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(0)}}}}).front();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    static_cast<void>(transaction->stageMutationBatchWithPropertyPatches({},
+        {{stagingNode(node), {{"rank", PropertyValue(1)}}, {}}}, 2U));
+    auto budget = std::dynamic_pointer_cast<graph::query::execution::MaterializedByteBudget>(dynamic_cast<LogicalGraphTransactionMemoryProvider &>(*transaction).retainedWriteMemory());
+    ASSERT_NE(budget, nullptr);
+    const auto retained = budget->used();
+    LogicalGraphMutationBatch candidate; candidate.node_creates.resize(512U);
+    for (auto &create : candidate.node_creates) create.properties.push_back({"payload", PropertyValue(std::string(1024U, 'c'))});
+    bool admitted = false;
+    LogicalGraphMutationReadControl control;
+    control.checkpoint = [&] {
+        if (budget->used() > retained + 524288U) { admitted = true; throw std::runtime_error("cancel admitted private copy"); }
+    };
+    EXPECT_THROW(static_cast<void>(transaction->stageMutationBatchWithPropertyPatches(std::move(candidate), {}, 0U, control)), std::runtime_error);
+    EXPECT_TRUE(admitted); EXPECT_EQ(budget->used(), retained);
+    EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_ACTIVE);
+    static_cast<void>(transaction->commit());
+    EXPECT_LT(budget->used(), 16384U);
+    EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNodeProperty(node, "rank"), PropertyValue(1));
+    transaction.reset(); EXPECT_EQ(budget->used(), 0U); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, CanonicalRawPropertyPlanningBudgetDenialRollsBackBeforeGraphPublication) {
+    materializeNativeDatabase();
+    RelocatableStorageBackend backend(writableStagingOptions(backendOptions())); backend.open();
+    const auto node = backend.createLogicalNodes({{{}, {{"rank", PropertyValue(0)}}}}).front();
+    auto transaction = backend.beginLogicalGraphTransaction(false);
+    static_cast<void>(transaction->stageMutationBatchWithPropertyPatches({},
+        {{stagingNode(node), {{"rank", PropertyValue(1)}}, {}}}, 2U));
+    auto budget = std::dynamic_pointer_cast<graph::query::execution::MaterializedByteBudget>(
+        dynamic_cast<LogicalGraphTransactionMemoryProvider &>(*transaction).retainedWriteMemory());
+    ASSERT_NE(budget, nullptr);
+    const auto fence = backend.currentNativeLogicalGraphMutationFence();
+    {
+        graph::query::execution::MaterializedByteReservation pressure(budget.get());
+        pressure.set(budget->availableWithParent());
+        EXPECT_THROW(static_cast<void>(transaction->commit()), graph::query::execution::detail::ResourceAdmissionDenied);
+        EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_ROLLED_BACK);
+    }
+    EXPECT_LT(budget->used(), 16384U);
+    EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), fence);
+    EXPECT_EQ(backend.openLogicalGraphReadSnapshot()->readNodeProperty(node, "rank"), PropertyValue(0));
+    transaction.reset(); EXPECT_EQ(budget->used(), 0U);
+    static_cast<void>(backend.verifyIntegrity()); backend.close();
 }

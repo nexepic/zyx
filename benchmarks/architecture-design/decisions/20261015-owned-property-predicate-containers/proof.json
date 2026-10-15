@@ -1,0 +1,13 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "initial_selected_tests": 710,
+  "final_move_selected_tests": 441,
+  "isolated_cases": 105,
+  "plan_heap_shapes": 6,
+  "uncovered_heap_request_bytes": 0,
+  "full_suite": false,
+  "new_performance_campaign": false
+}

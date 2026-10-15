@@ -57,7 +57,7 @@ namespace graph::storage {
 	// writer owns VectorId reservation, page placement, and atomic publication.
 	class NativeVectorMutationPlanner final {
 	public:
-		NativeVectorMutationPlanner(std::vector<IndexDefinition> definitions,
+		NativeVectorMutationPlanner(utils::OwnedStdVector<IndexDefinition> definitions,
 									NativeVectorPropertyKeyTokenResolver propertyKeyTokens,
 									NativeVectorMutationPlannerOptions options);
 
@@ -70,7 +70,7 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																 std::string_view name) const;
 
-		std::vector<IndexDefinition> definitions_;
+		utils::OwnedStdVector<IndexDefinition> definitions_;
 		NativeVectorPropertyKeyTokenResolver property_key_tokens_;
 		NativeVectorMutationPlannerOptions options_;
 	};

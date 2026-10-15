@@ -88,7 +88,7 @@ namespace graph::storage {
 
 	} // namespace
 
-	NativeVectorMutationPlanner::NativeVectorMutationPlanner(std::vector<IndexDefinition> definitions,
+	NativeVectorMutationPlanner::NativeVectorMutationPlanner(utils::OwnedStdVector<IndexDefinition> definitions,
 														 NativeVectorPropertyKeyTokenResolver propertyKeyTokens,
 														 NativeVectorMutationPlannerOptions options) :
 		definitions_(std::move(definitions)), property_key_tokens_(std::move(propertyKeyTokens)), options_(options) {

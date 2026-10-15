@@ -7,6 +7,11 @@
  */
 
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
+#include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+#include "graph/storage/detail/ScopedMutationCopies.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -26,6 +31,11 @@
 namespace graph::storage {
 
 	namespace {
+        std::shared_ptr<std::pmr::memory_resource> transactionWriteMemory(const LogicalGraphTransaction &transaction) {
+            const auto *provider = dynamic_cast<const LogicalGraphTransactionMemoryProvider *>(&transaction);
+            return provider ? provider->retainedWriteMemory() : nullptr;
+        }
+
 		uint64_t nextOverlayViewToken() {
 			static std::atomic<uint64_t> next{1U};
 			uint64_t value = next.load(std::memory_order_relaxed);
@@ -95,30 +105,58 @@ namespace graph::storage {
 			(*admission)(bytes + sizeof(uint32_t));
 		}
 
+        void admitGuardedStagedValue(const PropertyValue &source) {
+            auto *scope = property_decode::AllocationScope::current();
+            if (!scope) return;
+            const auto checkpoint = [scope] { scope->checkpoint(); };
+            const std::function<void()> notify = std::ref(checkpoint);
+            scope->admit(CanonicalPropertyValueCodec::guardedCopyHeapUpper(source, notify));
+        }
+
 		PropertyValue copyStagedValue(const PropertyValue &source, const std::function<void(size_t)> *admission) {
-			if (admission == nullptr) return source;
-			return graph::property_copy::copyPropertyValueGuarded(source, [&] { (*admission)(0U); });
+			if (admission == nullptr) {
+                detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.property(source); });
+                return source;
+            }
+			admitGuardedStagedValue(source);
+            return graph::property_copy::copyPropertyValueGuarded(source, [&] { (*admission)(0U); });
 		}
 
 		LogicalGraphPropertyEntry copyStagedEntry(const LogicalGraphPropertyEntry &entry,
 			const std::function<void(size_t)> *admission) {
-			if (admission == nullptr) return entry;
+			if (admission == nullptr) {
+                detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) {
+                    meter.add(detail::writeStringCopyHeapUpper(entry.key)); meter.property(entry.value);
+                });
+                return entry;
+            }
 			auto checkpoint = [&] { (*admission)(0U); };
+            detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.add(detail::writeStringCopyHeapUpper(entry.key)); });
 			auto key = graph::property_copy::copyPropertyStringGuarded(entry.key, checkpoint);
 			return {std::move(key), copyStagedValue(entry.value, admission)};
 		}
 
 		std::vector<LogicalGraphPropertyEntry> copyStagedProperties(
 			const std::vector<LogicalGraphPropertyEntry> &source, const std::function<void(size_t)> *admission) {
-			if (admission == nullptr) return source;
+			if (admission == nullptr) {
+                detail::admitScopedPropertyCopies<LogicalGraphPropertyEntry>(source);
+                return source;
+            }
 			// Zero-byte admission is a cancellation checkpoint, not a new charge.
 			const auto checkpoint = [&] { (*admission)(0U); };
+            detail::admitScopedMutationBytes(query::execution::detail::standardContainerProxyBytes());
+            detail::admitScopedPropertyVectorStorage<LogicalGraphPropertyEntry>(source.size());
 			std::vector<LogicalGraphPropertyEntry> result;
 			result.reserve(source.size());
 			for (const auto &entry : source) {
 				auto guard = checkpoint;
-				auto key = graph::property_copy::copyPropertyStringGuarded(entry.key, guard);
-				result.push_back({std::move(key), graph::property_copy::copyPropertyValueGuarded(entry.value, guard)});
+                detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.add(detail::writeStringCopyHeapUpper(entry.key)); });
+                auto key = graph::property_copy::copyPropertyStringGuarded(entry.key, guard);
+                admitGuardedStagedValue(entry.value);
+                auto value = graph::property_copy::copyPropertyValueGuarded(entry.value, guard);
+                detail::admitScopedMutationBytes(query::execution::detail::addStandardHeapBytes(
+                    detail::movedPropertyHeaderHeapUpper(value), query::execution::detail::standardContainerProxyBytes()));
+                result.emplace_back(std::move(key), std::move(value));
 			}
 			return result;
 		}
@@ -174,25 +212,6 @@ namespace graph::storage {
 				   !batch.creation_identity_plan.has_value();
 		}
 
-		[[nodiscard]] PropertyMap makePropertyMap(const std::vector<LogicalGraphWriteProperty> &properties) {
-			PropertyMap result;
-			for (const LogicalGraphWriteProperty &property: properties) {
-				if (property.key.empty() || !result.emplace(property.key, property.value).second) {
-					throw std::invalid_argument("logical graph transaction overlay requires nonempty unique Property keys");
-				}
-			}
-			return result;
-		}
-
-		[[nodiscard]] std::vector<LogicalGraphPropertyEntry> makePropertyEntries(const PropertyMap &properties) {
-			std::vector<LogicalGraphPropertyEntry> result;
-			result.reserve(properties.size());
-			for (const auto &[key, value]: properties) {
-				result.push_back({key, value});
-			}
-			return result;
-		}
-
 		[[nodiscard]] PropertyMap makePropertyMap(const std::vector<LogicalGraphPropertyEntry> &properties,
 														 const char *context) {
 			PropertyMap result;
@@ -202,15 +221,6 @@ namespace graph::storage {
 				}
 			}
 			return result;
-		}
-
-		[[nodiscard]] std::vector<std::string> canonicalLabels(std::vector<std::string> labels) {
-			std::ranges::sort(labels);
-			if (std::ranges::any_of(labels, [](const std::string &label) { return label.empty(); }) ||
-				std::ranges::adjacent_find(labels) != labels.end()) {
-				throw std::invalid_argument("logical graph transaction overlay requires nonempty unique labels");
-			}
-			return labels;
 		}
 
 		[[nodiscard]] LogicalGraphMutationEntityReference persistedNodeReference(uint64_t id) {
@@ -350,9 +360,11 @@ namespace graph::storage {
 				throw std::runtime_error("logical transaction overlay Node was deleted");
 			}
 			const LogicalGraphNode &source = state->second.node;
+            detail::admitScopedMutationBytes(2U * query::execution::detail::standardContainerProxyBytes());
 			LogicalGraphNode result;
 			result.node_id = source.node_id;
 			if (shape.include_labels) {
+                detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.strings(source.labels); });
 				result.labels = source.labels;
 			}
 			if (shape.all_properties) {
@@ -360,7 +372,11 @@ namespace graph::storage {
 				result.properties = copyStagedProperties(source.properties, admission);
 				return result;
 			}
-			// Staged records retain logical Property names. Resolve each name through
+			if (property_decode::AllocationScope::current()) {
+                detail::admitScopedPropertyVectorGrowth(result.properties, source.properties.size());
+                result.properties.reserve(source.properties.size());
+            }
+            // Staged records retain logical Property names. Resolve each name through
 			// the pinned base schema when possible; if a generic reader cannot expose
 			// tokens, conservatively retain the properties rather than returning an
 			// incomplete logical value.
@@ -399,6 +415,7 @@ namespace graph::storage {
 			requireActive();
 			validateEntityReadShape(shape);
 			std::vector<uint64_t> baseIds;
+			detail::admitScopedPropertyVectorGrowth(baseIds, nodeIds.size());
 			baseIds.reserve(nodeIds.size());
 			uint64_t previous = 0U;
 			for (const uint64_t nodeId: nodeIds) {
@@ -423,6 +440,7 @@ namespace graph::storage {
 				throw std::runtime_error("logical transaction overlay base Node batch returned an invalid cardinality");
 			}
 			std::vector<LogicalGraphNode> result;
+			detail::admitScopedPropertyVectorGrowth(result, nodeIds.size());
 			result.reserve(nodeIds.size());
 			size_t baseOrdinal = 0U;
 			for (const uint64_t nodeId: nodeIds) {
@@ -510,11 +528,13 @@ namespace graph::storage {
 				throw std::runtime_error("logical transaction overlay Edge was deleted");
 			}
 			const LogicalGraphEdge &source = state->second.edge;
+            detail::admitScopedMutationBytes(2U * query::execution::detail::standardContainerProxyBytes());
 			LogicalGraphEdge result;
 			result.edge_id = source.edge_id;
 			result.source_node_id = source.source_node_id;
 			result.target_node_id = source.target_node_id;
 			if (shape.include_type) {
+                detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.add(detail::writeStringCopyHeapUpper(source.type)); });
 				result.type = source.type;
 			}
 			if (shape.all_properties) {
@@ -522,6 +542,10 @@ namespace graph::storage {
 				result.properties = copyStagedProperties(source.properties, admission);
 				return result;
 			}
+            if (property_decode::AllocationScope::current()) {
+                detail::admitScopedPropertyVectorGrowth(result.properties, source.properties.size());
+                result.properties.reserve(source.properties.size());
+            }
 			for (const LogicalGraphPropertyEntry &entry: source.properties) {
 				const std::optional<uint32_t> token = overlay_.baseSnapshot().findPropertyToken(entry.key);
 				if (token.has_value() && std::ranges::binary_search(shape.property_tokens, *token)) {
@@ -558,6 +582,7 @@ namespace graph::storage {
 			requireActive();
 			validateEntityReadShape(shape);
 			std::vector<uint64_t> baseIds;
+			detail::admitScopedPropertyVectorGrowth(baseIds, edgeIds.size());
 			baseIds.reserve(edgeIds.size());
 			uint64_t previous = 0U;
 			for (const uint64_t edgeId: edgeIds) {
@@ -582,6 +607,7 @@ namespace graph::storage {
 				throw std::runtime_error("logical transaction overlay base Edge batch returned an invalid cardinality");
 			}
 			std::vector<LogicalGraphEdge> result;
+			detail::admitScopedPropertyVectorGrowth(result, edgeIds.size());
 			result.reserve(edgeIds.size());
 			size_t baseOrdinal = 0U;
 			for (const uint64_t edgeId: edgeIds) {
@@ -3038,7 +3064,10 @@ namespace graph::storage {
 	};
 
 	LogicalGraphTransactionOverlay::LogicalGraphTransactionOverlay(LogicalGraphTransaction &transaction) :
-			transaction_(transaction), view_token_(nextOverlayViewToken()) {
+			transaction_(transaction), view_token_(nextOverlayViewToken()), memory_owner_(transactionWriteMemory(transaction)),
+            nodes_(memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource()),
+            edges_(memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource()),
+            persisted_node_visibility_(memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource()) {
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
 			throw std::logic_error("logical transaction overlay requires an active transaction");
 		}
@@ -3129,27 +3158,35 @@ namespace graph::storage {
 		LogicalGraphReadSnapshot &snapshot, const LogicalGraphMutationBatch &companionBatch,
 		std::span<const LogicalGraphPropertyPatchRequest> patches, size_t maximumPropertyEntries,
 		const LogicalGraphMutationFence &expectedFence, const LogicalGraphMutationReadControl &control) {
+        std::optional<utils::OwnedAllocationScope> allocationScope;
+        if (memory_owner_) allocationScope.emplace(memory_owner_);
+        detail::PropertyDecodeWorkspace normalizedPayload(memory_owner_, &control.checkpoint);
 		auto normalized = normalizeLogicalGraphPropertyPatchBatch(snapshot, companionBatch, patches,
 			maximumPropertyEntries, expectedFence, control);
 		if (!transaction_.supportsPropertyPatchStaging() || normalized.persisted_patches.empty())
 			return executeStagedBatch(normalized.batch, expectedFence, nullptr, {}, 0U, control);
 		// Copy only companion requests into durable staging. Full patch outputs
 		// serve statement visibility and are released after this call.
-		LogicalGraphMutationBatch staged;
+		detail::admitScopedMutationBatchCopy(normalized.batch, false);
+        LogicalGraphMutationBatch staged;
+        staged.property_replacements.reserve(normalized.batch.property_replacements.size());
 		staged.node_creates = normalized.batch.node_creates;
 		staged.edge_creates = normalized.batch.edge_creates;
 		staged.node_label_replacements = normalized.batch.node_label_replacements;
 		staged.node_deletes = normalized.batch.node_deletes;
 		staged.edge_deletes = normalized.batch.edge_deletes;
 		staged.creation_identity_plan = normalized.batch.creation_identity_plan;
-		std::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
+		std::pmr::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets(
+            memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource());
 		for (const auto &patch : normalized.persisted_patches)
 			targets.emplace(static_cast<uint8_t>(patch.entity.entity_kind),
 				static_cast<uint8_t>(patch.entity.reference_kind), patch.entity.value);
 		for (const auto &replacement : normalized.batch.property_replacements)
 			if (!targets.contains({static_cast<uint8_t>(replacement.entity.entity_kind),
-				static_cast<uint8_t>(replacement.entity.reference_kind), replacement.entity.value}))
+				static_cast<uint8_t>(replacement.entity.reference_kind), replacement.entity.value})) {
+                detail::admitScopedPropertyCopies<LogicalGraphWriteProperty>(replacement.properties);
 				staged.property_replacements.push_back(replacement);
+            }
 		return executeStagedBatch(normalized.batch, expectedFence, &staged,
 			std::move(normalized.persisted_patches), normalized.entry_work, control);
 	}
@@ -3176,7 +3213,7 @@ namespace graph::storage {
 		}
 
 		const LogicalGraphMutationBatchResult preview = transaction_.previewMutationBatch(batch);
-		StatementUndo undo;
+		StatementUndo undo(memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource());
 		try {
 			applyBatch(batch, preview, undo);
 			debug::PerfTrace::addValue("logical_graph.overlay.statement_undo_nodes", static_cast<int64_t>(
@@ -3184,12 +3221,13 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("logical_graph.overlay.statement_undo_edges", static_cast<int64_t>(
 				std::min(undo.edges.size(), static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
 			if (control.checkpoint) control.checkpoint();
-			const LogicalGraphMutationBatchResult staged = patchCompanion
+			LogicalGraphMutationBatchResult staged = patchCompanion
 				? transaction_.stageMutationBatchWithPropertyPatches(*patchCompanion, std::move(patches), entryWork, control)
 				: transaction_.stageMutationBatch(batch);
 			if (staged != preview) {
 				throw std::logic_error("logical transaction changed a batch's provisional identity after validation");
 			}
+			static_assert(std::is_nothrow_move_constructible_v<LogicalGraphMutationBatchResult>);
 			++logical_revision_;
 			return staged;
 		} catch (...) {
@@ -3233,8 +3271,10 @@ namespace graph::storage {
 			}
 			return existing->second;
 		}
-		auto [inserted, success] = nodes_.emplace(
-				nodeId, NodeState{baseSnapshot().readNodeShaped(nodeId, completeNodeReadShape()), false, false});
+        detail::PropertyDecodeWorkspace decodedSource(memory_owner_);
+        const auto source = baseSnapshot().readNodeShaped(nodeId, completeNodeReadShape());
+        auto [inserted, success] = nodes_.try_emplace(nodeId,
+                memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource(), source);
 		static_cast<void>(success);
 		return inserted->second;
 	}
@@ -3249,8 +3289,10 @@ namespace graph::storage {
 			}
 			return existing->second;
 		}
-		auto [inserted, success] = edges_.emplace(
-				edgeId, EdgeState{baseSnapshot().readEdgeShaped(edgeId, completeEdgeReadShape()), false, false});
+        detail::PropertyDecodeWorkspace decodedSource(memory_owner_);
+        const auto source = baseSnapshot().readEdgeShaped(edgeId, completeEdgeReadShape());
+        auto [inserted, success] = edges_.try_emplace(edgeId,
+                memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource(), source);
 		static_cast<void>(success);
 		return inserted->second;
 	}
@@ -3258,13 +3300,15 @@ namespace graph::storage {
 	void LogicalGraphTransactionOverlay::rememberNode(StatementUndo &undo, uint64_t nodeId) const {
 		if (undo.nodes.contains(nodeId)) return;
 		const auto found = nodes_.find(nodeId);
-		undo.nodes.emplace(nodeId, found == nodes_.end() ? std::nullopt : std::optional<NodeState>(found->second));
+		if (found == nodes_.end()) undo.nodes.try_emplace(nodeId, std::nullopt);
+        else undo.nodes.try_emplace(nodeId, std::in_place, found->second);
 	}
 
 	void LogicalGraphTransactionOverlay::rememberEdge(StatementUndo &undo, uint64_t edgeId) const {
 		if (undo.edges.contains(edgeId)) return;
 		const auto found = edges_.find(edgeId);
-		undo.edges.emplace(edgeId, found == edges_.end() ? std::nullopt : std::optional<EdgeState>(found->second));
+		if (found == edges_.end()) undo.edges.try_emplace(edgeId, std::nullopt);
+        else undo.edges.try_emplace(edgeId, std::in_place, found->second);
 	}
 
 	void LogicalGraphTransactionOverlay::restoreStatement(StatementUndo &undo) noexcept {
@@ -3310,16 +3354,14 @@ namespace graph::storage {
 		for (size_t index = 0U; index < batch.node_creates.size(); ++index) {
 			const uint64_t nodeId = result.created_node_ids[index];
 			const LogicalGraphNodeCreateRequest &request = batch.node_creates[index];
-			NodeState state;
-			state.node.node_id = nodeId;
-			state.node.labels = canonicalLabels(request.labels);
-			state.created = true;
-			const PropertyMap properties = makePropertyMap(request.properties);
-			state.node.properties = makePropertyEntries(properties);
-			rememberNode(undo, nodeId);
-			if (!nodes_.emplace(nodeId, std::move(state)).second) {
-				throw std::logic_error("logical transaction overlay created a duplicate Node identity");
-			}
+            rememberNode(undo, nodeId);
+            auto [entry, inserted] = nodes_.try_emplace(nodeId,
+                memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource());
+            if (!inserted) throw std::logic_error("logical transaction overlay created a duplicate Node identity");
+            auto &state = entry->second;
+            state.node.node_id = nodeId; state.created = true;
+            state.payload_budget.replaceLabels(state.node, request.labels);
+            state.payload_budget.replaceProperties(state.node, request.properties);
 		}
 
 		for (const LogicalGraphNodeLabelMutationRequest &mutation: batch.node_label_replacements) {
@@ -3328,7 +3370,8 @@ namespace graph::storage {
 			}
 			const uint64_t nodeId = resolveReference(mutation.node);
 			rememberNode(undo, nodeId);
-			ensureNode(nodeId).node.labels = canonicalLabels(mutation.labels);
+			auto &state = ensureNode(nodeId);
+            state.payload_budget.replaceLabels(state.node, mutation.labels);
 		}
 
 		for (size_t index = 0U; index < batch.edge_creates.size(); ++index) {
@@ -3343,31 +3386,30 @@ namespace graph::storage {
 				throw std::runtime_error("logical transaction overlay Edge creation targets a deleted Node");
 			}
 			const uint64_t edgeId = result.created_edge_ids[index];
-			EdgeState state;
-			state.edge = {edgeId, sourceId, targetId, request.type, {}};
-			state.created = true;
+            rememberEdge(undo, edgeId);
+            auto [entry, inserted] = edges_.try_emplace(edgeId,
+                memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource());
+            if (!inserted) throw std::logic_error("logical transaction overlay created a duplicate Edge identity");
+            auto &state = entry->second;
+            state.edge.edge_id = edgeId; state.edge.source_node_id = sourceId; state.edge.target_node_id = targetId;
+            state.created = true;
+            state.payload_budget.replaceType(state.edge, request.type);
 			if (baseSnapshot().supportsNativeRelationshipTypeTokens()) {
 				state.relationship_type_token = baseSnapshot().findRelationshipTypeToken(request.type).value_or(0U);
 			}
-			const PropertyMap properties = makePropertyMap(request.properties);
-			state.edge.properties = makePropertyEntries(properties);
-			rememberEdge(undo, edgeId);
-			if (!edges_.emplace(edgeId, std::move(state)).second) {
-				throw std::logic_error("logical transaction overlay created a duplicate Edge identity");
-			}
+            state.payload_budget.replaceProperties(state.edge, request.properties);
 		}
 
 		for (const LogicalGraphPropertyMutationRequest &mutation: batch.property_replacements) {
 			const uint64_t entityId = resolveReference(mutation.entity);
-			const PropertyMap properties = makePropertyMap(mutation.properties);
 			if (mutation.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
 				rememberNode(undo, entityId);
 				NodeState &state = ensureNode(entityId);
-				state.node.properties = makePropertyEntries(properties);
+				state.payload_budget.replaceProperties(state.node, mutation.properties);
 			} else if (mutation.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE) {
 				rememberEdge(undo, entityId);
 				EdgeState &state = ensureEdge(entityId);
-				state.edge.properties = makePropertyEntries(properties);
+				state.payload_budget.replaceProperties(state.edge, mutation.properties);
 			} else {
 				throw std::invalid_argument("logical transaction overlay Property mutation has an unknown entity kind");
 			}
@@ -3382,7 +3424,8 @@ namespace graph::storage {
 			rememberNode(undo, request.node_id);
 			NodeState &node = ensureNode(request.node_id);
 			if (request.detach) {
-				std::set<uint64_t> detachedIds;
+				std::pmr::set<uint64_t> detachedIds(
+                    memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource());
 				const auto markIncident = [this, &undo, &detachedIds, &request](const LogicalGraphEdge &edge) {
 					if (const auto existing = edges_.find(edge.edge_id);
 						existing != edges_.end() && existing->second.deleted) {

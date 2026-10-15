@@ -77,6 +77,7 @@ namespace {
 		bool enable_native_range_node_candidates = false;
 		bool disable_native_candidate_stream = false;
 		bool enable_native_ref_scans = false;
+        bool enable_non_null_probes = false;
 		bool enable_property_admission = false;
 		bool truncate_node_property_columns = false;
 		std::shared_ptr<size_t> admitted_property_copies;
@@ -127,6 +128,22 @@ namespace {
 	class TestLogicalGraphSnapshot final : public LogicalGraphReadSnapshot {
 	public:
 		explicit TestLogicalGraphSnapshot(const LogicalGraphFixtureData &data) : data_(data) {}
+
+        [[nodiscard]] bool supportsPropertyNonNullProbes() const override { return data_.enable_non_null_probes; }
+        [[nodiscard]] std::optional<bool> nodePropertyIsNonNull(uint64_t id, std::string_view key) const override {
+            if (!data_.enable_non_null_probes) return std::nullopt;
+            for (const auto &entry : data_.nodes.at(id).properties) {
+                if (entry.key == key) return entry.value.getType() != PropertyType::NULL_TYPE;
+            }
+            return false;
+        }
+        [[nodiscard]] std::optional<bool> edgePropertyIsNonNull(uint64_t id, std::string_view key) const override {
+            if (!data_.enable_non_null_probes) return std::nullopt;
+            for (const auto &entry : data_.edges.at(id).properties) {
+                if (entry.key == key) return entry.value.getType() != PropertyType::NULL_TYPE;
+            }
+            return false;
+        }
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
 			if (data_.node_read_count) {

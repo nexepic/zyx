@@ -224,7 +224,7 @@ namespace graph::storage {
 									IndexDefinitionKind kind, uint64_t labelTokenId,
 									std::span<const std::string> propertyNames, uint32_t vectorDimensions = 0U,
 									std::string_view vectorMetric = {}) const;
-		[[nodiscard]] std::vector<IndexDefinition> readIndexDefinitions(const MetadataSnapshotPin &snapshot,
+		[[nodiscard]] utils::OwnedStdVector<IndexDefinition> readIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																		size_t maximumDefinitions) const;
 		[[nodiscard]] std::optional<ConstraintDefinition>
 		findConstraintDefinitionById(const MetadataSnapshotPin &snapshot, uint64_t constraintId) const;
@@ -235,7 +235,7 @@ namespace graph::storage {
 										 ConstraintDefinitionKind kind, uint64_t schemaTokenId,
 										 std::span<const std::string> propertyNames,
 										 ConstraintDefinitionPropertyType propertyType) const;
-		[[nodiscard]] std::vector<ConstraintDefinition> readConstraintDefinitions(const MetadataSnapshotPin &snapshot,
+		[[nodiscard]] utils::OwnedStdVector<ConstraintDefinition> readConstraintDefinitions(const MetadataSnapshotPin &snapshot,
 																				  size_t maximumDefinitions) const;
 		[[nodiscard]] std::optional<PropertyValue> findConfiguration(const MetadataSnapshotPin &snapshot,
 																	 std::string_view name) const;

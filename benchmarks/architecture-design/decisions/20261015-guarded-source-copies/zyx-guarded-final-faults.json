@@ -1,0 +1,883 @@
+{
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "codec-admitted-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "guarded-copy-heap-accounting",
+      "shape_cases": 18,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-partial-cancellation",
+      "cancelled_after_payload_allocation": true,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "allocation_sweeps": {
+    "normalized-patch": {
+      "probe": {
+        "mode": "normalized-patch-allocation-fault",
+        "allocation_attempts": 90,
+        "fault_triggered": false,
+        "operation_threw": false,
+        "selected_fault": null,
+        "closed_object_bytes": 1856,
+        "passed": true
+      },
+      "baseline_allocations": 90,
+      "tested_allocations": 90,
+      "exhaustive": true,
+      "cases": [
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 1,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 0,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 2,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 1,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 3,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 2,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 4,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 3,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 5,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 4,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 6,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 5,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 7,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 6,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 8,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 7,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 9,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 8,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 10,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 9,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 11,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 10,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 12,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 11,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 13,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 12,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 14,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 13,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 15,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 14,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 16,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 15,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 17,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 16,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 18,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 17,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 19,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 18,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 20,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 19,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 21,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 20,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 22,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 21,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 23,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 22,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 24,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 23,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 25,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 24,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 26,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 25,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 27,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 26,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 28,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 27,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 29,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 28,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 30,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 29,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 31,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 30,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 32,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 31,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 33,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 32,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 34,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 33,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 35,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 34,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 36,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 35,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 37,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 36,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 38,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 37,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 39,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 38,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 40,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 39,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 41,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 40,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 42,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 41,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 43,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 42,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 44,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 43,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 45,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 44,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 46,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 45,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 47,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 46,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 48,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 47,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 49,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 48,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 50,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 49,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 51,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 50,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 52,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 51,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 53,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 52,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 54,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 53,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 55,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 54,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 56,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 55,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 57,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 56,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 58,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 57,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 59,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 58,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 60,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 59,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 61,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 60,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 62,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 61,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 63,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 62,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 64,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 63,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 65,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 64,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 66,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 65,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 67,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 66,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 68,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 67,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 69,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 68,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 70,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 69,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 71,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 70,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 72,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 71,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 73,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 72,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 74,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 73,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 75,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 74,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 76,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 75,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 77,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 76,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 78,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 77,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 79,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 78,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 80,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 79,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 81,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 80,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 82,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 81,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 83,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 82,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 84,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 83,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 85,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 84,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 86,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 85,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 87,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 86,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 88,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 87,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 89,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 88,
+          "closed_object_bytes": 1856,
+          "passed": true
+        },
+        {
+          "mode": "normalized-patch-allocation-fault",
+          "allocation_attempts": 90,
+          "fault_triggered": true,
+          "operation_threw": true,
+          "selected_fault": 89,
+          "closed_object_bytes": 1856,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "crash_recovery": null,
+  "passed": 98,
+  "failures": 0,
+  "full_suite": false
+}

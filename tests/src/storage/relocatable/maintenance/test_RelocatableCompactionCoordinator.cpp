@@ -422,6 +422,10 @@ TEST_F(RelocatableCompactionCoordinatorTest, RetainsRetiredPoolUntilTheLastSnaps
 	EXPECT_TRUE(result.source_retired);
 	EXPECT_FALSE(result.source_released);
 	EXPECT_EQ(TestSlottedPageRecordCodec::decode(pages.read(oldSnapshot, PageId(101)).read(slot)), record);
+    const auto writesBefore = io->stats().write_calls;
+    EXPECT_FALSE(pages.tryReleaseRetiredEmptyPool(SegmentId(71), Generation(1), LogSequenceNumber(6)).has_value());
+    EXPECT_THROW(static_cast<void>(pages.tryReleaseRetiredEmptyPool(SegmentId(71), Generation(2), LogSequenceNumber(6))), FormatException);
+    EXPECT_EQ(io->stats().write_calls, writesBefore);
 	EXPECT_FALSE(coordinator.releaseRetiredSlottedPool(SegmentId(71), Generation(1), LogSequenceNumber(6)));
 	oldSnapshot.release();
 	EXPECT_TRUE(coordinator.releaseRetiredSlottedPool(SegmentId(71), Generation(1), LogSequenceNumber(6)));

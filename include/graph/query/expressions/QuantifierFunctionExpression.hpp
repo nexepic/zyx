@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include <memory>
@@ -39,8 +40,8 @@ public:
 	 * @param whereExpr The WHERE condition expression
 	 */
 	QuantifierFunctionExpression(
-		std::string functionName,
-		std::string variable,
+		utils::OwnedStdString functionName,
+		utils::OwnedStdString variable,
 		std::unique_ptr<Expression> listExpr,
 		std::unique_ptr<Expression> whereExpr
 	);
@@ -77,8 +78,8 @@ public:
 	[[nodiscard]] const Expression* getWhereExpression() const { return whereExpr_.get(); }
 
 private:
-	std::string functionName_;
-	std::string variable_;
+	utils::OwnedStdString functionName_;
+	utils::OwnedStdString variable_;
 	std::unique_ptr<Expression> listExpr_;
 	std::unique_ptr<Expression> whereExpr_;
 };

@@ -1,0 +1,1644 @@
+[0/2] Re-checking globbed directories...
+[1/7] Building CXX object CMakeFiles/zyx_core.dir/src/api/PreparedQuery.cpp.o
+[2/7] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/ir/test_LogicalPlanBuilder_Coverage.cpp.o
+[3/7] Building CXX object CMakeFiles/zyx_core.dir/src/query/ir/LogicalPlanBuilder.cpp.o
+[4/7] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalWriteOperators.cpp.o
+[5/7] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanMutationRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:9:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:141:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  141 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:145:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  145 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+7 warnings generated.
+[6/7] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = OwnedExpressionMapTest.*:Logical*Test.*:ExpressionBuilder*.*
+[==========] Running 714 tests from 59 test suites.
+[----------] Global test environment set-up.
+[----------] 3 tests from OwnedExpressionMapTest
+[ RUN      ] OwnedExpressionMapTest.RejectedMetadataCopyPreservesExistingMapAndAuthority
+[       OK ] OwnedExpressionMapTest.RejectedMetadataCopyPreservesExistingMapAndAuthority (0 ms)
+[ RUN      ] OwnedExpressionMapTest.PartialDeepCloneFailureRefundsMetadataAndKeepsSourceChildren
+[       OK ] OwnedExpressionMapTest.PartialDeepCloneFailureRefundsMetadataAndKeepsSourceChildren (0 ms)
+[ RUN      ] OwnedExpressionMapTest.CloneOwnsDestinationAndMovedEmptyMapRemainsReusable
+[       OK ] OwnedExpressionMapTest.CloneOwnsDestinationAndMovedEmptyMapRemainsReusable (0 ms)
+[----------] 3 tests from OwnedExpressionMapTest (0 ms total)
+
+[----------] 179 tests from ExpressionBuilderUnitTest
+[ RUN      ] ExpressionBuilderUnitTest.ExtractListFromExpression_Null
+[       OK ] ExpressionBuilderUnitTest.ExtractListFromExpression_Null (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.BuildExpression_NullExpression
+[       OK ] ExpressionBuilderUnitTest.BuildExpression_NullExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.BuildExpression_NullCheckErrorMessage
+[       OK ] ExpressionBuilderUnitTest.BuildExpression_NullCheckErrorMessage (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ParenthesizedExpression
+[       OK ] ExpressionBuilderUnitTest.ParenthesizedExpression (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NestedParenthesizedExpression
+[       OK ] ExpressionBuilderUnitTest.NestedParenthesizedExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.UnaryPlus
+[       OK ] ExpressionBuilderUnitTest.UnaryPlus (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.UnaryPlusDouble
+[       OK ] ExpressionBuilderUnitTest.UnaryPlusDouble (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.UnaryMinusOnVariable
+[       OK ] ExpressionBuilderUnitTest.UnaryMinusOnVariable (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SearchedCaseExpression
+[       OK ] ExpressionBuilderUnitTest.SearchedCaseExpression (2 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SearchedCaseExpressionWithElse
+[       OK ] ExpressionBuilderUnitTest.SearchedCaseExpressionWithElse (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SimpleCaseExpression
+[       OK ] ExpressionBuilderUnitTest.SimpleCaseExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SimpleCaseExpressionNoElse
+[       OK ] ExpressionBuilderUnitTest.SimpleCaseExpressionNoElse (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithArgument
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithArgument (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionNoArguments
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionNoArguments (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AllQuantifierFunction
+[       OK ] ExpressionBuilderUnitTest.AllQuantifierFunction (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AnyQuantifierFunction
+[       OK ] ExpressionBuilderUnitTest.AnyQuantifierFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NoneQuantifierFunction
+[       OK ] ExpressionBuilderUnitTest.NoneQuantifierFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SingleQuantifierFunction
+[       OK ] ExpressionBuilderUnitTest.SingleQuantifierFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListComprehensionNoWhereNoMap
+[       OK ] ExpressionBuilderUnitTest.ListComprehensionNoWhereNoMap (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListComprehensionWithWhere
+[       OK ] ExpressionBuilderUnitTest.ListComprehensionWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListComprehensionWithMap
+[       OK ] ExpressionBuilderUnitTest.ListComprehensionWithMap (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListComprehensionWithWhereAndMap
+[       OK ] ExpressionBuilderUnitTest.ListComprehensionWithWhereAndMap (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Null
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Null (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Integer
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Integer (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_String
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_String (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpressionDecodesCypherStringEscapes
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpressionDecodesCypherStringEscapes (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Boolean
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Boolean (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_NullLiteral
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_NullLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Double
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_Double (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_ListLiteral
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_ListLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_VariableReturnsEmpty
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_VariableReturnsEmpty (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.OrExpression
+[       OK ] ExpressionBuilderUnitTest.OrExpression (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.XorExpression
+[       OK ] ExpressionBuilderUnitTest.XorExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AndExpression
+[       OK ] ExpressionBuilderUnitTest.AndExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NotExpression
+[       OK ] ExpressionBuilderUnitTest.NotExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EqualOperator
+[       OK ] ExpressionBuilderUnitTest.EqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NotEqualOperator
+[       OK ] ExpressionBuilderUnitTest.NotEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.LessThanOperator
+[       OK ] ExpressionBuilderUnitTest.LessThanOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.GreaterThanOperator
+[       OK ] ExpressionBuilderUnitTest.GreaterThanOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.LessEqualOperator
+[       OK ] ExpressionBuilderUnitTest.LessEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.GreaterEqualOperator
+[       OK ] ExpressionBuilderUnitTest.GreaterEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StartsWithOperator
+[       OK ] ExpressionBuilderUnitTest.StartsWithOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EndsWithOperator
+[       OK ] ExpressionBuilderUnitTest.EndsWithOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ContainsOperator
+[       OK ] ExpressionBuilderUnitTest.ContainsOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.InOperatorWithList
+[       OK ] ExpressionBuilderUnitTest.InOperatorWithList (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsNullOperator
+[       OK ] ExpressionBuilderUnitTest.IsNullOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsNotNullOperator
+[       OK ] ExpressionBuilderUnitTest.IsNotNullOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AdditionExpression
+[       OK ] ExpressionBuilderUnitTest.AdditionExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SubtractionExpression
+[       OK ] ExpressionBuilderUnitTest.SubtractionExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MultiplicationExpression
+[       OK ] ExpressionBuilderUnitTest.MultiplicationExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.DivisionExpression
+[       OK ] ExpressionBuilderUnitTest.DivisionExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ModuloExpression
+[       OK ] ExpressionBuilderUnitTest.ModuloExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PowerExpression
+[       OK ] ExpressionBuilderUnitTest.PowerExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.CountStarFunction
+[       OK ] ExpressionBuilderUnitTest.CountStarFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ToUpperFunction
+[       OK ] ExpressionBuilderUnitTest.ToUpperFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SumFunction
+[       OK ] ExpressionBuilderUnitTest.SumFunction (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.SimpleVariable
+[       OK ] ExpressionBuilderUnitTest.SimpleVariable (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PropertyAccess
+[       OK ] ExpressionBuilderUnitTest.PropertyAccess (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PropertyAccessWithListIndex
+[       OK ] ExpressionBuilderUnitTest.PropertyAccessWithListIndex (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListLiteralWithIndex
+[       OK ] ExpressionBuilderUnitTest.ListLiteralWithIndex (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListLiteralWithRange
+[       OK ] ExpressionBuilderUnitTest.ListLiteralWithRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListLiteralWithOpenEndRange
+[       OK ] ExpressionBuilderUnitTest.ListLiteralWithOpenEndRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IntegerLiteral
+[       OK ] ExpressionBuilderUnitTest.IntegerLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.DoubleLiteral
+[       OK ] ExpressionBuilderUnitTest.DoubleLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringLiteral
+[       OK ] ExpressionBuilderUnitTest.StringLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.BooleanTrueLiteral
+[       OK ] ExpressionBuilderUnitTest.BooleanTrueLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.BooleanFalseLiteral
+[       OK ] ExpressionBuilderUnitTest.BooleanFalseLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NullLiteral
+[       OK ] ExpressionBuilderUnitTest.NullLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.UnaryMinusInteger
+[       OK ] ExpressionBuilderUnitTest.UnaryMinusInteger (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.UnaryMinusDouble
+[       OK ] ExpressionBuilderUnitTest.UnaryMinusDouble (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Count
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Count (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Sum
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Sum (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Avg
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Avg (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Min
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Min (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Max
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Max (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_Collect
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_Collect (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.IsAggregateFunction_NonAggregate
+[       OK ] ExpressionBuilderUnitTest.IsAggregateFunction_NonAggregate (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ComplexArithmeticExpression
+[       OK ] ExpressionBuilderUnitTest.ComplexArithmeticExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ComplexLogicalExpression
+[       OK ] ExpressionBuilderUnitTest.ComplexLogicalExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MultipleOrConditions
+[       OK ] ExpressionBuilderUnitTest.MultipleOrConditions (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MultipleAndConditions
+[       OK ] ExpressionBuilderUnitTest.MultipleAndConditions (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ScientificNotation
+[       OK ] ExpressionBuilderUnitTest.ScientificNotation (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ScientificNotationUpperE
+[       OK ] ExpressionBuilderUnitTest.ScientificNotationUpperE (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.InOperatorWithVariableList
+[       OK ] ExpressionBuilderUnitTest.InOperatorWithVariableList (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EmptyListLiteral
+[       OK ] ExpressionBuilderUnitTest.EmptyListLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MixedTypeListLiteral
+[       OK ] ExpressionBuilderUnitTest.MixedTypeListLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.GetAtomFromExpression_Null
+[       OK ] ExpressionBuilderUnitTest.GetAtomFromExpression_Null (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExtractListFromExpression_ValidList
+[       OK ] ExpressionBuilderUnitTest.ExtractListFromExpression_ValidList (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExtractListFromExpression_NonList
+[       OK ] ExpressionBuilderUnitTest.ExtractListFromExpression_NonList (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExtractListFromExpression_ListWithStrings
+[       OK ] ExpressionBuilderUnitTest.ExtractListFromExpression_ListWithStrings (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ScientificNotation_LowercaseE_NoDecimal
+[       OK ] ExpressionBuilderUnitTest.ScientificNotation_LowercaseE_NoDecimal (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ScientificNotation_UppercaseE_NoDecimal
+[       OK ] ExpressionBuilderUnitTest.ScientificNotation_UppercaseE_NoDecimal (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithTwoArguments
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithTwoArguments (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierFunction_SingleArg
+[       OK ] ExpressionBuilderUnitTest.QuantifierFunction_SingleArg (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.VariableDirectListIndex
+[       OK ] ExpressionBuilderUnitTest.VariableDirectListIndex (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.VariableDirectListRange
+[       OK ] ExpressionBuilderUnitTest.VariableDirectListRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_NegativeInteger
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_NegativeInteger (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ParseValue_Null
+[       OK ] ExpressionBuilderUnitTest.ParseValue_Null (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.BetweenOperator
+[       OK ] ExpressionBuilderUnitTest.BetweenOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.RegexMatchOperator
+[       OK ] ExpressionBuilderUnitTest.RegexMatchOperator (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MapLiteralExpression
+[       OK ] ExpressionBuilderUnitTest.MapLiteralExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_MapLiteral
+[       OK ] ExpressionBuilderUnitTest.EvaluateLiteralExpression_MapLiteral (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MapLiteralEmpty
+[       OK ] ExpressionBuilderUnitTest.MapLiteralEmpty (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionOutgoing
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionOutgoing (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionIncoming
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionIncoming (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionWithTargetLabel
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionWithTargetLabel (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionWithAnonymousSourceAndUntypedRelationship
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionWithAnonymousSourceAndUntypedRelationship (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionUndirected
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionUndirected (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionWithWhere
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionSimpleNode
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionSimpleNode (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.DistinctFunctionCall
+[       OK ] ExpressionBuilderUnitTest.DistinctFunctionCall (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NumericParameter
+[       OK ] ExpressionBuilderUnitTest.NumericParameter (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NamedParameter
+[       OK ] ExpressionBuilderUnitTest.NamedParameter (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ReduceExpression
+[       OK ] ExpressionBuilderUnitTest.ReduceExpression (2 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionOutgoing
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionOutgoing (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionIncoming
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionIncoming (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionWithTargetLabel
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionWithTargetLabel (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathExpression
+[       OK ] ExpressionBuilderUnitTest.ShortestPathExpression (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AllShortestPathsExpression
+[       OK ] ExpressionBuilderUnitTest.AllShortestPathsExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathWithTypeAndRange
+[       OK ] ExpressionBuilderUnitTest.ShortestPathWithTypeAndRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathPreservesExactAndOpenHopRanges
+[       OK ] ExpressionBuilderUnitTest.ShortestPathPreservesExactAndOpenHopRanges (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathRejectsPatternsTheLogicalRuntimeCannotRepresent
+[       OK ] ExpressionBuilderUnitTest.ShortestPathRejectsPatternsTheLogicalRuntimeCannotRepresent (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MapProjectionPropertySelector
+[       OK ] ExpressionBuilderUnitTest.MapProjectionPropertySelector (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MapProjectionAllProperties
+[       OK ] ExpressionBuilderUnitTest.MapProjectionAllProperties (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MapProjectionLiteralEntry
+[       OK ] ExpressionBuilderUnitTest.MapProjectionLiteralEntry (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierExpressionAll
+[       OK ] ExpressionBuilderUnitTest.QuantifierExpressionAll (1 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierExpressionAny
+[       OK ] ExpressionBuilderUnitTest.QuantifierExpressionAny (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierExpressionNone
+[       OK ] ExpressionBuilderUnitTest.QuantifierExpressionNone (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierExpressionSingle
+[       OK ] ExpressionBuilderUnitTest.QuantifierExpressionSingle (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithEscapeSequences
+[       OK ] ExpressionBuilderUnitTest.StringWithEscapeSequences (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithTabEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithTabEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithBackslashEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithBackslashEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithUnicodeEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithUnicodeEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ChainedComparison
+[       OK ] ExpressionBuilderUnitTest.ChainedComparison (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NestedPropertyAfterListIndex
+[       OK ] ExpressionBuilderUnitTest.NestedPropertyAfterListIndex (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.FunctionWithMultipleArgs
+[       OK ] ExpressionBuilderUnitTest.FunctionWithMultipleArgs (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListLiteralWithOpenStartRange
+[       OK ] ExpressionBuilderUnitTest.ListLiteralWithOpenStartRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithPatternLikeTwoArgs
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithPatternLikeTwoArgs (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithBackspaceEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithBackspaceEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithFormFeedEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithFormFeedEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithCarriageReturnEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithCarriageReturnEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithDoubleQuoteEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithDoubleQuoteEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithSingleQuoteEscape
+[       OK ] ExpressionBuilderUnitTest.StringWithSingleQuoteEscape (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithUnknownEscapeDefault
+[       OK ] ExpressionBuilderUnitTest.StringWithUnknownEscapeDefault (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithUnicodeEscapeHighCodepoint
+[       OK ] ExpressionBuilderUnitTest.StringWithUnicodeEscapeHighCodepoint (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithUnicodeEscapeShortSequence
+[       OK ] ExpressionBuilderUnitTest.StringWithUnicodeEscapeShortSequence (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithParenthesizedArg
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithParenthesizedArg (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithBracketArg
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithBracketArg (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithBracketAndColonArg
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithBracketAndColonArg (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithArrowInPatternText
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithArrowInPatternText (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithIncomingArrowInPatternText
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithIncomingArrowInPatternText (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsFunctionWithFullPatternText
+[       OK ] ExpressionBuilderUnitTest.ExistsFunctionWithFullPatternText (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExtractListFromExpression_WithNonLiteralItem
+[       OK ] ExpressionBuilderUnitTest.ExtractListFromExpression_WithNonLiteralItem (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PropertyAccessReturnBaseExpr
+[       OK ] ExpressionBuilderUnitTest.PropertyAccessReturnBaseExpr (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.QuantifierFunctionFirstArgNotVariable
+[       OK ] ExpressionBuilderUnitTest.QuantifierFunctionFirstArgNotVariable (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionWithWhere
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathIncoming
+[       OK ] ExpressionBuilderUnitTest.ShortestPathIncoming (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.AllShortestPathsIncoming
+[       OK ] ExpressionBuilderUnitTest.AllShortestPathsIncoming (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathWithSingleHop
+[       OK ] ExpressionBuilderUnitTest.ShortestPathWithSingleHop (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ListSliceOpenStartRange
+[       OK ] ExpressionBuilderUnitTest.ListSliceOpenStartRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.InOperatorBuildsDynamicListForPropertyItems
+[       OK ] ExpressionBuilderUnitTest.InOperatorBuildsDynamicListForPropertyItems (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.CaseExpressionMissingThenThrows
+[       OK ] ExpressionBuilderUnitTest.CaseExpressionMissingThenThrows (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.EmptyListSliceWithRange
+[       OK ] ExpressionBuilderUnitTest.EmptyListSliceWithRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionUndirected
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionUndirected (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ShortestPathWithOpenRange
+[       OK ] ExpressionBuilderUnitTest.ShortestPathWithOpenRange (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionWithoutRelType
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionWithoutRelType (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionNoSourceVar
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionNoSourceVar (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionNoTargetVar
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionNoTargetVar (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.InOperatorBuildsDynamicListForArithmeticItems
+[       OK ] ExpressionBuilderUnitTest.InOperatorBuildsDynamicListForArithmeticItems (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.StringWithMultipleEscapes
+[       OK ] ExpressionBuilderUnitTest.StringWithMultipleEscapes (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.PatternComprehensionNoChain
+[       OK ] ExpressionBuilderUnitTest.PatternComprehensionNoChain (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionSimpleNodeWithWhere
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionSimpleNodeWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ExistsExpressionWithTargetVariable
+[       OK ] ExpressionBuilderUnitTest.ExistsExpressionWithTargetVariable (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.TriplePowerExpression
+[       OK ] ExpressionBuilderUnitTest.TriplePowerExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.ComplexMixedExpression
+[       OK ] ExpressionBuilderUnitTest.ComplexMixedExpression (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NestedFunctionCalls
+[       OK ] ExpressionBuilderUnitTest.NestedFunctionCalls (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.FunctionNoArgs
+[       OK ] ExpressionBuilderUnitTest.FunctionNoArgs (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.MultipleXorConditions
+[       OK ] ExpressionBuilderUnitTest.MultipleXorConditions (0 ms)
+[ RUN      ] ExpressionBuilderUnitTest.NotWithOrExpression
+[       OK ] ExpressionBuilderUnitTest.NotWithOrExpression (2 ms)
+[----------] 179 tests from ExpressionBuilderUnitTest (51 ms total)
+
+[----------] 112 tests from ExpressionBuilderParsingTest
+[ RUN      ] ExpressionBuilderParsingTest.XorExpression
+[       OK ] ExpressionBuilderParsingTest.XorExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BetweenExpression
+[       OK ] ExpressionBuilderParsingTest.BetweenExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.RegexMatchOperator
+[       OK ] ExpressionBuilderParsingTest.RegexMatchOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PowerExpression
+[       OK ] ExpressionBuilderParsingTest.PowerExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PowerExpressionChained
+[       OK ] ExpressionBuilderParsingTest.PowerExpressionChained (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ModuloOperator
+[       OK ] ExpressionBuilderParsingTest.ModuloOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.MultiplyOperator
+[       OK ] ExpressionBuilderParsingTest.MultiplyOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.DivideOperator
+[       OK ] ExpressionBuilderParsingTest.DivideOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ScientificNotationLowerCase
+[       OK ] ExpressionBuilderParsingTest.ScientificNotationLowerCase (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ScientificNotationUpperCase
+[       OK ] ExpressionBuilderParsingTest.ScientificNotationUpperCase (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ScientificNotationUpperCaseWithoutDecimalPoint
+[       OK ] ExpressionBuilderParsingTest.ScientificNotationUpperCaseWithoutDecimalPoint (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.UnaryPlus
+[       OK ] ExpressionBuilderParsingTest.UnaryPlus (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.UnaryMinusOnVariable
+[       OK ] ExpressionBuilderParsingTest.UnaryMinusOnVariable (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.UnaryMinusDouble
+[       OK ] ExpressionBuilderParsingTest.UnaryMinusDouble (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.MapLiteralExpression
+[       OK ] ExpressionBuilderParsingTest.MapLiteralExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.CountStar
+[       OK ] ExpressionBuilderParsingTest.CountStar (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ParameterExpression
+[       OK ] ExpressionBuilderParsingTest.ParameterExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.SearchedCaseExpression
+[       OK ] ExpressionBuilderParsingTest.SearchedCaseExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.SimpleCaseExpression
+[       OK ] ExpressionBuilderParsingTest.SimpleCaseExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListSliceRange
+[       OK ] ExpressionBuilderParsingTest.ListSliceRange (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListIndexSingle
+[       OK ] ExpressionBuilderParsingTest.ListIndexSingle (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.IsNullExpression
+[       OK ] ExpressionBuilderParsingTest.IsNullExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.IsNotNullExpression
+[       OK ] ExpressionBuilderParsingTest.IsNotNullExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NotExpression
+[       OK ] ExpressionBuilderParsingTest.NotExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.LessThanOperator
+[       OK ] ExpressionBuilderParsingTest.LessThanOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.GreaterThanOperator
+[       OK ] ExpressionBuilderParsingTest.GreaterThanOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.LessThanOrEqualOperator
+[       OK ] ExpressionBuilderParsingTest.LessThanOrEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.GreaterThanOrEqualOperator
+[       OK ] ExpressionBuilderParsingTest.GreaterThanOrEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NotEqualOperator
+[       OK ] ExpressionBuilderParsingTest.NotEqualOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StartsWithOperator
+[       OK ] ExpressionBuilderParsingTest.StartsWithOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EndsWithOperator
+[       OK ] ExpressionBuilderParsingTest.EndsWithOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ContainsOperator
+[       OK ] ExpressionBuilderParsingTest.ContainsOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.InExpressionDynamicRhs
+[       OK ] ExpressionBuilderParsingTest.InExpressionDynamicRhs (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.SubtractOperator
+[       OK ] ExpressionBuilderParsingTest.SubtractOperator (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NullLiteralExpression
+[       OK ] ExpressionBuilderParsingTest.NullLiteralExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BooleanTrueLiteral
+[       OK ] ExpressionBuilderParsingTest.BooleanTrueLiteral (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BooleanFalseLiteral
+[       OK ] ExpressionBuilderParsingTest.BooleanFalseLiteral (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.DistinctFunctionCall
+[       OK ] ExpressionBuilderParsingTest.DistinctFunctionCall (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionNull
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionNull (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionInteger
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionInteger (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionDouble
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionDouble (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionString
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionString (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionBool
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionBool (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionNullLiteral
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionNullLiteral (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionList
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralExpressionList (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PropertyWithListIndex
+[       OK ] ExpressionBuilderParsingTest.PropertyWithListIndex (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListLiteralWithIndex
+[       OK ] ExpressionBuilderParsingTest.ListLiteralWithIndex (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithEscapeSequences
+[       OK ] ExpressionBuilderParsingTest.StringWithEscapeSequences (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithTabEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithTabEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithBackslashEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithBackslashEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithUnicodeEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithUnicodeEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithHighUnicodeCodepoint
+[       OK ] ExpressionBuilderParsingTest.StringWithHighUnicodeCodepoint (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ScientificNotationLowercaseE
+[       OK ] ExpressionBuilderParsingTest.ScientificNotationLowercaseE (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExtractListNonLiteralItem
+[       OK ] ExpressionBuilderParsingTest.ExtractListNonLiteralItem (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BuildsDynamicListLiteralsWithoutCollapsingNestedStaticLists
+[       OK ] ExpressionBuilderParsingTest.BuildsDynamicListLiteralsWithoutCollapsingNestedStaticLists (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.KeepsAnOuterListDynamicWhenItsNestedListDependsOnTheRow
+[       OK ] ExpressionBuilderParsingTest.KeepsAnOuterListDynamicWhenItsNestedListDependsOnTheRow (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BuildsDynamicMapLiteralsWithoutCollapsingNestedStaticLists
+[       OK ] ExpressionBuilderParsingTest.BuildsDynamicMapLiteralsWithoutCollapsingNestedStaticLists (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.KeepsAMapLiteralDynamicWhenItsNestedListDependsOnTheRow
+[       OK ] ExpressionBuilderParsingTest.KeepsAMapLiteralDynamicWhenItsNestedListDependsOnTheRow (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.InWithDynamicRhsVariable
+[       OK ] ExpressionBuilderParsingTest.InWithDynamicRhsVariable (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.CaseWithoutElse
+[       OK ] ExpressionBuilderParsingTest.CaseWithoutElse (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListComprehensionNoWhereNoMap
+[       OK ] ExpressionBuilderParsingTest.ListComprehensionNoWhereNoMap (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PatternComprehensionNoWhere
+[       OK ] ExpressionBuilderParsingTest.PatternComprehensionNoWhere (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsNoChain
+[       OK ] ExpressionBuilderParsingTest.ExistsNoChain (1 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsFunctionNoArgs
+[       OK ] ExpressionBuilderParsingTest.ExistsFunctionNoArgs (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.QuantifierAsFunction
+[       OK ] ExpressionBuilderParsingTest.QuantifierAsFunction (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.AllShortestPathsWithRange
+[       OK ] ExpressionBuilderParsingTest.AllShortestPathsWithRange (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.MapProjectionWithKeyExpr
+[       OK ] ExpressionBuilderParsingTest.MapProjectionWithKeyExpr (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.UnaryMinusOnNonNumeric
+[       OK ] ExpressionBuilderParsingTest.UnaryMinusOnNonNumeric (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PropertyThenListIndex
+[       OK ] ExpressionBuilderParsingTest.PropertyThenListIndex (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NumericParameter
+[       OK ] ExpressionBuilderParsingTest.NumericParameter (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsIncomingDirection
+[       OK ] ExpressionBuilderParsingTest.ExistsIncomingDirection (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PatternComprehensionWithWhere
+[       OK ] ExpressionBuilderParsingTest.PatternComprehensionWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ShortestPathIncoming
+[       OK ] ExpressionBuilderParsingTest.ShortestPathIncoming (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListSliceStartOnly
+[       OK ] ExpressionBuilderParsingTest.ListSliceStartOnly (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListSliceEndOnly
+[       OK ] ExpressionBuilderParsingTest.ListSliceEndOnly (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithBackspaceEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithBackspaceEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithFormfeedEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithFormfeedEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithCarriageReturnEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithCarriageReturnEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithSingleQuoteEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithSingleQuoteEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithDoubleQuoteEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithDoubleQuoteEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithTruncatedUnicodeEscape
+[       OK ] ExpressionBuilderParsingTest.StringWithTruncatedUnicodeEscape (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.StringWithUnknownEscapeChar
+[       OK ] ExpressionBuilderParsingTest.StringWithUnknownEscapeChar (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ReduceExpression
+[       OK ] ExpressionBuilderParsingTest.ReduceExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListComprehensionWithWhereOnly
+[       OK ] ExpressionBuilderParsingTest.ListComprehensionWithWhereOnly (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ListComprehensionWithWhereAndMap
+[       OK ] ExpressionBuilderParsingTest.ListComprehensionWithWhereAndMap (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsWithWhere
+[       OK ] ExpressionBuilderParsingTest.ExistsWithWhere (1 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsNoChainWithWhere
+[       OK ] ExpressionBuilderParsingTest.ExistsNoChainWithWhere (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ShortestPathWithMinMaxRange
+[       OK ] ExpressionBuilderParsingTest.ShortestPathWithMinMaxRange (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ShortestPathWithSingleRange
+[       OK ] ExpressionBuilderParsingTest.ShortestPathWithSingleRange (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.MapProjectionAllProperties
+[       OK ] ExpressionBuilderParsingTest.MapProjectionAllProperties (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ParenthesizedExpression
+[       OK ] ExpressionBuilderParsingTest.ParenthesizedExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.InWithLiteralList
+[       OK ] ExpressionBuilderParsingTest.InWithLiteralList (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.OrExpression
+[       OK ] ExpressionBuilderParsingTest.OrExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluateLiteralComplexExpression
+[       OK ] ExpressionBuilderParsingTest.EvaluateLiteralComplexExpression (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.QuantifierAny
+[       OK ] ExpressionBuilderParsingTest.QuantifierAny (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.QuantifierNone
+[       OK ] ExpressionBuilderParsingTest.QuantifierNone (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.QuantifierSingle
+[       OK ] ExpressionBuilderParsingTest.QuantifierSingle (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.PatternComprehensionIncoming
+[       OK ] ExpressionBuilderParsingTest.PatternComprehensionIncoming (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ShortestPathNoRelType
+[       OK ] ExpressionBuilderParsingTest.ShortestPathNoRelType (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsWithTargetLabel
+[       OK ] ExpressionBuilderParsingTest.ExistsWithTargetLabel (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.ExistsWithTargetVariable
+[       OK ] ExpressionBuilderParsingTest.ExistsWithTargetVariable (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluatesNegativeIntegerAndDoubleLiterals
+[       OK ] ExpressionBuilderParsingTest.EvaluatesNegativeIntegerAndDoubleLiterals (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.EvaluatesParenthesizedStaticLiteralValues
+[       OK ] ExpressionBuilderParsingTest.EvaluatesParenthesizedStaticLiteralValues (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickVariableNames
+[       OK ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickVariableNames (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickPropertyNames
+[       OK ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickPropertyNames (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesPlainBacktickNames
+[       OK ] ExpressionBuilderParsingTest.NormalizesPlainBacktickNames (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickMapKeysInStaticAndDynamicMaps
+[       OK ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickMapKeysInStaticAndDynamicMaps (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickMapProjectionNames
+[       OK ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickMapProjectionNames (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickQuantifierVariables
+[       OK ] ExpressionBuilderParsingTest.NormalizesEscapedBacktickQuantifierVariables (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BuildsConjoinedPredicates
+[       OK ] ExpressionBuilderParsingTest.BuildsConjoinedPredicates (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BuildsExactAndOpenEndedShortestPathRanges
+[       OK ] ExpressionBuilderParsingTest.BuildsExactAndOpenEndedShortestPathRanges (0 ms)
+[ RUN      ] ExpressionBuilderParsingTest.BuildsPatternComprehensionWithRelationshipVariableAndTargetLabel
+[       OK ] ExpressionBuilderParsingTest.BuildsPatternComprehensionWithRelationshipVariableAndTargetLabel (0 ms)
+[----------] 112 tests from ExpressionBuilderParsingTest (16 ms total)
+
+[----------] 5 tests from LogicalCreateIndexTest
+[ RUN      ] LogicalCreateIndexTest.SinglePropertyConstruction
+[       OK ] LogicalCreateIndexTest.SinglePropertyConstruction (0 ms)
+[ RUN      ] LogicalCreateIndexTest.CompositeConstruction
+[       OK ] LogicalCreateIndexTest.CompositeConstruction (0 ms)
+[ RUN      ] LogicalCreateIndexTest.LeafNode
+[       OK ] LogicalCreateIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateIndexTest.Clone
+[       OK ] LogicalCreateIndexTest.Clone (0 ms)
+[ RUN      ] LogicalCreateIndexTest.ToString
+[       OK ] LogicalCreateIndexTest.ToString (0 ms)
+[----------] 5 tests from LogicalCreateIndexTest (0 ms total)
+
+[----------] 5 tests from LogicalDropIndexTest
+[ RUN      ] LogicalDropIndexTest.BasicConstruction
+[       OK ] LogicalDropIndexTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDropIndexTest.ToStringWithIndexName
+[       OK ] LogicalDropIndexTest.ToStringWithIndexName (0 ms)
+[ RUN      ] LogicalDropIndexTest.ToStringWithoutIndexName
+[       OK ] LogicalDropIndexTest.ToStringWithoutIndexName (0 ms)
+[ RUN      ] LogicalDropIndexTest.LeafNode
+[       OK ] LogicalDropIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalDropIndexTest.Clone
+[       OK ] LogicalDropIndexTest.Clone (0 ms)
+[----------] 5 tests from LogicalDropIndexTest (0 ms total)
+
+[----------] 3 tests from LogicalShowIndexesTest
+[ RUN      ] LogicalShowIndexesTest.IsLeaf
+[       OK ] LogicalShowIndexesTest.IsLeaf (0 ms)
+[ RUN      ] LogicalShowIndexesTest.LeafRejectsChildren
+[       OK ] LogicalShowIndexesTest.LeafRejectsChildren (0 ms)
+[ RUN      ] LogicalShowIndexesTest.Clone
+[       OK ] LogicalShowIndexesTest.Clone (0 ms)
+[----------] 3 tests from LogicalShowIndexesTest (0 ms total)
+
+[----------] 4 tests from LogicalCreateVectorIndexTest
+[ RUN      ] LogicalCreateVectorIndexTest.BasicConstruction
+[       OK ] LogicalCreateVectorIndexTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.LeafNode
+[       OK ] LogicalCreateVectorIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.Clone
+[       OK ] LogicalCreateVectorIndexTest.Clone (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.ToString
+[       OK ] LogicalCreateVectorIndexTest.ToString (0 ms)
+[----------] 4 tests from LogicalCreateVectorIndexTest (0 ms total)
+
+[----------] 4 tests from LogicalCreateConstraintTest
+[ RUN      ] LogicalCreateConstraintTest.BasicConstruction
+[       OK ] LogicalCreateConstraintTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.LeafNode
+[       OK ] LogicalCreateConstraintTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.Clone
+[       OK ] LogicalCreateConstraintTest.Clone (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.ToString
+[       OK ] LogicalCreateConstraintTest.ToString (0 ms)
+[----------] 4 tests from LogicalCreateConstraintTest (0 ms total)
+
+[----------] 5 tests from LogicalDropConstraintTest
+[ RUN      ] LogicalDropConstraintTest.BasicConstruction
+[       OK ] LogicalDropConstraintTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDropConstraintTest.IfExistsFlag
+[       OK ] LogicalDropConstraintTest.IfExistsFlag (0 ms)
+[ RUN      ] LogicalDropConstraintTest.LeafNode
+[       OK ] LogicalDropConstraintTest.LeafNode (0 ms)
+[ RUN      ] LogicalDropConstraintTest.Clone
+[       OK ] LogicalDropConstraintTest.Clone (0 ms)
+[ RUN      ] LogicalDropConstraintTest.ToString
+[       OK ] LogicalDropConstraintTest.ToString (0 ms)
+[----------] 5 tests from LogicalDropConstraintTest (0 ms total)
+
+[----------] 3 tests from LogicalShowConstraintsTest
+[ RUN      ] LogicalShowConstraintsTest.IsLeaf
+[       OK ] LogicalShowConstraintsTest.IsLeaf (0 ms)
+[ RUN      ] LogicalShowConstraintsTest.LeafRejectsChildren
+[       OK ] LogicalShowConstraintsTest.LeafRejectsChildren (0 ms)
+[ RUN      ] LogicalShowConstraintsTest.Clone
+[       OK ] LogicalShowConstraintsTest.Clone (0 ms)
+[----------] 3 tests from LogicalShowConstraintsTest (0 ms total)
+
+[----------] 8 tests from LogicalTransactionControlTest
+[ RUN      ] LogicalTransactionControlTest.BeginConstruction
+[       OK ] LogicalTransactionControlTest.BeginConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.CommitConstruction
+[       OK ] LogicalTransactionControlTest.CommitConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.RollbackConstruction
+[       OK ] LogicalTransactionControlTest.RollbackConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringBegin
+[       OK ] LogicalTransactionControlTest.ToStringBegin (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringCommit
+[       OK ] LogicalTransactionControlTest.ToStringCommit (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringRollback
+[       OK ] LogicalTransactionControlTest.ToStringRollback (0 ms)
+[ RUN      ] LogicalTransactionControlTest.LeafNode
+[       OK ] LogicalTransactionControlTest.LeafNode (0 ms)
+[ RUN      ] LogicalTransactionControlTest.Clone
+[       OK ] LogicalTransactionControlTest.Clone (0 ms)
+[----------] 8 tests from LogicalTransactionControlTest (0 ms total)
+
+[----------] 6 tests from LogicalCallProcedureTest
+[ RUN      ] LogicalCallProcedureTest.BasicConstruction
+[       OK ] LogicalCallProcedureTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCallProcedureTest.LeafNode
+[       OK ] LogicalCallProcedureTest.LeafNode (0 ms)
+[ RUN      ] LogicalCallProcedureTest.Clone
+[       OK ] LogicalCallProcedureTest.Clone (0 ms)
+[ RUN      ] LogicalCallProcedureTest.ToString
+[       OK ] LogicalCallProcedureTest.ToString (0 ms)
+[ RUN      ] LogicalCallProcedureTest.ResolvesBoundArgumentsAndPreservesThemWhenCloned
+[       OK ] LogicalCallProcedureTest.ResolvesBoundArgumentsAndPreservesThemWhenCloned (0 ms)
+[ RUN      ] LogicalCallProcedureTest.RejectsMalformedOrUnresolvedBoundArguments
+[       OK ] LogicalCallProcedureTest.RejectsMalformedOrUnresolvedBoundArguments (0 ms)
+[----------] 6 tests from LogicalCallProcedureTest (0 ms total)
+
+[----------] 5 tests from LogicalAggregateTest
+[ RUN      ] LogicalAggregateTest.PreservesGroupingAggregateAndChildContractsAcrossClone
+[       OK ] LogicalAggregateTest.PreservesGroupingAggregateAndChildContractsAcrossClone (0 ms)
+[ RUN      ] LogicalAggregateTest.BasicConstruction
+[       OK ] LogicalAggregateTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalAggregateTest.AggItemProperties
+[       OK ] LogicalAggregateTest.AggItemProperties (0 ms)
+[ RUN      ] LogicalAggregateTest.OutputVariablesIncludesGroupByAndAggs
+[       OK ] LogicalAggregateTest.OutputVariablesIncludesGroupByAndAggs (0 ms)
+[ RUN      ] LogicalAggregateTest.Clone
+[       OK ] LogicalAggregateTest.Clone (0 ms)
+[----------] 5 tests from LogicalAggregateTest (0 ms total)
+
+[----------] 9 tests from LogicalExplainTest
+[ RUN      ] LogicalExplainTest.BasicConstruction
+[       OK ] LogicalExplainTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalExplainTest.ExposesTheInnerPlanThroughTheConstInspectionSurface
+[       OK ] LogicalExplainTest.ExposesTheInnerPlanThroughTheConstInspectionSurface (0 ms)
+[ RUN      ] LogicalExplainTest.OutputVariables_Admin
+[       OK ] LogicalExplainTest.OutputVariables_Admin (0 ms)
+[ RUN      ] LogicalExplainTest.NullInnerPlan
+[       OK ] LogicalExplainTest.NullInnerPlan (0 ms)
+[ RUN      ] LogicalExplainTest.SetChildIgnoresIndex
+[       OK ] LogicalExplainTest.SetChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalExplainTest.DetachChildIgnoresIndex
+[       OK ] LogicalExplainTest.DetachChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalExplainTest.Clone
+[       OK ] LogicalExplainTest.Clone (0 ms)
+[ RUN      ] LogicalExplainTest.CloneWithNull
+[       OK ] LogicalExplainTest.CloneWithNull (0 ms)
+[ RUN      ] LogicalExplainTest.ToString
+[       OK ] LogicalExplainTest.ToString (0 ms)
+[----------] 9 tests from LogicalExplainTest (0 ms total)
+
+[----------] 8 tests from LogicalProfileTest
+[ RUN      ] LogicalProfileTest.BasicConstruction
+[       OK ] LogicalProfileTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalProfileTest.OutputVariablesEmpty
+[       OK ] LogicalProfileTest.OutputVariablesEmpty (0 ms)
+[ RUN      ] LogicalProfileTest.NullInnerPlan
+[       OK ] LogicalProfileTest.NullInnerPlan (0 ms)
+[ RUN      ] LogicalProfileTest.SetChildIgnoresIndex
+[       OK ] LogicalProfileTest.SetChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalProfileTest.DetachChildIgnoresIndex
+[       OK ] LogicalProfileTest.DetachChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalProfileTest.Clone
+[       OK ] LogicalProfileTest.Clone (0 ms)
+[ RUN      ] LogicalProfileTest.CloneWithNull
+[       OK ] LogicalProfileTest.CloneWithNull (0 ms)
+[ RUN      ] LogicalProfileTest.ToString
+[       OK ] LogicalProfileTest.ToString (0 ms)
+[----------] 8 tests from LogicalProfileTest (0 ms total)
+
+[----------] 2 tests from LogicalLimitNullChildTest
+[ RUN      ] LogicalLimitNullChildTest.OutputVariablesAndCloneHandleNullChild
+[       OK ] LogicalLimitNullChildTest.OutputVariablesAndCloneHandleNullChild (0 ms)
+[ RUN      ] LogicalLimitNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards
+[       OK ] LogicalLimitNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards (0 ms)
+[----------] 2 tests from LogicalLimitNullChildTest (0 ms total)
+
+[----------] 2 tests from LogicalSkipNullChildTest
+[ RUN      ] LogicalSkipNullChildTest.OutputVariablesAndCloneHandleNullChild
+[       OK ] LogicalSkipNullChildTest.OutputVariablesAndCloneHandleNullChild (0 ms)
+[ RUN      ] LogicalSkipNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards
+[       OK ] LogicalSkipNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards (0 ms)
+[----------] 2 tests from LogicalSkipNullChildTest (0 ms total)
+
+[----------] 15 tests from LogicalNamedPathTest
+[ RUN      ] LogicalNamedPathTest.GetType
+[       OK ] LogicalNamedPathTest.GetType (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetPathVariable
+[       OK ] LogicalNamedPathTest.GetPathVariable (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetNodeVariables
+[       OK ] LogicalNamedPathTest.GetNodeVariables (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetEdgeVariables
+[       OK ] LogicalNamedPathTest.GetEdgeVariables (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetChildren
+[       OK ] LogicalNamedPathTest.GetChildren (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetOutputVariables_IncludesChildVarsAndPathVar
+[       OK ] LogicalNamedPathTest.GetOutputVariables_IncludesChildVarsAndPathVar (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetOutputVariables_NullChild
+[       OK ] LogicalNamedPathTest.GetOutputVariables_NullChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.Clone
+[       OK ] LogicalNamedPathTest.Clone (0 ms)
+[ RUN      ] LogicalNamedPathTest.CloneWithNullChild
+[       OK ] LogicalNamedPathTest.CloneWithNullChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.ToString
+[       OK ] LogicalNamedPathTest.ToString (0 ms)
+[ RUN      ] LogicalNamedPathTest.SetChild
+[       OK ] LogicalNamedPathTest.SetChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.SetChildNonZeroIndex
+[       OK ] LogicalNamedPathTest.SetChildNonZeroIndex (0 ms)
+[ RUN      ] LogicalNamedPathTest.DetachChild
+[       OK ] LogicalNamedPathTest.DetachChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.DetachChildNonZeroIndex
+[       OK ] LogicalNamedPathTest.DetachChildNonZeroIndex (0 ms)
+[ RUN      ] LogicalNamedPathTest.EmptyVariableLists
+[       OK ] LogicalNamedPathTest.EmptyVariableLists (0 ms)
+[----------] 15 tests from LogicalNamedPathTest (0 ms total)
+
+[----------] 6 tests from LogicalOpTypeToStringTest
+[ RUN      ] LogicalOpTypeToStringTest.ReadOperators
+[       OK ] LogicalOpTypeToStringTest.ReadOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.WriteOperators
+[       OK ] LogicalOpTypeToStringTest.WriteOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.DDLAndAdminOperators
+[       OK ] LogicalOpTypeToStringTest.DDLAndAdminOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.ObservabilityOperators
+[       OK ] LogicalOpTypeToStringTest.ObservabilityOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.SubqueryAndAdvancedOperators
+[       OK ] LogicalOpTypeToStringTest.SubqueryAndAdvancedOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.UnknownFallback
+[       OK ] LogicalOpTypeToStringTest.UnknownFallback (0 ms)
+[----------] 6 tests from LogicalOpTypeToStringTest (0 ms total)
+
+[----------] 4 tests from LogicalOpTypeMutationTest
+[ RUN      ] LogicalOpTypeMutationTest.DataMutatingOps_ReturnTrue
+[       OK ] LogicalOpTypeMutationTest.DataMutatingOps_ReturnTrue (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.NonDataMutatingOps_ReturnFalse
+[       OK ] LogicalOpTypeMutationTest.NonDataMutatingOps_ReturnFalse (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.SchemaMutatingOps_ReturnTrue
+[       OK ] LogicalOpTypeMutationTest.SchemaMutatingOps_ReturnTrue (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.NonSchemaMutatingOps_ReturnFalse
+[       OK ] LogicalOpTypeMutationTest.NonSchemaMutatingOps_ReturnFalse (0 ms)
+[----------] 4 tests from LogicalOpTypeMutationTest (0 ms total)
+
+[----------] 1 test from LogicalFilterNullGuardTest
+[ RUN      ] LogicalFilterNullGuardTest.HandlesNullChildAndNullPredicate
+[       OK ] LogicalFilterNullGuardTest.HandlesNullChildAndNullPredicate (0 ms)
+[----------] 1 test from LogicalFilterNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalSortNullGuardTest
+[ RUN      ] LogicalSortNullGuardTest.CloneCoversNullExpressionAndNullChild
+[       OK ] LogicalSortNullGuardTest.CloneCoversNullExpressionAndNullChild (0 ms)
+[----------] 1 test from LogicalSortNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalProjectNullGuardTest
+[ RUN      ] LogicalProjectNullGuardTest.CloneCoversNullExpressionAndNullChild
+[       OK ] LogicalProjectNullGuardTest.CloneCoversNullExpressionAndNullChild (0 ms)
+[----------] 1 test from LogicalProjectNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalAggregateNullGuardTest
+[ RUN      ] LogicalAggregateNullGuardTest.OutputAndCloneHandleNullExpressionsAndChild
+[       OK ] LogicalAggregateNullGuardTest.OutputAndCloneHandleNullExpressionsAndChild (0 ms)
+[----------] 1 test from LogicalAggregateNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalJoinNullGuardTest
+[ RUN      ] LogicalJoinNullGuardTest.OutputAndCloneHandleNullChildren
+[       OK ] LogicalJoinNullGuardTest.OutputAndCloneHandleNullChildren (0 ms)
+[----------] 1 test from LogicalJoinNullGuardTest (0 ms total)
+
+[----------] 2 tests from LogicalUnwindNullGuardTest
+[ RUN      ] LogicalUnwindNullGuardTest.OutputAndCloneHandleNullChildInLiteralMode
+[       OK ] LogicalUnwindNullGuardTest.OutputAndCloneHandleNullChildInLiteralMode (0 ms)
+[ RUN      ] LogicalUnwindNullGuardTest.CloneHandlesNullChildInExpressionMode
+[       OK ] LogicalUnwindNullGuardTest.CloneHandlesNullChildInExpressionMode (0 ms)
+[----------] 2 tests from LogicalUnwindNullGuardTest (0 ms total)
+
+[----------] 9 tests from LogicalNodeScanTest
+[ RUN      ] LogicalNodeScanTest.BasicConstruction
+[       OK ] LogicalNodeScanTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalNodeScanTest.OutputVariables
+[       OK ] LogicalNodeScanTest.OutputVariables (0 ms)
+[ RUN      ] LogicalNodeScanTest.PropertyPredicates
+[       OK ] LogicalNodeScanTest.PropertyPredicates (0 ms)
+[ RUN      ] LogicalNodeScanTest.MutablePropertyPredicates
+[       OK ] LogicalNodeScanTest.MutablePropertyPredicates (0 ms)
+[ RUN      ] LogicalNodeScanTest.PreferredScanHint
+[       OK ] LogicalNodeScanTest.PreferredScanHint (0 ms)
+[ RUN      ] LogicalNodeScanTest.ClonePreservesState
+[       OK ] LogicalNodeScanTest.ClonePreservesState (0 ms)
+[ RUN      ] LogicalNodeScanTest.ToString
+[       OK ] LogicalNodeScanTest.ToString (0 ms)
+[ RUN      ] LogicalNodeScanTest.ToStringWithoutLabelsCoversEmptyBranch
+[       OK ] LogicalNodeScanTest.ToStringWithoutLabelsCoversEmptyBranch (0 ms)
+[ RUN      ] LogicalNodeScanTest.LeafNodeRejectsChildren
+[       OK ] LogicalNodeScanTest.LeafNodeRejectsChildren (0 ms)
+[----------] 9 tests from LogicalNodeScanTest (0 ms total)
+
+[----------] 6 tests from LogicalFilterTest
+[ RUN      ] LogicalFilterTest.BasicConstruction
+[       OK ] LogicalFilterTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalFilterTest.OutputVariablesFromChild
+[       OK ] LogicalFilterTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalFilterTest.DetachAndSetChild
+[       OK ] LogicalFilterTest.DetachAndSetChild (0 ms)
+[ RUN      ] LogicalFilterTest.OutOfRangeChild
+[       OK ] LogicalFilterTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalFilterTest.Clone
+[       OK ] LogicalFilterTest.Clone (0 ms)
+[ RUN      ] LogicalFilterTest.ToStringContainsPredicate
+[       OK ] LogicalFilterTest.ToStringContainsPredicate (0 ms)
+[----------] 6 tests from LogicalFilterTest (0 ms total)
+
+[----------] 7 tests from LogicalProjectTest
+[ RUN      ] LogicalProjectTest.BasicConstruction
+[       OK ] LogicalProjectTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalProjectTest.DistinctFlag
+[       OK ] LogicalProjectTest.DistinctFlag (0 ms)
+[ RUN      ] LogicalProjectTest.FormatsMultipleAliasesWithThePublicSeparatorContract
+[       OK ] LogicalProjectTest.FormatsMultipleAliasesWithThePublicSeparatorContract (0 ms)
+[ RUN      ] LogicalProjectTest.OutputVariablesMatchAliases
+[       OK ] LogicalProjectTest.OutputVariablesMatchAliases (0 ms)
+[ RUN      ] LogicalProjectTest.RequiredColumns
+[       OK ] LogicalProjectTest.RequiredColumns (0 ms)
+[ RUN      ] LogicalProjectTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalProjectTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalProjectTest.Clone
+[       OK ] LogicalProjectTest.Clone (0 ms)
+[----------] 7 tests from LogicalProjectTest (0 ms total)
+
+[----------] 6 tests from LogicalJoinTest
+[ RUN      ] LogicalJoinTest.BasicConstruction
+[       OK ] LogicalJoinTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalJoinTest.OutputVariablesCombined
+[       OK ] LogicalJoinTest.OutputVariablesCombined (0 ms)
+[ RUN      ] LogicalJoinTest.DetachChildren
+[       OK ] LogicalJoinTest.DetachChildren (0 ms)
+[ RUN      ] LogicalJoinTest.SetChildren
+[       OK ] LogicalJoinTest.SetChildren (0 ms)
+[ RUN      ] LogicalJoinTest.OutOfRangeChild
+[       OK ] LogicalJoinTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalJoinTest.Clone
+[       OK ] LogicalJoinTest.Clone (0 ms)
+[----------] 6 tests from LogicalJoinTest (0 ms total)
+
+[----------] 5 tests from LogicalSortTest
+[ RUN      ] LogicalSortTest.BasicConstruction
+[       OK ] LogicalSortTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalSortTest.DescendingSort
+[       OK ] LogicalSortTest.DescendingSort (0 ms)
+[ RUN      ] LogicalSortTest.OutputVariablesPassThrough
+[       OK ] LogicalSortTest.OutputVariablesPassThrough (0 ms)
+[ RUN      ] LogicalSortTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalSortTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalSortTest.Clone
+[       OK ] LogicalSortTest.Clone (0 ms)
+[----------] 5 tests from LogicalSortTest (0 ms total)
+
+[----------] 1 test from LogicalLimitTest
+[ RUN      ] LogicalLimitTest.BasicConstruction
+[       OK ] LogicalLimitTest.BasicConstruction (0 ms)
+[----------] 1 test from LogicalLimitTest (0 ms total)
+
+[----------] 1 test from LogicalSkipTest
+[ RUN      ] LogicalSkipTest.BasicConstruction
+[       OK ] LogicalSkipTest.BasicConstruction (0 ms)
+[----------] 1 test from LogicalSkipTest (0 ms total)
+
+[----------] 2 tests from LogicalSingleRowTest
+[ RUN      ] LogicalSingleRowTest.IsLeaf
+[       OK ] LogicalSingleRowTest.IsLeaf (0 ms)
+[ RUN      ] LogicalSingleRowTest.Clone
+[       OK ] LogicalSingleRowTest.Clone (0 ms)
+[----------] 2 tests from LogicalSingleRowTest (0 ms total)
+
+[----------] 8 tests from LogicalUnwindTest
+[ RUN      ] LogicalUnwindTest.LiteralListConstruction
+[       OK ] LogicalUnwindTest.LiteralListConstruction (0 ms)
+[ RUN      ] LogicalUnwindTest.ExpressionConstruction
+[       OK ] LogicalUnwindTest.ExpressionConstruction (0 ms)
+[ RUN      ] LogicalUnwindTest.OutputVariablesIncludesAlias
+[       OK ] LogicalUnwindTest.OutputVariablesIncludesAlias (0 ms)
+[ RUN      ] LogicalUnwindTest.CloneLiteralList
+[       OK ] LogicalUnwindTest.CloneLiteralList (0 ms)
+[ RUN      ] LogicalUnwindTest.CloneExpression
+[       OK ] LogicalUnwindTest.CloneExpression (0 ms)
+[ RUN      ] LogicalUnwindTest.SetAndDetachChild
+[       OK ] LogicalUnwindTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalUnwindTest.OutOfRangeChild
+[       OK ] LogicalUnwindTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalUnwindTest.ToString
+[       OK ] LogicalUnwindTest.ToString (0 ms)
+[----------] 8 tests from LogicalUnwindTest (0 ms total)
+
+[----------] 10 tests from LogicalOptionalMatchTest
+[ RUN      ] LogicalOptionalMatchTest.BasicConstruction
+[       OK ] LogicalOptionalMatchTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.RequiredVariables
+[       OK ] LogicalOptionalMatchTest.RequiredVariables (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesBothChildren
+[       OK ] LogicalOptionalMatchTest.OutputVariablesBothChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesWithNullChildren
+[       OK ] LogicalOptionalMatchTest.OutputVariablesWithNullChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesOneChildNull
+[       OK ] LogicalOptionalMatchTest.OutputVariablesOneChildNull (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.SetAndDetachChildren
+[       OK ] LogicalOptionalMatchTest.SetAndDetachChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutOfRangeChild
+[       OK ] LogicalOptionalMatchTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.Clone
+[       OK ] LogicalOptionalMatchTest.Clone (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.CloneWithNullChildren
+[       OK ] LogicalOptionalMatchTest.CloneWithNullChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.ToString
+[       OK ] LogicalOptionalMatchTest.ToString (0 ms)
+[----------] 10 tests from LogicalOptionalMatchTest (0 ms total)
+
+[----------] 9 tests from LogicalUnionTest
+[ RUN      ] LogicalUnionTest.UnionAllConstruction
+[       OK ] LogicalUnionTest.UnionAllConstruction (0 ms)
+[ RUN      ] LogicalUnionTest.UnionDistinctConstruction
+[       OK ] LogicalUnionTest.UnionDistinctConstruction (0 ms)
+[ RUN      ] LogicalUnionTest.ToStringDifference
+[       OK ] LogicalUnionTest.ToStringDifference (0 ms)
+[ RUN      ] LogicalUnionTest.OutputVariablesFromLeft
+[       OK ] LogicalUnionTest.OutputVariablesFromLeft (0 ms)
+[ RUN      ] LogicalUnionTest.OutputVariablesNullLeft
+[       OK ] LogicalUnionTest.OutputVariablesNullLeft (0 ms)
+[ RUN      ] LogicalUnionTest.SetAndDetachChildren
+[       OK ] LogicalUnionTest.SetAndDetachChildren (0 ms)
+[ RUN      ] LogicalUnionTest.OutOfRangeChild
+[       OK ] LogicalUnionTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalUnionTest.Clone
+[       OK ] LogicalUnionTest.Clone (0 ms)
+[ RUN      ] LogicalUnionTest.CloneWithNullChildren
+[       OK ] LogicalUnionTest.CloneWithNullChildren (0 ms)
+[----------] 9 tests from LogicalUnionTest (0 ms total)
+
+[----------] 1 test from LogicalTreeTest
+[ RUN      ] LogicalTreeTest.DeepTreeClone
+[       OK ] LogicalTreeTest.DeepTreeClone (0 ms)
+[----------] 1 test from LogicalTreeTest (0 ms total)
+
+[----------] 2 tests from LogicalSingleRowStandaloneTest
+[ RUN      ] LogicalSingleRowStandaloneTest.ToStringAndLeafShape
+[       OK ] LogicalSingleRowStandaloneTest.ToStringAndLeafShape (0 ms)
+[ RUN      ] LogicalSingleRowStandaloneTest.RejectsChildMutations
+[       OK ] LogicalSingleRowStandaloneTest.RejectsChildMutations (0 ms)
+[----------] 2 tests from LogicalSingleRowStandaloneTest (0 ms total)
+
+[----------] 2 tests from LogicalPlanPrinterTest
+[ RUN      ] LogicalPlanPrinterTest.NullPlanPrintsPlaceholder
+[       OK ] LogicalPlanPrinterTest.NullPlanPrintsPlaceholder (0 ms)
+[ RUN      ] LogicalPlanPrinterTest.PrintsIndentedTreeAndSkipsNullChildren
+[       OK ] LogicalPlanPrinterTest.PrintsIndentedTreeAndSkipsNullChildren (0 ms)
+[----------] 2 tests from LogicalPlanPrinterTest (0 ms total)
+
+[----------] 14 tests from LogicalLoadCsvTest
+[ RUN      ] LogicalLoadCsvTest.BasicConstruction
+[       OK ] LogicalLoadCsvTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DefaultParams
+[       OK ] LogicalLoadCsvTest.DefaultParams (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenNoChild
+[       OK ] LogicalLoadCsvTest.GetChildrenNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenWithChild
+[       OK ] LogicalLoadCsvTest.GetChildrenWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesNoChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesWithChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneWithChild
+[       OK ] LogicalLoadCsvTest.CloneWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneNoChild
+[       OK ] LogicalLoadCsvTest.CloneNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithoutHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithoutHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChild
+[       OK ] LogicalLoadCsvTest.SetChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChild
+[       OK ] LogicalLoadCsvTest.DetachChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.DetachChildInvalidIndex (0 ms)
+[----------] 14 tests from LogicalLoadCsvTest (0 ms total)
+
+[----------] 19 tests from LogicalCallSubqueryTest
+[ RUN      ] LogicalCallSubqueryTest.BasicConstruction
+[       OK ] LogicalCallSubqueryTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ConstructionWithParams
+[       OK ] LogicalCallSubqueryTest.ConstructionWithParams (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenBothPresent
+[       OK ] LogicalCallSubqueryTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlyInput
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlyInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlySubquery
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlySubquery (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenEmpty
+[       OK ] LogicalCallSubqueryTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesNoInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesNoInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesWithInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesWithInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneBothChildren
+[       OK ] LogicalCallSubqueryTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneNoChildren
+[       OK ] LogicalCallSubqueryTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringBasic
+[       OK ] LogicalCallSubqueryTest.ToStringBasic (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactions
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactions (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex0
+[       OK ] LogicalCallSubqueryTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex1
+[       OK ] LogicalCallSubqueryTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex0
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex1
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.DetachChildInvalidIndex (0 ms)
+[----------] 19 tests from LogicalCallSubqueryTest (0 ms total)
+
+[----------] 17 tests from LogicalForeachTest
+[ RUN      ] LogicalForeachTest.BasicConstruction
+[       OK ] LogicalForeachTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalForeachTest.WithChildAndBody
+[       OK ] LogicalForeachTest.WithChildAndBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenBothPresent
+[       OK ] LogicalForeachTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyChild
+[       OK ] LogicalForeachTest.GetChildrenOnlyChild (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyBody
+[       OK ] LogicalForeachTest.GetChildrenOnlyBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenEmpty
+[       OK ] LogicalForeachTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesNoChild
+[       OK ] LogicalForeachTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesWithChild
+[       OK ] LogicalForeachTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalForeachTest.CloneBothChildren
+[       OK ] LogicalForeachTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalForeachTest.CloneNoChildren
+[       OK ] LogicalForeachTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalForeachTest.ToString
+[       OK ] LogicalForeachTest.ToString (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex0
+[       OK ] LogicalForeachTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex1
+[       OK ] LogicalForeachTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildInvalidIndex
+[       OK ] LogicalForeachTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex0
+[       OK ] LogicalForeachTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex1
+[       OK ] LogicalForeachTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildInvalidIndex
+[       OK ] LogicalForeachTest.DetachChildInvalidIndex (0 ms)
+[----------] 17 tests from LogicalForeachTest (0 ms total)
+
+[----------] 11 tests from LogicalTraversalTest
+[ RUN      ] LogicalTraversalTest.BasicConstruction
+[       OK ] LogicalTraversalTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalTraversalTest.WithTargetLabelsAndProperties
+[       OK ] LogicalTraversalTest.WithTargetLabelsAndProperties (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesWithBothVars
+[       OK ] LogicalTraversalTest.OutputVariablesWithBothVars (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalTraversalTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesEmptyTargetVar
+[       OK ] LogicalTraversalTest.OutputVariablesEmptyTargetVar (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesBothEmpty
+[       OK ] LogicalTraversalTest.OutputVariablesBothEmpty (0 ms)
+[ RUN      ] LogicalTraversalTest.Clone
+[       OK ] LogicalTraversalTest.Clone (0 ms)
+[ RUN      ] LogicalTraversalTest.SetAndDetachChild
+[       OK ] LogicalTraversalTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalTraversalTest.OutOfRangeChild
+[       OK ] LogicalTraversalTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalTraversalTest.ToString
+[       OK ] LogicalTraversalTest.ToString (0 ms)
+[ RUN      ] LogicalTraversalTest.NullChildOutputAndCloneCoverage
+[       OK ] LogicalTraversalTest.NullChildOutputAndCloneCoverage (0 ms)
+[----------] 11 tests from LogicalTraversalTest (0 ms total)
+
+[----------] 10 tests from LogicalVarLengthTraversalTest
+[ RUN      ] LogicalVarLengthTraversalTest.BasicConstruction
+[       OK ] LogicalVarLengthTraversalTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.DifferentHopValues
+[       OK ] LogicalVarLengthTraversalTest.DifferentHopValues (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesWithBothVars
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesWithBothVars (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesEmptyTargetVar
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesEmptyTargetVar (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.Clone
+[       OK ] LogicalVarLengthTraversalTest.Clone (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.SetAndDetachChild
+[       OK ] LogicalVarLengthTraversalTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutOfRangeChild
+[       OK ] LogicalVarLengthTraversalTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.ToString
+[       OK ] LogicalVarLengthTraversalTest.ToString (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.NullChildOutputAndCloneCoverage
+[       OK ] LogicalVarLengthTraversalTest.NullChildOutputAndCloneCoverage (0 ms)
+[----------] 10 tests from LogicalVarLengthTraversalTest (0 ms total)
+
+[----------] 9 tests from LogicalCreateNodeTest
+[ RUN      ] LogicalCreateNodeTest.BasicConstruction
+[       OK ] LogicalCreateNodeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateNodeTest.WithChild
+[       OK ] LogicalCreateNodeTest.WithChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.OutputVariablesAlwaysIncludesVariable
+[       OK ] LogicalCreateNodeTest.OutputVariablesAlwaysIncludesVariable (0 ms)
+[ RUN      ] LogicalCreateNodeTest.OutputVariablesWithChild
+[       OK ] LogicalCreateNodeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.Clone
+[       OK ] LogicalCreateNodeTest.Clone (0 ms)
+[ RUN      ] LogicalCreateNodeTest.CloneWithNullExpression
+[       OK ] LogicalCreateNodeTest.CloneWithNullExpression (0 ms)
+[ RUN      ] LogicalCreateNodeTest.SetAndDetachChild
+[       OK ] LogicalCreateNodeTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.InvalidChildIndex
+[       OK ] LogicalCreateNodeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalCreateNodeTest.ToString
+[       OK ] LogicalCreateNodeTest.ToString (0 ms)
+[----------] 9 tests from LogicalCreateNodeTest (0 ms total)
+
+[----------] 11 tests from LogicalCreateEdgeTest
+[ RUN      ] LogicalCreateEdgeTest.BasicConstruction
+[       OK ] LogicalCreateEdgeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.PreservesIncomingDirectionAcrossClone
+[       OK ] LogicalCreateEdgeTest.PreservesIncomingDirectionAcrossClone (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesNonEmptyVariable
+[       OK ] LogicalCreateEdgeTest.OutputVariablesNonEmptyVariable (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesEmptyVariable
+[       OK ] LogicalCreateEdgeTest.OutputVariablesEmptyVariable (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesWithChild
+[       OK ] LogicalCreateEdgeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.Clone
+[       OK ] LogicalCreateEdgeTest.Clone (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ClonesDynamicPropertyExpressionsWithoutAliasingThem
+[       OK ] LogicalCreateEdgeTest.ClonesDynamicPropertyExpressionsWithoutAliasingThem (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.NullChildGetChildrenAndCloneCoverage
+[       OK ] LogicalCreateEdgeTest.NullChildGetChildrenAndCloneCoverage (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.InvalidChildIndex
+[       OK ] LogicalCreateEdgeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalCreateEdgeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ToString
+[       OK ] LogicalCreateEdgeTest.ToString (0 ms)
+[----------] 11 tests from LogicalCreateEdgeTest (0 ms total)
+
+[----------] 9 tests from LogicalDeleteTest
+[ RUN      ] LogicalDeleteTest.BasicConstruction
+[       OK ] LogicalDeleteTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDeleteTest.DetachMode
+[       OK ] LogicalDeleteTest.DetachMode (0 ms)
+[ RUN      ] LogicalDeleteTest.ToStringDetachVsDelete
+[       OK ] LogicalDeleteTest.ToStringDetachVsDelete (0 ms)
+[ RUN      ] LogicalDeleteTest.OutputVariablesFromChild
+[       OK ] LogicalDeleteTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalDeleteTest.OutputVariablesNoChild
+[       OK ] LogicalDeleteTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalDeleteTest.Clone
+[       OK ] LogicalDeleteTest.Clone (0 ms)
+[ RUN      ] LogicalDeleteTest.NullChildGetChildrenAndCloneCoverage
+[       OK ] LogicalDeleteTest.NullChildGetChildrenAndCloneCoverage (0 ms)
+[ RUN      ] LogicalDeleteTest.InvalidChildIndex
+[       OK ] LogicalDeleteTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalDeleteTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalDeleteTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[----------] 9 tests from LogicalDeleteTest (0 ms total)
+
+[----------] 9 tests from LogicalSetTest
+[ RUN      ] LogicalSetTest.PropertySet
+[       OK ] LogicalSetTest.PropertySet (0 ms)
+[ RUN      ] LogicalSetTest.LabelSet
+[       OK ] LogicalSetTest.LabelSet (0 ms)
+[ RUN      ] LogicalSetTest.MapMerge
+[       OK ] LogicalSetTest.MapMerge (0 ms)
+[ RUN      ] LogicalSetTest.OutputVariablesFromChild
+[       OK ] LogicalSetTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalSetTest.OutputVariablesNoChild
+[       OK ] LogicalSetTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalSetTest.Clone
+[       OK ] LogicalSetTest.Clone (0 ms)
+[ RUN      ] LogicalSetTest.TransfersAndClonesItsOptionalChild
+[       OK ] LogicalSetTest.TransfersAndClonesItsOptionalChild (0 ms)
+[ RUN      ] LogicalSetTest.InvalidChildIndex
+[       OK ] LogicalSetTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalSetTest.ToString
+[       OK ] LogicalSetTest.ToString (0 ms)
+[----------] 9 tests from LogicalSetTest (0 ms total)
+
+[----------] 8 tests from LogicalRemoveTest
+[ RUN      ] LogicalRemoveTest.PropertyRemove
+[       OK ] LogicalRemoveTest.PropertyRemove (0 ms)
+[ RUN      ] LogicalRemoveTest.LabelRemove
+[       OK ] LogicalRemoveTest.LabelRemove (0 ms)
+[ RUN      ] LogicalRemoveTest.OutputVariablesFromChild
+[       OK ] LogicalRemoveTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalRemoveTest.OutputVariablesNoChild
+[       OK ] LogicalRemoveTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalRemoveTest.Clone
+[       OK ] LogicalRemoveTest.Clone (0 ms)
+[ RUN      ] LogicalRemoveTest.TransfersAndClonesItsOptionalChild
+[       OK ] LogicalRemoveTest.TransfersAndClonesItsOptionalChild (0 ms)
+[ RUN      ] LogicalRemoveTest.InvalidChildIndex
+[       OK ] LogicalRemoveTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalRemoveTest.ToString
+[       OK ] LogicalRemoveTest.ToString (0 ms)
+[----------] 8 tests from LogicalRemoveTest (0 ms total)
+
+[----------] 9 tests from LogicalMergeNodeTest
+[ RUN      ] LogicalMergeNodeTest.BasicConstruction
+[       OK ] LogicalMergeNodeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OutputVariables
+[       OK ] LogicalMergeNodeTest.OutputVariables (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OutputVariablesWithChild
+[       OK ] LogicalMergeNodeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OnCreateAndOnMatchActions
+[       OK ] LogicalMergeNodeTest.OnCreateAndOnMatchActions (0 ms)
+[ RUN      ] LogicalMergeNodeTest.Clone
+[       OK ] LogicalMergeNodeTest.Clone (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ClonesDynamicMatchPropertyExpressionsWithoutAliasingThem
+[       OK ] LogicalMergeNodeTest.ClonesDynamicMatchPropertyExpressionsWithoutAliasingThem (0 ms)
+[ RUN      ] LogicalMergeNodeTest.InvalidChildIndex
+[       OK ] LogicalMergeNodeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalMergeNodeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ToString
+[       OK ] LogicalMergeNodeTest.ToString (0 ms)
+[----------] 9 tests from LogicalMergeNodeTest (0 ms total)
+
+[----------] 9 tests from LogicalMergeEdgeTest
+[ RUN      ] LogicalMergeEdgeTest.BasicConstruction
+[       OK ] LogicalMergeEdgeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesNonEmptyEdgeVar
+[       OK ] LogicalMergeEdgeTest.OutputVariablesNonEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalMergeEdgeTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesWithChild
+[       OK ] LogicalMergeEdgeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OnCreateAndOnMatchActions
+[       OK ] LogicalMergeEdgeTest.OnCreateAndOnMatchActions (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.Clone
+[       OK ] LogicalMergeEdgeTest.Clone (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.InvalidChildIndex
+[       OK ] LogicalMergeEdgeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalMergeEdgeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.ToString
+[       OK ] LogicalMergeEdgeTest.ToString (0 ms)
+[----------] 9 tests from LogicalMergeEdgeTest (0 ms total)
+
+[----------] 1 test from LogicalCardinalityEstimateTest
+[ RUN      ] LogicalCardinalityEstimateTest.AcceptsOrderedBoundsAndRejectsInconsistentEstimates
+[       OK ] LogicalCardinalityEstimateTest.AcceptsOrderedBoundsAndRejectsInconsistentEstimates (0 ms)
+[----------] 1 test from LogicalCardinalityEstimateTest (0 ms total)
+
+[----------] 1 test from LogicalStatisticsProviderContractTest
+[ RUN      ] LogicalStatisticsProviderContractTest.DestroysProvidersPolymorphically
+[       OK ] LogicalStatisticsProviderContractTest.DestroysProvidersPolymorphically (0 ms)
+[----------] 1 test from LogicalStatisticsProviderContractTest (0 ms total)
+
+[----------] 31 tests from LogicalPlanOptimizerTest
+[ RUN      ] LogicalPlanOptimizerTest.FusesNestedLimitsWithoutChangingTheScan
+[       OK ] LogicalPlanOptimizerTest.FusesNestedLimitsWithoutChangingTheScan (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesAFilterWithAnInvalidChildShapeUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesAFilterWithAnInvalidChildShapeUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesLimitBelowAValidNonDistinctProjection
+[       OK ] LogicalPlanOptimizerTest.PushesLimitBelowAValidNonDistinctProjection (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesPositiveLimitBelowNonNegativeSkip
+[       OK ] LogicalPlanOptimizerTest.PushesPositiveLimitBelowNonNegativeSkip (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.RetainsDistinctAndMalformedProjectionsAboveLimit
+[       OK ] LogicalPlanOptimizerTest.RetainsDistinctAndMalformedProjectionsAboveLimit (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.FusesNestedSkipsWhenTheExactSumIsRepresentable
+[       OK ] LogicalPlanOptimizerTest.FusesNestedSkipsWhenTheExactSumIsRepresentable (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesDirectLiteralPropertyEqualityIntoNodeScanWithoutRemovingFilter
+[       OK ] LogicalPlanOptimizerTest.PushesDirectLiteralPropertyEqualityIntoNodeScanWithoutRemovingFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesConjunctiveLiteralEqualitiesIntoOneNodeScanWithoutRemovingTheFilter
+[       OK ] LogicalPlanOptimizerTest.PushesConjunctiveLiteralEqualitiesIntoOneNodeScanWithoutRemovingTheFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter
+[       OK ] LogicalPlanOptimizerTest.PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.CanonicalizesConjunctiveBoundsForOneRangeProperty
+[       OK ] LogicalPlanOptimizerTest.CanonicalizesConjunctiveBoundsForOneRangeProperty (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PrefersExclusiveBoundsWhenEqualRangeEndpointsAreConjoined
+[       OK ] LogicalPlanOptimizerTest.PrefersExclusiveBoundsWhenEqualRangeEndpointsAreConjoined (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ReplacesLooserRangeBoundsWithStricterEndpoints
+[       OK ] LogicalPlanOptimizerTest.ReplacesLooserRangeBoundsWithStricterEndpoints (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesMalformedOrConflictingExistingScanPredicatesUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesMalformedOrConflictingExistingScanPredicatesUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesEveryNonNullLiteralRepresentationAndRejectsInvalidFilterShapes
+[       OK ] LogicalPlanOptimizerTest.PushesEveryNonNullLiteralRepresentationAndRejectsInvalidFilterShapes (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesMalformedOrOverflowingWindowsForRuntimeValidation
+[       OK ] LogicalPlanOptimizerTest.LeavesMalformedOrOverflowingWindowsForRuntimeValidation (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ValidatesStatisticsAndPlanTraversalBounds
+[       OK ] LogicalPlanOptimizerTest.ValidatesStatisticsAndPlanTraversalBounds (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide
+[       OK ] LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.HandlesEmptyInputsAndInvalidConfiguration
+[       OK ] LogicalPlanOptimizerTest.HandlesEmptyInputsAndInvalidConfiguration (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.FailsClosedForMalformedOperatorContracts
+[       OK ] LogicalPlanOptimizerTest.FailsClosedForMalformedOperatorContracts (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.EnforcesItsFixedPointBound
+[       OK ] LogicalPlanOptimizerTest.EnforcesItsFixedPointBound (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter
+[       OK ] LogicalPlanOptimizerTest.PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction
+[       OK ] LogicalPlanOptimizerTest.JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged
+[       OK ] LogicalPlanOptimizerTest.JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable
+[       OK ] LogicalPlanOptimizerTest.JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity
+[       OK ] LogicalPlanOptimizerTest.ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates
+[       OK ] LogicalPlanOptimizerTest.ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.KeepsUnsupportedOrUncostedAnchorsOnOriginalPath
+[       OK ] LogicalPlanOptimizerTest.KeepsUnsupportedOrUncostedAnchorsOnOriginalPath (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof
+[       OK ] LogicalPlanOptimizerTest.KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor
+[       OK ] LogicalPlanOptimizerTest.RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor (0 ms)
+[----------] 31 tests from LogicalPlanOptimizerTest (1 ms total)
+
+[----------] 4 tests from LogicalPlanBuilderFlagsTest
+[ RUN      ] LogicalPlanBuilderFlagsTest.InitialState
+[       OK ] LogicalPlanBuilderFlagsTest.InitialState (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkDataMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkDataMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkBothMutations
+[       OK ] LogicalPlanBuilderFlagsTest.MarkBothMutations (0 ms)
+[----------] 4 tests from LogicalPlanBuilderFlagsTest (0 ms total)
+
+[----------] 45 tests from LogicalPlanBuilderCoverageTest
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity
+[       OK ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithAggregates
+[       OK ] LogicalPlanBuilderCoverageTest.WithAggregates (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithReturnStar
+[       OK ] LogicalPlanBuilderCoverageTest.WithReturnStar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithWhereFilter
+[       OK ] LogicalPlanBuilderCoverageTest.WithWhereFilter (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.WithNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithDistinct
+[       OK ] LogicalPlanBuilderCoverageTest.WithDistinct (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns
+[       OK ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithWhere
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithWhere (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithDefaultType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithDefaultType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.SetNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemovePropertyType
+[       OK ] LogicalPlanBuilderCoverageTest.RemovePropertyType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeSingleNode
+[       OK ] LogicalPlanBuilderCoverageTest.MergeSingleNode (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithExpression
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithExpression (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithoutYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithoutYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexComposite
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexComposite (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexSingle
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexSingle (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar
+[       OK ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars (0 ms)
+[----------] 45 tests from LogicalPlanBuilderCoverageTest (0 ms total)
+
+[----------] 23 tests from LogicalGraphPropertyPatchTest
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt
+[       OK ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit
+[       OK ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission
+[       OK ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues
+[       OK ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback
+[       OK ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement
+[       OK ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList
+[       OK ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges
+[       OK ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging
+[       OK ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets
+[       OK ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch
+[       OK ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder
+[       OK ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds
+[       OK ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement
+[       OK ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary
+[       OK ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether
+[       OK ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission
+[       OK ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission (0 ms)
+[----------] 23 tests from LogicalGraphPropertyPatchTest (1 ms total)
+
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating
+[       OK ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft
+[       OK ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo
+[       OK ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges
+[       OK ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop
+[       OK ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners
+[       OK ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners (1 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity
+[       OK ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback
+[       OK ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback (0 ms)
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest (2 ms total)
+
+[----------] Global test environment tear-down
+[==========] 714 tests from 59 test suites ran. (77 ms total)
+[  PASSED  ] 714 tests.

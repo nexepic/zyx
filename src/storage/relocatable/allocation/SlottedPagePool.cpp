@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 
 #include <tuple>
@@ -176,7 +177,8 @@ namespace graph::storage {
 	SlottedPage SlottedPagePool::read(const MetadataSnapshotPin &snapshot, PageId pageId,
 									  BufferPoolReadHint hint) const {
 		const SharedPagePoolContents contents = pool_.read(snapshot, pageId, hint);
-		SlottedPage page = SlottedPage::open(contents.owner, contents.payload);
+		SlottedPage page = SlottedPage::open(contents.owner, contents.payload,
+			utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		if (contents.location.free_bytes != page.stats().contiguous_free_bytes) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable slotted page free-space index disagrees with its page payload");
@@ -558,6 +560,14 @@ namespace graph::storage {
 		invalidateFreeSpaceIndex(segmentId);
 		return released;
 	}
+
+    std::optional<Superblock> SlottedPagePool::tryReleaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
+														LogSequenceNumber checkpointLsn,
+														const MetadataPublishOptions &options) {
+        auto result = pool_.tryReleaseRetiredEmptyPool(segmentId, expectedGeneration, checkpointLsn, options);
+        if (result) invalidateFreeSpaceIndex(segmentId);
+        return result;
+    }
 
 	SlottedPagePool::PoolFreeSpaceIndex SlottedPagePool::buildFreeSpaceIndex(const MetadataSnapshotPin &snapshot,
 																			 SegmentId segmentId) const {

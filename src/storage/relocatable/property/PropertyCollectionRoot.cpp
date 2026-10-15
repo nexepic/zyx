@@ -13,6 +13,8 @@
 #include <limits>
 
 #include "graph/core/Edge.hpp"
+#include "graph/core/PropertyDecodeAllocationScope.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
@@ -174,7 +176,8 @@ namespace graph::storage {
 			}
 			const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET);
 			std::vector<EntityPropertyLargeValueEntryLocation> locations;
-			if (slotsAdmission == nullptr) locations.reserve(entryCount);
+			const bool deferred = slotsAdmission != nullptr || property_decode::AllocationScope::current();
+            if (!deferred) locations.reserve(entryCount);
 			size_t expectedOffset = directoryBytes;
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
@@ -191,7 +194,7 @@ namespace graph::storage {
 					throwRootError(FormatError::FERR_INVALID_HEADER,
 								   "Entity Property LargeValue payload directory is noncanonical");
 				}
-				if (slotsAdmission == nullptr) locations.push_back({token, offset, end - offset});
+				if (!deferred) locations.push_back({token, offset, end - offset});
 				expectedOffset = end;
 				previousToken = token;
 			}
@@ -199,14 +202,15 @@ namespace graph::storage {
 				throwRootError(FormatError::FERR_INVALID_HEADER,
 							   "Entity Property LargeValue payload directory leaves trailing bytes");
 			}
-			if (slotsAdmission != nullptr) {
+			if (deferred) {
 				if (entryCount > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyLargeValueEntryLocation)) {
 					throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue directory slots overflowed");
 				}
-				(*slotsAdmission)(entryCount * sizeof(EntityPropertyLargeValueEntryLocation));
+				if (slotsAdmission) (*slotsAdmission)(entryCount * sizeof(EntityPropertyLargeValueEntryLocation));
+                else detail::admitScopedPropertyVectorGrowth(locations, entryCount);
 				if (cancellation) cancellation->check();
 				locations.reserve(entryCount);
-				(*slotsAdmission)(locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation));
+				if (slotsAdmission) (*slotsAdmission)(locations.capacity() * sizeof(EntityPropertyLargeValueEntryLocation));
 				if (cancellation) cancellation->check();
 				for (uint32_t index = 0U; index < entryCount; ++index) {
 					if (cancellation) cancellation->check();
@@ -325,16 +329,18 @@ namespace graph::storage {
 			// Authenticate the entire token sequence before a resource rejection
 			// can hide a later malformed token. Admission is collection-wide and
 			// precedes reserve and all canonical variable-value decoding.
-			if (admission != nullptr || slotsAdmission != nullptr) {
+            if (admission != nullptr || slotsAdmission != nullptr || property_decode::AllocationScope::current()) {
 				uint32_t validatedToken = 0U;
-				for (uint32_t index = 0U; index < entryCount; ++index) {
-					const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
-					const uint32_t token = LittleEndianCodec::readU32(payload, start);
+                for (uint32_t index = 0U; index < entryCount; ++index) {
+                    if ((index & 255U) == 0U)
+                        if (auto *scope = property_decode::AllocationScope::current()) scope->checkpoint();
+                    const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
+                    const uint32_t token = LittleEndianCodec::readU32(payload, start);
 					if (token == 0U || token <= validatedToken) throwRootError(FormatError::FERR_INVALID_HEADER,
 						"relocatable Property collection root tokens are not strictly ordered");
 					validatedToken = token;
 				}
-				for (uint32_t index = 0U; index < entryCount; ++index) {
+				if (admission != nullptr) for (uint32_t index = 0U; index < entryCount; ++index) {
 					const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
 					if (admission != nullptr) (*admission)(end - start);
 				}
@@ -342,8 +348,9 @@ namespace graph::storage {
 			if (entryCount > std::numeric_limits<size_t>::max() / sizeof(PropertyCollectionRootEntry)) {
 				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property root slot size overflowed");
 			}
-			if (slotsAdmission != nullptr) (*slotsAdmission)(entryCount * sizeof(PropertyCollectionRootEntry));
-			root.entries.reserve(entryCount);
+            if (slotsAdmission != nullptr) (*slotsAdmission)(entryCount * sizeof(PropertyCollectionRootEntry));
+            else detail::admitScopedPropertyVectorGrowth(root.entries, entryCount);
+            root.entries.reserve(entryCount);
 			if (slotsAdmission != nullptr) (*slotsAdmission)(root.entries.capacity() * sizeof(PropertyCollectionRootEntry));
 			uint32_t previousToken = 0U;
 			for (uint32_t index = 0U; index < entryCount; ++index) {
@@ -655,6 +662,7 @@ namespace graph::storage {
 				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue Property slot size overflowed");
 		}
 		if (slotsAdmission != nullptr) (*slotsAdmission)(directoryBytes + locations.size() * sizeof(PropertyCollectionRootEntry));
+        if (!slotsAdmission) detail::admitScopedPropertyVectorGrowth(result, locations.size());
 		result.reserve(locations.size());
 		if (result.capacity() > (std::numeric_limits<size_t>::max() - directoryBytes) / sizeof(PropertyCollectionRootEntry)) {
 			throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue retained directory and Property slots overflowed");

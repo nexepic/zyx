@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
@@ -1046,4 +1047,32 @@ TEST_F(RelocatableSlottedPagePoolTest, RejectsOrExactlyRoundTripsEverySingleBitP
 			}
 		}
 	}
+}
+
+TEST_F(RelocatableSlottedPagePoolTest, SharedReadPayloadKeepsTheSnapshotAllocationGrantAfterMetadataCloses) {
+    using namespace graph::query::execution::detail;
+    constexpr size_t maximum = 2U * 1024U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+    auto domain = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+    auto memory = std::make_shared<PrepaidMemoryResource>(
+        std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_CACHE, maximum), maximum);
+    std::weak_ptr<PrepaidMemoryResource> weak = memory;
+    std::optional<SharedPagePoolContents> escaped;
+    {
+        auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U), memory);
+        SlottedPagePool pool(io, *metadata);
+        auto allocation = pool.allocateEmptyPage(request(51U, 101U), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U));
+        ASSERT_TRUE(allocation.has_value());
+        auto snapshot = metadata->openSnapshot();
+        SharedPagePoolAllocator shared(io, *metadata);
+        escaped.emplace(shared.read(snapshot, PageId(101U)));
+        EXPECT_EQ(escaped->payload.get_allocator().owner(), memory);
+        EXPECT_GE(memory->used(), escaped->payload.capacity());
+    }
+    EXPECT_EQ(memory->used(), escaped->payload.capacity());
+    memory.reset();
+    EXPECT_FALSE(weak.expired());
+    EXPECT_EQ(SlottedPage::open(escaped->owner, escaped->payload).pageId(), PageId(101U));
+    escaped.reset();
+    EXPECT_TRUE(weak.expired());
 }

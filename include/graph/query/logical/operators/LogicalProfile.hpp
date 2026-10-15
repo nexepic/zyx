@@ -30,6 +30,10 @@ public:
 		return {};
 	}
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		return {};
+	}
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalProfile>(innerPlan_ ? innerPlan_->clone() : nullptr);
 	}

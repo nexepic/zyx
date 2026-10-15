@@ -160,13 +160,15 @@ namespace graph::storage {
 		RelocatableMaintenanceFailureHandler failureHandler, std::function<bool()> writeAllowed,
 		RelocatableVectorRebuildExecutor vectorRebuild,
 		RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner,
-		RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner) :
+		RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner,
+        std::function<std::unique_ptr<RelocatableMaintenanceWorkspace>()> workspaceFactory) :
 		options_(validatedOptions(std::move(options))), pages_(pages), large_values_(largeValues), metadata_(metadata),
 			entities_(entities),
 			publication_mutex_(publicationMutex),
 			write_allowed_(std::move(writeAllowed)), vector_rebuild_(std::move(vectorRebuild)),
 			vector_rebuild_debt_scanner_(std::move(vectorRebuildDebtScanner)),
 			global_adjacency_pool_reclaim_candidate_scanner_(std::move(globalAdjacencyPoolReclaimCandidateScanner)),
+		workspace_factory_(std::move(workspaceFactory)),
 		property_coordinator_(pages, metadata),
 		entity_coordinator_(pages, entities, metadata),
 		btree_coordinator_(pages, btreePages, metadata), vector_coordinator_(pages, vectorPages, metadata),
@@ -205,6 +207,12 @@ namespace graph::storage {
 				}),
 		segment_scheduler_(metadata), loop_(options_.loop, std::move(failureHandler)) {}
 
+    RelocatableMaintenanceService::~RelocatableMaintenanceService() {
+        // Join before any counters, coordinators or captured workspace factory
+        // are destroyed; the worker can access all of them until it stops.
+        try { loop_.stop(); } catch (...) { std::terminate(); }
+    }
+
 	void RelocatableMaintenanceService::start() { loop_.start(); }
 
 	void RelocatableMaintenanceService::pause() { loop_.pause(); }
@@ -234,6 +242,9 @@ namespace graph::storage {
 		const LargeValueMaintenanceJournalStoreOptions journalOptions = largeValueJournalOptions(options);
 		const uint64_t reservedBytes = largeValueReclamationReservation(options, options_.loop);
 		return loop_.submit(reservedBytes, [this, options, journalOptions, reservedBytes] {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			ensureWritesAllowed();
 			std::lock_guard publicationLock(publication_mutex_);
 			ensureWritesAllowed();
@@ -320,6 +331,9 @@ namespace graph::storage {
 		}
 		auto state = std::make_shared<GlobalAdjacencyPoolReclaimTaskState>();
 		return loop_.submit(RSS_SEGMENT_SIZE, [this, state] {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			ensureWritesAllowed();
 			std::lock_guard publicationLock(publication_mutex_);
 			ensureWritesAllowed();
@@ -390,6 +404,9 @@ namespace graph::storage {
 		auto state = std::make_shared<PageTaskState>();
 		state->request = {source, destination, pageBudget, {}};
 		return loop_.submit(reservedBytes, [this, state, taskBudget, &scheduler, &coordinator]() {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			RelocatableMaintenanceTaskResult result;
 			ensureWritesAllowed();
 			{
@@ -437,6 +454,9 @@ namespace graph::storage {
 		auto state = std::make_shared<SegmentTaskState>();
 		return loop_.submit(RSS_SEGMENT_SIZE, [this, state, codebookId, extentId, firstDestination,
 														 lastDestination]() {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			RelocatableMaintenanceTaskResult result;
 			ensureWritesAllowed();
 			{
@@ -486,6 +506,9 @@ namespace graph::storage {
 		const uint64_t reservedBytes = std::max<uint64_t>(RSS_SEGMENT_SIZE,
 				std::min(options_.loop.maximum_rewrite_bytes_per_cycle, options_.loop.maximum_outstanding_rewrite_bytes));
 		return loop_.submit(reservedBytes, [this, indexId]() {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			ensureWritesAllowed();
 			std::lock_guard publicationLock(publication_mutex_);
 			ensureWritesAllowed();
@@ -508,6 +531,9 @@ namespace graph::storage {
 				std::min(options_.loop.maximum_rewrite_bytes_per_cycle, options_.loop.maximum_outstanding_rewrite_bytes));
 		auto state = std::make_shared<VectorRebuildRecoveryState>();
 		return loop_.submit(reservedBytes, [this, state]() {
+            auto workspace = workspace_factory_ ? workspace_factory_() : nullptr;
+            if (workspace_factory_ && !workspace)
+                return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
 			ensureWritesAllowed();
 			const RelocatableVectorRebuildDebtScan scan = vector_rebuild_debt_scanner_(
 					state->vector_after_index_id, options_.vector_rebuild_recovery_metadata_pages_per_cycle);

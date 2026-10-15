@@ -10,7 +10,7 @@
 
 #include <array>
 #include <limits>
-#include <set>
+#include <algorithm>
 #include <string_view>
 
 namespace graph::storage {
@@ -61,7 +61,8 @@ namespace graph::storage {
 			}
 		}
 
-		void validateDefinition(const ConstraintDefinition &definition) {
+		template<class Definition>
+        void validateDefinition(const Definition &definition) {
 			if (!isNativeConstraintId(definition.constraint_id) || definition.schema_token_id == 0U ||
 				!isKnownEntityKind(definition.entity_kind) || !isKnownConstraintKind(definition.kind) ||
 				!isKnownPropertyType(definition.property_type)) {
@@ -74,14 +75,17 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable constraint definition exceeds the supported Property-key component count");
 			}
-			std::set<std::string, std::less<>> uniqueNames;
-			for (const std::string &property: definition.property_names) {
+			std::array<std::string_view, RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES> uniqueNames{};
+            size_t uniqueCount = 0U;
+			for (const std::string_view property: definition.property_names) {
 				validateByteString(property, RSS_CONSTRAINT_DEFINITION_MAX_PROPERTY_NAME_BYTES,
 							   "relocatable constraint definition Property name is empty or exceeds its byte bound");
-				if (!uniqueNames.insert(property).second) {
+				if (std::find(uniqueNames.begin(), uniqueNames.begin() + uniqueCount, property) !=
+                    uniqueNames.begin() + uniqueCount) {
 					fail(FormatError::FERR_INVALID_HEADER,
 						 "relocatable constraint definition repeats a Property-key component");
 				}
+                uniqueNames[uniqueCount++] = property;
 			}
 			const bool oneProperty = definition.property_names.size() == 1U;
 			const uint8_t invalidContract =
@@ -115,7 +119,7 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::string readString(std::span<const std::byte> payload, size_t &offset, size_t length,
+		[[nodiscard]] std::string_view readString(std::span<const std::byte> payload, size_t &offset, size_t length,
 												const char *message) {
 			if (length > payload.size() - offset) {
 				fail(FormatError::FERR_BUFFER_TOO_SMALL, message);
@@ -187,16 +191,25 @@ namespace graph::storage {
 				 "relocatable constraint definition variable lengths exceed configured bounds");
 		}
 
-		ConstraintDefinition definition;
-		definition.constraint_id = LittleEndianCodec::readU64(bytes, CONSTRAINT_ID_OFFSET);
-		definition.schema_token_id = LittleEndianCodec::readU64(bytes, SCHEMA_TOKEN_ID_OFFSET);
-		definition.entity_kind = static_cast<ConstraintDefinitionEntityKind>(bytes[ENTITY_KIND_OFFSET]);
-		definition.kind = static_cast<ConstraintDefinitionKind>(bytes[CONSTRAINT_KIND_OFFSET]);
-		definition.property_type = static_cast<ConstraintDefinitionPropertyType>(bytes[PROPERTY_TYPE_OFFSET]);
+		struct BorrowedDefinition {
+            uint64_t constraint_id{};
+            std::string_view name;
+            ConstraintDefinitionEntityKind entity_kind{};
+            ConstraintDefinitionKind kind{};
+            uint64_t schema_token_id{};
+            std::span<const std::string_view> property_names;
+            ConstraintDefinitionPropertyType property_type{};
+        } view;
+        std::array<std::string_view, RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES> properties{};
+		view.constraint_id = LittleEndianCodec::readU64(bytes, CONSTRAINT_ID_OFFSET);
+		view.schema_token_id = LittleEndianCodec::readU64(bytes, SCHEMA_TOKEN_ID_OFFSET);
+		view.entity_kind = static_cast<ConstraintDefinitionEntityKind>(bytes[ENTITY_KIND_OFFSET]);
+		view.kind = static_cast<ConstraintDefinitionKind>(bytes[CONSTRAINT_KIND_OFFSET]);
+		view.property_type = static_cast<ConstraintDefinitionPropertyType>(bytes[PROPERTY_TYPE_OFFSET]);
 		const std::span<const std::byte> payload = bytes.subspan(RSS_CONSTRAINT_DEFINITION_HEADER_BYTES);
 		size_t offset = 0U;
-		definition.name = readString(payload, offset, nameBytes, "relocatable constraint definition name is truncated");
-		definition.property_names.reserve(propertyCount);
+		view.name = readString(payload, offset, nameBytes, "relocatable constraint definition name is truncated");
+		view.property_names = std::span<const std::string_view>(properties.data(), propertyCount);
 		for (uint16_t index = 0U; index < propertyCount; ++index) {
 			if (payload.size() - offset < sizeof(uint16_t)) {
 				fail(FormatError::FERR_BUFFER_TOO_SMALL,
@@ -208,13 +221,23 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable constraint definition Property name exceeds its configured byte bound");
 			}
-			definition.property_names.push_back(readString(
-					payload, offset, propertyBytes, "relocatable constraint definition Property name is truncated"));
+			properties[index] = readString(
+					payload, offset, propertyBytes, "relocatable constraint definition Property name is truncated");
 		}
 		if (offset != payload.size()) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable constraint definition payload has trailing bytes");
 		}
-		validateDefinition(definition);
+		validateDefinition(view);
+        ConstraintDefinition definition;
+        definition.constraint_id = view.constraint_id;
+        definition.name = view.name;
+        definition.entity_kind = view.entity_kind;
+        definition.kind = view.kind;
+        definition.schema_token_id = view.schema_token_id;
+        definition.property_type = view.property_type;
+        definition.property_names.reserve(propertyCount);
+        for (size_t index = 0U; index < propertyCount; ++index)
+            definition.property_names.emplace_back(properties[index]);
 		return definition;
 	}
 

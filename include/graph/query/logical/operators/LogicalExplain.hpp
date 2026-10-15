@@ -30,6 +30,10 @@ public:
 		return {"operator", "details"};
 	}
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars; vars.emplace_back("operator"); vars.emplace_back("details"); return vars;
+    }
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalExplain>(innerPlan_ ? innerPlan_->clone() : nullptr);
 	}

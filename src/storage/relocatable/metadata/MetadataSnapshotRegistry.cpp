@@ -15,6 +15,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
@@ -38,11 +39,16 @@ namespace graph::storage {
 		mutable std::mutex snapshots_mutex;
 		SuperblockFile *bootstrap = nullptr;
 		MetadataSnapshotRegistryLimits limits;
-		std::map<uint64_t, std::pair<Superblock, uint64_t>> snapshots;
+		std::shared_ptr<std::pmr::memory_resource> memory_owner;
+        std::shared_ptr<std::pmr::memory_resource> control_owner;
+        std::pmr::map<uint64_t, std::pair<Superblock, uint64_t>> snapshots;
 
 		MetadataSnapshotRegistryState(SuperblockFile &configuredBootstrap,
-									  MetadataSnapshotRegistryLimits configuredLimits) :
-			bootstrap(&configuredBootstrap), limits(configuredLimits) {}
+									  MetadataSnapshotRegistryLimits configuredLimits,
+                                      std::shared_ptr<std::pmr::memory_resource> memoryOwner,
+                                      std::shared_ptr<std::pmr::memory_resource> controlOwner) :
+            bootstrap(&configuredBootstrap), limits(configuredLimits), memory_owner(std::move(memoryOwner)), control_owner(controlOwner ? std::move(controlOwner) : memory_owner),
+            snapshots(control_owner ? control_owner.get() : std::pmr::get_default_resource()) {}
 	};
 
 	namespace {
@@ -56,9 +62,9 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::vector<Superblock> activeSuperblocks(const MetadataSnapshotRegistryState &state) {
+		[[nodiscard]] std::pmr::vector<Superblock> activeSuperblocks(const MetadataSnapshotRegistryState &state) {
 			std::lock_guard lock(state.snapshots_mutex);
-			std::vector<Superblock> activeSnapshots;
+			std::pmr::vector<Superblock> activeSnapshots(state.control_owner ? state.control_owner.get() : std::pmr::get_default_resource());
 			activeSnapshots.reserve(state.snapshots.size());
 			for (const auto &[generation, snapshot]: state.snapshots) {
 				static_cast<void>(generation);
@@ -112,8 +118,11 @@ namespace graph::storage {
 	}
 
 	MetadataSnapshotRegistry::MetadataSnapshotRegistry(SuperblockFile &bootstrap,
-													   MetadataSnapshotRegistryLimits limits) :
-		state_(std::make_shared<MetadataSnapshotRegistryState>(bootstrap, limits)) {
+													   MetadataSnapshotRegistryLimits limits,
+                                                       std::shared_ptr<std::pmr::memory_resource> memoryOwner,
+                                                       std::shared_ptr<std::pmr::memory_resource> controlOwner) :
+        state_(std::allocate_shared<MetadataSnapshotRegistryState>(
+            utils::OwnedPmrAllocator<MetadataSnapshotRegistryState>(controlOwner ? controlOwner : memoryOwner), bootstrap, limits, memoryOwner, controlOwner)) {
 		if (limits.maximum_pins_per_generation == 0U) {
 			throw std::invalid_argument("relocatable metadata snapshot registry needs a positive per-generation pin limit");
 		}
@@ -126,7 +135,7 @@ namespace graph::storage {
 		const Superblock snapshot = state_->bootstrap->recover();
 		static_cast<void>(SuperblockCodec::encode(snapshot));
 		// Allocate before registration so an allocation failure cannot leak a pin.
-		auto readContext = std::make_shared<MetadataPageReadContext>(snapshot);
+		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), snapshot, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{
 			std::lock_guard snapshotsLock(state_->snapshots_mutex);
 			auto [position, inserted] =
@@ -155,7 +164,7 @@ namespace graph::storage {
 		}
 		static_cast<void>(SuperblockCodec::encode(current));
 		// Allocate before registration so an allocation failure cannot leak a pin.
-		auto readContext = std::make_shared<MetadataPageReadContext>(current);
+		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), current, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{
 			std::lock_guard snapshotsLock(state_->snapshots_mutex);
 			auto [position, inserted] =

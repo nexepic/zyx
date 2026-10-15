@@ -4,7 +4,7 @@
 namespace graph::query::expressions {
 
 ListComprehensionExpression::ListComprehensionExpression(
-		std::string variable,
+		utils::OwnedStdString variable,
 		std::unique_ptr<Expression> listExpr,
 		std::unique_ptr<Expression> whereExpr,
 		std::unique_ptr<Expression> mapExpr,

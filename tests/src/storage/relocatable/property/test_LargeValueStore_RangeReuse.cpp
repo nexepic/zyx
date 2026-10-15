@@ -5,6 +5,7 @@
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include <array>
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
 namespace {
 LargeValueWriteOptions options(LargeValueCodec codec = LargeValueCodec::LVC_RAW) {
@@ -152,4 +153,51 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueRangeReuseKeepsChildValidationAnd
  auto current = metadata->openSnapshot();
  const auto nextRoot = store.manifest(current, second.reference);
  EXPECT_EQ(store.readRangeFromManifestCached(current, nextRoot, 0, 16, cache), slice(next, 0, 16));
+}
+
+TEST_F(RelocatableMetadataStoreTest, PrivateChunkCacheRetainsItsAllocationOwnerAfterDecodeScopeEnds) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+ LargeValueStore store(io, *metadata);
+ const std::vector<std::byte> input(8192U, std::byte{0x59});
+ const auto written = store.write(input, options(), LogSequenceNumber(2));
+ auto snapshot = metadata->openSnapshot();
+ const auto manifest = store.manifest(snapshot, written.reference);
+ LargeValueStore::RangeReadCache cache;
+ auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(262144U);
+ {
+  graph::storage::detail::PropertyDecodeWorkspace workspace(budget);
+  const auto result = store.readRangeFromManifestCached(snapshot, manifest, 0U, 16U, cache);
+  EXPECT_EQ(result, slice(input, 0U, 16U));
+  EXPECT_GE(budget->used(), result.capacity() + cache.retainedBytes());
+ }
+ EXPECT_EQ(budget->used(), cache.retainedBytes());
+ EXPECT_EQ(cache.retainedBytes(), input.size());
+ cache.clear();
+ EXPECT_EQ(budget->used(), 0U);
+ auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(8U);
+ {
+  graph::storage::detail::PropertyDecodeWorkspace workspace(small);
+  EXPECT_THROW(static_cast<void>(store.readRangeFromManifestCached(snapshot, manifest, 0U, 16U, cache)),
+   graph::query::execution::MaterializedByteLimitExceeded);
+ }
+ EXPECT_EQ(small->used(), 0U); EXPECT_EQ(cache.retainedBytes(), 0U);
+ EXPECT_EQ(store.readRangeFromManifestCached(snapshot, manifest, 0U, 16U, cache), slice(input, 0U, 16U));
+}
+
+TEST_F(RelocatableMetadataStoreTest, PrivateSequentialChunkWorkspaceDoesNotAccumulateReleasedChunkBuffers) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+ LargeValueStore store(io, *metadata);
+ const std::vector<std::byte> input(100000U, std::byte{0x59});
+ const auto written = store.write(input, options(), LogSequenceNumber(2));
+ auto snapshot = metadata->openSnapshot();
+ const auto manifest = store.manifest(snapshot, written.reference);
+ ASSERT_GT(manifest.chunks.size(), 4U);
+ auto budget = std::make_shared<graph::query::execution::MaterializedByteBudget>(163840U);
+ {
+  graph::storage::detail::PropertyDecodeWorkspace workspace(budget);
+  const auto result = store.readRangeFromManifest(snapshot, manifest, 0U, input.size());
+  EXPECT_EQ(result, input);
+  EXPECT_EQ(budget->used(), result.capacity());
+ }
+ EXPECT_EQ(budget->used(), 0U);
 }

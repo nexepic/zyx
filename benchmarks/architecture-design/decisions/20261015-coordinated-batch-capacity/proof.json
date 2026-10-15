@@ -1,0 +1,27 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 678,
+  "selected_suites": 28,
+  "failures": 0,
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "include/graph/query/execution/BoundedBatch.hpp": "372496a20e02574b4d7df99eebaf6a2daa0ed9499920e697fb3bad1fa8f466f0",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "cd068686b7f41f5d31d45b6688554c0b5b20561a4895c32fd03a6e130a2a291b",
+    "tests/src/query/execution/test_BoundedBatch.cpp": "785bc4f4638e865cb46fd19f53da5d54be33c995de172d1878fd6fa7e1b12058",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "2478e3d566463e6a147c822f32e6221e0b9b3a2d999d3dda88d0ea195b51f906",
+    "tests/src/query/execution/test_LogicalGraphReadExecutor.cpp": "b9fd971b6eaefc5f3694a2b45e7769a16a516c127ecaf723f91c22dc328be086",
+    "tests/include/query/execution/LogicalGraphReadExecutorTestFixture.hpp": "d63ecd25381cee3e0d32300c1849062d241f9a38610b93d810ac7cdd40d6b66b"
+  },
+  "archive_sha256": "e4c11382e4b123df117681d892910a3006b738f0c0d40d5fbb04fa57c5d1b0be",
+  "remaining": [
+    "property-prefetch row storage and temporary workspaces",
+    "plan/write/undo/overlay/maintenance complete ownership",
+    "pinned-snapshot backlog admission",
+    "partitioned hash/aggregate",
+    "complete long-run/fault acceptance and final-source affected regressions"
+  ]
+}

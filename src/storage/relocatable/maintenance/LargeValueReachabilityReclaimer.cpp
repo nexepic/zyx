@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+
 #include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
 
 #include <algorithm>
@@ -16,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -27,10 +30,15 @@
 namespace graph::storage {
 
 	namespace {
+        template<class Key, class Value>
+        using WorkMap = std::map<Key, Value, std::less<Key>, utils::OwnedPmrAllocator<std::pair<const Key, Value>>>;
+        template<class Key>
+        using WorkSet = std::set<Key, std::less<Key>, utils::OwnedPmrAllocator<Key>>;
+
 
 		struct ScannedValue {
 			LargeValueManifest manifest;
-			std::vector<PageRetirement> retirements;
+			utils::OwnedVector<PageRetirement> retirements;
 			size_t manifest_page_count = 0U;
 		};
 
@@ -75,8 +83,8 @@ namespace graph::storage {
 
 		class ReachabilitySink final : public LargeValueOwnershipScanSink {
 		public:
-			ReachabilitySink(const std::map<uint64_t, ScannedValue> &reclaimableValues,
-							 std::set<uint64_t> &reachableValues) :
+			ReachabilitySink(const WorkMap<uint64_t, ScannedValue> &reclaimableValues,
+							 WorkSet<uint64_t> &reachableValues) :
 				reclaimable_values_(reclaimableValues), reachable_values_(reachableValues) {}
 
 			void setExpectedMediaType(std::string_view mediaType) { expected_media_type_ = mediaType; }
@@ -92,8 +100,8 @@ namespace graph::storage {
 			}
 
 		private:
-			const std::map<uint64_t, ScannedValue> &reclaimable_values_;
-			std::set<uint64_t> &reachable_values_;
+			const WorkMap<uint64_t, ScannedValue> &reclaimable_values_;
+			WorkSet<uint64_t> &reachable_values_;
 			std::string_view expected_media_type_;
 		};
 
@@ -117,7 +125,8 @@ namespace graph::storage {
 					if (progress.locations_scanned == maximumLocations) {
 						return false;
 					}
-					const SlottedPage page = property_pages_.read(snapshot, location.page_id);
+					detail::PropertyDecodeWorkspace propertyWorkspace(utils::OwnedAllocationScope::owner());
+                    const SlottedPage page = property_pages_.read(snapshot, location.page_id);
 					const std::vector<std::byte> bytes =
 							page.read({location.page_id, location.slot_id, location.slot_generation});
 					if (!EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
@@ -269,7 +278,7 @@ namespace graph::storage {
 				break;
 		}
 
-		std::map<uint64_t, ScannedValue> candidates;
+		WorkMap<uint64_t, ScannedValue> candidates;
 		for (const LargeValueId valueId: journal.candidate_value_ids) {
 			const LargeValueManifest manifest = values_.manifest(snapshot, valueId);
 			if (!scanners_.contains(manifest.media_type)) { // journal candidates are emitted only by the registered scanner set.
@@ -283,7 +292,7 @@ namespace graph::storage {
 					 "LargeValue maintenance journal contains duplicate candidate identities");
 			}
 		}
-		std::set<uint64_t> reachable;
+		WorkSet<uint64_t> reachable;
 		for (const LargeValueId valueId: journal.reachable_value_ids) {
 			if (!candidates.contains(valueId.value())) { // reachable IDs are persisted only from the candidate set.
 				fail(FormatError::FERR_INVALID_STATE,
@@ -368,13 +377,13 @@ namespace graph::storage {
 
 		LargeValueReachabilityReclaimReport report;
 		report.scanned_generation = snapshot.superblock().generation;
-		std::map<uint64_t, ScannedValue> reclaimableValues;
-		std::set<uint64_t> reachableValues;
-		std::set<uint64_t> observedPages;
-		std::map<uint64_t, std::set<uint64_t>> retiredPageIdsBySegment;
-		std::map<uint64_t, CatalogEntry> frameReclaimPools;
-		std::map<uint64_t, CatalogEntry> sealedPoolCandidates;
-		std::map<uint64_t, CatalogEntry> retiredPoolCandidates;
+		WorkMap<uint64_t, ScannedValue> reclaimableValues;
+		WorkSet<uint64_t> reachableValues;
+		WorkSet<uint64_t> observedPages;
+		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
+		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
+		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 		try {
 			for (const LargeValueId valueId: journal.candidate_value_ids) {
 				const LargeValueManifest manifest = values_.manifest(snapshot, valueId);
@@ -505,8 +514,8 @@ namespace graph::storage {
 			throw;
 		}
 
-		std::vector<LargeValueId> erasedValueIds;
-		std::vector<PageRetirement> retirements;
+		utils::OwnedVector<LargeValueId> erasedValueIds;
+		utils::OwnedVector<PageRetirement> retirements;
 		for (const auto &[valueId, scanned]: reclaimableValues) {
 			if (reachableValues.contains(valueId)) {
 				++report.reachable_values;
@@ -522,7 +531,7 @@ namespace graph::storage {
 			report.retired_manifest_pages += scanned.manifest_page_count;
 			report.retired_data_pages += scanned.retirements.size() - scanned.manifest_page_count;
 		}
-		std::vector<CatalogEntry> sealedPools;
+		utils::OwnedVector<CatalogEntry> sealedPools;
 		sealedPools.reserve(sealedPoolCandidates.size());
 		for (const auto &[segmentId, pool]: sealedPoolCandidates) {
 			static_cast<void>(segmentId);
@@ -589,13 +598,13 @@ namespace graph::storage {
 											 const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		LargeValueReachabilityReclaimReport report;
-		std::map<uint64_t, ScannedValue> reclaimableValues;
-		std::set<uint64_t> reachableValues;
-		std::set<uint64_t> observedPages;
-		std::map<uint64_t, std::set<uint64_t>> retiredPageIdsBySegment;
-		std::map<uint64_t, CatalogEntry> frameReclaimPools;
-		std::map<uint64_t, CatalogEntry> sealedPoolCandidates;
-		std::map<uint64_t, CatalogEntry> retiredPoolCandidates;
+		WorkMap<uint64_t, ScannedValue> reclaimableValues;
+		WorkSet<uint64_t> reachableValues;
+		WorkSet<uint64_t> observedPages;
+		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
+		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
+		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
@@ -750,8 +759,8 @@ namespace graph::storage {
 			throw;
 		}
 
-		std::vector<LargeValueId> erasedValueIds;
-		std::vector<PageRetirement> retirements;
+		utils::OwnedVector<LargeValueId> erasedValueIds;
+		utils::OwnedVector<PageRetirement> retirements;
 		for (const auto &[valueId, scanned]: reclaimableValues) {
 			if (reachableValues.contains(valueId)) {
 				++report.reachable_values;
@@ -769,7 +778,7 @@ namespace graph::storage {
 			report.retired_manifest_pages += scanned.manifest_page_count;
 			report.retired_data_pages += scanned.retirements.size() - scanned.manifest_page_count;
 		}
-		std::vector<CatalogEntry> sealedPools;
+		utils::OwnedVector<CatalogEntry> sealedPools;
 		sealedPools.reserve(sealedPoolCandidates.size());
 		for (const auto &[segmentId, pool]: sealedPoolCandidates) {
 			static_cast<void>(segmentId);

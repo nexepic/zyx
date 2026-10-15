@@ -1,0 +1,52 @@
+{
+  "status": "implementation_checkpoint_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "module_tests": {
+    "foundation": 25,
+    "read_output_stage": 116,
+    "native_domain_stage": 146,
+    "failures": 0,
+    "full_suite": false,
+    "native_domain_suites": 15
+  },
+  "performance": "only_before_campaign_complete; no after claim; final window after all optimization implementations",
+  "remaining": [
+    "cache/write/maintenance/code-owner attribution and all capacity audit",
+    "bounded retirement backlog and progress under old snapshots",
+    "partitionable hash join and aggregation",
+    "complete resource/scratch fault and long-run acceptance",
+    "final-source module matrix and final performance admission"
+  ],
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "cc07b91945bbfcdc76e7e234f462cb305ebcaef4eec0095079c17c0d92459b7d",
+    "include/graph/query/QueryContext.hpp": "26fb7671387ee4b76c2663c101aaa9d224dc28629117cd75f8bae2a0298fe6cb",
+    "include/graph/query/api/QueryResult.hpp": "23a3d4f7c2140a54bd2e4af4f6fe38334053d1b2b3d5efe31f7b3e79f134dbc2",
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/MaterializedByteBudget.hpp": "ce29753866ff9bef1ad7782c01a1b604b2682d363e246b67eabc6d5afc4d11de",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "src/query/execution/ResourceCoordinator.hpp": "ab05f53596f715e93812cfc52bfd8ef01a7bf0ca0213cffdd0d4e701d2cbfb97",
+    "src/query/execution/ProcessResourceDomains.hpp": "bbaf43acdd2c95a7e3cb4d3cec61206d59def079d238feeafb6917c22b4235a5",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "313b1920fa7f76612c1db0525762ad618b0fdeec9aade27d4b8ce7222283506a",
+    "src/query/api/QueryEngine.cpp": "8fb4bdcdcaa7621cdf929fa1ece1cf1da1e8f9d6df9b71e6212b2f09666b936d",
+    "include/graph/storage/LogicalGraphRead.hpp": "85e724d5b11c3a45b5451f3e41b0cac79179d311dc9737bfe337e414616614ce",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "73d65316d7d5a79e0840fb63acc8c13e659ae8b7e1ecc42417e3fcbf0e3430cb",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "bfdbf15d0d2832f5eae52278f1f91b53e5e68f33dcb053d7417e8a3bb30c4ba7",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "a508ad9036feb8204e86d8ca06fd0d781eac06e2664fffef0de42079921203dc",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "944018a38e17f65ca0e1767b43aa8cf0156b2ee3a07797d4c05847115e924f0b",
+    "tests/src/query/execution/test_LogicalGraphReadExecutor_RuntimeContracts.cpp": "19a301eadd3287616ae51fd80f93467ec1ce12b8ff08e0c0df1c375891933b1f",
+    "tests/src/query/execution/test_MaterializedReservationEmbedded.cpp": "b8c88c18f9c6c65f78efad52f748fe8c5fb99b627749bbedf17c594fd2b86ea2"
+  },
+  "evidence_sha256": {
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-global-output-regression.log": "ffe398d55379183de6fe94b8b50171b77be5c7b55a93b2ecadd696a337b89f32",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-global-output-regression-tests.xml": "ca2e02ae73f1f775e8a3540656904e9dd96f4222cc3ca340521a13f1022781b9",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-native-resource-regression.log": "2aead1450336ebd87adfeecc25f438c823731551f4d6edbabe56f986b4a00735",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-global-output-regression.py": "97442a2be7d48fe0475a41b1c8bf11b6daa24cace7cc56646f06905b49c890b4",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-coordinated-materialization-tests.log": "4eba84f53df3c474f28dddb637caf1ff84c26db75032640adab8a30e2165a17d",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/link-command.txt": "4fcee63ce1d066dda225cb11dff841775aa7e0ce78de667341fa2888255cf5bb",
+    "benchmarks/architecture-design/results/20261015-native-query-resource-ownership/zyx-coordinated-materialization-tests.xml": "d652f7055cf2f88aec2f56b2c90194f47291e02ee3460f84e0e6445d89507c13"
+  }
+}

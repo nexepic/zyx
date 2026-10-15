@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "result-column-copy-admission",
+      "shape_cases": 3,
+      "rejected_payload_allocations": 0,
+      "accepted_payload_allocations": 1,
+      "passed": true
+    },
+    {
+      "mode": "owned-plan-heap-accounting",
+      "shape_cases": 10,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-string-containers-heap-accounting",
+      "shape_cases": 7,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-property-heap-accounting",
+      "shape_cases": 10,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-expression-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-std-string-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "allocation_sweeps": {},
+  "crash_recovery": null,
+  "passed": 10,
+  "failures": 0,
+  "full_suite": false
+}

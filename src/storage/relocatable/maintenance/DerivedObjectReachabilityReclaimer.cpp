@@ -13,6 +13,8 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -50,11 +52,11 @@ namespace graph::storage {
 			return manifest.adjacency_mapping_index_id != 0U;
 		}
 
-		[[nodiscard]] std::set<uint64_t>
+		[[nodiscard]] utils::OwnedSet<uint64_t>
 		baseVectorIds(const MetadataSnapshotPin &snapshot, const VectorManifest &manifest,
-					  const std::set<uint64_t> &rawVectorIds, BTreePageStore &trees,
+					  const utils::OwnedSet<uint64_t> &rawVectorIds, BTreePageStore &trees,
 					  RelocatableMetadataStore &metadata, size_t maximumEntries) {
-			std::set<uint64_t> result = rawVectorIds;
+			utils::OwnedSet<uint64_t> result = rawVectorIds;
 			if (manifest.delta_mapping_index_id == 0U) {
 				return result;
 			}
@@ -118,14 +120,14 @@ namespace graph::storage {
 			const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		DerivedObjectReachabilityReclaimReport report;
-		std::vector<DerivedVectorAdjacencyPage> retirementPlan;
-		std::set<SegmentId> affectedPools;
+		utils::OwnedVector<DerivedVectorAdjacencyPage> retirementPlan;
+		utils::OwnedSet<SegmentId> affectedPools;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			report.scanned_generation = snapshot.superblock().generation;
-			std::map<uint64_t, std::set<uint64_t>> rawVectorIdsByIndex;
-			std::map<uint64_t, std::unique_ptr<VectorPage>> rawPages;
+			utils::OwnedMap<uint64_t, utils::OwnedSet<uint64_t>> rawVectorIdsByIndex;
+			utils::OwnedMap<uint64_t, std::unique_ptr<VectorPage>> rawPages;
 			metadata_.visitVectorLocations(snapshot, [&](const VectorLocation &location) {
 				if (report.vector_locations == options.maximum_vector_locations) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -155,7 +157,7 @@ namespace graph::storage {
 				rawVectorIdsByIndex[header.index_id].insert(location.vector_id);
 			});
 
-			std::set<PageId> reachableAdjacencyPages;
+			utils::OwnedSet<PageId> reachableAdjacencyPages;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &manifestLocation) {
 				if (report.vector_manifests == options.maximum_vector_manifests) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -163,7 +165,7 @@ namespace graph::storage {
 				}
 				++report.vector_manifests;
 				const VectorManifest manifest = manifests_.read(snapshot, manifestLocation.index_id).manifest();
-				const std::set<uint64_t> baseIds = baseVectorIds(snapshot, manifest, rawVectorIdsByIndex[manifest.index_id],
+				const utils::OwnedSet<uint64_t> baseIds = baseVectorIds(snapshot, manifest, rawVectorIdsByIndex[manifest.index_id],
 																			 trees_, metadata_, options.maximum_mapping_entries);
 				if (!hasAdjacencyMapping(manifest)) {
 					return;
@@ -266,14 +268,14 @@ namespace graph::storage {
 			const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		DerivedObjectReachabilityReclaimReport report;
-		std::vector<DerivedVectorPqPage> retirementPlan;
-		std::set<SegmentId> affectedPools;
+		utils::OwnedVector<DerivedVectorPqPage> retirementPlan;
+		utils::OwnedSet<SegmentId> affectedPools;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			report.scanned_generation = snapshot.superblock().generation;
-			std::map<uint64_t, std::set<uint64_t>> rawVectorIdsByIndex;
-			std::map<uint64_t, std::unique_ptr<VectorPage>> pages;
+			utils::OwnedMap<uint64_t, utils::OwnedSet<uint64_t>> rawVectorIdsByIndex;
+			utils::OwnedMap<uint64_t, std::unique_ptr<VectorPage>> pages;
 			metadata_.visitVectorLocations(snapshot, [&](const VectorLocation &location) {
 				if (report.vector_locations == options.maximum_vector_locations) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -300,7 +302,7 @@ namespace graph::storage {
 				rawVectorIdsByIndex[header.index_id].insert(location.vector_id);
 			});
 
-			std::set<PageId> reachablePqPages;
+			utils::OwnedSet<PageId> reachablePqPages;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &manifestLocation) {
 				if (report.vector_manifests == options.maximum_vector_manifests) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -308,7 +310,7 @@ namespace graph::storage {
 				}
 				++report.vector_manifests;
 				const VectorManifest manifest = manifests_.read(snapshot, manifestLocation.index_id).manifest();
-				const std::set<uint64_t> baseIds = baseVectorIds(snapshot, manifest, rawVectorIdsByIndex[manifest.index_id],
+				const utils::OwnedSet<uint64_t> baseIds = baseVectorIds(snapshot, manifest, rawVectorIdsByIndex[manifest.index_id],
 																			 trees_, metadata_, options.maximum_mapping_entries);
 				if (manifest.pq_mapping_index_id == 0U) {
 					return;
@@ -399,11 +401,11 @@ namespace graph::storage {
 			const MetadataPublishOptions &publishOptions) {
 		validateMappingTreeOptions(options, checkpointLsn);
 		DerivedObjectReachabilityReclaimReport report;
-		std::map<uint64_t, IndexRootLocation> visibleRoots;
-		std::vector<IndexRootLocation> retirementRoots;
-		std::vector<RetiredIndexTreePage> retirementPages;
-		std::set<SegmentId> affectedPools;
-		std::set<PageId> plannedPages;
+		utils::OwnedMap<uint64_t, IndexRootLocation> visibleRoots;
+		utils::OwnedVector<IndexRootLocation> retirementRoots;
+		utils::OwnedVector<RetiredIndexTreePage> retirementPages;
+		utils::OwnedSet<SegmentId> affectedPools;
+		utils::OwnedSet<PageId> plannedPages;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
@@ -463,8 +465,8 @@ namespace graph::storage {
 			});
 
 			for (const IndexRootLocation &root: retirementRoots) {
-				std::vector<PageId> pending{root.root_page_id};
-				std::set<PageId> visited;
+				utils::OwnedVector<PageId> pending{root.root_page_id};
+				utils::OwnedSet<PageId> visited;
 				while (!pending.empty()) {
 					const PageId pageId = pending.back();
 					pending.pop_back();

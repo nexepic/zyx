@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/PatternDirection.hpp"
@@ -25,23 +26,23 @@ namespace graph::query::expressions {
 class PatternComprehensionExpression : public Expression {
 public:
 	PatternComprehensionExpression(
-		std::string pattern,
-		std::string sourceVar,
-		std::string targetVar,
-		std::string relType,
-		std::string targetLabel,
+		utils::OwnedStdString pattern,
+		utils::OwnedStdString sourceVar,
+		utils::OwnedStdString targetVar,
+		utils::OwnedStdString relType,
+		utils::OwnedStdString targetLabel,
 		PatternDirection direction,
 		std::unique_ptr<Expression> mapExpr,
 		std::unique_ptr<Expression> whereExpr = nullptr,
-		std::string relationshipVar = {}
+		utils::OwnedStdString relationshipVar = {}
 	);
 
 	/**
 	 * @brief Backward-compatible constructor with pattern string only
 	 */
 	PatternComprehensionExpression(
-		std::string pattern,
-		std::string variable,
+		utils::OwnedStdString pattern,
+		utils::OwnedStdString variable,
 		std::unique_ptr<Expression> mapExpr,
 		std::unique_ptr<Expression> whereExpr = nullptr
 	);
@@ -68,12 +69,12 @@ public:
 	[[nodiscard]] bool hasWhereClause() const { return whereExpr_ != nullptr; }
 
 private:
-	std::string pattern_;
-	std::string sourceVar_;
-	std::string targetVar_;
-	std::string relationshipVar_;
-	std::string relType_;
-	std::string targetLabel_;
+	utils::OwnedStdString pattern_;
+	utils::OwnedStdString sourceVar_;
+	utils::OwnedStdString targetVar_;
+	utils::OwnedStdString relationshipVar_;
+	utils::OwnedStdString relType_;
+	utils::OwnedStdString targetLabel_;
 	PatternDirection direction_;
 	std::unique_ptr<Expression> mapExpr_;
 	std::unique_ptr<Expression> whereExpr_;

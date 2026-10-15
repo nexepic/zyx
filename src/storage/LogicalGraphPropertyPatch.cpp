@@ -1,4 +1,8 @@
 #include "graph/storage/LogicalGraphWrite.hpp"
+#include "graph/storage/detail/ScopedMutationCopies.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include <algorithm>
 #include <array>
@@ -40,7 +44,7 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 	if (!fence || !fence->isValid() || !expectedFence.isValid())
 		throw std::invalid_argument("Property patches require a snapshot mutation fence");
 	if (*fence != expectedFence) throw LogicalGraphMutationConflict("Property patch planning fence does not match its source snapshot");
-	std::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
+	utils::OwnedSet<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
 	size_t entries = 0U;
 	size_t persistedTargets = 0U;
 	const auto chargeEntries = [&](size_t count) {
@@ -67,7 +71,7 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 		// their work before copying the companion batch or any source payload.
 		if (createdNode) chargeEntries(companionBatch.node_creates.at(static_cast<size_t>(entity.value)).properties.size());
 		if (createdEdge) chargeEntries(companionBatch.edge_creates.at(static_cast<size_t>(entity.value)).properties.size());
-		std::set<std::string_view> keys;
+		utils::OwnedSet<std::string_view> keys;
 		for (const auto &property : patch.sets) {
 			checkpoint();
 			if (property.key.empty() || property.value.getType() == PropertyType::NULL_TYPE || !keys.insert(property.key).second)
@@ -97,7 +101,13 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 			static_cast<uint8_t>(replacement.entity.reference_kind), replacement.entity.value}))
 			throw std::invalid_argument("Property patches cannot overlap complete replacement targets");
 	}
-	if (patches.empty()) {
+	detail::admitScopedMutationBatchCopy(companionBatch);
+    detail::admitScopedMutationBytes(query::execution::detail::standardContainerProxyBytes());
+    // Returning the named DTO can leave fresh empty proxy headers in its
+    // moved-from source when copy elision is disabled on MSVC Debug STL.
+    detail::admitScopedMutationBytes((7U + (companionBatch.creation_identity_plan ? 4U : 0U)) *
+        query::execution::detail::standardContainerProxyBytes());
+    if (patches.empty()) {
 		return {companionBatch, {}, entries};
 	}
 	if (persistedTargets != 0U && control.property_admission && !snapshot.supportsShapedPropertyReadAdmission())
@@ -106,10 +116,14 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 	auto &batch = normalized.batch;
 	if (persistedTargets > (std::numeric_limits<size_t>::max)() - batch.property_replacements.size())
 		throw std::overflow_error("Property patch replacement count overflowed");
-	batch.property_replacements.reserve(batch.property_replacements.size() + persistedTargets);
+	detail::admitScopedPropertyVectorGrowth(batch.property_replacements, batch.property_replacements.size() + persistedTargets);
+    batch.property_replacements.reserve(batch.property_replacements.size() + persistedTargets);
+    detail::admitScopedPropertyVectorGrowth(normalized.persisted_patches, persistedTargets);
+    normalized.persisted_patches.reserve(persistedTargets);
 	size_t sourceBytes = 0U;
 	for (const auto &patch : patches) {
 		checkpoint();
+        detail::admitScopedMutationBytes(query::execution::detail::standardContainerProxyBytes());
 		std::vector<LogicalGraphPropertyEntry> source;
 		const EntityReadShape shape{.all_properties = true};
 		const std::array<uint64_t, 1U> ids{patch.entity.value};
@@ -125,8 +139,10 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 			const auto &properties = patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE
 				? companionBatch.node_creates.at(static_cast<size_t>(patch.entity.value)).properties
 				: companionBatch.edge_creates.at(static_cast<size_t>(patch.entity.value)).properties;
-			source.reserve(properties.size());
-			for (const auto &property : properties) { checkpoint(); source.push_back({property.key, property.value}); }
+			detail::admitScopedPropertyVectorStorage<LogicalGraphPropertyEntry>(properties.size());
+            detail::admitScopedPropertyPayloadCopies(properties);
+            source.reserve(properties.size());
+			for (const auto &property : properties) { checkpoint(); source.emplace_back(property.key, property.value); }
 		} else if (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
 			if (control.property_admission) {
 				auto nodes = snapshot.readNodesShapedSortedWithAdmission(ids, shape, admit);
@@ -159,13 +175,13 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 			if (source[index].key.empty() || (index != 0U && source[index - 1U].key == source[index].key))
 				throw std::runtime_error("Property patch source contains invalid or duplicate keys");
 		}
-		std::vector<const LogicalGraphWriteProperty *> sets;
+		utils::OwnedVector<const LogicalGraphWriteProperty *> sets;
 		sets.reserve(patch.sets.size());
 		for (const auto &property : patch.sets) { checkpoint(); sets.push_back(&property); }
 		std::sort(sets.begin(), sets.end(), [&](const auto *left, const auto *right) {
 			checkpoint(); return left->key < right->key;
 		});
-		std::vector<std::string_view> removals;
+		utils::OwnedVector<std::string_view> removals;
 		removals.reserve(patch.removals.size());
 		for (const auto &key : patch.removals) { checkpoint(); removals.push_back(key); }
 		std::sort(removals.begin(), removals.end(), [&](auto left, auto right) {
@@ -204,8 +220,12 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 			}
 		}
 		if (!changesSource) continue;
-		LogicalGraphPropertyPatchRequest changed{patch.entity, {}, {}};
+		detail::admitScopedMutationBytes(2U * query::execution::detail::standardContainerProxyBytes());
+        LogicalGraphPropertyPatchRequest changed{patch.entity, {}, {}};
 		if (patch.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
+            detail::admitScopedPropertyCopies<LogicalGraphWriteProperty>(patch.sets);
+            detail::sizeScopedMutationCopy([&](detail::WriteCopySizer &meter) { meter.strings(patch.removals); });
+            changed.sets.reserve(sets.size()); changed.removals.reserve(removals.size());
 			for (const auto *property : sets) {
 				checkpoint();
 				const auto found = std::lower_bound(source.begin(), source.end(), std::string_view(property->key),
@@ -221,11 +241,20 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 		size_t outputEntries = source.size();
 		for (const auto key : removals) { checkpoint(); if (containsSourceKey(key)) --outputEntries; }
 		for (const auto *property : sets) { checkpoint(); if (!containsSourceKey(property->key)) ++outputEntries; }
-		LogicalGraphPropertyMutationRequest replacement{patch.entity, {}};
+		detail::admitScopedMutationBytes(query::execution::detail::standardContainerProxyBytes());
+        detail::admitScopedPropertyVectorStorage<LogicalGraphWriteProperty>(outputEntries);
+        detail::admitScopedPropertyPayloadCopies(patch.sets);
+        LogicalGraphPropertyMutationRequest replacement{patch.entity, {}};
 		// Source payloads move directly into the replacement. Only changed input
 		// values are copied; borrowed patch descriptors live for this call only.
 		replacement.properties.reserve(outputEntries);
-		size_t sourceIndex = 0U, setIndex = 0U;
+		const auto appendMovedSource = [&](LogicalGraphPropertyEntry &property) {
+            detail::admitScopedMutationBytes(query::execution::detail::addStandardHeapBytes(
+                detail::movedPropertyHeaderHeapUpper(property.value),
+                query::execution::detail::standardContainerProxyBytes()));
+            replacement.properties.emplace_back(std::move(property.key), std::move(property.value));
+        };
+        size_t sourceIndex = 0U, setIndex = 0U;
 		while (sourceIndex < source.size() || setIndex < sets.size()) {
 			checkpoint();
 			if (setIndex < sets.size() && (sourceIndex == source.size() || sets[setIndex]->key <= source[sourceIndex].key)) {
@@ -233,13 +262,13 @@ NormalizedLogicalGraphPropertyPatchBatch normalizeLogicalGraphPropertyPatchBatch
 				if (sourceIndex < source.size() && source[sourceIndex].key == property.key) {
 					auto &old = source[sourceIndex++];
 					if (old.value == property.value)
-						replacement.properties.push_back({std::move(old.key), std::move(old.value)});
+						appendMovedSource(old);
 					else replacement.properties.push_back(property);
 				} else replacement.properties.push_back(property);
 			} else {
 				auto &property = source[sourceIndex++];
 				if (!std::binary_search(removals.begin(), removals.end(), std::string_view(property.key)))
-					replacement.properties.push_back({std::move(property.key), std::move(property.value)});
+					appendMovedSource(property);
 			}
 		}
 		// Created entities must carry their final fields in the creation request.

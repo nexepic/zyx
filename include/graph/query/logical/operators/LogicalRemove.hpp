@@ -6,6 +6,8 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -32,9 +34,10 @@ enum class LogicalRemoveActionType {
  * @brief Describes a single item within a REMOVE clause.
  */
 struct LogicalRemoveItem {
+    using OwnedHeapElement = void;
 	LogicalRemoveActionType type;
-	std::string variable;
-	std::string key;
+	utils::OwnedStdString variable;
+	utils::OwnedStdString key;
 };
 
 /**
@@ -43,7 +46,7 @@ struct LogicalRemoveItem {
  */
 class LogicalRemove : public LogicalOperator {
 public:
-	LogicalRemove(std::vector<LogicalRemoveItem> items, std::unique_ptr<LogicalOperator> child = nullptr)
+	LogicalRemove(utils::OwnedStdVector<LogicalRemoveItem> items, std::unique_ptr<LogicalOperator> child = nullptr)
 		: items_(std::move(items)), child_(std::move(child)) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_REMOVE; }
@@ -54,6 +57,10 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
 	}
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
@@ -75,7 +82,7 @@ public:
 	[[nodiscard]] const std::vector<LogicalRemoveItem> &getItems() const { return items_; }
 
 private:
-	std::vector<LogicalRemoveItem> items_;
+	utils::OwnedStdVector<LogicalRemoveItem> items_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

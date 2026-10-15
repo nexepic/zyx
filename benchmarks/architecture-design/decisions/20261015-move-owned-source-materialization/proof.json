@@ -1,0 +1,77 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 151,
+  "selected_suites": 8,
+  "failures": 0,
+  "isolated_cases_passed": 103,
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "codec-inspection-allocation-free",
+      "shape_values": 1025,
+      "decoded_string_bytes": 524288,
+      "passed": true
+    },
+    {
+      "mode": "codec-admitted-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "source-materialization-copy-accounting",
+      "string_request_bytes": 65537,
+      "node_body_allocations": 1,
+      "edge_body_allocations": 1,
+      "passed": true
+    }
+  ],
+  "fault_sweeps": {
+    "source-materialization": {
+      "baseline_allocations": 955,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "negative_control": [
+    {
+      "variant": "copy_owned_local_raw",
+      "returncode": 10,
+      "stdout": "",
+      "stderr": "source materialization repeated large string allocations: node=2, edge=2\n"
+    }
+  ],
+  "worker_sha256": "4d0cbab8b082fbc8b83ccd533e4ceff0110536e9b24a789df2ba2e3a66bbac5f",
+  "source_sha256": {
+    "src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp": "b1069f76d97172a6954a538192f7ba78bacd868cc50eb5028754c2e7b9eea898",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "f9630e077e8e5d88c2ccd15c1b37a714b0aac89954ce3a1859a8566eb1854d90",
+    "tests/support/TransactionResourceFaultWorker.cpp": "54fa66ed4d382f0ed2625c9c88972a6ca45bd01cf15a1928fd3a302872689a49",
+    "scripts/test_transaction_resource_faults.py": "b45746faf5978d07e088e77a424d72b399da7a6d6baf719c030efdb60d1ec58d"
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_execution": "Linux clang19/libstdc++; allocation counts do not claim latency or Windows/macOS execution"
+}

@@ -326,3 +326,92 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, DecodedContextFollowsPinMovesAnd
 	EXPECT_TRUE(original.expired());
 	EXPECT_EQ(snapshots.activeSnapshotCount(), 0U);
 }
+
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
+namespace {
+std::shared_ptr<graph::query::execution::detail::PrepaidMemoryResource> snapshotRegistryGrant() {
+    using namespace graph::query::execution::detail;
+    constexpr size_t bytes = 64U * 1024U;
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(bytes));
+    auto domain = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(bytes));
+    return std::make_shared<PrepaidMemoryResource>(std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_CACHE, bytes), bytes);
+}
+}
+TEST_F(RelocatableMetadataSnapshotRegistryTest, EscapedPinOwnsItsRegistryAndReadContextAllocationDomain) {
+    SuperblockFile bootstrap(io);
+    bootstrap.initializeNew(superblock(1U, 1U));
+    auto memory = snapshotRegistryGrant();
+    std::weak_ptr<graph::query::execution::detail::PrepaidMemoryResource> lifetime = memory;
+    MetadataSnapshotPin escaped;
+    {
+        MetadataSnapshotRegistry registry(bootstrap, {}, memory);
+        escaped = registry.openSnapshot();
+        EXPECT_GT(memory->used(), sizeof(MetadataPageReadContext));
+        EXPECT_EQ(registry.activeSnapshotCount(), 1U);
+    }
+    memory.reset();
+    EXPECT_FALSE(lifetime.expired());
+    EXPECT_EQ(escaped.superblock().generation, Generation(1U));
+    escaped.release();
+    EXPECT_TRUE(lifetime.expired());
+}
+TEST_F(RelocatableMetadataSnapshotRegistryTest, DeniedReadContextsNeverRegisterAPinAndCanRetryUnderTheWriter) {
+    using graph::query::execution::detail::ResourceAdmissionDenied;
+    SuperblockFile bootstrap(io);
+    bootstrap.initializeNew(superblock(1U, 1U));
+    auto memory = snapshotRegistryGrant();
+    {
+        MetadataSnapshotRegistry registry(bootstrap, {}, memory);
+        const size_t before = memory->used();
+        const size_t pressureBytes = memory->capacity() - before;
+        auto releasePressure = [memory, pressureBytes](void *pointer) { memory->deallocate(pointer, pressureBytes); };
+        std::unique_ptr<void, decltype(releasePressure)> pressure(memory->allocate(pressureBytes), releasePressure);
+        EXPECT_THROW(static_cast<void>(registry.openSnapshot()), ResourceAdmissionDenied);
+        EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+        {
+            auto writer = registry.beginWrite();
+            EXPECT_THROW(static_cast<void>(registry.pinCurrentUnderWrite(writer, bootstrap.recover())), ResourceAdmissionDenied);
+            EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+        }
+        pressure.reset();
+        EXPECT_EQ(memory->used(), before);
+        {
+            auto writer = registry.beginWrite();
+            auto pin = registry.pinCurrentUnderWrite(writer, bootstrap.recover());
+            EXPECT_EQ(registry.activeSnapshotCount(), 1U);
+        }
+        EXPECT_EQ(registry.activeSnapshotCount(), 0U);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(RelocatableMetadataSnapshotRegistryTest, FullPayloadArenaCannotBlockSeparateSnapshotControls) {
+    SuperblockFile bootstrap(io);
+    bootstrap.initializeNew(superblock(1U, 1U));
+    auto payload = snapshotRegistryGrant();
+    auto controls = snapshotRegistryGrant();
+    {
+        MetadataSnapshotRegistry registry(bootstrap, {}, payload, controls);
+        const auto controlBaseline = controls->used();
+        ASSERT_GT(controlBaseline, 0U);
+        EXPECT_EQ(payload->used(), 0U);
+        const auto bytes = payload->capacity();
+        auto release = [payload, bytes](void *pointer) { payload->deallocate(pointer, bytes); };
+        std::unique_ptr<void, decltype(release)> pressure(payload->allocate(bytes), release);
+        MetadataSnapshotPin pin;
+        ASSERT_NO_THROW(pin = registry.openSnapshot());
+        EXPECT_EQ(pin.readContext()->memoryOwner(), payload);
+        EXPECT_GT(controls->used(), controlBaseline);
+        EXPECT_EQ(registry.activeSnapshotCount(), 1U);
+        pin.release();
+        EXPECT_EQ(controls->used(), controlBaseline);
+        auto writer = registry.beginWrite();
+        MetadataSnapshotPin current;
+        ASSERT_NO_THROW(current = registry.pinCurrentUnderWrite(writer, bootstrap.recover()));
+        EXPECT_EQ(registry.activeSnapshotCount(), 1U);
+        current.release();
+        EXPECT_EQ(controls->used(), controlBaseline);
+    }
+    EXPECT_EQ(payload->used(), 0U);
+    EXPECT_EQ(controls->used(), 0U);
+}

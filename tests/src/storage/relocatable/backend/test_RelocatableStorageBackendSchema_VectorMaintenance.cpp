@@ -8,6 +8,7 @@
 
 #include "storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp"
 
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <atomic>
 #include <chrono>
 #include <limits>
@@ -1275,4 +1276,42 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsAnOutOfRangePersistedPqCentro
 	EXPECT_THROW(static_cast<void>(snapshot->searchLogicalVector(request)), FormatException);
 	snapshot.reset();
 	reader.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle) {
+    auto configured = options();
+    configured.maximum_index_definitions = 128U;
+    {
+        RelocatableStorageBackend writer(configured); writer.open();
+        for (size_t index = 0U; index < 64U; ++index)
+            static_cast<void>(writer.createLogicalNodeIndex({std::string(1000U, 's') + std::to_string(index),
+                "Person", {"property" + std::to_string(index)}}));
+        static_cast<void>(writer.createLogicalNodeVectorIndex({"vector", "Person", "embedding", 2U, "l2"}));
+        {
+            auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(32768U);
+            auto snapshot = writer.openSnapshot();
+            {
+                graph::utils::OwnedAllocationScope scope(memory);
+                EXPECT_THROW(static_cast<void>(writer.readIndexDefinitions(snapshot, 128U)),
+                    graph::query::execution::MaterializedByteLimitExceeded);
+            }
+            EXPECT_EQ(memory->used(), 0U);
+        }
+        writer.close();
+    }
+    configured.maximum_reclaim_workspace_bytes = 32768U;
+    RelocatableMaintenanceOptions maintenance;
+    maintenance.loop.maximum_outstanding_tasks = 1U;
+    maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+    configured.maintenance = maintenance;
+    RelocatableStorageBackend recovered(configured); recovered.open();
+    ASSERT_TRUE(waitUntil([&] {
+        const auto metrics = recovered.maintenanceMetrics();
+        return metrics.loop.deferred_attempts >= 4U || metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+    }));
+    recovered.pauseMaintenance();
+    EXPECT_EQ(recovered.maintenanceFailure(), nullptr);
+    EXPECT_NE(recovered.maintenanceMetrics().loop.state, RelocatableMaintenanceLoopState::VMLS_FAULTED);
+    EXPECT_GE(recovered.maintenanceMetrics().loop.deferred_attempts, 4U);
+    recovered.close();
 }

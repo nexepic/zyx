@@ -431,7 +431,7 @@ namespace graph::query::optimization {
 					if (!input) {
 						throw std::logic_error("logical PROJECT has no child");
 					}
-					std::vector<logical::LogicalProjectItem> items = project->getItems();
+					utils::OwnedStdVector<logical::LogicalProjectItem> items = project->getItems();
 					++state.rewrite_count;
 					state.changed = true;
 					return std::make_unique<logical::LogicalProject>(

@@ -1350,6 +1350,12 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBatchesFullAdjacencyEndpoin
 TEST(LogicalGraphReadExecutorTest, CountPropertyStreamsLargeValuesWithoutBatchMaterialization) {
 	LogicalGraphFixtureData data = graphData();
 	data.enable_native_ref_scans = true;
+    // Streaming COUNT requires the native non-null probe capability; a reference
+    // scan alone does not promise payload-free Property reads.
+    data.enable_non_null_probes = true;
+    const auto materializedReads = std::make_shared<size_t>(0U);
+    data.node_read_count = materializedReads;
+    data.nodes.at(2U).properties.emplace_back("payload", PropertyValue{});
 	data.nodes.at(1U).properties.emplace_back("payload", PropertyValue(std::string(4096U, 'x')));
 	TestLogicalGraphBackend backend(std::move(data));
 	LogicalPlanReadRuntime runtime(backend);
@@ -1368,6 +1374,7 @@ TEST(LogicalGraphReadExecutorTest, CountPropertyStreamsLargeValuesWithoutBatchMa
 		return true;
 	}));
 	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t{1})}));
+    EXPECT_EQ(*materializedReads, 0U);
 }
 
 TEST(LogicalGraphReadExecutorTest, AggregateFlushesAtBoundedBatchRowsWithoutChangingCardinality) {

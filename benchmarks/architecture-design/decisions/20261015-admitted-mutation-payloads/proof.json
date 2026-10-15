@@ -1,0 +1,114 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "final_selected_tests": 63,
+  "selected_suites": 2,
+  "failures": 0,
+  "earlier_broader_run": {
+    "tests": 1982,
+    "passed": 1979,
+    "failed": 3,
+    "reason": "Three old assertions expected later hierarchical rejection and a consumed ID; corrected to exact earlier preflight rejection and contiguous ID retry. Final 63-test module selection passes. Broader run predates consumed-input lifecycle fix."
+  },
+  "fault_cases_passed": 583,
+  "fault_failures": 0,
+  "fault_sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3941,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 20,
+      "tested_allocations": 20,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 13,
+      "tested_allocations": 13,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 24,
+      "tested_allocations": 24,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 26,
+      "tested_allocations": 26,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42253,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "crash_cycles": 32,
+  "heap_cases": [
+    {
+      "mode": "property-heap-accounting",
+      "shape_cases": 22,
+      "maximum_observed_requested_bytes": 320376,
+      "passed": true
+    },
+    {
+      "mode": "native-stage-heap-accounting",
+      "shape_cases": 5,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 357601,
+      "passed": true
+    }
+  ],
+  "negative_control": [
+    {
+      "variant": "retained_consumed_input",
+      "returncode": 10,
+      "stdout": "",
+      "stderr": "native staging had uncovered live allocator requests: 190971\n"
+    }
+  ],
+  "worker_sha256": "4e47dc2c7b7fe1dacdee7d8b67b91ecc43e5727ec848664be843c7f5cd25b6be",
+  "source_sha256": {
+    "src/storage/relocatable/backend/AdmittedMutationInput.hpp": "dfe3371e15eb2e6b9c89f900ed616e6a5a647a7d1e445282d89427c96526a25d",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "9904f1183229f411c2a4d9843f3b369245b80063c1adc61202e9050ee7ec1993",
+    "tests/src/storage/relocatable/backend/test_AdmittedMutationInput.cpp": "17290a567af18b243e3c9a6f5f3cec167ca7b08008e13fc5ed9394c4c041bc4a",
+    "tests/src/storage/relocatable/backend/test_RelocatablePropertyPatchStaging.cpp": "073a825526e9f20e9088d7b2a349c64d7947029d1bf0ef8aa55a0e1edbc40eb6",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "450658c6cd48e3f4e87d2941efb5ff457b180761235ad48d9ec6a4bd9fd03450",
+    "tests/support/TransactionResourceFaultWorker.cpp": "42fc41fc43fd08e6a6496cce1509fd84346959b5314b25e365cc57394ec66f57",
+    "scripts/test_transaction_resource_faults.py": "260941eb4d0735825939a506443b676a86a051d7fc2b57bfa5e04fcb30aadaa3",
+    "include/graph/query/execution/MaterializedByteBudget.hpp": "ce29753866ff9bef1ad7782c01a1b604b2682d363e246b67eabc6d5afc4d11de",
+    "include/graph/query/execution/RetainedPropertyBytes.hpp": "8dd6f3a62f66cfac7d4b965ab28687173fd5c8c848a99c2bbc95ea1e3d1530c8",
+    "include/graph/query/execution/StandardContainerHeapBytes.hpp": "7e30f3ce81d7463be12e771539aabcf9e1db0ba3bac70b4c728102a4372abe43"
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_execution": "Linux clang19/libstdc++; no Windows/macOS execution claim"
+}

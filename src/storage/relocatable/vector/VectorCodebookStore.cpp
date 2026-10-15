@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "graph/utils/ChecksumUtils.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 
 namespace graph::storage {
 
@@ -161,9 +162,12 @@ namespace graph::storage {
 	} // namespace
 
 	VectorCodebookStore::VectorCodebookStore(PhysicalSegmentAllocator &segments, RelocatableMetadataStore &metadata,
-											 size_t maximumCacheBytes, size_t maximumCacheEntries) :
+											 size_t maximumCacheBytes, size_t maximumCacheEntries,
+                                         std::shared_ptr<std::pmr::memory_resource> cacheMemoryOwner) :
 		segments_(segments), metadata_(metadata), maximum_cache_bytes_(maximumCacheBytes),
-		maximum_cache_entries_(maximumCacheEntries) {
+		maximum_cache_entries_(maximumCacheEntries), cache_memory_owner_(std::move(cacheMemoryOwner)),
+        cache_recency_(cache_memory_owner_ ? cache_memory_owner_.get() : std::pmr::get_default_resource()),
+        cache_(cache_memory_owner_ ? cache_memory_owner_.get() : std::pmr::get_default_resource()) {
 		if ((maximum_cache_bytes_ == 0U) != (maximum_cache_entries_ == 0U)) {
 			throw std::invalid_argument(
 					"relocatable Vector Codebook cache byte and entry bounds must both be zero or both be positive");
@@ -371,22 +375,30 @@ namespace graph::storage {
 			}
 		}
 
-		std::shared_ptr<const VectorCodebook> loaded;
-		if (immutableManifest.isInline()) {
-			loaded = std::make_shared<const VectorCodebook>(
-					VectorCodebook{immutableManifest.header, immutableManifest.inline_payload});
-		} else {
-			std::vector<std::byte> payload;
-			payload.reserve(immutableManifest.header.payload_bytes);
-			for (size_t index = 0U; index < immutableManifest.entries.size(); ++index) {
-				const std::vector<std::byte> block =
-						readDataExtent(snapshot, immutableManifest, immutableManifest.entries[index], index);
-				payload.insert(payload.end(), block.begin(), block.end());
-			}
-			VectorCodebookHeaderCodec::validatePayload(immutableManifest.header, payload);
-			loaded = std::make_shared<const VectorCodebook>(
-					VectorCodebook{immutableManifest.header, std::move(payload)});
-		}
+        const auto load = [&]() -> std::shared_ptr<const VectorCodebook> {
+            auto candidate = std::allocate_shared<VectorCodebook>(
+                utils::OwnedPmrAllocator<VectorCodebook>(cache_memory_owner_), immutableManifest.header, cache_memory_owner_);
+            candidate->payload.reserve(immutableManifest.header.payload_bytes);
+            if (immutableManifest.isInline()) {
+                candidate->payload.assign(immutableManifest.inline_payload.begin(), immutableManifest.inline_payload.end());
+            } else {
+                for (size_t index = 0U; index < immutableManifest.entries.size(); ++index) {
+                    const std::vector<std::byte> block =
+                        readDataExtent(snapshot, immutableManifest, immutableManifest.entries[index], index);
+                    candidate->payload.insert(candidate->payload.end(), block.begin(), block.end());
+                }
+            }
+            VectorCodebookHeaderCodec::validatePayload(immutableManifest.header, candidate->payload);
+            return candidate;
+        };
+        std::shared_ptr<const VectorCodebook> loaded;
+        for (;;) {
+            try { loaded = load(); break; }
+            catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                std::lock_guard lock(cache_mutex_);
+                if (!evictCacheEntryLocked()) throw;
+            }
+        }
 
 		const size_t payloadBytes = loaded->payload.size();
 		if (maximum_cache_entries_ == 0U || payloadBytes > maximum_cache_bytes_) {
@@ -402,25 +414,40 @@ namespace graph::storage {
 			// while this mutex is held and is updated by the exact payload delta for every insertion and eviction.
 			fail(FormatError::FERR_INVALID_STATE, "relocatable Vector Codebook cache accounting is inconsistent");
 		}
-		while (!cache_recency_.empty() && (cache_.size() >= maximum_cache_entries_ ||
-										   payloadBytes > maximum_cache_bytes_ - cached_payload_bytes_)) {
-			const CacheKey victim = cache_recency_.back();
-			const auto existing = cache_.find(victim);
-			if (existing == cache_.end() ||
-				existing->second.codebook->payload.size() > cached_payload_bytes_) { // ZYX_COV_EXCL_LINE:
-				// the list and map are mutated together under this mutex and each entry contributes its exact payload
-				// size.
-				fail(FormatError::FERR_INVALID_STATE, "relocatable Vector Codebook cache accounting is inconsistent");
-			}
-			cached_payload_bytes_ -= existing->second.codebook->payload.size();
-			cache_.erase(existing);
-			cache_recency_.pop_back();
-		}
-		cache_recency_.push_front(key);
-		cache_.emplace(key, CacheEntry{loaded, cache_recency_.begin()});
-		cached_payload_bytes_ += payloadBytes;
+		// Admit both metadata nodes before evicting an existing immutable value.
+        // A failed map allocation must not leave an orphan recency node.
+        for (;;) {
+            try {
+                cache_recency_.push_front(key);
+                try { cache_.emplace(key, CacheEntry{loaded, cache_recency_.begin()}); }
+                catch (...) { cache_recency_.pop_front(); throw; }
+                break;
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                if (!evictCacheEntryLocked()) throw;
+            }
+        }
+        // Compare the old byte count without adding first: the sum can overflow
+        // size_t for callers with very large explicit bounds.
+        while (cache_.size() > maximum_cache_entries_ ||
+               payloadBytes > maximum_cache_bytes_ - cached_payload_bytes_) {
+            const CacheKey victim = cache_recency_.back();
+            const auto existing = cache_.find(victim);
+            cached_payload_bytes_ -= existing->second.codebook->payload.size();
+            cache_.erase(existing);
+            cache_recency_.pop_back();
+        }
+        cached_payload_bytes_ += payloadBytes;
 		return loaded;
 	}
+
+    bool VectorCodebookStore::evictCacheEntryLocked() const {
+        if (cache_recency_.empty()) return false;
+        const auto existing = cache_.find(cache_recency_.back());
+        cached_payload_bytes_ -= existing->second.codebook->payload.size();
+        cache_.erase(existing);
+        cache_recency_.pop_back();
+        return true;
+    }
 
 	void VectorCodebookStore::validate(const MetadataSnapshotPin &snapshot, uint64_t codebookId,
 									   uint64_t maximumPayloadBytes, size_t maximumDataExtents) const {

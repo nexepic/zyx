@@ -14,6 +14,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include "graph/storage/relocatable/maintenance/RelocatableMaintenanceWorkspace.hpp"
 
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceLoop.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatablePageCompactionScheduler.hpp"
@@ -116,8 +117,9 @@ namespace graph::storage {
 			   std::function<bool()> writeAllowed = {},
 			   RelocatableVectorRebuildExecutor vectorRebuild = {},
 			   RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner = {},
-			   RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner = {});
-		~RelocatableMaintenanceService() = default;
+			   RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner = {},
+               std::function<std::unique_ptr<RelocatableMaintenanceWorkspace>()> workspaceFactory = {});
+		~RelocatableMaintenanceService();
 		RelocatableMaintenanceService(const RelocatableMaintenanceService &) = delete;
 		RelocatableMaintenanceService &operator=(const RelocatableMaintenanceService &) = delete;
 
@@ -174,6 +176,9 @@ namespace graph::storage {
 		RelocatableVectorRebuildExecutor vector_rebuild_;
 		RelocatableVectorRebuildDebtScanner vector_rebuild_debt_scanner_;
 		RelocatableGlobalAdjacencyPoolReclaimCandidateScanner global_adjacency_pool_reclaim_candidate_scanner_;
+        // A null result from a configured factory means transient admission
+        // pressure: defer before touching the publication lock or durable roots.
+        std::function<std::unique_ptr<RelocatableMaintenanceWorkspace>()> workspace_factory_;
 		RelocatableCompactionCoordinator property_coordinator_;
 		RelocatableCompactionCoordinator entity_coordinator_;
 		RelocatableCompactionCoordinator btree_coordinator_;

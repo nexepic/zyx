@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -81,8 +82,10 @@ namespace graph::storage {
 		}
 	}
 
-	BufferPool::BufferPool(StorageIO &io, size_t capacityBytes) :
-		io_(io), capacity_bytes_(capacityBytes - capacityBytes % RSS_BUFFER_POOL_PAGE_BYTES) {
+	BufferPool::BufferPool(StorageIO &io, size_t capacityBytes, std::shared_ptr<std::pmr::memory_resource> memoryOwner) :
+		io_(io), capacity_bytes_(capacityBytes - capacityBytes % RSS_BUFFER_POOL_PAGE_BYTES),
+		memory_owner_(std::move(memoryOwner)), memory_(memory_owner_ ? memory_owner_.get() : std::pmr::get_default_resource()),
+		entries_(memory_), recent_(memory_), frequent_(memory_) {
 		if (capacity_bytes_ == 0U) {
 			throw std::invalid_argument("buffer pool capacity must contain at least one 4 KiB page");
 		}
@@ -140,15 +143,12 @@ namespace graph::storage {
 			throw std::logic_error("private buffer-pool COW page key is already resident");
 		}
 		ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-		auto entry = std::make_unique<Entry>();
+		auto entry = allocateEntryLocked();
 		entry->valid_bytes = RSS_BUFFER_POOL_PAGE_BYTES;
 		entry->pin_count = 1U;
 		entry->dirty = true;
 		entry->private_cow = true;
-		Entry &stored = *entry;
-		entries_.emplace(key, std::move(entry));
-		admitLocked(key, stored);
-		resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+		static_cast<void>(storeEntryLocked(key, std::move(entry)));
 		++pinned_pages_;
 		++dirty_pages_;
 		return Pin(this, key, true);
@@ -159,13 +159,29 @@ namespace graph::storage {
 		if (!isAligned(key) || key.generation == 0U) {
 			throw std::invalid_argument("typed buffer-pool read needs an aligned nonzero generation key");
 		}
+        // Use the same allocation-free miss path as multi-page scan reads.
+        // Existing dirty/private entries still pass through readPages' checks.
+        if (hint == BufferPoolReadHint::BPRH_SEQUENTIAL) {
+            return readPages(key, output, hint);
+        }
 		if (key.page_offset >= io_.fileSizeUncached()) {
 			return 0U;
 		}
-		auto page = pin(key, hint);
-		const size_t bytes = page.validBytes();
-		std::copy_n(page.bytes().begin(), static_cast<std::ptrdiff_t>(bytes), output.begin());
-		return bytes;
+        // A copy read needs no externally visible pin. Keep the cache lock
+        // through the copy so a concurrent control-record invalidation waits
+        // for these few bytes instead of rejecting an otherwise valid writer.
+        std::lock_guard lock(mutex_);
+        Entry &entry = loadLocked(key, hint);
+        if (entry.private_cow) {
+            throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
+        }
+        const size_t bytes = entry.valid_bytes;
+        std::copy_n(entry.bytes.begin(), static_cast<std::ptrdiff_t>(bytes), output.begin());
+        if (entry.transient && entry.pin_count == 0U) {
+            eraseLocked(key, entry);
+            entries_.erase(key);
+        }
+        return bytes;
 	}
 
 	void BufferPool::writePage(BufferPoolPageKey key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> input) {
@@ -187,11 +203,9 @@ namespace graph::storage {
 		} else {
 			++misses_;
 			ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-			auto fresh = std::make_unique<Entry>();
+			auto fresh = allocateEntryLocked();
 			Entry &stored = *fresh;
-			entries_.emplace(key, std::move(fresh));
-			admitLocked(key, stored);
-			resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+			static_cast<void>(storeEntryLocked(key, std::move(fresh)));
 			entry = &stored;
 		}
 
@@ -311,11 +325,9 @@ namespace graph::storage {
 			} else {
 				++misses_;
 				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-				auto fresh = std::make_unique<Entry>();
+				auto fresh = allocateEntryLocked();
 				Entry &stored = *fresh;
-				entries_.emplace(key, std::move(fresh));
-				admitLocked(key, stored);
-				resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+				static_cast<void>(storeEntryLocked(key, std::move(fresh)));
 				entry = &stored;
 			}
 			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
@@ -370,12 +382,39 @@ namespace graph::storage {
 			return 0U;
 		}
 		const uint64_t end = std::min(requestedEnd, fileSize);
-		if (hint == BufferPoolReadHint::BPRH_SEQUENTIAL) {
-			const size_t bytes = io_.readAtUncached(offset, output.data(), static_cast<size_t>(end - offset));
-			std::lock_guard lock(mutex_);
-			disk_read_bytes_ += bytes;
-			return bytes;
-		}
+        if (hint == BufferPoolReadHint::BPRH_SEQUENTIAL) {
+            // Keep dirty untyped hits coherent while coalescing uncached gaps.
+            // No residency allocation or eviction is needed, even with all
+            // cache pages pinned. Serialize reads with cache writes/invalidations.
+            std::lock_guard lock(mutex_);
+            size_t copied = 0U;
+            while (offset + copied < end) {
+                const uint64_t current = offset + copied;
+                const uint64_t pageOffset = current - current % RSS_BUFFER_POOL_PAGE_BYTES;
+                const size_t inPage = static_cast<size_t>(current - pageOffset);
+                const auto found = entries_.find({pageOffset, 0U});
+                if (found != entries_.end()) {
+                    Entry &entry = *found->second;
+                    if (inPage >= entry.valid_bytes) return copied;
+                    const size_t bytes = (std::min)(entry.valid_bytes - inPage, static_cast<size_t>(end - current));
+                    std::copy_n(entry.bytes.begin() + static_cast<std::ptrdiff_t>(inPage), bytes,
+                        output.begin() + static_cast<std::ptrdiff_t>(copied));
+                    ++hits_;
+                    copied += bytes;
+                    continue;
+                }
+                uint64_t gapEnd = (std::min)(end, pageOffset + RSS_BUFFER_POOL_PAGE_BYTES);
+                while (gapEnd < end && !entries_.contains({gapEnd, 0U})) {
+                    gapEnd += (std::min)(uint64_t{RSS_BUFFER_POOL_PAGE_BYTES}, end - gapEnd);
+                }
+                const size_t requested = static_cast<size_t>(gapEnd - current);
+                const size_t bytes = io_.readAtUncached(current, output.data() + copied, requested);
+                disk_read_bytes_ += bytes;
+                copied += bytes;
+                if (bytes != requested) return copied;
+            }
+            return copied;
+        }
 		size_t copied = 0U;
 		uint64_t current = offset;
 		while (current < end) {
@@ -428,11 +467,9 @@ namespace graph::storage {
 				// read-before-write round trip for bulk page and segment publication.
 				++misses_;
 				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-				auto fresh = std::make_unique<Entry>();
+				auto fresh = allocateEntryLocked();
 				Entry &stored = *fresh;
-				entries_.emplace(key, std::move(fresh));
-				admitLocked(key, stored);
-				resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+				static_cast<void>(storeEntryLocked(key, std::move(fresh)));
 				entry = &stored;
 			} else {
 				entry = &loadLocked(key, BufferPoolReadHint::BPRH_NORMAL);
@@ -569,23 +606,51 @@ namespace graph::storage {
 		++misses_;
 		debug::PerfTrace::addValue("storage.buffer_pool.misses", 1);
 		ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
-		auto entry = std::make_unique<Entry>();
+		auto entry = allocateEntryLocked();
 		const size_t bytesRead = io_.readAtUncached(key.page_offset, entry->bytes.data(), entry->bytes.size());
 		entry->valid_bytes = bytesRead;
 		disk_read_bytes_ += bytesRead;
 		debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytesRead));
 		entry->transient = hint == BufferPoolReadHint::BPRH_SEQUENTIAL;
 		Entry &stored = *entry;
-		entries_.emplace(key, std::move(entry));
-		admitLocked(key, stored);
-		resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+		static_cast<void>(storeEntryLocked(key, std::move(entry)));
 		return stored;
 	}
 
-	void BufferPool::promoteLocked(BufferPoolPageKey key, Entry &entry) {
+    std::shared_ptr<BufferPool::Entry> BufferPool::allocateEntryLocked() {
+        for (;;) {
+            try {
+                return std::allocate_shared<Entry>(std::pmr::polymorphic_allocator<Entry>(memory_));
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                // Metadata counts against the same grant as page arrays, so the
+                // grant can fill before the payload-only resident ceiling.
+                if (!evictOneLocked()) throw;
+            }
+        }
+    }
+
+    BufferPool::Entry &BufferPool::storeEntryLocked(BufferPoolPageKey key, std::shared_ptr<Entry> entry) {
+        for (;;) {
+            try {
+                // Retain the candidate locally while map/queue admission runs.
+                // A denied node can be retried after evicting an unpinned page.
+                auto [stored, inserted] = entries_.emplace(key, entry);
+                if (!inserted) throw std::logic_error("buffer pool entry is already resident");
+                try { admitLocked(key, *stored->second); }
+                catch (...) { entries_.erase(stored); throw; }
+                resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+                return *stored->second;
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                if (!evictOneLocked()) throw;
+            }
+        }
+    }
+
+	void BufferPool::promoteLocked(BufferPoolPageKey, Entry &entry) {
 		if (entry.queue == QueueKind::BQK_RECENT) {
-			recent_.erase(entry.recency);
-			frequent_.push_front(key);
+			// Both queues use the same allocator. Splicing cannot fail after
+			// removing the recent node, unlike erase followed by allocating push.
+			frequent_.splice(frequent_.begin(), recent_, entry.recency);
 			entry.recency = frequent_.begin();
 			entry.queue = QueueKind::BQK_FREQUENT;
 			return;
@@ -619,7 +684,7 @@ namespace graph::storage {
 	}
 
 	bool BufferPool::evictOneLocked() {
-		const auto evictFrom = [this](std::list<BufferPoolPageKey> &queue) {
+		const auto evictFrom = [this](PageQueue &queue) {
 			for (auto iterator = queue.rbegin(); iterator != queue.rend(); ++iterator) {
 				const auto found = entries_.find(*iterator);
 				if (found == entries_.end()) { // ZYX_COV_EXCL_LINE: recency and entry maps are mutated under one lock.

@@ -1,0 +1,26 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 681,
+  "selected_suites": 28,
+  "failures": 0,
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "include/graph/query/execution/BoundedBatch.hpp": "26b8d4014453f1dbab00e8f146a17987185f25f3fea856cc30a8837a507e2c76",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "bee9a918caf581694d25cfdbc2c02ec0238fcc43079e8b49a00e105ab7aa1edd",
+    "tests/src/query/execution/test_BoundedBatch.cpp": "2e0eb3af6518e4824d0476841d4e4ec3b59b44017645fd2206699c798690b8b5",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "cd374044b4b249ddee0298b2407422bf614fb60f7d5fcbea93bceeee76f76cbb"
+  },
+  "archive_sha256": "2cd1ce2794af1e0720fc9a4e1d6920c97368d33934888addc8e8f61313001820",
+  "remaining": [
+    "plan-cache IR/native metadata ownership",
+    "write/undo/overlay and maintenance/recovery allocations",
+    "temporary workspaces audit",
+    "bounded pinned-snapshot durable backlog",
+    "partitioned hash/aggregate",
+    "complete long-run/fault acceptance and final-source affected regressions"
+  ]
+}

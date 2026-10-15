@@ -44,9 +44,9 @@ namespace graph::storage {
 	};
 
 	using NativeGraphMutationIndexDefinitionReader =
-			std::function<std::vector<IndexDefinition>(const MetadataSnapshotPin &)>;
+			std::function<utils::OwnedStdVector<IndexDefinition>(const MetadataSnapshotPin &)>;
 	using NativeGraphMutationConstraintDefinitionReader =
-			std::function<std::vector<ConstraintDefinition>(const MetadataSnapshotPin &)>;
+			std::function<utils::OwnedStdVector<ConstraintDefinition>(const MetadataSnapshotPin &)>;
 	using NativeGraphMutationFenceValidator = std::function<bool(const Superblock &)>;
 
 	struct NativeGraphMutationExecutorOptions {

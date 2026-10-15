@@ -9,16 +9,17 @@
 
 namespace graph::query::expressions {
 
-ListLiteralExpression::ListLiteralExpression(PropertyValue listValue)
+ListLiteralExpression::ListLiteralExpression(OwnedPropertyValue listValue)
 	: value_(std::move(listValue)) {
 	// Validate that it's actually a list
-	if (value_.getType() != PropertyType::LIST) {
+	if (value_.get().getType() != PropertyType::LIST) {
 		throw std::runtime_error("ListLiteralExpression requires a LIST type PropertyValue");
 	}
 }
 
-ListLiteralExpression::ListLiteralExpression(std::vector<std::unique_ptr<Expression>> elements)
-	: value_(std::vector<PropertyValue>{}), elements_(std::move(elements)) {
+ListLiteralExpression::ListLiteralExpression(utils::OwnedStdVector<std::unique_ptr<Expression>> elements)
+	: value_(elements.empty() ? OwnedPropertyValue::fromList(0U, [](size_t) { return property_heap::CopySource{}; })
+                              : OwnedPropertyValue{}), elements_(std::move(elements)) {
 	for (const auto &element: elements_) {
 		if (!element) {
 			throw std::invalid_argument("ListLiteralExpression cannot contain a null element");
@@ -52,7 +53,7 @@ std::string ListLiteralExpression::toString() const {
 
 std::unique_ptr<Expression> ListLiteralExpression::clone() const {
 	if (!isStatic()) {
-		std::vector<std::unique_ptr<Expression>> clonedElements;
+		utils::OwnedStdVector<std::unique_ptr<Expression>> clonedElements;
 		clonedElements.reserve(elements_.size());
 		for (const auto &element: elements_) {
 			clonedElements.push_back(element->clone());
@@ -66,7 +67,7 @@ const PropertyValue &ListLiteralExpression::getValue() const {
 	if (!isStatic()) {
 		throw std::logic_error("dynamic ListLiteralExpression has no static value");
 	}
-	return value_;
+	return value_.get();
 }
 
 } // namespace graph::query::expressions

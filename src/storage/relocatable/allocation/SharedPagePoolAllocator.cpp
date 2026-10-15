@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 
 #include <algorithm>
@@ -1278,7 +1279,10 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared page owner header disagrees with its location mapping");
 		}
-		std::vector<std::byte> payload(owner.payload_bytes);
+		utils::OwnedVector<std::byte> payload(owner.payload_bytes,
+			utils::OwnedPmrAllocator<std::byte>(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr)));
 		std::copy_n(pageBytes.begin() + RSS_PAGE_OWNER_HEADER_BYTES, payload.size(), payload.begin());
 		return {pool, location, poolHeader, owner, std::move(payload)};
 	}
@@ -1324,15 +1328,16 @@ namespace graph::storage {
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
 		const BufferPoolPageKey poolKey{poolOffset, pool.generation.value()};
-		std::optional<BufferPool::Pin> poolPin = io_->pinTypedPage(poolKey);
-		if (!poolPin.has_value()) {
-			return std::nullopt;
-		}
-		if (poolPin->validBytes() != RSS_PAGE_SIZE) {
+        // The pool control header is mutable even while snapshot-visible data
+        // pages are immutable. Copy its bounded image under the cache lock;
+        // only the immutable data page below may escape with a read pin.
+        if (io_->bufferPoolStats().capacity_bytes == 0U) return std::nullopt;
+        std::array<std::byte, RSS_PAGE_SIZE> poolImage{};
+        if (io_->readAt(poolKey, poolImage.data(), poolImage.size()) != RSS_PAGE_SIZE) {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
 														 "relocatable shared pinned page-pool envelope is truncated");
 		}
-		const std::span<const std::byte, RSS_PAGE_SIZE> poolBytes = poolPin->bytes();
+		const std::span<const std::byte, RSS_PAGE_SIZE> poolBytes(poolImage);
 		const SegmentEnvelope envelope = SegmentEnvelopeCodec::decode(poolBytes.first(RSS_ENVELOPE_BYTES));
 		const uint8_t invalidEnvelope = static_cast<uint8_t>(envelope.state != SegmentState::SGS_SEALED) |
 				static_cast<uint8_t>(envelope.header_bytes != RSS_PAGE_SIZE) |
@@ -1356,7 +1361,6 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable shared pinned page-pool header disagrees with its Page Directory mapping");
 		}
-		poolPin.reset();
 
 		const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
 		std::optional<BufferPool::Pin> pagePin =
@@ -1484,6 +1488,13 @@ namespace graph::storage {
 																const MetadataPublishOptions &options) {
 		return metadata_.releaseRetiredCatalogSegment(segmentId, expectedGeneration, checkpointLsn, options);
 	}
+
+    std::optional<Superblock> SharedPagePoolAllocator::tryReleaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
+																LogSequenceNumber checkpointLsn,
+																const MetadataPublishOptions &options) {
+        auto result = metadata_.tryReleaseRetiredCatalogSegment(segmentId, expectedGeneration, checkpointLsn, options);
+        return result;
+    }
 
 	void SharedPagePoolAllocator::reconcileCurrentPools() const {
 		metadata_.reconcileCurrentPools([this](const CatalogEntry &pool, std::span<const PageLocation> pageLocations) {

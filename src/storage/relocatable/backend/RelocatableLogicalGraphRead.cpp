@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -34,16 +35,21 @@ namespace graph::storage {
 		}
 	} // namespace
 
-	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalQueryScratchProvider {
+	class RelocatableLogicalGraphReadSnapshot final : public LogicalGraphVectorSearchSnapshot, public LogicalQueryScratchProvider, public utils::OwnedPmrObject {
 	public:
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
-																											const PageBackedLogicalGraphReadAdapter &nativeReads) :
-			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()) {}
+																											const PageBackedLogicalGraphReadAdapter &nativeReads,
+			std::shared_ptr<std::pmr::memory_resource> memory) :
+			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory)) {}
 
 		[[nodiscard]] bool queryScratchEnabled() const override {return backend_.nativeQueryScratchEnabled();}
 		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {
 			return const_cast<RelocatableStorageBackend &>(backend_).openNativeQueryScratchSession(bytes,fragments);
 		}
+        [[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t bytes, size_t fragments,
+                std::shared_ptr<query::execution::detail::ResourceAccount> account) const override {
+            return const_cast<RelocatableStorageBackend &>(backend_).openNativeQueryScratchSession(bytes, fragments, std::move(account));
+        }
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
 				return readNodeShaped(nodeId, {.include_labels = true, .all_properties = true});
@@ -526,12 +532,15 @@ namespace graph::storage {
 		mutable NativeReadSession read_session_;
 	};
 
+	static_assert(alignof(RelocatableLogicalGraphReadSnapshot) <= alignof(std::max_align_t));
+
 	std::unique_ptr<LogicalGraphReadSnapshot> RelocatableStorageBackend::openLogicalGraphReadSnapshot() const {
 		requireOpen();
 		if (native_logical_graph_reads_ == nullptr) {
 			throw std::logic_error("relocatable backend has no native logical graph reader");
 		}
-		return std::make_unique<RelocatableLogicalGraphReadSnapshot>(*this, *native_logical_graph_reads_);
+		return std::unique_ptr<RelocatableLogicalGraphReadSnapshot>(
+			new (native_cache_memory_) RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
 	}
 
 	std::unique_ptr<LogicalGraphVectorSearchSnapshot>
@@ -540,7 +549,8 @@ namespace graph::storage {
 		if (native_logical_graph_reads_ == nullptr) {
 			throw std::logic_error("relocatable backend has no native logical graph reader");
 		}
-		return std::make_unique<RelocatableLogicalGraphReadSnapshot>(*this, *native_logical_graph_reads_);
+		return std::unique_ptr<RelocatableLogicalGraphReadSnapshot>(
+			new (native_cache_memory_) RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
 	}
 
 } // namespace graph::storage

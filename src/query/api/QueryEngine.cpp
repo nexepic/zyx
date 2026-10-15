@@ -19,6 +19,7 @@
  **/
 
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/core/PropertyHeapRequestBytes.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -29,6 +30,7 @@
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryGuard.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
@@ -39,6 +41,42 @@
 namespace graph::query {
 
 	namespace {
+		std::shared_ptr<execution::detail::ResourceAccount> validatedQueryResourceAccount(
+            const std::shared_ptr<execution::detail::ResourceAccount> &account, const storage::LogicalGraphReadBackend &backend,
+			size_t maximumBytes, const NativeQueryResourcePolicy &policy) {
+			auto domain = backend.queryResourceDomain();
+			if (!domain) return account;
+			maximumBytes = (std::min)(maximumBytes, domain->maximum());
+			if (policy.maximum_memory_mb > 0 && static_cast<uint64_t>(policy.maximum_memory_mb) <=
+				std::numeric_limits<size_t>::max() / (1024U * 1024U))
+				maximumBytes = (std::min)(maximumBytes, static_cast<size_t>(policy.maximum_memory_mb) * 1024U * 1024U);
+			if (account) {
+				if (!account->belongsTo(*domain) ||
+                    account->resourceClass() != execution::detail::ResourceClass::RCK_QUERY ||
+                    account->maximum() > maximumBytes)
+					throw std::invalid_argument("query resource account requires QUERY ownership within its database policy");
+			} else {
+				return std::make_shared<execution::detail::ResourceAccount>(domain,
+					execution::detail::ResourceClass::RCK_QUERY, maximumBytes);
+			}
+            return account;
+		}
+        // Keep this lease before the copied context in declaration order: all
+        // standard-container payloads must be destroyed before their refund.
+        [[nodiscard]] std::optional<execution::detail::ResourceLease> admitQueryParameterCopy(
+                const QueryContext &context,
+                const std::shared_ptr<execution::detail::ResourceAccount> &account) {
+            if (!account) return std::nullopt;
+            using namespace utils::detail;
+            size_t bytes = standardUnorderedMapStructuralHeapBytes(context.parameters);
+            for (const auto &[key, value] : context.parameters) {
+                bytes = addStandardHeapBytes(bytes, standardFreshStringHeapUpper(key.size()));
+                bytes = addStandardHeapBytes(bytes, property_heap::copyRequestUpper(value));
+            }
+            execution::detail::ResourceLease credit(account);
+            credit.set(bytes);
+            return credit;
+        }
 		[[nodiscard]] bool isLogicalExplainPlan(const logical::LogicalOperator &root) {
 			return root.getType() == logical::LogicalOpType::LOP_EXPLAIN;
 		}
@@ -425,7 +463,8 @@ namespace graph::query {
 
 	QueryEngine::QueryEngine(std::shared_ptr<storage::LogicalGraphReadBackend> logicalBackend,
 							 LogicalReadExecutionOptions options) :
-		logicalBackend_(std::move(logicalBackend)), logicalReadOptions_(std::move(options)) {
+		logicalBackend_(std::move(logicalBackend)), logicalReadOptions_(std::move(options)),
+        planCache_(128U, logicalBackend_ ? logicalBackend_->logicalPlanCacheMemoryOwner() : nullptr) {
 		if (!logicalBackend_) {
 			throw std::invalid_argument("logical query engine requires a read backend");
 		}
@@ -447,7 +486,8 @@ namespace graph::query {
 							 std::shared_ptr<storage::LogicalGraphWriteBackend> logicalWriteBackend,
 							 LogicalReadExecutionOptions options) :
 		logicalBackend_(std::move(logicalReadBackend)), logicalWriteBackend_(std::move(logicalWriteBackend)),
-		logicalReadOptions_(std::move(options)) {
+		logicalReadOptions_(std::move(options)),
+        planCache_(128U, logicalBackend_ ? logicalBackend_->logicalPlanCacheMemoryOwner() : nullptr) {
 		if (!logicalBackend_ || !logicalWriteBackend_) {
 			throw std::invalid_argument("logical read-write query engine requires both logical backend boundaries");
 		}
@@ -468,7 +508,7 @@ namespace graph::query {
 	QueryEngine::~QueryEngine() = default;
 
 	void QueryEngine::resetEphemeralState() noexcept {
-		planCache_.clear();
+		planCache_.releaseMemoryOwner();
 		planCacheIdentity_.reset();
 		planCacheIdentityInitialized_ = false;
 		if (logicalProjectionCatalog_) {
@@ -492,6 +532,31 @@ namespace graph::query {
 	}
 
 	QueryPlan QueryEngine::buildPlan(const std::string &query, const Language lang) {
+        QueryContext context;
+        if (logicalBackend_) {
+            const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
+                : NativeQueryResourcePolicy{};
+            context.resource_account = validatedQueryResourceAccount(context.resource_account, *logicalBackend_, logicalReadOptions_.bounds.maximum_materialized_bytes, policy);
+        }
+        return buildPlanWithAccount(query, lang, std::move(context.resource_account));
+    }
+
+    QueryPlan QueryEngine::buildPlanWithAccount(const std::string &query, Language lang,
+            std::shared_ptr<execution::detail::ResourceAccount> account) {
+        // Keep private operator allocations charged until the escaped plan's
+        // last node is destroyed. Cache insertion temporarily selects CACHE.
+        const bool managedPlan = static_cast<bool>(account);
+        std::optional<utils::OwnedAllocationScope> allocationScope;
+        if (account) allocationScope.emplace(std::make_shared<execution::MaterializedByteBudget>(
+            logicalReadOptions_.bounds.maximum_materialized_bytes, std::move(account), std::pmr::new_delete_resource()));
+        const auto cacheOwner = logicalBackend_ ? logicalBackend_->logicalPlanCacheMemoryOwner() : nullptr;
+        bool cacheAllowed = !managedPlan || static_cast<bool>(cacheOwner);
+        if (!cacheAllowed) planCache_.releaseMemoryOwner();
+        else {
+            try { planCache_.bindMemoryOwner(cacheOwner); }
+            catch (const execution::detail::ResourceAdmissionDenied &) { cacheAllowed = false; }
+            catch (const execution::MaterializedByteLimitExceeded &) { cacheAllowed = false; }
+        }
 		// Cache only unbound logical IR; executable slots, parameters and page
 		// references are always rebuilt against the execution snapshot.
 		const auto refreshCacheIdentity = [&]() {
@@ -502,7 +567,7 @@ namespace graph::query {
 			planCacheIdentity_ = observed;
 			planCacheIdentityInitialized_ = true;
 		};
-		auto cached = planCache_.get(query);
+		auto cached = cacheAllowed ? planCache_.get(query) : std::optional<QueryPlan>{};
 		if (cached) {
 			const auto previousIdentity = planCacheIdentity_;
 			refreshCacheIdentity();
@@ -514,7 +579,7 @@ namespace graph::query {
 		auto plan = parser->parseToLogical(query);
 
 		if (plan.root) {
-			const bool cacheable = plan.cacheable && !isLogicalExplainPlan(*plan.root);
+			const bool cacheable = cacheAllowed && plan.cacheable && !isLogicalExplainPlan(*plan.root);
 			if (cacheable) refreshCacheIdentity();
 			const auto compilationIdentity = planCacheIdentity_;
 			if (plan.optimizable) {
@@ -540,7 +605,13 @@ namespace graph::query {
 				refreshCacheIdentity();
 				// Concurrent publication cannot stamp older optimizer observations
 				// with a newer identity. Execute the unbound IR without caching it.
-				if (compilationIdentity == planCacheIdentity_) planCache_.put(query, plan);
+				if (compilationIdentity == planCacheIdentity_) {
+                    // A cache admission refusal is optional; source QUERY
+                    // admission, bad_alloc and semantic errors still propagate.
+                    try { planCache_.put(query, plan); }
+                    catch (const execution::detail::ResourceAdmissionDenied &) {}
+                    catch (const execution::MaterializedByteLimitExceeded &) {}
+                }
 			}
 		}
 
@@ -548,6 +619,11 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::executePlan(QueryPlan plan, const QueryContext &ctx) {
+        return executePlanWithAccount(std::move(plan), ctx, ctx.resource_account);
+    }
+
+    QueryResult QueryEngine::executePlanWithAccount(QueryPlan plan, const QueryContext &ctx,
+            std::shared_ptr<execution::detail::ResourceAccount> suppliedAccount) {
 		if (!plan.root) {
 			return QueryResult{};
 		}
@@ -569,7 +645,11 @@ namespace graph::query {
 					? nativeConfigurationService_->queryResourcePolicy()
 					: NativeQueryResourcePolicy{};
 			QueryGuard defaultGuard(resourcePolicy.timeout_ms, resourcePolicy.maximum_memory_mb);
+			auto account = validatedQueryResourceAccount(suppliedAccount, *logicalBackend_,
+					logicalReadOptions_.bounds.maximum_materialized_bytes, resourcePolicy);
+			auto parameterCredit = admitQueryParameterCopy(ctx, account);
 			QueryContext logicalContext = ctx;
+			logicalContext.resource_account = std::move(account);
 			if (logicalContext.guard == nullptr) {
 				logicalContext.guard = &defaultGuard;
 			}
@@ -662,7 +742,11 @@ namespace graph::query {
 				? nativeConfigurationService_->queryResourcePolicy()
 				: NativeQueryResourcePolicy{};
 		QueryGuard defaultGuard(resourcePolicy.timeout_ms, resourcePolicy.maximum_memory_mb);
+		auto account = validatedQueryResourceAccount(ctx.resource_account, *logicalBackend_,
+				logicalReadOptions_.bounds.maximum_materialized_bytes, resourcePolicy);
+		auto parameterCredit = admitQueryParameterCopy(ctx, account);
 		QueryContext logicalContext = ctx;
+		logicalContext.resource_account = std::move(account);
 		if (logicalContext.guard == nullptr) {
 			logicalContext.guard = &defaultGuard;
 		}
@@ -724,14 +808,21 @@ namespace graph::query {
 
 		auto parseStart = Clock::now();
 
-		auto plan = buildPlan(query, lang);
+        auto account = ctx.resource_account;
+        if (logicalBackend_) {
+            const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
+                : NativeQueryResourcePolicy{};
+            account = validatedQueryResourceAccount(ctx.resource_account, *logicalBackend_,
+                logicalReadOptions_.bounds.maximum_materialized_bytes, policy);
+        }
+        auto plan = buildPlanWithAccount(query, lang, account);
 
 		debug::PerfTrace::addDuration(
 				"parse",
 				static_cast<uint64_t>(
 						std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - parseStart).count()));
 
-		return executePlan(std::move(plan), ctx);
+		return executePlanWithAccount(std::move(plan), ctx, std::move(account));
 	}
 
 } // namespace graph::query

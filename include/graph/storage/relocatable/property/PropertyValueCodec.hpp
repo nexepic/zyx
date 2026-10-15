@@ -9,6 +9,8 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+#include <memory_resource>
 #include <span>
 #include <vector>
 
@@ -30,6 +32,30 @@ namespace graph::storage {
 		// oversized value before beginning a scratch or page materialization.
 		[[nodiscard]] static size_t encodedSize(const PropertyValue &value);
 		static void append(std::vector<std::byte> &bytes, const PropertyValue &value);
+		// Destination and canonical-map ordering workspace use the same resource.
+		static void append(std::pmr::vector<std::byte> &bytes, const PropertyValue &value);
+        // Structural counts are not decoded heap capacity or RSS. Inspection
+        // validates the complete value while borrowing input, before allocating
+        // strings, lists or maps; offsets change only after successful scanning.
+        struct DecodeShape {
+            size_t encoded_bytes = 0U, value_count = 0U, list_elements = 0U,
+                map_entries = 0U, string_bytes = 0U, map_key_bytes = 0U, binary_bytes = 0U, maximum_depth = 0U;
+            // Audited upper bound for the admitted decoder's allocator requests,
+            // including reserved hash buckets and moving-container temporaries.
+            // This is distinct from exact retained capacity and malloc/RSS costs.
+            size_t maximum_heap_request_bytes = 0U;
+        };
+        // Heap-request upper bound for the fresh default-layout guarded copy,
+        // without encoding a second buffer. Includes construction/move overlap.
+        [[nodiscard]] static size_t guardedCopyHeapUpper(const PropertyValue &value,
+            const std::function<void()> &checkpoint = {});
+        [[nodiscard]] static DecodeShape inspectNext(std::span<const std::byte> bytes, size_t &offset,
+            const std::function<void()> &checkpoint = {});
+        // The caller owns its admission lifetime through the decoded value.
+        // Input must remain stable and immutable across the callback.
+        [[nodiscard]] static PropertyValue decodeNextWithAdmission(std::span<const std::byte> bytes,
+            size_t &offset, const std::function<void(const DecodeShape &)> &admission,
+            const std::function<void()> &checkpoint = {});
 		[[nodiscard]] static PropertyValue decodeNext(std::span<const std::byte> bytes, size_t &offset);
 	};
 

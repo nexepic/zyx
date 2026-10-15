@@ -1,0 +1,81 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 42,
+  "selected_suites": 4,
+  "failures": 0,
+  "native_sort_integrations": 2,
+  "fault_cases_passed": 559,
+  "fault_failures": 0,
+  "fault_sweeps": {
+    "stage": {
+      "baseline_allocations": 5,
+      "tested_allocations": 5,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3941,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 16,
+      "tested_allocations": 16,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 10,
+      "tested_allocations": 10,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 21,
+      "tested_allocations": 21,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 17,
+      "tested_allocations": 17,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42253,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "crash_cycles": 32,
+  "heap_probe_shapes": 16,
+  "full_suite": false,
+  "source_sha256": {
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "5af32865e8c753ce400eef052ff269168e43665153d401f336c3a264844cdc8e",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "73db40aca3c2a75fe3de4522f143c29715e45adaca195be0fc63e4e2600e8657",
+    "include/graph/storage/relocatable/maintenance/RelocatableMaintenanceWorkspace.hpp": "87552e5592a0b37f182cb2799cf6ee8019ed6448bd21fc70a5937119132a6f0d",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp": "4651b0e18f72cd2dfb22edcae575aba62b4bf7e296c182193d2a7064a9ae6a8a",
+    "tests/support/TransactionResourceFaultWorker.cpp": "0b1df8953cd28683eaabaea38cc4a2675838c7d244f032d3d9f9cbc0d8ea6dde",
+    "scripts/test_transaction_resource_faults.py": "1fafa9aab7ee59fcbcb4562c985fa4ae5f899f834a767d43e65687e908a9ccf9"
+  },
+  "worker_sha256": "749f3d772eff816df9605dd4555f4a1937de5a61a765311eb153d8c425d108f9"
+}

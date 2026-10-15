@@ -105,13 +105,13 @@ namespace graph::storage {
 		const CatalogSlotReservationPreparer preparer = [this, requests](std::span<const CatalogEntry> entries) {
 			writePreparedSegments(entries, requests);
 		};
-		const std::optional<CatalogSlotReservations> reservations = metadata_.reserveFirstFreeAndUpsertCatalog(
+		std::optional<CatalogSlotReservations> reservations = metadata_.reserveFirstFreeAndUpsertCatalog(
 				std::span<const CatalogSlotReservationRequest>(catalogRequests), firstSlot, lastSlot, checkpointLsn,
 				preparer, options);
 		if (!reservations.has_value()) {
 			return std::nullopt;
 		}
-		return PhysicalSegmentAllocations{reservations->superblock, reservations->entries};
+		return PhysicalSegmentAllocations{reservations->superblock, std::move(reservations->entries)};
 	}
 
 	std::optional<PhysicalSegmentAllocation>
@@ -175,14 +175,14 @@ namespace graph::storage {
 		const CatalogSlotReservationPreparer preparer = [this, requests](std::span<const CatalogEntry> entries) {
 			writePreparedSegments(entries, requests);
 		};
-		const std::optional<CatalogSlotReservations> reservations =
+		std::optional<CatalogSlotReservations> reservations =
 				metadata_.reserveFirstFreeAndUpsertCatalogAndLocations(
 						std::span<const CatalogSlotReservationRequest>(catalogRequests), {}, extents, firstSlot,
 						lastSlot, checkpointLsn, preparer, options);
 		if (!reservations.has_value()) {
 			return std::nullopt;
 		}
-		return PhysicalSegmentAllocations{reservations->superblock, reservations->entries};
+		return PhysicalSegmentAllocations{reservations->superblock, std::move(reservations->entries)};
 	}
 
 	Superblock PhysicalSegmentAllocator::retire(SegmentId segmentId, Generation expectedGeneration,
@@ -234,6 +234,13 @@ namespace graph::storage {
 																const MetadataPublishOptions &options) {
 		return metadata_.releaseRelocatedCatalogSource(segmentId, expectedGeneration, checkpointLsn, options);
 	}
+
+    std::optional<Superblock> PhysicalSegmentAllocator::tryReleaseRelocatedSource(SegmentId segmentId, Generation expectedGeneration,
+																LogSequenceNumber checkpointLsn,
+																const MetadataPublishOptions &options) {
+        auto result = metadata_.tryReleaseRelocatedCatalogSource(segmentId, expectedGeneration, checkpointLsn, options);
+        return result;
+    }
 
 	PhysicalSegmentContents PhysicalSegmentAllocator::read(const MetadataSnapshotPin &snapshot,
 														   SegmentId segmentId) const {

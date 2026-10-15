@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -104,7 +105,7 @@ namespace graph::storage {
 		PageLocation location;
 		SharedPagePoolHeader pool_header;
 		PageOwnerHeader owner;
-		std::vector<std::byte> payload;
+		utils::OwnedVector<std::byte> payload;
 	};
 
 	// A read-only validated page view retains the Buffer Pool pin that owns its
@@ -275,6 +276,9 @@ namespace graph::storage {
 		// Releases an already retired empty pool after all process-local metadata
 		// snapshots have stopped resolving its previous Catalog generation.
 		[[nodiscard]] Superblock releaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
+														 LogSequenceNumber checkpointLsn,
+														 const MetadataPublishOptions &options = {});
+        [[nodiscard]] std::optional<Superblock> tryReleaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
 														 LogSequenceNumber checkpointLsn,
 														 const MetadataPublishOptions &options = {});
 

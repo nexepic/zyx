@@ -15,6 +15,7 @@
 #include <set>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
@@ -596,7 +597,15 @@ namespace graph::storage {
 		std::vector<PhysicalSegmentAllocationRequest> requests;
 		requests.reserve(payloads.size());
 		const LogSequenceNumber allocationCheckpoint = nextCheckpointLsn(checkpointLsn);
-		const std::vector<SegmentId> ids = metadata_.allocateLogicalSegmentIds(payloads.size(), checkpointLsn);
+        // Receipts cannot allocate after the fragment ownership is published.
+        std::vector<NativeBulkRunFragmentLocation> locations;
+        locations.reserve(payloads.size());
+        std::vector<SegmentId> ids;
+        try { ids = metadata_.allocateLogicalSegmentIds(payloads.size(), checkpointLsn); }
+        catch (const StorageFileLimitExceeded &) {
+            // Namespace reservation cannot publish a scratch fragment.
+            throw NativeBulkRunCapacityDenied();
+        }
 		if (ids.size() != payloads.size()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable native bulk-run payload batch did not reserve all Segment IDs");
@@ -610,15 +619,23 @@ namespace graph::storage {
 			request.payload = std::move(payloads[ordinal]);
 			requests.push_back(std::move(request));
 		}
-		const std::optional<PhysicalSegmentAllocations> allocations = physical_.allocate(
-			std::span<const PhysicalSegmentAllocationRequest>(requests), options_.first_slot, options_.last_slot,
-			allocationCheckpoint);
+        const PhysicalPageRef beforeCatalog = metadata_.openSnapshot().superblock().catalog_root;
+        std::optional<PhysicalSegmentAllocations> allocations;
+        try {
+            allocations = physical_.allocate(std::span<const PhysicalSegmentAllocationRequest>(requests),
+                options_.first_slot, options_.last_slot, allocationCheckpoint);
+        } catch (const StorageFileLimitExceeded &) {
+            // Post-publication reclamation can also fail. Only an unchanged
+            // durable Catalog proves that no fragment ownership was published.
+            if (metadata_.openSnapshot().superblock().catalog_root == beforeCatalog)
+                throw NativeBulkRunCapacityDenied();
+            throw;
+        }
 		if (!allocations.has_value() || allocations->entries.size() != requests.size()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable native bulk-run payload batch exhausted its physical-slot range");
 		}
-		std::vector<NativeBulkRunFragmentLocation> locations;
-		locations.reserve(allocations->entries.size());
+
 		for (const CatalogEntry &entry: allocations->entries) {
 			locations.push_back({entry.segment_id, entry.generation, transactionId});
 		}
@@ -653,7 +670,7 @@ namespace graph::storage {
 		if (!location.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable native bulk-run location is invalid");
 		}
-		const PhysicalSegmentContents contents = physical_.read(snapshot, location.segment_id);
+		PhysicalSegmentContents contents = physical_.read(snapshot, location.segment_id);
 		const uint8_t invalid = static_cast<uint8_t>(contents.entry.kind != options_.scratch_kind) |
 								static_cast<uint8_t>(contents.entry.owner_id != location.transaction_id) |
 								static_cast<uint8_t>(contents.entry.generation != location.generation);
@@ -661,7 +678,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable native bulk-run location does not match its durable scratch segment");
 		}
-		return contents.payload;
+		return std::move(contents.payload);
 	}
 
 	NativeBulkRunPayloadReader NativeBulkRunStore::openOpaquePayloadReader() const {

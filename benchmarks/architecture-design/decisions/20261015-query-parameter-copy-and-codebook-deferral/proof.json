@@ -1,0 +1,22 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "final_selected_tests": 1282,
+  "codebook_selected_tests": 82,
+  "query_context_probe": {
+    "mode": "query-context-account-validation",
+    "shape_cases": 10,
+    "rejected_payload_allocations": 0,
+    "passed": true
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "CSV filesystem path copy",
+    "public binding parameter conversion",
+    "other compiler/runtime standard-container workspaces",
+    "complete S5/S6 contracts"
+  ]
+}

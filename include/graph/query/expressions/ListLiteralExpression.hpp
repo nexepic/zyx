@@ -28,13 +28,14 @@ public:
 	 * Construct a list literal expression
 	 * @param listValue The PropertyValue containing the list
 	 */
-	explicit ListLiteralExpression(PropertyValue listValue);
+	explicit ListLiteralExpression(OwnedPropertyValue listValue);
+    explicit ListLiteralExpression(const PropertyValue &listValue) : ListLiteralExpression(OwnedPropertyValue(listValue)) {}
 
 	/**
 	 * Construct a list whose members must be evaluated against the current row.
 	 * Static lists keep their compact PropertyValue representation instead.
 	 */
-	explicit ListLiteralExpression(std::vector<std::unique_ptr<Expression>> elements);
+	explicit ListLiteralExpression(utils::OwnedStdVector<std::unique_ptr<Expression>> elements);
 
 	~ListLiteralExpression() override = default;
 
@@ -55,8 +56,8 @@ public:
 	[[nodiscard]] const std::vector<std::unique_ptr<Expression>>& getElements() const { return elements_; }
 
 private:
-	PropertyValue value_;
-	std::vector<std::unique_ptr<Expression>> elements_;
+	OwnedPropertyValue value_;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> elements_;
 };
 
 } // namespace graph::query::expressions

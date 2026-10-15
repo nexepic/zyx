@@ -1,0 +1,30 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "current_module_tests": 590,
+  "current_module_suites": 67,
+  "additional_database_lifecycle_tests": 12,
+  "current_isolated_cases": 100,
+  "current_plan_cache_sweep": {
+    "baseline_allocations": 25092,
+    "tested_allocations": 96,
+    "exhaustive": false
+  },
+  "current_worker_sha256": "9eaa671624f98b382a9dcb08061202e8f5dab33faafe6cc8191e7501f82dd173",
+  "earlier_pre_index_borrow_isolated_cases": 868,
+  "earlier_pre_index_borrow_crash_cycles": 32,
+  "earlier_worker_sha256": "b0d209d02c57480cc189b2616ae7eb3f37c78ba19dae7e4137f8b7003fba566c",
+  "earlier_sweep_source_difference": "pre-index-borrow-PlanCache.hpp; do not describe the868case campaign as a final-source rerun",
+  "failures": 0,
+  "full_suite": false,
+  "performance_campaign": false,
+  "runtime_platform": "Linux clang19/libstdc++14",
+  "limitations": [
+    "Operator object requests, owned cache state/text/index only; standard internal IR strings/vectors/expression payloads and other private workspaces remain ungoverned.",
+    "Long sweeps sample96 allocation points; counts are allocation requests, not timings or RSS.",
+    "No macOS/Windows runtime claim.",
+    "clear retains admission authority; explicit engine lifecycle reset releases it."
+  ]
+}

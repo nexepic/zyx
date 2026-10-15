@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <memory_resource>
 #include <mutex>
 #include <span>
 #include <unordered_map>
@@ -53,7 +54,7 @@ namespace graph::storage {
 			bool writable_ = false;
 		};
 
-		BufferPool(StorageIO &io, size_t capacityBytes);
+		BufferPool(StorageIO &io, size_t capacityBytes, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {});
 		~BufferPool() = default;
 		BufferPool(const BufferPool &) = delete;
 		BufferPool &operator=(const BufferPool &) = delete;
@@ -108,6 +109,7 @@ namespace graph::storage {
 			BQK_FREQUENT = 1,
 		};
 
+		using PageQueue = std::pmr::list<BufferPoolPageKey>;
 		struct Entry {
 			PageBytes bytes{};
 			size_t valid_bytes = 0U;
@@ -117,12 +119,14 @@ namespace graph::storage {
 			bool transient = false;
 			bool prefetched = false;
 			QueueKind queue = QueueKind::BQK_RECENT;
-			std::list<BufferPoolPageKey>::iterator recency;
+			PageQueue::iterator recency;
 		};
 
 		[[nodiscard]] static bool isAligned(BufferPoolPageKey key) noexcept;
 		static void requireTypedPageRange(BufferPoolPageKey firstKey, size_t bytes, const char *operation);
 		[[nodiscard]] Entry &loadLocked(BufferPoolPageKey key, BufferPoolReadHint hint);
+		std::shared_ptr<Entry> allocateEntryLocked();
+		Entry &storeEntryLocked(BufferPoolPageKey key, std::shared_ptr<Entry> entry);
 		void promoteLocked(BufferPoolPageKey key, Entry &entry);
 		void admitLocked(BufferPoolPageKey key, Entry &entry);
 		void eraseLocked(BufferPoolPageKey key, Entry &entry);
@@ -139,10 +143,13 @@ namespace graph::storage {
 
 		StorageIO &io_;
 		const size_t capacity_bytes_;
+		// The allocator owner outlives every entry, queue node and hash bucket.
+		std::shared_ptr<std::pmr::memory_resource> memory_owner_;
+		std::pmr::memory_resource *memory_;
 		mutable std::mutex mutex_;
-		std::unordered_map<BufferPoolPageKey, std::unique_ptr<Entry>, KeyHash> entries_;
-		std::list<BufferPoolPageKey> recent_;
-		std::list<BufferPoolPageKey> frequent_;
+		std::pmr::unordered_map<BufferPoolPageKey, std::shared_ptr<Entry>, KeyHash> entries_;
+		PageQueue recent_;
+		PageQueue frequent_;
 		size_t resident_bytes_ = 0U;
 		size_t pinned_pages_ = 0U;
 		size_t dirty_pages_ = 0U;

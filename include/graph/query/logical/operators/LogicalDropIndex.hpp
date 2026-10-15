@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -25,7 +26,7 @@ namespace graph::query::logical {
  */
 class LogicalDropIndex : public LogicalOperator {
 public:
-	LogicalDropIndex(std::string indexName, std::string label, std::string propertyKey)
+	LogicalDropIndex(utils::OwnedStdString indexName, utils::OwnedStdString label, utils::OwnedStdString propertyKey)
 		: indexName_(std::move(indexName))
 		, label_(std::move(label))
 		, propertyKey_(std::move(propertyKey)) {}
@@ -36,12 +37,14 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override { return {}; }
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalDropIndex>(indexName_, label_, propertyKey_);
 	}
 
 	[[nodiscard]] std::string toString() const override {
-		return "DropIndex(" + (indexName_.empty() ? label_ + "." + propertyKey_ : indexName_) + ")";
+		return "DropIndex(" + (indexName_.empty() ? label_ + "." + propertyKey_ : static_cast<const std::string &>(indexName_)) + ")";
 	}
 
 	void setChild(size_t, std::unique_ptr<LogicalOperator>) override {
@@ -57,9 +60,9 @@ public:
 	[[nodiscard]] const std::string &getPropertyKey() const { return propertyKey_; }
 
 private:
-	std::string indexName_;
-	std::string label_;
-	std::string propertyKey_;
+	utils::OwnedStdString indexName_;
+	utils::OwnedStdString label_;
+	utils::OwnedStdString propertyKey_;
 };
 
 } // namespace graph::query::logical

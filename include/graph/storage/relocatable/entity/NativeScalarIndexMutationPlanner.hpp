@@ -41,7 +41,7 @@ namespace graph::storage {
 	class NativeScalarIndexMutationPlanner final {
 	public:
 		NativeScalarIndexMutationPlanner(RelocatableMetadataStore &metadata, BTreePageStore &indexes,
-										 std::vector<IndexDefinition> definitions,
+										 utils::OwnedStdVector<IndexDefinition> definitions,
 										 NativePropertyKeyTokenResolver propertyKeyTokens);
 
 		// Adds or removes the label entries belonging to one Node. The caller must
@@ -84,7 +84,7 @@ namespace graph::storage {
 
 		RelocatableMetadataStore &metadata_;
 		BTreePageStore &indexes_;
-		std::vector<IndexDefinition> definitions_;
+		utils::OwnedStdVector<IndexDefinition> definitions_;
 		NativePropertyKeyTokenResolver property_key_tokens_;
 		// Index-root presence is immutable for a pinned metadata generation. The
 		// planner may stage thousands of entities against one snapshot, so retain

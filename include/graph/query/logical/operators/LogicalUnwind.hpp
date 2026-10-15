@@ -6,6 +6,8 @@
  **/
 
 #pragma once
+#include "graph/core/OwnedPropertyVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -32,8 +34,8 @@ public:
      * @brief Constructor for a literal list UNWIND.
      */
     LogicalUnwind(std::unique_ptr<LogicalOperator> child,
-                  std::string alias,
-                  std::vector<graph::PropertyValue> listValues)
+                  utils::OwnedStdString alias,
+                  graph::OwnedPropertyVector listValues)
         : child_(std::move(child))
         , alias_(std::move(alias))
         , listValues_(std::move(listValues))
@@ -43,7 +45,7 @@ public:
      * @brief Constructor for an expression-based UNWIND.
      */
     LogicalUnwind(std::unique_ptr<LogicalOperator> child,
-                  std::string alias,
+                  utils::OwnedStdString alias,
                   std::shared_ptr<graph::query::expressions::Expression> listExpr,
                   bool scalarAsSingleRow = true)
         : child_(std::move(child))
@@ -72,13 +74,22 @@ public:
         return vars;
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+        if (child_) {
+            vars = child_->getOwnedOutputVariables();
+        }
+        vars.push_back(alias_);
+        return vars;
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "Unwind(" + alias_ + ")";
     }
 
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
         if (listExpr_) {
-            std::shared_ptr<graph::query::expressions::Expression> clonedExpr(listExpr_->clone());
+            auto clonedExpr = utils::shareOwned(listExpr_->clone());
             return std::make_unique<LogicalUnwind>(
                 child_ ? child_->clone() : nullptr,
                 alias_,
@@ -113,8 +124,8 @@ public:
 
 private:
     std::unique_ptr<LogicalOperator> child_;
-    std::string alias_;
-    std::vector<graph::PropertyValue> listValues_;
+    utils::OwnedStdString alias_;
+    graph::OwnedPropertyVector listValues_;
     std::shared_ptr<graph::query::expressions::Expression> listExpr_;
     bool scalar_as_single_row_ = true;
 };
