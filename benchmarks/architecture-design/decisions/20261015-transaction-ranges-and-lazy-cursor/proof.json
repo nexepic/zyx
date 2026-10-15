@@ -1,0 +1,43 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1209,
+  "selected_suites": 51,
+  "failures": 0,
+  "isolated_transaction_fault_cases": 4,
+  "closed_object_bytes": [
+    1736,
+    1736,
+    1736,
+    1736
+  ],
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "0307a372963e4cab0e92393becd14254ebe815c9100de7e846a655b485a16fdf",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "9aed5c2082514c60f7017a3d684082df81e59bd6d2ca596c2e32b56223bc7637",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "173260bbacc3bac60892ca373ccf3a0478e1a0b27a6fb3474c7f1a87e043dcd0",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "6e73fc48e3e8eb122a3fb2b715587aecfcde5468ba01b68320ce97d163677f55",
+    "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "6ee613a1235527cb9f61bd00442878d7c191a7689f96c886f84a435332749673",
+    "src/storage/relocatable/metadata/LocationDirectory.cpp": "67252a7368cd5dda3fd596afa92987c0ff7d199cede31ba830f0f51c2df6fcf1",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "bf86b9f60ef4527265dc4fc83008063ab05e2b39c860809f1085a717bcd8ce3c",
+    "tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp": "1319a09a2874210166782a794b3238b9600eb6c653a16b01a0bd3a9fea74f036",
+    "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp": "f5bc2717b76ff7b2e5fba3aff3b71d361f28d25695ef8a8bd8fa2a7d83c42d78",
+    "tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp": "b05f35847eaf939e680887da4908d37221ad085a4c3832c1bb276ab71e5e1aa1"
+  },
+  "evidence_sha256": {
+    "module-tests.log": "38182859f8160c62c7a285b47987ba7462b56d222fd8aec0ed5c575df2cd49c4",
+    "module-tests.xml": "c15bf12ba819f096d88d2779c6f4b8d06f81c8ada2bc29628a547807d32ece36",
+    "module-recipe.py": "b7ad3a0474582c3bea3950a21128d1e0c513af3242b0cf39b36b19edea7b4094",
+    "transaction-faults.json": "72c02d3a6b28e60627e85d585005c21badb4d6e0588c0d9c49f11d8c01935860",
+    "worker-build.log": "292e67b7ed786d2584845137c2049caa5025726fae751089c80152ed66811f58",
+    "prior-lazy-context-negative-trace.log": "bec9da1c9913ab41b9cad87e44524b27e1907069e10370edfbeddc6ea34ca2a4",
+    "prior-lazy-context-negative-recipe.py": "97b21f4a48fd5fca87b7bf898d12bc1a22d94a0bc8833ea3c89fd9cea067fa51",
+    "link-command.txt": "4d19aa755d80d3a2031c3f8e17a6f75a88914d7db7367babeeb78dcec4da5a5d"
+  }
+}

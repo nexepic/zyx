@@ -7,6 +7,7 @@
  **/
 
 #pragma once
+#include <algorithm>
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -61,6 +62,28 @@ public:
             for (std::string &variable : rv) {
                 if (seen.insert(variable).second) {
                     vars.push_back(std::move(variable));
+                }
+            }
+        }
+        return vars;
+    }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+
+        if (left_) {
+            auto lv = left_->getOwnedOutputVariables();
+            for (const std::string &variable : lv) {
+                if (std::find(vars.begin(), vars.end(), variable) == vars.end()) {
+                    vars.push_back(variable);
+                }
+            }
+        }
+        if (right_) {
+            auto rv = right_->getOwnedOutputVariables();
+            for (const std::string &variable : rv) {
+                if (std::find(vars.begin(), vars.end(), variable) == vars.end()) {
+                    vars.push_back(variable);
                 }
             }
         }

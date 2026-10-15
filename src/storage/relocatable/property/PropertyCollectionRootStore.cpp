@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 #include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
 
@@ -34,6 +35,10 @@
 namespace graph::storage {
 
 	namespace {
+		[[nodiscard]] size_t pageReadAdmissionBytes(const MetadataSnapshotPin &snapshot) {
+			return snapshot.readContext() && snapshot.readContext()->memoryOwner() ? 0U : RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		}
+
 
 		template<typename Result>
 		Result recordSelectedValues(Result result) {
@@ -881,10 +886,12 @@ namespace graph::storage {
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
 			size_t payloadBytes = 0U;
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value, [&](size_t bytes) {
+			const SelectedPropertyReadAdmission admitPayload = [&](size_t bytes) {
 				payloadBytes = bytes;
 				if (slotsAdmission != nullptr) (*slotsAdmission)(bytes);
-			});
+			};
+            const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value,
+                slotsAdmission ? admitPayload : SelectedPropertyReadAdmission{});
 			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
@@ -897,7 +904,7 @@ namespace graph::storage {
 				}
 				if (slotsAdmission != nullptr) (*slotsAdmission)(payloadBytes + bytes);
 			};
-			root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload, admission, &combinedSlots);
+			root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload, admission, slotsAdmission ? &combinedSlots : nullptr);
 		} else {
 			if ((admission != nullptr || slotsAdmission != nullptr) && entityKeyForRoot(EntityPropertyCollectionRootCodec::decodeOwner(bytes)) != key) {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE, "Entity Property Directory location resolves to another logical owner");
@@ -1137,12 +1144,12 @@ namespace graph::storage {
 		}
 		if (location.page_id != current_page_id_) {
 			if (slotsAdmission) (*slotsAdmission)(checkedLargeValueBuffers(
-					current_page_ ? current_page_->retainedBufferBytes() : 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES));
+					current_page_ ? current_page_->unaccountedReadBufferBytes() : 0U, pageReadAdmissionBytes(snapshot)));
 			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
 			current_page_id_ = location.page_id;
 			debug::PerfTrace::addValue("native_graph.read.property_full_cursor_pages", 1);
 		}
-		const size_t pageBytes = current_page_->retainedBufferBytes();
+		const size_t pageBytes = current_page_->unaccountedReadBufferBytes();
 		const SelectedPropertyReadAdmission admitSlot = [&](size_t bytes) {
 			if (slotsAdmission) (*slotsAdmission)(checkedLargeValueBuffers(pageBytes, bytes));
 		};
@@ -1311,7 +1318,8 @@ namespace graph::storage {
 		// never retain a buffer-pool pin beyond this read. Only the final page
 		// is copied, while borrowed slots were decoded directly above.
 		if (pinned.has_value()) {
-			auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload());
+			auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
+					utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 			debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_copy_bytes",
 					static_cast<int64_t>(pinned->contents.payload().size()));
 			current_page_.emplace(std::move(retained));
@@ -1401,7 +1409,7 @@ namespace graph::storage {
 					pinned = store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
 					if (!pinned.has_value()) {
 						admitTransient(checkedLargeValueBuffers(
-								current_page_ ? current_page_->retainedBufferBytes() : 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES));
+								current_page_ ? current_page_->unaccountedReadBufferBytes() : 0U, pageReadAdmissionBytes(snapshot)));
 						current_page_.emplace(store_->pages_.read(snapshot, currentPage));
 						current_page_id_ = currentPage;
 						copied = &*current_page_;
@@ -1417,7 +1425,7 @@ namespace graph::storage {
 				pageId = pinned->page.pageId();
 				ownerKind = pinned->page.ownerKind();
 			} else {
-				const size_t copiedPageBytes = copied->retainedBufferBytes();
+				const size_t copiedPageBytes = copied->unaccountedReadBufferBytes();
 				const SelectedPropertyReadAdmission admitSlot = [&](size_t retained) {
 					admitTransient(checkedLargeValueBuffers(copiedPageBytes, retained));
 				};
@@ -1431,7 +1439,7 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
 			const SelectedPropertyReadAdmission admitDecode = [&](size_t retained) {
 				admitTransient(checkedLargeValueBuffers(
-						checkedLargeValueBuffers(copied ? copied->retainedBufferBytes() : 0U, copiedBytes.capacity()), retained));
+						checkedLargeValueBuffers(copied ? copied->unaccountedReadBufferBytes() : 0U, copiedBytes.capacity()), retained));
 			};
 			auto decoded = store_->decodeSelectedEntityPropertiesAndCount(snapshot, keys[ownerIndex], location,
 				pageId, ownerKind, bytes, keyTokens, admission, transientBufferAdmission ? &admitDecode : nullptr);
@@ -1452,12 +1460,13 @@ namespace graph::storage {
 		if (pinned.has_value() && transientBufferAdmission == nullptr) {
 			try {
 				// Retain only an owned image across calls, so the session does not keep a pool pin.
-				admitTransient(checkedLargeValueBuffers(current_page_ ? current_page_->retainedBufferBytes() : 0U,
+				admitTransient(checkedLargeValueBuffers(current_page_ ? current_page_->unaccountedReadBufferBytes() : 0U,
 						pinned->contents.payload().size()));
-				current_page_.emplace(SlottedPage::open(pinned->contents.owner, pinned->contents.payload()));
+				current_page_.emplace(SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
+					utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr)));
 				current_page_id_ = currentPage;
 				pinned.reset();
-				admitTransient(current_page_->retainedBufferBytes());
+				admitTransient(current_page_->unaccountedReadBufferBytes());
 			} catch (...) {
 				std::fill(results.begin(), results.end(), std::nullopt);
 				std::fill(counts.begin(), counts.end(), std::nullopt);
@@ -1552,8 +1561,8 @@ namespace graph::storage {
 
 			if (location.page_id != currentPage) {
 				if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(ownerBytes,
-						checkedLargeValueBuffers(current_page_ ? current_page_->retainedBufferBytes() : 0U,
-								RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES)));
+						checkedLargeValueBuffers(current_page_ ? current_page_->unaccountedReadBufferBytes() : 0U,
+								pageReadAdmissionBytes(snapshot))));
 				currentPage = location.page_id;
 				// Keep an owned transient image in the cursor after the authenticated
 				// pin is released. This preserves the one-page cursor locality without
@@ -1561,15 +1570,15 @@ namespace graph::storage {
 				if (std::optional<SlottedPagePinnedRead> pinned =
 						store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
 						pinned.has_value()) {
-					current_page_.emplace(SlottedPage::open(pinned->contents.owner, std::vector<std::byte>(
-							pinned->contents.payload().begin(), pinned->contents.payload().end())));
+					current_page_.emplace(SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
+							utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr)));
 				} else {
 					current_page_.emplace(store_->pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
 				}
 				current_page_id_ = currentPage;
 				debug::PerfTrace::addValue("native_graph.read.property_count_batch_pages", 1);
 			}
-			const size_t pageBytes = current_page_->retainedBufferBytes();
+			const size_t pageBytes = current_page_->unaccountedReadBufferBytes();
 			const auto admitSlot = [&](size_t bytes) {
 				if (transientBufferAdmission) (*transientBufferAdmission)(checkedLargeValueBuffers(
 						checkedLargeValueBuffers(ownerBytes, pageBytes), bytes));

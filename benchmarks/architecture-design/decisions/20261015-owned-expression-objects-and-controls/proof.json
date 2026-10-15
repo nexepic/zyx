@@ -1,0 +1,143 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_module_tests": 686,
+  "selected_suites": 75,
+  "isolated_cases_passed": 106,
+  "failures": 0,
+  "heap_probes": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "codec-admitted-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "owned-expression-heap-accounting",
+      "shape_cases": 6,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-std-string-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "guarded-copy-heap-accounting",
+      "shape_cases": 18,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-partial-cancellation",
+      "cancelled_after_payload_allocation": true,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "plan_cache_sweep": {
+    "baseline_allocations": 25092,
+    "tested_allocations": 96,
+    "exhaustive": false
+  },
+  "worker_sha256": "af51a3f1fa510f2fe77c14be98870b6d76390c69e0bec22bafe3afc7a8539b60",
+  "source_inventory": {
+    "scalar_headers": {
+      "include/graph/query/expressions/ExistsExpression.hpp": [
+        "pattern",
+        "sourceVar",
+        "relType",
+        "targetLabel",
+        "targetVar"
+      ],
+      "include/graph/query/expressions/Expression.hpp": [
+        "stringValue",
+        "variableName",
+        "propertyName",
+        "functionName"
+      ],
+      "include/graph/query/expressions/ListComprehensionExpression.hpp": [
+        "variable"
+      ],
+      "include/graph/query/expressions/MapProjectionExpression.hpp": [
+        "variable"
+      ],
+      "include/graph/query/expressions/ParameterExpression.hpp": [
+        "paramName"
+      ],
+      "include/graph/query/expressions/PatternComprehensionExpression.hpp": [
+        "pattern",
+        "sourceVar",
+        "targetVar",
+        "relationshipVar",
+        "relType",
+        "targetLabel"
+      ],
+      "include/graph/query/expressions/QuantifierFunctionExpression.hpp": [
+        "functionName",
+        "variable"
+      ],
+      "include/graph/query/expressions/ReduceExpression.hpp": [
+        "accumulator",
+        "variable"
+      ],
+      "include/graph/query/expressions/ShortestPathExpression.hpp": [
+        "startVar",
+        "endVar",
+        "relType"
+      ]
+    },
+    "bridge_files": {
+      "include/graph/query/logical/operators/LogicalAggregate.hpp": true,
+      "include/graph/query/logical/operators/LogicalFilter.hpp": true,
+      "include/graph/query/logical/operators/LogicalProject.hpp": true,
+      "include/graph/query/logical/operators/LogicalSort.hpp": true,
+      "include/graph/query/logical/operators/LogicalUnwind.hpp": true,
+      "src/query/expressions/ExpressionUtils.cpp": true,
+      "src/query/ir/LogicalPlanBuilder.cpp": true,
+      "src/query/ir/SemanticAnalyzer.cpp": true,
+      "src/query/parser/cypher/ir/CypherASTBuilder.cpp": true
+    }
+  },
+  "full_suite": false,
+  "performance_campaign": false,
+  "runtime_platform": "Linux clang19/libstdc++14",
+  "limitations": [
+    "The six expression probe shapes have fixed child storage; dynamic argument vectors and nested PropertyValue literals remain open.",
+    "Rendering is a separate caller-owned API operation excluded from the clone/control-block heap probe.",
+    "Long sweeps sample96 allocation points. No Windows/macOS runtime claim."
+  ]
+}

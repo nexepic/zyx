@@ -1,0 +1,260 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:441:82: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  441 |     const EntityReadShape topology{.include_labels = true, .all_properties = true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:443:107: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  443 |     const auto originalEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true});
+      |                                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:453:116: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  453 |         EXPECT_NO_THROW(repeatedEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true}));
+      |                                                                                                                    ^
+9 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = SystemCatalog*.*:IndexDefinition*.*:NativeReadSessionTokenBudgetTest.*:OwnedStdString*.*:RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope:RelocatableStorageBackendSchemaTest.VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle
+[==========] Running 94 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 1 test from IndexDefinitionCodecBudgetTest
+[ RUN      ] IndexDefinitionCodecBudgetTest.ValidatesMalformedWireBeforeNameAdmissionAndRefundsDeniedValidCopies
+[       OK ] IndexDefinitionCodecBudgetTest.ValidatesMalformedWireBeforeNameAdmissionAndRefundsDeniedValidCopies (0 ms)
+[----------] 1 test from IndexDefinitionCodecBudgetTest (0 ms total)
+
+[----------] 1 test from SystemCatalogIdRangeTest
+[ RUN      ] SystemCatalogIdRangeTest.AcceptsOnlyPersistedDefinitionIdRanges
+[       OK ] SystemCatalogIdRangeTest.AcceptsOnlyPersistedDefinitionIdRanges (0 ms)
+[----------] 1 test from SystemCatalogIdRangeTest (0 ms total)
+
+[----------] 61 tests from SystemCatalogTest
+[ RUN      ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists
+[       OK ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists (2 ms)
+[ RUN      ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue
+[       OK ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue (20 ms)
+[ RUN      ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions
+[       OK ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions (7 ms)
+[ RUN      ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen
+[       OK ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen (16 ms)
+[ RUN      ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord
+[       OK ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord (5 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial
+[       OK ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial (5 ms)
+[ RUN      ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts
+[       OK ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts (1 ms)
+[ RUN      ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue
+[       OK ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue (7 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog
+[       OK ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication
+[       OK ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed (13 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration
+[       OK ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound (11 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues (19 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated (12 ms)
+[ RUN      ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords
+[       OK ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords (13 ms)
+[ RUN      ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration
+[       OK ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration (12 ms)
+[ RUN      ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains
+[       OK ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains (7 ms)
+[ RUN      ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences
+[       OK ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences (21 ms)
+[ RUN      ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication
+[       OK ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication (5 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests
+[       OK ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests (5 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds
+[       OK ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds (10 ms)
+[ RUN      ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction
+[       OK ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction (6 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange (7 ms)
+[ RUN      ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion
+[       OK ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion (11 ms)
+[ RUN      ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds
+[       OK ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds (13 ms)
+[ RUN      ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts
+[       OK ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts (14 ms)
+[ RUN      ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings
+[       OK ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings (7 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication
+[       OK ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication (29 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock
+[       OK ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock (8 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock
+[       OK ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock (16 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord
+[       OK ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord (6 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping (7 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics
+[       OK ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics (5 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous (6 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue (6 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments
+[       OK ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent
+[       OK ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds (8 ms)
+[ RUN      ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey
+[       OK ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey (7 ms)
+[ RUN      ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot
+[       OK ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot (19 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds
+[       OK ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds (9 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated (12 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords (12 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId (16 ms)
+[ RUN      ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections
+[       OK ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections (23 ms)
+[ RUN      ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes
+[       OK ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes (10 ms)
+[ RUN      ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots
+[       OK ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots (44 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions (15 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId (14 ms)
+[ RUN      ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid
+[       OK ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid (34 ms)
+[ RUN      ] SystemCatalogTest.PrivateSourceNameLookupAdmitsFreshNamesAndForwardKeysWithoutAnExternalCallback
+[       OK ] SystemCatalogTest.PrivateSourceNameLookupAdmitsFreshNamesAndForwardKeysWithoutAnExternalCallback (12 ms)
+[----------] 61 tests from SystemCatalogTest (726 ms total)
+
+[----------] 23 tests from NativeReadSessionTokenBudgetTest
+[ RUN      ] NativeReadSessionTokenBudgetTest.SchemaCachesRejectSpareCapacityAndRetainSmallDefinitions
+[       OK ] NativeReadSessionTokenBudgetTest.SchemaCachesRejectSpareCapacityAndRetainSmallDefinitions (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.IndexMetricCapacityCannotBypassSchemaCacheBudget
+[       OK ] NativeReadSessionTokenBudgetTest.IndexMetricCapacityCannotBypassSchemaCacheBudget (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.NamedTokenNamespacesAdmitBeforeCopyAndRefundEvictedNames
+[       OK ] NativeReadSessionTokenBudgetTest.NamedTokenNamespacesAdmitBeforeCopyAndRefundEvictedNames (3 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.TokenNameReplacementEvictsOtherKindsAndRefundsOldPayload
+[       OK ] NativeReadSessionTokenBudgetTest.TokenNameReplacementEvictsOtherKindsAndRefundsOldPayload (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.TokenNameUpdatesPreserveFifoAndEntryCap
+[       OK ] NativeReadSessionTokenBudgetTest.TokenNameUpdatesPreserveFifoAndEntryCap (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.CachedNameCopyAdmitsBeforeAllocationAndPreservesCacheOnRejection
+[       OK ] NativeReadSessionTokenBudgetTest.CachedNameCopyAdmitsBeforeAllocationAndPreservesCacheOnRejection (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.DirectPropertyAdmissionDoesNotConsumeOversizedRvalues
+[       OK ] NativeReadSessionTokenBudgetTest.DirectPropertyAdmissionDoesNotConsumeOversizedRvalues (1 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.PropertyAdmissionChargesSpareListAndByteCapacity
+[       OK ] NativeReadSessionTokenBudgetTest.PropertyAdmissionChargesSpareListAndByteCapacity (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.PropertyCopiesChargeActualCapacityAndRejectSpareMapBuckets
+[       OK ] NativeReadSessionTokenBudgetTest.PropertyCopiesChargeActualCapacityAndRejectSpareMapBuckets (4 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.OwnedLabelsAndTokenNamesChargePayloadAndReleaseTogether
+[       OK ] NativeReadSessionTokenBudgetTest.OwnedLabelsAndTokenNamesChargePayloadAndReleaseTogether (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer
+[       OK ] NativeReadSessionTokenBudgetTest.FailedConstructionRefundsEveryPartialContainer (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry
+[       OK ] NativeReadSessionTokenBudgetTest.FailedNamedTokenInsertionLeavesNoPhantomHitAndCanRetry (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.OwnedObjectSurvivesOwnerReleaseAndDeletesThroughBase
+[       OK ] NativeReadSessionTokenBudgetTest.OwnedObjectSurvivesOwnerReleaseAndDeletesThroughBase (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.OwnedObjectConstructorFailureRefundsPrefixAndBody
+[       OK ] NativeReadSessionTokenBudgetTest.OwnedObjectConstructorFailureRefundsPrefixAndBody (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.OwnedCanonicalPropertyCodecMatchesExistingWireAndRollsBackFailure
+[       OK ] NativeReadSessionTokenBudgetTest.OwnedCanonicalPropertyCodecMatchesExistingWireAndRollsBackFailure (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.OwnedPropertyCachePreservesNestedNullAndAbsentValues
+[       OK ] NativeReadSessionTokenBudgetTest.OwnedPropertyCachePreservesNestedNullAndAbsentValues (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.DeniedOwnedPropertyReplacementPreservesOldValueAndSource
+[       OK ] NativeReadSessionTokenBudgetTest.DeniedOwnedPropertyReplacementPreservesOldValueAndSource (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.NativeGrantChargesAdoptedSchemaBuffersAndReleasesOldDefinitions
+[       OK ] NativeReadSessionTokenBudgetTest.NativeGrantChargesAdoptedSchemaBuffersAndReleasesOldDefinitions (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.DeniedSchemaAdoptionPreservesCachedDefinitionAndRetriesAfterPressure
+[       OK ] NativeReadSessionTokenBudgetTest.DeniedSchemaAdoptionPreservesCachedDefinitionAndRetriesAfterPressure (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.EntityPoolCopiesAreChargedThroughTheSessionResource
+[       OK ] NativeReadSessionTokenBudgetTest.EntityPoolCopiesAreChargedThroughTheSessionResource (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.UnownedObjectUsesPermanentStorageAcrossAnAmbientDefaultChange
+[       OK ] NativeReadSessionTokenBudgetTest.UnownedObjectUsesPermanentStorageAcrossAnAmbientDefaultChange (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.CachedNameCopyUsesSourceAdmissionAndKeepsItsOriginalSessionOwner
+[       OK ] NativeReadSessionTokenBudgetTest.CachedNameCopyUsesSourceAdmissionAndKeepsItsOriginalSessionOwner (0 ms)
+[ RUN      ] NativeReadSessionTokenBudgetTest.CachedIndexCopiesReleasePrivateQueryAuthorityBeforeSessionEnds
+[       OK ] NativeReadSessionTokenBudgetTest.CachedIndexCopiesReleasePrivateQueryAuthorityBeforeSessionEnds (0 ms)
+[----------] 23 tests from NativeReadSessionTokenBudgetTest (11 ms total)
+
+[----------] 1 test from RelocatableStorageBackendSchemaTest
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle
+[       OK ] RelocatableStorageBackendSchemaTest.VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle (2841 ms)
+[----------] 1 test from RelocatableStorageBackendSchemaTest (2841 ms total)
+
+[----------] 4 tests from OwnedStdStringTest
+[ RUN      ] OwnedStdStringTest.AdmissionPrecedesCopiesAndRejectedAssignmentKeepsThePreviousValue
+[       OK ] OwnedStdStringTest.AdmissionPrecedesCopiesAndRejectedAssignmentKeepsThePreviousValue (0 ms)
+[ RUN      ] OwnedStdStringTest.CopiesSelectTheActiveOwnerAndSwapsPreserveBothAuthorities
+[       OK ] OwnedStdStringTest.CopiesSelectTheActiveOwnerAndSwapsPreserveBothAuthorities (0 ms)
+[ RUN      ] OwnedStdStringTest.MovedSourcesRemainAdmittedAndReusableAfterTheDestinationDies
+[       OK ] OwnedStdStringTest.MovedSourcesRemainAdmittedAndReusableAfterTheDestinationDies (0 ms)
+[ RUN      ] OwnedStdStringTest.ScanVariableDenialRefundsThePartiallyAllocatedOperatorObject
+[       OK ] OwnedStdStringTest.ScanVariableDenialRefundsThePartiallyAllocatedOperatorObject (0 ms)
+[----------] 4 tests from OwnedStdStringTest (0 ms total)
+
+[----------] 2 tests from OwnedStdStringMutationTest
+[ RUN      ] OwnedStdStringMutationTest.DeniedReserveAndCountAssignmentPreserveValueCapacityAndCredit
+[       OK ] OwnedStdStringMutationTest.DeniedReserveAndCountAssignmentPreserveValueCapacityAndCredit (0 ms)
+[ RUN      ] OwnedStdStringMutationTest.SuccessfulGrowthAndCountReplacementKeepOnlyTheirRetainedStorage
+[       OK ] OwnedStdStringMutationTest.SuccessfulGrowthAndCountReplacementKeepOnlyTheirRetainedStorage (0 ms)
+[----------] 2 tests from OwnedStdStringMutationTest (0 ms total)
+
+[----------] 1 test from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope
+[       OK ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope (90 ms)
+[----------] 1 test from RelocatableStorageBackendTest (90 ms total)
+
+[----------] Global test environment tear-down
+[==========] 94 tests from 8 test suites ran. (3670 ms total)
+[  PASSED  ] 94 tests.

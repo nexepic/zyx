@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/PatternDirection.hpp"
@@ -30,20 +31,20 @@ public:
 	 * @brief Constructor for EXISTS with structured pattern info
 	 */
 	ExistsExpression(
-		std::string pattern,
-		std::string sourceVar,
-		std::string relType,
-		std::string targetLabel,
+		utils::OwnedStdString pattern,
+		utils::OwnedStdString sourceVar,
+		utils::OwnedStdString relType,
+		utils::OwnedStdString targetLabel,
 		PatternDirection direction,
 		std::unique_ptr<Expression> whereExpr = nullptr,
-		std::string targetVar = ""
+		utils::OwnedStdString targetVar = ""
 	);
 
 	/**
 	 * @brief Backward-compatible constructor with pattern string only
 	 */
 	ExistsExpression(
-		std::string pattern,
+		utils::OwnedStdString pattern,
 		std::unique_ptr<Expression> whereExpr = nullptr
 	);
 
@@ -70,11 +71,11 @@ public:
 	[[nodiscard]] bool hasWhereClause() const { return whereExpr_ != nullptr; }
 
 private:
-	std::string pattern_;
-	std::string sourceVar_;
-	std::string relType_;
-	std::string targetLabel_;
-	std::string targetVar_;
+	utils::OwnedStdString pattern_;
+	utils::OwnedStdString sourceVar_;
+	utils::OwnedStdString relType_;
+	utils::OwnedStdString targetLabel_;
+	utils::OwnedStdString targetVar_;
 	PatternDirection direction_ = PatternDirection::PAT_OUTGOING;
 	std::unique_ptr<Expression> whereExpr_;
 };

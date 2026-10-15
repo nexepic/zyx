@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -19,7 +20,7 @@ namespace graph::query::logical {
 class LogicalForeach : public LogicalOperator {
 public:
 	LogicalForeach(std::unique_ptr<LogicalOperator> child,
-	               std::string iterVar,
+	               utils::OwnedStdString iterVar,
 	               std::shared_ptr<graph::query::expressions::Expression> listExpr,
 	               std::unique_ptr<LogicalOperator> body)
 		: child_(std::move(child)), iterVar_(std::move(iterVar)),
@@ -37,6 +38,11 @@ public:
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		// FOREACH does not export any new variables
 		return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		// FOREACH does not export any new variables
+		return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
 	}
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
@@ -70,7 +76,7 @@ public:
 
 private:
 	std::unique_ptr<LogicalOperator> child_;
-	std::string iterVar_;
+	utils::OwnedStdString iterVar_;
 	std::shared_ptr<graph::query::expressions::Expression> listExpr_;
 	std::unique_ptr<LogicalOperator> body_;
 };

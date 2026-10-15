@@ -153,3 +153,22 @@ TEST(GuardedPropertyCopyTest, PathCopiesCancelInsideNestedEntityAndRetryReferenc
 	EXPECT_NE(copy.nodes.front().properties.front().value.getList().data(),
 		source.nodes.front().properties.front().value.getList().data());
 }
+
+TEST(GuardedPropertyCopyTest, RejectsExcessiveNestingAndCopiesTheDepthBoundary) {
+    PropertyValue source(int64_t{42});
+    for (size_t depth = 0U; depth < 64U; ++depth) {
+        std::vector<PropertyValue> elements;
+        elements.push_back(std::move(source));
+        source = PropertyValue(std::move(elements));
+    }
+    const auto copied = detail::copyPropertyValueGuarded(source, [] {});
+    EXPECT_EQ(copied, source);
+    const PropertyValue::MapType wrapped{{"nested", source}};
+    EXPECT_THROW(static_cast<void>(detail::copyPropertyMapGuarded(wrapped, [] {})), std::length_error);
+    std::vector<PropertyValue> elements;
+    elements.push_back(std::move(source));
+    const PropertyValue excessive(std::move(elements));
+    EXPECT_THROW(static_cast<void>(detail::copyPropertyValueGuarded(excessive, [] {})), std::length_error);
+    EXPECT_EQ(excessive.getList().size(), 1U);
+    EXPECT_EQ(detail::copyPropertyValueGuarded(PropertyValue(int64_t{7}), [] {}), PropertyValue(int64_t{7}));
+}

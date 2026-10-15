@@ -35,9 +35,10 @@ enum class SetActionType {
  * @brief Describes a single assignment within a SET clause.
  */
 struct LogicalSetItem {
+    using OwnedHeapElement = void;
 	SetActionType type;
-	std::string variable;
-	std::string key;
+	utils::OwnedStdString variable;
+	utils::OwnedStdString key;
 	std::shared_ptr<graph::query::expressions::Expression> expression;
 };
 
@@ -47,7 +48,7 @@ struct LogicalSetItem {
  */
 class LogicalSet : public LogicalOperator {
 public:
-	LogicalSet(std::vector<LogicalSetItem> items, std::unique_ptr<LogicalOperator> child = nullptr)
+	LogicalSet(utils::OwnedStdVector<LogicalSetItem> items, std::unique_ptr<LogicalOperator> child = nullptr)
 		: items_(std::move(items)), child_(std::move(child)) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_SET; }
@@ -60,12 +61,16 @@ public:
 		return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
 	}
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+	}
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-		std::vector<LogicalSetItem> itemsCopy;
+		utils::OwnedStdVector<LogicalSetItem> itemsCopy;
 		itemsCopy.reserve(items_.size());
 		for (const auto &item : items_) {
 			itemsCopy.push_back({item.type, item.variable, item.key,
-				item.expression ? item.expression->clone() : nullptr});
+				utils::shareOwned(item.expression ? item.expression->clone() : nullptr)});
 		}
 		return std::make_unique<LogicalSet>(std::move(itemsCopy), child_ ? child_->clone() : nullptr);
 	}
@@ -85,7 +90,7 @@ public:
 	[[nodiscard]] const std::vector<LogicalSetItem> &getItems() const { return items_; }
 
 private:
-	std::vector<LogicalSetItem> items_;
+	utils::OwnedStdVector<LogicalSetItem> items_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

@@ -19,6 +19,7 @@
 #include "query/execution/BoundNodeColumnPredicates.hpp"
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "query/execution/ExternalQuerySort.hpp"
+#include "query/execution/ExternalQueryKeySet.hpp"
 #include "graph/query/execution/StringBufferBytes.hpp"
 #include "graph/query/execution/RetainedPropertyBytes.hpp"
 #include "graph/query/execution/GuardedPropertyCopy.hpp"
@@ -138,6 +139,7 @@ namespace graph::query::execution {
 			std::vector<std::vector<PropertyValue>> columns;
 		};
 
+
 		// Query owners outlive every task and all borrowed batch views.
 		// Shared caches and budgets are currently confined to one execution thread.
 		struct ExecutionSharedState {
@@ -152,7 +154,9 @@ namespace graph::query::execution {
 			// path row that the caller did not request.
 			bool allow_cross_row_entity_batches = false;
 			size_t resident_output_batch_bytes = 0U;
-			MaterializedByteBudget materialized_budget{bounds.maximum_materialized_bytes - resident_output_batch_bytes};
+			MaterializedByteBudget materialized_budget = context && context->resource_account
+				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
+				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
 			MaterializedByteReservation final_result_reservation{&materialized_budget};
 			size_t final_result_bytes = 0U;
@@ -454,6 +458,10 @@ namespace graph::query::execution {
 				bytes = checkedSizeAdd(bytes, sizeof(value), "logical-plan result row size overflowed");
 				bytes = checkedSizeAdd(bytes, resultValueBytes(value, state.shared.context), "logical-plan result row size overflowed");
 			}
+			if (state.shared.context && state.shared.context->resource_account) {
+				bytes = (std::max)(bytes, checkedSizeAdd(sizeof(row), graph::query::detail::resultRowHeapBytes(row),
+					"logical-plan result heap storage overflowed"));
+			}
 			if (bytes > state.shared.bounds.maximum_materialized_bytes) {
 				throw std::runtime_error("logical-plan result row exceeded its materialized byte bound");
 			}
@@ -461,14 +469,10 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] size_t queryResultColumnStorageBytes(const std::vector<std::string> &columns) {
-			constexpr const char *message = "logical-plan result column storage size overflowed";
-			size_t bytes = checkedSizeMul(columns.capacity(), sizeof(std::string), message);
-			for (const std::string &column: columns) {
-				// The string object is included in its vector slot. Charge only the
-				// out-of-line character allocation when it exceeds inline storage.
-				bytes = checkedSizeAdd(bytes, detail::dynamicStringBufferBytes(column), message);
-			}
-			return bytes;
+			// Include the empty rows/notifications vector proxies in the retained
+			// result metadata; their later capacity growth is accounted separately.
+			return checkedSizeAdd(graph::query::detail::resultStringsHeapBytes(columns),
+				2U * detail::standardContainerProxyBytes(), "logical-plan result column storage size overflowed");
 		}
 
 		void appendMaterializedResultRow(QueryResult &result, QueryResult::Row &&row, ExecutionState &state,
@@ -486,8 +490,9 @@ namespace graph::query::execution {
 								? minimumCapacity
 								: checkedSizeMul(currentCapacity, 2U, "logical-plan result row capacity overflowed");
 				const size_t requestedCapacity = std::max(minimumCapacity, doubledCapacity);
-				const size_t requestedGrowthBytes = checkedSizeMul(requestedCapacity, sizeof(QueryResult::Row),
-																   "logical-plan result row capacity overflowed");
+				const size_t requestedGrowthBytes = detail::standardAllocatorRequestBytes(
+					checkedSizeMul(requestedCapacity, sizeof(QueryResult::Row),
+						"logical-plan result row capacity overflowed"), alignof(QueryResult::Row));
 				const size_t transientBytes =
 						checkedSizeAdd(nextBytes, requestedGrowthBytes, "logical-plan result growth peak overflowed");
 				state.shared.final_result_reservation.set(transientBytes);
@@ -497,10 +502,11 @@ namespace graph::query::execution {
 					state.shared.final_result_reservation.set(previousBytes);
 					throw;
 				}
-				const size_t oldCapacityBytes = checkedSizeMul(currentCapacity, sizeof(QueryResult::Row),
-															   "logical-plan result row capacity overflowed");
-				const size_t actualCapacityBytes = checkedSizeMul(result.getRows().capacity(), sizeof(QueryResult::Row),
-																  "logical-plan result row capacity overflowed");
+				const size_t oldCapacityBytes = detail::standardAllocatorRequestBytes(
+					checkedSizeMul(currentCapacity, sizeof(QueryResult::Row),
+						"logical-plan result row capacity overflowed"), alignof(QueryResult::Row));
+				const size_t actualCapacityBytes = detail::standardVectorHeapBufferBytes(result.getRows()) -
+					detail::standardContainerProxyBytes();
 				const size_t retainedPayloadBytes = previousBytes - oldCapacityBytes;
 				nextBytes = checkedSizeAdd(
 						checkedSizeAdd(retainedPayloadBytes, rowBytes, "logical-plan result retention size overflowed"),
@@ -5718,11 +5724,41 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] std::vector<std::string> visibleOutputColumns(const logical::LogicalOperator &root) {
-			std::vector<std::string> columns = root.getOutputVariables();
-			std::erase_if(columns, isAnonymousVariable);
-			return columns;
-		}
+        [[nodiscard]] utils::OwnedStringVector visibleOutputColumns(const logical::LogicalOperator &root) {
+            const auto all = root.getOwnedOutputVariables();
+            utils::OwnedStringVector columns;
+            columns.reserve(all.size());
+            for (const auto &column : all) if (!isAnonymousVariable(column)) columns.push_back(column);
+            return columns;
+        }
+
+        // Metadata and the final standard-vector copy overlap during handoff.
+        // Both have admission before copying; detach transfers the final copy's
+        // existing parent credit without a refund/re-admission window.
+        [[nodiscard]] std::optional<detail::ResourceLease> populateResultColumns(QueryResult &result,
+                const logical::LogicalOperator &root, size_t maximumBytes, const QueryContext *context) {
+            const bool managed = context && context->resource_account;
+            auto memory = managed
+                ? std::make_shared<MaterializedByteBudget>(maximumBytes, context->resource_account, std::pmr::new_delete_resource())
+                : std::make_shared<MaterializedByteBudget>(maximumBytes);
+            utils::OwnedAllocationScope scope(memory);
+            const auto columns = visibleOutputColumns(root);
+            if (columns.size() > (std::numeric_limits<size_t>::max)()/sizeof(std::string))
+                throw std::overflow_error("result column backing overflowed");
+            size_t copyUpper = utils::detail::addStandardHeapBytes(3U * utils::detail::standardContainerProxyBytes(),
+                utils::detail::standardAllocatorRequestBytes(columns.size()*sizeof(std::string), alignof(std::string)));
+            for (const auto &column : columns)
+                copyUpper = utils::detail::addStandardHeapBytes(copyUpper, utils::detail::standardFreshStringHeapUpper(column.size()));
+            MaterializedByteReservation copied(memory.get());
+            copied.set(copyUpper);
+            result.setColumns(static_cast<const std::vector<std::string> &>(columns));
+            const auto retained = queryResultColumnStorageBytes(result.getColumns());
+            // The fresh-copy model is audited for the supported standard STLs.
+            if (retained > copyUpper) std::terminate();
+            copied.set(retained);
+            if (managed) return copied.detachToParent();
+            return std::nullopt;
+        }
 
 		template<typename String = std::string>
 		[[nodiscard]] String distinctUnionRowKey(const LogicalPlanReadRow &row,
@@ -6448,7 +6484,7 @@ namespace graph::query::execution {
 			static_cast<void>(materializeEdgeReferences(edgeReferences, state, false));
 		}
 
-		void materializeEntityRefsInRows(std::vector<LogicalPlanReadRow> &rows, ExecutionState &state) {
+		void materializeEntityRefsInRows(std::span<LogicalPlanReadRow> rows, ExecutionState &state) {
 			prefetchEntityRefsInRows(rows, state);
 			for (LogicalPlanReadRow &row: rows) {
 				for (auto &[variable, value]: row.values) {
@@ -6495,7 +6531,8 @@ namespace graph::query::execution {
 		[[nodiscard]] LogicalPlanReadRuntimeStats
 		executeWithBatchedOutputMaterialization(const LogicalPlanReadRuntimeBounds &bounds, Run &&run, Emit &&emit,
 												const bool preserveVisitorEarlyStop = false,
-												const bool replaceDeferredEntityRefs = true) {
+												const bool replaceDeferredEntityRefs = true,
+                                                const QueryContext *allocationContext = nullptr) {
 			// A public row visitor is allowed to stop the producer after the first
 			// emitted row. Keep that contract strict by flushing one row at a time;
 			// QueryResult materialization has no such callback and can use larger
@@ -6503,24 +6540,40 @@ namespace graph::query::execution {
 			// Keep reserved row slots to at most 1/16 of the byte allowance where
 			// possible, leaving most of the budget for the rows and source payloads.
 			constexpr size_t outputBatchSlotBudgetDivisor = 16U;
+            const size_t allocationAllowance = allocationContext && allocationContext->resource_account
+                ? std::min(bounds.maximum_materialized_bytes, allocationContext->resource_account->available())
+                : bounds.maximum_materialized_bytes;
 			const size_t slotBytes = checkedSizeMul(sizeof(LogicalPlanReadRow), outputBatchSlotBudgetDivisor,
 													"logical-plan output batch slot bound overflowed");
 			const size_t maximumOutputSlots =
-					bounds.maximum_materialized_bytes < sizeof(LogicalPlanReadRow)
+					allocationAllowance < sizeof(LogicalPlanReadRow)
 							? 0U
-							: std::max<size_t>(1U, bounds.maximum_materialized_bytes / slotBytes);
+							: std::max<size_t>(1U, allocationAllowance / slotBytes);
 			const size_t batchCapacity =
 					preserveVisitorEarlyStop
 							? std::min<size_t>(1U, maximumOutputSlots)
 							: std::min({DEFAULT_PROPERTY_BATCH_ROWS, bounds.maximum_rows, maximumOutputSlots});
 			if (batchCapacity == 0U) {
+                // Private compiled nodes can legitimately hold part of the same
+                // QUERY account. Report parent pressure as admission denial,
+                // preserving the distinction from an invalid local row bound.
+                if (bounds.maximum_rows != 0U && bounds.maximum_materialized_bytes >= sizeof(LogicalPlanReadRow) &&
+                    allocationContext && allocationContext->resource_account && allocationAllowance < sizeof(LogicalPlanReadRow))
+                    throw detail::ResourceAdmissionDenied();
 				throw std::runtime_error("logical-plan output materialization exceeds its row or byte bound");
 			}
 			// The output batch is live while upstream sources (including LOAD CSV)
 			// continue reading. Charge it to their shared execution budget.
-			MaterializedByteReservation bufferedReservation;
-			bool budgetBound = false;
-			std::vector<LogicalPlanReadRow> rows;
+            // Account actual allocator requests before allocating, including
+            // unused output slots. The execution budget separately excludes this
+            // resident capacity from its local allowance, without a second parent charge.
+            std::optional<MaterializedByteBudget> outputStorage;
+            if (allocationContext && allocationContext->resource_account)
+                outputStorage.emplace(allocationAllowance, allocationContext->resource_account);
+            MaterializedByteReservation bufferedReservation;
+            bool budgetBound = false;
+            std::pmr::vector<LogicalPlanReadRow> rows(outputStorage
+                ? static_cast<std::pmr::memory_resource *>(&*outputStorage) : std::pmr::get_default_resource());
 			rows.reserve(batchCapacity);
 			const size_t residentOutputBatchBytes = checkedSizeMul(rows.capacity(), sizeof(LogicalPlanReadRow),
 																   "logical-plan output batch storage size overflowed");
@@ -6605,7 +6658,7 @@ namespace graph::query::execution {
 				if (!finalized) {
 					finalized = true;
 					const auto release = [&] {
-						std::vector<LogicalPlanReadRow>().swap(rows);
+						std::pmr::vector<LogicalPlanReadRow>(rows.get_allocator().resource()).swap(rows);
 						// Detach while the ExecutionState budget is still alive, including zero-charge owners.
 						bufferedReservation = MaterializedByteReservation{};
 					};
@@ -7382,12 +7435,15 @@ namespace graph::query::execution {
 			if (batchCapacity == 0U) {
 				return std::nullopt;
 			}
-			MaterializedByteReservation bufferedRowsBytes(&state.shared.materialized_budget);
-			detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
-			BoundedBatch<LogicalPlanReadRow> rows(
-					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
-					[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); });
-			rows.reserve(batchCapacity);
+			const bool coordinatedStorage = state.shared.context && state.shared.context->resource_account;
+            MaterializedByteReservation legacyBufferedRowsBytes(&state.shared.materialized_budget);
+            detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
+            BoundedBatch<LogicalPlanReadRow> rows(
+                batchCapacity, state.shared.bounds.maximum_materialized_bytes,
+                [&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
+                coordinatedStorage ? &state.shared.materialized_budget : nullptr, true, sizeof(LogicalPlanReadRow));
+            auto &bufferedRowsBytes = coordinatedStorage ? rows.enrichmentReservation() : legacyBufferedRowsBytes;
+            rows.reserve(batchCapacity);
 			bool stoppedByVisitor = false;
 			size_t largestInputRowBytes = 0U;
 			std::function<bool()> flush;
@@ -7466,9 +7522,14 @@ namespace graph::query::execution {
 					const size_t rowBytes = logicalReadRowBytes(bufferedRows.back(), state.shared.context);
 					LogicalPlanReadRow row = std::move(bufferedRows.back());
 					bufferedRows.pop_back();
-					MaterializedByteReservation rowCharge = pendingBytes.splitOff(rowBytes);
-					rows.append(std::move(row));
-					bufferedRowsBytes.absorb(std::move(rowCharge));
+					MaterializedByteReservation rowCharge = coordinatedStorage
+                        ? pendingBytes.splitOffAccounting(rowBytes, sizeof(LogicalPlanReadRow))
+                        : pendingBytes.splitOff(rowBytes);
+                    if (coordinatedStorage) rows.appendCharged(std::move(row), std::move(rowCharge));
+                    else {
+                        rows.append(std::move(row));
+                        bufferedRowsBytes.absorb(std::move(rowCharge));
+                    }
 					if (rows.size() == splitCapacity && !flush())
 						return false;
 				}
@@ -8141,6 +8202,15 @@ namespace graph::query::execution {
 					const size_t rowCount = rows.size();
 					for (size_t index = 0U; index < rowCount; ++index) {
 						checkGuard(state);
+                        if (coordinatedStorage) {
+                            if (!selection.includes(index)) { rows.discardBack(); continue; }
+                            auto charged = rows.popBackCharged();
+                            const bool accepted = chargedReceiver
+                                ? (*chargedReceiver)(std::move(charged.value), std::move(charged.reservation))
+                                : visitor(std::move(charged.value));
+                            if (!accepted) { keepGoing = false; break; }
+                            continue;
+                        }
 						LogicalPlanReadRow row = rows.popBack();
 						if (selection.includes(index)) {
 							if (chargedReceiver != nullptr) {
@@ -8190,11 +8260,14 @@ namespace graph::query::execution {
 						return false;
 					}
 				}
-				rows.append(std::move(row));
-				if (charge.bytes() == 0U)
-					bufferedRowsBytes.set(rows.bytes());
-				else
-					bufferedRowsBytes.absorb(std::move(charge));
+                if (coordinatedStorage) {
+                    if (charge.bytes() == 0U) rows.append(std::move(row));
+                    else rows.appendCharged(std::move(row), std::move(charge));
+                } else {
+                    rows.append(std::move(row));
+                    if (charge.bytes() == 0U) bufferedRowsBytes.set(rows.bytes());
+                    else bufferedRowsBytes.absorb(std::move(charge));
+                }
 				largestInputRowBytes = std::max(largestInputRowBytes, rowBytes);
 				// A first cache-enriched row can already consume the headroom. Flush
 				// it now so the upstream source can admit the next selected payload.
@@ -10085,7 +10158,8 @@ namespace graph::query::execution {
 						return checkedSizeAdd(sizeof(storage::LogicalGraphEdgeTopology), edge.type.size(),
 											  "logical-plan count topology size overflowed");
 					},
-					&state.shared.materialized_budget,false,sizeof(storage::LogicalGraphEdgeTopology));
+					&state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(storage::LogicalGraphEdgeTopology));
 			pending.reserve(batchCapacity);
 			const auto countTopology = [&](const storage::LogicalGraphEdgeTopology &edge) {
 				if (inputRows == state.shared.bounds.maximum_rows) {
@@ -11113,7 +11187,8 @@ namespace graph::query::execution {
 												   state.shared.bounds.maximum_node_records, state.shared.bounds.maximum_rows});
 			BoundedBatch<PendingNodeRef> pending(
 					batchCapacity, state.shared.bounds.maximum_materialized_bytes,
-					[](const auto &) { return sizeof(PendingNodeRef); }, &state.shared.materialized_budget,false,sizeof(PendingNodeRef));
+					[](const auto &) { return sizeof(PendingNodeRef); }, &state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(PendingNodeRef));
 			pending.reserve(batchCapacity);
 			bool continueVisitor = true;
 			const auto flushPending = [&]() {
@@ -11711,7 +11786,7 @@ namespace graph::query::execution {
 				total=checkedSizeAdd(total,checkedSizeMul(record.keys.capacity(),sizeof(PropertyValue),"Sort spill keys overflowed"),"Sort spill row overflowed");
 				for(const auto &key:record.keys)total=checkedSizeAdd(total,keyBytes(key),"Sort spill key payload overflowed");return total;};
 			detail::ExternalQuerySort sorter(provider,state.shared.materialized_budget,state.shared.bounds.maximum_rows,
-				state.shared.bounds.maximum_materialized_bytes,ascending,bytes,[&]{checkGuard(state);},128U*1024U*1024U,1024U,[&]{checkGuardNow(state);});
+				state.shared.bounds.maximum_materialized_bytes,ascending,bytes,[&]{checkGuard(state);},128U*1024U*1024U,1024U,[&]{checkGuardNow(state);},state.shared.context?state.shared.context->resource_account:nullptr);
 			struct Pending {MaterializedByteReservation charge;Record record;};std::optional<Pending> pending;bool multiple=false;
 			const auto decorate=[&](Record &record,MaterializedByteReservation &charge){
 				charge.set(checkedSizeAdd(rowBytes(record.row),checkedSizeMul(items.size(),sizeof(PropertyValue),"Sort spill keys overflowed"),"Sort spill row overflowed"));
@@ -12122,6 +12197,24 @@ namespace graph::query::execution {
 					}
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
 					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					std::optional<detail::ExternalQueryKeySet> externalDistinct;
+					if (project.isDistinct() && state.shared.allow_cross_row_entity_batches &&
+					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {
+					    auto *provider = dynamic_cast<storage::LogicalQueryScratchProvider *>(&state.shared.snapshot);
+					    if (provider && provider->queryScratchEnabled())
+					        externalDistinct.emplace(*provider, state.shared.materialized_budget, distinctMemory,
+					            state.shared.bounds.maximum_distinct_rows, state.shared.bounds.maximum_materialized_bytes / 8U,
+					            [&] { checkGuard(state); }, [&] { checkGuardNow(state); },
+                                128U * 1024U * 1024U, 1024U,
+                                state.shared.context ? state.shared.context->resource_account : nullptr);
+					}
+					const auto finishDistinct = [&](bool completed) {
+					    if (externalDistinct) {
+					        externalDistinct->finish();
+					        if (externalDistinct->spilled()) debug::PerfTrace::addValue("logical_plan.distinct.spilled", 1);
+					    }
+					    return completed;
+					};
 					const auto *identityReference =
 							items.size() == 1U && !project.isDistinct()
 									? dynamic_cast<const expressions::VariableReferenceExpression *>(
@@ -12281,13 +12374,14 @@ namespace graph::query::execution {
 						} // Slot borrows end before input destruction or downstream callbacks.
 						if (project.isDistinct()) {
 							auto key = distinctRowKey(projected, items, &distinctMemory);
-							if (distinctRows.contains(key)) {
-								return true;
+							if (externalDistinct) {
+								if (!externalDistinct->insert(std::move(key))) return true;
+							} else {
+								if (distinctRows.contains(key)) return true;
+								if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows)
+									throw std::runtime_error("logical-plan DISTINCT exceeded its row bound");
+								distinctRows.insert(std::move(key));
 							}
-							if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows) {
-								throw std::runtime_error("logical-plan DISTINCT exceeded its row bound");
-							}
-							distinctRows.insert(std::move(key));
 						}
 						row = {};
 						if (chargedReceiver != nullptr) {
@@ -12424,9 +12518,9 @@ namespace graph::query::execution {
 								if (const auto batched = tryVisitBatchedPropertyExpressions(
 											input, selected, state, emitScalarPathRow, {}, complete);
 									batched)
-									return *batched;
+									return finishDistinct(*batched);
 							}
-							return visitOperator(input, state, emitScalarPathRow);
+							return finishDistinct(visitOperator(input, state, emitScalarPathRow));
 						}
 					}
 					std::vector<const expressions::Expression *> projectionCandidates;
@@ -12446,13 +12540,13 @@ namespace graph::query::execution {
 										return item.expression && item.expression->getExpressionType() == expressions::ExpressionType::PROPERTY_ACCESS;
 									}));
 							batched.has_value()) {
-							return *batched;
+							return finishDistinct(*batched);
 						}
 					}
-					return visitOperator(projectChild, state, emitProjectedRow,
+					return finishDistinct(visitOperator(projectChild, state, emitProjectedRow,
 										 chargedReceiver != nullptr && supportsChargedRowHandoff(projectChild.getType())
 												 ? &chargedProject
-												 : nullptr);
+												 : nullptr));
 				}
 				case logical::LogicalOpType::LOP_AGGREGATE: {
 					const auto &aggregate = dynamic_cast<const logical::LogicalAggregate &>(op);
@@ -13085,7 +13179,8 @@ namespace graph::query::execution {
 					BoundedBatch<LogicalPlanReadRow> rightRows(
 							state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
 							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
-							&state.shared.materialized_budget,false,sizeof(LogicalPlanReadRow));
+							&state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(LogicalPlanReadRow));
 					rightRows.reserve(state.shared.bounds.maximum_rows);
 					std::pmr::vector<const std::string *> sharedColumns(nameAllocator);
 					sharedColumns.reserve(std::min(leftColumns.size(), rightColumns.size()));
@@ -13237,7 +13332,8 @@ namespace graph::query::execution {
 					BoundedBatch<LogicalPlanReadRow> patternRows(
 							state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
 							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
-							&state.shared.materialized_budget,false,sizeof(LogicalPlanReadRow));
+							&state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(LogicalPlanReadRow));
 					patternRows.reserve(state.shared.bounds.maximum_rows);
 					const bool patternCompleted = visitOperator(*pattern, state, [&](LogicalPlanReadRow row) {
 						if (patternRows.size() == state.shared.bounds.maximum_rows) {
@@ -13844,7 +13940,8 @@ namespace graph::query::execution {
 					BoundedBatch<LogicalPlanReadRow> rows(
 							batchCapacity, state.shared.bounds.maximum_materialized_bytes,
 							[&state](const LogicalPlanReadRow &row) { return logicalReadRowBytes(row, state.shared.context); },
-							&state.shared.materialized_budget,false,sizeof(LogicalPlanReadRow));
+							&state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(LogicalPlanReadRow));
 					rows.reserve(batchCapacity);
 					const auto flushNamedPathRows = [&]() {
 						if (rows.empty()) {
@@ -15220,18 +15317,37 @@ namespace graph::query::execution {
 
 					detail::BudgetMemoryResource distinctMemory(state.shared.materialized_budget);
 					std::pmr::unordered_set<std::pmr::string> distinctRows{&distinctMemory};
+					std::optional<detail::ExternalQueryKeySet> externalDistinct;
+					if (!unionOperator.isAll() && state.shared.allow_cross_row_entity_batches &&
+					        state.shared.bounds.maximum_materialized_bytes >= detail::ExternalQueryKeySet::MINIMUM_QUERY_BYTES) {
+					    auto *provider = dynamic_cast<storage::LogicalQueryScratchProvider *>(&state.shared.snapshot);
+					    if (provider && provider->queryScratchEnabled())
+					        externalDistinct.emplace(*provider, state.shared.materialized_budget, distinctMemory,
+					            state.shared.bounds.maximum_distinct_rows, state.shared.bounds.maximum_materialized_bytes / 8U,
+					            [&] { checkGuard(state); }, [&] { checkGuardNow(state); },
+                                128U * 1024U * 1024U, 1024U,
+                                state.shared.context ? state.shared.context->resource_account : nullptr);
+					}
+					const auto finishDistinct = [&](bool completed) {
+					    if (externalDistinct) {
+					        externalDistinct->finish();
+					        if (externalDistinct->spilled()) debug::PerfTrace::addValue("logical_plan.distinct.spilled", 1);
+					    }
+					    return completed;
+					};
 					const auto visitChild = [&](const logical::LogicalOperator &child) {
 						const auto acceptRow = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
 							LogicalPlanReadRow output = normalizeOutputRow(std::move(row), columns);
 							if (!unionOperator.isAll()) {
 								auto key = distinctUnionRowKey<std::pmr::string>(output, columns, &distinctMemory);
-								if (distinctRows.contains(key)) {
-									return true;
+								if (externalDistinct) {
+									if (!externalDistinct->insert(std::move(key))) return true;
+								} else {
+									if (distinctRows.contains(key)) return true;
+									if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows)
+										throw std::runtime_error("logical-plan UNION DISTINCT exceeded its row bound");
+									distinctRows.insert(std::move(key));
 								}
-								if (distinctRows.size() == state.shared.bounds.maximum_distinct_rows) {
-									throw std::runtime_error("logical-plan UNION DISTINCT exceeded its row bound");
-								}
-								distinctRows.insert(std::move(key));
 							}
 							if (chargedReceiver != nullptr) {
 								if (charge.bytes() != 0U)
@@ -15251,7 +15367,7 @@ namespace graph::query::execution {
 								chargedReceiver != nullptr && supportsChargedRowHandoff(child.getType()) ? &chargedInput
 																										 : nullptr);
 					};
-					return visitChild(*left) && visitChild(*right);
+					return finishDistinct(visitChild(*left) && visitChild(*right));
 				}
 				case logical::LogicalOpType::LOP_SORT: {
 					const auto &sort = dynamic_cast<const logical::LogicalSort &>(op);
@@ -15285,7 +15401,8 @@ namespace graph::query::execution {
 					MaterializedByteReservation keySlots(&state.shared.materialized_budget);
 					MaterializedByteReservation enrichmentPayload(&state.shared.materialized_budget);
 					BoundedBatch<DecoratedRow> rows(state.shared.bounds.maximum_rows, state.shared.bounds.maximum_materialized_bytes,
-													decoratedRowBytes, &state.shared.materialized_budget,false,sizeof(LogicalPlanReadRow));
+													decoratedRowBytes, &state.shared.materialized_budget,
+                            state.shared.context && state.shared.context->resource_account, sizeof(LogicalPlanReadRow));
 					// Start with one bounded batch, not the complete cardinality/byte
 					// allowance. Small grouped results must not allocate millions of
 					// unused sort slots; the vector grows for actual input rows.
@@ -16673,7 +16790,7 @@ namespace graph::query::execution {
 					return executeInternal(backend_, root, bounds, finalVisitor, &context, true, &finalizer, false,
 										   residentOutputBatchBytes);
 				},
-				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true);
+				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true, true, &context);
 	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::executeWithSnapshot(storage::LogicalGraphReadSnapshot &snapshot,
@@ -16688,7 +16805,7 @@ namespace graph::query::execution {
 					return executeOnSnapshot(snapshot, root, bounds, finalVisitor, &context, true, &finalizer, false,
 											 residentOutputBatchBytes);
 				},
-				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true);
+				[&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); }, true, true, &context);
 	}
 
 	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::executeWithSnapshotAndInputRow(
@@ -17009,7 +17126,7 @@ namespace graph::query::execution {
 	QueryResult LogicalPlanReadRuntime::executeToQueryResult(const logical::LogicalOperator &root,
 															 const LogicalPlanReadRuntimeBounds &bounds) const {
 		QueryResult result;
-		result.setColumns(visibleOutputColumns(root));
+        static_cast<void>(populateResultColumns(result, root, bounds.maximum_materialized_bytes, nullptr));
 		const std::vector<std::string> &columns = result.getColumns();
 		const size_t columnBytes = queryResultColumnStorageBytes(columns);
 		if (columnBytes > bounds.maximum_materialized_bytes) {
@@ -17035,8 +17152,16 @@ namespace graph::query::execution {
 	QueryResult LogicalPlanReadRuntime::executeToQueryResult(const logical::LogicalOperator &root,
 															 const LogicalPlanReadRuntimeBounds &bounds,
 															 const QueryContext &context) const {
+		std::optional<detail::ResourceLease> columnParentCharge;
+        // Debug MSVC vectors allocate empty proxies in the result constructor.
+        // Admit these before construction; the populated result's detached
+        // reservation takes over before this initial loan is replaced.
+        if (context.resource_account) {
+            columnParentCharge.emplace(context.resource_account);
+            columnParentCharge->set(3U * detail::standardContainerProxyBytes());
+        }
 		QueryResult result;
-		result.setColumns(visibleOutputColumns(root));
+        columnParentCharge = populateResultColumns(result, root, bounds.maximum_materialized_bytes, &context);
 		const std::vector<std::string> &columns = result.getColumns();
 		const size_t columnBytes = queryResultColumnStorageBytes(columns);
 		if (columnBytes > bounds.maximum_materialized_bytes) {
@@ -17048,14 +17173,26 @@ namespace graph::query::execution {
 				executionBounds,
 				[&](const FinalRowVisitor &finalVisitor, const ExecutionFinalizer &finalizer,
 					const size_t residentOutputBatchBytes) {
-					return executeInternal(backend_, root, executionBounds, finalVisitor, &context, true, &finalizer,
+					const ExecutionFinalizer retainOutput = [&](ExecutionState &state, bool failed) {
+						finalizer(state, failed);
+						if (failed) {
+							// Free partial output before execution reservations refund it.
+							result = QueryResult{};
+						}
+						if (!failed && context.resource_account) {
+							auto charge = state.shared.final_result_reservation.detachToParent();
+							charge.absorb(std::move(*columnParentCharge));
+							result.retainExecutionCharge(std::move(charge));
+						}
+					};
+					return executeInternal(backend_, root, executionBounds, finalVisitor, &context, true, &retainOutput,
 										   true, residentOutputBatchBytes);
 				},
 				[&result, &columns](LogicalPlanReadRow &row, ExecutionState &state) {
 					appendLogicalResultRow(result, row, columns, state);
 					return true;
 				},
-				false, false));
+				false, false, &context));
 		return result;
 	}
 

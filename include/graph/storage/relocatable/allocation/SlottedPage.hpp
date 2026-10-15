@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedVector.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -131,8 +132,9 @@ namespace graph::storage {
 		// Validate allocation metadata without constructing/checksumming a page.
 		static void validateOwner(const PageOwnerHeader &owner);
 		[[nodiscard]] static SlottedPage create(const PageOwnerHeader &owner);
-		[[nodiscard]] static SlottedPage open(std::span<const std::byte> bytes);
-		[[nodiscard]] static SlottedPage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
+		[[nodiscard]] static SlottedPage open(std::span<const std::byte> bytes, std::shared_ptr<std::pmr::memory_resource> memory = {});
+		[[nodiscard]] static SlottedPage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+			std::shared_ptr<std::pmr::memory_resource> memory = {});
 
 		SlottedPage(const SlottedPage &) = delete;
 		SlottedPage &operator=(const SlottedPage &) = delete;
@@ -158,6 +160,9 @@ namespace graph::storage {
 
 		[[nodiscard]] SlottedSlotReference insert(std::span<const std::byte> value);
 		[[nodiscard]] size_t retainedBufferBytes() const;
+		// Owned allocations already belong to their arena; read callbacks must
+		// charge only buffers that have no allocation-domain owner.
+		[[nodiscard]] size_t unaccountedReadBufferBytes() const;
 		// Admission runs under the page latch before copying and after capacity is
 		// known. The callback may throw, but must not reenter this page.
 		[[nodiscard]] std::vector<std::byte> read(const SlottedSlotReference &reference,
@@ -192,7 +197,7 @@ namespace graph::storage {
 			[[nodiscard]] bool isLive() const { return flags == RSS_SLOTTED_SLOT_FLAG_LIVE; }
 		};
 
-		explicit SlottedPage(std::vector<std::byte> bytes, Header header);
+		explicit SlottedPage(utils::OwnedVector<std::byte> bytes, Header header);
 
 		[[nodiscard]] SlottedSlotReference insertLocked(std::span<const std::byte> value);
 		[[nodiscard]] std::vector<std::byte> readLocked(const SlottedSlotReference &reference) const;
@@ -212,7 +217,7 @@ namespace graph::storage {
 		[[nodiscard]] uint32_t contiguousFreeLocked() const;
 
 		mutable std::mutex latch_;
-		std::vector<std::byte> bytes_;
+		utils::OwnedVector<std::byte> bytes_;
 		Header header_;
 	};
 

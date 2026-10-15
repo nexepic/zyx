@@ -21,6 +21,9 @@
 
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
+#include <memory_resource>
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -218,6 +221,21 @@ namespace graph::storage {
 				}
 			}
 		}
+
+        void validateDecodedRoute(const DecodedMetadataPageView<LocationLeafPage> &page, uint64_t ordinal,
+                                  const Superblock &superblock) {
+            validateVisible(page->generation, page->committed_lsn, superblock,
+                "relocatable location leaf is newer than its Superblock");
+            const auto &entries = page->entries;
+            // Codec-validated strict order and monotonic leafOrdinal make this
+            // equivalent to checking every entry. Mutable COW pages still use
+            // the full validateRoute scan before they are written.
+            if (!entries.empty() && (leafOrdinal(entries.front().logical_id) != ordinal ||
+                                     leafOrdinal(entries.back().logical_id) != ordinal)) {
+                throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+                    "relocatable location leaf does not match its radix route");
+            }
+        }
 
 		[[nodiscard]] PhysicalPageRef physicalRootFor(const Superblock &superblock,
 													  MetadataDirectoryType directoryType) {
@@ -671,7 +689,7 @@ namespace graph::storage {
 															batch))
 								   .first;
 			}
-			std::vector<LocationLeafEntry> &entries = iterator->second->page.entries;
+			auto &entries = iterator->second->page.entries;
 			const auto position = std::lower_bound(
 					entries.begin(), entries.end(), logicalId,
 					[](const LocationLeafEntry &candidate, uint64_t id) { return candidate.logical_id < id; });
@@ -733,7 +751,7 @@ namespace graph::storage {
 											"relocatable location radix child reference is invalid");
 			}
 			return radixChild ? pages.readMetadataRadixUnresolved(reference).page_id
-							  : pages.readLocationLeaf(reference).page_id;
+							  : pages.readLocationLeafView(reference)->page_id;
 		}
 
 		void encodeLogicalChildren(MetadataRadixPage &page, MetadataPageFile &pages) {
@@ -982,7 +1000,7 @@ namespace graph::storage {
 	LocationDirectory::LocationDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator) :
 		pages_(pages), allocator_(allocator) {}
 
-	struct LocationDirectoryRangeCursor::Impl final {
+	struct LocationDirectoryRangeCursor::Impl final : utils::OwnedPmrObject {
 		struct RouteFrame final {
 			uint16_t level = 0U;
 			// Only the cursor's bounded ordinal range is resolved. Keep this view
@@ -993,6 +1011,11 @@ namespace graph::storage {
 			uint32_t next_child = 0U;
 		};
 
+        explicit Impl(const std::shared_ptr<std::pmr::memory_resource> &memory)
+            : route(memory ? memory.get() : std::pmr::new_delete_resource()) {}
+        // The lazy cursor outlives its creation scope; every advance rebinds
+        // this context before decoding routes or allocating retained leaves.
+        std::shared_ptr<MetadataPageReadContext> read_context;
 		MetadataPageFile *pages = nullptr;
 		Superblock superblock;
 		MetadataDirectoryType directory_type = MetadataDirectoryType::MDT_PAGE;
@@ -1003,8 +1026,8 @@ namespace graph::storage {
 		// their local cursor is destroyed before either caller-owned span expires.
 		std::span<const uint64_t> requested_entity_ids;
 		std::span<const EntityPropertyKey> requested_property_keys;
-		std::vector<RouteFrame> route;
-		std::optional<LocationLeafPage> leaf;
+		std::pmr::vector<RouteFrame> route;
+		std::optional<DecodedMetadataPageView<LocationLeafPage>> leaf;
 		size_t leaf_entry_index = 0U;
 		uint64_t leaf_ordinal = 0U;
 		std::optional<uint64_t> previous_leaf_ordinal;
@@ -1138,16 +1161,16 @@ namespace graph::storage {
 					}
 					checkCancellation();
 					if (frame.level == 0U) {
-						LocationLeafPage candidate =
-								pages->readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						auto candidate =
+								pages->readLocationLeafView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 						++metadata_pages_read;
 						debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
-						if (candidate.directory_type != directory_type) {
+						if (candidate->directory_type != directory_type) {
 							throwLocationDirectoryError(
 									FormatError::FERR_INVALID_HEADER,
 									"relocatable location range cursor leaf has an unexpected type");
 						}
-						validateRoute(candidate, childOrdinal, superblock);
+						validateDecodedRoute(candidate, childOrdinal, superblock);
 						if (previous_leaf_ordinal.has_value() && childOrdinal <= *previous_leaf_ordinal) {
 							throwLocationDirectoryError(
 									FormatError::FERR_INVALID_HEADER,
@@ -1156,14 +1179,14 @@ namespace graph::storage {
 						previous_leaf_ordinal = childOrdinal;
 						leaf_ordinal = childOrdinal;
 						leaf_entry_index = static_cast<size_t>(std::lower_bound(
-								candidate.entries.begin(), candidate.entries.end(), next_logical_id,
+								candidate->entries.begin(), candidate->entries.end(), next_logical_id,
 								[](const LocationLeafEntry &entry, const uint64_t id) {
 									return entry.logical_id < id;
 								}) -
-														 candidate.entries.begin());
+														 candidate->entries.begin());
 						leaf.emplace(std::move(candidate));
-						if (leaf_entry_index < leaf->entries.size() &&
-							leaf->entries[leaf_entry_index].logical_id <= upper_logical_id) {
+						if (leaf_entry_index < (*leaf)->entries.size() &&
+							(*leaf)->entries[leaf_entry_index].logical_id <= upper_logical_id) {
 							return true;
 						}
 						leaf.reset();
@@ -1210,18 +1233,18 @@ namespace graph::storage {
 					}
 				} else {
 					leaf_entry_index = static_cast<size_t>(std::lower_bound(
-							leaf->entries.begin() + static_cast<std::ptrdiff_t>(leaf_entry_index),
-							leaf->entries.end(), next_logical_id,
+							(*leaf)->entries.begin() + static_cast<std::ptrdiff_t>(leaf_entry_index),
+							(*leaf)->entries.end(), next_logical_id,
 							[](const LocationLeafEntry &entry, const uint64_t id) {
 								return entry.logical_id < id;
 							}) -
-												 leaf->entries.begin());
+												 (*leaf)->entries.begin());
 				}
-				if (leaf_entry_index >= leaf->entries.size()) {
+				if (leaf_entry_index >= (*leaf)->entries.size()) {
 					leaf.reset();
 					continue;
 				}
-				const LocationLeafEntry result = leaf->entries[leaf_entry_index++];
+				const LocationLeafEntry result = (*leaf)->entries[leaf_entry_index++];
 				if (result.logical_id > upper_logical_id) {
 					exhausted = true;
 					leaf.reset();
@@ -1271,6 +1294,8 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
 									"relocatable location range cursor has no snapshot-bound state");
 		}
+		std::optional<MetadataPageReadContext::Scope> scope;
+        if (implementation_->read_context) scope.emplace(implementation_->read_context, *implementation_->pages->storageIO());
 		return implementation_->nextEntry();
 	}
 
@@ -1280,6 +1305,8 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
 									"relocatable location range cursor has no snapshot-bound state");
 		}
+		std::optional<MetadataPageReadContext::Scope> scope;
+        if (implementation_->read_context) scope.emplace(implementation_->read_context, *implementation_->pages->storageIO());
 		return implementation_->nextAtOrAfter(minimumLogicalId);
 	}
 
@@ -1299,7 +1326,12 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 									"relocatable location range cursor requires a valid type and logical range");
 		}
-		auto implementation = std::make_unique<LocationDirectoryRangeCursor::Impl>();
+		auto context = MetadataPageReadContext::Scope::currentOwner(*pages_.storageIO());
+        const auto memory = context ? context->memoryOwner() : nullptr;
+        static_assert(alignof(LocationDirectoryRangeCursor::Impl) <= alignof(std::max_align_t));
+        auto implementation = std::unique_ptr<LocationDirectoryRangeCursor::Impl>(
+            new (memory) LocationDirectoryRangeCursor::Impl(memory));
+        implementation->read_context = std::move(context);
 		implementation->pages = &pages_;
 		implementation->superblock = superblock;
 		implementation->directory_type = directoryType;
@@ -2242,16 +2274,16 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 			if (node.level == 0U) {
-				const LocationLeafPage leaf = pages_.readLocationLeaf(reference);
-				if (leaf.directory_type != directoryType) {
+				const auto leaf = pages_.readLocationLeafView(reference);
+				if (leaf->directory_type != directoryType) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"relocatable location leaf has an unexpected directory type");
 				}
-				validateRoute(leaf, ordinal, superblock);
+				validateDecodedRoute(leaf, ordinal, superblock);
 				const auto position = std::lower_bound(
-						leaf.entries.begin(), leaf.entries.end(), logicalId,
+						leaf->entries.begin(), leaf->entries.end(), logicalId,
 						[](const LocationLeafEntry &entry, uint64_t id) { return entry.logical_id < id; });
-				if (position == leaf.entries.end() || position->logical_id != logicalId) {
+				if (position == leaf->entries.end() || position->logical_id != logicalId) {
 					return std::nullopt;
 				}
 				return *position;
@@ -2323,17 +2355,17 @@ namespace graph::storage {
 					visitNode(child, childOrdinal);
 					continue;
 				}
-				const LocationLeafPage leaf =
-						pages_.readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
-				if (leaf.directory_type != directoryType) {
+				const auto leaf =
+						pages_.readLocationLeafView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (leaf->directory_type != directoryType) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"relocatable entity range absence proof found a leaf of another type");
 				}
-				validateRoute(leaf, childOrdinal, superblock);
+				validateDecodedRoute(leaf, childOrdinal, superblock);
 				const auto found = std::lower_bound(
-						leaf.entries.begin(), leaf.entries.end(), firstLogicalId,
+						leaf->entries.begin(), leaf->entries.end(), firstLogicalId,
 						[](const LocationLeafEntry &entry, uint64_t id) { return entry.logical_id < id; });
-				if (found != leaf.entries.end() && found->logical_id <= lastLogicalId) {
+				if (found != leaf->entries.end() && found->logical_id <= lastLogicalId) {
 					throwLocationDirectoryError(
 							FormatError::FERR_INVALID_STATE,
 							"relocatable entity range absence proof found an existing logical entity ID");
@@ -2394,14 +2426,14 @@ namespace graph::storage {
 												"relocatable location directory reuses one physical metadata page");
 				}
 				if (node.level == 0U) {
-					const LocationLeafPage leaf =
-							pages_.readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
-					if (leaf.directory_type != directoryType) {
+					const auto leaf =
+							pages_.readLocationLeafView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					if (leaf->directory_type != directoryType) {
 						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 													"relocatable location directory leaf has an unexpected type");
 					}
-					validateRoute(leaf, childOrdinal, superblock);
-					for (const LocationLeafEntry &entry: leaf.entries) {
+					validateDecodedRoute(leaf, childOrdinal, superblock);
+					for (const LocationLeafEntry &entry: leaf->entries) {
 						if (!visitor(entry)) {
 							return false;
 						}
@@ -2482,21 +2514,21 @@ namespace graph::storage {
 				}
 				++visitedPageCount;
 				if (node.level == 0U) {
-					const LocationLeafPage leaf =
-							pages_.readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
-					if (leaf.directory_type != directoryType) {
+					const auto leaf =
+							pages_.readLocationLeafView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					if (leaf->directory_type != directoryType) {
 						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 													"relocatable location directory leaf has an unexpected type");
 					}
-					validateRoute(leaf, childOrdinal, superblock);
-					auto entry = leaf.entries.begin();
+					validateDecodedRoute(leaf, childOrdinal, superblock);
+					auto entry = leaf->entries.begin();
 					if (childOrdinal == firstOrdinal) {
-						entry = std::upper_bound(leaf.entries.begin(), leaf.entries.end(), afterLogicalId,
+						entry = std::upper_bound(leaf->entries.begin(), leaf->entries.end(), afterLogicalId,
 												 [](uint64_t id, const LocationLeafEntry &candidate) {
 													 return id < candidate.logical_id;
 												 });
 					}
-					for (; entry != leaf.entries.end(); ++entry) {
+					for (; entry != leaf->entries.end(); ++entry) {
 						if (!visitor(*entry)) {
 							return false;
 						}

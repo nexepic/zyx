@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
 
 #include <algorithm>
 #include "graph/query/logical/LogicalOperator.hpp"
@@ -32,7 +33,7 @@ class LogicalOptionalMatch : public LogicalOperator {
 public:
     LogicalOptionalMatch(std::unique_ptr<LogicalOperator> input,
                          std::unique_ptr<LogicalOperator> optionalPattern,
-                         std::vector<std::string> requiredVariables = {})
+                         utils::OwnedStringVector requiredVariables = {})
         : input_(std::move(input))
         , optionalPattern_(std::move(optionalPattern))
         , requiredVariables_(std::move(requiredVariables)) {}
@@ -60,6 +61,23 @@ public:
             for (std::string &variable : ov) {
                 if (std::find(vars.begin(), vars.end(), variable) == vars.end()) {
                     vars.push_back(std::move(variable));
+                }
+            }
+        }
+        return vars;
+    }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+        if (input_) {
+            auto iv = input_->getOwnedOutputVariables();
+            for (const auto &name : iv) vars.push_back(name);
+        }
+        if (optionalPattern_) {
+            auto ov = optionalPattern_->getOwnedOutputVariables();
+            for (const std::string &variable : ov) {
+                if (std::find(vars.begin(), vars.end(), variable) == vars.end()) {
+                    vars.push_back(variable);
                 }
             }
         }
@@ -100,7 +118,7 @@ public:
 private:
     std::unique_ptr<LogicalOperator> input_;
     std::unique_ptr<LogicalOperator> optionalPattern_;
-    std::vector<std::string> requiredVariables_;
+    utils::OwnedStringVector requiredVariables_;
 };
 
 } // namespace graph::query::logical

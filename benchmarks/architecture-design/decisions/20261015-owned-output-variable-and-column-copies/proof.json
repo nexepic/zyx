@@ -1,0 +1,17 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1063,
+  "final_proxy_selected_tests": 57,
+  "pre_proxy_isolated_cases": 106,
+  "final_proxy_isolated_cases": 10,
+  "plan_and_column_heap_shapes": 10,
+  "expression_heap_shapes": 12,
+  "column_copy_cases": 3,
+  "rejected_large_column_payload_allocations": 0,
+  "accepted_large_column_payload_allocations": 1,
+  "full_suite": false,
+  "new_performance_campaign": false
+}

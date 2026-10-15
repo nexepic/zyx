@@ -1547,3 +1547,167 @@ TEST_F(RelocatableVectorCodebookStoreTest, RejectsCachedCodebookWhoseCurrentMani
 	expectFormatError([&] { static_cast<void>(store.readSharedBounded(snapshot, 17U, 1024U, 0U)); },
 					  FormatError::FERR_INVALID_STATE);
 }
+
+namespace {
+class CodebookMetadataResource final : public std::pmr::memory_resource {
+public:
+    size_t allocations = 0U;
+    size_t live = 0U;
+    size_t failAt = 0U;
+private:
+    void *do_allocate(size_t bytes, size_t alignment) override {
+        if (++allocations == failAt) { throw std::bad_alloc(); }
+        void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+        live += bytes;
+        return result;
+    }
+    void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+        live -= bytes;
+        std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment);
+    }
+    bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST_F(RelocatableVectorCodebookStoreTest, RollsBackEveryMetadataAllocationFailureAndRetries) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    VectorCodebookStore writer(segments, *metadata);
+    static_cast<void>(writer.writeImmutable(request(), payload(), PhysicalSlotId(40U), PhysicalSlotId(40U),
+                                            LogSequenceNumber(2U)));
+    const auto snapshot = metadata->openSnapshot();
+    for (size_t failure = 1U; failure <= 4U; ++failure) {
+        auto resource = std::make_shared<CodebookMetadataResource>();
+        {
+            VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
+            resource->failAt = failure;
+            EXPECT_THROW(static_cast<void>(store.readSharedBounded(snapshot, 17U, 1024U, 0U)), std::bad_alloc);
+            EXPECT_EQ(resource->live, 0U);
+            resource->failAt = 0U;
+            const auto loaded = store.readSharedBounded(snapshot, 17U, 1024U, 0U);
+            EXPECT_GT(resource->live, 0U);
+            EXPECT_EQ(store.readSharedBounded(snapshot, 17U, 1024U, 0U), loaded);
+        }
+        EXPECT_EQ(resource->live, 0U);
+    }
+}
+
+TEST_F(RelocatableVectorCodebookStoreTest, FailedReplacementPreservesTheExistingCachedValue) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    VectorCodebookStore writer(segments, *metadata);
+    static_cast<void>(writer.writeImmutable(request(), payload(), PhysicalSlotId(40U), PhysicalSlotId(40U),
+                                            LogSequenceNumber(2U)));
+    auto second = request();
+    second.codebook_id = 18U;
+    second.manifest_segment_id = SegmentId(42U);
+    second.generation = Generation(3U);
+    static_cast<void>(writer.writeImmutable(second, payload(), PhysicalSlotId(41U), PhysicalSlotId(41U),
+                                            LogSequenceNumber(3U)));
+    const auto snapshot = metadata->openSnapshot();
+    for (size_t failure = 1U; failure <= 4U; ++failure) {
+        auto resource = std::make_shared<CodebookMetadataResource>();
+        VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
+        const auto first = store.readSharedBounded(snapshot, 17U, 1024U, 0U);
+        const size_t retained = resource->live;
+        resource->failAt = resource->allocations + failure;
+        EXPECT_THROW(static_cast<void>(store.readSharedBounded(snapshot, 18U, 1024U, 0U)), std::bad_alloc);
+        EXPECT_EQ(resource->live, retained);
+        EXPECT_EQ(store.readSharedBounded(snapshot, 17U, 1024U, 0U), first);
+        resource->failAt = 0U;
+        const auto replacement = store.readSharedBounded(snapshot, 18U, 1024U, 0U);
+        EXPECT_EQ(store.readSharedBounded(snapshot, 18U, 1024U, 0U), replacement);
+        EXPECT_NE(store.readSharedBounded(snapshot, 17U, 1024U, 0U), first);
+    }
+}
+
+TEST_F(RelocatableVectorCodebookStoreTest, OwnsMetadataAllocatorUntilCacheDestruction) {
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    auto resource = std::make_shared<CodebookMetadataResource>();
+    std::weak_ptr<CodebookMetadataResource> weak = resource;
+    {
+        VectorCodebookStore store(segments, *metadata, 1024U, 1U, resource);
+        resource.reset();
+        EXPECT_FALSE(weak.expired());
+    }
+    EXPECT_TRUE(weak.expired());
+}
+
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
+TEST_F(RelocatableVectorCodebookStoreTest, EscapedPayloadAndDeepCopyKeepTheirActualAllocationGrantAlive) {
+    using namespace graph::query::execution::detail;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    VectorCodebookStore writer(segments, *metadata);
+    static_cast<void>(writer.writeImmutable(request(), payload(), PhysicalSlotId(40U), PhysicalSlotId(40U),
+                                            LogSequenceNumber(2U)));
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(4096U));
+    auto domain = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(4096U));
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_CACHE, 4096U);
+    auto memory = std::make_shared<PrepaidMemoryResource>(account, 4096U);
+    std::weak_ptr<PrepaidMemoryResource> lifetime = memory;
+    std::shared_ptr<const VectorCodebook> escaped;
+    {
+        VectorCodebookStore store(segments, *metadata, 1024U, 1U, memory);
+        escaped = store.readSharedBounded(metadata->openSnapshot(), 17U, 1024U, 0U);
+        EXPECT_GT(memory->used(), escaped->payload.capacity());
+        const size_t retained = memory->used();
+        {
+            const VectorCodebook copy = *escaped;
+            EXPECT_EQ(copy, *escaped);
+            EXPECT_NE(copy.payload.data(), escaped->payload.data());
+            EXPECT_EQ(memory->used(), retained + copy.payload.capacity());
+        }
+        EXPECT_EQ(memory->used(), retained);
+    }
+    EXPECT_GT(memory->used(), escaped->payload.capacity());
+    memory.reset();
+    EXPECT_FALSE(lifetime.expired());
+    EXPECT_EQ(escaped->payload, payload());
+    std::weak_ptr<const VectorCodebook> weakControl = escaped;
+    escaped.reset();
+    EXPECT_FALSE(lifetime.expired());
+    EXPECT_EQ(account->used(), 4096U);
+    weakControl.reset();
+    EXPECT_TRUE(lifetime.expired());
+    EXPECT_EQ(account->used(), 0U);
+}
+
+TEST_F(RelocatableVectorCodebookStoreTest, SharedPayloadQuotaEvictsUnpinnedValuesAndPreservesPinnedReaders) {
+    using namespace graph::query::execution::detail;
+    auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+    PhysicalSegmentAllocator segments(io, *metadata);
+    VectorCodebookStore writer(segments, *metadata);
+    auto firstRequest = request();
+    firstRequest.centroid_count = 512U;
+    const std::vector<std::byte> bytes(4096U, std::byte{0});
+    static_cast<void>(writer.writeImmutable(firstRequest, bytes, PhysicalSlotId(40U), PhysicalSlotId(40U),
+                                            LogSequenceNumber(2U)));
+    auto secondRequest = firstRequest;
+    secondRequest.codebook_id = 18U;
+    secondRequest.manifest_segment_id = SegmentId(72U);
+    secondRequest.generation = Generation(3U);
+    static_cast<void>(writer.writeImmutable(secondRequest, bytes, PhysicalSlotId(41U), PhysicalSlotId(41U),
+                                            LogSequenceNumber(3U)));
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(6000U));
+    auto domain = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(6000U));
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_CACHE, 6000U);
+    auto memory = std::make_shared<PrepaidMemoryResource>(account, 6000U);
+    VectorCodebookStore store(segments, *metadata, 16384U, 4U, memory);
+    const auto snapshot = metadata->openSnapshot();
+    auto first = store.readSharedBounded(snapshot, 17U, bytes.size(), 0U);
+    std::weak_ptr<const VectorCodebook> old = first;
+    first.reset();
+    auto second = store.readSharedBounded(snapshot, 18U, bytes.size(), 0U);
+    EXPECT_TRUE(old.expired());
+    EXPECT_EQ(second->payload, bytes);
+    const size_t retained = memory->used();
+    EXPECT_THROW(static_cast<void>(VectorCodebook(*second)), ResourceAdmissionDenied);
+    EXPECT_EQ(memory->used(), retained);
+    EXPECT_THROW(static_cast<void>(store.readSharedBounded(snapshot, 17U, bytes.size(), 0U)), ResourceAdmissionDenied);
+    EXPECT_EQ(second->payload, bytes);
+    EXPECT_LE(memory->used(), memory->capacity());
+    second.reset();
+    EXPECT_EQ(store.readSharedBounded(snapshot, 17U, bytes.size(), 0U)->payload, bytes);
+}

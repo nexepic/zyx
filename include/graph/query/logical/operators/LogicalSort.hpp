@@ -6,6 +6,8 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -22,6 +24,7 @@ namespace graph::query::logical {
  * @brief A single sort key: an expression and its sort direction.
  */
 struct LogicalSortItem {
+    using OwnedHeapElement = void;
     std::shared_ptr<graph::query::expressions::Expression> expression;
     bool ascending;
 
@@ -36,7 +39,7 @@ struct LogicalSortItem {
 class LogicalSort : public LogicalOperator {
 public:
     LogicalSort(std::unique_ptr<LogicalOperator> child,
-                std::vector<LogicalSortItem> sortItems)
+                utils::OwnedStdVector<LogicalSortItem> sortItems)
         : child_(std::move(child))
         , sortItems_(std::move(sortItems)) {}
 
@@ -56,16 +59,20 @@ public:
         return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "Sort";
     }
 
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-        std::vector<LogicalSortItem> clonedItems;
+        utils::OwnedStdVector<LogicalSortItem> clonedItems;
         clonedItems.reserve(sortItems_.size());
         for (const auto &item : sortItems_) {
             auto clonedExpr = item.expression ? item.expression->clone() : nullptr;
-            std::shared_ptr<graph::query::expressions::Expression> sharedExpr(std::move(clonedExpr));
+            auto sharedExpr = utils::shareOwned(std::move(clonedExpr));
             clonedItems.emplace_back(std::move(sharedExpr), item.ascending);
         }
         return std::make_unique<LogicalSort>(
@@ -91,7 +98,7 @@ public:
 
 private:
     std::unique_ptr<LogicalOperator> child_;
-    std::vector<LogicalSortItem> sortItems_;
+    utils::OwnedStdVector<LogicalSortItem> sortItems_;
 };
 
 } // namespace graph::query::logical

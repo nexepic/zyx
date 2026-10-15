@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -229,4 +230,19 @@ TEST(RelocatableConstraintDefinitionCodecTest, RejectsOrExactlyRoundTripsEverySi
 			}
 		}
 	}
+}
+
+TEST(ConstraintDefinitionCodecBudgetTest, ValidatesMalformedWireBeforeNameAdmissionAndRefundsDeniedValidCopies) {
+    auto input = definition(std::string(4096U, 'n'), ConstraintDefinitionEntityKind::CDEK_NODE,
+        ConstraintDefinitionKind::CDK_UNIQUE, {"key"});
+    const auto valid = ConstraintDefinitionCodec::encode(input);
+    auto invalid = valid; invalid[25U] = std::byte{0x7f};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(static_cast<void>(ConstraintDefinitionCodec::decode(invalid)), FormatException);
+        EXPECT_THROW(static_cast<void>(ConstraintDefinitionCodec::decode(valid)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U);
 }

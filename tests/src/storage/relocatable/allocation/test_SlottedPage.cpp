@@ -612,3 +612,70 @@ TEST(RelocatableSlottedPageTest, SlotReadAdmissionRejectsBeforeAllocationAndPres
 	}
 	EXPECT_GE(page.retainedBufferBytes(), input.size());
 }
+
+namespace {
+class SlottedAllocationResource final : public std::pmr::memory_resource {
+public:
+ size_t live = 0U;
+ size_t maximum = (std::numeric_limits<size_t>::max)();
+private:
+ void *do_allocate(size_t bytes, size_t alignment) override {
+  if (bytes > maximum - live) throw std::bad_alloc();
+  void *value = std::pmr::new_delete_resource()->allocate(bytes, alignment);
+  live += bytes; return value;
+ }
+ void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+  std::pmr::new_delete_resource()->deallocate(pointer, bytes, alignment); live -= bytes;
+ }
+ bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST(RelocatableSlottedPageTest, OwnedPageCloneAndMoveRetainTheAllocationDomain) {
+ auto original = SlottedPage::create(PageId(17U), Generation(3U));
+ const auto reference = original.insert(bytes("owned"));
+ const auto serialized = original.serialize();
+ auto resource = std::make_shared<SlottedAllocationResource>();
+ std::weak_ptr<SlottedAllocationResource> weak = resource;
+ {
+  auto page = SlottedPage::open(serialized, resource);
+  EXPECT_EQ(resource->live, page.retainedBufferBytes());
+  auto cloned = page.clone();
+  EXPECT_EQ(resource->live, page.retainedBufferBytes() + cloned.retainedBufferBytes());
+  auto moved = std::move(cloned);
+  EXPECT_EQ(moved.read(reference), bytes("owned"));
+  resource.reset();
+  EXPECT_FALSE(weak.expired());
+  EXPECT_EQ(page.serialize(), serialized);
+ }
+ EXPECT_TRUE(weak.expired());
+}
+
+TEST(RelocatableSlottedPageTest, DeniedClonePreservesTheSourceAndMalformedOpenRefundsItsBuffer) {
+ auto original = SlottedPage::create(PageId(18U), Generation(4U));
+ const auto serialized = original.serialize();
+ auto resource = std::make_shared<SlottedAllocationResource>();
+ resource->maximum = serialized.size();
+ {
+  auto page = SlottedPage::open(serialized, resource);
+  EXPECT_THROW((void)page.clone(), std::bad_alloc);
+  EXPECT_EQ(page.serialize(), serialized);
+  EXPECT_EQ(resource->live, serialized.size());
+ }
+ EXPECT_EQ(resource->live, 0U);
+ auto malformed = serialized;
+ malformed.back() ^= std::byte{0x55};
+ EXPECT_THROW((void)SlottedPage::open(malformed, resource), FormatException);
+ EXPECT_EQ(resource->live, 0U);
+ auto retried = SlottedPage::open(serialized, resource);
+ EXPECT_EQ(retried.serialize(), serialized);
+}
+
+TEST(RelocatableSlottedPageTest, OwnedPagesAreNotChargedAgainByLegacyReadAdmission) {
+ auto original = SlottedPage::create(PageId(19U), Generation(5U));
+ EXPECT_EQ(original.unaccountedReadBufferBytes(), original.retainedBufferBytes());
+ auto resource = std::make_shared<SlottedAllocationResource>();
+ auto owned = SlottedPage::open(original.serialize(), resource);
+ EXPECT_EQ(owned.unaccountedReadBufferBytes(), 0U);
+ EXPECT_EQ(resource->live, owned.retainedBufferBytes());
+}

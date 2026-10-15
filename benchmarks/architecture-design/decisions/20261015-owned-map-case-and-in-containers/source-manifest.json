@@ -1,0 +1,8 @@
+{
+  "include/graph/query/expressions/Expression.hpp": "2356cf0fa589fbe1c1bec734fc84b72b0edee31e72fa79c1ca18daf6c2a26531",
+  "include/graph/query/expressions/MapProjectionExpression.hpp": "891e3e0831088238e8d66a284f29f6ad6ad935cc5fa456e9d01c2cd11bc734f1",
+  "src/query/expressions/ExpressionUtils.cpp": "93c4de980c0418da87e41ee060449b4ec6ebf063a0b40640128f90f5d76ace32",
+  "src/query/parser/cypher/helpers/internal/ExpressionBuilder.cpp": "705b4185b0acf15cbbc06a415518b3b1b96cf3d0e0672fcbd91caad2c8a80647",
+  "tests/src/query/execution/test_OwnedMapProjectionItems.cpp": "6da683aac1d96b736f8632adcdcbdc5906d6aac1b97dd456bd2b0f08e847e9d3",
+  "tests/support/TransactionResourceFaultWorker.cpp": "f33169e8ebf2c2220698e51549a4f19a728ce19f4c89cce3c58a774d38ba951f"
+}

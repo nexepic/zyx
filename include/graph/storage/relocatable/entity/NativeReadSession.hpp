@@ -8,12 +8,16 @@
 
 #pragma once
 
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <memory_resource>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -24,6 +28,9 @@
 #include <vector>
 
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
 #include "graph/storage/relocatable/metadata/Catalog.hpp"
 #include "graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
@@ -35,9 +42,44 @@ namespace graph::storage {
 	// This session is query-owned and snapshot-bound. It carries no page offsets
 	// or PageIds across the logical boundary. Entries use a bounded FIFO rather
 	// than an ID modulo table so sequential scans do not collide.
-	class NativeReadSession final {
+	class NativeReadSession final : public utils::OwnedPmrObject {
 	public:
-		static constexpr size_t MAXIMUM_CACHED_ENTITY_RECORDS = 128U;
+		explicit NativeReadSession(std::shared_ptr<std::pmr::memory_resource> memory = {})
+			: memory_(std::move(memory)),
+			node_cache_(memoryResource()),
+			edge_cache_(memoryResource()),
+			node_existence_cache_(memoryResource()),
+			node_label_cache_(memoryResource()),
+			node_order_(memoryResource()),
+			edge_order_(memoryResource()),
+			node_existence_order_(memoryResource()),
+			node_label_order_(memoryResource()),
+			property_cache_(memoryResource()),
+			owned_property_cache_(memoryResource()),
+			property_presence_cache_(memoryResource()),
+			property_order_(memoryResource()),
+			property_presence_order_(memoryResource()),
+			token_name_cache_(memoryResource()),
+			token_name_order_(memoryResource()),
+			property_token_cache_(memoryResource()),
+			property_token_order_(memoryResource()),
+			node_label_token_cache_(memoryResource()),
+			node_label_token_order_(memoryResource()),
+			relationship_type_token_cache_(memoryResource()),
+			relationship_type_token_order_(memoryResource()) {}
+
+        explicit NativeReadSession(const MetadataSnapshotPin &snapshot)
+            : NativeReadSession(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+                (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr)) { bind(snapshot); }
+
+		NativeReadSession(const NativeReadSession &) = delete;
+		NativeReadSession &operator=(const NativeReadSession &) = delete;
+		NativeReadSession(NativeReadSession &&) = delete;
+		NativeReadSession &operator=(NativeReadSession &&) = delete;
+
+		[[nodiscard]] const std::shared_ptr<std::pmr::memory_resource> &memoryOwner() const noexcept { return memory_; }
+
+        static constexpr size_t MAXIMUM_CACHED_ENTITY_RECORDS = 128U;
 		static constexpr size_t MAXIMUM_CACHED_TOKEN_NAMES = 128U;
 		// Per namespace, including both copies of name-to-token keys (map/FIFO).
 		// This bounds logical string payload, not allocator overhead or query RSS.
@@ -106,7 +148,7 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::vector<uint64_t>> nodeLabels(uint64_t id) const {
 			const auto found = node_label_cache_.find(id);
 			if (found != node_label_cache_.end()) {
-				return found->second;
+				return std::vector<uint64_t>(found->second.begin(), found->second.end());
 			}
 			return std::nullopt;
 		}
@@ -136,7 +178,7 @@ namespace graph::storage {
 					throw std::invalid_argument("native read session Node label cache requires ordered nonzero tokens");
 				}
 			}
-			std::vector<uint64_t> replacement(labels);
+			std::pmr::vector<uint64_t> replacement(labels.begin(), labels.end(), memoryResource());
 			const size_t bytes = replacement.capacity() * sizeof(uint64_t);
 			if (bytes > MAXIMUM_CACHED_NODE_LABEL_BYTES) { discardPrevious(); return; }
 			const auto evictOldest = [&]() {
@@ -173,7 +215,8 @@ namespace graph::storage {
 
 		// Test presence without copying a potentially large cached payload.
 		[[nodiscard]] bool hasProperty(bool isEdge, uint64_t entityId, uint32_t token) const {
-			return property_cache_.contains(PropertyCacheKey{isEdge, entityId, token});
+			return memory_ ? owned_property_cache_.contains(PropertyCacheKey{isEdge, entityId, token})
+				: property_cache_.contains(PropertyCacheKey{isEdge, entityId, token});
 		}
 
 		// The outer optional distinguishes a cache miss from a cached absent value.
@@ -182,6 +225,16 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::optional<PropertyValue>> property(
 				bool isEdge, uint64_t entityId, uint32_t token,
 				const SelectedPropertyReadAdmission *admission = nullptr) const {
+            if (memory_) {
+                const auto found = owned_property_cache_.find(PropertyCacheKey{isEdge, entityId, token});
+                if (found == owned_property_cache_.end()) return std::nullopt;
+                if (!found->second) return std::optional<std::optional<PropertyValue>>{std::optional<PropertyValue>{}};
+                if (admission) (*admission)(found->second->size() + sizeof(uint32_t));
+                size_t offset = 0U;
+                auto value = CanonicalPropertyValueCodec::decodeNext(*found->second, offset);
+                if (offset != found->second->size()) throw std::logic_error("cached Property envelope has trailing bytes");
+                return std::optional<std::optional<PropertyValue>>{std::move(value)};
+            }
 			const auto found = property_cache_.find(PropertyCacheKey{isEdge, entityId, token});
 			if (found == property_cache_.end()) {
 				return std::nullopt;
@@ -234,7 +287,8 @@ namespace graph::storage {
 				property_presence_order_.pop_front();
 			}
 			property_presence_order_.push_back(key);
-			property_presence_cache_.emplace(key, present);
+			try { property_presence_cache_.emplace(key, present); }
+			catch (...) { property_presence_order_.pop_back(); throw; }
 		}
 
 		[[nodiscard]] std::optional<std::string> tokenName(TokenNameKind kind, uint64_t tokenId,
@@ -244,7 +298,8 @@ namespace graph::storage {
 				// Admit the owned copy before its string allocation; rejection leaves
 				// the snapshot-local cached name and its retention budget intact.
 				if (copyAdmission) copyAdmission(found->second.capacity());
-				return found->second;
+                else detail::admitScopedPropertyString(found->second.size());
+				return std::string(found->second);
 			}
 			return std::nullopt;
 		}
@@ -324,7 +379,7 @@ namespace graph::storage {
 				token_name_order_.erase(evicted);
 			}
 			if (found != token_name_cache_.end()) {
-				found->second = std::string(name);
+				found->second = name;
 				token_name_bytes_ = token_name_bytes_ - oldBytes + name.size();
 				return;
 			}
@@ -354,25 +409,40 @@ namespace graph::storage {
 			}
 			return &*constraint_definitions_;
 		}
-		void putIndexDefinitions(std::vector<IndexDefinition> definitions) const {
-			if (fitsSchemaDefinitionCache(definitions)) {
-				index_definitions_ = std::move(definitions);
-			}
-		}
-		void putConstraintDefinitions(std::vector<ConstraintDefinition> definitions) const {
-			if (fitsSchemaDefinitionCache(definitions)) {
-				constraint_definitions_ = std::move(definitions);
-			}
-		}
+        void putIndexDefinitions(const std::vector<IndexDefinition> &definitions) const {
+            if (!fitsSchemaDefinitionCache(definitions)) return;
+            // Every field and backing copy selects CACHE, so a retained schema
+            // list never keeps a finished query's private authority alive.
+            if (memory_ && !std::dynamic_pointer_cast<query::execution::detail::PrepaidMemoryResource>(memory_)) return;
+            try {
+                utils::OwnedAllocationScope scope(memory_);
+                utils::OwnedStdVector<IndexDefinition> copy(definitions);
+                index_definitions_ = std::move(copy);
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                // This cache is optional; preserve its former validated list.
+            }
+        }
+        void putConstraintDefinitions(const std::vector<ConstraintDefinition> &definitions) const {
+            if (!fitsSchemaDefinitionCache(definitions)) return;
+            if (memory_ && !std::dynamic_pointer_cast<query::execution::detail::PrepaidMemoryResource>(memory_)) return;
+            try {
+                utils::OwnedAllocationScope scope(memory_);
+                utils::OwnedStdVector<ConstraintDefinition> copy(definitions);
+                constraint_definitions_ = std::move(copy);
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                // Optional CACHE admission cannot invalidate the old list.
+            }
+        }
 
 		// Catalog entries are snapshot-stable. Retaining this bounded pool list
 		// removes repeated Catalog traversals when one query opens several cursors.
-		[[nodiscard]] const std::vector<CatalogEntry> *entityPagePools() const noexcept {
+		[[nodiscard]] const std::pmr::vector<CatalogEntry> *entityPagePools() const noexcept {
 			return entity_page_pools_.has_value() ? &*entity_page_pools_ : nullptr;
 		}
 		void putEntityPagePools(const std::vector<CatalogEntry> &pools) const {
 			if (pools.size() <= MAXIMUM_CACHED_ENTITY_PAGE_POOLS) {
-				entity_page_pools_ = pools;
+				std::pmr::vector<CatalogEntry> replacement(pools.begin(), pools.end(), memoryResource());
+				entity_page_pools_ = std::move(replacement);
 			}
 		}
 
@@ -392,8 +462,11 @@ namespace graph::storage {
 		}
 
 	private:
+		[[nodiscard]] std::pmr::memory_resource *memoryResource() const noexcept {
+			return memory_ ? memory_.get() : std::pmr::get_default_resource();
+		}
 		template <typename Cache>
-		static void putNamedToken(Cache &cache, std::deque<std::string> &order, size_t &bytes,
+		static void putNamedToken(Cache &cache, std::pmr::deque<std::pmr::string> &order, size_t &bytes,
 				std::string_view name, typename Cache::mapped_type token) {
 			if (const auto found = cache.find(name); found != cache.end()) {
 				found->second = token;
@@ -409,7 +482,7 @@ namespace graph::storage {
 				cache.erase(order.front());
 				order.pop_front();
 			}
-			const auto inserted = cache.emplace(std::string(name), token).first;
+			const auto inserted = cache.emplace(name, token).first;
 			try {
 				order.push_back(inserted->first);
 			} catch (...) {
@@ -419,11 +492,61 @@ namespace graph::storage {
 			bytes += nameBytes;
 		}
 
+        template<class Value>
+        void putOwnedProperty(bool isEdge, uint64_t entityId, uint32_t token, const Value &input) const {
+            const PropertyValue *value = [&]() -> const PropertyValue * {
+                if constexpr (std::is_same_v<std::remove_cvref_t<Value>, PropertyValue>) return &input;
+                else return input ? &*input : nullptr;
+            }();
+            const PropertyCacheKey key{isEdge, entityId, token};
+            const auto eraseEntry = [&](const PropertyCacheKey &entry) {
+                const auto found = owned_property_cache_.find(entry);
+                if (found == owned_property_cache_.end()) return;
+                property_cache_bytes_ -= found->second ? found->second->capacity() : 0U;
+                owned_property_cache_.erase(found);
+            };
+            // Preserve the legacy input-capacity safeguard before any clone or
+            // encoding allocation. Coordinated retention uses canonical bytes,
+            // so nested std::string/list/map heaps cannot escape the arena.
+            if (value && propertyValueBytes(*value) > MAXIMUM_CACHED_PROPERTY_BYTES) {
+                eraseEntry(key); std::erase(property_order_, key); return;
+            }
+            const size_t encoded = value ? CanonicalPropertyValueCodec::encodedSize(*value) : 0U;
+            if (encoded > MAXIMUM_CACHED_PROPERTY_BYTES) {
+                eraseEntry(key); std::erase(property_order_, key); return;
+            }
+            std::optional<std::pmr::vector<std::byte>> replacement;
+            if (value) {
+                replacement.emplace(memoryResource());
+                replacement->reserve(encoded);
+                CanonicalPropertyValueCodec::append(*replacement, *value);
+            }
+            const size_t bytes = replacement ? replacement->capacity() : 0U;
+            if (bytes > MAXIMUM_CACHED_PROPERTY_BYTES) return;
+            // Complete encoding before changing either cache index. No input
+            // rvalue is consumed on a denied allocation.
+            if (auto found = owned_property_cache_.find(key); found != owned_property_cache_.end()) {
+                const size_t old = found->second ? found->second->capacity() : 0U;
+                found->second = std::move(replacement);
+                property_cache_bytes_ = property_cache_bytes_ - old + bytes;
+            } else {
+                property_order_.push_back(key);
+                try { owned_property_cache_.emplace(key, std::move(replacement)); }
+                catch (...) { property_order_.pop_back(); throw; }
+                property_cache_bytes_ += bytes;
+            }
+            while (owned_property_cache_.size() > MAXIMUM_CACHED_PROPERTIES ||
+                   property_cache_bytes_ > MAXIMUM_CACHED_PROPERTY_BYTES) {
+                eraseEntry(property_order_.front()); property_order_.pop_front();
+            }
+        }
+
 		template <typename Value>
 		void putPropertyImpl(bool isEdge, uint64_t entityId, uint32_t token, Value &&value) const {
 			if (entityId == 0U || token == 0U) {
 				throw std::invalid_argument("native read session Property cache requires nonzero identifiers");
 			}
+			if (memory_) { putOwnedProperty(isEdge, entityId, token, value); return; }
 			const PropertyCacheKey key{isEdge, entityId, token};
 			const size_t valueBytes = [&] {
 				if constexpr (std::is_same_v<std::remove_cvref_t<Value>, PropertyValue>) return propertyValueBytes(value);
@@ -529,6 +652,7 @@ namespace graph::storage {
 			return estimate(estimate, value, 0U);
 		}
 
+
 		template <typename Definition>
 		[[nodiscard]] static bool fitsSchemaDefinitionCache(const std::vector<Definition> &definitions) {
 			if (definitions.size() > MAXIMUM_CACHED_SCHEMA_DEFINITIONS) {
@@ -558,7 +682,7 @@ namespace graph::storage {
 		}
 
 		template <typename T>
-		static void put(std::unordered_map<uint64_t, T> &cache, std::deque<uint64_t> &order, uint64_t id,
+		static void put(std::pmr::unordered_map<uint64_t, T> &cache, std::pmr::deque<uint64_t> &order, uint64_t id,
 							const T &value) {
 			const auto found = cache.find(id);
 			if (found != cache.end()) {
@@ -613,42 +737,59 @@ namespace graph::storage {
 			size_t operator()(const std::string &value) const noexcept { return (*this)(std::string_view(value)); }
 		};
 
+		// Declared before every borrowing PMR container, so destroyed last.
+		std::shared_ptr<std::pmr::memory_resource> memory_;
 		mutable uint64_t generation_ = 0U;
 		mutable uint64_t database_id_ = 0U;
 		mutable bool bound_ = false;
-		mutable std::unordered_map<uint64_t, NodeEntityRecord> node_cache_;
-		mutable std::unordered_map<uint64_t, EdgeEntityRecord> edge_cache_;
-		mutable std::unordered_map<uint64_t, bool> node_existence_cache_;
-		mutable std::unordered_map<uint64_t, std::vector<uint64_t>> node_label_cache_;
+		mutable std::pmr::unordered_map<uint64_t, NodeEntityRecord> node_cache_;
+		mutable std::pmr::unordered_map<uint64_t, EdgeEntityRecord> edge_cache_;
+		mutable std::pmr::unordered_map<uint64_t, bool> node_existence_cache_;
+		mutable std::pmr::unordered_map<uint64_t, std::pmr::vector<uint64_t>> node_label_cache_;
 		mutable size_t node_label_cache_bytes_ = 0U;
-		mutable std::deque<uint64_t> node_order_;
-		mutable std::deque<uint64_t> edge_order_;
-		mutable std::deque<uint64_t> node_existence_order_;
-		mutable std::deque<uint64_t> node_label_order_;
-		mutable std::unordered_map<PropertyCacheKey, std::optional<PropertyValue>, PropertyCacheKeyHash>
+		mutable std::pmr::deque<uint64_t> node_order_;
+		mutable std::pmr::deque<uint64_t> edge_order_;
+		mutable std::pmr::deque<uint64_t> node_existence_order_;
+		mutable std::pmr::deque<uint64_t> node_label_order_;
+		mutable std::pmr::unordered_map<PropertyCacheKey, std::optional<PropertyValue>, PropertyCacheKeyHash>
 				property_cache_;
-		mutable std::unordered_map<PropertyCacheKey, bool, PropertyCacheKeyHash> property_presence_cache_;
-		mutable std::deque<PropertyCacheKey> property_order_;
-		mutable std::deque<PropertyCacheKey> property_presence_order_;
+		mutable std::pmr::unordered_map<PropertyCacheKey, std::optional<std::pmr::vector<std::byte>>, PropertyCacheKeyHash> owned_property_cache_;
+		mutable std::pmr::unordered_map<PropertyCacheKey, bool, PropertyCacheKeyHash> property_presence_cache_;
+		mutable std::pmr::deque<PropertyCacheKey> property_order_;
+		mutable std::pmr::deque<PropertyCacheKey> property_presence_order_;
 		mutable size_t property_cache_bytes_ = 0U;
-		mutable std::unordered_map<TokenNameKey, std::string, TokenNameKeyHash> token_name_cache_;
-		mutable std::deque<TokenNameKey> token_name_order_;
+		mutable std::pmr::unordered_map<TokenNameKey, std::pmr::string, TokenNameKeyHash> token_name_cache_;
+		mutable std::pmr::deque<TokenNameKey> token_name_order_;
 		mutable size_t token_name_bytes_ = 0U;
-		mutable std::unordered_map<std::string, uint32_t, TransparentStringHash, std::equal_to<>> property_token_cache_;
-		mutable std::deque<std::string> property_token_order_;
+		mutable std::pmr::unordered_map<std::pmr::string, uint32_t, TransparentStringHash, std::equal_to<>> property_token_cache_;
+		mutable std::pmr::deque<std::pmr::string> property_token_order_;
 		mutable size_t property_token_bytes_ = 0U;
-		mutable std::unordered_map<std::string, uint64_t, TransparentStringHash, std::equal_to<>> node_label_token_cache_;
-		mutable std::deque<std::string> node_label_token_order_;
+		mutable std::pmr::unordered_map<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>> node_label_token_cache_;
+		mutable std::pmr::deque<std::pmr::string> node_label_token_order_;
 		mutable size_t node_label_token_bytes_ = 0U;
-		mutable std::unordered_map<std::string, uint64_t, TransparentStringHash, std::equal_to<>>
+		mutable std::pmr::unordered_map<std::pmr::string, uint64_t, TransparentStringHash, std::equal_to<>>
 				relationship_type_token_cache_;
-		mutable std::deque<std::string> relationship_type_token_order_;
+		mutable std::pmr::deque<std::pmr::string> relationship_type_token_order_;
 		mutable size_t relationship_type_token_bytes_ = 0U;
-		mutable std::optional<std::vector<IndexDefinition>> index_definitions_;
-		mutable std::optional<std::vector<ConstraintDefinition>> constraint_definitions_;
-		mutable std::optional<std::vector<CatalogEntry>> entity_page_pools_;
+		mutable std::optional<utils::OwnedStdVector<IndexDefinition>> index_definitions_;
+		mutable std::optional<utils::OwnedStdVector<ConstraintDefinition>> constraint_definitions_;
+		mutable std::optional<std::pmr::vector<CatalogEntry>> entity_page_pools_;
 		mutable const PropertyCollectionRootStore *property_store_ = nullptr;
 		mutable std::optional<PropertyCollectionRootScanCursor> property_cursor_;
 	};
+
+    static_assert(alignof(NativeReadSession) <= alignof(std::max_align_t));
+
+    // Existing query sessions need no fallback construction or deque allocation.
+    // Standalone adapter calls inherit the snapshot's allocation domain.
+    inline NativeReadSession &selectNativeReadSession(const MetadataSnapshotPin &snapshot,
+            NativeReadSession *session, std::optional<NativeReadSession> &fallback) {
+        if (!session) {
+            if (!fallback) fallback.emplace(snapshot);
+            session = &*fallback;
+        }
+        session->bind(snapshot);
+        return *session;
+    }
 
 } // namespace graph::storage

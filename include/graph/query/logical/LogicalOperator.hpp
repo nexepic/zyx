@@ -11,9 +11,12 @@
 
 #pragma once
 
+#include "graph/utils/OwnedStringVector.hpp"
 #include <memory>
 #include <string>
 #include <vector>
+#include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 namespace graph::query::logical {
 
@@ -83,8 +86,14 @@ enum class LogicalOpType {
  * Logical operators form the storage-neutral plan tree interpreted directly
  * by the logical runtimes. They must not depend on a physical storage layout.
  */
-class LogicalOperator {
+class LogicalOperator : public utils::OwnedPmrObject {
 public:
+    // Operator objects retain their allocation resource through ordinary
+    // polymorphic unique_ptr teardown, including after their scope has ended.
+    static void *operator new(size_t bytes) {
+        return utils::OwnedPmrObject::operator new(bytes, utils::OwnedAllocationScope::owner());
+    }
+    using utils::OwnedPmrObject::operator delete;
 	virtual ~LogicalOperator() = default;
 
 	/** @brief Returns the type of this logical operator. */
@@ -95,6 +104,12 @@ public:
 
 	/** @brief Returns the variables produced by this operator. */
 	[[nodiscard]] virtual std::vector<std::string> getOutputVariables() const = 0;
+
+    // Native runtimes use this admitted metadata path. The legacy public vector
+    // API remains available to external plan implementations and callers.
+    [[nodiscard]] virtual utils::OwnedStringVector getOwnedOutputVariables() const {
+        return getOutputVariables();
+    }
 
 	/** @brief Creates a deep copy of this operator and its subtree. */
 	[[nodiscard]] virtual std::unique_ptr<LogicalOperator> clone() const = 0;

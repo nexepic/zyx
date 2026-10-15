@@ -14,6 +14,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <memory_resource>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -1028,14 +1029,22 @@ namespace graph::storage {
 
 	public:
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> initializeNew(std::shared_ptr<StorageIO> io,
-																					 const Superblock &initial);
+																					 const Superblock &initial, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
 		// Completes the creation-only bootstrap convergence before the caller
 		// exposes the file to a later open. Internal tools that own their StorageIO
 		// use this instead of publishing the bootstrap-only intermediate state.
 		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore>
-		initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial);
-		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> open(std::shared_ptr<StorageIO> io);
-		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> openReadOnly(std::shared_ptr<StorageIO> io);
+		initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
+		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> open(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
+		[[nodiscard]] static std::unique_ptr<RelocatableMetadataStore> openReadOnly(std::shared_ptr<StorageIO> io, std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> controlOwner = {},
+            std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner = {});
 
 		RelocatableMetadataStore(const RelocatableMetadataStore &) = delete;
 		RelocatableMetadataStore &operator=(const RelocatableMetadataStore &) = delete;
@@ -1066,6 +1075,8 @@ namespace graph::storage {
 		// below the durable high-water mark cannot be presented as a lease.
 		[[nodiscard]] bool claimNativeGraphLogicalIdReservation(const NativeGraphLogicalIdReservation &reservation);
 		void abandonNativeGraphLogicalIdReservation(const NativeGraphLogicalIdReservation &reservation) noexcept;
+		void abandonNativeGraphLogicalIdReservation(std::span<const NativeGraphLogicalIdLeaseRange> nodes,
+			std::span<const NativeGraphLogicalIdLeaseRange> edges) noexcept;
 		// The sole streamed Edge coordinator owns one metadata batch for all
 		// Entity/Property/LargeValue, Catalog, adjacency, and index roots.
 		[[nodiscard]] Superblock publishStreamedEdgeGraph(const NativeStreamedGraphFinalPublicationRequest &request,
@@ -1424,6 +1435,10 @@ namespace graph::storage {
 		[[nodiscard]] Superblock releaseRetiredCatalogSegment(SegmentId segmentId, Generation expectedGeneration,
 															  LogSequenceNumber checkpointLsn,
 															  const MetadataPublishOptions &options = {});
+        // nullopt means a snapshot became visible before this atomic writer fence.
+        [[nodiscard]] std::optional<Superblock> tryReleaseRetiredCatalogSegment(SegmentId segmentId, Generation expectedGeneration,
+															  LogSequenceNumber checkpointLsn,
+															  const MetadataPublishOptions &options = {});
 
 		// Reserves a destination and switches one Catalog mapping to it in one
 		// generation. The old slot enters the Retire Queue in the same publication.
@@ -1444,6 +1459,10 @@ namespace graph::storage {
 		// Releases the old physical source after a relocated generation has no
 		// process-local metadata snapshots left to observe it.
 		[[nodiscard]] Superblock releaseRelocatedCatalogSource(SegmentId segmentId, Generation expectedGeneration,
+															   LogSequenceNumber checkpointLsn,
+															   const MetadataPublishOptions &options = {});
+        // nullopt means a snapshot became visible before this atomic writer fence.
+        [[nodiscard]] std::optional<Superblock> tryReleaseRelocatedCatalogSource(SegmentId segmentId, Generation expectedGeneration,
 															   LogSequenceNumber checkpointLsn,
 															   const MetadataPublishOptions &options = {});
 
@@ -1747,7 +1766,10 @@ namespace graph::storage {
 									LogSequenceNumber checkpointLsn, const CrossPoolPageEvacuationPreparer &preparer,
 									const MetadataPublishOptions &options);
 		[[nodiscard]] MetadataWriteGuard beginWrite();
-		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly);
+		RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current, bool readOnly,
+                                 std::shared_ptr<std::pmr::memory_resource> memoryOwner,
+                                 std::shared_ptr<std::pmr::memory_resource> controlOwner,
+                                 std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner);
 
 		std::shared_ptr<StorageIO> io_;
 		SuperblockFile bootstrap_;
@@ -1766,8 +1788,9 @@ namespace graph::storage {
 		std::mutex logical_id_lease_mutex_;
 		NativeGraphLogicalIdLeaseRange available_node_ids_;
 		NativeGraphLogicalIdLeaseRange available_edge_ids_;
-		std::map<uint64_t, uint64_t> outstanding_node_id_leases_;
-		std::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
+		std::shared_ptr<std::pmr::memory_resource> lease_memory_owner_;
+        std::pmr::map<uint64_t, uint64_t> outstanding_node_id_leases_;
+		std::pmr::map<uint64_t, uint64_t> outstanding_edge_id_leases_;
 		bool read_only_ = false;
 	};
 

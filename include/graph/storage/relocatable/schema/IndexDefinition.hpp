@@ -7,6 +7,9 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -41,14 +44,15 @@ namespace graph::storage {
 	// `index_id` is a public logical identifier. IDs with the high bit set are
 	// reserved for metadata-owned B+Tree indexes such as schema registries.
 	struct IndexDefinition {
+        using OwnedHeapElement = void;
 		uint64_t index_id = 0;
-		std::string name;
+		utils::OwnedStdString name;
 		IndexDefinitionEntityKind entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
 		IndexDefinitionKind kind = IndexDefinitionKind::IDK_LABEL;
 		uint64_t label_token_id = 0;
-		std::vector<std::string> property_names;
+		utils::OwnedStringVector property_names;
 		uint32_t vector_dimensions = 0;
-		std::string vector_metric;
+		utils::OwnedStdString vector_metric;
 
 		bool operator==(const IndexDefinition &) const = default;
 	};

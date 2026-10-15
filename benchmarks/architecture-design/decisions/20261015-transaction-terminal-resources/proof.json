@@ -1,0 +1,29 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "affected_module_tests": 155,
+  "failures": 0,
+  "isolated_fault_cases": 4,
+  "negative_control_reproductions": 3,
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "294e86e1c9b08080b9d30ba8a365efbba592a75198bbb4b3257c89541fcdc698",
+    "tests/support/TransactionResourceFaultWorker.cpp": "7d1016d1f6615077eaa4521e55be4779b065a13d57e49d74b8ad0db558f5785e",
+    "scripts/test_transaction_resource_faults.py": "715a497c94ed41cddf8c35690e77035aac2ce18260c871483ff955271827d9e4",
+    "CMakeLists.txt": "3c4454f9eeb530015b1f61e77c470c502a68fc1f0c4c57ceb151072ff2851376"
+  },
+  "negative_control_backend_sha256": "6373d6e3df6205260d749bb70adf5ad1a43867cc97082ff6c3f671d749162bff",
+  "archive_sha256": "59bd1d1c5df5090709eca60ff779d99423b06e93895675fa546db591b763bef1",
+  "closed_transaction_bytes": [
+    1408,
+    1408,
+    1408,
+    1408
+  ],
+  "measurement": "replacement-new requested bytes released when an already closed transaction object is destroyed; not RSS",
+  "platform_executed": "Linux x86_64; worker allocation implementation and production source use portable C++20 APIs",
+  "remaining": "Production write/undo/overlay and maintenance pre-admission/ownership, plan IR cache, workspace audit, bounded long-pin backlog, partitioned hash/aggregate, full final faults/long-run acceptance."
+}

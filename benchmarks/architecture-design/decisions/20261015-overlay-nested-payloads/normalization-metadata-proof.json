@@ -1,0 +1,11 @@
+{
+  "status": "metadata_followup_not_stage_acceptance",
+  "selected_tests": 45,
+  "failures": 0,
+  "source_sha256": {
+    "src/storage/LogicalGraphPropertyPatch.cpp": "bb499d835592860e22f4171095d5d84a163e52286e9a4f3dae707d71d1ce5fb3",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "4b7492663cfaaa055ece3560ef1ec0de1b5edf17419458bfbf66a99b4d409249",
+    "tests/src/storage/test_LogicalGraphPropertyPatch.cpp": "df75d1a3396bb84f795e6b8bd6f20cdbf5a35945a8e15e32e88cbb285d4f196d"
+  },
+  "scope": "Target/key sets and sorted descriptor vectors capture the native overlay WRITE owner; source/normalized payload copies remain pending. Earlier 579-case worker is frozen before this followup; its selected allocation-fault modes do not execute patch normalization."
+}

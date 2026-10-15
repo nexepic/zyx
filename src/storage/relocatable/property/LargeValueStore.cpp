@@ -8,6 +8,9 @@
 
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "storage/relocatable/property/PoolPreparationBatch.hpp"
 
 #include <algorithm>
@@ -355,7 +358,7 @@ namespace graph::storage {
 			return {input.begin(), input.end()};
 		}
 
-		[[nodiscard]] std::vector<std::byte> decompressPayload(std::span<const std::byte> input, LargeValueCodec codec,
+		[[nodiscard]] utils::OwnedVector<std::byte> decompressPayload(std::span<const std::byte> input, LargeValueCodec codec,
 															   size_t expectedBytes) {
 			if (codec == LargeValueCodec::LVC_RAW) {
 				if (input.size() != expectedBytes) {
@@ -364,7 +367,7 @@ namespace graph::storage {
 				}
 				return {input.begin(), input.end()};
 			}
-			std::vector<std::byte> output(expectedBytes);
+			utils::OwnedVector<std::byte> output(expectedBytes);
 			if (codec == LargeValueCodec::LVC_LZ4) {
 #if ZYX_HAS_LZ4
 				if (expectedBytes > static_cast<size_t>(INT_MAX) ||
@@ -1484,6 +1487,7 @@ namespace graph::storage {
 		}
 		std::vector<std::byte> result;
 		admit(static_cast<size_t>(length));
+        if (!bufferAdmission) detail::admitScopedPropertyVectorGrowth(result, static_cast<size_t>(length));
 		result.reserve(static_cast<size_t>(length));
 		admit(result.capacity());
 		if (length == 0U) {
@@ -1503,7 +1507,7 @@ namespace graph::storage {
 					const uint64_t chunkEnd = chunk->uncompressed_offset + chunk->uncompressed_bytes;
 					const BufferPoolReadHint firstPageHint = firstDataPage ? BufferPoolReadHint::BPRH_NORMAL
 																				 : BufferPoolReadHint::BPRH_SEQUENTIAL;
-					std::vector<std::byte> ownedChunk;
+					utils::OwnedVector<std::byte> ownedChunk;
 					std::span<const std::byte> rawChunk;
 					if (cache && cache->valid_ && cache->chunk_ == *chunk &&
 						cache->mutation_epoch_ == io_->dataMutationEpoch() &&
@@ -1516,9 +1520,11 @@ namespace graph::storage {
 						// therefore charges one raw chunk, not two retained chunks.
 						if (cache) cache->clear();
 						const uint64_t epoch = io_->dataMutationEpoch();
-						ownedChunk = readRawChunk(snapshot, immutableManifest, *chunk, firstPageHint, [&](size_t bytes) {
-							admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
-						});
+						const auto admitChunk = [&](size_t bytes) {
+                            admit(checkedReadBufferSum(checkedReadBufferSum(result.capacity(), retainedChildren), bytes));
+                        };
+                        ownedChunk = readRawChunk(snapshot, immutableManifest, *chunk, firstPageHint,
+                            bufferAdmission ? std::function<void(size_t)>(std::ref(admitChunk)) : std::function<void(size_t)>{});
 						if (cache && ownedChunk.capacity() <= RSS_LARGE_VALUE_EXTENT_128K_BYTES &&
 							epoch == io_->dataMutationEpoch() && epoch != std::numeric_limits<uint64_t>::max()) {
 							cache->store_ = this; cache->io_ = io_; cache->snapshot_ = snapshot.superblock();
@@ -1661,7 +1667,7 @@ namespace graph::storage {
 		return immutableManifest;
 	}
 
-	std::vector<std::byte> LargeValueStore::readRawChunk(const MetadataSnapshotPin &snapshot,
+	utils::OwnedVector<std::byte> LargeValueStore::readRawChunk(const MetadataSnapshotPin &snapshot,
 																		 const LargeValueManifest &manifest,
 																		 const LargeValueChunk &chunk,
 																		 BufferPoolReadHint firstPageHint, const std::function<void(size_t)> &bufferAdmission) const {
@@ -1671,7 +1677,12 @@ namespace graph::storage {
 					 "LargeValue stored chunk exceeds this platform's address space");
 			}
 		}
-		std::vector<std::byte> bytes;
+        const auto owner = bufferAdmission
+            ? std::shared_ptr<std::pmr::memory_resource>(std::shared_ptr<std::pmr::memory_resource>{}, std::pmr::new_delete_resource())
+            : utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr;
+        utils::OwnedAllocationScope allocationScope(owner);
+		utils::OwnedVector<std::byte> bytes;
 		if (bufferAdmission) bufferAdmission(chunk.stored_bytes);
 		bytes.reserve(chunk.stored_bytes);
 		if (bufferAdmission) bufferAdmission(bytes.capacity());
@@ -1691,6 +1702,8 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue data-page route disagrees with its immutable manifest");
 			}
+            detail::PropertyDecodeWorkspace pageWorkspace(owner);
+            if (!bufferAdmission) detail::admitScopedPropertyVectorStorage<std::byte>(RSS_LARGE_VALUE_DATA_PAGE_MAX_STORED_BYTES);
 			const LargeValueDataPage data = LargeValueDataFrame::decodePage(contents.owner, contents.payload,
 					[&](size_t retained) {
 						if (bufferAdmission) bufferAdmission(checkedReadBufferSum(
@@ -1715,7 +1728,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_CHECKSUM_MISMATCH,
 				 "LargeValue stored chunk is truncated or fails its integrity checksum");
 		}
-		std::vector<std::byte> raw;
+		utils::OwnedVector<std::byte> raw;
 		if (chunk.codec == LargeValueCodec::LVC_RAW) {
 			// RAW already owns the uncompressed bytes; transfer instead of cloning.
 			raw = std::move(bytes);

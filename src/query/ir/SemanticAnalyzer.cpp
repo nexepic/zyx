@@ -56,7 +56,7 @@ void SemanticAnalyzer::analyzeProjection(ProjectionBody& body) {
 				if (!varExpr->hasProperty()) {
 					auto it = aliasMap.find(varExpr->getVariableName());
 					if (it != aliasMap.end()) {
-						sortItem.expression = std::shared_ptr<Expression>(it->second->clone());
+						sortItem.expression = utils::shareOwned(it->second->clone());
 					}
 				}
 			} else if (auto* sliceExpr = dynamic_cast<ListSliceExpression*>(expr)) {
@@ -64,7 +64,7 @@ void SemanticAnalyzer::analyzeProjection(ProjectionBody& body) {
 					if (!baseVarExpr->hasProperty()) {
 						auto it = aliasMap.find(baseVarExpr->getVariableName());
 						if (it != aliasMap.end()) {
-							sortItem.expression = std::make_shared<ListSliceExpression>(
+							sortItem.expression = utils::makeSharedOwned<ListSliceExpression>(
 								std::unique_ptr<Expression>(it->second->clone()),
 								sliceExpr->getStart() ? std::unique_ptr<Expression>(sliceExpr->getStart()->clone()) : nullptr,
 								sliceExpr->getEnd() ? std::unique_ptr<Expression>(sliceExpr->getEnd()->clone()) : nullptr,

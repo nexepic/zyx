@@ -80,13 +80,27 @@ namespace graph::storage {
 		StorageIO(std::move(stream), writeFd, readFd, StorageIOAccessMode::SIOAM_READ_WRITE) {}
 
 	StorageIO::StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd,
-						 StorageIOAccessMode accessMode) :
-		stream_(std::move(stream)), writeFd_(writeFd), readFd_(readFd), access_mode_(accessMode) {
+                         StorageIOAccessMode accessMode) :
+        StorageIO(std::move(stream), writeFd, readFd, accessMode, (std::numeric_limits<uint64_t>::max)()) {}
+
+    StorageIO::StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd,
+                         StorageIOAccessMode accessMode, uint64_t maximumFileBytes) :
+        stream_(std::move(stream)), writeFd_(writeFd), readFd_(readFd), access_mode_(accessMode),
+        maximum_file_bytes_(maximumFileBytes) {
+        if (maximumFileBytes == 0U) throw std::invalid_argument("StorageIO requires a positive file byte limit");
 		if (access_mode_ != StorageIOAccessMode::SIOAM_READ_WRITE &&
 			access_mode_ != StorageIOAccessMode::SIOAM_READ_ONLY) {
 			throw std::invalid_argument("StorageIO received an unknown access mode");
 		}
 	}
+
+    void StorageIO::requireWritableRange(uint64_t offset, size_t size, const char *operation) const {
+        requireWritable(operation);
+        requireAddressableRange(offset, size, operation);
+        if (offset > maximum_file_bytes_ || size > maximum_file_bytes_ - offset) {
+            throw StorageFileLimitExceeded();
+        }
+    }
 
 	StorageIO::~StorageIO() noexcept {
 		try {
@@ -244,7 +258,7 @@ namespace graph::storage {
 		if (!buf || size == 0)
 			return;
 		requireWritable("writeAt");
-		requireAddressableRange(offset, size, "writeAt");
+		requireWritableRange(offset, size, "writeAt");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->write(offset, {static_cast<const std::byte *>(buf), size});
 			recordWrite(size);
@@ -260,6 +274,7 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::writeAt typed page buffer is null");
 		}
 		requireTypedPageKey(key, size, "writeAt");
+        requireWritableRange(key.page_offset, size, "writeAt");
 		requireWritable("writeAt");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->writePage(key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES>(
@@ -277,6 +292,7 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::writePages typed page buffer is null");
 		}
 		requireTypedPageRange(firstKey, size, "writePages");
+        requireWritableRange(firstKey.page_offset, size, "writePages");
 		requireWritable("writePages");
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 		// Preserve page-granular fault-injection semantics when a test hook is
@@ -305,6 +321,7 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::writePagesThrough typed page buffer is null");
 		}
 		requireTypedPageRange(firstKey, size, "writePagesThrough");
+        requireWritableRange(firstKey.page_offset, size, "writePagesThrough");
 		requireWritable("writePagesThrough");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->writePagesThrough(firstKey, {static_cast<const std::byte *>(buf), size});
@@ -327,7 +344,7 @@ namespace graph::storage {
 		requireTypedPageKey(key, RSS_BUFFER_POOL_PAGE_BYTES, "writeControlRecord");
 		requireWritable("writeControlRecord");
 		const uint64_t offset = key.page_offset + static_cast<uint64_t>(byteOffset);
-		requireAddressableRange(offset, bytes.size(), "writeControlRecord");
+		requireWritableRange(offset, bytes.size(), "writeControlRecord");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			// Invalidation also flushes an earlier complete page image before the
 			// exact-record write.  On failure no stale cache entry remains that could
@@ -345,7 +362,7 @@ namespace graph::storage {
 			return;
 		}
 		requireWritable("writeAt");
-		requireAddressableRange(offset, size, "writeAt");
+		requireWritableRange(offset, size, "writeAt");
 
 		if (writeFd_ != INVALID_FILE_HANDLE) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
@@ -388,7 +405,8 @@ namespace graph::storage {
 			return 0;
 		requireAddressableRange(offset, size, "readAt");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
-			const size_t result = pool->read(offset, {static_cast<std::byte *>(buf), size});
+			const size_t result = pool->read(offset, {static_cast<std::byte *>(buf), size},
+                SequentialReadScope::activeFor(*this) ? BufferPoolReadHint::BPRH_SEQUENTIAL : BufferPoolReadHint::BPRH_NORMAL);
 			recordRead(result);
 			return result;
 		}
@@ -412,6 +430,7 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::readAt typed page buffer is null");
 		}
 		requireTypedPageKey(key, size, "readAt");
+        if (SequentialReadScope::activeFor(*this)) hint = BufferPoolReadHint::BPRH_SEQUENTIAL;
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			const size_t result = pool->readPage(key,
 												 std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES>(
@@ -430,6 +449,7 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::readPages typed page buffer is null");
 		}
 		requireTypedPageRange(firstKey, size, "readPages");
+        if (SequentialReadScope::activeFor(*this)) hint = BufferPoolReadHint::BPRH_SEQUENTIAL;
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			const size_t result = pool->readPages(firstKey, {static_cast<std::byte *>(buf), size}, hint);
 			recordRead(result);
@@ -478,7 +498,7 @@ namespace graph::storage {
 		}
 		requireWritable("append");
 		const uint64_t offset = fileSizeUncached();
-		requireAddressableRange(offset, size, "append");
+		requireWritableRange(offset, size, "append");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			// Flush and remove a cached tail before the direct append changes its page.
 			pool->invalidateRange(offset, size);
@@ -499,7 +519,7 @@ namespace graph::storage {
 		}
 		requireWritable("reserveAppendSpace");
 		const uint64_t offset = fileSizeUncached();
-		requireAddressableRange(offset, size, "reserveAppendSpace");
+		requireWritableRange(offset, size, "reserveAppendSpace");
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->invalidateRange(offset, size);
 		}
@@ -653,9 +673,9 @@ namespace graph::storage {
 	}
 
 	void StorageIO::ensureFileSizeUncached(uint64_t minimumSize) {
-		if (minimumSize == 0U || fileSizeUncached() >= minimumSize) {
-			return;
-		}
+        if (minimumSize == 0U) return;
+        requireWritableRange(minimumSize - 1U, 1U, "ensureFileSize");
+        if (fileSizeUncached() >= minimumSize) return;
 		requireWritable("ensureFileSize");
 		requireAddressableRange(minimumSize - 1U, 1U, "ensureFileSize");
 		const char zero = 0;
@@ -665,8 +685,9 @@ namespace graph::storage {
 		}
 	}
 
-	void StorageIO::enableBufferPool(size_t capacityBytes) {
-		auto pool = std::make_shared<BufferPool>(*this, capacityBytes);
+	void StorageIO::enableBufferPool(size_t capacityBytes,
+                                     std::shared_ptr<std::pmr::memory_resource> memoryOwner) {
+		auto pool = std::make_shared<BufferPool>(*this, capacityBytes, std::move(memoryOwner));
 		std::lock_guard lock(buffer_pool_mutex_);
 		if (buffer_pool_ != nullptr) {
 			throw std::logic_error("StorageIO buffer pool is already enabled");

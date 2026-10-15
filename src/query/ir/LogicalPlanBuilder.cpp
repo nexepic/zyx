@@ -59,9 +59,9 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 	const ProjectionBody& body,
 	std::unique_ptr<LogicalOperator> input)
 {
-	std::vector<LogicalAggItem> aggItems;
-	std::vector<LogicalProjectItem> groupByProjItems;
-	std::vector<LogicalProjectItem> postAggProjItems;
+	utils::OwnedStdVector<LogicalAggItem> aggItems;
+	utils::OwnedStdVector<LogicalProjectItem> groupByProjItems;
+	utils::OwnedStdVector<LogicalProjectItem> postAggProjItems;
 	size_t aggCounter = 0;
 
 	for (const auto& item : body.items) {
@@ -78,14 +78,14 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 			if (funcCall->getArgumentCount() > 0) {
 				const auto& args = funcCall->getArguments();
 				if (!args.empty()) {
-					argExpr = std::shared_ptr<Expression>(args[0]->clone().release());
+					argExpr = utils::shareOwned(args[0]->clone());
 				}
 			}
 
 			std::shared_ptr<Expression> extraArg(nullptr);
 			if (funcNameLower == "percentiledisc" || funcNameLower == "percentilecont") {
 				const auto& arguments = funcCall->getArguments();
-				extraArg = std::shared_ptr<Expression>(arguments[1]->clone().release());
+				extraArg = utils::shareOwned(arguments[1]->clone());
 			}
 
 			aggItems.emplace_back(funcNameLower, argExpr, item.alias, funcCall->isDistinct(), std::move(extraArg));
@@ -93,7 +93,7 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 			// Case 2: Expression containing nested aggregates (e.g., count(n) + 1)
 			auto modifiedExpr = ExpressionUtils::extractAndReplaceAggregates(
 				item.expression.get(), aggItems, aggCounter);
-			auto modifiedShared = std::shared_ptr<Expression>(modifiedExpr.release());
+			auto modifiedShared = utils::shareOwned(std::move(modifiedExpr));
 			postAggProjItems.emplace_back(modifiedShared, item.alias);
 		} else {
 			// Case 3: Non-aggregate expression (group-by key)
@@ -102,8 +102,8 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 	}
 
 	// Build group-by expressions and aliases
-	std::vector<std::shared_ptr<Expression>> groupByExprs;
-	std::vector<std::string> groupByAliases;
+	utils::OwnedStdVector<std::shared_ptr<Expression>> groupByExprs;
+	utils::OwnedStringVector groupByAliases;
 	for (const auto& pi : groupByProjItems) {
 		groupByExprs.push_back(pi.expression);
 		groupByAliases.push_back(pi.alias);
@@ -117,9 +117,9 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 	// If there are post-aggregate projections (nested aggregate expressions),
 	// add a Project operator to compute them
 	if (!postAggProjItems.empty()) {
-		std::vector<LogicalProjectItem> fullProjItems;
+		utils::OwnedStdVector<LogicalProjectItem> fullProjItems;
 		for (const auto& pi : groupByProjItems) {
-			auto varRef = std::make_shared<VariableReferenceExpression>(pi.alias);
+			auto varRef = utils::makeSharedOwned<VariableReferenceExpression>(pi.alias);
 			fullProjItems.emplace_back(varRef, pi.alias);
 		}
 		for (auto& pi : postAggProjItems) {
@@ -142,7 +142,7 @@ std::unique_ptr<LogicalOperator> buildSimpleProjection(
 	std::unique_ptr<LogicalOperator> input)
 {
 	// Build sort items (sort goes BEFORE projection so it can access full record)
-	std::vector<LogicalSortItem> sortItems;
+	utils::OwnedStdVector<LogicalSortItem> sortItems;
 	for (const auto& si : body.orderBy) {
 		sortItems.emplace_back(si.expression, si.ascending);
 	}
@@ -152,7 +152,7 @@ std::unique_ptr<LogicalOperator> buildSimpleProjection(
 	}
 
 	// Build projection items
-	std::vector<LogicalProjectItem> projItems;
+	utils::OwnedStdVector<LogicalProjectItem> projItems;
 	for (const auto& item : body.items) {
 		projItems.emplace_back(item.expression, item.alias);
 	}
@@ -174,7 +174,7 @@ std::unique_ptr<LogicalOperator> appendSortSkipLimit(
 {
 	// Sort in the current output scope; aggregate expressions resolve to aliases.
 	if (!body.orderBy.empty()) {
-		std::vector<LogicalSortItem> sortItems;
+		utils::OwnedStdVector<LogicalSortItem> sortItems;
 		for (const auto& si : body.orderBy) {
 			if (!si.expression) {
 				throw std::invalid_argument("aggregate ORDER BY has an empty expression");
@@ -183,7 +183,7 @@ std::unique_ptr<LogicalOperator> appendSortSkipLimit(
 			for (const ProjectionItem &item: body.items) {
 				if (item.expression && !item.alias.empty() &&
 					item.expression->toString() == si.expression->toString()) {
-					sortExpression = std::make_shared<VariableReferenceExpression>(item.alias);
+					sortExpression = utils::makeSharedOwned<VariableReferenceExpression>(item.alias);
 					break;
 				}
 			}
@@ -303,7 +303,7 @@ void addPropertyExpressionFilters(
 			std::move(lhs),
 			BinaryOperatorType::BOP_EQUAL,
 			std::move(rhs));
-		auto filter = std::shared_ptr<Expression>(cmp.release());
+		auto filter = utils::shareOwned(std::move(cmp));
 		rootOp = std::make_unique<LogicalFilter>(std::move(rootOp), filter);
 	}
 }
@@ -547,9 +547,9 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCall(
 
 	// YIELD items → Project
 	if (!clause.yieldItems.empty()) {
-		std::vector<LogicalProjectItem> projItems;
+		utils::OwnedStdVector<LogicalProjectItem> projItems;
 		for (const auto& yi : clause.yieldItems) {
-			auto expr = std::make_shared<VariableReferenceExpression>(yi.sourceField);
+			auto expr = utils::makeSharedOwned<VariableReferenceExpression>(yi.sourceField);
 			projItems.emplace_back(expr, yi.alias);
 		}
 		result = std::make_unique<LogicalProject>(
@@ -691,7 +691,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildSet(
 		throw std::runtime_error("SET clause must follow a MATCH or CREATE clause.");
 	}
 
-	std::vector<LogicalSetItem> logicalItems;
+	utils::OwnedStdVector<LogicalSetItem> logicalItems;
 	logicalItems.reserve(clause.items.size());
 	for (const auto& item : clause.items) {
 		SetActionType logType;
@@ -747,7 +747,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildRemove(
 		throw std::runtime_error("REMOVE clause must follow a MATCH or CREATE clause.");
 	}
 
-	std::vector<LogicalRemoveItem> logicalItems;
+	utils::OwnedStdVector<LogicalRemoveItem> logicalItems;
 	for (const auto& item : clause.items) {
 		LogicalRemoveActionType logType = (item.type == RemoveItemType::RIT_PROPERTY)
 			? LogicalRemoveActionType::LREM_PROPERTY
@@ -771,7 +771,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 
 	// Convert SetItemAST → MergeSetAction
 	auto convertToMergeActions = [](const std::vector<SetItemAST>& items) {
-		std::vector<MergeSetAction> actions;
+		utils::OwnedStdVector<MergeSetAction> actions;
 		actions.reserve(items.size());
 		for (const auto& item : items) {
 			SetActionType type = SetActionType::LSET_PROPERTY;
@@ -804,7 +804,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	}
 
 	// Edge MERGE
-	std::vector<MergeSetAction> emptyActions;
+	utils::OwnedStdVector<MergeSetAction> emptyActions;
 
 	std::unique_ptr<LogicalOperator> rootOp =
 		std::make_unique<LogicalMergeNode>(

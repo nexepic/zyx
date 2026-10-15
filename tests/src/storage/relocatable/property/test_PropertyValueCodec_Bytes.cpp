@@ -201,7 +201,11 @@ TEST(RelocatablePropertyValueCodecBytesTest, RoundTripsEveryCanonicalScalarAndCo
 
 	size_t offset = 0U;
 	for (const PropertyValue &value: expected) {
-		EXPECT_EQ(CanonicalPropertyValueCodec::decodeNext(encoded, offset), value);
+        size_t inspected = offset;
+        const auto shape = CanonicalPropertyValueCodec::inspectNext(encoded, inspected);
+        EXPECT_EQ(shape.encoded_bytes, CanonicalPropertyValueCodec::encodedSize(value));
+        EXPECT_EQ(CanonicalPropertyValueCodec::decodeNext(encoded, offset), value);
+        EXPECT_EQ(inspected, offset);
 	}
 	EXPECT_EQ(offset, encoded.size());
 }

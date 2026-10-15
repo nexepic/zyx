@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 
 #include <array>
@@ -43,10 +45,17 @@
 #include "graph/storage/relocatable/vector/VectorPage.hpp"
 #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 namespace graph::storage {
 
 	namespace {
+
+        template<class Key, class Value>
+        using ScanMap = std::map<Key, Value, std::less<Key>,
+            utils::OwnedPmrAllocator<std::pair<const Key, Value>>>;
+        template<class Key>
+        using ScanSet = std::set<Key, std::less<Key>, utils::OwnedPmrAllocator<Key>>;
 
 		[[noreturn]] void throwIntegrityError(const char *message) {
 			throw FormatException(FormatError::FERR_INVALID_STATE, message);
@@ -148,7 +157,7 @@ namespace graph::storage {
 			PageLocation location;
 			CatalogEntry pool;
 			PageOwnerHeader owner;
-			std::vector<std::byte> payload;
+			utils::OwnedVector<std::byte> payload;
 		};
 
 		[[nodiscard]] bool lessKey(std::span<const std::byte> left, std::span<const std::byte> right) {
@@ -166,21 +175,21 @@ namespace graph::storage {
 			return value;
 		}
 
-		void appendBigEndianU16(std::vector<std::byte> &bytes, uint16_t value) {
+		void appendBigEndianU16(utils::OwnedVector<std::byte> &bytes, uint16_t value) {
 			bytes.push_back(static_cast<std::byte>(value >> 8U));
 			bytes.push_back(static_cast<std::byte>(value));
 		}
 
-		void appendBigEndianU64(std::vector<std::byte> &bytes, uint64_t value) {
+		void appendBigEndianU64(utils::OwnedVector<std::byte> &bytes, uint64_t value) {
 			for (int shift = 56; shift >= 0; shift -= 8) {
 				bytes.push_back(static_cast<std::byte>(value >> shift));
 			}
 		}
 
-		[[nodiscard]] std::vector<std::byte> largeValueContentIndexKey(const LargeValueRef &reference) {
+		[[nodiscard]] utils::OwnedVector<std::byte> largeValueContentIndexKey(const LargeValueRef &reference) {
 			// Routed references originate from validated Manifest codecs. Re-encoding
 			// their complete identity here must not duplicate those local checks.
-			std::vector<std::byte> key;
+			utils::OwnedVector<std::byte> key;
 			key.reserve(1U + sizeof(uint16_t) * 2U + sizeof(uint64_t) + reference.content_hash.size() +
 						reference.media_type.size() + sizeof(uint64_t));
 			key.push_back(std::byte{1U});
@@ -197,16 +206,16 @@ namespace graph::storage {
 		struct BTreeScanWorkItem {
 			PageId page_id{};
 			uint16_t expected_level = 0;
-			std::optional<std::vector<std::byte>> lower_inclusive;
-			std::optional<std::vector<std::byte>> upper_exclusive;
+			std::optional<utils::OwnedVector<std::byte>> lower_inclusive;
+			std::optional<utils::OwnedVector<std::byte>> upper_exclusive;
 		};
 
-		[[nodiscard]] std::vector<BTreePageEntry>
-		scanIndexTree(const std::map<uint64_t, ScannedPage> &pages, const IndexRootLocation &root,
+		[[nodiscard]] utils::OwnedVector<BTreePageEntry>
+		scanIndexTree(const ScanMap<uint64_t, ScannedPage> &pages, const IndexRootLocation &root,
 				  size_t maximumEntries, std::optional<BTreeLeafValueLayout> expectedLeafValueLayout = std::nullopt) {
-			std::vector<BTreePageEntry> result;
-			std::vector<BTreePageHeader> leaves;
-			std::set<PageId> visited;
+			utils::OwnedVector<BTreePageEntry> result;
+			utils::OwnedVector<BTreePageHeader> leaves;
+			ScanSet<PageId> visited;
 			// The full Index Root Directory pass below has already fail-closed on an
 			// absent root page before any manifest mapping reaches this helper.
 			const ScannedPage &rootPage = pages.at(root.root_page_id.value());
@@ -217,7 +226,7 @@ namespace graph::storage {
 						"relocatable integrity scan found an adjacency mapping root with sibling links");
 			}
 
-			std::vector<BTreeScanWorkItem> work;
+			utils::OwnedVector<BTreeScanWorkItem> work;
 			work.push_back({root.root_page_id, rootHeader.level, std::nullopt, std::nullopt});
 			while (!work.empty()) {
 				BTreeScanWorkItem item = std::move(work.back());
@@ -240,7 +249,7 @@ namespace graph::storage {
 					throwIntegrityError(
 							"relocatable integrity scan found an adjacency mapping child with mismatched level");
 				}
-				const std::vector<BTreePageEntry> entries = current.entries();
+				const utils::OwnedVector<BTreePageEntry> entries = current.entries();
 				for (const BTreePageEntry &entry: entries) {
 					const uint8_t outsideRange = static_cast<uint8_t>(item.lower_inclusive.has_value() &&
 																	  lessKey(entry.key, *item.lower_inclusive)) |
@@ -269,8 +278,8 @@ namespace graph::storage {
 					const size_t ordinal = childOrdinal - 1U;
 					const PageId child =
 							ordinal == 0U ? header.leftmost_child : PageId(entries[ordinal - 1U].value_or_child);
-					std::optional<std::vector<std::byte>> lower = item.lower_inclusive;
-					std::optional<std::vector<std::byte>> upper = item.upper_exclusive;
+					std::optional<utils::OwnedVector<std::byte>> lower = item.lower_inclusive;
+					std::optional<utils::OwnedVector<std::byte>> upper = item.upper_exclusive;
 					if (ordinal != 0U) {
 						lower = entries[ordinal - 1U].key;
 					}
@@ -295,18 +304,24 @@ namespace graph::storage {
 	} // namespace
 
 	RelocatableIntegrityScanner::RelocatableIntegrityScanner(std::shared_ptr<StorageIO> io,
-															 RelocatableMetadataStore &metadata) :
-		io_(std::move(io)), metadata_(metadata) {
+															 RelocatableMetadataStore &metadata,
+            std::shared_ptr<std::pmr::memory_resource> workspaceOwner) :
+        workspace_owner_(std::move(workspaceOwner)), io_(std::move(io)), metadata_(metadata) {
 		if (!io_ || !metadata_.usesDataStorage(io_)) {
 			throw std::invalid_argument("relocatable integrity scanner requires the metadata data StorageIO");
 		}
 	}
 
 	RelocatableIntegrityReport RelocatableIntegrityScanner::scan() const {
+        // The owner outlives every workspace and decoded owned payload. Legacy
+        // standalone callers retain their existing explicit allocation scope.
+        std::optional<utils::OwnedAllocationScope> allocationScope;
+        if (workspace_owner_) allocationScope.emplace(workspace_owner_);
+        StorageIO::SequentialReadScope sequentialReads(*io_);
 		const MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const Superblock &superblock = snapshot.superblock();
 		RelocatableIntegrityReport report{superblock.generation, superblock.checkpoint_lsn};
-		std::map<uint64_t, CatalogEntry> catalog;
+		ScanMap<uint64_t, CatalogEntry> catalog;
 		metadata_.catalog_.visit(superblock, [this, &superblock, &report, &catalog](const CatalogEntry &entry) {
 			requireIntegrity(catalog.emplace(entry.segment_id.value(), entry).second,
 							 "relocatable integrity scan found duplicate Catalog Segment IDs");
@@ -337,7 +352,7 @@ namespace graph::storage {
 				++report.sealed_segments;
 			}
 		});
-		std::set<uint64_t> retiredSegments;
+		ScanSet<uint64_t> retiredSegments;
 		metadata_.locations_.visitRetireQueue(superblock, [this, &superblock, &catalog, &report,
 													   &retiredSegments](const RetireQueueEntry &entry) {
 			const auto current = catalog.find(entry.segment_id.value());
@@ -371,18 +386,18 @@ namespace graph::storage {
 		PhysicalSegmentAllocator extents(io_, metadata_);
 		LargeValueStore largeValues(io_, metadata_, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 		VectorCodebookStore codebooks(extents, metadata_);
-		std::map<uint64_t, ScannedPage> scannedPages;
-		std::map<uint64_t, VectorManifestLocation> scannedManifests;
-		std::map<uint64_t, VectorCodebookHeader> scannedCodebooks;
-		std::map<uint64_t, VectorCodebookExtentHeader> scannedCodebookExtents;
-		std::map<uint64_t, LargeValueManifest> scannedLargeValueManifests;
-		std::map<uint64_t, LargeValueDataPage> scannedLargeValueDataPages;
-		std::map<uint64_t, StateLocation> scannedStates;
-		std::map<uint64_t, VectorPageHeader> vectorPages;
-		std::map<uint64_t, std::set<uint64_t>> rawVectorIdsByIndex;
-		std::map<StableSlotKey, std::pair<EntityPageRecordKind, uint64_t>> scannedEntitySlots;
-		std::map<StableSlotKey, std::vector<uint64_t>> scannedLabelSlots;
-		std::map<StableSlotKey, EntityPropertyKey> scannedEntityPropertySlots;
+		ScanMap<uint64_t, ScannedPage> scannedPages;
+		ScanMap<uint64_t, VectorManifestLocation> scannedManifests;
+		ScanMap<uint64_t, VectorCodebookHeader> scannedCodebooks;
+		ScanMap<uint64_t, VectorCodebookExtentHeader> scannedCodebookExtents;
+		ScanMap<uint64_t, LargeValueManifest> scannedLargeValueManifests;
+		ScanMap<uint64_t, LargeValueDataPage> scannedLargeValueDataPages;
+		ScanMap<uint64_t, StateLocation> scannedStates;
+		ScanMap<uint64_t, VectorPageHeader> vectorPages;
+		ScanMap<uint64_t, ScanSet<uint64_t>> rawVectorIdsByIndex;
+		ScanMap<StableSlotKey, std::pair<EntityPageRecordKind, uint64_t>> scannedEntitySlots;
+		ScanMap<StableSlotKey, utils::OwnedVector<uint64_t>> scannedLabelSlots;
+		ScanMap<StableSlotKey, EntityPropertyKey> scannedEntityPropertySlots;
 		// Node and Edge logical IDs share the directory type with the native
 		// Entity Map. Validate their targets below instead of rejecting the root
 		// outright: a clean native database necessarily has entries here.
@@ -446,7 +461,7 @@ namespace graph::storage {
 						throwIntegrityError("relocatable integrity scan found stale LabelSet page free-space metadata");
 					}
 					for (const SlottedSlotReference &reference: page.liveSlots()) {
-						const std::vector<uint64_t> labels = EntityLabelSetCodec::decode(page.read(reference));
+						const utils::OwnedVector<uint64_t> labels = EntityLabelSetCodec::decode(page.read(reference));
 						static_cast<void>(scannedLabelSlots.emplace(
 								stableSlotKey(reference.page_id, reference.slot_id, reference.generation), labels));
 					}
@@ -458,7 +473,8 @@ namespace graph::storage {
 						throwIntegrityError("relocatable integrity scan found stale slotted page free-space metadata");
 					}
 					for (const SlottedSlotReference &reference: page.liveSlots()) {
-						const std::vector<std::byte> bytes = page.read(reference);
+                        detail::PropertyDecodeWorkspace propertyWorkspace(workspace_owner_);
+						const utils::OwnedVector<std::byte> bytes = page.read(reference);
 						PropertyCollectionRoot root;
 						if (hasNativeEntityPropertyRootMagic(bytes)) {
 							root = EntityPropertyCollectionRootCodec::decode(bytes);
@@ -610,9 +626,9 @@ namespace graph::storage {
 			uint32_t chunk_count = 0U;
 			uint64_t logical_bytes = 0U;
 		};
-		std::map<uint64_t, LargeValueRef> routedLargeValueReferences;
-		std::set<uint64_t> reachableLargeValueManifestPages;
-		std::set<uint64_t> reachableLargeValueDataPages;
+		ScanMap<uint64_t, LargeValueRef> routedLargeValueReferences;
+		ScanSet<uint64_t> reachableLargeValueManifestPages;
+		ScanSet<uint64_t> reachableLargeValueDataPages;
 		metadata_.visitLargeValueManifestLocations(snapshot, [&](const LargeValueManifestLocation &route) {
 			const auto rootPage = scannedPages.find(route.manifest_page_id.value());
 			const auto root = scannedLargeValueManifests.find(route.manifest_page_id.value());
@@ -715,11 +731,11 @@ namespace graph::storage {
 		}
 		if (contentIndexRoot.has_value()) {
 			const size_t maximumEntries = routedLargeValueReferences.size() + 1U;
-			const std::vector<BTreePageEntry> entries = scanIndexTree(scannedPages, *contentIndexRoot, maximumEntries);
+			const utils::OwnedVector<BTreePageEntry> entries = scanIndexTree(scannedPages, *contentIndexRoot, maximumEntries);
 			if (entries.size() != routedLargeValueReferences.size()) {
 				throwIntegrityError("relocatable integrity scan found an incomplete or orphan LargeValue content index");
 			}
-			std::map<std::vector<std::byte>, uint64_t> expectedEntries;
+			ScanMap<utils::OwnedVector<std::byte>, uint64_t> expectedEntries;
 			for (const auto &[valueId, reference]: routedLargeValueReferences) {
 				static_cast<void>(valueId);
 				expectedEntries.emplace(largeValueContentIndexKey(reference), reference.value_id.value());
@@ -733,7 +749,7 @@ namespace graph::storage {
 			report.large_value_content_index_entries = entries.size();
 		}
 
-		std::map<uint64_t, ExtentLocation> scannedExtents;
+		ScanMap<uint64_t, ExtentLocation> scannedExtents;
 		metadata_.locations_.visitExtents(superblock, [&](const ExtentLocation &location) {
 			const PhysicalSegmentContents contents = extents.read(snapshot, location.segment_id);
 			// A Location Directory route has exactly one entry for an ExtentId.
@@ -775,7 +791,7 @@ namespace graph::storage {
 			++report.extent_locations;
 		});
 
-		std::set<uint64_t> referencedCodebookExtents;
+		ScanSet<uint64_t> referencedCodebookExtents;
 		for (const auto &[codebookId, expectedHeader]: scannedCodebooks) {
 			const VectorCodebookManifest immutableManifest = codebooks.manifest(snapshot, codebookId);
 			codebooks.validate(snapshot, codebookId, expectedHeader.payload_bytes, immutableManifest.entries.size());
@@ -829,10 +845,10 @@ namespace graph::storage {
 							 "relocatable integrity scan found an Index Root Directory reference mismatch");
 		});
 
-		std::map<uint64_t, EntityPageLocation> nativeNodes;
-		std::map<uint64_t, EntityPageLocation> nativeEdges;
-		std::set<StableSlotKey> mappedEntitySlots;
-		std::map<StableSlotKey, uint64_t> labelSlotOwners;
+		ScanMap<uint64_t, EntityPageLocation> nativeNodes;
+		ScanMap<uint64_t, EntityPageLocation> nativeEdges;
+		ScanSet<StableSlotKey> mappedEntitySlots;
+		ScanMap<StableSlotKey, uint64_t> labelSlotOwners;
 		const auto validateNativeEntityLocation = [&scannedPages, &scannedEntitySlots, &scannedLabelSlots, &nativeNodes,
 														   &nativeEdges, &mappedEntitySlots,
 														   &labelSlotOwners](const EntityPageLocation &location,
@@ -854,7 +870,7 @@ namespace graph::storage {
 			requireIntegrity(
 					mappedEntitySlots.insert(slotKey).second,
 					"relocatable integrity scan found multiple Entity Map entries for one live Entity page slot");
-			std::map<uint64_t, EntityPageLocation> &entities =
+			ScanMap<uint64_t, EntityPageLocation> &entities =
 					expectedKind == EntityPageRecordKind::EPRK_NODE ? nativeNodes : nativeEdges;
 			static_cast<void>(entities.emplace(location.entity_id, location));
 			if (expectedKind != EntityPageRecordKind::EPRK_NODE) {
@@ -893,7 +909,7 @@ namespace graph::storage {
 			throwIntegrityError("relocatable integrity scan found a live LabelSet slot without one owning Node");
 		}
 
-		std::set<StableSlotKey> mappedEntityPropertySlots;
+		ScanSet<StableSlotKey> mappedEntityPropertySlots;
 		metadata_.visitEntityPropertyLocations(snapshot, [&](const EntityPropertyLocation &location) {
 			const StableSlotKey slotKey = stableSlotKey(location.page_id, location.slot_id, location.slot_generation);
 			const auto property = scannedEntityPropertySlots.find(slotKey);
@@ -918,7 +934,7 @@ namespace graph::storage {
 		// Ordinary graph adjacency is a key-only derived access path. Validate it
 		// against the authoritative Edge records before scanning unrelated derived
 		// structures, so an orphan, missing, or one-direction Edge fails closed.
-		std::map<uint64_t, EdgeEntityRecord> authoritativeEdges;
+		ScanMap<uint64_t, EdgeEntityRecord> authoritativeEdges;
 		for (const auto &[edgeId, location]: nativeEdges) {
 			const auto page = scannedPages.find(location.page_id.value());
 			requireIntegrity(page != scannedPages.end(),
@@ -947,11 +963,11 @@ namespace graph::storage {
 				throwIntegrityError("relocatable integrity scan cannot bound global adjacency entry validation");
 			}
 			const size_t expectedEntryCount = authoritativeEdges.size() * 2U;
-			const std::vector<BTreePageEntry> entries =
+			const utils::OwnedVector<BTreePageEntry> entries =
 					scanIndexTree(scannedPages, *adjacencyRoot, expectedEntryCount, BTreeLeafValueLayout::BLVL_EMPTY);
 			requireIntegrity(entries.size() == expectedEntryCount,
 							 "relocatable integrity scan found an incomplete global adjacency tree");
-			std::set<std::vector<std::byte>> expectedKeys;
+			ScanSet<utils::OwnedVector<std::byte>> expectedKeys;
 			for (const auto &[edgeId, edge]: authoritativeEdges) {
 				static_cast<void>(expectedKeys.insert(
 						AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, edge.source_node_id, edgeId})));
@@ -976,7 +992,7 @@ namespace graph::storage {
 			requireIntegrity(vector != vectorPages.end(),
 							 "relocatable integrity scan found a Vector Location outside a VectorPage");
 			const VectorPage opened = VectorPage::open(page->second.owner, page->second.payload);
-			const std::vector<std::byte> record = opened.read(location.slot_id, location.slot_generation);
+			const utils::OwnedVector<std::byte> record = opened.read(location.slot_id, location.slot_generation);
 			const uint8_t invalidRecordIdentity =
 					static_cast<uint8_t>(location.vector_id == 0U) |
 					static_cast<uint8_t>(LittleEndianCodec::readU64(record, 0U) != location.vector_id);
@@ -1027,12 +1043,12 @@ namespace graph::storage {
 				}
 			}
 			const auto rawVectorIds = rawVectorIdsByIndex.find(manifest.index_id);
-			const std::set<uint64_t> emptyRawVectorIds;
-			const std::set<uint64_t> &allRawVectorIds =
+			const ScanSet<uint64_t> emptyRawVectorIds;
+			const ScanSet<uint64_t> &allRawVectorIds =
 					rawVectorIds == rawVectorIdsByIndex.end() ? emptyRawVectorIds : rawVectorIds->second;
-			std::set<uint64_t> semanticVectorIds = allRawVectorIds;
-			std::set<uint64_t> baseVectorIds = allRawVectorIds;
-			std::vector<VectorDeltaEntry> semanticDeltaEntries;
+			ScanSet<uint64_t> semanticVectorIds = allRawVectorIds;
+			ScanSet<uint64_t> baseVectorIds = allRawVectorIds;
+			utils::OwnedVector<VectorDeltaEntry> semanticDeltaEntries;
 			if (manifest.delta_mapping_index_id != 0U) {
 				const std::optional<IndexRootLocation> mappingRoot =
 						metadata_.locations_.findIndexRootOptional(superblock, manifest.delta_mapping_index_id);
@@ -1047,7 +1063,7 @@ namespace graph::storage {
 					throwIntegrityError(
 							"relocatable integrity scan found a Vector Manifest delta mapping-root mismatch");
 				}
-				const std::vector<BTreePageEntry> deltaEntries =
+				const utils::OwnedVector<BTreePageEntry> deltaEntries =
 						scanIndexTree(scannedPages, *mappingRoot, manifest.delta_entry_count);
 				if (deltaEntries.size() != manifest.delta_entry_count) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Vector delta mapping");
@@ -1095,14 +1111,14 @@ namespace graph::storage {
 					throwIntegrityError(
 							"relocatable integrity scan found a Vector Manifest Vector-to-Node mapping-root mismatch");
 				}
-				const std::set<uint64_t> &expectedVectorIds = semanticVectorIds;
-				const std::vector<BTreePageEntry> nodeEntries =
+				const ScanSet<uint64_t> &expectedVectorIds = semanticVectorIds;
+				const utils::OwnedVector<BTreePageEntry> nodeEntries =
 						scanIndexTree(scannedPages, *nodeMappingRoot, expectedVectorIds.size());
 				if (nodeEntries.size() != expectedVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Node-to-Vector mapping");
 				}
-				std::map<uint64_t, uint64_t> nodeByVector;
-				std::map<uint64_t, uint64_t> vectorByNode;
+				ScanMap<uint64_t, uint64_t> nodeByVector;
+				ScanMap<uint64_t, uint64_t> vectorByNode;
 				for (const BTreePageEntry &entry: nodeEntries) {
 					const uint64_t nodeId = decodeCanonicalU64Key(
 							entry.key, "relocatable integrity scan found a malformed Node-to-Vector mapping key");
@@ -1114,7 +1130,7 @@ namespace graph::storage {
 					// Canonical B+Tree keys make NodeId unique before this conversion.
 					static_cast<void>(vectorByNode.emplace(nodeId, entry.value_or_child));
 				}
-				const std::vector<BTreePageEntry> reverseEntries =
+				const utils::OwnedVector<BTreePageEntry> reverseEntries =
 						scanIndexTree(scannedPages, *vectorNodeMappingRoot, expectedVectorIds.size());
 				if (reverseEntries.size() != expectedVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an incomplete Vector-to-Node mapping");
@@ -1134,7 +1150,7 @@ namespace graph::storage {
 								"relocatable integrity scan found a noncanonical Vector-to-Node mapping key");
 					}
 				}
-				std::map<uint64_t, VectorDeltaEntry> deltaByVector;
+				ScanMap<uint64_t, VectorDeltaEntry> deltaByVector;
 				for (const VectorDeltaEntry &delta: semanticDeltaEntries) {
 					deltaByVector.emplace(delta.vector_id, delta);
 					if (delta.operation == VectorDeltaOperation::VDO_INSERT) {
@@ -1196,7 +1212,7 @@ namespace graph::storage {
 					throwIntegrityError(
 							"relocatable integrity scan found an adjacency generation without raw Vector IDs");
 				}
-				const std::vector<BTreePageEntry> entries =
+				const utils::OwnedVector<BTreePageEntry> entries =
 						scanIndexTree(scannedPages, *mappingRoot, baseVectorIds.size());
 				if (entries.size() != baseVectorIds.size()) {
 					throwIntegrityError("relocatable integrity scan found an adjacency mapping that does not cover "

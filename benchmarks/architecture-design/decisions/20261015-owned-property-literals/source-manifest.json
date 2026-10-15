@@ -1,0 +1,10 @@
+{
+  "include/graph/core/OwnedPropertyValue.hpp": "6d1cd1d6705b91da1943b24b81de309c47e5cd307f387b114982ca7b3f7f0502",
+  "include/graph/core/PropertyHeapRequestBytes.hpp": "c4f95a4e7439bbee8edc985614d75f36bb94db632393b46388f3e785098d89ad",
+  "include/graph/query/expressions/Expression.hpp": "4cec3fa56695783d86d1ce540c984729d192434ad7ae61f6bd7462245d4972ca",
+  "src/query/expressions/Expression.cpp": "f7fcf1629c309b12e388004c21523d461a4b76b9a3ef6d6f0e7d76a01df94b2b",
+  "tests/src/query/execution/test_OwnedPropertyValue.cpp": "94096ea3ac1a3783135dbedc091a103950a4034bb424b0d7f25c1e56d7267154",
+  "cmake/SourceSets.cmake": "e00b8e05d10fb60050d913d1d8719e749f820f0228deaaf668407b7164ccbb9b",
+  "tests/support/TransactionResourceFaultWorker.cpp": "7f320348ec702153d0f7d3f0d296b9537b8e459cbd18809fb988c27d2a43804b",
+  "scripts/test_transaction_resource_faults.py": "5d192304ed912cff4cbe738fc8177c800a1e0e82fa69c62152bbbbf918fb504e"
+}

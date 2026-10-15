@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 #include "storage/LogicalGraphTransactionOverlayTestFixture.hpp"
 
@@ -6,6 +9,101 @@ namespace graph::storage::transaction_overlay_test {
 namespace {
 LogicalGraphMutationEntityReference nodeReference(uint64_t id) {
 	return {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id};
+}
+
+TEST(LogicalGraphPropertyPatchTest, NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry) {
+    InMemoryLogicalTransaction transaction;
+    auto &source = static_cast<InMemoryLogicalSnapshot &>(transaction.readSnapshot());
+    const auto fence = *source.mutationFence();
+    const std::vector<LogicalGraphPropertyPatchRequest> patches{{nodeReference(1U), {{"rank", PropertyValue(7)}}, {}}};
+    auto small = std::make_shared<query::execution::MaterializedByteBudget>(16U);
+    {
+        utils::OwnedAllocationScope scope(small);
+        EXPECT_THROW(static_cast<void>(normalizeLogicalGraphPropertyPatchBatch(source, {}, patches, 4U, fence)),
+            query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U); EXPECT_EQ(source.read_node_calls, 0U);
+    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(4096U);
+    {
+        utils::OwnedAllocationScope scope(enough);
+        const auto result = normalizeLogicalGraphPropertyPatchBatch(source, {}, patches, 4U, fence);
+        ASSERT_EQ(result.batch.property_replacements.size(), 1U);
+        EXPECT_EQ(result.batch.property_replacements.front().properties.size(), 2U);
+    }
+    EXPECT_EQ(enough->used(), 0U);
+    EXPECT_EQ(source.read_node_calls, 1U);
+}
+
+TEST(LogicalGraphPropertyPatchTest, CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt) {
+    InMemoryLogicalTransaction transaction;
+    auto &source = transaction.readSnapshot();
+    LogicalGraphMutationBatch companion;
+    companion.node_creates = {{{"Created"}, {{"payload", PropertyValue(std::string(65536U, 'p'))}}}};
+    const auto expected = companion;
+    auto small = std::make_shared<query::execution::MaterializedByteBudget>(4096U);
+    {
+        detail::PropertyDecodeWorkspace workspace(small);
+        EXPECT_THROW(static_cast<void>(normalizeLogicalGraphPropertyPatchBatch(
+            source, companion, {}, 4U, *source.mutationFence())), query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U); EXPECT_EQ(companion, expected);
+    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(1048576U);
+    {
+        detail::PropertyDecodeWorkspace workspace(enough);
+        const auto normalized = normalizeLogicalGraphPropertyPatchBatch(source, companion, {}, 4U, *source.mutationFence());
+        EXPECT_EQ(normalized.batch, expected); EXPECT_GE(enough->used(), 65537U);
+    }
+    EXPECT_EQ(enough->used(), 0U);
+}
+
+TEST(LogicalGraphPropertyPatchTest, NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit) {
+    InMemoryLogicalTransaction transaction;
+    auto &source = transaction.readSnapshot();
+    const std::vector<LogicalGraphPropertyPatchRequest> patches{
+        {nodeReference(1U), {{"payload", PropertyValue(std::string(65536U, 'p'))}}, {}}};
+    auto budget = std::make_shared<query::execution::MaterializedByteBudget>(1048576U);
+    {
+        detail::PropertyDecodeWorkspace workspace(budget);
+        const auto normalized = normalizeLogicalGraphPropertyPatchBatch(source, {}, patches, 8U, *source.mutationFence());
+        ASSERT_EQ(normalized.persisted_patches.size(), 1U);
+        ASSERT_EQ(normalized.batch.property_replacements.size(), 1U);
+        EXPECT_EQ(normalized.persisted_patches[0].sets, patches[0].sets);
+        EXPECT_EQ(normalized.batch.property_replacements[0].properties[1].value, patches[0].sets[0].value);
+        EXPECT_GE(budget->used(), 2U * 65537U);
+    }
+    EXPECT_EQ(budget->used(), 0U);
+}
+
+TEST(LogicalGraphPropertyPatchTest, LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission) {
+    InMemoryLogicalTransaction transaction;
+    static_cast<InMemoryLogicalSnapshot &>(transaction.readSnapshot()).shaped_property_admission = true;
+    LogicalGraphTransactionOverlay overlay(transaction);
+    const PropertyValue expected(std::string(65536U, 's'));
+    overlay.replaceLogicalNodeProperties({{1U, {{"payload", expected}}}});
+    auto snapshot = overlay.openLogicalGraphReadSnapshot();
+    const auto fence = *snapshot->mutationFence();
+    const std::vector<LogicalGraphPropertyPatchRequest> patches{{nodeReference(1U), {{"rank", PropertyValue(7)}}, {}}};
+    LogicalGraphMutationReadControl control; size_t sourceCalls = 0U;
+    control.property_admission = [&](size_t bytes) {
+        ++sourceCalls;
+        if (bytes > 1048576U) throw std::length_error("logical source work denied");
+    };
+    auto small = std::make_shared<query::execution::MaterializedByteBudget>(4096U);
+    {
+        detail::PropertyDecodeWorkspace workspace(small);
+        EXPECT_THROW(static_cast<void>(overlay.executeLogicalGraphPropertyPatches(
+            *snapshot, patches, 8U, fence, control)), query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_GT(sourceCalls, 0U); EXPECT_EQ(small->used(), 0U);
+    EXPECT_EQ(*overlay.openLogicalGraphReadSnapshot()->mutationFence(), fence);
+    EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties[0].value, expected);
+    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(1048576U);
+    {
+        detail::PropertyDecodeWorkspace workspace(enough);
+        EXPECT_NO_THROW(static_cast<void>(overlay.executeLogicalGraphPropertyPatches(*snapshot, patches, 8U, fence, control)));
+    }
+    EXPECT_EQ(enough->used(), 0U);
+    EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeShaped(1U, {.all_properties = true}).properties.size(), 2U);
 }
 
 TEST(LogicalGraphPropertyPatchTest, PreservesOtherFieldsAndReadsPreviousStagedValues) {

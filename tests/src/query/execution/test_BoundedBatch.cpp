@@ -400,3 +400,124 @@ TEST(BoundedBatchTest, CapacityMoveAcrossBudgetsTransfersTheAllocatorOwnerAndRef
 	}
 	EXPECT_EQ(first.used(),0U);EXPECT_EQ(second.used(),0U);
 }
+
+TEST(BoundedBatchTest, MoveConstructionPreservesEmbeddedObjectClassification) {
+    using namespace graph::query::execution;
+    MaterializedByteBudget budget(1024U);
+    {
+        BoundedBatch<uint64_t> source(8U, 1024U, [](const uint64_t &) { return sizeof(uint64_t); },
+                                      &budget, true, sizeof(uint64_t));
+        source.append(42U);
+        const size_t retained = budget.used();
+        BoundedBatch<uint64_t> moved(std::move(source));
+        EXPECT_EQ(budget.used(), retained);
+        moved.append(43U);
+        EXPECT_EQ(budget.used(), moved.values().capacity() * sizeof(uint64_t));
+        auto last = moved.popBackCharged();
+        EXPECT_EQ(last.value, 43U);
+        EXPECT_EQ(last.reservation.bytes(), sizeof(uint64_t));
+        EXPECT_EQ(budget.used(), moved.values().capacity() * sizeof(uint64_t) + sizeof(uint64_t));
+        source.append(7U);
+        EXPECT_EQ(budget.used(), (moved.values().capacity() + source.values().capacity() + 1U) * sizeof(uint64_t));
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(BoundedBatchTest, EscapedEmbeddedValueDenialLeavesThePublishedBatchIntact) {
+    using namespace graph::query::execution;
+    MaterializedByteBudget budget(sizeof(uint64_t));
+    BoundedBatch<uint64_t> batch(1U, sizeof(uint64_t), [](const uint64_t &) { return sizeof(uint64_t); },
+                                 &budget, true, sizeof(uint64_t));
+    batch.append(42U);
+    EXPECT_THROW(static_cast<void>(batch.popBackCharged()), MaterializedByteLimitExceeded);
+    ASSERT_EQ(batch.size(), 1U);
+    EXPECT_EQ(batch.values()[0], 42U);
+    EXPECT_EQ(batch.bytes(), sizeof(uint64_t));
+    EXPECT_EQ(budget.used(), sizeof(uint64_t));
+    batch.clear();
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(BoundedBatchTest, ThrowingEscapeMoveRestoresTheEmbeddedChargeBeforeRetry) {
+    using namespace graph::query::execution;
+    struct Value {
+        uint64_t number;
+        bool *fail;
+        Value(uint64_t number, bool &fail) : number(number), fail(&fail) {}
+        Value(Value &&other) : number(other.number), fail(other.fail) {
+            if (*fail) throw std::runtime_error("move denied");
+        }
+    };
+    bool fail = false;
+    MaterializedByteBudget budget(1024U);
+    BoundedBatch<Value> batch(2U, 1024U, [](const Value &) { return sizeof(Value); }, &budget, true, sizeof(Value));
+    batch.append(Value(42U, fail));
+    const size_t retained = budget.used();
+    fail = true;
+    EXPECT_THROW(static_cast<void>(batch.popBackCharged()), std::runtime_error);
+    EXPECT_EQ(budget.used(), retained);
+    ASSERT_EQ(batch.size(), 1U);
+    EXPECT_EQ(batch.values()[0].number, 42U);
+    fail = false;
+    {
+        auto escaped = batch.popBackCharged();
+        EXPECT_TRUE(batch.empty());
+        EXPECT_EQ(escaped.value.number, 42U);
+        EXPECT_EQ(budget.used(), sizeof(Value));
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(BoundedBatchTest, DiscardDestroysPayloadBeforeRefundingItsSharedCharge) {
+    using namespace graph::query::execution;
+    struct Value {
+        MaterializedByteBudget *budget;
+        size_t *observed;
+        std::vector<std::byte> payload;
+        Value(MaterializedByteBudget &budget, size_t &observed)
+            : budget(&budget), observed(&observed), payload(64U) {}
+        Value(Value &&) noexcept = default;
+        ~Value() { if (!payload.empty()) *observed = budget->used(); }
+    };
+    MaterializedByteBudget budget(1024U);
+    size_t atDestruction = 0U;
+    BoundedBatch<Value> batch(2U, 1024U,
+        [](const Value &value) { return sizeof(Value) + value.payload.capacity(); }, &budget, true, sizeof(Value));
+    batch.append(Value(budget, atDestruction));
+    const size_t retained = budget.used();
+    EXPECT_GT(retained, 64U);
+    batch.discardBack();
+    EXPECT_EQ(atDestruction, retained);
+    EXPECT_TRUE(batch.empty());
+    EXPECT_EQ(budget.used(), 0U);
+    EXPECT_THROW(batch.discardBack(), std::logic_error);
+    EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(BoundedBatchTest, FailedChargedInsertionDestroysRejectedPayloadBeforeRefunding) {
+    using namespace graph::query::execution;
+    struct Value {
+        MaterializedByteBudget *budget;
+        size_t *observed;
+        std::vector<std::byte> payload;
+        Value(MaterializedByteBudget &budget, size_t &observed)
+            : budget(&budget), observed(&observed), payload(64U) {}
+        Value(Value &&) noexcept = default;
+        ~Value() { if (!payload.empty()) *observed = budget->used(); }
+    };
+    const size_t rowBytes = sizeof(Value) + 64U;
+    MaterializedByteBudget budget(2U * rowBytes);
+    size_t atDestruction = 0U;
+    BoundedBatch<Value> batch(4U, 2U * rowBytes,
+        [](const Value &value) { return sizeof(Value) + value.payload.capacity(); }, &budget, true, sizeof(Value));
+    batch.append(Value(budget, atDestruction));
+    MaterializedByteReservation incoming(&budget);
+    incoming.set(rowBytes);
+    EXPECT_THROW(batch.appendCharged(Value(budget, atDestruction), std::move(incoming)), MaterializedByteLimitExceeded);
+    EXPECT_GE(atDestruction, 2U * 64U + sizeof(Value));
+    ASSERT_EQ(batch.size(), 1U);
+    EXPECT_EQ(batch.bytes(), rowBytes);
+    EXPECT_EQ(budget.used(), rowBytes);
+    batch.clear();
+    EXPECT_EQ(budget.used(), 0U);
+}

@@ -14,6 +14,8 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -51,7 +53,7 @@ namespace graph::storage {
 			LogSequenceNumber owner_lsn{};
 			uint16_t live_count = 0U;
 			bool retire = false;
-			std::vector<uint64_t> vector_ids;
+			utils::OwnedVector<uint64_t> vector_ids;
 		};
 
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(const Superblock &published) {
@@ -81,25 +83,25 @@ namespace graph::storage {
 											const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		VectorRawReachabilityReclaimReport report;
-		std::vector<RetiredRawVectorPage> retirementPages;
-		std::vector<uint64_t> erasedVectorIds;
-		std::vector<CatalogEntry> candidatePools;
-		std::vector<CatalogEntry> retiredPools;
+		utils::OwnedVector<RetiredRawVectorPage> retirementPages;
+		utils::OwnedVector<uint64_t> erasedVectorIds;
+		utils::OwnedVector<CatalogEntry> candidatePools;
+		utils::OwnedVector<CatalogEntry> retiredPools;
 		Superblock scanned;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			scanned = snapshot.superblock();
 			report.scanned_generation = scanned.generation;
-			const std::vector<IndexDefinition> definitions =
+			const utils::OwnedStdVector<IndexDefinition> definitions =
 					catalog_.readIndexDefinitions(snapshot, options.maximum_index_definitions);
-			std::map<uint64_t, IndexDefinitionKind> activeKinds;
+			utils::OwnedMap<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {
 				activeKinds.emplace(definition.index_id, definition.kind);
 			}
 			report.index_definitions = definitions.size();
 
-			std::map<uint64_t, bool> manifestHasNodeMapping;
+			utils::OwnedMap<uint64_t, bool> manifestHasNodeMapping;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &location) {
 				if (report.vector_manifests == options.maximum_vector_manifests) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -141,8 +143,8 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE, "relocatable Raw Vector reclamation exceeded its Raw pool scan bound");
 			}
 			report.raw_pools_scanned = currentPools.size() + retiredPools.size();
-			std::map<uint64_t, CatalogEntry> currentPoolsBySegment;
-			std::set<uint64_t> candidateSegments;
+			utils::OwnedMap<uint64_t, CatalogEntry> currentPoolsBySegment;
+			utils::OwnedSet<uint64_t> candidateSegments;
 			for (const CatalogEntry &pool: currentPools) {
 				currentPoolsBySegment.emplace(pool.segment_id.value(), pool);
 				if (pool.owner_id == 0U || (pool.owner_id & (UINT64_C(1) << 63U)) != 0U) {
@@ -172,7 +174,7 @@ namespace graph::storage {
 				candidatePools.push_back(pool);
 			}
 
-			std::map<uint64_t, RawPageObservation> rawPages;
+			utils::OwnedMap<uint64_t, RawPageObservation> rawPages;
 			static_cast<void>(metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
 				const auto pool = currentPoolsBySegment.find(location.segment_id.value());
 				if (pool == currentPoolsBySegment.end()) {

@@ -1,0 +1,23 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "linux_module_tests_before_count_only_helper": 382,
+  "final_count_only_helper_selected_tests": 9,
+  "failures": 0,
+  "isolated_cases_passed": 680,
+  "fault_evidence": "verification/zyx-scoped-buffers-faults.json",
+  "worker_sha256": "09f218d545dd7e31201b58fb0925d80ef9a553eb0b5b1384c0734c39f124327d",
+  "source_manifest": "source-manifest.json",
+  "source_archive": "source.tar.gz",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "runtime_platform": "Linux/clang19/libstdc++14",
+  "limitations": [
+    "No stage acceptance. Other reader names/metadata/compiler/IR/publication/maintenance paths remain.",
+    "Long allocation sweeps sample at most96points per path; short sweeps exhaust actual points.",
+    "MSVC/libc++ ABI source audit is not runtime verification.",
+    "Count-only helper removes construction of empty vectors while computing pre-admission, which matters for Debug STL proxy allocation."
+  ]
+}

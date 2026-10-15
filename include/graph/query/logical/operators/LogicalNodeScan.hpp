@@ -6,16 +6,20 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/logical/LogicalScanHint.hpp"
 #include "graph/core/PropertyTypes.hpp"
 
+#include "graph/core/OwnedPropertyVector.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+#include "graph/utils/OwnedStdString.hpp"
 
 namespace graph::query::logical {
 
@@ -34,8 +38,8 @@ struct RangePredicate {
  * @brief Describes a composite equality predicate (e.g. n.name = 'Alice' AND n.age = 30).
  */
 struct CompositeEqualityPredicate {
-    std::vector<std::string> keys;
-    std::vector<graph::PropertyValue> values;
+    utils::OwnedStringVector keys;
+    graph::OwnedPropertyVector values;
 };
 
 /**
@@ -45,6 +49,22 @@ struct ParameterPropertyPredicate {
     std::string key;
     std::string parameter_name;
 };
+
+struct ParameterPredicateCopyPolicy {
+    static size_t copyBytes(const ParameterPropertyPredicate &value) {
+        return utils::detail::addStandardHeapBytes(utils::detail::standardFreshStringHeapUpper(value.key.size()),
+            utils::detail::standardFreshStringHeapUpper(value.parameter_name.size()));
+    }
+};
+struct RangePredicateCopyPolicy {
+    static size_t copyBytes(const RangePredicate &value) {
+        return utils::detail::addStandardHeapBytes(utils::detail::standardFreshStringHeapUpper(value.key.size()),
+            utils::detail::addStandardHeapBytes(graph::property_heap::copyRequestUpper(value.minValue),
+                graph::property_heap::copyRequestUpper(value.maxValue)));
+    }
+};
+using OwnedParameterPredicates = utils::OwnedCopyVector<ParameterPropertyPredicate, ParameterPredicateCopyPolicy>;
+using OwnedRangePredicates = utils::OwnedCopyVector<RangePredicate, RangePredicateCopyPolicy>;
 
 /**
  * @class LogicalNodeScan
@@ -56,9 +76,9 @@ struct ParameterPropertyPredicate {
  */
 class LogicalNodeScan : public LogicalOperator {
 public:
-    explicit LogicalNodeScan(std::string variable,
-                             std::vector<std::string> labels = {},
-                             std::vector<std::pair<std::string, graph::PropertyValue>> propertyPredicates = {})
+    explicit LogicalNodeScan(utils::OwnedStdString variable,
+                             utils::OwnedStringVector labels = {},
+                             OwnedPropertyPredicates propertyPredicates = {})
         : variable_(std::move(variable))
         , labels_(std::move(labels))
         , propertyPredicates_(std::move(propertyPredicates)) {}
@@ -77,6 +97,10 @@ public:
 
     [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
         return {variable_};
+    }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars; vars.push_back(variable_); return vars;
     }
 
     [[nodiscard]] std::string toString() const override {
@@ -126,10 +150,10 @@ public:
     // Mutators for logical-plan transformations.
     // -------------------------------------------------------------------------
 
-    void setPropertyPredicates(std::vector<std::pair<std::string, graph::PropertyValue>> predicates) {
+    void setPropertyPredicates(OwnedPropertyPredicates predicates) {
         propertyPredicates_ = std::move(predicates);
     }
-    void setParameterPropertyPredicates(std::vector<ParameterPropertyPredicate> predicates) {
+    void setParameterPropertyPredicates(OwnedParameterPredicates predicates) {
         parameterPropertyPredicates_ = std::move(predicates);
     }
 
@@ -137,7 +161,7 @@ public:
     [[nodiscard]] const std::vector<RangePredicate> &getRangePredicates() const {
         return rangePredicates_;
     }
-    void setRangePredicates(std::vector<RangePredicate> predicates) {
+    void setRangePredicates(OwnedRangePredicates predicates) {
         rangePredicates_ = std::move(predicates);
     }
 
@@ -146,7 +170,12 @@ public:
         return compositeEquality_;
     }
     void setCompositeEquality(CompositeEqualityPredicate pred) {
-        compositeEquality_ = std::move(pred);
+        if (compositeEquality_) {
+            compositeEquality_->keys.swap(pred.keys);
+            compositeEquality_->values.swap(pred.values);
+        } else {
+            compositeEquality_.emplace(std::move(pred));
+        }
     }
 
     /** @brief Sets an optional storage-neutral scan preference. */
@@ -160,11 +189,11 @@ public:
     }
 
 private:
-    std::string variable_;
-    std::vector<std::string> labels_;
-    std::vector<std::pair<std::string, graph::PropertyValue>> propertyPredicates_;
-    std::vector<ParameterPropertyPredicate> parameterPropertyPredicates_;
-    std::vector<RangePredicate> rangePredicates_;
+    utils::OwnedStdString variable_;
+    utils::OwnedStringVector labels_;
+    OwnedPropertyPredicates propertyPredicates_;
+    OwnedParameterPredicates parameterPropertyPredicates_;
+    OwnedRangePredicates rangePredicates_;
     std::optional<CompositeEqualityPredicate> compositeEquality_;
     LogicalScanHint preferred_scan_hint_ = LogicalScanHint::LSH_FULL;
 };

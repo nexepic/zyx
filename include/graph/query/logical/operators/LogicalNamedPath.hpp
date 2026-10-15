@@ -4,6 +4,8 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include <string>
@@ -22,9 +24,9 @@ class LogicalNamedPath : public LogicalOperator {
 public:
 	LogicalNamedPath(
 		std::unique_ptr<LogicalOperator> child,
-		std::string pathVariable,
-		std::vector<std::string> nodeVariables,
-		std::vector<std::string> edgeVariables
+		utils::OwnedStdString pathVariable,
+		utils::OwnedStringVector nodeVariables,
+		utils::OwnedStringVector edgeVariables
 	) : child_(std::move(child)),
 		pathVariable_(std::move(pathVariable)),
 		nodeVariables_(std::move(nodeVariables)),
@@ -40,6 +42,12 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		auto vars = child_ ? child_->getOutputVariables() : std::vector<std::string>{};
+		vars.push_back(pathVariable_);
+		return vars;
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		auto vars = child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
 		vars.push_back(pathVariable_);
 		return vars;
 	}
@@ -69,9 +77,9 @@ public:
 
 private:
 	std::unique_ptr<LogicalOperator> child_;
-	std::string pathVariable_;
-	std::vector<std::string> nodeVariables_;
-	std::vector<std::string> edgeVariables_;
+	utils::OwnedStdString pathVariable_;
+	utils::OwnedStringVector nodeVariables_;
+	utils::OwnedStringVector edgeVariables_;
 };
 
 } // namespace graph::query::logical

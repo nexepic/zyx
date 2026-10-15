@@ -6,6 +6,11 @@
  **/
 
 #pragma once
+#include "graph/query/expressions/OwnedExpressionMap.hpp"
+#include "graph/core/OwnedPropertyMap.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -25,8 +30,9 @@ namespace graph::query::logical {
  * @brief Represents a single SET action within ON CREATE or ON MATCH clause.
  */
 struct MergeSetAction {
-	std::string variable;
-	std::string key;
+    using OwnedHeapElement = void;
+	utils::OwnedStdString variable;
+	utils::OwnedStdString key;
 	std::shared_ptr<graph::query::expressions::Expression> expression;
 	SetActionType type = SetActionType::LSET_PROPERTY;
 };
@@ -39,13 +45,13 @@ struct MergeSetAction {
 class LogicalMergeNode : public LogicalOperator {
 public:
 	LogicalMergeNode(
-		std::string variable,
-		std::vector<std::string> labels,
-		std::unordered_map<std::string, graph::PropertyValue> matchProps,
-		std::vector<MergeSetAction> onCreateItems,
-		std::vector<MergeSetAction> onMatchItems,
+		utils::OwnedStdString variable,
+		utils::OwnedStringVector labels,
+		graph::OwnedPropertyMap matchProps,
+		utils::OwnedStdVector<MergeSetAction> onCreateItems,
+		utils::OwnedStdVector<MergeSetAction> onMatchItems,
 		std::unique_ptr<LogicalOperator> child = nullptr,
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>
+		graph::query::expressions::OwnedExpressionMap
 			matchPropertyExpressions = {})
 		: variable_(std::move(variable))
 		, labels_(std::move(labels))
@@ -70,12 +76,21 @@ public:
 		return out;
 	}
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		utils::OwnedStringVector out;
+		if (child_) {
+			out = child_->getOwnedOutputVariables();
+		}
+		out.push_back(variable_);
+		return out;
+	}
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		auto cloneActions = [](const std::vector<MergeSetAction> &src) {
-			std::vector<MergeSetAction> dst;
+			utils::OwnedStdVector<MergeSetAction> dst;
 			dst.reserve(src.size());
 			for (const auto &a : src) {
-				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr, a.type});
+				dst.push_back({a.variable, a.key, utils::shareOwned(a.expression ? a.expression->clone() : nullptr), a.type});
 			}
 			return dst;
 		};
@@ -86,14 +101,7 @@ public:
 			cloneActions(onCreateItems_),
 			cloneActions(onMatchItems_),
 			child_ ? child_->clone() : nullptr,
-			[&]() {
-				std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> expressions;
-				expressions.reserve(matchPropertyExpressions_.size());
-				for (const auto &[key, expression] : matchPropertyExpressions_) {
-					expressions.emplace(key, expression ? expression->clone() : nullptr);
-				}
-				return expressions;
-			}());
+			graph::query::expressions::cloneExpressionMap(matchPropertyExpressions_));
 	}
 
 	[[nodiscard]] std::string toString() const override { return "MergeNode(" + variable_ + ")"; }
@@ -119,12 +127,12 @@ public:
 	[[nodiscard]] const std::vector<MergeSetAction> &getOnMatchItems() const { return onMatchItems_; }
 
 private:
-	std::string variable_;
-	std::vector<std::string> labels_;
-	std::unordered_map<std::string, graph::PropertyValue> matchProps_;
-	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> matchPropertyExpressions_;
-	std::vector<MergeSetAction> onCreateItems_;
-	std::vector<MergeSetAction> onMatchItems_;
+	utils::OwnedStdString variable_;
+	utils::OwnedStringVector labels_;
+	graph::OwnedPropertyMap matchProps_;
+	graph::query::expressions::OwnedExpressionMap matchPropertyExpressions_;
+	utils::OwnedStdVector<MergeSetAction> onCreateItems_;
+	utils::OwnedStdVector<MergeSetAction> onMatchItems_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

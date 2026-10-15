@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -89,6 +90,15 @@ namespace graph::storage {
 		[[nodiscard]] MetadataPageRouteLeafPage
 		readMetadataPageRouteLeaf(PhysicalPageRef reference,
 								  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+
+        [[nodiscard]] DecodedMetadataPageView<CatalogLeafPage>
+        readCatalogLeafView(PhysicalPageRef reference, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        [[nodiscard]] DecodedMetadataPageView<LocationLeafPage>
+        readLocationLeafView(PhysicalPageRef reference, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+
+        [[nodiscard]] DecodedMetadataPageView<MetadataPageRouteLeafPage>
+        readMetadataPageRouteLeafView(PhysicalPageRef reference,
+            BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 
 		void writePageDirectoryBootstrap(PhysicalPageRef reference, const PageDirectoryBootstrap &bootstrap) const;
 		[[nodiscard]] PageDirectoryBootstrap

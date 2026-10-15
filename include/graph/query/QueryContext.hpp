@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/ExecMode.hpp"
@@ -14,6 +15,8 @@
 #include <unordered_map>
 
 namespace graph::query {
+
+namespace execution::detail { class ResourceAccount; }
 
 class QueryGuard;
 
@@ -47,6 +50,9 @@ struct QueryContext {
 	// durable database ceiling.
 	std::optional<int> maxVarLengthDepth;
 	CsvImportPolicy csv_import_policy;
+	// Explicit shared query allowance; all nested execution-local budgets use
+	// this account, while retained outputs keep their own allocation leases.
+	std::shared_ptr<execution::detail::ResourceAccount> resource_account;
 
 	void checkGuard() const;
 	void checkGuardNow() const;

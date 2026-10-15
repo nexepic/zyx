@@ -6,6 +6,9 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStringSet.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -23,10 +26,11 @@ namespace graph::query::logical {
  * @brief A single projection item: an expression evaluated to a named alias.
  */
 struct LogicalProjectItem {
+    using OwnedHeapElement = void;
     std::shared_ptr<graph::query::expressions::Expression> expression;
-    std::string alias;
+    utils::OwnedStdString alias;
 
-    LogicalProjectItem(std::shared_ptr<graph::query::expressions::Expression> expr, std::string al)
+    LogicalProjectItem(std::shared_ptr<graph::query::expressions::Expression> expr, utils::OwnedStdString al)
         : expression(std::move(expr)), alias(std::move(al)) {}
 };
 
@@ -41,7 +45,7 @@ struct LogicalProjectItem {
 class LogicalProject : public LogicalOperator {
 public:
     LogicalProject(std::unique_ptr<LogicalOperator> child,
-                   std::vector<LogicalProjectItem> items,
+                   utils::OwnedStdVector<LogicalProjectItem> items,
                    bool distinct = false)
         : child_(std::move(child))
         , items_(std::move(items))
@@ -68,6 +72,15 @@ public:
         return vars;
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+        vars.reserve(items_.size());
+        for (const auto &item : items_) {
+            vars.push_back(item.alias);
+        }
+        return vars;
+    }
+
     [[nodiscard]] std::string toString() const override {
         std::string result = distinct_ ? "DistinctProject(" : "Project(";
         for (size_t i = 0; i < items_.size(); ++i) {
@@ -80,11 +93,11 @@ public:
 
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
         auto clonedChild = child_ ? child_->clone() : nullptr;
-        std::vector<LogicalProjectItem> clonedItems;
+        utils::OwnedStdVector<LogicalProjectItem> clonedItems;
         clonedItems.reserve(items_.size());
         for (const auto &item : items_) {
             auto clonedExpr = item.expression ? item.expression->clone() : nullptr;
-            std::shared_ptr<graph::query::expressions::Expression> sharedExpr(std::move(clonedExpr));
+            auto sharedExpr = utils::shareOwned(std::move(clonedExpr));
             clonedItems.emplace_back(std::move(sharedExpr), item.alias);
         }
         auto op = std::make_unique<LogicalProject>(std::move(clonedChild), std::move(clonedItems), distinct_);
@@ -114,15 +127,15 @@ public:
     // Mutators (for optimizer use)
     // -------------------------------------------------------------------------
 
-    void setRequiredColumns(std::unordered_set<std::string> cols) {
+    void setRequiredColumns(utils::OwnedStringSet cols) {
         requiredColumns_ = std::move(cols);
     }
 
 private:
     std::unique_ptr<LogicalOperator> child_;
-    std::vector<LogicalProjectItem> items_;
+    utils::OwnedStdVector<LogicalProjectItem> items_;
     bool distinct_;
-    std::unordered_set<std::string> requiredColumns_;
+    utils::OwnedStringSet requiredColumns_;
 };
 
 } // namespace graph::query::logical

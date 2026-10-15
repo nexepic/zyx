@@ -11,6 +11,7 @@ public:
 	explicit BudgetMemoryResource(MaterializedByteBudget &budget,
 		std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
 		: reservation_(&budget), upstream_(upstream) {}
+	[[nodiscard]] size_t used() const noexcept { return reservation_.bytes(); }
 private:
 	void *do_allocate(std::size_t bytes, std::size_t alignment) override {
 		const auto old = reservation_.bytes();

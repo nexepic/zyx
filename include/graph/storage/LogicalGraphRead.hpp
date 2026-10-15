@@ -7,6 +7,7 @@
  **/
 
 #pragma once
+#include <memory_resource>
 
 #include <algorithm>
 #include <array>
@@ -24,6 +25,8 @@
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
+
+namespace graph::query::execution::detail { class DatabaseResourceBudget; }
 
 namespace graph::storage {
 	// Only admission pressure may trigger source batching adaptation. Cancellation,
@@ -1127,6 +1130,9 @@ namespace graph::storage {
 	class LogicalGraphReadBackend {
 	public:
 		virtual ~LogicalGraphReadBackend() = default;
+		[[nodiscard]] virtual std::shared_ptr<query::execution::detail::DatabaseResourceBudget> queryResourceDomain() const { return {}; }
+        // Cache metadata and retained unbound operator objects share this owner.
+        [[nodiscard]] virtual std::shared_ptr<std::pmr::memory_resource> logicalPlanCacheMemoryOwner() const { return {}; }
 
 		[[nodiscard]] virtual std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const = 0;
 

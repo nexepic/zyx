@@ -1,0 +1,24 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_module_tests": 238,
+  "selected_suites": 11,
+  "isolated_cases_passed": 105,
+  "failures": 0,
+  "worker_sha256": "011fb03e9976f3dd3fa870e2a6a0b30298e6751ddb63ae53b762ccec629a8c98",
+  "source_sha256": {
+    "include/graph/storage/detail/ScopedPropertyBuffers.hpp": "9c70d4b6be819e918f53d81818707730724dafa9c09287c61d72de9dc29a6fa6",
+    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "7919aeecf43eba14e68fe27f36f59b9da3c87630ecd6c4b9d71dd1dbb2e52e98",
+    "src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp": "0856d0b7190f28bd3c01ae14da119850e3391d86c587e3dadfe068f6ccb15ac9",
+    "src/storage/relocatable/schema/SystemCatalog.cpp": "c71a4066fae3b547f06a7131b368bb321fcf1dadad87449544d4f1c0c6356585",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "17ec10d0564975af4b11b55262af8feef76b58425540e9cba542c23b5e39b113",
+    "tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp": "e2c74023b9893c0f664bd535ee9d644a4fc8e75fad23682d67c0a11212751a50",
+    "tests/src/storage/relocatable/schema/test_SystemCatalogNameAdmission.cpp": "3ac0253681a47d1c822a0ac6eddeaf1f28fd84df07d7d687c1e827b60905a989",
+    "scripts/test_transaction_resource_faults.py": "612f8d9b2ddd6b4b0cbb06de65e9994ea8d82b2085e1f433738c33a93e718df4",
+    "tests/support/TransactionResourceFaultWorker.cpp": "20548e524d9e1acafd18ec12a7e1c3b3efa164aa492046ee7e5a2185f996a10e"
+  },
+  "full_suite": false,
+  "performance_campaign": false
+}

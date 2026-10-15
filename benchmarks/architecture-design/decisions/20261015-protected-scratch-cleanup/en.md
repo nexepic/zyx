@@ -1,0 +1,11 @@
+# Protected in-file scratch cleanup
+
+Component progress, not whole-item acceptance; still 22/34 (64.7%).
+
+Native scratch release/finish admit a MAINTENANCE workspace before publication, using maximum_reclaim_workspace_bytes (8 MiB by default). The control object and owned page copies use the finite grant. Scoped sequential reads bypass CACHE admission while preserving dirty-page visibility. Sessions retain only a weak IO reference, so a retained finished object does not extend file lifetime. Empty cleanup requires no grant. Admission failure precedes cleanup writes and does not mark an indeterminate outcome; the same handle can be retried after refund. Actual publication/IO failures retain recovery fencing and orphan disk charges when destruction cannot complete cleanup.
+
+All 42 related selected tests passed, including both native sort integrations, partitioned DISTINCT, shared query ownership and disk/read-only/reclamation cases. New cases verify release/finish under fully occupied CACHE credit without cache admission denials, zero-write failure under exhausted MAINTENANCE credit, and successful same-handle retry. Maintenance credit is refunded after the workspace; finished session QUERY grants remain charged until object destruction.
+
+The current source passed 559 isolated fault/recovery cases: 553 allocation points (short paths exhaustive, long paths sampled at 96 each), four terminal cases, one 16-shape heap probe, and one flow containing 32 actual crash/read-only/recovery cycles. DISTINCT normally allocates 42,253 times; 96 points were sampled. Successful execution must return all 400 ordered unique values. Rejection/recovery preserves user data, refunds query memory and permits another execution under the same disk quota after reopen. Successful-result validation is outside exception capture, so incomplete success cannot masquerade as rejection. Full evidence is in proof.json/module-evidence.tar.gz.
+
+No full suite or new performance campaign ran. Nested standard payloads, other private/compiler workspaces, durable maintenance backlog and whole-stage acceptance remain pending. This does not claim universal platform OOM guarantees or comprehensive accounting of every heap allocation.

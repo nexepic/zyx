@@ -7,6 +7,9 @@
  **/
 
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
+#include "graph/query/execution/StandardContainerHeapBytes.hpp"
+#include "graph/core/PropertyDecodeAllocationScope.hpp"
+#include "graph/core/GuardedPropertyCopy.hpp"
 #include "graph/debug/PerfTrace.hpp"
 
 #include <algorithm>
@@ -38,22 +41,22 @@ namespace graph::storage {
 			});
 		}
 
-		void appendU8(std::vector<std::byte> &bytes, uint8_t value) { bytes.push_back(static_cast<std::byte>(value)); }
-		void appendU32(std::vector<std::byte> &bytes, uint32_t value) {
+		template<class Bytes> void appendU8(Bytes &bytes, uint8_t value) { bytes.push_back(static_cast<std::byte>(value)); }
+		template<class Bytes> void appendU32(Bytes &bytes, uint32_t value) {
 			const size_t offset = bytes.size();
 			bytes.resize(offset + sizeof(value));
 			LittleEndianCodec::writeU32(bytes, offset, value);
 		}
-		void appendU64(std::vector<std::byte> &bytes, uint64_t value) {
+		template<class Bytes> void appendU64(Bytes &bytes, uint64_t value) {
 			const size_t offset = bytes.size();
 			bytes.resize(offset + sizeof(value));
 			LittleEndianCodec::writeU64(bytes, offset, value);
 		}
-		void appendBytes(std::vector<std::byte> &bytes, std::string_view value) {
+		template<class Bytes> void appendBytes(Bytes &bytes, std::string_view value) {
 			bytes.insert(bytes.end(), reinterpret_cast<const std::byte *>(value.data()),
 						 reinterpret_cast<const std::byte *>(value.data() + value.size()));
 		}
-		void appendBytes(std::vector<std::byte> &bytes, std::span<const std::byte> value) {
+		template<class Bytes> void appendBytes(Bytes &bytes, std::span<const std::byte> value) {
 			bytes.insert(bytes.end(), value.begin(), value.end());
 		}
 		void requireU32Size(size_t value, const char *message) {
@@ -82,12 +85,12 @@ namespace graph::storage {
 				offset += sizeof(value);
 				return value;
 			}
-			[[nodiscard]] std::string readString(uint32_t count) {
-				if (count > remaining()) fail(FormatError::FERR_BUFFER_TOO_SMALL, "Property string is truncated");
-				const char *data = reinterpret_cast<const char *>(bytes.data() + offset);
-				offset += count;
-				return {data, count};
-			}
+            [[nodiscard]] std::string_view readStringView(uint32_t count) {
+                if (count > remaining()) fail(FormatError::FERR_BUFFER_TOO_SMALL, "Property string is truncated");
+                const char *data = reinterpret_cast<const char *>(bytes.data() + offset);
+                offset += count; return {data, count};
+            }
+            [[nodiscard]] std::string readString(uint32_t count) { return std::string(readStringView(count)); }
 			[[nodiscard]] std::span<const std::byte> readBytes(uint32_t count) {
 				if (count > remaining()) fail(FormatError::FERR_BUFFER_TOO_SMALL, "Property payload is truncated");
 				const auto result = bytes.subspan(offset, count);
@@ -113,6 +116,7 @@ namespace graph::storage {
 		}
 
 		void encodeValue(std::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth);
+		void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth);
 
 		[[nodiscard]] size_t checkedAdd(size_t left, size_t right, const char *message) {
 			if (right > std::numeric_limits<size_t>::max() - left) {
@@ -176,7 +180,7 @@ namespace graph::storage {
 			return checkedAdd(6U, payloadSize, "Property value wire size overflowed");
 		}
 
-		void encodePayload(std::vector<std::byte> &payload, const PropertyValue &value, uint32_t depth) {
+		template<class Bytes> void encodePayload(Bytes &payload, const PropertyValue &value, uint32_t depth) {
 			std::visit([&payload, depth]<typename T>(const T &argument) {
 				if constexpr (std::is_same_v<T, std::monostate>) {
 					return;
@@ -196,7 +200,11 @@ namespace graph::storage {
 					appendU32(payload, static_cast<uint32_t>(argument.size()));
 					for (const auto &entry: argument) encodeValue(payload, entry, depth + 1U);
 				} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
-					std::vector<std::pair<std::string_view, const PropertyValue *>> entries;
+					auto *resource = [&]() -> std::pmr::memory_resource * {
+                        if constexpr (requires { payload.get_allocator().resource(); }) return payload.get_allocator().resource();
+                        else return std::pmr::get_default_resource();
+                    }();
+                    std::pmr::vector<std::pair<std::string_view, const PropertyValue *>> entries(resource);
 					entries.reserve(argument.size());
 					for (const auto &[key, entry]: argument) entries.emplace_back(key, &entry);
 					std::ranges::sort(entries, [](const auto &left, const auto &right) {
@@ -239,7 +247,160 @@ namespace graph::storage {
 			appendBytes(bytes, payload);
 		}
 
-		[[nodiscard]] PropertyValue decodeValue(ByteReader &reader, uint32_t depth) {
+		void encodeValue(std::pmr::vector<std::byte> &bytes, const PropertyValue &value, uint32_t depth) {
+            if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
+            const size_t start = bytes.size();
+            try {
+                appendU8(bytes, static_cast<uint8_t>(kindFor(value)));
+                appendU8(bytes, 0U);
+                appendU32(bytes, 0U);
+                encodePayload(bytes, value, depth);
+                const size_t payloadBytes = bytes.size() - start - CanonicalPropertyValueCodec::HEADER_BYTES;
+                requireU32Size(payloadBytes, "Property value payload is too large");
+                LittleEndianCodec::writeU32(bytes, start + 2U, static_cast<uint32_t>(payloadBytes));
+            } catch (...) { bytes.resize(start); throw; }
+        }
+
+        using query::execution::detail::addStandardHeapBytes;
+        using query::execution::detail::standardAllocatorRequestBytes;
+        using query::execution::detail::standardContainerProxyBytes;
+        size_t checkedHeapProduct(size_t count, size_t width) {
+            if (width != 0U && count > (std::numeric_limits<size_t>::max)()/width)
+                fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property decoded heap bound overflowed");
+            return count * width;
+        }
+        size_t constructedStringHeapUpper(size_t count) {
+            return utils::detail::standardFreshStringHeapUpper(count);
+        }
+
+        // libc++ reserve divides using float. Padding by at least one full ULP
+        // prevents rounding below count before rehash, also at large wire counts.
+        size_t decodedMapReserveCount(size_t count) {
+            return property_copy::freshMapReserveCount(count);
+        }
+        size_t defaultMovingMapHeapUpper() {
+#if defined(_MSVC_STL_VERSION)
+            using Entry = PropertyValue::MapType::value_type;
+            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+            return addStandardHeapBytes(2U * standardContainerProxyBytes(),
+                addStandardHeapBytes(standardAllocatorRequestBytes(node, alignof(Entry)),
+                    standardAllocatorRequestBytes(16U * sizeof(void *), alignof(void *))));
+#else
+            return 0U;
+#endif
+        }
+        size_t reservedDecodedMapHeapUpper(size_t count) {
+            using Entry = PropertyValue::MapType::value_type;
+            constexpr size_t node = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+#if defined(_MSVC_STL_VERSION)
+            const auto nodes = addStandardHeapBytes(count, 1U);
+            constexpr size_t bucketWidth = 2U * sizeof(void *);
+            const auto buckets = (std::max)(size_t{8U}, checkedHeapProduct(decodedMapReserveCount(decodedMapReserveCount(count)), 2U));
+#elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION)
+            const auto nodes = count;
+            constexpr size_t bucketWidth = sizeof(void *);
+            // In the uint32 wire-payload domain, audited libstdc++ table gaps
+            // and libc++ next-prime/power2
+            // selection are <= twice a positive target. The second padding
+            // bounds upward float rounding of reserve, as well as the first
+            // padding preventing a rounded target below the element count.
+            const auto buckets = checkedHeapProduct((std::max)(size_t{1U}, decodedMapReserveCount(decodedMapReserveCount(count))), 2U);
+#else
+            const size_t nodes = 0U, buckets = 0U;
+            constexpr size_t bucketWidth = sizeof(void *);
+            throw std::logic_error("admitted Property decoding requires a supported standard hash ABI");
+#endif
+            auto bytes = addStandardHeapBytes(2U * standardContainerProxyBytes(),
+                addStandardHeapBytes(checkedHeapProduct(nodes, standardAllocatorRequestBytes(node, alignof(Entry))),
+                    standardAllocatorRequestBytes(checkedHeapProduct(buckets, bucketWidth), alignof(void *))));
+            // Two empty source maps from the by-value PropertyValue constructor
+            // plus a parent/outer move; this also covers initial reserve overlap.
+            return addStandardHeapBytes(bytes, checkedHeapProduct(3U, defaultMovingMapHeapUpper()));
+        }
+        template<class T> size_t decodedVectorHeapUpper(size_t count) {
+            // The by-value PropertyValue constructor and a parent/outer move
+            // leave up to three additional empty iterator-debug headers.
+            return addStandardHeapBytes(4U * standardContainerProxyBytes(),
+                standardAllocatorRequestBytes(checkedHeapProduct(count, sizeof(T)), alignof(T)));
+        }
+
+        class ShapeInspector final {
+        public:
+            explicit ShapeInspector(const std::function<void()> &checkpoint) : checkpoint_(checkpoint) {}
+            CanonicalPropertyValueCodec::DecodeShape shape;
+            void scan(ByteReader &reader, uint32_t depth) {
+                if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
+                if (--until_checkpoint_ == 0U) { if (checkpoint_) checkpoint_(); until_checkpoint_ = 256U; }
+                add(shape.value_count, 1U); shape.maximum_depth = (std::max)(shape.maximum_depth, size_t{depth});
+                const auto kind = static_cast<PropertyValueWireKind>(reader.readU8());
+                if (reader.readU8() != 0U) fail(FormatError::FERR_RESERVED_BITS, "Property value has nonzero flags");
+                ByteReader payload{reader.readBytes(reader.readU32())};
+                switch (kind) {
+                    case PropertyValueWireKind::PVW_NULL: break;
+                    case PropertyValueWireKind::PVW_BOOLEAN:
+                        if (payload.readU8() > 1U) fail(FormatError::FERR_INVALID_ENUM, "Property Boolean value is invalid");
+                        break;
+                    case PropertyValueWireKind::PVW_INTEGER:
+                    case PropertyValueWireKind::PVW_DOUBLE:
+                    case PropertyValueWireKind::PVW_DATETIME: static_cast<void>(payload.readU64()); break;
+                    case PropertyValueWireKind::PVW_DATE: static_cast<void>(payload.readU32()); break;
+                    case PropertyValueWireKind::PVW_DURATION:
+                        for (size_t i = 0U; i < 3U; ++i) static_cast<void>(payload.readU64());
+                        break;
+                    case PropertyValueWireKind::PVW_STRING: {
+                        const auto text = payload.readStringView(payload.readU32()); add(shape.string_bytes, text.size());
+                        heap(addStandardHeapBytes(constructedStringHeapUpper(text.size()), 2U * standardContainerProxyBytes())); break;
+                    }
+                    case PropertyValueWireKind::PVW_BYTES: {
+                        const auto count = payload.readU32(); static_cast<void>(payload.readBytes(count)); add(shape.binary_bytes, count);
+                        heap(decodedVectorHeapUpper<std::byte>(count)); break;
+                    }
+                    case PropertyValueWireKind::PVW_LIST: {
+                        const auto count = payload.readU32();
+                        if (count > payload.remaining()/6U) fail(FormatError::FERR_INVALID_HEADER, "Property list count exceeds payload");
+                        add(shape.list_elements, count); heap(decodedVectorHeapUpper<PropertyValue>(count));
+                        for (uint32_t i = 0U; i < count; ++i) scan(payload, depth + 1U);
+                        break;
+                    }
+                    case PropertyValueWireKind::PVW_MAP: {
+                        const auto count = payload.readU32();
+                        if (count > payload.remaining()/10U) fail(FormatError::FERR_INVALID_HEADER, "Property map count exceeds payload");
+                        add(shape.map_entries, count); heap(reservedDecodedMapHeapUpper(count)); std::string_view previous;
+                        for (uint32_t i = 0U; i < count; ++i) {
+                            const auto key = payload.readStringView(payload.readU32());
+                            if (i != 0U && !bytewiseLess(previous, key))
+                                fail(FormatError::FERR_INVALID_HEADER, "Property map keys are not canonical");
+                            add(shape.map_key_bytes, key.size());
+                            heap(addStandardHeapBytes(constructedStringHeapUpper(key.size()), standardContainerProxyBytes()));
+                            scan(payload, depth + 1U); previous = key;
+                        }
+                        break;
+                    }
+                    default: fail(FormatError::FERR_INVALID_ENUM, "Property value kind is unknown");
+                }
+                if (payload.remaining() != 0U) fail(FormatError::FERR_INVALID_HEADER, "Property payload has trailing bytes");
+            }
+        private:
+            void heap(size_t count) { add(shape.maximum_heap_request_bytes, count); }
+            static void add(size_t &target, size_t count) {
+                if (count > (std::numeric_limits<size_t>::max)() - target)
+                    fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property decode shape overflowed");
+                target += count;
+            }
+            const std::function<void()> &checkpoint_;
+            size_t until_checkpoint_ = 256U;
+        };
+
+        struct DecodeCheckpoints {
+            const std::function<void()> &checkpoint;
+            size_t remaining = 256U;
+            void tick() {
+                if (--remaining == 0U) { if (checkpoint) checkpoint(); remaining = 256U; }
+            }
+        };
+        [[nodiscard]] PropertyValue decodeValue(ByteReader &reader, uint32_t depth,
+                bool reserveMaps = false, DecodeCheckpoints *checkpoints = nullptr) {
+            if (checkpoints) checkpoints->tick();
 			if (depth > MAX_NESTING_DEPTH) fail(FormatError::FERR_INVALID_STATE, "Property value nesting is too deep");
 			const auto kind = static_cast<PropertyValueWireKind>(reader.readU8());
 			if (reader.readU8() != 0U) fail(FormatError::FERR_RESERVED_BITS, "Property value has nonzero flags");
@@ -262,23 +423,25 @@ namespace graph::storage {
 					const auto value = std::bit_cast<double>(payload.readU64()); requireComplete(); return PropertyValue(value);
 				}
 				case PropertyValueWireKind::PVW_STRING: {
-					const auto value = payload.readString(payload.readU32()); requireComplete(); return PropertyValue(value);
+					auto value = payload.readString(payload.readU32()); requireComplete(); return PropertyValue(std::move(value));
 				}
 				case PropertyValueWireKind::PVW_LIST: {
 					const uint32_t count = payload.readU32();
 					if (count > payload.remaining() / 6U) fail(FormatError::FERR_INVALID_HEADER, "Property list count exceeds payload");
 					std::vector<PropertyValue> values; values.reserve(count);
-					for (uint32_t index = 0U; index < count; ++index) values.push_back(decodeValue(payload, depth + 1U));
+					for (uint32_t index = 0U; index < count; ++index) values.push_back(decodeValue(payload, depth + 1U, reserveMaps, checkpoints));
 					requireComplete(); return PropertyValue(std::move(values));
 				}
 				case PropertyValueWireKind::PVW_MAP: {
 					const uint32_t count = payload.readU32();
 					if (count > payload.remaining() / 10U) fail(FormatError::FERR_INVALID_HEADER, "Property map count exceeds payload");
-					PropertyValue::MapType values; std::string previous;
+					PropertyValue::MapType values;
+                    if (reserveMaps && count != 0U) values.reserve(decodedMapReserveCount(count));
+                    std::string_view previous;
 					for (uint32_t index = 0U; index < count; ++index) {
-						const auto key = payload.readString(payload.readU32());
+						const auto key = payload.readStringView(payload.readU32());
 						if (index != 0U && !bytewiseLess(previous, key)) fail(FormatError::FERR_INVALID_HEADER, "Property map keys are not canonical");
-						values.emplace(key, decodeValue(payload, depth + 1U)); previous = key;
+						values.emplace(std::string(key), decodeValue(payload, depth + 1U, reserveMaps, checkpoints)); previous = key;
 					}
 					requireComplete(); return PropertyValue(std::move(values));
 				}
@@ -338,11 +501,81 @@ namespace graph::storage {
 		return encodedValueSize(value, 0U);
 	}
 
+	void CanonicalPropertyValueCodec::append(std::pmr::vector<std::byte> &bytes, const PropertyValue &value) {
+		encodeValue(bytes, value, 0U);
+	}
+
 	void CanonicalPropertyValueCodec::append(std::vector<std::byte> &bytes, const PropertyValue &value) {
 		encodeValue(bytes, value, 0U);
 	}
 
+    size_t CanonicalPropertyValueCodec::guardedCopyHeapUpper(const PropertyValue &value,
+            const std::function<void()> &checkpoint) {
+        size_t bytes = 0U, remaining = 256U;
+        if (checkpoint) checkpoint();
+        const auto add = [&](size_t count) { bytes = addStandardHeapBytes(bytes, count); };
+        const auto visit = [&](const auto &self, const PropertyValue &current, size_t depth) -> void {
+            if (depth > MAX_NESTING_DEPTH) throw std::length_error("guarded Property copy nesting is too deep");
+            if (--remaining == 0U) { remaining = 256U; if (checkpoint) checkpoint(); }
+            const auto &variant = current.getVariant();
+            if (const auto *text = std::get_if<std::string>(&variant)) {
+                add(addStandardHeapBytes(constructedStringHeapUpper(text->size()), 2U * standardContainerProxyBytes()));
+            } else if (const auto *binary = std::get_if<PropertyValue::Bytes>(&variant)) {
+                add(decodedVectorHeapUpper<std::byte>(binary->size()));
+            } else if (const auto *list = std::get_if<std::vector<PropertyValue>>(&variant)) {
+                add(decodedVectorHeapUpper<PropertyValue>(list->size()));
+                for (const auto &child : *list) self(self, child, depth + 1U);
+            } else if (const auto *map = std::get_if<PropertyValue::MapType>(&variant)) {
+                if (map->size() > std::numeric_limits<uint32_t>::max()/10U)
+                    throw std::length_error("guarded Property map exceeds the audited wire-sized table domain");
+                add(reservedDecodedMapHeapUpper(map->size()));
+                for (const auto &[key, child] : *map) {
+                    add(addStandardHeapBytes(constructedStringHeapUpper(key.size()), standardContainerProxyBytes()));
+                    self(self, child, depth + 1U);
+                }
+            }
+        };
+        visit(visit, value, 0U);
+        if (checkpoint) checkpoint();
+        return bytes;
+    }
+
+    CanonicalPropertyValueCodec::DecodeShape CanonicalPropertyValueCodec::inspectNext(
+            std::span<const std::byte> bytes, size_t &offset, const std::function<void()> &checkpoint) {
+        if (offset > bytes.size()) fail(FormatError::FERR_INVALID_HEADER, "Property cursor exceeds payload");
+        if (checkpoint) checkpoint();
+        ByteReader reader{bytes.subspan(offset)};
+        ShapeInspector inspector(checkpoint); inspector.scan(reader, 0U);
+        if (checkpoint) checkpoint();
+        inspector.shape.encoded_bytes = reader.offset;
+        offset += reader.offset; return inspector.shape;
+    }
+
+    PropertyValue CanonicalPropertyValueCodec::decodeNextWithAdmission(std::span<const std::byte> bytes,
+            size_t &offset, const std::function<void(const DecodeShape &)> &admission,
+            const std::function<void()> &checkpoint) {
+        if (!admission) throw std::invalid_argument("Property decode requires its admission callback");
+        size_t inspected = offset;
+        const auto shape = inspectNext(bytes, inspected, checkpoint);
+        admission(shape);
+        if (checkpoint) checkpoint();
+        ByteReader reader{bytes.subspan(offset)};
+        DecodeCheckpoints decoding{checkpoint};
+        PropertyValue value = decodeValue(reader, 0U, true, &decoding);
+        offset += reader.offset;
+        debug::PerfTrace::addValue("native_graph.read.materialized_bytes",
+            reader.offset > static_cast<size_t>((std::numeric_limits<int64_t>::max)())
+                ? (std::numeric_limits<int64_t>::max)() : static_cast<int64_t>(reader.offset));
+        return value;
+    }
+
 	PropertyValue CanonicalPropertyValueCodec::decodeNext(std::span<const std::byte> bytes, size_t &offset) {
+        if (auto *scope = property_decode::AllocationScope::current()) {
+            const auto admit = [&](const DecodeShape &shape) { scope->admit(shape.maximum_heap_request_bytes); };
+            const auto check = [&] { scope->checkpoint(); };
+            // std::function reference_wrapper targets require no heap storage.
+            return decodeNextWithAdmission(bytes, offset, std::ref(admit), std::ref(check));
+        }
 		if (offset > bytes.size()) fail(FormatError::FERR_INVALID_HEADER, "Property cursor exceeds payload");
 		ByteReader reader{bytes.subspan(offset)};
 		PropertyValue value = decodeValue(reader, 0U);

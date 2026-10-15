@@ -1,0 +1,69 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1419,
+  "selected_suites": 55,
+  "module_failures": 0,
+  "logical_id_write_grant_bytes": 262144,
+  "lease_fault_sweeps": {
+    "lease-reserve": {
+      "points": 163,
+      "exhaustive": true
+    },
+    "lease-cached": {
+      "points": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "points": 169,
+      "exhaustive": true
+    }
+  },
+  "legacy_cases": 4,
+  "crash_cycles": 32,
+  "crash_recovered_sizes": [
+    1572864
+  ],
+  "fault_failures": 0,
+  "full_suite": false,
+  "performance_run": false,
+  "base_commit": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_sha256": {
+    "src/query/execution/ProcessResourceDomains.hpp": "601ac0efe2ef0f269ef76aea4295bee43c32855a914a9e964e1aa0cecda044cd",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "b641bc08aedf56c792d3e2de5da22d9afed051f1f5a4e5648e9f92c6932a8664",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "3787d50b7be831c52e72f03fd24b0159473cac5120ce9572342fe7f9ca75a409",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "598f3f887ab699570a3d7360aca4d5f4d86a60749f301b1e055141ffd0358145",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "dcfee8121497c0aecfe6984c8bdf8928a336c4572b584724a0e708da45976676",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "468d67df0b158ae27ff80fd2e4da6b1f0292c10b668818b3d0761d48daa3c4ee"
+  },
+  "patch_sha256": "8f549841a889526f5c1496d316f83292e7aedc7b6e6e39c71ede56828832fe1c",
+  "untracked_source_sha256": {
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "acfe960ae09ec689e4fc4f629115d6ea5e9e4db5a7c991bc1ec5c29f3159de70",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "include/graph/storage/LogicalGraphTransactionMemoryProvider.hpp": "276c1dc5696b09dd704b2b9619bc742258e01fb838744a5efaf964c7b277993a",
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "scripts/test_transaction_resource_faults.py": "59d605ec4046a038fdbb628088a25468a97b0a6b95c360c3079f638890fc3278",
+    "src/query/execution/ProcessResourceDomains.hpp": "601ac0efe2ef0f269ef76aea4295bee43c32855a914a9e964e1aa0cecda044cd",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "cbf2db190b39920e708b92c88f9e0d4b694f7302b256ef7906b475622da3c3fb",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "dcfee8121497c0aecfe6984c8bdf8928a336c4572b584724a0e708da45976676",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "468d67df0b158ae27ff80fd2e4da6b1f0292c10b668818b3d0761d48daa3c4ee",
+    "tests/support/TransactionResourceFaultWorker.cpp": "d07f624c67663d5bddd1076cbedd44cf39661013711a2cc08ea589779e2cbb8d"
+  },
+  "evidence_sha256": {
+    "worker-build.log": "292e67b7ed786d2584845137c2049caa5025726fae751089c80152ed66811f58",
+    "lease-faults.log": "cbc83f985b5fee3a301ded68435e4a768312e7d7bc69f154f2b774e09fcaf912",
+    "lease-faults.json": "25f90dfcb08975195d218fd8279fe0edee8357e2cd6b09baa3e612c882fb761c",
+    "source.patch": "8f549841a889526f5c1496d316f83292e7aedc7b6e6e39c71ede56828832fe1c",
+    "module-tests.log": "ea886d63687ef7fa4a27bf556667d16d1f6db4cc7ff58bfa077b9fde6b2cc19a",
+    "module-recipe.py": "7bd7811e9bdfdda7c2ba27bb6b0d640f6cc704d97286f77ab0bf18382837b420",
+    "module-tests.xml": "ac87c7862663b58b1d86699bae7d97391ee8c663607c3bfc9d01a3752d173b37"
+  }
+}

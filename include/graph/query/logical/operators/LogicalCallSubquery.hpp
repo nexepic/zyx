@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -20,8 +21,8 @@ class LogicalCallSubquery : public LogicalOperator {
 public:
 	LogicalCallSubquery(std::unique_ptr<LogicalOperator> input,
 	                    std::unique_ptr<LogicalOperator> subquery,
-	                    std::vector<std::string> importedVars,
-	                    std::vector<std::string> returnedVars,
+	                    utils::OwnedStringVector importedVars,
+	                    utils::OwnedStringVector returnedVars,
 	                    bool inTransactions = false,
 	                    int64_t batchSize = 0)
 		: input_(std::move(input)), subquery_(std::move(subquery)),
@@ -41,6 +42,13 @@ public:
 		// Output = input vars + returned vars from subquery
 		auto vars = input_ ? input_->getOutputVariables() : std::vector<std::string>{};
 		vars.insert(vars.end(), returnedVars_.begin(), returnedVars_.end());
+		return vars;
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		// Output = input vars + returned vars from subquery
+		auto vars = input_ ? input_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+		for (const auto &name : returnedVars_) vars.push_back(name);
 		return vars;
 	}
 
@@ -84,8 +92,8 @@ public:
 private:
 	std::unique_ptr<LogicalOperator> input_;
 	std::unique_ptr<LogicalOperator> subquery_;
-	std::vector<std::string> importedVars_;
-	std::vector<std::string> returnedVars_;
+	utils::OwnedStringVector importedVars_;
+	utils::OwnedStringVector returnedVars_;
 	bool inTransactions_;
 	int64_t batchSize_;
 };

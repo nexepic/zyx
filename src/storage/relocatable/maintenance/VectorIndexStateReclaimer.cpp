@@ -12,6 +12,8 @@
 #include <map>
 #include <stdexcept>
 #include <vector>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -115,16 +117,16 @@ namespace graph::storage {
 												const MetadataPublishOptions &publishOptions) {
 		validateManifestOptions(options, checkpointLsn);
 		VectorManifestReachabilityReclaimReport report;
-		std::vector<RetiredManifestPlan> retirementPlan;
+		utils::OwnedVector<RetiredManifestPlan> retirementPlan;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			report.scanned_generation = snapshot.superblock().generation;
-			const std::vector<IndexDefinition> definitions =
+			const utils::OwnedStdVector<IndexDefinition> definitions =
 					catalog_.readIndexDefinitions(snapshot, options.maximum_index_definitions);
 			report.index_definitions = definitions.size();
 
-			std::map<uint64_t, IndexDefinitionKind> activeKinds;
+			utils::OwnedMap<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {
 				// The canonical System Catalog reader has already validated the
 				// definition namespace, key/value agreement, and uniqueness.

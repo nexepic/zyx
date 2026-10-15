@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
 
@@ -260,4 +261,20 @@ TEST(RelocatableIndexDefinitionTest, RejectsOrExactlyRoundTripsEverySingleBitMut
 			}
 		}
 	}
+}
+
+TEST(IndexDefinitionCodecBudgetTest, ValidatesMalformedWireBeforeNameAdmissionAndRefundsDeniedValidCopies) {
+    graph::storage::IndexDefinition input;
+    input.index_id = 1U; input.name = std::string(4096U, 'n');
+    input.kind = graph::storage::IndexDefinitionKind::IDK_PROPERTY;
+    input.label_token_id = 1U; input.property_names = {"key"};
+    const auto valid = graph::storage::IndexDefinitionCodec::encode(input);
+    auto invalid = valid; invalid[25U] = std::byte{0x7f};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(static_cast<void>(graph::storage::IndexDefinitionCodec::decode(invalid)), graph::storage::FormatException);
+        EXPECT_THROW(static_cast<void>(graph::storage::IndexDefinitionCodec::decode(valid)), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U);
 }

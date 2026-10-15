@@ -1,0 +1,13 @@
+# Snapshot and decoded-metadata cache allocation ownership
+
+No delivery is accepted by this checkpoint. Progress remains 22/34 (64.7%).
+
+Native initialization/open now passes the existing shared 64 MiB file-domain cache grant through metadata-store factories and the snapshot registry. Registry state/control blocks, generation map nodes, read-context state/control blocks, hash buckets/nodes, FIFO storage, cached page objects/control blocks and active-root vector workspace use owned or PMR allocations. Prepaid local admission does not acquire the process coordinator mutex while metadata publication locks are held.
+
+Catalog and location leaf entries and metadata-route arrays use owning vectors. An explicit thread-local construction/copy scope binds codec and cache copies to the destination owner; escaped copies keep their allocation domain alive. Allocators capture borrowed defaults once and preserve a reusable source allocator after moves. Native grants deliberately use the process-lifetime new/delete resource, avoiding an ambient temporary default-resource lifetime. These are in-memory ownership changes; encoded page layouts and versions remain unchanged.
+
+Coordinated decoded caches accept only the six audited native codec page types. Unknown heap-owning pages, including unknown nested owned vectors, cannot bypass accounting or evict useful entries. Under quota pressure a failed cached copy drops the optional entry, allowing a single authenticated decode; failed optional cache insertion rolls back metadata and declines retention. Ordinary upstream allocation errors retain their error semantics. Local chargedBytes remains the prior logical cache bound; actual allocation usage is the shared grant's used counter, and unused grant capacity remains charged globally.
+
+Final source passes 829 selected tests in 41 suites, covering affected metadata codecs/trees/directories, snapshot concurrency/lifetime, query runtime, native read/output/transaction isolation, cache/codebook and scratch faults. The rebuilt isolated transaction worker also passes all four OOM/terminal-retention cases. No full suite or new performance campaign ran. Proof/source hashes and raw evidence are archived alongside this note. These results are not final S6.1 acceptance.
+
+NativeReadSession's separate token/property/schema/pool/cursor caches still need shared ownership, as do plan IR/compilation, write-private/undo/overlays, maintenance/recovery, other temporary workspaces and non-read outputs. Protected maintenance progress with a full cache and bounded observable long-pin backlog, partitioned hash/aggregate and full final fault/long-run acceptance remain open. No new fixed-item percentage, commit or push is claimed.

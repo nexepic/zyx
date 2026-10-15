@@ -1,5 +1,7 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 #include "graph/storage/LogicalQueryScratch.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "query/execution/ProcessResourceDomains.hpp"
 using namespace relocatable_storage_backend_test;
 TEST_F(RelocatableStorageBackendTest, QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins) {
 	materializeNativeDatabase();auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;options.query_scratch_enabled=true;RelocatableStorageBackend backend(options);backend.open();
@@ -305,4 +307,247 @@ TEST_F(RelocatableStorageBackendTest, CorruptScratchReadAndOrphanRecoveryNeverRe
 	backend.open();
 	EXPECT_EQ(budget->usage().orphan_bytes,quarantined-RSS_SEGMENT_SIZE);
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));backend.close();
+}
+
+#include "graph/query/execution/ResourceCoordinator.hpp"
+TEST_F(RelocatableStorageBackendTest, QueryScratchHandleGrantIsSharedAndRetainedUntilObjectDestruction) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.query_scratch_enabled = true;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto domain = backend.queryResourceDomain();
+    const size_t kind = static_cast<size_t>(ResourceClass::RCK_QUERY);
+    const auto before = domain->usage().classes[kind];
+    auto first = backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE, 1U);
+    const auto firstCharge = domain->usage().classes[kind] - before;
+    EXPECT_GT(firstCharge, 0U);
+    auto second = backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE, 1U);
+    EXPECT_EQ(domain->usage().classes[kind], before + 2U * firstCharge);
+    const std::vector<std::byte> payload(64U, std::byte{0x5a});
+    const auto handle = first->write(payload);
+    EXPECT_EQ(first->read(handle), payload);
+    EXPECT_EQ(domain->usage().classes[kind], before + 2U * firstCharge);
+    first->finish(); second->finish();
+    EXPECT_EQ(domain->usage().classes[kind], before + 2U * firstCharge);
+    first.reset();
+    EXPECT_EQ(domain->usage().classes[kind], before + firstCharge);
+    backend.close();
+    second.reset();
+    EXPECT_EQ(domain->usage().classes[kind], before);
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.query_scratch_enabled = true;
+    options.maximum_database_query_scratch_bytes = RSS_SEGMENT_SIZE;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto domain = backend.queryResourceDomain();
+    const size_t maximum = 192U * 1024U * 1024U;
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, maximum);
+    ResourceLease pressure(account); pressure.set(account->available());
+    const auto generation = backend.currentNativeMetadataGeneration();
+    backend.resetIoStats();
+    EXPECT_THROW((void)backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE, 1U), ResourceAdmissionDenied);
+    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    pressure.reset();
+    auto session = backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE, 1U);
+    ASSERT_NE(session, nullptr);
+    const std::vector<std::byte> payload(64U, std::byte{0x5a});
+    EXPECT_EQ(session->read(session->write(payload)), payload);
+    session->finish(); session.reset(); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.query_scratch_enabled = true;
+    options.maximum_database_file_bytes = std::filesystem::file_size(data_path_) + 2U * RSS_SEGMENT_SIZE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto fence = backend.currentNativeLogicalGraphMutationFence();
+    auto graph = backend.openLogicalGraphReadSnapshot();
+    auto *provider = dynamic_cast<LogicalQueryScratchProvider *>(graph.get()); ASSERT_NE(provider, nullptr);
+    auto scratch = provider->openQueryScratchSession(64U * RSS_SEGMENT_SIZE, 64U); ASSERT_NE(scratch, nullptr);
+    const std::vector<std::byte> bytes(4096U, std::byte{0x37});
+    bool denied = false;
+    for (size_t attempt = 0U; attempt < 64U; ++attempt) {
+        try { (void)scratch->write(bytes); }
+        catch (const std::system_error &error) {
+            EXPECT_EQ(error.code(), std::make_error_code(std::errc::no_space_on_device));
+            denied = true; break;
+        }
+        ASSERT_LE(std::filesystem::file_size(data_path_), options.maximum_database_file_bytes);
+    }
+    ASSERT_TRUE(denied);
+    EXPECT_LE(std::filesystem::file_size(data_path_), options.maximum_database_file_bytes);
+    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), fence);
+    EXPECT_NO_THROW(scratch->finish()); scratch.reset();
+    auto retry = provider->openQueryScratchSession(RSS_SEGMENT_SIZE, 1U); ASSERT_NE(retry, nullptr);
+    const auto handle = retry->write(bytes); EXPECT_EQ(retry->read(handle), bytes);
+    retry->finish(); retry.reset();
+    EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), fence);
+    graph.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    options.query_scratch_enabled = true;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    graph::query::LogicalReadExecutionOptions reads;
+    reads.bounds.maximum_materialized_bytes = 8U * 1024U * 1024U;
+    graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend), reads);
+    const auto fence = backend->currentNativeLogicalGraphMutationFence();
+    const bool enabled = graph::debug::PerfTrace::isEnabled(), collecting = graph::debug::PerfTrace::areValuesEnabled();
+    struct RestoreTrace {
+        bool enabled, collecting;
+        ~RestoreTrace() { graph::debug::PerfTrace::setValueCollectionEnabled(collecting); graph::debug::PerfTrace::setEnabled(enabled); }
+    } restore{enabled, collecting};
+    graph::debug::PerfTrace::setEnabled(true); graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    (void)graph::debug::PerfTrace::snapshotAndReset();
+    backend->resetIoStats();
+    graph::query::QueryGuard guard(120000, 64); graph::query::QueryContext context; context.guard = &guard;
+    // Wide canonical keys force a real spill with a small, fast input. The
+    // quoted declaration must match the expression reference after decoding.
+    const std::string alias(2048U, 'a');
+    const std::string text = "UNWIND range(1,800) AS x WITH DISTINCT x % 400 AS `" + alias +
+        "` RETURN collect(`" + alias + "`) AS values";
+    const auto result = engine.execute(text, context);
+    ASSERT_EQ(result.rowCount(), 1U);
+    const auto &values = result.getRows()[0].at("values").asPrimitive().getList();
+    ASSERT_EQ(values.size(), 400U);
+    for (size_t i = 0U; i < values.size(); ++i)
+        EXPECT_EQ(values[i], PropertyValue(static_cast<int64_t>((i + 1U) % 400U)));
+    const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+    ASSERT_TRUE(trace.contains("logical_plan.distinct.spilled"));
+    EXPECT_EQ(trace.at("logical_plan.distinct.spilled").totalValue, 1);
+    EXPECT_GT(backend->ioStats().data.write_calls, 0U);
+    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), fence);
+    EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity()));
+    backend->close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchHandleGrantUsesTheCallingQueryAllowanceAndRefundsAfterDestruction) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto snapshot = backend.openLogicalGraphReadSnapshot();
+    auto *provider = dynamic_cast<LogicalQueryScratchProvider *>(snapshot.get()); ASSERT_NE(provider, nullptr);
+    auto domain = backend.queryResourceDomain();
+    auto small = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 1024U);
+    const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+    EXPECT_THROW(static_cast<void>(provider->openQueryScratchSession(RSS_SEGMENT_SIZE, 1U, small)), ResourceAdmissionDenied);
+    EXPECT_EQ(small->used(), 0U); EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 65536U);
+    auto scratch = provider->openQueryScratchSession(RSS_SEGMENT_SIZE, 1U, account); ASSERT_NE(scratch, nullptr);
+    const auto charge = account->used(); EXPECT_EQ(charge, 4096U + 256U);
+    const std::vector<std::byte> payload(64U, std::byte{0x6b});
+    const auto handle = scratch->write(payload); EXPECT_EQ(scratch->read(handle), payload);
+    EXPECT_EQ(account->used(), charge); scratch->finish(); EXPECT_EQ(account->used(), charge);
+    scratch.reset(); EXPECT_EQ(account->used(), 0U);
+    auto wrong = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_MAINTENANCE, 65536U);
+    backend.resetIoStats();
+    EXPECT_THROW(static_cast<void>(provider->openQueryScratchSession(RSS_SEGMENT_SIZE, 1U, wrong)), std::invalid_argument);
+    EXPECT_EQ(wrong->used(), 0U); EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    snapshot.reset(); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend));
+    const auto fence = backend->currentNativeLogicalGraphMutationFence(); backend->resetIoStats();
+    const auto result = engine.execute("UNWIND [null,1,1,2] AS x RETURN x AS value UNION UNWIND [2,null,3] AS y RETURN y AS value");
+    ASSERT_EQ(result.rowCount(), 4U);
+    const std::array<PropertyValue, 4U> expected{PropertyValue{}, PropertyValue(1), PropertyValue(2), PropertyValue(3)};
+    for (size_t i = 0U; i < expected.size(); ++i) EXPECT_EQ(result.getRows()[i].at("value").asPrimitive(), expected[i]);
+    EXPECT_EQ(backend->ioStats().data.write_calls, 0U);
+    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), fence); backend->close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery) {
+    using namespace graph::query::execution;
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    graph::query::LogicalReadExecutionOptions reads; reads.bounds.maximum_materialized_bytes = 8U * 1024U * 1024U;
+    graph::query::QueryEngine engine(std::static_pointer_cast<LogicalGraphReadBackend>(backend), reads);
+    const auto fence = backend->currentNativeLogicalGraphMutationFence();
+    const auto disk = graph::storage::detail::QueryScratchDiskBudget::processBudget();
+    const auto before = disk->usage().bytes;
+    graph::query::QueryContext context;
+    context.resource_account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, reads.bounds.maximum_materialized_bytes);
+    bool denied = false;
+    try { static_cast<void>(engine.execute("UNWIND range(1,24000) AS x RETURN DISTINCT x % 12000 AS value", context)); }
+    catch (const MaterializedByteLimitExceeded &) { denied = true; }
+    catch (const ResourceAdmissionDenied &) { denied = true; }
+    EXPECT_TRUE(denied);
+    EXPECT_EQ(context.resource_account->used(), 0U);
+    EXPECT_EQ(disk->usage().bytes, before);
+    EXPECT_FALSE(backend->hasIndeterminateWriteOutcome());
+    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), fence);
+    {
+        const auto retry = engine.execute("RETURN 42 AS value", context);
+        ASSERT_EQ(retry.rowCount(), 1U); EXPECT_EQ(retry.getRows()[0].at("value").asPrimitive(), PropertyValue(42));
+    }
+    EXPECT_EQ(context.resource_account->used(), 0U);
+    EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity())); backend->close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto scratch = backend.openNativeQueryScratchSession(2U * RSS_SEGMENT_SIZE, 2U);
+    const std::vector<std::byte> payload(4096U, std::byte{0x3c});
+    const auto first = scratch->write(payload); static_cast<void>(scratch->write(payload));
+    auto domain = backend.queryResourceDomain();
+    const auto baseline = domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_MAINTENANCE)];
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    const auto denials = cache->denials();
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        EXPECT_NO_THROW(scratch->release(first));
+        EXPECT_NO_THROW(scratch->finish());
+        EXPECT_EQ(cache->denials(), denials);
+    }
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_MAINTENANCE)], baseline);
+    EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+    scratch.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE; options.query_scratch_enabled = true;
+    RelocatableStorageBackend backend(options); backend.open();
+    auto scratch = backend.openNativeQueryScratchSession(RSS_SEGMENT_SIZE, 1U);
+    const std::vector<std::byte> payload(4096U, std::byte{0x4d}); const auto handle = scratch->write(payload);
+    auto domain = backend.queryResourceDomain();
+    constexpr auto maintenance = static_cast<size_t>(ResourceClass::RCK_MAINTENANCE);
+    constexpr size_t ceiling = 32U * 1024U * 1024U;
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_MAINTENANCE, ceiling);
+    ResourceLease pressure(account); pressure.set(ceiling - domain->usage().classes[maintenance]);
+    const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+    EXPECT_THROW(scratch->release(handle), ResourceAdmissionDenied);
+    EXPECT_THROW(scratch->finish(), ResourceAdmissionDenied);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    EXPECT_FALSE(backend.hasIndeterminateWriteOutcome()); EXPECT_EQ(scratch->read(handle), payload);
+    pressure.reset();
+    EXPECT_NO_THROW(scratch->release(handle));
+    EXPECT_NO_THROW(scratch->finish());
+    scratch.reset();
+    EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
 }

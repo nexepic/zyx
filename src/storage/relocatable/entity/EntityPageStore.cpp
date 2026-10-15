@@ -486,9 +486,8 @@ namespace graph::storage {
 		}
 		debug::ScopedPerfTimer timer("native_graph.read.node_page_scan");
 		const bool tracingValues = debug::PerfTrace::areValuesEnabled();
-		NativeReadSession localSession;
-		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
-		activeSession.bind(snapshot);
+		std::optional<NativeReadSession> localSession;
+		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
 		size_t visited = 0U;
 		std::optional<ReadPage> currentPage;
 		PageId currentPageId;
@@ -534,9 +533,8 @@ namespace graph::storage {
 		uint64_t entityRecordNanoseconds = 0U;
 		uint64_t visitorNanoseconds = 0U;
 		uint64_t records = 0U;
-		NativeReadSession localSession;
-		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
-		activeSession.bind(snapshot);
+		std::optional<NativeReadSession> localSession;
+		NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
 		size_t visited = 0U;
 		std::optional<ReadPage> currentPage;
 		PageId currentPageId;
@@ -2278,6 +2276,13 @@ namespace graph::storage {
 														const MetadataPublishOptions &options) {
 		return allocator_.releaseRetiredEmptyPool(segmentId, expectedGeneration, checkpointLsn, options);
 	}
+
+    std::optional<Superblock> EntityPageStore::tryReleaseRetiredEmptyPool(SegmentId segmentId, Generation expectedGeneration,
+														LogSequenceNumber checkpointLsn,
+														const MetadataPublishOptions &options) {
+        auto result = allocator_.tryReleaseRetiredEmptyPool(segmentId, expectedGeneration, checkpointLsn, options);
+        return result;
+    }
 
 	EntityPageStore::LoadedPage EntityPageStore::loadPage(const MetadataSnapshotPin &snapshot, PageId pageId,
 														  EntityPageRecordKind expectedKind,

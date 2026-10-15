@@ -1,0 +1,201 @@
+{
+  "rounds": 3,
+  "rows": [
+    {
+      "profile": "scan",
+      "workload": "aggregation_count_by_group",
+      "zyx_median_process_p50_ms": 443.227,
+      "zyx_process_p50_range_ms": [
+        440.765,
+        457.797
+      ],
+      "kuzu_median_process_p50_ms": 3.739570000107051,
+      "zyx_kuzu_ratio": 118.52352008046698
+    },
+    {
+      "profile": "scan",
+      "workload": "aggregation_group_by",
+      "zyx_median_process_p50_ms": 457.295,
+      "zyx_process_p50_range_ms": [
+        427.83,
+        470.21
+      ],
+      "kuzu_median_process_p50_ms": 3.4308459999010665,
+      "zyx_kuzu_ratio": 133.28928200600865
+    },
+    {
+      "profile": "scan",
+      "workload": "all_nodes_property_filter",
+      "zyx_median_process_p50_ms": 715.522,
+      "zyx_process_p50_range_ms": [
+        695.148,
+        736.168
+      ],
+      "kuzu_median_process_p50_ms": 0.917710000067018,
+      "zyx_kuzu_ratio": 779.682034572738
+    },
+    {
+      "profile": "scan",
+      "workload": "label_multi_property_filter",
+      "zyx_median_process_p50_ms": 418.616,
+      "zyx_process_p50_range_ms": [
+        413.291,
+        448.182
+      ],
+      "kuzu_median_process_p50_ms": 2.3506500000394226,
+      "zyx_kuzu_ratio": 178.0852104707121
+    },
+    {
+      "profile": "scan",
+      "workload": "label_scan_filter",
+      "zyx_median_process_p50_ms": 367.385,
+      "zyx_process_p50_range_ms": [
+        362.191,
+        379.091
+      ],
+      "kuzu_median_process_p50_ms": 2.1634920001361024,
+      "zyx_kuzu_ratio": 169.8111201598565
+    },
+    {
+      "profile": "scan",
+      "workload": "one_hop_expand",
+      "zyx_median_process_p50_ms": 1.83561,
+      "zyx_process_p50_range_ms": [
+        1.82101,
+        1.88104
+      ],
+      "kuzu_median_process_p50_ms": 0.5072059998383338,
+      "zyx_kuzu_ratio": 3.6190620784948915
+    },
+    {
+      "profile": "scan",
+      "workload": "relationship_property_filter",
+      "zyx_median_process_p50_ms": 856.112,
+      "zyx_process_p50_range_ms": [
+        850.305,
+        861.832
+      ],
+      "kuzu_median_process_p50_ms": 10.58674499972767,
+      "zyx_kuzu_ratio": 80.86640417068912
+    },
+    {
+      "profile": "scan",
+      "workload": "relationship_type_scan",
+      "zyx_median_process_p50_ms": 251.673,
+      "zyx_process_p50_range_ms": [
+        251.54,
+        256.792
+      ],
+      "kuzu_median_process_p50_ms": 6.34075700008907,
+      "zyx_kuzu_ratio": 39.69131761341188
+    },
+    {
+      "profile": "scan",
+      "workload": "topk_property_sort",
+      "zyx_median_process_p50_ms": 1210.6,
+      "zyx_process_p50_range_ms": [
+        1164.24,
+        1230.75
+      ],
+      "kuzu_median_process_p50_ms": 4.341367000051832,
+      "zyx_kuzu_ratio": 278.85226012579596
+    },
+    {
+      "profile": "scan",
+      "workload": "two_hop_expand",
+      "zyx_median_process_p50_ms": 2.17411,
+      "zyx_process_p50_range_ms": [
+        2.09004,
+        2.25275
+      ],
+      "kuzu_median_process_p50_ms": 1.046038999902521,
+      "zyx_kuzu_ratio": 2.078421550441812
+    },
+    {
+      "profile": "indexed",
+      "workload": "point_lookup_indexed",
+      "zyx_median_process_p50_ms": 1.34648,
+      "zyx_process_p50_range_ms": [
+        1.30735,
+        1.4681
+      ],
+      "kuzu_median_process_p50_ms": 0.24597200001608144,
+      "zyx_kuzu_ratio": 5.474119005057357
+    },
+    {
+      "profile": "indexed",
+      "workload": "property_equality_indexed",
+      "zyx_median_process_p50_ms": 181.3,
+      "zyx_process_p50_range_ms": [
+        179.825,
+        182.515
+      ],
+      "comparison": "Kuzu unsupported; no victory claim"
+    },
+    {
+      "profile": "indexed",
+      "workload": "property_range_indexed",
+      "zyx_median_process_p50_ms": 1043.34,
+      "zyx_process_p50_range_ms": [
+        1038.86,
+        1047.97
+      ],
+      "comparison": "Kuzu unsupported; no victory claim"
+    },
+    {
+      "profile": "retrieval",
+      "workload": "batch_node_fetch_100",
+      "zyx_median_process_p50_ms": 3.17251,
+      "zyx_process_p50_range_ms": [
+        3.08113,
+        3.24922
+      ],
+      "kuzu_median_process_p50_ms": 0.5766489998677571,
+      "zyx_kuzu_ratio": 5.501630976083461
+    },
+    {
+      "profile": "retrieval",
+      "workload": "one_hop_fetch_neighbor_ids",
+      "zyx_median_process_p50_ms": 2.38834,
+      "zyx_process_p50_range_ms": [
+        2.34047,
+        2.54018
+      ],
+      "kuzu_median_process_p50_ms": 0.7117680002011184,
+      "zyx_kuzu_ratio": 3.3555034777134494
+    },
+    {
+      "profile": "retrieval",
+      "workload": "one_hop_fetch_neighbor_records",
+      "zyx_median_process_p50_ms": 3.47133,
+      "zyx_process_p50_range_ms": [
+        3.4144,
+        3.87776
+      ],
+      "kuzu_median_process_p50_ms": 0.8072559999163786,
+      "zyx_kuzu_ratio": 4.300160048806804
+    },
+    {
+      "profile": "retrieval",
+      "workload": "point_edge_fetch_by_endpoints",
+      "zyx_median_process_p50_ms": 2.62002,
+      "zyx_process_p50_range_ms": [
+        2.57724,
+        2.82669
+      ],
+      "kuzu_median_process_p50_ms": 0.5302489998939564,
+      "zyx_kuzu_ratio": 4.941112572629035
+    },
+    {
+      "profile": "retrieval",
+      "workload": "point_node_fetch_by_id",
+      "zyx_median_process_p50_ms": 2.96566,
+      "zyx_process_p50_range_ms": [
+        2.87388,
+        2.98532
+      ],
+      "kuzu_median_process_p50_ms": 0.2611339998566109,
+      "zyx_kuzu_ratio": 11.356851277996924
+    }
+  ]
+}

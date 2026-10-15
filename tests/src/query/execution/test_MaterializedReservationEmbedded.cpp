@@ -17,7 +17,7 @@ TEST(MaterializedReservationEmbeddedTest, FailedReclassificationAndInvalidTransf
 	MaterializedByteReservation source(&budget);source.setAccounting(100U,64U);
 	EXPECT_THROW(source.setAccounting(100U,0U),MaterializedByteLimitExceeded);
 	EXPECT_EQ(source.bytes(),100U);EXPECT_EQ(budget.used(),100U);
-	EXPECT_THROW(source.splitOffAccounting(80U,0U),std::logic_error);
+	EXPECT_THROW((void)source.splitOffAccounting(80U,0U),std::logic_error);
 	EXPECT_EQ(source.bytes(),100U);EXPECT_EQ(budget.used(),100U);
 	source.reset();budget.deallocate(frame,64U,alignof(std::max_align_t));EXPECT_EQ(budget.used(),0U);
 }

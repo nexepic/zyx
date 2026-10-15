@@ -1,0 +1,28 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "earlier_module_tests": 157,
+  "final_selected_module_tests": 44,
+  "isolated_cases_passed": 100,
+  "failures": 0,
+  "new_normalized_patch_sweep": {
+    "baseline_allocations": 627,
+    "tested_allocations": 96,
+    "exhaustive": false
+  },
+  "worker_sha256": "83614377f22373a75bc2fe3c151d1e4bf5b464359ef60f87af09c9e5a99a0bc6",
+  "source_sha256": {
+    "include/graph/storage/detail/ScopedMutationCopies.hpp": "80d528d833a9af5aecc71077374bdf46c7ffc55a640c13b86d1d62a19c23eac2",
+    "include/graph/storage/detail/PropertyDecodeWorkspace.hpp": "6d3d3c6a02f2e1f7a9e49bc428c5c385da3859321af38c58ee582afd064b63a4",
+    "include/graph/storage/MutationHeapBytes.hpp": "c2fffb5ee0fdb59b867733f434e1f30359a7be1e5585614b8469695f2e24c15f",
+    "src/storage/LogicalGraphPropertyPatch.cpp": "9c082dabcc6e63ef9a218052aeea107544ea389c890278bea2cf9f27c5479071",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "0b30b3290e4b25daf0b4a63b22e43a41f0e47e99b12235a790eeabff885254b1",
+    "tests/src/storage/test_LogicalGraphPropertyPatch.cpp": "c88ed36d3b97ce2c93e46b1a560043239ba7a9a205c6791b967746426afbb42a",
+    "tests/support/TransactionResourceFaultWorker.cpp": "3865af0ad2a46aaf5002a558d6c5e19820deff6cee5d90987a7321f663891825",
+    "scripts/test_transaction_resource_faults.py": "525bf2ab033a8aaf6d9ef0a0d3c5388786dac417a86ffe00d3ff0b068581163a"
+  },
+  "full_suite": false,
+  "performance_campaign": false
+}

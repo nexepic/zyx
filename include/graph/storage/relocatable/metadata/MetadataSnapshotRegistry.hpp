@@ -12,6 +12,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <memory_resource>
 #include <shared_mutex>
 
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
@@ -73,7 +74,9 @@ namespace graph::storage {
 
 	class MetadataSnapshotRegistry final {
 	public:
-		explicit MetadataSnapshotRegistry(SuperblockFile &bootstrap, MetadataSnapshotRegistryLimits limits = {});
+		explicit MetadataSnapshotRegistry(SuperblockFile &bootstrap, MetadataSnapshotRegistryLimits limits = {},
+                                          std::shared_ptr<std::pmr::memory_resource> memoryOwner = {},
+                                          std::shared_ptr<std::pmr::memory_resource> controlOwner = {});
 		~MetadataSnapshotRegistry();
 		MetadataSnapshotRegistry(const MetadataSnapshotRegistry &) = delete;
 		MetadataSnapshotRegistry &operator=(const MetadataSnapshotRegistry &) = delete;

@@ -7,6 +7,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedVector.hpp"
 
 #include <array>
 #include <cstddef>
@@ -53,7 +54,7 @@ namespace graph::storage {
 		MetadataPageId page_id{};
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
-		std::vector<LocationLeafEntry> entries;
+		utils::OwnedVector<LocationLeafEntry> entries;
 	};
 
 	class LocationLeafPageCodec {

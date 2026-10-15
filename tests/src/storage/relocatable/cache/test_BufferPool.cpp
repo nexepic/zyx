@@ -24,6 +24,7 @@
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
 
 namespace graph::storage {
 
@@ -707,4 +708,279 @@ TEST_F(BufferPoolTest, FailsClosedWhenInternalPinOrRecencyInvariantsAreCorrupted
 
 	EXPECT_THROW(BufferPoolTestAccess::evictWithStaleRecentKey(*pool_, {2U * RSS_BUFFER_POOL_PAGE_BYTES, 0U}),
 				 std::logic_error);
+}
+
+namespace {
+using namespace graph::query::execution::detail;
+std::shared_ptr<PrepaidMemoryResource> pageCacheGrant(size_t bytes) {
+	auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(bytes));
+	auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(bytes));
+	auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_CACHE, bytes);
+	return std::make_shared<PrepaidMemoryResource>(account, bytes);
+}
+class FailingPageCacheResource final : public std::pmr::memory_resource {
+public:
+	explicit FailingPageCacheResource(std::shared_ptr<PrepaidMemoryResource> grant) : grant(std::move(grant)) {}
+	std::shared_ptr<PrepaidMemoryResource> grant;
+	size_t calls = 0U, fail_at = (std::numeric_limits<size_t>::max)();
+private:
+	void *do_allocate(size_t bytes, size_t alignment) override {
+		if (++calls == fail_at) throw std::bad_alloc();
+		return grant->allocate(bytes, alignment);
+	}
+	void do_deallocate(void *pointer, size_t bytes, size_t alignment) override { grant->deallocate(pointer, bytes, alignment); }
+	bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+};
+}
+
+TEST_F(BufferPoolTest, CoordinatedCacheIncludesEntryQueueAndHashMetadataCapacity) {
+	open(3U); auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
+	pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+	{ auto first = pool_->pin({0U, 1U}); }
+	EXPECT_GT(memory->used(), RSS_BUFFER_POOL_PAGE_BYTES);
+	{ auto second = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U}); }
+	EXPECT_GT(memory->used(), 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	{ auto third = pool_->pin({2U * RSS_BUFFER_POOL_PAGE_BYTES, 1U}); EXPECT_EQ(third.bytes()[0], std::byte{3}); }
+	EXPECT_EQ(pool_->stats().resident_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_GT(pool_->stats().evictions, 0U);
+	pool_.reset(); EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, CacheQuotaIncludesMetadataInsteadOfAdmittingAPayloadOnlyPage) {
+	open(1U); auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
+	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+	EXPECT_THROW((void)pool_->pin({0U, 1U}), ResourceAdmissionDenied);
+	EXPECT_EQ(pool_->stats().resident_bytes, 0U); EXPECT_EQ(memory->used(), 0U);
+	pool_.reset(); EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, EveryFirstAdmissionAllocationFailureLeavesAUsableEmptyCache) {
+	open(1U); auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
+	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+	{ auto first = pool_->pin({0U, 1U}); }
+	const size_t allocations = memory->calls; ASSERT_GE(allocations, 3U);
+	pool_.reset(); ASSERT_EQ(memory->grant->used(), 0U);
+	for (size_t failure = 1U; failure <= allocations; ++failure) {
+		SCOPED_TRACE(failure); memory->calls = 0U; memory->fail_at = failure;
+		pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+		EXPECT_THROW((void)pool_->pin({0U, 1U}), std::bad_alloc);
+		EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+		memory->fail_at = (std::numeric_limits<size_t>::max)();
+		{ auto retry = pool_->pin({0U, 1U}); EXPECT_EQ(retry.bytes()[0], std::byte{1}); }
+		EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+		pool_.reset(); EXPECT_EQ(memory->grant->used(), 0U);
+	}
+}
+
+TEST_F(BufferPoolTest, PromotionReusesItsQueueNodeWhenFurtherAllocationsWouldFail) {
+	open(1U); auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
+	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+	{ auto first = pool_->pin({0U, 1U}); }
+	const size_t allocations = memory->calls; memory->fail_at = allocations + 1U;
+	{ auto hit = pool_->pin({0U, 1U}); EXPECT_EQ(hit.bytes()[0], std::byte{1}); }
+	EXPECT_EQ(memory->calls, allocations); EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+	pool_.reset(); EXPECT_EQ(memory->grant->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, CacheRetainsItsAllocatorUntilAllOwnedPagesAndMetadataAreDestroyed) {
+	open(1U); auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
+	std::weak_ptr<PrepaidMemoryResource> lifetime = memory;
+	pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory); memory.reset();
+	{ auto first = pool_->pin({0U, 1U}); EXPECT_EQ(first.bytes()[0], std::byte{1}); }
+	ASSERT_FALSE(lifetime.expired()); EXPECT_GT(lifetime.lock()->used(), RSS_BUFFER_POOL_PAGE_BYTES);
+	pool_.reset(); EXPECT_TRUE(lifetime.expired());
+}
+
+TEST_F(BufferPoolTest, StorageIOForwardsAndRetainsTheCoordinatedCacheGrant) {
+    open(1U);
+    auto memory = pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES);
+    std::weak_ptr<PrepaidMemoryResource> lifetime = memory;
+    io_->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    memory.reset();
+    {
+        const auto pinned = io_->pinTypedPage({0U, 1U});
+        ASSERT_TRUE(pinned.has_value());
+        EXPECT_EQ(pinned->bytes()[0], std::byte{1});
+        ASSERT_FALSE(lifetime.expired());
+        EXPECT_GT(lifetime.lock()->used(), RSS_BUFFER_POOL_PAGE_BYTES);
+    }
+    io_->disableBufferPool();
+    EXPECT_TRUE(lifetime.expired());
+}
+
+TEST_F(BufferPoolTest, StorageIOCacheDenialLeavesNoPartiallyPublishedPage) {
+    open(1U);
+    auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES);
+    io_->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    EXPECT_THROW(static_cast<void>(io_->pinTypedPage({0U, 1U})), ResourceAdmissionDenied);
+    EXPECT_EQ(io_->bufferPoolStats().resident_bytes, 0U);
+    EXPECT_EQ(memory->used(), 0U);
+    io_->disableBufferPool();
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, EvictsForMetadataPressureBeforeThePayloadOnlyCeiling) {
+    open(8U);
+    auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES + 1024U);
+    pool_ = std::make_unique<BufferPool>(*io_, 8U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    for (size_t page = 0U; page < 8U; ++page) {
+        auto pin = pool_->pin({page * RSS_BUFFER_POOL_PAGE_BYTES, 1U});
+        EXPECT_EQ(pin.bytes()[0], static_cast<std::byte>(page + 1U));
+        EXPECT_LE(memory->used(), memory->capacity());
+    }
+    EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(pool_->stats().evictions, 7U);
+    pool_.reset();
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(BufferPoolTest, SharedGrantNeverEvictsPinnedPagesOrBorrowsAnotherAllowance) {
+    open(2U);
+    auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES + 1024U);
+    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    auto alias = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    {
+        auto pin = pool_->pin({0U, 1U});
+        EXPECT_THROW(static_cast<void>(pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U})), ResourceAdmissionDenied);
+        EXPECT_THROW(static_cast<void>(alias->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U})), ResourceAdmissionDenied);
+        EXPECT_EQ(pin.bytes()[0], std::byte{1});
+        EXPECT_EQ(pool_->stats().evictions, 0U);
+        EXPECT_EQ(alias->stats().resident_bytes, 0U);
+    }
+    pool_.reset();
+    {
+        auto retry = alias->pin({RSS_BUFFER_POOL_PAGE_BYTES, 1U});
+        EXPECT_EQ(retry.bytes()[0], std::byte{2});
+    }
+    alias.reset();
+    EXPECT_EQ(memory->used(), 0U);
+}
+
+#include <barrier>
+#include <thread>
+TEST_F(BufferPoolTest, TypedCopyReadsSerializeWithInvalidationWithoutExposingTransientPins) {
+    open(1U);
+    pool_ = createPool(1U);
+    std::barrier start(2);
+    std::barrier iterationStart(2);
+    std::atomic<size_t> failures{0U};
+    constexpr size_t iterations = 10000U;
+    std::thread reader([&] {
+        std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> image{};
+        start.arrive_and_wait();
+        for (size_t index = 0U; index < iterations; ++index) {
+            iterationStart.arrive_and_wait();
+            try {
+                if (pool_->readPage({0U, 7U}, image) != image.size() ||
+                    !std::ranges::all_of(image, [](std::byte byte) { return byte == std::byte{1U}; })) ++failures;
+            } catch (...) { ++failures; }
+        }
+    });
+    start.arrive_and_wait();
+    for (size_t index = 0U; index < iterations; ++index) {
+        iterationStart.arrive_and_wait();
+        try { pool_->invalidateRange(0U, RSS_BUFFER_POOL_PAGE_BYTES); }
+        catch (...) { ++failures; }
+    }
+    reader.join();
+    EXPECT_EQ(failures.load(), 0U);
+    EXPECT_EQ(pool_->stats().pinned_bytes, 0U);
+}
+
+TEST_F(BufferPoolTest, TypedCopyReadsReleaseSequentialMissesAndPreserveExistingExternalPins) {
+    open(2U);
+    pool_ = createPool(2U);
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> image{};
+    EXPECT_EQ(pool_->readPage({0U, 17U}, image), image.size());
+    EXPECT_EQ(pool_->readPage({RSS_BUFFER_POOL_PAGE_BYTES, 17U}, image, BufferPoolReadHint::BPRH_SEQUENTIAL), image.size());
+    EXPECT_EQ(image.front(), std::byte{2U});
+    EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(pool_->stats().pinned_bytes, 0U);
+    {
+        auto pin = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 17U}, BufferPoolReadHint::BPRH_SEQUENTIAL);
+        EXPECT_EQ(pool_->readPage(pin.key(), image), image.size());
+        EXPECT_EQ(pool_->stats().resident_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+        EXPECT_EQ(pool_->stats().pinned_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+        EXPECT_EQ(pin.bytes().front(), std::byte{2U});
+    }
+    EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(pool_->stats().pinned_bytes, 0U);
+}
+
+TEST_F(BufferPoolTest, TypedSequentialCopyMissBypassesPinnedCapacityWithoutEvictionOrAllocation) {
+    open(2U);
+    auto memory = std::make_shared<FailingPageCacheResource>(pageCacheGrant(4U * RSS_BUFFER_POOL_PAGE_BYTES));
+    pool_ = std::make_unique<BufferPool>(*io_, RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    auto pinned = pool_->pin({0U, 9U});
+    const auto allocations = memory->calls;
+    memory->fail_at = allocations + 1U;
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> image{};
+    EXPECT_EQ(pool_->readPage({RSS_BUFFER_POOL_PAGE_BYTES, 9U}, image, BufferPoolReadHint::BPRH_SEQUENTIAL), image.size());
+    EXPECT_EQ(image.front(), std::byte{2U});
+    EXPECT_EQ(pinned.bytes().front(), std::byte{1U});
+    EXPECT_EQ(memory->calls, allocations);
+    EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(pool_->stats().pinned_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    EXPECT_EQ(pool_->stats().evictions, 0U);
+}
+
+TEST_F(BufferPoolTest, TypedSequentialCopyHitReadsDirtyMemoryAndRejectsUnpublishedPrivatePages) {
+    open(2U); pool_ = createPool(2U);
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> changed{};
+    changed.fill(std::byte{77U});
+    pool_->writePage({0U, 11U}, changed);
+    ASSERT_EQ(diskByte(0U), std::byte{1U});
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> image{};
+    EXPECT_EQ(pool_->readPage({0U, 11U}, image, BufferPoolReadHint::BPRH_SEQUENTIAL), image.size());
+    EXPECT_EQ(image, changed);
+    auto unpublished = pool_->allocatePrivate({RSS_BUFFER_POOL_PAGE_BYTES, 12U});
+    EXPECT_THROW(static_cast<void>(pool_->readPage(unpublished.key(), image, BufferPoolReadHint::BPRH_SEQUENTIAL)), std::logic_error);
+    EXPECT_EQ(pool_->stats().dirty_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+}
+
+TEST_F(BufferPoolTest, UntypedSequentialReadCoalescesMissesAndKeepsDirtyPartialHitsCoherent) {
+    open(4U); pool_ = createPool(1U);
+    const std::array<std::byte, 3U> patch{std::byte{71}, std::byte{72}, std::byte{73}};
+    pool_->write(RSS_BUFFER_POOL_PAGE_BYTES + 7U, patch);
+    ASSERT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES + 7U), std::byte{2U});
+    auto pin = pool_->pin({RSS_BUFFER_POOL_PAGE_BYTES, 0U});
+    std::vector<std::byte> image(4U * RSS_BUFFER_POOL_PAGE_BYTES);
+    const auto before = io_->stats();
+    EXPECT_EQ(pool_->read(0U, image, BufferPoolReadHint::BPRH_SEQUENTIAL), image.size());
+    EXPECT_EQ(image.front(), std::byte{1U});
+    EXPECT_EQ(image.back(), std::byte{4U});
+    EXPECT_EQ(image[RSS_BUFFER_POOL_PAGE_BYTES + 7U], patch[0]);
+    EXPECT_EQ(image[RSS_BUFFER_POOL_PAGE_BYTES + 9U], patch[2]);
+    EXPECT_EQ(pool_->stats().evictions, 0U);
+    EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+    // Uncached low-level reads are reflected in BufferPool disk telemetry.
+    EXPECT_EQ(pool_->stats().disk_read_bytes, 4U * RSS_BUFFER_POOL_PAGE_BYTES);
+    std::array<std::byte, 2U> partial{};
+    EXPECT_EQ(pool_->read(RSS_BUFFER_POOL_PAGE_BYTES + 8U, partial, BufferPoolReadHint::BPRH_SEQUENTIAL), partial.size());
+    EXPECT_EQ(partial[0], patch[1]); EXPECT_EQ(partial[1], patch[2]);
+    EXPECT_EQ(io_->stats().write_calls, before.write_calls);
+}
+
+TEST_F(BufferPoolTest, ScopedSequentialStorageReadsRestoreNormalAdmissionAndStayOnTheirThread) {
+    open(2U); io_->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+    auto pin = io_->pinTypedPage({0U, 17U}); ASSERT_TRUE(pin.has_value());
+    std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> image{};
+    const BufferPoolPageKey missing{RSS_BUFFER_POOL_PAGE_BYTES, 17U};
+    EXPECT_THROW(static_cast<void>(io_->readAt(missing, image.data(), image.size())), std::runtime_error);
+    {
+        StorageIO::SequentialReadScope scope(*io_);
+        EXPECT_EQ(io_->readAt(missing, image.data(), image.size()), image.size());
+        EXPECT_EQ(image.front(), std::byte{2U});
+        bool otherThreadDenied = false;
+        std::thread other([&] {
+            std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> copy{};
+            try { (void)io_->readAt(missing, copy.data(), copy.size()); }
+            catch (const std::runtime_error &) { otherThreadDenied = true; }
+        });
+        other.join(); EXPECT_TRUE(otherThreadDenied);
+        EXPECT_THROW(static_cast<void>(io_->pinTypedPage(missing)), std::runtime_error);
+    }
+    EXPECT_FALSE(StorageIO::SequentialReadScope::activeFor(*io_));
+    EXPECT_THROW(static_cast<void>(io_->readAt(missing, image.data(), image.size())), std::runtime_error);
+    pin.reset(); io_->disableBufferPool();
 }

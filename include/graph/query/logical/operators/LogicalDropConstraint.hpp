@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -24,7 +25,7 @@ namespace graph::query::logical {
  */
 class LogicalDropConstraint : public LogicalOperator {
 public:
-	LogicalDropConstraint(std::string name, bool ifExists)
+	LogicalDropConstraint(utils::OwnedStdString name, bool ifExists)
 		: name_(std::move(name)), ifExists_(ifExists) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_DROP_CONSTRAINT; }
@@ -32,6 +33,8 @@ public:
 	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {}; }
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override { return {}; }
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		return std::make_unique<LogicalDropConstraint>(name_, ifExists_);
@@ -53,7 +56,7 @@ public:
 	[[nodiscard]] bool isIfExists() const { return ifExists_; }
 
 private:
-	std::string name_;
+	utils::OwnedStdString name_;
 	bool ifExists_;
 };
 

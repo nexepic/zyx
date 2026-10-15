@@ -24,10 +24,10 @@ public:
 	static constexpr size_t MINIMUM_QUERY_BYTES=4U*1024U*1024U;
 	ExternalQuerySort(storage::LogicalQueryScratchProvider &provider,MaterializedByteBudget &budget,
 		size_t maximumRows,size_t maximumBytes,std::span<const uint8_t> ascending,SizeFunction size,
-		std::function<void()> checkpoint,size_t maximumDiskBytes=128U*1024U*1024U,size_t maximumFragments=1024U,std::function<void()> publicationCheckpoint={})
+		std::function<void()> checkpoint,size_t maximumDiskBytes=128U*1024U*1024U,size_t maximumFragments=1024U,std::function<void()> publicationCheckpoint={},std::shared_ptr<ResourceAccount> account={})
 		:provider_(provider),budget_(budget),maximum_rows_(maximumRows),buffer_target_(maximumBytes/8U),
 		workspace_(&budget),memory_(budget),ascending_(ascending.begin(),ascending.end(),&memory_),size_(std::move(size)),checkpoint_(std::move(checkpoint)),publication_checkpoint_(publicationCheckpoint?std::move(publicationCheckpoint):checkpoint_),
-		maximum_disk_(maximumDiskBytes),maximum_fragments_(maximumFragments),
+		maximum_disk_(maximumDiskBytes),maximum_fragments_(maximumFragments),account_(std::move(account)),
 		runs_(&memory_),rows_(maximumRows,maximumBytes,size_,&budget,true,sizeof(LogicalPlanReadRow)) {
 		if(maximumBytes<MINIMUM_QUERY_BYTES || ascending_.empty() || !checkpoint_)
 			throw std::invalid_argument("external Sort requires ordering, guards and bounded workspace");
@@ -120,7 +120,7 @@ private:
 		if(spillable_)std::sort(rows_.values().begin(),rows_.values().end(),[&](const auto &a,const auto &b){return precedes(a,b);});
 		else {MaterializedByteReservation temporary(&budget_);temporary.set(rows_.size()*sizeof(Record));std::stable_sort(rows_.values().begin(),rows_.values().end(),[&](const auto &a,const auto &b){checkpoint_();for(size_t i=0;i<ascending_.size();++i)if(a.keys[i]!=b.keys[i])return orderByPrecedes(a.keys[i],b.keys[i],ascending_[i]!=0);return false;});}
 	}
-	void ensureScratch(){if(scratch_)return;workspace_.set(WORKSPACE_BYTES);publication_checkpoint_();scratch_=provider_.openQueryScratchSession(maximum_disk_,maximum_fragments_);if(!scratch_)throw std::runtime_error("external Sort cannot spill to a physically read-only file");}
+	void ensureScratch(){if(scratch_)return;workspace_.set(WORKSPACE_BYTES);publication_checkpoint_();scratch_=provider_.openQueryScratchSession(maximum_disk_,maximum_fragments_,account_);if(!scratch_)throw std::runtime_error("external Sort cannot spill to a physically read-only file");}
 	void flush(){if(!spillable_)throw std::runtime_error("external Sort has no qualified spill codec for its input");ensureScratch();sortRows();Writer writer(*this);
 		for(const auto &record:rows_.values())writer.append(record);auto run=writer.finish();if(runs_.size()==4096U)throw std::runtime_error("external Sort exceeded its run bound");runs_.push_back(std::move(run));rows_.clear();}
 	Run merge(Run &left,Run &right){Cursor a(*this,left),b(*this,right);Writer writer(*this);
@@ -128,7 +128,7 @@ private:
 		auto result=writer.finish();for(const auto handle:left.handles)scratch_->release(handle);for(const auto handle:right.handles)scratch_->release(handle);return result;}
 	storage::LogicalQueryScratchProvider &provider_;MaterializedByteBudget &budget_;size_t maximum_rows_,buffer_target_,total_=0;
 	MaterializedByteReservation workspace_;BudgetMemoryResource memory_;std::pmr::vector<uint8_t> ascending_;
-	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::pmr::vector<Run> runs_;BoundedBatch<Record> rows_;
+	SizeFunction size_;std::function<void()> checkpoint_,publication_checkpoint_;size_t maximum_disk_,maximum_fragments_;std::shared_ptr<ResourceAccount> account_;std::pmr::vector<Run> runs_;BoundedBatch<Record> rows_;
 	std::unique_ptr<storage::LogicalQueryScratchSession> scratch_;bool spillable_=true,finished_=false;
 };
 }

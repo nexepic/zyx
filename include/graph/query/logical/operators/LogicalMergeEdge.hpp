@@ -6,6 +6,10 @@
  **/
 
 #pragma once
+#include "graph/query/expressions/OwnedExpressionMap.hpp"
+#include "graph/core/OwnedPropertyMap.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -31,16 +35,16 @@ namespace graph::query::logical {
 class LogicalMergeEdge : public LogicalOperator {
 public:
 	LogicalMergeEdge(
-		std::string sourceVar,
-		std::string edgeVar,
-		std::string targetVar,
-		std::string edgeType,
-		std::string direction,
-		std::unordered_map<std::string, graph::PropertyValue> matchProps,
-		std::vector<MergeSetAction> onCreateActions,
-		std::vector<MergeSetAction> onMatchActions,
+		utils::OwnedStdString sourceVar,
+		utils::OwnedStdString edgeVar,
+		utils::OwnedStdString targetVar,
+		utils::OwnedStdString edgeType,
+		utils::OwnedStdString direction,
+		graph::OwnedPropertyMap matchProps,
+		utils::OwnedStdVector<MergeSetAction> onCreateActions,
+		utils::OwnedStdVector<MergeSetAction> onMatchActions,
 		std::unique_ptr<LogicalOperator> child = nullptr,
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>
+		graph::query::expressions::OwnedExpressionMap
 			matchPropertyExpressions = {})
 		: child_(std::move(child))
 		, sourceVar_(std::move(sourceVar))
@@ -67,12 +71,19 @@ public:
 		return out;
 	}
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		utils::OwnedStringVector out;
+		if (child_) out = child_->getOwnedOutputVariables();
+		if (!edgeVar_.empty()) out.push_back(edgeVar_);
+		return out;
+	}
+
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		auto cloneActions = [](const std::vector<MergeSetAction> &src) {
-			std::vector<MergeSetAction> dst;
+			utils::OwnedStdVector<MergeSetAction> dst;
 			dst.reserve(src.size());
 			for (const auto &a : src) {
-				dst.push_back({a.variable, a.key, a.expression ? a.expression->clone() : nullptr, a.type});
+				dst.push_back({a.variable, a.key, utils::shareOwned(a.expression ? a.expression->clone() : nullptr), a.type});
 			}
 			return dst;
 		};
@@ -82,14 +93,7 @@ public:
 			cloneActions(onCreateActions_),
 			cloneActions(onMatchActions_),
 			child_ ? child_->clone() : nullptr,
-			[&]() {
-				std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> expressions;
-				expressions.reserve(matchPropertyExpressions_.size());
-				for (const auto &[key, expression] : matchPropertyExpressions_) {
-					expressions.emplace(key, expression ? expression->clone() : nullptr);
-				}
-				return expressions;
-			}());
+			graph::query::expressions::cloneExpressionMap(matchPropertyExpressions_));
 	}
 
 	[[nodiscard]] std::string toString() const override {
@@ -121,15 +125,15 @@ public:
 
 private:
 	std::unique_ptr<LogicalOperator> child_;
-	std::string sourceVar_;
-	std::string edgeVar_;
-	std::string targetVar_;
-	std::string edgeType_;
-	std::string direction_;
-	std::unordered_map<std::string, graph::PropertyValue> matchProps_;
-	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> matchPropertyExpressions_;
-	std::vector<MergeSetAction> onCreateActions_;
-	std::vector<MergeSetAction> onMatchActions_;
+	utils::OwnedStdString sourceVar_;
+	utils::OwnedStdString edgeVar_;
+	utils::OwnedStdString targetVar_;
+	utils::OwnedStdString edgeType_;
+	utils::OwnedStdString direction_;
+	graph::OwnedPropertyMap matchProps_;
+	graph::query::expressions::OwnedExpressionMap matchPropertyExpressions_;
+	utils::OwnedStdVector<MergeSetAction> onCreateActions_;
+	utils::OwnedStdVector<MergeSetAction> onMatchActions_;
 };
 
 } // namespace graph::query::logical

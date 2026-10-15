@@ -1,0 +1,42 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 829,
+  "selected_suites": 41,
+  "failures": 0,
+  "isolated_transaction_fault_cases": 4,
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "include/graph/storage/relocatable/metadata/CatalogPage.hpp": "846286e7438f7556e8c885c90dc0bcb42df3541291ae5f3b4eaa6a2fc8d6f193",
+    "include/graph/storage/relocatable/metadata/LocationDirectory.hpp": "c45a746b05489111ffca8e64a367b5b4f5c44bb95aa6361dbfd0a301c5b08b08",
+    "include/graph/storage/relocatable/metadata/MetadataPageRoute.hpp": "f6888109d68b669f61a12c87cf44bf87b78a1e9b189d170412f39e4f292b6194",
+    "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "838ecc54f8ea257313b159b0ef42b42be416daa2b7b277bf4b8aecbe35f4eb08",
+    "include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp": "14f726b1fa18c427d55e63f358ea66cda943df842b0033cbcc3e78be3bd97c04",
+    "src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp": "53054a1ce0d5f494f3bd425928a8fb20525b9fefc37fc3cee9f95e9433275f4a",
+    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "2790cb160d9907f3d2f64d5c45c5361376ba01cf83fe11d05c7aa4cb2bb85696",
+    "src/storage/relocatable/metadata/LocationDirectory.cpp": "811dcb0ec8dd4d286fb4201143556921f848775210228d262d90bfe7660b0960",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "0b3e42a83b8f26886b67beeaaba1e1a2dcd1d09cdc768256e58f6d6c533663c2",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "d294ca8487d03235353085f31e07c35f3d1340e73abb4ef49e7aba4a2f560e2f",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "c627cd7a452a3e75ea789144b96db13b8bdf5484962e820fe3c476628332ec2c",
+    "src/query/execution/ProcessResourceDomains.hpp": "f22ad4c883694c9f5cbf508f134bac033a4128dab68719a7f8723248fd936837",
+    "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp": "4b50fbbca5a1a428a192f1333a630919c967878acd22e7e5ad52e6ba45399520",
+    "tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp": "1f47c226bf189a83bae4963ea892912d253b3e8dcaf1b37a359ee0ec8946eaea",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "9b8659edc1e66351b69fdd391074e4e7cec42a6d9679978d85ae923bbcff3447",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "2eab665e2a1ed52d55dd233496f7dadb1e28dfa90102a043b61d10684d55c42c"
+  },
+  "archive_sha256": "66d29dafe195a1dc535eb628569c9f3c45b1a0c146cc1fda88bb9d91cf6f86a5",
+  "remaining": [
+    "NativeReadSession caches and cursor buffers",
+    "plan IR/native cache metadata and compilation ownership",
+    "write/undo/overlay/COW and maintenance/recovery allocations",
+    "other temporary workspaces and non-read output audit",
+    "bounded pinned-snapshot backlog and protected maintenance progress",
+    "partitioned hash/aggregate",
+    "complete final faults/long-run acceptance and affected final-source integration including DriverABI"
+  ]
+}

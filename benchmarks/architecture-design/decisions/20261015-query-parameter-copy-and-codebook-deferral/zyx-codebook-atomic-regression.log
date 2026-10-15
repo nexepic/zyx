@@ -1,0 +1,181 @@
+[0/2] Re-checking globbed directories...
+[1/5] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorCodebookReachabilityReclaimer.cpp.o
+[2/5] Linking CXX static library libzyx_core.a
+[3/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_VectorCodebookReachabilityCorruption.cpp.o
+[4/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/maintenance/test_VectorRawReachabilityReclaimer.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 82 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 77 tests from RelocatableVectorRawReachabilityReclaimerTest
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedRawPagesThenReleasesTheirPoolAfterPinnedSnapshotsDrain
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedRawPagesThenReleasesTheirPoolAfterPinnedSnapshotsDrain (91 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleDroppedRawPoolsInOneBoundedRun
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleDroppedRawPoolsInOneBoundedRun (161 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesARawPoolWhosePageRetirementAlreadyCommitted
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesARawPoolWhosePageRetirementAlreadyCommitted (64 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenRawRetirementExhaustsTheCheckpointLsn
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenRawRetirementExhaustsTheCheckpointLsn (53 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolWithoutItsRequiredManifest
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolWithoutItsRequiredManifest (18 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolWhoseManifestMappingRootIsMissing
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolWhoseManifestMappingRootIsMissing (41 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolOwnedByANonVectorIndex
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveRawPoolOwnedByANonVectorIndex (19 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveManifestOwnedByANonVectorIndexDuringRawReclaim
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveManifestOwnedByANonVectorIndexDuringRawReclaim (27 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedNonVectorManifestAsOrphanedVectorState
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedNonVectorManifestAsOrphanedVectorState (85 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.AllowsDroppedOnlineManifestBeforeTheManifestPhaseRuns
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.AllowsDroppedOnlineManifestBeforeTheManifestPhaseRuns (37 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestsOutsideEveryPublicIndexNamespaceDuringRawReclaim
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestsOutsideEveryPublicIndexNamespaceDuringRawReclaim (15 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAManifestWhoseFrameIdentityDiffersFromItsDirectoryKey
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAManifestWhoseFrameIdentityDiffersFromItsDirectoryKey (34 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolWithAReservedOwnerIdentity
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolWithAReservedOwnerIdentity (5 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolWithAHighBitOwnerIdentity
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolWithAHighBitOwnerIdentity (5 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolOutsideEveryPublicIndexNamespace
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACurrentRawPoolOutsideEveryPublicIndexNamespace (5 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsVectorLocationsWhoseRecordsNameAnotherVector
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsVectorLocationsWhoseRecordsNameAnotherVector (36 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPagesWhoseLiveSlotsOutnumberVectorLocations
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPagesWhoseLiveSlotsOutnumberVectorLocations (36 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsARawPageWhoseOwnedIndexDisagreesWithItsPool
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsARawPageWhoseOwnedIndexDisagreesWithItsPool (32 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsVectorLocationScansThatExceedTheConfiguredBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsVectorLocationScansThatExceedTheConfiguredBound (33 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPageScansThatExceedTheConfiguredBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPageScansThatExceedTheConfiguredBound (32 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawRetirementPlansThatExceedTheConfiguredBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawRetirementPlansThatExceedTheConfiguredBound (50 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPoolAndManifestScansThatExceedTheirBounds
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRawPoolAndManifestScansThatExceedTheirBounds (73 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRetiredRawPoolsThatExceedTheRemainingPoolBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsRetiredRawPoolsThatExceedTheRemainingPoolBound (69 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsUnboundedLifecycleMaintenanceOptionsBeforeScanning
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsUnboundedLifecycleMaintenanceOptionsBeforeScanning (3 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryRawMaintenanceBoundBeforeScanning
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryRawMaintenanceBoundBeforeScanning (4 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryCodebookMaintenanceBoundBeforeScanning
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryCodebookMaintenanceBoundBeforeScanning (4 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryTypedPoolMaintenanceBoundBeforeScanning
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryTypedPoolMaintenanceBoundBeforeScanning (4 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryNestedLifecycleBoundBeforeScanning
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsEveryNestedLifecycleBoundBeforeScanning (7 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestAndCatalogScansThatExceedTheirConfiguredBounds
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestAndCatalogScansThatExceedTheirConfiguredBounds (54 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsPageDirectoryAndRetiredPoolScansThatExceedTheirBounds
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsPageDirectoryAndRetiredPoolScansThatExceedTheirBounds (91 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTypedVectorPoolsWithoutAVectorSchemaOwner
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTypedVectorPoolsWithoutAVectorSchemaOwner (27 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTypedVectorPoolsOutsideEveryPublicIndexNamespace
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTypedVectorPoolsOutsideEveryPublicIndexNamespace (15 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWithAReservedOwnerIdentity
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWithAReservedOwnerIdentity (6 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWithAHighBitOwnerIdentity
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWithAHighBitOwnerIdentity (6 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWhoseCatalogSlotWasReleased
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsATypedVectorPoolWhoseCatalogSlotWasReleased (8 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.IgnoresAnAllocatedObsoleteTypedPool
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.IgnoresAnAllocatedObsoleteTypedPool (5 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCallerSuppliedCanonicalDefinitionId
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCallerSuppliedCanonicalDefinitionId (2 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsDroppingAnAbsentCanonicalDefinition
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsDroppingAnAbsentCanonicalDefinition (3 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetainsATypedPoolWithAPendingRelocationSource
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetainsATypedPoolWithAPendingRelocationSource (8 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsInvalidNestedOptionsBeforePublishingAnyLifecyclePhase
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsInvalidNestedOptionsBeforePublishingAnyLifecyclePhase (44 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestScansThatExceedTheConfiguredStateBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestScansThatExceedTheConfiguredStateBound (54 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestsOutsideThePublicIndexNamespaces
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestsOutsideThePublicIndexNamespaces (16 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.LeavesAnEmptyMetadataGenerationUnchanged
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.LeavesAnEmptyMetadataGenerationUnchanged (5 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleDroppedManifestsWithSequentialCheckpointLsns
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleDroppedManifestsWithSequentialCheckpointLsns (161 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedVectorStateInDependencyOrder
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedVectorStateInDependencyOrder (124 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesEveryDroppedVectorPoolOnlyAfterPinnedSnapshotsDrain
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesEveryDroppedVectorPoolOnlyAfterPinnedSnapshotsDrain (129 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetainsActiveVectorStateAcrossEveryRetirementPhase
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetainsActiveVectorStateAcrossEveryRetirementPhase (59 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetainsActiveOnlineVectorStateAcrossEveryRetirementPhase
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetainsActiveOnlineVectorStateAcrossEveryRetirementPhase (51 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetainsAnActiveOnlineVectorRawPool
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetainsAnActiveOnlineVectorRawPool (31 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveManifestWhoseDeltaMappingRootWasReplaced
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAnActiveManifestWhoseDeltaMappingRootWasReplaced (52 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseMappingRootIsMissing
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseMappingRootIsMissing (34 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseMappingRootWasReplaced
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseMappingRootWasReplaced (35 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseVectorNodeMappingRootWasReplaced
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseVectorNodeMappingRootWasReplaced (36 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseDeltaMappingRootWasReplaced
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedForAnActiveManifestWhoseDeltaMappingRootWasReplaced (70 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAManifestOwnedByAnActiveNonVectorIndex
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsAManifestOwnedByAnActiveNonVectorIndex (25 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedOnlineVectorStateWithoutASealedTombstone
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresDroppedOnlineVectorStateWithoutASealedTombstone (105 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesAnEmptyDerivedMappingPoolAfterItsRootIsRetired
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.ReleasesAnEmptyDerivedMappingPoolAfterItsRootIsRetired (19 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenTypedPoolRetirementExhaustsTheCheckpointLsn
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenTypedPoolRetirementExhaustsTheCheckpointLsn (13 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTwoEmptyTypedPoolsWhenTheBoundAllowsOnlyOne
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsTwoEmptyTypedPoolsWhenTheBoundAllowsOnlyOne (17 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedManifestPhaseBeforeRetryingTheWholeLifecycle
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedManifestPhaseBeforeRetryingTheWholeLifecycle (127 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenManifestRetirementExhaustsTheCheckpointLsn
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenManifestRetirementExhaustsTheCheckpointLsn (48 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedCodebookRetirementBeforeRetrying
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedCodebookRetirementBeforeRetrying (19 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresEveryExtentOfOneUnreferencedLargeCodebook
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresEveryExtentOfOneUnreferencedLargeCodebook (57 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetainsRetiredCodebookForPinnedSnapshotsUntilRelease
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetainsRetiredCodebookForPinnedSnapshotsUntilRelease (14 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenCodebookRetirementExhaustsTheCheckpointLsn
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.FailsClosedWhenCodebookRetirementExhaustsTheCheckpointLsn (7 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsARetiredCodebookWhoseCatalogSlotWasReleased
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsARetiredCodebookWhoseCatalogSlotWasReleased (11 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestReferencesToADeletedCodebookExtent
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestReferencesToADeletedCodebookExtent (39 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestReferencesToTheWrongCodebookGeneration
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsManifestReferencesToTheWrongCodebookGeneration (31 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACodebookExtentWhoseHeaderDisagreesWithItsCatalogOwner
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsACodebookExtentWhoseHeaderDisagreesWithItsCatalogOwner (6 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsConflictingManifestGenerationsForOneCodebook
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsConflictingManifestGenerationsForOneCodebook (58 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCodebookExtentScansThatExceedTheConfiguredBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCodebookExtentScansThatExceedTheConfiguredBound (8 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCodebookRetirementAndCatalogScansThatExceedTheirBounds
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsCodebookRetirementAndCatalogScansThatExceedTheirBounds (9 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsMaintenanceRetireQueueScansThatExceedTheConfiguredBound
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsMaintenanceRetireQueueScansThatExceedTheConfiguredBound (17 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleUnreferencedCodebooksInOneBoundedRun
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresMultipleUnreferencedCodebooksInOneBoundedRun (18 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RejectsReclaimersComposedFromDifferentMetadataStores
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RejectsReclaimersComposedFromDifferentMetadataStores (4 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RetiresAnUnreferencedCodebookAfterPhysicalRelocation
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RetiresAnUnreferencedCodebookAfterPhysicalRelocation (20 ms)
+[ RUN      ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedRawRetirementBeforeRetrying
+[       OK ] RelocatableVectorRawReachabilityReclaimerTest.RecoversInterruptedRawRetirementBeforeRetrying (90 ms)
+[----------] 77 tests from RelocatableVectorRawReachabilityReclaimerTest (2972 ms total)
+
+[----------] 5 tests from RelocatableVectorCodebookReachabilityCorruptionTest
+[ RUN      ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsCodebookDataExtentWithoutACanonicalManifest
+[       OK ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsCodebookDataExtentWithoutACanonicalManifest (5 ms)
+[ RUN      ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsUnownedExtentAlongsideAnInlineCodebook
+[       OK ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsUnownedExtentAlongsideAnInlineCodebook (8 ms)
+[ RUN      ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsAPartialExtentDirectorySpan
+[       OK ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsAPartialExtentDirectorySpan (6 ms)
+[ RUN      ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsAnExtentDirectorySpanOutsideTheDataFrameRange
+[       OK ] RelocatableVectorCodebookReachabilityCorruptionTest.RejectsAnExtentDirectorySpanOutsideTheDataFrameRange (6 ms)
+[ RUN      ] RelocatableVectorCodebookReachabilityCorruptionTest.IgnoresAnExtentOwnedByAnotherStorageKind
+[       OK ] RelocatableVectorCodebookReachabilityCorruptionTest.IgnoresAnExtentOwnedByAnotherStorageKind (6 ms)
+[----------] 5 tests from RelocatableVectorCodebookReachabilityCorruptionTest (33 ms total)
+
+[----------] Global test environment tear-down
+[==========] 82 tests from 2 test suites ran. (3006 ms total)
+[  PASSED  ] 82 tests.

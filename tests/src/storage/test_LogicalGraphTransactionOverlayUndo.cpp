@@ -9,6 +9,8 @@
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
+#include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 #include "storage/LogicalGraphTransactionOverlayTestFixture.hpp"
 
 namespace graph::storage {
@@ -21,6 +23,113 @@ LogicalGraphMutationEntityReference nodeReference(uint64_t id) {
 
 LogicalGraphMutationEntityReference edgeReference(uint64_t id) {
 	return {LogicalGraphMutationEntityKind::LGMK_EDGE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, id};
+}
+
+TEST(LogicalGraphTransactionOverlayUndoTest, PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating) {
+    InMemoryLogicalTransaction transaction;
+    LogicalGraphTransactionOverlay overlay(transaction);
+    const PropertyValue expected(std::string(65536U, 's'));
+    overlay.replaceLogicalNodeProperties({{1U, {{"payload", expected}}}});
+    overlay.replaceLogicalEdgeProperties({{10U, {{"payload", expected}}}});
+    auto snapshot = overlay.openLogicalGraphReadSnapshot();
+    const auto fence = snapshot->mutationFence();
+    auto small = std::make_shared<query::execution::MaterializedByteBudget>(4096U);
+    {
+        detail::PropertyDecodeWorkspace workspace(small);
+        EXPECT_THROW(static_cast<void>(snapshot->readNodeShaped(1U, {.include_labels = true, .all_properties = true})),
+            query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U);
+    {
+        detail::PropertyDecodeWorkspace workspace(small);
+        EXPECT_THROW(static_cast<void>(snapshot->readEdgeShaped(10U, {.include_type = true, .all_properties = true})),
+            query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U);
+    auto enough = std::make_shared<query::execution::MaterializedByteBudget>(1048576U);
+    {
+        detail::PropertyDecodeWorkspace workspace(enough);
+        const auto node = snapshot->readNodeShaped(1U, {.include_labels = true, .all_properties = true});
+        const auto edge = snapshot->readEdgeShaped(10U, {.include_type = true, .all_properties = true});
+        ASSERT_EQ(node.properties.size(), 1U); ASSERT_EQ(edge.properties.size(), 1U);
+        EXPECT_EQ(node.properties[0].value, expected); EXPECT_EQ(edge.properties[0].value, expected);
+        const std::array<uint64_t, 1U> nodes{1U}, edges{10U};
+        const auto nodeBatch = snapshot->readNodesShapedSorted(nodes, {.all_properties = true});
+        const auto edgeBatch = snapshot->readEdgesShapedSorted(edges, {.all_properties = true});
+        EXPECT_EQ(nodeBatch[0].properties[0].value, expected);
+        EXPECT_EQ(edgeBatch[0].properties[0].value, expected);
+        EXPECT_GE(enough->used(), 4U * 65537U);
+    }
+    EXPECT_EQ(enough->used(), 0U);
+    EXPECT_EQ(snapshot->mutationFence(), fence);
+    EXPECT_EQ(snapshot->readNodeShaped(1U, {.all_properties = true}).properties[0].value, expected);
+}
+
+class BudgetedUndoTransaction final : public LogicalGraphTransaction,
+                                      public LogicalGraphTransactionMemoryProvider {
+public:
+    std::shared_ptr<query::execution::MaterializedByteBudget> budget =
+        std::make_shared<query::execution::MaterializedByteBudget>(262144U);
+    InMemoryLogicalTransaction inner;
+    [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> retainedWriteMemory() const override { return budget; }
+    [[nodiscard]] LogicalGraphTransactionState state() const override { return inner.state(); }
+    [[nodiscard]] bool isReadOnly() const override { return false; }
+    [[nodiscard]] LogicalGraphReadSnapshot &readSnapshot() override { return inner.readSnapshot(); }
+    [[nodiscard]] LogicalGraphMutationBatchResult previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
+        return inner.previewMutationBatch(batch);
+    }
+    [[nodiscard]] LogicalGraphMutationBatchResult stageMutationBatch(LogicalGraphMutationBatch batch) override {
+        return inner.stageMutationBatch(std::move(batch));
+    }
+    [[nodiscard]] LogicalGraphMutationBatchResult commit() override { return inner.commit(); }
+    void rollback() override { inner.rollback(); }
+};
+
+TEST(LogicalGraphTransactionOverlayUndoTest, NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft) {
+    BudgetedUndoTransaction transaction;
+    {
+        LogicalGraphTransactionOverlay overlay(transaction);
+        const PropertyValue expected(std::string(65536U, 'a'));
+        overlay.replaceLogicalNodeProperties({{1U, {{"payload", expected}}}});
+        const auto retained = transaction.budget->used();
+        EXPECT_GE(retained, 65536U);
+        {
+            query::execution::MaterializedByteReservation pressure(transaction.budget.get());
+            ASSERT_GT(transaction.budget->available(), 1024U);
+            pressure.set(transaction.budget->available() - 1024U);
+            EXPECT_THROW(overlay.replaceLogicalNodeProperties({{1U, {{"payload", PropertyValue(9)}}}}),
+                query::execution::MaterializedByteLimitExceeded);
+            EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeProperty(1U, "payload"), expected);
+        }
+        EXPECT_EQ(transaction.budget->used(), retained);
+        overlay.replaceLogicalNodeProperties({{1U, {{"payload", PropertyValue(9)}}}});
+        EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNodeProperty(1U, "payload"), PropertyValue(9));
+        EXPECT_LT(transaction.budget->used(), retained);
+    }
+    EXPECT_EQ(transaction.budget->used(), 0U);
+}
+
+TEST(LogicalGraphTransactionOverlayUndoTest, RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo) {
+    BudgetedUndoTransaction transaction;
+    {
+        LogicalGraphTransactionOverlay overlay(transaction);
+        const PropertyValue expected(std::string(32768U, 'v'));
+        overlay.replaceLogicalNodeProperties({{1U, {{"payload", expected}}}});
+        overlay.replaceLogicalEdgeProperties({{10U, {{"payload", expected}}}});
+        const auto retained = transaction.budget->used();
+        transaction.inner.setRejectStage(true);
+        LogicalGraphMutationBatch candidate;
+        candidate.property_replacements = {{nodeReference(1U), {{"payload", PropertyValue(std::string(49152U, 'n'))}}},
+            {edgeReference(10U), {{"payload", PropertyValue(std::string(49152U, 'e'))}}}};
+        EXPECT_THROW(static_cast<void>(overlay.executeLogicalGraphMutationBatch(candidate)), std::runtime_error);
+        EXPECT_EQ(transaction.budget->used(), retained);
+        auto snapshot = overlay.openLogicalGraphReadSnapshot();
+        EXPECT_EQ(snapshot->readNodeProperty(1U, "payload"), expected);
+        EXPECT_EQ(snapshot->readEdgeProperty(10U, "payload"), expected);
+        transaction.inner.setRejectStage(false);
+        EXPECT_NO_THROW(static_cast<void>(overlay.executeLogicalGraphMutationBatch(candidate)));
+    }
+    EXPECT_EQ(transaction.budget->used(), 0U);
 }
 
 TEST(LogicalGraphTransactionOverlayUndoTest, FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds) {

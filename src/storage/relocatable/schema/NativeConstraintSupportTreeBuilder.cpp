@@ -250,7 +250,7 @@ namespace graph::storage {
 		if (std::ranges::adjacent_find(readTokens) != readTokens.end()) {
 			fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree definition repeats a Property-key Token");
 		}
-		NativeReadSession session;
+		NativeReadSession session(snapshot);
 		const size_t batchEntries = std::min<size_t>(256U, options.validation_batch_entries);
 		std::vector<uint64_t> ids;
 		ids.reserve(std::min(batchEntries, options.maximum_entries));

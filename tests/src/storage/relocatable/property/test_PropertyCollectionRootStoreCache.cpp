@@ -382,7 +382,9 @@ TEST_F(PropertyCollectionRootStoreCacheTest, NativeReadSessionReusesOneCursorFor
 		const BufferPoolStats afterRepeat = io_->bufferPoolStats();
 		EXPECT_EQ(afterRepeat.disk_read_bytes, afterFirst.disk_read_bytes);
 		EXPECT_EQ(afterRepeat.misses, afterFirst.misses);
-		EXPECT_GT(afterRepeat.hits, afterFirst.hits);
+		// The retained decoded directory and owned Property image avoid even
+		// a Buffer Pool lookup when this unchanged snapshot is read again.
+		EXPECT_EQ(afterRepeat.hits, afterFirst.hits);
 	}
 
 	TEST_F(PropertyCollectionRootStoreCacheTest, ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads) {

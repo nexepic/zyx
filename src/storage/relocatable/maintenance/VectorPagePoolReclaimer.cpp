@@ -92,7 +92,7 @@ namespace graph::storage {
 						 "relocatable Vector page-pool reclamation found duplicate pending relocation sources");
 				}
 			});
-			const std::vector<IndexDefinition> definitions =
+			const utils::OwnedStdVector<IndexDefinition> definitions =
 					catalog_.readIndexDefinitions(snapshot, options.maximum_index_definitions);
 			std::map<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {

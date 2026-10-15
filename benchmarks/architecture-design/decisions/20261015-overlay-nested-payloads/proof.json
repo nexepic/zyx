@@ -1,0 +1,105 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 103,
+  "selected_suites": 4,
+  "failures": 0,
+  "fault_cases_passed": 579,
+  "fault_points": 572,
+  "fault_sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3941,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 18,
+      "tested_allocations": 18,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 13,
+      "tested_allocations": 13,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 22,
+      "tested_allocations": 22,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 26,
+      "tested_allocations": 26,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42253,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "heap_cases": [
+    {
+      "mode": "property-heap-accounting",
+      "shape_cases": 22,
+      "maximum_observed_requested_bytes": 320376,
+      "passed": true
+    },
+    {
+      "mode": "native-stage-heap-accounting",
+      "shape_cases": 5,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 357601,
+      "passed": true
+    },
+    {
+      "mode": "overlay-payload-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "worker_sha256": "4a7f27d51e3afd9bac7139d8a78fdbe3e464de21ccc6452653deb223b0bd50b3",
+  "source_sha256": {
+    "include/graph/storage/MutationHeapBytes.hpp": "c2fffb5ee0fdb59b867733f434e1f30359a7be1e5585614b8469695f2e24c15f",
+    "include/graph/storage/detail/OverlayPayloadBudget.hpp": "2cc2b43ed8259138f2e5e8f65afe36b65ba74da6ceadde3159601498d5c44f4c",
+    "include/graph/storage/LogicalGraphTransactionOverlay.hpp": "5f3de2fe0135e655e21e9537c5f1f1508612c840889c43b4ed4edfce16026c8a",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "5aecdeb79810548f40220808c13e44473c12fb0a662ca7b64e4a74a2a9360dab",
+    "src/storage/relocatable/backend/AdmittedMutationInput.hpp": "6a88498bfbb753f6eb8bd7bc32bbf854f17accf48fb214f3b163814e17763737",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "9904f1183229f411c2a4d9843f3b369245b80063c1adc61202e9050ee7ec1993",
+    "tests/src/storage/test_LogicalGraphTransactionOverlayUndo.cpp": "23c631fcc886d724e142d6dd62f17cab72079c6ef01946425a93707cef0fb8d7",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "1e24fba1d256b52342556a777affe57dfa990f3a4886f6a50f5c564dc92d6c8b",
+    "tests/support/TransactionResourceFaultWorker.cpp": "886b79276017bff67a4fec5ae3a602a99853b619a2cab24cbeff319c42bd74a6",
+    "scripts/test_transaction_resource_faults.py": "6576348cf398aded216aa4fd794bedb09828ae90073335d395e0ca584ca0ce83"
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_execution": "Linux clang19/libstdc++; no Windows/macOS execution claim"
+}

@@ -18,12 +18,21 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <system_error>
 #include <vector>
 
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
 
 namespace graph::storage {
+
+    // Capacity was refused and the fragment's Catalog publication did not occur.
+    // Logical ID high-water marks may advance; no fragment ownership escaped.
+    class NativeBulkRunCapacityDenied final : public std::system_error {
+    public:
+        NativeBulkRunCapacityDenied() : std::system_error(std::make_error_code(std::errc::no_space_on_device),
+            "native scratch capacity denied before fragment publication") {}
+    };
 
 	constexpr uint32_t RSS_NATIVE_BULK_RUN_MAGIC = 0x5253595AU; // Little-endian bytes: ZYSR
 	constexpr uint16_t RSS_NATIVE_BULK_RUN_VERSION = 1;

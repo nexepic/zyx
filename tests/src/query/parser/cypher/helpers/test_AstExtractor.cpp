@@ -5,6 +5,8 @@
 
 #include <gtest/gtest.h>
 #include <string>
+#include <utility>
+#include <vector>
 #include "CypherLexer.h"
 #include "CypherParser.h"
 #include "antlr4-runtime.h"
@@ -694,4 +696,14 @@ TEST_F(AstExtractorUnitTest, ExtractProperties_NoMapLiteral) {
 	// Null properties context
 	auto result = AstExtractor::extractProperties(nullptr, evaluator);
 	EXPECT_TRUE(result.empty());
+}
+
+TEST_F(AstExtractorUnitTest, ExtractVariable_NormalizesQuotedDeclarationsLikeExpressionReferences) {
+    for (const auto &[spelling, expected] : std::vector<std::pair<std::string, std::string>>{
+            {"plain", "plain"}, {"`with space`", "with space"}, {"`name``tick`", "name`tick"}}) {
+        auto tree = parse("CREATE (" + spelling + ")");
+        auto node = getFirstNodePattern(tree);
+        ASSERT_NE(node, nullptr); ASSERT_NE(node->variable(), nullptr);
+        EXPECT_EQ(AstExtractor::extractVariable(node->variable()), expected);
+    }
 }

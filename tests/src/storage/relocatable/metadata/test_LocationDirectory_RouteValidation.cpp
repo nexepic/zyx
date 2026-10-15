@@ -34,7 +34,7 @@ namespace {
 			operation();
 			FAIL() << "Expected FormatException";
 		} catch (const FormatException &error) {
-			EXPECT_EQ(error.error(), expected);
+			EXPECT_EQ(error.error(), expected) << error.what();
 		}
 	}
 
@@ -412,4 +412,71 @@ TEST_F(RelocatableLocationDirectoryRouteValidationTest, AppendSessionsRejectAnIn
 						batch, LargeValueId(1U), LargeValueId{}, 1U));
 			},
 			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryRouteValidationTest, CatalogLookupChecksBothDecodedLeafEndpoints) {
+    const Superblock initial = superblock();
+    SuperblockFile(dataIo).initializeNew(initial);
+    MetadataPageFile pages(dataIo, initial);
+    MetadataPagePoolAllocator allocator(dataIo, initial);
+    CatalogTree tree(pages, allocator);
+    for (bool changeFirst : {false, true}) {
+        const uint64_t start = changeFirst ? RSS_CATALOG_PAGE_MAX_ENTRIES + 1U : 1U;
+        CatalogLeafPage page;
+        page.page_id = MetadataPageId(changeFirst ? 18U : 17U);
+        page.generation = Generation(1U); page.committed_lsn = LogSequenceNumber(1U);
+        for (uint64_t offset = 0U; offset < 3U; ++offset)
+            page.entries.push_back({SegmentId(start + offset), PhysicalSlotId(40U + offset), SegmentKind::SGK_ENTITY_PAGE_POOL,
+                1U, Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(1U)});
+        if (changeFirst) page.entries.front().segment_id = SegmentId(start - 1U);
+        else page.entries.back().segment_id = SegmentId(RSS_CATALOG_PAGE_MAX_ENTRIES + 1U);
+        page.minimum_segment_id = page.entries.front().segment_id;
+        page.maximum_segment_id = page.entries.back().segment_id;
+        const PhysicalPageRef leafRef{PhysicalSlotId(1U), static_cast<uint8_t>(changeFirst ? 3U : 1U), Generation(1U)};
+        pages.writeCatalogLeaf(leafRef, page);
+        CatalogRadixPage root;
+        root.kind = CatalogRadixPageKind::CRPK_ROOT;
+        root.level = 0U;
+        root.directory_type = MetadataDirectoryType::MDT_CATALOG;
+        root.page_id = MetadataPageId(changeFirst ? 20U : 19U);
+        root.generation = Generation(1U); root.committed_lsn = LogSequenceNumber(1U);
+        root.children[changeFirst ? 1U : 0U] = leafRef;
+        const PhysicalPageRef rootRef{PhysicalSlotId(1U), static_cast<uint8_t>(changeFirst ? 4U : 2U), Generation(1U)};
+        pages.writeCatalogRadix(rootRef, root);
+        auto published = initial; published.catalog_root = rootRef;
+        const SegmentId requested(changeFirst ? start + 2U : start);
+        expectFormatError([&] { (void)tree.find(published, requested); }, FormatError::FERR_INVALID_HEADER);
+    }
+}
+
+TEST_F(RelocatableLocationDirectoryRouteValidationTest, LocationLookupChecksBothDecodedLeafEndpoints) {
+    const Superblock initial = superblock();
+    SuperblockFile(dataIo).initializeNew(initial);
+    MetadataPageFile pages(dataIo, initial);
+    MetadataPagePoolAllocator allocator(dataIo, initial);
+    LocationDirectory directory(pages, allocator);
+    for (bool changeFirst : {false, true}) {
+        const uint64_t start = changeFirst ? RSS_LOCATION_LEAF_MAX_ENTRIES + 1U : 1U;
+        LocationLeafPage page;
+        page.page_id = MetadataPageId(changeFirst ? 18U : 17U);
+        page.generation = Generation(1U); page.committed_lsn = LogSequenceNumber(1U);
+        for (uint64_t offset = 0U; offset < 3U; ++offset)
+            page.entries.push_back({start + offset, SegmentId(20U), Generation(1U), static_cast<uint16_t>(offset + 1U), 1U, 64U});
+        if (changeFirst) page.entries.front().logical_id = start - 1U;
+        else page.entries.back().logical_id = RSS_LOCATION_LEAF_MAX_ENTRIES + 1U;
+        const PhysicalPageRef leafRef{PhysicalSlotId(1U), static_cast<uint8_t>(changeFirst ? 3U : 1U), Generation(1U)};
+        pages.writeLocationLeaf(leafRef, page);
+        CatalogRadixPage root;
+        root.kind = CatalogRadixPageKind::CRPK_ROOT;
+        root.level = 0U;
+        root.directory_type = MetadataDirectoryType::MDT_PAGE;
+        root.page_id = MetadataPageId(changeFirst ? 20U : 19U);
+        root.generation = Generation(1U); root.committed_lsn = LogSequenceNumber(1U);
+        root.children[changeFirst ? 1U : 0U] = leafRef;
+        const PhysicalPageRef rootRef{PhysicalSlotId(1U), static_cast<uint8_t>(changeFirst ? 4U : 2U), Generation(1U)};
+        pages.writeMetadataRadix(rootRef, root);
+        auto published = initial; published.page_directory_root = rootRef;
+        const PageId requested(changeFirst ? start + 2U : start);
+        expectFormatError([&] { (void)directory.findPage(published, requested); }, FormatError::FERR_INVALID_HEADER);
+    }
 }

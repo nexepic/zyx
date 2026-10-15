@@ -1685,6 +1685,13 @@ TEST_F(RelocatableVectorRawReachabilityReclaimerTest, RetainsRetiredCodebookForP
 	EXPECT_EQ(metadata_->findCatalog(current, pool.segment_id).state, SegmentState::SGS_RETIRED);
 	current.release();
 	EXPECT_EQ(codebooks.read(oldSnapshot, 17U).header, oldCodebook.header);
+	// The atomic release path must treat a newly registered/remaining reader
+	// as retryable pressure, without publishing or freeing its codebook slot.
+	const Generation beforeDeferred = metadata_->openSnapshot().superblock().generation;
+	EXPECT_FALSE(metadata_->tryReleaseRetiredCatalogSegment(pool.segment_id, pool.generation,
+			nextCheckpointLsn()).has_value());
+	EXPECT_EQ(metadata_->openSnapshot().superblock().generation, beforeDeferred);
+	EXPECT_EQ(codebooks.read(oldSnapshot, 17U).header, oldCodebook.header);
 	oldSnapshot.release();
 
 	const VectorCodebookReachabilityReclaimReport released = reclaimer.reclaim(codebookOptions(), nextCheckpointLsn());

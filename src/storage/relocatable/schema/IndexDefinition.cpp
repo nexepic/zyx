@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <array>
 #include <limits>
-#include <set>
 #include <string_view>
 
 namespace graph::storage {
@@ -55,7 +54,7 @@ namespace graph::storage {
 			}
 		}
 
-		void validateDefinition(const IndexDefinition &definition) {
+		template<class Definition> void validateDefinition(const Definition &definition) {
 			if (!isPublicIndexId(definition.index_id) || !isKnownEntityKind(definition.entity_kind) ||
 				!isKnownIndexKind(definition.kind)) {
 				fail(FormatError::FERR_INVALID_HEADER,
@@ -67,14 +66,16 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable index definition exceeds the supported property-key component count");
 			}
-			std::set<std::string, std::less<>> unique_names;
-			for (const std::string &property: definition.property_names) {
+			std::array<std::string_view, RSS_INDEX_DEFINITION_MAX_PROPERTIES> unique_names{};
+            size_t unique_count = 0U;
+			for (const auto &property: definition.property_names) {
 				validateByteString(property, RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES,
 								   "relocatable index definition property name is empty or exceeds its byte bound");
-				if (!unique_names.insert(property).second) {
+				if (std::find(unique_names.begin(), unique_names.begin() + unique_count, std::string_view(property)) != unique_names.begin() + unique_count) {
 					fail(FormatError::FERR_INVALID_HEADER,
 						 "relocatable index definition repeats a property-key component");
 				}
+                unique_names[unique_count++] = property;
 			}
 
 			const uint8_t invalidKindContract =
@@ -114,7 +115,7 @@ namespace graph::storage {
 		}
 		}
 
-		[[nodiscard]] std::string readString(std::span<const std::byte> payload, size_t &offset, size_t length,
+		[[nodiscard]] std::string_view readString(std::span<const std::byte> payload, size_t &offset, size_t length,
 											const char *message) {
 			if (length > payload.size() - offset) {
 				fail(FormatError::FERR_BUFFER_TOO_SMALL, message);
@@ -133,7 +134,7 @@ namespace graph::storage {
 						definition.property_names.size() * (sizeof(uint16_t) + 16U));
 		appendBytes(payload, definition.name);
 		appendBytes(payload, definition.vector_metric);
-		for (const std::string &property: definition.property_names) {
+		for (const auto &property: definition.property_names) {
 			appendU16(payload, static_cast<uint16_t>(property.size()));
 			appendBytes(payload, property);
 		}
@@ -189,18 +190,28 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable index definition variable lengths exceed configured bounds");
 		}
 
-		IndexDefinition definition;
-		definition.index_id = LittleEndianCodec::readU64(bytes, INDEX_ID_OFFSET);
-		definition.label_token_id = LittleEndianCodec::readU64(bytes, LABEL_TOKEN_ID_OFFSET);
-		definition.entity_kind = static_cast<IndexDefinitionEntityKind>(bytes[ENTITY_KIND_OFFSET]);
-		definition.kind = static_cast<IndexDefinitionKind>(bytes[INDEX_KIND_OFFSET]);
-		definition.vector_dimensions = LittleEndianCodec::readU32(bytes, VECTOR_DIMENSIONS_OFFSET);
+		struct BorrowedDefinition {
+            uint64_t index_id = 0U;
+            std::string_view name;
+            IndexDefinitionEntityKind entity_kind{};
+            IndexDefinitionKind kind{};
+            uint64_t label_token_id = 0U;
+            std::span<const std::string_view> property_names;
+            uint32_t vector_dimensions = 0U;
+            std::string_view vector_metric;
+        } view;
+        std::array<std::string_view, RSS_INDEX_DEFINITION_MAX_PROPERTIES> properties{};
+		view.index_id = LittleEndianCodec::readU64(bytes, INDEX_ID_OFFSET);
+		view.label_token_id = LittleEndianCodec::readU64(bytes, LABEL_TOKEN_ID_OFFSET);
+		view.entity_kind = static_cast<IndexDefinitionEntityKind>(bytes[ENTITY_KIND_OFFSET]);
+		view.kind = static_cast<IndexDefinitionKind>(bytes[INDEX_KIND_OFFSET]);
+		view.vector_dimensions = LittleEndianCodec::readU32(bytes, VECTOR_DIMENSIONS_OFFSET);
 		const std::span<const std::byte> payload = bytes.subspan(RSS_INDEX_DEFINITION_HEADER_BYTES);
 		size_t offset = 0;
-		definition.name = readString(payload, offset, nameBytes, "relocatable index definition name is truncated");
-		definition.vector_metric =
+		view.name = readString(payload, offset, nameBytes, "relocatable index definition name is truncated");
+		view.vector_metric =
 				readString(payload, offset, metricBytes, "relocatable index definition vector metric is truncated");
-		definition.property_names.reserve(propertyCount);
+		view.property_names = std::span<const std::string_view>(properties.data(), propertyCount);
 		for (uint16_t index = 0; index < propertyCount; ++index) {
 			if (payload.size() - offset < sizeof(uint16_t)) {
 				fail(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable index definition property length is truncated");
@@ -211,13 +222,24 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable index definition property name exceeds its configured byte bound");
 			}
-			definition.property_names.push_back(
-					readString(payload, offset, propertyBytes, "relocatable index definition property name is truncated"));
+			properties[index] = readString(payload, offset, propertyBytes, "relocatable index definition property name is truncated");
 		}
 		if (offset != payload.size()) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable index definition payload has trailing bytes");
 		}
-		validateDefinition(definition);
+		validateDefinition(view);
+        // Finish byte/semantic validation before admitting any name allocation.
+        IndexDefinition definition;
+        definition.index_id = view.index_id;
+        definition.name = view.name;
+        definition.entity_kind = view.entity_kind;
+        definition.kind = view.kind;
+        definition.label_token_id = view.label_token_id;
+        definition.property_names.reserve(propertyCount);
+        for (size_t index = 0U; index < propertyCount; ++index)
+            definition.property_names.emplace_back(properties[index]);
+        definition.vector_dimensions = view.vector_dimensions;
+        definition.vector_metric = view.vector_metric;
 		return definition;
 	}
 

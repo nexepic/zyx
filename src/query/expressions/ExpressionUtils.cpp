@@ -375,7 +375,7 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 			if (funcCall->getArgumentCount() > 0) {
 				const auto& args = funcCall->getArguments();
 				if (!args.empty()) {
-					argExpr = std::shared_ptr<Expression>(args[0]->clone().release());
+					argExpr = utils::shareOwned(args[0]->clone());
 				}
 			}
 
@@ -384,7 +384,7 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 			if ((funcNameLower == "percentiledisc" || funcNameLower == "percentilecont") &&
 			    funcCall->getArgumentCount() > 1) {
 				const auto& args = funcCall->getArguments();
-				extraArg = std::shared_ptr<Expression>(args[1]->clone().release());
+				extraArg = utils::shareOwned(args[1]->clone());
 			}
 
 			aggItems.emplace_back(funcNameLower, argExpr, tempAlias, funcCall->isDistinct(), extraArg);
@@ -442,7 +442,7 @@ std::unique_ptr<Expression> ExpressionUtils::extractAndReplaceAggregates(
 		}
 		case ExpressionType::MAP_PROJECTION: {
 			auto* mapProjection = static_cast<const MapProjectionExpression*>(expr);
-			std::vector<MapProjectionItem> items;
+			utils::OwnedStdVector<MapProjectionItem> items;
 			items.reserve(mapProjection->getItems().size());
 			for (const auto& item : mapProjection->getItems()) {
 				items.emplace_back(item.type, item.key,

@@ -1,0 +1,13 @@
+# Overlay and undo nested payload ownership
+
+Component verification; progress remains 22/34 (64.7%).
+
+Native-backed overlays now admit nested node/edge data before retained copies and before statement-undo copies. Memory ownership precedes payload members so destruction frees data before refunds. Undo entries are constructed in place. Rollback swaps leases, vectors, strings and scalar metadata directly, without copying payloads or constructing temporary owners. Overlay owners retain WRITE credit after the native transaction rolls back, until the overlay itself is destroyed.
+
+Replacement workspaces sort borrowed field/label pointers in PMR buffers and admit complete output copies before constructing standard containers. This removes the staging-only intermediate property map and its extra payload copy. Replaced buffers die before incoming credit is absorbed and trimmed. Edge types use the same ownership rule. Mutation copy-size helpers are now format-independent in MutationHeapBytes.hpp; the native private-input owner reuses them. Legacy transactions without a MaterializedByteBudget provider preserve their existing allocation contract.
+
+All 103 selected tests pass. New tests cover nested undo admission failure, node/edge restoration after a later stage rejection, successful retry, and retained overlay credit after native rollback. A new allocation observer verifies 12 node/edge replacement, copy/undo and swap phases with zero uncovered requested bytes; native staging's five phases and the other 22 heap shapes also pass. The worker passed 579 isolated cases: 572 allocation-failure points, four terminal cases and three heap-accounting cases. Short paths are exhaustive; long paths sample 96 points each. Overlay staging's normal allocation count fell from 20 to 18, and overlay creation from 24 to 22. These counts are not performance measurements.
+
+Snapshot-source materialization, patch normalization, convenience/API copies and other publication/compiler workspaces remain pending. No comprehensive heap, whole-stage acceptance, Windows/macOS execution or Kuzu performance claim is made. No full suite, new crash campaign or performance campaign ran for this component; the preceding component retains its separate 32-cycle crash evidence.
+
+Followup: normalization target/key sets and sorted descriptors now capture the overlay WRITE owner. All 45 relevant tests pass, including rejection before source reads and successful retry after refund. This accounts metadata only; source and normalized payload copies remain pending. Separate proof/source/logs are in normalization-metadata-proof.json and normalization-metadata-evidence.tar.gz; the preceding worker remains historical evidence for its frozen source.

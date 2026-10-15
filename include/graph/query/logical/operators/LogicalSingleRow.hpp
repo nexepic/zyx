@@ -44,6 +44,10 @@ public:
         return {};
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        return {};
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "SingleRow";
     }

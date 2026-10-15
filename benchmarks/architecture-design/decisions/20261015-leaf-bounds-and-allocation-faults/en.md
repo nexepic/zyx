@@ -1,0 +1,13 @@
+# Decoded leaf bounds and isolated allocation faults
+
+Component implementation only. Accepted 22/34 (64.7%); none of the requested five deliveries is newly accepted.
+
+Read-only decoded Catalog/location membership checks use both ID endpoints: codec-validated IDs are strictly increasing and `(id-1)/capacity` is monotonic, so checking the extrema proves the same membership property for every entry. Mutable COW pages retain the existing full scan. Visibility/type/CRC/generation checks remain. Metadata route point lookup now checks the complete leaf ID range before binary search; a previously accepted matching prefix can no longer hide a later misrouted ID. This earlier corrupt-tail detection is documented in both native storage specifications. Boundary corruption tests cover first and last entries while the requested record itself remains valid.
+
+The isolated worker now supports one-shot failure at a selected global new/new[] request, including aligned/nothrow forms. Production and benchmark allocators are not replaced. A fixed Property transaction's normal stage path has six allocation requests and its normal commit path3,769; each request was individually failed in a fresh process. Failed staging preserves the prior staged statement. Commit error state and writable reopen must expose only complete old/new Property sets, followed by integrity checks. This exhaustive statement refers to those fixed normal operation traces, not all engine workloads or failure-handler allocations.
+
+A separate subprocess creates private query scratch and exits87 via std::_Exit, skipping destructors. A fresh physical-readonly process must report the orphan as unhealthy, allocate no scratch and leave the entire database SHA256 unchanged. A writable reopen must reclaim it, preserve the user Node and reuse the one-segment scratch quota. Four existing OOM rollback/terminal-retention cases also pass.
+
+Validation:1,216 selected tests/51suites pass; six stage fault points +3,769commit fault points +four legacy cases +one crash/recovery flow =3,780distinct fault/retention/recovery cases. No full suite or performance campaign. Two expensive native sort integrations remain excluded. Source patch/untracked sources, exact recipes, all fault indices and final XML are archived.
+
+Still open: whole WRITE mutation/Property/undo/overlay/COW/commit workspace accounting, outstanding lease metadata, plan IR/compiler/parser/Driver ABI allocation ownership, maintenance resource/progress/backlog, partitioned hash/aggregate spill, complete multi-workload fault/long-run acceptance and final Kuzu campaign. No performance win or complete S5.4 acceptance follows from this fixed-transaction sweep.

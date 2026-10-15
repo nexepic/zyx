@@ -268,20 +268,19 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 					if (!rhsPowerList.empty()) {
 						auto rhsUnaryList = rhsPowerList[0]->unaryExpression();
 						if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
-							std::vector<PropertyValue> listValues;
 							auto listLit = rhsUnaryList[0]->atom()->listLiteral();
 							bool isStaticList = true;
 							for (auto itemExpr : listLit->expression()) {
 								auto itemAtom = getAtomFromExpression(itemExpr);
-								if (itemAtom && itemAtom->literal()) {
-									listValues.push_back(parseValue(itemAtom->literal()));
-								} else {
+								if (!(itemAtom && itemAtom->literal())) {
 									isStaticList = false;
 									break;
 								}
 							}
 							if (isStaticList) {
-								left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
+                                auto admittedList = buildListLiteral(listLit);
+                                const auto &literalList = static_cast<const ListLiteralExpression &>(*admittedList);
+                                left = std::make_unique<InExpression>(std::move(left), literalList.getValue().getList());
 								hasPendingOp = false;
 								arithIdx++;
 								continue;
@@ -348,7 +347,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 		return nullptr;
 	}
 
-	std::vector<BinaryOperatorType> operators;
+	utils::OwnedStdVector<BinaryOperatorType> operators;
 	operators.reserve(powerExprs.size() - 1U);
 	for (auto* child : ctx->children) {
 		auto* termNode = dynamic_cast<antlr4::tree::TerminalNode*>(child);
@@ -375,8 +374,8 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 	// Fold multiplicative groups first. Addition and subtraction then remain
 	// left-associative across the resulting groups.
 	auto group = buildPowerExpression(powerExprs[0]);
-	std::vector<std::unique_ptr<Expression>> additiveTerms;
-	std::vector<BinaryOperatorType> additiveOperators;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> additiveTerms;
+	utils::OwnedStdVector<BinaryOperatorType> additiveOperators;
 	additiveTerms.reserve(operators.size() + 1U);
 	additiveOperators.reserve(operators.size());
 	for (size_t index = 0U; index < operators.size(); ++index) {
@@ -493,7 +492,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 			if (keys.size() != values.size()) {
 				throw std::runtime_error("map literal has mismatched keys and values");
 			}
-			std::vector<MapProjectionItem> items;
+			utils::OwnedStdVector<MapProjectionItem> items;
 			items.reserve(keys.size());
 			bool isStatic = true;
 			for (size_t index = 0U; index < keys.size(); ++index) {
@@ -556,7 +555,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 	if (ctx->K_COUNT() && ctx->MULTIPLY()) {
 		// Create a FunctionCallExpression for count(*) with no arguments
 		// The * indicates "count all rows" which is handled specially in the aggregate operator
-		return std::make_unique<FunctionCallExpression>("count", std::vector<std::unique_ptr<Expression>>());
+		return std::make_unique<FunctionCallExpression>("count", utils::OwnedStdVector<std::unique_ptr<Expression>>());
 	}
 
 	// Parameter: $param
@@ -697,7 +696,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListLiteral(CypherParser::Li
 		return nullptr;
 	}
 
-	std::vector<std::unique_ptr<Expression>> elements;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> elements;
 	elements.reserve(ctx->expression().size());
 	bool isStatic = true;
 	for (CypherParser::ExpressionContext *elementContext: ctx->expression()) {
@@ -714,7 +713,17 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListLiteral(CypherParser::Li
 	}
 
 	if (isStatic) {
-		return std::make_unique<ListLiteralExpression>(parseListLiteral(ctx));
+		const auto source = [&](size_t index) -> property_heap::CopySource {
+            const auto *literal = dynamic_cast<const LiteralExpression *>(elements[index].get());
+            if (!literal) return property_heap::CopySource(dynamic_cast<const ListLiteralExpression &>(*elements[index]).getValue());
+            if (literal->isPropertyValue()) return property_heap::CopySource(literal->getPropertyValue());
+            if (literal->isString()) return property_heap::CopySource(literal->getStringValue());
+            if (literal->isBoolean()) return property_heap::CopySource(literal->getBooleanValue());
+            if (literal->isInteger()) return property_heap::CopySource(literal->getIntegerValue());
+            if (literal->isDouble()) return property_heap::CopySource(literal->getDoubleValue());
+            return {};
+        };
+        return std::make_unique<ListLiteralExpression>(OwnedPropertyValue::fromList(elements.size(), source));
 	}
 	return std::make_unique<ListLiteralExpression>(std::move(elements));
 }
@@ -855,7 +864,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::F
 	bool isDistinctFunc = (ctx->K_DISTINCT() != nullptr);
 
 	// Parse arguments for normal function calls
-	std::vector<std::unique_ptr<Expression>> arguments;
+	utils::OwnedStdVector<std::unique_ptr<Expression>> arguments;
 	auto exprs = ctx->expression();
 	for (auto exprCtx : exprs) {
 		arguments.push_back(buildExpression(exprCtx));
@@ -1464,7 +1473,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildMapProjectionExpression(Cyph
 
 	std::string variable = normalizeSymbolicName(ctx->variable()->getText());
 
-	std::vector<MapProjectionItem> items;
+	utils::OwnedStdVector<MapProjectionItem> items;
 	for (auto* elemCtx : ctx->mapProjectionElement()) {
 		if (elemCtx->MULTIPLY()) {
 			// .* — all properties

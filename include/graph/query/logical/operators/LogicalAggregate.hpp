@@ -6,6 +6,9 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -22,15 +25,16 @@ namespace graph::query::logical {
  * @brief Describes a single aggregate function application.
  */
 struct LogicalAggItem {
-    std::string functionName;
+    using OwnedHeapElement = void;
+    utils::OwnedStdString functionName;
     std::shared_ptr<graph::query::expressions::Expression> argument;
-    std::string alias;
+    utils::OwnedStdString alias;
     bool distinct;
     std::shared_ptr<graph::query::expressions::Expression> extraArg; // percentile literal
 
-    LogicalAggItem(std::string fn,
+    LogicalAggItem(utils::OwnedStdString fn,
                    std::shared_ptr<graph::query::expressions::Expression> arg,
-                   std::string al,
+                   utils::OwnedStdString al,
                    bool dist = false,
                    std::shared_ptr<graph::query::expressions::Expression> extra = nullptr)
         : functionName(std::move(fn))
@@ -48,9 +52,9 @@ struct LogicalAggItem {
 class LogicalAggregate : public LogicalOperator {
 public:
     LogicalAggregate(std::unique_ptr<LogicalOperator> child,
-                     std::vector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs,
-                     std::vector<LogicalAggItem> aggregations,
-                     std::vector<std::string> groupByAliases = {})
+                     utils::OwnedStdVector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs,
+                     utils::OwnedStdVector<LogicalAggItem> aggregations,
+                     utils::OwnedStringVector groupByAliases = {})
         : child_(std::move(child))
         , groupByExprs_(std::move(groupByExprs))
         , aggregations_(std::move(aggregations))
@@ -86,25 +90,41 @@ public:
         return vars;
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        utils::OwnedStringVector vars;
+        for (size_t index = 0U; index < groupByExprs_.size(); ++index) {
+            const auto &expr = groupByExprs_[index];
+            if (!expr) continue;
+            if (index < groupByAliases_.size() && !groupByAliases_[index].empty()) {
+                vars.push_back(groupByAliases_[index]);
+            } else {
+                vars.push_back(expr->toString());
+            }
+        }
+        // Include aliases from aggregation items
+        for (const auto &agg : aggregations_) {
+            vars.push_back(agg.alias);
+        }
+        return vars;
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "Aggregate";
     }
 
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-        std::vector<std::shared_ptr<graph::query::expressions::Expression>> clonedGroupBy;
+        utils::OwnedStdVector<std::shared_ptr<graph::query::expressions::Expression>> clonedGroupBy;
         clonedGroupBy.reserve(groupByExprs_.size());
         for (const auto &expr : groupByExprs_) {
-            std::shared_ptr<graph::query::expressions::Expression> cloned(expr ? expr->clone() : nullptr);
+            auto cloned = utils::shareOwned(expr ? expr->clone() : nullptr);
             clonedGroupBy.push_back(std::move(cloned));
         }
 
-        std::vector<LogicalAggItem> clonedAggs;
+        utils::OwnedStdVector<LogicalAggItem> clonedAggs;
         clonedAggs.reserve(aggregations_.size());
         for (const auto &agg : aggregations_) {
-            std::shared_ptr<graph::query::expressions::Expression> clonedArg(
-                agg.argument ? agg.argument->clone() : nullptr);
-            std::shared_ptr<graph::query::expressions::Expression> clonedExtra(
-                agg.extraArg ? agg.extraArg->clone() : nullptr);
+            auto clonedArg = utils::shareOwned(agg.argument ? agg.argument->clone() : nullptr);
+            auto clonedExtra = utils::shareOwned(agg.extraArg ? agg.extraArg->clone() : nullptr);
             clonedAggs.emplace_back(agg.functionName, std::move(clonedArg), agg.alias, agg.distinct, std::move(clonedExtra));
         }
 
@@ -137,9 +157,9 @@ public:
 
 private:
     std::unique_ptr<LogicalOperator> child_;
-    std::vector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs_;
-    std::vector<LogicalAggItem> aggregations_;
-    std::vector<std::string> groupByAliases_;
+    utils::OwnedStdVector<std::shared_ptr<graph::query::expressions::Expression>> groupByExprs_;
+    utils::OwnedStdVector<LogicalAggItem> aggregations_;
+    utils::OwnedStringVector groupByAliases_;
 };
 
 } // namespace graph::query::logical

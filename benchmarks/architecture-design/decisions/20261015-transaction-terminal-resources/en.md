@@ -1,0 +1,13 @@
+# Transaction terminal resource cleanup
+
+This component checkpoint does not accept a delivery: 22/34 (64.7%).
+
+An ordinary committed logical transaction retained its accumulated mutation payloads and issued-ID arrays until the closed transaction object was destroyed. Rollback/conflict cleanup also retained some array capacities. All ordinary terminal paths now release accumulated requests, patch capacity, issued IDs and lease-range capacity immediately after abandoning/consuming the corresponding capabilities.
+
+The noexcept abandonment helper previously allocated temporary conversion vectors; allocation failure could terminate the process during rollback. Staging now retains the exact native lease-range representation, permitting allocation-free abandonment through the existing metadata API. Only canonical publication planning converts ranges to the public logical identity representation. This preserves exact capabilities, cancelled-ID holes and durable high-water rules without duplicating a second retained range ledger.
+
+The explicitly selected zyx_transaction_resource_fault_worker target replaces new/delete only in its own process. Its runner covers rollback with all new heap allocation denied, 40 separately staged reservations under the same failure, 8,192 staged IDs with closed-object retention checks, and a committed 1 MiB Property that remains readable after terminal buffers are released. All four cases pass, retain only the 1,408-byte closed object on this build, and verify integrity plus reopen. These are requested-allocation counts, not RSS or performance results. The production and benchmark allocators are unchanged.
+
+A negative-control archive substitutes only the immediately preceding backend implementation into a copy of the current static library. Both OOM rollback cases abort with bad_alloc on that source; the old commit-retention case fails the retained-payload check. All three reproduce the intended defects. The isolated current tests and all 155 selected affected backend tests pass. Full suite and performance campaigns were not run. Build the EXCLUDE_FROM_ALL worker explicitly, then run scripts/test_transaction_resource_faults.py --worker buildDir/zyx_transaction_resource_fault_worker. Broader read/batch coverage (681 tests before this backend-only change) is recorded in the preceding checkpoint, not relabelled as a final all-source acceptance.
+
+This removes retention and OOM-cleanup defects; it does not implement production write/undo/overlay or maintenance memory ownership. Those consumers, plan-cache IR, temporary workspace audits, bounded durable backlog and partitioned operators still block S5.3/S5.4 and later acceptance. No commit/push or new fixed-item progress was recorded.

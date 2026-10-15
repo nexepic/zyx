@@ -1,0 +1,81 @@
+{
+  "status": "component_foundation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 113,
+  "selected_suites": 5,
+  "failures": 0,
+  "isolated_cases_passed": 113,
+  "fault_sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3941,
+      "tested_allocations": 96,
+      "exhaustive": false
+    }
+  },
+  "non_fault_cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "property-heap-accounting",
+      "shape_cases": 22,
+      "maximum_observed_requested_bytes": 320376,
+      "passed": true
+    },
+    {
+      "mode": "native-stage-heap-accounting",
+      "shape_cases": 5,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 357601,
+      "passed": true
+    },
+    {
+      "mode": "overlay-payload-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "codec-inspection-allocation-free",
+      "shape_values": 1025,
+      "decoded_string_bytes": 524288,
+      "passed": true
+    }
+  ],
+  "worker_sha256": "2e76f8aef71367a4610d75d15884defa3b4570f99b1f2f624d17cbb58b269c32",
+  "source_sha256": {
+    "include/graph/storage/relocatable/property/PropertyValueCodec.hpp": "a6d9cf3c1ebe86da2936e96cda8fbfa0599eb3c10ba73abf46bf1765909f5ae4",
+    "src/storage/relocatable/property/PropertyValueCodec.cpp": "f399e1886146898868fc1984d04ccbe2b66076a55ddfcbaf24fb1a280ca09a74",
+    "tests/src/storage/relocatable/property/test_PropertyValueCodec_Inspection.cpp": "0b1eef3882154662d0dcde19d6d9f4e5310578618cf61d608ebf53d6b544fdcb",
+    "tests/src/storage/relocatable/property/test_PropertyValueCodec_Bytes.cpp": "aad8235723e650fcea1b5d1c6c2e862e98ae05ae8535573d6a8a15d836f3216e",
+    "tests/support/TransactionResourceFaultWorker.cpp": "082089d943cfc430f242c764a8493fb638362ecbac393fb7ca63ea779bbc9595",
+    "scripts/test_transaction_resource_faults.py": "c87e7211c89fa020c6a99cf07624a53ebc11ce0cec46f905dad157e9c229dd71"
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_execution": "Linux clang19/libstdc++; no Windows/macOS execution claim"
+}

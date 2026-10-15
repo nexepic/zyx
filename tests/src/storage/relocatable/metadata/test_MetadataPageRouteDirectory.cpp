@@ -40,7 +40,7 @@ namespace {
 			operation();
 			FAIL() << "Expected FormatException";
 		} catch (const FormatException &error) {
-			EXPECT_EQ(error.error(), expected);
+			EXPECT_EQ(error.error(), expected) << error.what();
 		}
 	}
 
@@ -1605,4 +1605,28 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, SparseEntityAndPropertyBatches
 		auto cursor = directory.openRangeCursor(published, type, 1U, farId);
 		EXPECT_THROW(static_cast<void>(cursor.next()), FormatException);
 	}
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, LookupRejectsAMisroutedEndpointEvenWhenTheRequestedEntryIsValid) {
+    for (bool changeFirst : {false, true}) {
+        const uint64_t start = changeFirst ? RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U : 1U;
+        const Superblock current = superblock(1U, 1U);
+        TestMetadataPageAllocator allocator;
+        MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+        MetadataPageFile pages(io, batch.candidate());
+        MetadataPageRouteDirectory directory(pages);
+        const PhysicalPageRef root = directory.buildFromCompleteRouteSet(batch,
+            std::vector{route(start, 1000U, 1U, 1U), route(start + 1U, 1001U, 1U, 1U), route(start + 2U, 1002U, 1U, 1U)});
+        const auto radix = pages.readMetadataRadix(root);
+        const size_t ordinal = changeFirst ? 1U : 0U;
+        ASSERT_TRUE(radix.children[ordinal].isValid());
+        auto leaf = pages.readMetadataPageRouteLeaf(radix.children[ordinal]);
+        ASSERT_EQ(leaf.routes.size(), 3U);
+        if (changeFirst) leaf.routes.front().page_id = MetadataPageId(start - 1U);
+        else leaf.routes.back().page_id = MetadataPageId(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U);
+        pages.writeMetadataPageRouteLeaf(radix.children[ordinal], leaf);
+        const MetadataPageId validRequested(changeFirst ? start + 2U : start);
+        expectFormatError([&] { (void)directory.find(batch.candidate(), root, validRequested); },
+            FormatError::FERR_INVALID_HEADER);
+    }
 }

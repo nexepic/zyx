@@ -48,6 +48,10 @@ public:
         return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "Filter(" + (predicate_ ? predicate_->toString() : "null") + ")";
     }
@@ -55,7 +59,7 @@ public:
     [[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
         auto clonedChild = child_ ? child_->clone() : nullptr;
         auto clonedPred  = predicate_ ? predicate_->clone() : nullptr;
-        std::shared_ptr<graph::query::expressions::Expression> sharedPred(std::move(clonedPred));
+        auto sharedPred = utils::shareOwned(std::move(clonedPred));
         return std::make_unique<LogicalFilter>(std::move(clonedChild), std::move(sharedPred));
     }
 

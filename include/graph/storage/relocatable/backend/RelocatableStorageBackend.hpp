@@ -91,6 +91,13 @@ namespace graph::storage {
 		// Full integrity scans are deliberately opt-in: they are O(database size)
 		// and belong to cutover, repair, and operator verification workflows.
 		bool verify_integrity_on_open = false;
+        // Absolute logical file length, including durable data and scratch.
+        // Growth beyond this finite ceiling fails before cache or disk mutation.
+        uint64_t maximum_database_file_bytes = UINT64_C(1024) * 1024U * 1024U * 1024U;
+        // Per-scan MAINTENANCE grant; resource exhaustion fails the read-only scan.
+        size_t maximum_integrity_workspace_bytes = 8U * 1024U * 1024U;
+        // Per explicit reclamation pass, admitted before publication.
+        size_t maximum_reclaim_workspace_bytes = 8U * 1024U * 1024U;
 		// Cost-admitted ROW chunk placement; callers can retain uniform chunks.
 		bool adaptive_property_row_chunks = true;
 		// Internal query-only permission, independent of graph write permissions.
@@ -293,6 +300,8 @@ namespace graph::storage {
 		// can claim it once and rollback can abandon it without making IDs reusable.
 		[[nodiscard]] NativeGraphLogicalIdReservation reserveNativeBulkEdgeSessionIds(uint64_t edgeCount);
 		void abandonLogicalGraphCreationIds(const NativeGraphLogicalIdReservation &reservation) noexcept;
+		void abandonLogicalGraphCreationIds(std::span<const NativeGraphLogicalIdLeaseRange> nodes,
+			std::span<const NativeGraphLogicalIdLeaseRange> edges) noexcept;
 		// Internal transaction-only bridge for typed private scratch. It is kept on
 		// the relocatable backend rather than the format-independent logical API so
 		// no public caller can obtain an allocator, SegmentId, or metadata handle.
@@ -303,6 +312,9 @@ namespace graph::storage {
 		[[nodiscard]] std::unique_ptr<NativeBulkRunStore> createNativeBulkRunStore();
 		[[nodiscard]] bool nativeQueryScratchEnabled() const {return options_.query_scratch_enabled && !isReadOnly();}
 		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openNativeQueryScratchSession(size_t maximumDiskBytes,size_t maximumFragments);
+        [[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openNativeQueryScratchSession(
+            size_t maximumDiskBytes, size_t maximumFragments,
+            std::shared_ptr<query::execution::detail::ResourceAccount> queryAccount);
 
 		[[nodiscard]] Generation currentNativeMetadataGeneration() const;
 		[[nodiscard]] LogicalGraphMutationFence currentNativeLogicalGraphMutationFence() const;
@@ -363,6 +375,10 @@ namespace graph::storage {
 		[[nodiscard]] std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override;
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
 		[[nodiscard]] std::optional<LogicalGraphSchemaIdentity> logicalPlanCacheIdentity() const override;
+        [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> logicalPlanCacheMemoryOwner() const override { return native_cache_memory_; }
+		[[nodiscard]] std::shared_ptr<query::execution::detail::DatabaseResourceBudget> queryResourceDomain() const override {
+			requireOpen(); return resource_domain_;
+		}
 		[[nodiscard]] std::optional<LogicalGraphCardinalityStatistics>
 		readLogicalGraphCardinalityStatistics() const override;
 		[[nodiscard]] std::optional<uint64_t>
@@ -441,7 +457,7 @@ namespace graph::storage {
 																						std::string_view name) const;
 		[[nodiscard]] std::optional<uint64_t> findRelationshipTypeTokenId(const RelocatableReadSnapshot &snapshot,
 																								std::string_view name) const;
-		[[nodiscard]] std::vector<IndexDefinition> readIndexDefinitions(const RelocatableReadSnapshot &snapshot,
+		[[nodiscard]] utils::OwnedStdVector<IndexDefinition> readIndexDefinitions(const RelocatableReadSnapshot &snapshot,
 																		size_t maximumDefinitions) const;
 		[[nodiscard]] LogicalGraphIndexDefinition
 		createLogicalNodeIndex(const LogicalGraphNodeIndexCreateRequest &request) override;
@@ -547,9 +563,9 @@ namespace graph::storage {
 																			 std::string_view name) const override;
 		[[nodiscard]] std::optional<uint64_t> resolveNodeLabelName(const MetadataSnapshotPin &snapshot,
 																		  std::string_view name) const override;
-		[[nodiscard]] std::vector<IndexDefinition> readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
+		[[nodiscard]] utils::OwnedStdVector<IndexDefinition> readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																									   size_t maximumDefinitions) const;
-		[[nodiscard]] std::vector<ConstraintDefinition>
+		[[nodiscard]] utils::OwnedStdVector<ConstraintDefinition>
 		readAllConstraintDefinitions(const MetadataSnapshotPin &snapshot, size_t maximumDefinitions) const;
 		// A failed final publication fence can leave either the old or the newly
 		// published Superblock durable. Keep this distinction at the transaction
@@ -634,6 +650,9 @@ namespace graph::storage {
 		// writable opens additionally install both native writers.
 		// A construction failure rolls the whole domain back through releaseResources().
 		std::unique_ptr<OwnedRelocatableBackendFile> data_file_;
+		std::shared_ptr<query::execution::detail::DatabaseResourceBudget> resource_domain_;
+        std::shared_ptr<const uint64_t> database_file_limit_;
+        std::shared_ptr<std::pmr::memory_resource> native_cache_memory_;
 		std::unique_ptr<RelocatableMetadataStore> metadata_;
 		std::unique_ptr<PhysicalSegmentAllocator> physical_;
 		std::unique_ptr<VectorCodebookStore> vector_codebooks_;

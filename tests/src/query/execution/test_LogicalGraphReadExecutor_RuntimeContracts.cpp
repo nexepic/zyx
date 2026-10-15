@@ -1857,3 +1857,74 @@ TEST(LogicalGraphReadExecutorTest, VerifiedExactProjectionReusesRepeatedFieldsAn
 		EXPECT_EQ(*columnReads, includeUncovered ? 1U : 0U);
 	}
 }
+
+namespace {
+std::shared_ptr<graph::query::execution::detail::ResourceAccount> sharedRuntimeAccount(size_t maximum) {
+	using namespace graph::query::execution::detail;
+	auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+	auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+	return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, maximum);
+}
+}
+
+TEST(LogicalGraphReadExecutorTest, QueryResultRetainsSharedAccountAfterExecutionAndBackendDestruction) {
+	auto account = sharedRuntimeAccount(1024U * 1024U);
+	graph::query::QueryResult result;
+	{
+		TestLogicalGraphBackend backend(graphData());
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+		graph::query::QueryContext context; context.resource_account = account;
+		result = runtime.executeToQueryResult(scan, runtimeBounds(), context);
+		ASSERT_EQ(result.rowCount(), 2U);
+		ASSERT_GT(result.retainedResourceBytes(), 0U);
+		EXPECT_EQ(account->used(), result.retainedResourceBytes());
+	}
+	EXPECT_EQ(account->used(), result.retainedResourceBytes());
+	EXPECT_EQ(result.getRows()[0].at("n").asNode().getId(), 1U);
+	const size_t retained = account->used();
+	{
+		graph::query::QueryResult copy(result);
+		EXPECT_EQ(account->used(), 2U * retained);
+	}
+	EXPECT_EQ(account->used(), retained);
+	result = graph::query::QueryResult{};
+	EXPECT_EQ(account->used(), 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, SharedAccountDenialRefundsColumnsAndBatchWithoutPublishingOutput) {
+	using graph::query::execution::detail::ResourceAdmissionDenied;
+	auto account = sharedRuntimeAccount(1000U);
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	graph::query::QueryContext context; context.resource_account = account;
+	EXPECT_THROW((void)runtime.executeToQueryResult(scan, runtimeBounds(), context), ResourceAdmissionDenied);
+	EXPECT_EQ(account->used(), 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, SharedAccountRefundsExecutionStateOnVisitorFailure) {
+	auto account = sharedRuntimeAccount(1024U * 1024U);
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	graph::query::QueryContext context; context.resource_account = account;
+	EXPECT_THROW((void)runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) -> bool {
+		throw std::runtime_error("consumer failure");
+	}, context), std::runtime_error);
+	EXPECT_EQ(account->used(), 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LongOutputColumnsRejectBeforeOpeningOrReadingSnapshot) {
+    using graph::query::execution::detail::ResourceAdmissionDenied;
+    auto account = sharedRuntimeAccount(4096U);
+    auto reads = std::make_shared<size_t>(0U);
+    auto data = graphData(); data.node_read_count = reads;
+    TestLogicalGraphBackend backend(std::move(data));
+    LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalNodeScan scan(std::string(8192U, 'n'), std::vector<std::string>{"Person"});
+    graph::query::QueryContext context; context.resource_account = account;
+    EXPECT_THROW((void)runtime.executeToQueryResult(scan, runtimeBounds(), context), ResourceAdmissionDenied);
+    EXPECT_EQ(*reads, 0U); EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(scan.getVariable().size(), 8192U);
+}

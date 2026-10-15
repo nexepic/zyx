@@ -1,0 +1,78 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_module_tests": 170,
+  "isolated_cases_passed": 98,
+  "failures": 0,
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "codec-admitted-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "guarded-copy-heap-accounting",
+      "shape_cases": 18,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    },
+    {
+      "mode": "codec-scoped-partial-cancellation",
+      "cancelled_after_payload_allocation": true,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "normalized_patch_sweep": {
+    "baseline_allocations": 90,
+    "tested_allocations": 90,
+    "exhaustive": true
+  },
+  "source_sha256": {
+    "include/graph/core/GuardedPropertyCopy.hpp": "f027203cd01cbcac27a9e477a35287ba7c7def596594435249c55a52cd1511c0",
+    "include/graph/storage/detail/ScopedMutationCopies.hpp": "80d528d833a9af5aecc71077374bdf46c7ffc55a640c13b86d1d62a19c23eac2",
+    "include/graph/storage/relocatable/property/PropertyValueCodec.hpp": "34f94f273bc744adcaa5281474f325de4ca18a4eb007e4e38b87c32d5ca48c0a",
+    "src/storage/relocatable/property/PropertyValueCodec.cpp": "6a53902b83af2e22f3b7c826cd1a17679f251dfc922b1074a85fa04edf135121",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "6cb6f2cf1f1e69bad2e1c9206f891810c5c424de023576ae04cb18b2c6534759",
+    "tests/src/query/execution/test_GuardedPropertyCopy.cpp": "40cd8fd696e73e5530970445df1ae3bfba48d70b2a93077df167c5faa1024b10",
+    "tests/src/storage/test_LogicalGraphTransactionOverlayUndo.cpp": "843ca7c6b93d54ec1eb2556e97dcdcbeffc4339e040a2e3d1571630554a422d4",
+    "tests/support/TransactionResourceFaultWorker.cpp": "a634c2077368886cbfa14269c5ce171b6f9b2b2a020ed0801cddaca358eb6caa",
+    "scripts/test_transaction_resource_faults.py": "82b41216e3c153ac14ad5d7caa811bf0b9b3ebd6aeb8e69364b4b1bc1ff02e83"
+  },
+  "worker_sha256": "a4607f8e50345d2f5800b522f44278bddb2a30c357008ba9ee53238e628a7e4e",
+  "full_suite": false,
+  "performance_campaign": false,
+  "runtime_platform": "Linux clang19 libstdc++14"
+}

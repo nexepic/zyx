@@ -15,6 +15,8 @@
 #include <span>
 #include <stdexcept>
 #include <vector>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedVector.hpp"
 
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -48,11 +50,11 @@ namespace graph::storage {
 
 		void planTreeRetirement(BTreePageStore &trees, RelocatableMetadataStore &metadata,
 								   const MetadataSnapshotPin &snapshot, const IndexRootLocation &root,
-								   size_t maximumTreePages, std::set<PageId> &plannedPages,
-								   std::vector<RetiredIndexTreePage> &retirementPages,
-								   std::set<SegmentId> &affectedPools) {
-			std::vector<PageId> pending = {root.root_page_id};
-			std::set<PageId> visited;
+								   size_t maximumTreePages, utils::OwnedSet<PageId> &plannedPages,
+								   utils::OwnedVector<RetiredIndexTreePage> &retirementPages,
+								   utils::OwnedSet<SegmentId> &affectedPools) {
+			utils::OwnedVector<PageId> pending = {root.root_page_id};
+			utils::OwnedSet<PageId> visited;
 			while (!pending.empty()) {
 				const PageId pageId = pending.back();
 				pending.pop_back();
@@ -117,29 +119,29 @@ namespace graph::storage {
 			const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		ScalarIndexTreeReclaimReport report;
-		std::vector<IndexRootLocation> retirementRoots;
-		std::vector<RetiredIndexTreePage> retirementPages;
-		std::set<SegmentId> affectedPools;
-		std::set<PageId> plannedPages;
+		utils::OwnedVector<IndexRootLocation> retirementRoots;
+		utils::OwnedVector<RetiredIndexTreePage> retirementPages;
+		utils::OwnedSet<SegmentId> affectedPools;
+		utils::OwnedSet<PageId> plannedPages;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		try {
 			report.scanned_generation = snapshot.superblock().generation;
-			const std::vector<IndexDefinition> definitions =
+			const utils::OwnedStdVector<IndexDefinition> definitions =
 					catalog_.readIndexDefinitions(snapshot, options.maximum_index_definitions);
-			const std::vector<ConstraintDefinition> constraints =
+			const utils::OwnedStdVector<ConstraintDefinition> constraints =
 					catalog_.readConstraintDefinitions(snapshot, options.maximum_constraint_definitions);
 			report.index_definitions = definitions.size();
 			report.constraint_definitions = constraints.size();
 
-			std::map<uint64_t, IndexDefinitionKind> activeKinds;
+			utils::OwnedMap<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {
 				if (!activeKinds.emplace(definition.index_id, definition.kind).second) {
 					fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable scalar Index-tree reclamation found duplicate active Catalog Index IDs");
 				}
 			}
-			std::set<uint64_t> activeConstraintSupportRoots;
+			utils::OwnedSet<uint64_t> activeConstraintSupportRoots;
 			uint64_t previousConstraintId = 0U;
 			for (const ConstraintDefinition &definition: constraints) {
 				if (!isSystemCatalogConstraintDefinitionId(definition.constraint_id) ||
@@ -164,7 +166,7 @@ namespace graph::storage {
 							 "relocatable scalar Index-tree reclamation found a support-tree root for a non-unique constraint");
 				}
 			}
-			std::map<uint64_t, IndexRootLocation> visibleVectorRoots;
+			utils::OwnedMap<uint64_t, IndexRootLocation> visibleVectorRoots;
 			size_t visibleVectorManifestCount = 0U;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &location) {
 				if (visibleVectorManifestCount == options.maximum_vector_manifests) {

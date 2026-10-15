@@ -1,4 +1,5 @@
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include <memory>
 #include <string>
@@ -34,7 +35,7 @@ public:
 	 * @param type Type of comprehension
 	 */
 	ListComprehensionExpression(
-			std::string variable,
+			utils::OwnedStdString variable,
 			std::unique_ptr<Expression> listExpr,
 			std::unique_ptr<Expression> whereExpr,
 			std::unique_ptr<Expression> mapExpr,
@@ -57,7 +58,7 @@ public:
 	[[nodiscard]] std::unique_ptr<Expression> clone() const override;
 
 private:
-	std::string variable_;
+	utils::OwnedStdString variable_;
 	std::unique_ptr<Expression> listExpr_;
 	std::unique_ptr<Expression> whereExpr_;  // Can be nullptr
 	std::unique_ptr<Expression> mapExpr_;    // Can be nullptr

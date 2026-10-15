@@ -1,0 +1,98 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "final_selected_tests": 1378,
+  "selected_suites": 108,
+  "isolated_cases": 887,
+  "failures": 0,
+  "crash_recovery_cycles": 32,
+  "allocation_sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 3914,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 18,
+      "tested_allocations": 18,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 13,
+      "tested_allocations": 13,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 22,
+      "tested_allocations": 22,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 26,
+      "tested_allocations": 26,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42258,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "source-materialization": {
+      "baseline_allocations": 947,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "normalized-patch": {
+      "baseline_allocations": 90,
+      "tested_allocations": 90,
+      "exhaustive": true
+    },
+    "plan-cache": {
+      "baseline_allocations": 25092,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "schema-cache": {
+      "baseline_allocations": 10,
+      "tested_allocations": 10,
+      "exhaustive": true
+    }
+  },
+  "worker_sha256": "6721a9b575cc91689ca6ec10dd43d524f94f64521ac2b87f242eb1c80dcbad41",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "raw BTree decode/page/route buffers",
+    "public logical schema DTO and result construction",
+    "CSV path and binding parameter copies",
+    "compiler/runtime workspaces",
+    "complete S5/S6 acceptance contracts"
+  ]
+}

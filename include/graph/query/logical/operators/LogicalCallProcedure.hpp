@@ -6,6 +6,9 @@
  **/
 
 #pragma once
+#include "graph/core/OwnedPropertyVector.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -48,7 +51,7 @@ public:
 		const std::unordered_map<std::string, graph::PropertyValue> *parameters_;
 	};
 
-	LogicalCallProcedure(std::string procedureName, std::vector<graph::PropertyValue> args)
+	LogicalCallProcedure(utils::OwnedStdString procedureName, graph::OwnedPropertyVector args)
 		: procedureName_(std::move(procedureName)), args_(std::move(args)) {}
 
 	/**
@@ -56,7 +59,7 @@ public:
 	 * execution context instead of embedded in the logical plan.
 	 */
 	[[nodiscard]] static std::unique_ptr<LogicalCallProcedure>
-	withBoundArguments(std::string procedureName, std::vector<std::string> parameterNames) {
+	withBoundArguments(utils::OwnedStdString procedureName, utils::OwnedStringVector parameterNames) {
 		auto result = std::make_unique<LogicalCallProcedure>(std::move(procedureName),
 															std::vector<graph::PropertyValue>{});
 		result->parameter_names_ = std::move(parameterNames);
@@ -68,6 +71,8 @@ public:
 	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {}; }
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override { return {}; }
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
 		if (!parameter_names_.empty()) {
@@ -121,9 +126,9 @@ public:
 	}
 
 private:
-	std::string procedureName_;
-	std::vector<graph::PropertyValue> args_;
-	std::vector<std::string> parameter_names_;
+	utils::OwnedStdString procedureName_;
+	graph::OwnedPropertyVector args_;
+	utils::OwnedStringVector parameter_names_;
 };
 
 } // namespace graph::query::logical

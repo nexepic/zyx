@@ -19,6 +19,7 @@
  **/
 
 #include "CypherParserImpl.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <regex>
 #include "CypherLexer.h"
 #include "CypherParser.h"
@@ -106,7 +107,13 @@ namespace graph::parser::cypher {
 
 		try {
 			visitor.visit(tree);
-		} catch (const std::exception &e) {
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            throw;
+        } catch (const query::execution::MaterializedByteLimitExceeded &) {
+            throw;
+        } catch (const std::bad_alloc &) {
+            throw;
+        } catch (const std::exception &e) {
 			throw std::runtime_error(std::string("Plan generation failed: ") + e.what());
 		}
 

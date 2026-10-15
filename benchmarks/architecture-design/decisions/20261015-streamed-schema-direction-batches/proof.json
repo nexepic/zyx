@@ -1,0 +1,13 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "final_selected_tests": 94,
+  "maximum_definitions_per_direction_batch": 64,
+  "native_snapshot_owner_without_caller_scope_test": true,
+  "cross_batch_name_corruption_and_old_snapshot_test": true,
+  "raw_btree_decoding_still_open": true,
+  "full_suite": false,
+  "new_performance_campaign": false
+}

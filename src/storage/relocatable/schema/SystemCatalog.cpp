@@ -6,6 +6,8 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
+
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 
 #include <algorithm>
@@ -18,11 +20,17 @@
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 
 namespace graph::storage {
 
 	namespace {
+
+        std::shared_ptr<std::pmr::memory_resource> schemaAllocationOwner(const MetadataSnapshotPin &snapshot) {
+            if (utils::OwnedAllocationScope::active()) return utils::OwnedAllocationScope::owner();
+            return snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr;
+        }
 
 		// Prefix every key namespace explicitly so a valid mapping cannot be read
 		// as a sequence or bootstrap record after storage corruption.
@@ -315,6 +323,7 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<std::byte> namedKey(SystemCatalogKeyKind kind, std::string_view name) {
 			validateName(name);
 			std::vector<std::byte> key = definitionPrefix(kind);
+            key.reserve(1U + name.size());
 			appendName(key, name);
 			return key;
 		}
@@ -328,8 +337,25 @@ namespace graph::storage {
 			appendName(key, value);
 		}
 
+        [[nodiscard]] size_t indexSemanticKeyBytes(const IndexDefinition &definition) {
+            size_t bytes = 19U;
+            if (definition.kind == IndexDefinitionKind::IDK_VECTOR)
+                bytes = utils::detail::addStandardHeapBytes(bytes, definition.vector_metric.size());
+            for (const auto &property : definition.property_names)
+                bytes = utils::detail::addStandardHeapBytes(bytes, utils::detail::addStandardHeapBytes(2U, property.size()));
+            return bytes;
+        }
+
+        template<class T> size_t schemaVectorRequest(size_t count) {
+            if (count > (std::numeric_limits<size_t>::max)()/sizeof(T))
+                throw std::overflow_error("schema direction vector request overflowed");
+            return utils::detail::addStandardHeapBytes(utils::detail::standardContainerProxyBytes(),
+                utils::detail::standardAllocatorRequestBytes(count*sizeof(T), alignof(T)));
+        }
+
 		[[nodiscard]] std::vector<std::byte> indexSemanticKey(const IndexDefinition &definition) {
 			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_SEMANTIC);
+            key.reserve(indexSemanticKeyBytes(definition));
 			appendByte(key, static_cast<uint8_t>(definition.entity_kind));
 			appendByte(key, static_cast<uint8_t>(definition.kind));
 			appendBigEndianU64(key, definition.label_token_id);
@@ -474,7 +500,8 @@ namespace graph::storage {
 					throw std::overflow_error("System Catalog reverse name buffer size overflow");
 				nameAdmission(entry->key.capacity() + bytes);
 			};
-			admitName(std::max(nameSize, std::string{}.capacity()));
+			if (nameAdmission) admitName(std::max(nameSize, std::string{}.capacity()));
+            else detail::admitScopedPropertyString(nameSize);
 			std::string name(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize);
 			admitName(name.capacity());
 			entry.reset();
@@ -1027,7 +1054,8 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		auto name = findReverseName(*this, snapshot, propertyTokenPrefix(token), token, nameAdmission);
+		if (!nameAdmission) detail::admitScopedPropertyVectorStorage<std::byte>(1U + sizeof(token));
+        auto name = findReverseName(*this, snapshot, propertyTokenPrefix(token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
 		}
@@ -1038,6 +1066,7 @@ namespace graph::storage {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property name admission size overflowed");
 			}
 			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 1U);
+            else detail::admitScopedPropertyVectorStorage<std::byte>(1U + name->size());
 			const auto key = propertyNameKey(*name);
 			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
 			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
@@ -1120,7 +1149,8 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		auto name = findReverseName(*this, snapshot, schemaTokenPrefix(kind, token), token, nameAdmission);
+		if (!nameAdmission) detail::admitScopedPropertyVectorStorage<std::byte>(2U + sizeof(token));
+        auto name = findReverseName(*this, snapshot, schemaTokenPrefix(kind, token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
 		}
@@ -1131,6 +1161,7 @@ namespace graph::storage {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "schema name admission size overflowed");
 			}
 			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 2U);
+            else detail::admitScopedPropertyVectorStorage<std::byte>(2U + name->size());
 			const auto key = schemaNameKey(kind, *name);
 			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
 			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
@@ -1145,6 +1176,7 @@ namespace graph::storage {
 
 	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
 																		  uint64_t indexId) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		if (indexId == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition lookup requires a nonzero ID");
 		}
@@ -1162,7 +1194,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "System Catalog contains multiple Index definitions for one logical ID");
 		}
-		const IndexDefinition definition = decodeIndexDefinition(entries.front().key);
+		IndexDefinition definition = decodeIndexDefinition(entries.front().key);
 		if (entries.front().value_or_child != indexId) {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition value disagrees with its key");
 		}
@@ -1179,6 +1211,7 @@ namespace graph::storage {
 
 	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionByName(const MetadataSnapshotPin &snapshot,
 																			std::string_view name) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		validateName(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
@@ -1202,12 +1235,14 @@ namespace graph::storage {
 											   IndexDefinitionEntityKind entityKind, IndexDefinitionKind kind,
 											   uint64_t labelTokenId, std::span<const std::string> propertyNames,
 											   uint32_t vectorDimensions, std::string_view vectorMetric) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		IndexDefinition probe;
 		probe.name = "_";
 		probe.entity_kind = entityKind;
 		probe.kind = kind;
 		probe.label_token_id = labelTokenId;
-		probe.property_names.assign(propertyNames.begin(), propertyNames.end());
+		probe.property_names.reserve(propertyNames.size());
+        for (const auto &name : propertyNames) probe.property_names.emplace_back(name);
 		probe.vector_dimensions = vectorDimensions;
 		probe.vector_metric = vectorMetric;
 		probe.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST;
@@ -1229,8 +1264,9 @@ namespace graph::storage {
 		return definition;
 	}
 
-	std::vector<IndexDefinition> SystemCatalog::readIndexDefinitions(const MetadataSnapshotPin &snapshot,
+	utils::OwnedStdVector<IndexDefinition> SystemCatalog::readIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																	 size_t maximumDefinitions) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		if (maximumDefinitions == 0U || maximumDefinitions == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "System Catalog Index definition read requires a finite positive bound");
@@ -1241,10 +1277,18 @@ namespace graph::storage {
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
 		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
-		const std::vector<BTreePageEntry> entries = index.scan(snapshot, prefix, maximumDefinitions + 1U);
-		std::vector<IndexDefinition> result;
-		uint64_t previousId = 0U;
-		for (const BTreePageEntry &entry: entries) {
+        // Keep only the cursor's leaf/route and one encoded definition; the
+        // validated typed output owns its own backing and strings.
+        utils::OwnedHeapReservation boundaryCredit(utils::OwnedAllocationScope::owner());
+        auto cursor = index.openRangeCursor(snapshot, prefix, maximumDefinitions + 1U);
+        utils::OwnedStdVector<IndexDefinition> result;
+        uint64_t previousId = 0U;
+        while (auto encoded = cursor.next([&](size_t capacity) {
+            boundaryCredit.set(capacity == 0U ? 0U : utils::detail::addStandardHeapBytes(
+                utils::detail::standardContainerProxyBytes(),
+                utils::detail::standardAllocatorRequestBytes(capacity, alignof(std::byte))));
+        })) {
+            const BTreePageEntry &entry = *encoded;
 			if (!startsWith(entry.key, prefix)) {
 				break;
 			}
@@ -1259,37 +1303,58 @@ namespace graph::storage {
 			previousId = definition.index_id;
 			result.push_back(definition);
 		}
-		// Validate every name/semantic direction with generic batched exact
-		// probes. The immutable root and authenticated same-leaf entries can be
-		// reused without dropping any definition or direction integrity check.
-		if (result.size() > std::numeric_limits<size_t>::max() / 2U)
-			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "System Catalog Index direction batch overflowed");
-		std::vector<std::pair<std::vector<std::byte>, uint64_t>> directions;
-		directions.reserve(result.size() * 2U);
-		for (const auto &definition : result) {
-			directions.emplace_back(namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name), definition.index_id);
-			directions.emplace_back(indexSemanticKey(definition), definition.index_id);
-		}
-		std::ranges::sort(directions, [](const auto &left, const auto &right) {
-			return std::lexicographical_compare(left.first.begin(), left.first.end(), right.first.begin(), right.first.end());
-		});
-		std::vector<std::vector<std::byte>> keys;
-		keys.reserve(directions.size());
-		for (auto &direction : directions) {
-			if (!keys.empty() && keys.back() == direction.first)
-				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions are duplicated");
-			keys.push_back(std::move(direction.first));
-		}
-		const auto values = index.findSorted(snapshot, keys);
-		for (size_t position = 0U; position < values.size(); ++position) {
-			if (!values[position] || *values[position] != directions[position].second)
-				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions do not agree");
-		}
+        // Validate every direction in bounded batches. Duplicate directions in
+        // different batches still fail: one canonical key cannot map to two
+        // distinct strictly increasing definition IDs.
+        using Direction = std::pair<std::vector<std::byte>, uint64_t>;
+        constexpr size_t definitionsPerBatch = 64U;
+        for (size_t first = 0U; first < result.size();) {
+            const auto count = (std::min)(definitionsPerBatch, result.size() - first);
+            const auto directionsCount = 2U*count;
+            auto upper = utils::detail::addStandardHeapBytes(schemaVectorRequest<Direction>(directionsCount),
+                utils::detail::addStandardHeapBytes(schemaVectorRequest<std::vector<std::byte>>(directionsCount),
+                    schemaVectorRequest<std::optional<uint64_t>>(directionsCount)));
+            for (size_t offset = 0U; offset < count; ++offset) {
+                const auto &definition = result[first + offset];
+                validateName(definition.name);
+                upper = utils::detail::addStandardHeapBytes(upper,
+                    utils::detail::addStandardHeapBytes(schemaVectorRequest<std::byte>(1U + definition.name.size()),
+                        schemaVectorRequest<std::byte>(indexSemanticKeyBytes(definition))));
+                // Prefix buffers overlap their exact replacement briefly;
+                // moves/sorting retain empty debug STL proxies as well.
+                upper = utils::detail::addStandardHeapBytes(upper,
+                    2U*schemaVectorRequest<std::byte>(1U) + 8U*utils::detail::standardContainerProxyBytes());
+            }
+            utils::OwnedHeapReservation directionCredit(utils::OwnedAllocationScope::owner(), upper);
+            std::vector<Direction> directions;
+            directions.reserve(directionsCount);
+            for (size_t offset = 0U; offset < count; ++offset) {
+                const auto &definition = result[first + offset];
+                directions.emplace_back(namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name), definition.index_id);
+                directions.emplace_back(indexSemanticKey(definition), definition.index_id);
+            }
+            std::ranges::sort(directions, [](const auto &left, const auto &right) {
+                return std::lexicographical_compare(left.first.begin(), left.first.end(), right.first.begin(), right.first.end());
+            });
+            std::vector<std::vector<std::byte>> keys;
+            keys.reserve(directions.size());
+            for (auto &direction : directions) {
+                if (!keys.empty() && keys.back() == direction.first)
+                    fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions are duplicated");
+                keys.push_back(std::move(direction.first));
+            }
+            const auto values = index.findSorted(snapshot, keys);
+            for (size_t position = 0U; position < values.size(); ++position)
+                if (!values[position] || *values[position] != directions[position].second)
+                    fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions do not agree");
+            first += count;
+        }
 		return result;
 	}
 
 	std::optional<ConstraintDefinition> SystemCatalog::findConstraintDefinitionById(const MetadataSnapshotPin &snapshot,
 																					uint64_t constraintId) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		if (constraintId == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog constraint definition lookup requires a nonzero ID");
 		}
@@ -1324,6 +1389,7 @@ namespace graph::storage {
 
 	std::optional<ConstraintDefinition>
 	SystemCatalog::findConstraintDefinitionByName(const MetadataSnapshotPin &snapshot, std::string_view name) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		validateName(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
@@ -1347,12 +1413,14 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, ConstraintDefinitionEntityKind entityKind,
 			ConstraintDefinitionKind kind, uint64_t schemaTokenId, std::span<const std::string> propertyNames,
 			ConstraintDefinitionPropertyType propertyType) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		ConstraintDefinition probe;
 		probe.name = "_";
 		probe.entity_kind = entityKind;
 		probe.kind = kind;
 		probe.schema_token_id = schemaTokenId;
-		probe.property_names.assign(propertyNames.begin(), propertyNames.end());
+		probe.property_names.reserve(propertyNames.size());
+        for (const auto &name : propertyNames) probe.property_names.emplace_back(name);
 		probe.property_type = propertyType;
 		probe.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST;
 		static_cast<void>(ConstraintDefinitionCodec::encode(probe));
@@ -1374,8 +1442,9 @@ namespace graph::storage {
 		return definition;
 	}
 
-	std::vector<ConstraintDefinition> SystemCatalog::readConstraintDefinitions(const MetadataSnapshotPin &snapshot,
+	utils::OwnedStdVector<ConstraintDefinition> SystemCatalog::readConstraintDefinitions(const MetadataSnapshotPin &snapshot,
 																			   size_t maximumDefinitions) const {
+        utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
 		if (maximumDefinitions == 0U || maximumDefinitions == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "System Catalog constraint definition read requires a finite positive bound");
@@ -1385,10 +1454,16 @@ namespace graph::storage {
 		}
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
-		const std::vector<BTreePageEntry> entries = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-															.scan(snapshot, prefix, maximumDefinitions + 1U);
-		std::vector<ConstraintDefinition> result;
-		for (const BTreePageEntry &entry: entries) {
+        const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
+        utils::OwnedHeapReservation boundaryCredit(utils::OwnedAllocationScope::owner());
+        auto cursor = index.openRangeCursor(snapshot, prefix, maximumDefinitions + 1U);
+        utils::OwnedStdVector<ConstraintDefinition> result;
+        while (const auto encoded = cursor.next([&](size_t capacity) {
+            boundaryCredit.set(capacity == 0U ? 0U : utils::detail::addStandardHeapBytes(
+                utils::detail::standardContainerProxyBytes(),
+                utils::detail::standardAllocatorRequestBytes(capacity, alignof(std::byte))));
+        })) {
+            const BTreePageEntry &entry = *encoded;
 			if (!startsWith(entry.key, prefix)) {
 				break;
 			}

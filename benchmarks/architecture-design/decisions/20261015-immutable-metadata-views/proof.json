@@ -1,0 +1,56 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1213,
+  "selected_suites": 51,
+  "failures": 0,
+  "isolated_transaction_fault_cases": 4,
+  "closed_object_bytes": [
+    1736,
+    1736,
+    1736,
+    1736
+  ],
+  "full_suite": false,
+  "performance_run": false,
+  "base_commit": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+  "source_sha256": {
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "b1706041d5befa3f0d338f83ec44b40c6a7e346e53b418ae9da8d08da738304f",
+    "include/graph/storage/relocatable/metadata/MetadataPageFile.hpp": "7ba2302b8db99586837a6210f91ce4516509611b28a25bde36502110b43ed607",
+    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "8ef80dda88b857d000e59b82aa70a7710a535865778b6662793ce15b30c5262e",
+    "src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp": "46645172b8b4ed146a01ebf2d93a033f7e2ca0aae24e050c8f6d44c37a69bed0",
+    "src/storage/relocatable/metadata/CatalogTree.cpp": "2b00992e93920d7c96f04e4ec50ad13edfde536d0af3100cee75419431bcd665",
+    "src/storage/relocatable/metadata/LocationDirectory.cpp": "6ead9d3eaf5ef9822f674ebab20fb9f3cc24be1f2e90ddc7560cf0f3809eb156",
+    "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp": "8daee2d952caa0e2b997f6981af42e8ff39e4c399012a6e5cbf83eb2fb8fe7d2"
+  },
+  "reproduction_patch_sha256": "28abcbcb46bd221f6c968c4e9ef18a726272554b84b3da427056c773fecaa49c",
+  "untracked_source_sha256": {
+    "include/graph/query/api/ResultStorageBytes.hpp": "7cf580c7145ae1fa5f0a36ce8380e40c6a72deaf951bee5d7399b6c837756c7c",
+    "include/graph/query/execution/PrepaidMemoryResource.hpp": "acfe960ae09ec689e4fc4f629115d6ea5e9e4db5a7c991bc1ec5c29f3159de70",
+    "include/graph/query/execution/ResourceCoordinator.hpp": "b92cb3d26eab729f1d63ec9317e3ea6b8756d70b9796c9c339f1bd2f7283717e",
+    "include/graph/storage/relocatable/metadata/DecodedMetadataPageView.hpp": "e72fee755f40c96f87139e9f5534f883657035601bb2320e4870ff18e87bf8f4",
+    "include/graph/utils/OwnedPmrAllocator.hpp": "062a5de68f7dfd56f1e14c0a334672fa57fd16f10bf89b5f428553930f7a4bf2",
+    "include/graph/utils/OwnedPmrObject.hpp": "9667cb3565f190d2c8012b218e4681b951cc07e7f5a6b331cf36136097afd3c3",
+    "include/graph/utils/OwnedVector.hpp": "76ac6718e1a8afce1bcd4246d04fd7fe95e1fa06740131ad1f8a32b390f8a0c3",
+    "scripts/test_transaction_resource_faults.py": "715a497c94ed41cddf8c35690e77035aac2ce18260c871483ff955271827d9e4",
+    "src/query/execution/ProcessResourceDomains.hpp": "f22ad4c883694c9f5cbf508f134bac033a4128dab68719a7f8723248fd936837",
+    "tests/src/query/api/test_QueryResultResources.cpp": "a631b044352cd342f44dffb05b3e0f62d21fb815c214f651d544c8ea3855e410",
+    "tests/src/query/execution/test_CoordinatedMaterializedBudget.cpp": "f86469c2516fe255d71ece6aee9bf2cf933b0798766721f143a809a413bc1bb9",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "cbf2db190b39920e708b92c88f9e0d4b694f7302b256ef7906b475622da3c3fb",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "2eab665e2a1ed52d55dd233496f7dadb1e28dfa90102a043b61d10684d55c42c",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "bf86b9f60ef4527265dc4fc83008063ab05e2b39c860809f1085a717bcd8ce3c",
+    "tests/support/TransactionResourceFaultWorker.cpp": "7d1016d1f6615077eaa4521e55be4779b065a13d57e49d74b8ad0db558f5785e"
+  },
+  "evidence_sha256": {
+    "module-tests.log": "682e47e7b89fe0ac653917b90d45e461d6aa4158bac835a9785d73e242a14c3b",
+    "module-tests.xml": "bc5e10f786032b1071644505a674f9bf6532ca8a82fd6ae206fb9b5a493d32c3",
+    "focused-tests.log": "f5d869d89654ef6fdc13f4df9be15554669055cffaf4d6ee03aa58cc31ec9a7e",
+    "module-recipe.py": "b7ad3a0474582c3bea3950a21128d1e0c513af3242b0cf39b36b19edea7b4094",
+    "transaction-faults.json": "72c02d3a6b28e60627e85d585005c21badb4d6e0588c0d9c49f11d8c01935860",
+    "worker-build.log": "292e67b7ed786d2584845137c2049caa5025726fae751089c80152ed66811f58",
+    "link-command.txt": "4d19aa755d80d3a2031c3f8e17a6f75a88914d7db7367babeeb78dcec4da5a5d"
+  }
+}

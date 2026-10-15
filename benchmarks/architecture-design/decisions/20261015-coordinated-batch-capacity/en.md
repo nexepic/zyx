@@ -1,0 +1,13 @@
+# Coordinated batch capacity checkpoint
+
+Progress remains 22/34 (64.7%). No delivery is accepted by this component checkpoint.
+
+Native coordinated topology/node-reference, Join/OptionalMatch, NamedPath and in-memory Sort batch vectors now allocate through the shared execution budget. Their active object bytes are classified as embedded in charged vector capacity; unused slots and growth overlap remain charged. Uncoordinated public embedding retains its existing logical-byte contract, matching the already-established coordinated/legacy output accounting distinction. This is an explicit API contract boundary; native QueryEngine always binds a file-domain account, so these production paths cannot silently opt out.
+
+BoundedBatch move construction preserves embedded-object classification. Charged extraction admits an independent value before mutating the batch; admission denial preserves the published batch, and a throwing value move restores its charge. Shared-budget eager reservation starts at one slot and grows for actual input, avoiding unused initial capacity crowding out useful rows without raising budgets.
+
+Output row slots now use a PMR resource that admits actual allocations before the upstream allocator. Output batch sizing uses the smaller shared-account headroom when present, leaving 15/16 for query/result work where possible. Execution-local headroom still excludes resident output slots, while the parent is charged once. A 128 KiB caller account can execute the selected small native Sort/Join/OptionalMatch queries even with a 64 MiB local ceiling; the previous 512-row eager output allocation could deny them prematurely. A 1 KiB account fails and refunds all query ownership, allowing a subsequent admitted retry.
+
+Broader verification exposed a stale streaming COUNT test fixture: reference scans alone did not implement the optional non-null Property probes needed to avoid reading a large payload. The fixture now opts into real borrowed non-null probes for that case, covers explicit NULL/missing fields and asserts zero full Node materializations. Its 2 KiB budget and expected result remain unchanged. Native production probes already implement this capability.
+
+Final checkpoint source passes 678 selected tests across 28 suites, covering affected graph-read runtime, topology batching, column aggregation, pattern/variable-length/union paths, Sort and scratch faults, cache ownership and native transaction isolation. No full suite or performance campaign ran. The separate property-prefetch rows vector still lacks full capacity ownership; plan/write/maintenance and temporary decoded workspaces, bounded durable backlog and partitioned hash/aggregate remain required. See proof.json and module-evidence.tar.gz.

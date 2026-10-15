@@ -1,0 +1,37 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 241,
+  "selected_suites": 21,
+  "failures": 0,
+  "full_suite": false,
+  "performance_run": false,
+  "source_sha256": {
+    "include/graph/utils/OwnedPmrAllocator.hpp": "65d069f675a321fb1e20aa3c6c8edc1c11998f6ef7f82bc9e106d780f3de3512",
+    "src/query/execution/ProcessResourceDomains.hpp": "16adf26c3eaef9c9b8513ffdd53bf97083ac4d964aed0f80e30983bfce453575",
+    "include/graph/storage/StorageIO.hpp": "4122d64cd92d36cc8cb9ce8a7afaf1ef6d37b4715e54f4a8e5315fa5847d9fe2",
+    "src/storage/StorageIO.cpp": "0b26f949af4a916854b3c862378cd22e8eac07dea9b5bd2953adc30c628458c9",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "17f0354e139d2433c78627c00d9f6a9746b2a826739c7a268fb610998fc4b069",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "6373d6e3df6205260d749bb70adf5ad1a43867cc97082ff6c3f671d749162bff",
+    "include/graph/storage/relocatable/cache/BufferPool.hpp": "eb5cf0be69d09a7310d46f9d859df206760ff8c3734710223cfd2aa231942bfa",
+    "src/storage/relocatable/cache/BufferPool.cpp": "e29309dfad8ff7af12e85ecfe2a710c74b6b201773cd1f2bdddcf217a4e6497d",
+    "include/graph/storage/relocatable/vector/VectorCodebookStore.hpp": "3f1b7829c8232ae8f148d41aa99e10e4fbbc7eb0ce4499670ffd6331fe7c6b4f",
+    "src/storage/relocatable/vector/VectorCodebookStore.cpp": "a7311ef830fa1723490c80f746002ca2576a2c391ed51074b224f8887cf77d0e",
+    "tests/src/query/execution/test_ProcessResourceDomains.cpp": "ab21ae8813728af00c2645785acc0d90c85ca24d19542ccae0fcb1058f9ad0f5",
+    "tests/src/query/execution/test_PrepaidMemoryResource.cpp": "49e90a5aad16e250d1eba9eef5299bf45a23968e6dd978d469d6d4194fa28ce1",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "2ef01e3ba459e1f3341510e2728fcc5a0eb14594ab2e9a25da01c38ff69ec916",
+    "tests/src/storage/relocatable/cache/test_BufferPool.cpp": "43cbd29a45b4ec6de760f0f9be9bd529e30d1a3ca19ad72287d12c57659af90d",
+    "tests/src/storage/relocatable/vector/test_VectorCodebook.cpp": "d3998f66c6a0ec9ba88b6c1bd574c6e112dc0fd2a40ae6b61ab114e0d3d9bf57"
+  },
+  "archive_sha256": "10e261d486f578951403e66894acb1c9ada80fa83154a541b78b2c1703f86933",
+  "remaining": [
+    "plan cache IR and metadata native ownership",
+    "write/undo/overlay and maintenance workspace accounting",
+    "bounded pinned-snapshot backlog",
+    "batch retained capacities",
+    "partitioned hash/aggregate",
+    "complete resource fault/long-run acceptance and final-source regressions"
+  ]
+}

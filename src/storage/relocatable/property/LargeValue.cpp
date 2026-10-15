@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/property/LargeValue.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 
 #include <algorithm>
 #include <array>
@@ -640,6 +641,7 @@ namespace graph::storage {
 		page.stored_chunk_bytes = LittleEndianCodec::readU32(bytes, DATA_STORED_CHUNK_BYTES_OFFSET);
 		page.stored_offset = LittleEndianCodec::readU32(bytes, DATA_STORED_OFFSET_OFFSET);
 		if (bufferAdmission) bufferAdmission(payload.size());
+        else detail::admitScopedPropertyVectorGrowth(page.payload, payload.size());
 		page.payload.assign(payload.begin(), payload.end());
 		if (bufferAdmission) bufferAdmission(page.payload.capacity());
 		validateDataPage(page);

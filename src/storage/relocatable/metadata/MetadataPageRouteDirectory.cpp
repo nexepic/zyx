@@ -459,10 +459,10 @@ namespace graph::storage {
 					continue;
 				}
 				registerBootstrapFrame(child);
-				const MetadataPageRouteLeafPage leaf = pages_.readMetadataPageRouteLeaf(child);
-				validateVisible(leaf.generation, leaf.committed_lsn, superblock,
+				const auto leaf = pages_.readMetadataPageRouteLeafView(child);
+				validateVisible(leaf->generation, leaf->committed_lsn, superblock,
 									"metadata PageId route branch has a future leaf");
-				for (const MetadataPageRoute &route: leaf.routes) {
+				for (const MetadataPageRoute &route: leaf->routes) {
 					if (leafOrdinal(route.page_id) != ordinal) {
 						throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"metadata PageId route leaf does not match its radix route");
@@ -523,8 +523,8 @@ namespace graph::storage {
 					continue;
 				}
 				registerFrame(child);
-				const MetadataPageRouteLeafPage leaf = pages_.readMetadataPageRouteLeaf(child);
-				validateVisible(leaf.generation, leaf.committed_lsn, superblock,
+				const auto leaf = pages_.readMetadataPageRouteLeafView(child);
+				validateVisible(leaf->generation, leaf->committed_lsn, superblock,
 								"metadata PageId route branch has a future leaf");
 			}
 		};
@@ -667,20 +667,23 @@ namespace graph::storage {
 				size_t next = begin + 1U;
 				while (next < end && leafOrdinal(pageIds[order[next]]) / factor == ordinal / factor) ++next;
 				if (node.level == 0U) {
-					const auto leaf = pages_.readMetadataPageRouteLeaf(*child);
-					validateVisible(leaf.generation, leaf.committed_lsn, superblock,
+					const auto leaf = pages_.readMetadataPageRouteLeafView(*child);
+					validateVisible(leaf->generation, leaf->committed_lsn, superblock,
 							"metadata PageId route leaf is newer than its Superblock");
-					for (const auto &route : leaf.routes) {
-						if (leafOrdinal(route.page_id) != ordinal) {
-							throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
-									"metadata PageId route leaf is inconsistent with its radix path");
-						}
-					}
+                    // The route codec validates strict PageId order; ordinal
+                    // division is monotonic, so checking both endpoints proves
+                    // the same membership property for the immutable leaf.
+                    if (!leaf->routes.empty() &&
+                        (leafOrdinal(leaf->routes.front().page_id) != ordinal ||
+                         leafOrdinal(leaf->routes.back().page_id) != ordinal)) {
+                        throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
+                            "metadata PageId route leaf is inconsistent with its radix path");
+                    }
 					for (size_t index = begin; index < next; ++index) {
 						const auto id = pageIds[order[index]];
-						const auto route = std::lower_bound(leaf.routes.begin(), leaf.routes.end(), id.value(),
+						const auto route = std::lower_bound(leaf->routes.begin(), leaf->routes.end(), id.value(),
 								[](const MetadataPageRoute &entry, uint64_t value) { return entry.page_id.value() < value; });
-						if (route == leaf.routes.end() || route->page_id != id) {
+						if (route == leaf->routes.end() || route->page_id != id) {
 							throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 						}
 						validateRoute(*route, superblock);
@@ -725,19 +728,23 @@ namespace graph::storage {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 			}
 			if (node.level == 0U) {
-				const MetadataPageRouteLeafPage leaf = pages_.readMetadataPageRouteLeaf(*child);
-				validateVisible(leaf.generation, leaf.committed_lsn, superblock,
+				const auto leaf = pages_.readMetadataPageRouteLeafView(*child);
+				validateVisible(leaf->generation, leaf->committed_lsn, superblock,
 								"metadata PageId route leaf is newer than its Superblock");
-				for (const MetadataPageRoute &route: leaf.routes) {
-					if (leafOrdinal(route.page_id) != ordinal) {
-						throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
-											"metadata PageId route leaf is inconsistent with its radix path");
-					}
-					if (route.page_id == pageId) {
-						validateRoute(route, superblock);
-						return route.physical_reference;
-					}
-				}
+                // Validate the whole sorted leaf before returning a matching
+                // prefix; a corrupt later ordinal must not be hidden by a hit.
+                if (!leaf->routes.empty() &&
+                    (leafOrdinal(leaf->routes.front().page_id) != ordinal ||
+                     leafOrdinal(leaf->routes.back().page_id) != ordinal)) {
+                    throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
+                        "metadata PageId route leaf is inconsistent with its radix path");
+                }
+                const auto route = std::lower_bound(leaf->routes.begin(), leaf->routes.end(), pageId.value(),
+                    [](const MetadataPageRoute &entry, uint64_t id) { return entry.page_id.value() < id; });
+                if (route != leaf->routes.end() && route->page_id == pageId) {
+                    validateRoute(*route, superblock);
+                    return route->physical_reference;
+                }
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");
 			}
 			node = pages_.readMetadataRadix(*child);

@@ -1,0 +1,175 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanReadRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:10:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:216:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  216 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:220:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  220 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:2911:55: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2911 |                                                                         state, pageTargetIds, {.include_labels = true}, &nodesBytes);
+      |                                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3582:101: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3582 |                                                 return state.shared.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
+      |                                                                                                                                               ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3610:93: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3610 |                                                         state.shared.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
+      |                                                                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7724:33: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7724 |                                                                         {.include_labels = true}, &sourceBytes);
+      |                                                                                                ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7754:31: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7754 |                                                                         {.include_type = true}, &sourceBytes);
+      |                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:14042:57: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 14042 |                                                         {.include_labels = targetReadShape.include_labels}, &retainedTargets);
+       |                                                                                                          ^
+13 warnings generated.
+[2/3] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = OwnedOutputVariablesTest.*:QueryResultResourcesTest.*:LogicalGraphReadExecutorTest.*
+[==========] Running 57 tests from 3 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from QueryResultResourcesTest
+[ RUN      ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment
+[       OK ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment (0 ms)
+[ RUN      ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction
+[       OK ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction (0 ms)
+[ RUN      ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission
+[       OK ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce
+[       OK ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce (0 ms)
+[ RUN      ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination
+[       OK ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy
+[       OK ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy (0 ms)
+[ RUN      ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased
+[       OK ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased (0 ms)
+[ RUN      ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers
+[       OK ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers (0 ms)
+[ RUN      ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission
+[       OK ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel
+[       OK ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel (0 ms)
+[ RUN      ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease
+[       OK ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease (0 ms)
+[----------] 11 tests from QueryResultResourcesTest (0 ms total)
+
+[----------] 44 tests from LogicalGraphReadExecutorTest
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsNativeExactCandidatesOutsidePinnedSnapshot
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsNativeExactCandidatesOutsidePinnedSnapshot (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsNativeExactCandidatesWithoutSnapshotGeneration
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsNativeExactCandidatesWithoutSnapshotGeneration (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterReusesVerifiedNativeExactCandidateFields
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterReusesVerifiedNativeExactCandidateFields (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeExactCandidatesBeforeCompleteMaterialization
+[       OK ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeExactCandidatesBeforeCompleteMaterialization (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeExactCandidateStreamStopsAtDownstreamLimit
+[       OK ] LogicalGraphReadExecutorTest.NativeExactCandidateStreamStopsAtDownstreamLimit (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeExactCandidateStreamEnforcesTheCrossBatchNodeBound
+[       OK ] LogicalGraphReadExecutorTest.NativeExactCandidateStreamEnforcesTheCrossBatchNodeBound (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamStopsAtDownstreamLimit
+[       OK ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamStopsAtDownstreamLimit (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeCompositeRangeCandidateStreamStopsAtDownstreamLimit
+[       OK ] LogicalGraphReadExecutorTest.NativeCompositeRangeCandidateStreamStopsAtDownstreamLimit (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamAllowsValueMajorOrderAcrossBatches
+[       OK ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamAllowsValueMajorOrderAcrossBatches (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamRejectsDuplicatesAcrossBatches
+[       OK ] LogicalGraphReadExecutorTest.NativeRangeCandidateStreamRejectsDuplicatesAcrossBatches (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBoundsVerifiedIndexCandidateBytes
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBoundsVerifiedIndexCandidateBytes (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBoundsNonStreamingIndexCandidateBytes
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBoundsNonStreamingIndexCandidateBytes (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.ReadsUnverifiedNativeIndexResidualColumnsInBoundedBatches
+[       OK ] LogicalGraphReadExecutorTest.ReadsUnverifiedNativeIndexResidualColumnsInBoundedBatches (13 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.ReducesIndexResidualBatchSizeForByteBudgetBeforeLimit
+[       OK ] LogicalGraphReadExecutorTest.ReducesIndexResidualBatchSizeForByteBudgetBeforeLimit (2 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.RejectsOversizedNativeIndexResidualPayloadBeforeVisitingRows
+[       OK ] LogicalGraphReadExecutorTest.RejectsOversizedNativeIndexResidualPayloadBeforeVisitingRows (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeExactCandidateResidualColumns
+[       OK ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeExactCandidateResidualColumns (3 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeCompositeCandidateResidualColumns
+[       OK ] LogicalGraphReadExecutorTest.BatchesUnverifiedNativeCompositeCandidateResidualColumns (13 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedNativeCandidateColumnsAndOrder
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedNativeCandidateColumnsAndOrder (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesExactLookupAndRetainsRuntimePredicateValidation
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesExactLookupAndRetainsRuntimePredicateValidation (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesRangeLookupAndRetainsRuntimePredicateValidation
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesRangeLookupAndRetainsRuntimePredicateValidation (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterReusesVerifiedNativeRangeCandidateFields
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterReusesVerifiedNativeRangeCandidateFields (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCanonicalConjunctiveRangeLookup
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCanonicalConjunctiveRangeLookup (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCompositeRangeLookupAndRetainsPredicateValidation
+[       OK ] LogicalGraphReadExecutorTest.OptimizedFilterNodeScanUsesCompositeRangeLookupAndRetainsPredicateValidation (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.ParserPushesParameterizedInlinePropertyEqualityIntoExactLookup
+[       OK ] LogicalGraphReadExecutorTest.ParserPushesParameterizedInlinePropertyEqualityIntoExactLookup (2 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsArithmeticOverflowBeforeProducingAResult
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsArithmeticOverflowBeforeProducingAResult (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeEvaluatesSupportedScalarExpressionsAndNullSemantics
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeEvaluatesSupportedScalarExpressionsAndNullSemantics (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimePreservesThreeValuedFiltersAndStopsAtTheVisitorBoundary
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimePreservesThreeValuedFiltersAndStopsAtTheVisitorBoundary (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsInvalidScalarOperationsBeforeEmittingRows
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsInvalidScalarOperationsBeforeEmittingRows (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeCoversScalarNullAndFailClosedBoundaries
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeCoversScalarNullAndFailClosedBoundaries (1 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.EvaluatesEntityIntrospectionFunctionsAgainstSnapshotBindings
+[       OK ] LogicalGraphReadExecutorTest.EvaluatesEntityIntrospectionFunctionsAgainstSnapshotBindings (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeResolvesNodeEdgeAndMapPropertiesWithoutDuplicateReads
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeResolvesNodeEdgeAndMapPropertiesWithoutDuplicateReads (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeUsesStructuralDistinctKeysAndEnforcesItsBound
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeUsesStructuralDistinctKeysAndEnforcesItsBound (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeAppliesAndValidatesAllNodeScanPredicateForms
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeAppliesAndValidatesAllNodeScanPredicateForms (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBuildsDistinctKeysForEverySupportedPropertyAndEntityValue
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeBuildsDistinctKeysForEverySupportedPropertyAndEntityValue (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedOperatorsExpressionsAndBounds
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedOperatorsExpressionsAndBounds (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedNodePagesAndLogicalShapes
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedNodePagesAndLogicalShapes (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedAdjacencyPagesAndBindings
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsMalformedAdjacencyPagesAndBindings (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsCorruptEntitiesPropertiesAndTraversalBindings
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeRejectsCorruptEntitiesPropertiesAndTraversalBindings (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeCoversTraversalFilteringBindingsAndTerminalPages
+[       OK ] LogicalGraphReadExecutorTest.LogicalPlanRuntimeCoversTraversalFilteringBindingsAndTerminalPages (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.VerifiedExactProjectionReusesRepeatedFieldsAndReadsOnlyUncoveredFields
+[       OK ] LogicalGraphReadExecutorTest.VerifiedExactProjectionReusesRepeatedFieldsAndReadsOnlyUncoveredFields (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.QueryResultRetainsSharedAccountAfterExecutionAndBackendDestruction
+[       OK ] LogicalGraphReadExecutorTest.QueryResultRetainsSharedAccountAfterExecutionAndBackendDestruction (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.SharedAccountDenialRefundsColumnsAndBatchWithoutPublishingOutput
+[       OK ] LogicalGraphReadExecutorTest.SharedAccountDenialRefundsColumnsAndBatchWithoutPublishingOutput (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.SharedAccountRefundsExecutionStateOnVisitorFailure
+[       OK ] LogicalGraphReadExecutorTest.SharedAccountRefundsExecutionStateOnVisitorFailure (0 ms)
+[ RUN      ] LogicalGraphReadExecutorTest.LongOutputColumnsRejectBeforeOpeningOrReadingSnapshot
+[       OK ] LogicalGraphReadExecutorTest.LongOutputColumnsRejectBeforeOpeningOrReadingSnapshot (0 ms)
+[----------] 44 tests from LogicalGraphReadExecutorTest (46 ms total)
+
+[----------] 2 tests from OwnedOutputVariablesTest
+[ RUN      ] OwnedOutputVariablesTest.LongScanColumnRejectsBeforeCopyAndLeavesPlanIntact
+[       OK ] OwnedOutputVariablesTest.LongScanColumnRejectsBeforeCopyAndLeavesPlanIntact (0 ms)
+[ RUN      ] OwnedOutputVariablesTest.AdmittedColumnsKeepTheirOwnerAfterTheProducingScopeEnds
+[       OK ] OwnedOutputVariablesTest.AdmittedColumnsKeepTheirOwnerAfterTheProducingScopeEnds (0 ms)
+[----------] 2 tests from OwnedOutputVariablesTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 57 tests from 3 test suites ran. (46 ms total)
+[  PASSED  ] 57 tests.

@@ -19,11 +19,19 @@
 #include <mutex>
 #include <optional>
 #include <span>
+#include <system_error>
 #include "PwriteHelper.hpp"
 #include "graph/storage/relocatable/cache/BufferPool.hpp"
 #include "graph/storage/relocatable/cache/BufferPoolTypes.hpp"
 
 namespace graph::storage {
+    // This refusal happens before the rejected I/O mutates cache or disk.
+    // Earlier writes in a larger transaction still require outcome inspection.
+    class StorageFileLimitExceeded final : public std::system_error {
+    public:
+        StorageFileLimitExceeded() : std::system_error(std::make_error_code(std::errc::no_space_on_device),
+            "StorageIO configured database file byte limit exceeded") {}
+    };
 	class FileTruncator;
 	class RelocatableMetadataStore;
 
@@ -70,7 +78,29 @@ namespace graph::storage {
 		StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd);
 		StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd,
 				  StorageIOAccessMode accessMode);
+        StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd,
+                  StorageIOAccessMode accessMode, uint64_t maximumFileBytes);
 		~StorageIO() noexcept;
+
+        // Thread-bound scan policy. Read hits remain coherent with dirty cache
+        // entries; misses bypass residency and decoded metadata cache admission.
+        class SequentialReadScope final {
+        public:
+            explicit SequentialReadScope(const StorageIO &io) noexcept
+                : io_(&io), previous_(active_) { active_ = this; }
+            ~SequentialReadScope() { active_ = previous_; }
+            SequentialReadScope(const SequentialReadScope &) = delete;
+            SequentialReadScope &operator=(const SequentialReadScope &) = delete;
+            [[nodiscard]] static bool activeFor(const StorageIO &io) noexcept {
+                for (auto scope = active_; scope; scope = scope->previous_)
+                    if (scope->io_ == &io) return true;
+                return false;
+            }
+        private:
+            const StorageIO *io_;
+            SequentialReadScope *previous_;
+            inline static thread_local SequentialReadScope *active_ = nullptr;
+        };
 
 		// Non-copyable, non-movable (shared ownership via shared_ptr)
 		StorageIO(const StorageIO &) = delete;
@@ -283,7 +313,8 @@ namespace graph::storage {
 
 		// The native storage backend configures this once at open. Capacity is in
 		// bytes and must contain at least one 4 KiB format page.
-		void enableBufferPool(size_t capacityBytes);
+		void enableBufferPool(size_t capacityBytes,
+                              std::shared_ptr<std::pmr::memory_resource> memoryOwner = {});
 		void disableBufferPool();
 		// Holds a generation-qualified cached native page without copying its
 		// bytes. Typed storage readers use this only while their decoded view is
@@ -329,6 +360,7 @@ namespace graph::storage {
 		void setWriteFd(file_handle_t writeFd) { writeFd_ = writeFd; }
 		[[nodiscard]] bool isWritable() const { return access_mode_ == StorageIOAccessMode::SIOAM_READ_WRITE; }
 		void requireWritable(const char *operation) const;
+        void requireWritableRange(uint64_t offset, size_t size, const char *operation) const;
 		static void requireTypedPageKey(BufferPoolPageKey key, size_t size, const char *operation);
 		static void requireTypedPageRange(BufferPoolPageKey firstKey, size_t size, const char *operation);
 		[[nodiscard]] std::shared_ptr<BufferPool> bufferPool() const;
@@ -337,6 +369,7 @@ namespace graph::storage {
 		file_handle_t writeFd_;
 		file_handle_t readFd_;
 		StorageIOAccessMode access_mode_;
+        const uint64_t maximum_file_bytes_;
 		// The fallback stream has one shared seek position. Native positioned I/O
 		// remains lock-free; fallback operations serialize only that stream state.
 		mutable std::mutex stream_mutex_;

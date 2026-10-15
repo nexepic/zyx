@@ -8,6 +8,14 @@
 
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 #include "storage/relocatable/backend/QueryScratchDiskBudget.hpp"
+#include "storage/relocatable/backend/AdmittedMutationInput.hpp"
+#include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
+#include "query/execution/ProcessResourceDomains.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
+#include "graph/utils/OwnedVector.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,6 +27,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <type_traits>
 #include <memory>
 #include <memory_resource>
 #include <numeric>
@@ -92,9 +101,9 @@ namespace graph::storage {
 
 	namespace {
 
-		[[nodiscard]] std::string nativeBulkSessionFileIdentity(file_handle_t handle) {
-			if (handle == INVALID_FILE_HANDLE) { // the only caller obtains the handle from an open writable backend after verifying its data file.
-				throw std::logic_error("relocatable bulk session requires a native writable file handle");
+		[[nodiscard]] std::string nativeOpenedFileIdentity(file_handle_t handle) {
+			if (handle == INVALID_FILE_HANDLE) { // Callers identify an already opened native file, including physical read-only handles.
+				throw std::logic_error("relocatable resource domain requires a native file handle");
 			}
 #ifdef _WIN32
 			BY_HANDLE_FILE_INFORMATION information = {};
@@ -121,7 +130,7 @@ namespace graph::storage {
 			static std::mutex registryMutex;
 			static std::map<std::string, std::weak_ptr<std::mutex>> registry;
 			// Key by the opened file identity so hard-link and symlink aliases share a lease.
-			const std::string key = nativeBulkSessionFileIdentity(handle);
+			const std::string key = nativeOpenedFileIdentity(handle);
 			std::lock_guard lock(registryMutex);
 			for (auto position = registry.begin(); position != registry.end();) {
 				if (position->second.expired()) {
@@ -208,8 +217,7 @@ namespace graph::storage {
 
 	class OwnedRelocatableBackendFile final {
 	public:
-		[[nodiscard]] static std::unique_ptr<OwnedRelocatableBackendFile> create(const std::filesystem::path &path,
-																				 size_t bufferPoolBytes) {
+		[[nodiscard]] static std::unique_ptr<OwnedRelocatableBackendFile> create(const std::filesystem::path &path, uint64_t maximumFileBytes) {
 			auto result = std::unique_ptr<OwnedRelocatableBackendFile>(new OwnedRelocatableBackendFile());
 			result->write_fd_ = portable_create_rw_exclusive(path.string().c_str());
 			if (result->write_fd_ == INVALID_FILE_HANDLE) {
@@ -221,13 +229,13 @@ namespace graph::storage {
 			}
 			result->read_fd_ = portable_open(path.string().c_str(), O_RDONLY);
 			result->io_ = std::make_shared<StorageIO>(result->stream_, result->write_fd_, result->read_fd_,
-													  StorageIOAccessMode::SIOAM_READ_WRITE);
-			result->io_->enableBufferPool(bufferPoolBytes);
+													  StorageIOAccessMode::SIOAM_READ_WRITE, maximumFileBytes);
+			// Cache admission follows opened-file and durable database identity binding.
 			return result;
 		}
 
 		[[nodiscard]] static std::unique_ptr<OwnedRelocatableBackendFile> open(const std::filesystem::path &path,
-																			   bool writable, size_t bufferPoolBytes) {
+																			   bool writable, uint64_t maximumFileBytes) {
 			auto result = std::unique_ptr<OwnedRelocatableBackendFile>(new OwnedRelocatableBackendFile());
 			const std::ios::openmode mode =
 					std::ios::binary | std::ios::in | (writable ? std::ios::out : std::ios::openmode{});
@@ -243,8 +251,12 @@ namespace graph::storage {
 			// native handle is unavailable on this platform or filesystem.
 			result->io_ = std::make_shared<StorageIO>(result->stream_, result->write_fd_, result->read_fd_,
 													  writable ? StorageIOAccessMode::SIOAM_READ_WRITE
-															   : StorageIOAccessMode::SIOAM_READ_ONLY);
-			result->io_->enableBufferPool(bufferPoolBytes);
+															   : StorageIOAccessMode::SIOAM_READ_ONLY, maximumFileBytes);
+            if (writable && result->io_->fileSize() > maximumFileBytes) {
+                throw std::system_error(std::make_error_code(std::errc::no_space_on_device),
+                    "relocatable existing database exceeds its configured file byte limit");
+            }
+			// Cache admission follows opened-file and durable database identity binding.
 			return result;
 		}
 
@@ -614,12 +626,13 @@ namespace graph::storage {
 			return 1U;
 		}
 
-		class NativeQueryScratchSession final : public LogicalQueryScratchSession {
+		class NativeQueryScratchSession final : public LogicalQueryScratchSession, public utils::OwnedPmrObject {
 		public:
 			NativeQueryScratchSession(RelocatableStorageBackend &backend,std::unique_ptr<NativeBulkRunStore> store,
 				std::shared_ptr<NativeBulkSessionLease> lease,std::function<void()> refund,uint64_t owner,size_t bytes,size_t fragments,
-				detail::QueryScratchDiskBudget::Session disk)
-				:backend_(backend),store_(std::move(store)),lease_(std::move(lease)),refund_(std::move(refund)),owner_(owner),maximum_bytes_(bytes),maximum_fragments_(fragments),disk_(std::move(disk)) {}
+				detail::QueryScratchDiskBudget::Session disk, std::shared_ptr<std::pmr::memory_resource> memory,
+                std::weak_ptr<StorageIO> io, size_t cleanupBytes)
+				:backend_(backend),store_(std::move(store)),lease_(std::move(lease)),refund_(std::move(refund)),owner_(owner),maximum_bytes_(bytes),maximum_fragments_(fragments),locations_(utils::OwnedPmrAllocator<std::pair<const uint64_t, NativeBulkRunFragmentLocation>>(std::move(memory))),disk_(std::move(disk)),io_(std::move(io)),cleanup_bytes_(cleanupBytes) {}
 			~NativeQueryScratchSession() override {
 				try {finish();} catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();releasePermit();}
 			}
@@ -628,13 +641,19 @@ namespace graph::storage {
 				if(bytes.empty() || bytes.size()>maximumFragmentBytes() || locations_.size()>=maximum_fragments_ ||
 					RSS_SEGMENT_SIZE>maximum_bytes_-used_bytes_)
 					throw std::runtime_error("query scratch exceeded its fragment or disk bound");
+                std::vector<std::byte> payload(bytes.begin(), bytes.end());
 				// Install bookkeeping before IO so a post-publication allocation failure
 				// cannot lose the only live cleanup route.
 				auto [position,inserted]=locations_.emplace(0U,NativeBulkRunFragmentLocation{});
 				if(!inserted)throw std::logic_error("query scratch session cannot publish concurrently");
 				try {disk_.acquire(RSS_SEGMENT_SIZE);}
 				catch(...) {locations_.erase(position);throw;}
-				try {auto gate=backend_.acquireNativePublicationGate();position->second=store_->writeOpaquePayload(owner_,std::vector<std::byte>(bytes.begin(),bytes.end()),backend_.nextNativeBulkScratchCheckpointLsn());}
+				try {auto gate=backend_.acquireNativePublicationGate();position->second=store_->writeOpaquePayload(owner_,std::move(payload),backend_.nextNativeBulkScratchCheckpointLsn());}
+                catch (const NativeBulkRunCapacityDenied &) {
+                    locations_.erase(position);
+                    disk_.release(RSS_SEGMENT_SIZE);
+                    throw;
+                }
 				catch(...) {locations_.erase(position);backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
 				const uint64_t id=position->second.segment_id.value();auto node=locations_.extract(position);node.key()=id;locations_.insert(std::move(node));
 				used_bytes_+=RSS_SEGMENT_SIZE;return id;
@@ -645,6 +664,7 @@ namespace graph::storage {
 			}
 			void release(uint64_t id) override {
 				requireActive();auto position=locations_.find(id);if(position==locations_.end())throw std::invalid_argument("query scratch release handle is stale or foreign");
+                auto cleanup = openCleanupWorkspace();
 				try {auto gate=backend_.acquireNativePublicationGate();store_->release(position->second,backend_.nextNativeBulkScratchCheckpointLsn());}
 				catch(...) {backend_.requireReopenAfterNativeBulkStagingFailure();throw;}
 				locations_.erase(position);used_bytes_-=RSS_SEGMENT_SIZE;disk_.release(RSS_SEGMENT_SIZE);
@@ -652,6 +672,7 @@ namespace graph::storage {
 			void finish() override {
 				if(!refund_)return;
 				if(backend_.hasIndeterminateWriteOutcome() && !locations_.empty())throw std::logic_error("query scratch cleanup requires writable recovery");
+                auto cleanup = locations_.empty() ? nullptr : openCleanupWorkspace();
 				while(!locations_.empty()) {
 					std::array<NativeBulkRunFragmentLocation,64U> batch;size_t count=0U;
 					for(const auto &[id,location]:locations_){if(count==batch.size())break;batch[count++]=location;}
@@ -663,23 +684,89 @@ namespace graph::storage {
 				releasePermit();
 			}
 			size_t maximumFragmentBytes() const override {return store_->maximumFragmentBytes();}
-		private:
+        private:
+            std::unique_ptr<RelocatableMaintenanceWorkspace> openCleanupWorkspace() const {
+                // Cleanup must not compete with the query's full allowance or
+                // CACHE credit. Admit the protected grant before publication.
+                auto io = io_.lock();
+                if (!io) throw std::logic_error("query scratch cleanup lost its open file");
+                auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+                    backend_.queryResourceDomain(), query::execution::detail::ResourceClass::RCK_MAINTENANCE, cleanup_bytes_);
+                auto memory = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+                    std::move(account), cleanup_bytes_, std::pmr::new_delete_resource());
+                return std::unique_ptr<RelocatableMaintenanceWorkspace>(
+                    new (memory) RelocatableMaintenanceWorkspace(std::move(io), memory));
+            }
 			void requireActive() const {if(!refund_)throw std::logic_error("query scratch session is finished");if(backend_.hasIndeterminateWriteOutcome())throw std::logic_error("query scratch requires database reopen after uncertain IO");}
 			void releasePermit(){if(refund_){disk_.close();auto refund=std::move(refund_);refund();lease_.reset();}}
 			RelocatableStorageBackend &backend_;std::unique_ptr<NativeBulkRunStore> store_;std::shared_ptr<NativeBulkSessionLease> lease_;std::function<void()> refund_;
-			uint64_t owner_;size_t maximum_bytes_,maximum_fragments_,used_bytes_=0U;std::map<uint64_t,NativeBulkRunFragmentLocation> locations_;
+			uint64_t owner_;size_t maximum_bytes_,maximum_fragments_,used_bytes_=0U;std::map<uint64_t,NativeBulkRunFragmentLocation, std::less<uint64_t>, utils::OwnedPmrAllocator<std::pair<const uint64_t, NativeBulkRunFragmentLocation>>> locations_;
 			detail::QueryScratchDiskBudget::Session disk_;
+            std::weak_ptr<StorageIO> io_;
+            size_t cleanup_bytes_;
 		};
 
 		class RelocatableLogicalGraphTransaction final : public LogicalGraphTransaction,
 														 public LogicalGraphTransactionVectorSnapshotProvider,
-														 public LogicalGraphBoundedBulkEdgeTransaction {
+														 public LogicalGraphBoundedBulkEdgeTransaction, public LogicalGraphTransactionMemoryProvider, public utils::OwnedPmrObject {
+            struct OwnedCreationReservation {
+                utils::OwnedVector<NativeGraphLogicalIdLeaseRange> node_ranges;
+                utils::OwnedVector<NativeGraphLogicalIdLeaseRange> edge_ranges;
+                OwnedCreationReservation() = delete;
+                explicit OwnedCreationReservation(std::shared_ptr<std::pmr::memory_resource> memory)
+                    : node_ranges(utils::OwnedPmrAllocator<NativeGraphLogicalIdLeaseRange>(memory)),
+                      edge_ranges(utils::OwnedPmrAllocator<NativeGraphLogicalIdLeaseRange>(std::move(memory))) {}
+                OwnedCreationReservation(const OwnedCreationReservation &source)
+                    : node_ranges(source.node_ranges.begin(), source.node_ranges.end(), source.node_ranges.get_allocator()),
+                      edge_ranges(source.edge_ranges.begin(), source.edge_ranges.end(), source.edge_ranges.get_allocator()) {}
+                OwnedCreationReservation(OwnedCreationReservation &&) noexcept = default;
+                OwnedCreationReservation &operator=(const OwnedCreationReservation &) = default;
+                OwnedCreationReservation &operator=(OwnedCreationReservation &&) noexcept = default;
+            };
+            // Own fixed request slots without changing the public batch ABI.
+            // Nested standard buffers carry a separate retained payload lease.
+            struct OwnedMutationBatch {
+                utils::OwnedVector<LogicalGraphNodeCreateRequest> node_creates;
+                utils::OwnedVector<LogicalGraphBatchEdgeCreateRequest> edge_creates;
+                utils::OwnedVector<LogicalGraphPropertyMutationRequest> property_replacements;
+                utils::OwnedVector<LogicalGraphNodeLabelMutationRequest> node_label_replacements;
+                utils::OwnedVector<LogicalGraphEdgeDeleteRequest> edge_deletes;
+                utils::OwnedVector<LogicalGraphNodeDeleteRequest> node_deletes;
+                explicit OwnedMutationBatch(const std::shared_ptr<std::pmr::memory_resource> &memory)
+                    : node_creates(utils::OwnedPmrAllocator<LogicalGraphNodeCreateRequest>(memory)),
+                      edge_creates(utils::OwnedPmrAllocator<LogicalGraphBatchEdgeCreateRequest>(memory)),
+                      property_replacements(utils::OwnedPmrAllocator<LogicalGraphPropertyMutationRequest>(memory)),
+                      node_label_replacements(utils::OwnedPmrAllocator<LogicalGraphNodeLabelMutationRequest>(memory)),
+                      edge_deletes(utils::OwnedPmrAllocator<LogicalGraphEdgeDeleteRequest>(memory)),
+                      node_deletes(utils::OwnedPmrAllocator<LogicalGraphNodeDeleteRequest>(memory)) {}
+                OwnedMutationBatch(const OwnedMutationBatch &source, const LogicalGraphMutationBatch &incoming)
+                    : OwnedMutationBatch(source.node_creates.get_allocator().owner()) {
+                    const auto clone = [](auto &destination, const auto &old, const auto &added) {
+                        if (added.size() > destination.max_size() - old.size())
+                            throw std::length_error("logical transaction request slots overflowed");
+                        destination.reserve(old.size() + added.size());
+                        destination.insert(destination.end(), old.begin(), old.end());
+                    };
+                    clone(node_creates, source.node_creates, incoming.node_creates);
+                    clone(edge_creates, source.edge_creates, incoming.edge_creates);
+                    clone(property_replacements, source.property_replacements, incoming.property_replacements);
+                    clone(node_label_replacements, source.node_label_replacements, incoming.node_label_replacements);
+                    clone(edge_deletes, source.edge_deletes, incoming.edge_deletes);
+                    clone(node_deletes, source.node_deletes, incoming.node_deletes);
+                }
+                OwnedMutationBatch(OwnedMutationBatch &&) noexcept = default;
+                OwnedMutationBatch &operator=(const OwnedMutationBatch &) = delete;
+                OwnedMutationBatch &operator=(OwnedMutationBatch &&) noexcept = default;
+            };
+
 		public:
 			RelocatableLogicalGraphTransaction(RelocatableStorageBackend &backend, bool readOnly,
 											   std::unique_ptr<LogicalGraphVectorSearchSnapshot> snapshot,
-											   LogicalGraphMutationFence fence, Generation metadataGeneration, RelocatableReadSnapshot rawSnapshot) :
+											   LogicalGraphMutationFence fence, Generation metadataGeneration, RelocatableReadSnapshot rawSnapshot,
+                std::shared_ptr<std::pmr::memory_resource> memory) :
 				backend_(backend), read_only_(readOnly), snapshot_(std::move(snapshot)), fence_(std::move(fence)),
-				metadata_generation_(metadataGeneration), raw_snapshot_(std::move(rawSnapshot)), issued_node_ids_(), issued_edge_ids_() {
+				metadata_generation_(metadataGeneration), raw_snapshot_(std::move(rawSnapshot)),
+                write_memory_(std::move(memory)), retained_(std::in_place, write_memory_) {
 				if (snapshot_ == nullptr) { // transaction construction only receives a snapshot opened by the initialized native backend.
 					throw std::logic_error("relocatable logical transaction could not open its read snapshot");
 				}
@@ -699,6 +786,9 @@ namespace graph::storage {
 
 			[[nodiscard]] LogicalGraphTransactionState state() const override { return state_; }
 			[[nodiscard]] bool isReadOnly() const override { return read_only_; }
+            [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> retainedWriteMemory() const override {
+                return write_memory_;
+            }
 
 			[[nodiscard]] LogicalGraphReadSnapshot &readSnapshot() override {
 				requireActive("read its snapshot");
@@ -731,19 +821,17 @@ namespace graph::storage {
 				if (batch.node_creates.empty() && batch.edge_creates.empty()) {
 					return {};
 				}
-				if (!preview_reservation_.has_value()) {
-					preview_reservation_.emplace(PendingCreationReservation{0U, 0U, {}});
-					preview_reservation_->node_count = batch.node_creates.size();
-					preview_reservation_->edge_count = batch.edge_creates.size();
-					preview_reservation_->reservation = backend_.reserveLogicalGraphCreationIds(
-							static_cast<uint64_t>(preview_reservation_->node_count),
-							static_cast<uint64_t>(preview_reservation_->edge_count));
-				} else if (preview_reservation_->node_count != batch.node_creates.size() ||
-						   preview_reservation_->edge_count != batch.edge_creates.size()) {
+				if (!retained_->preview_reservation.has_value()) {
+                    auto reservation = reserveOwnedCreationIds(static_cast<uint64_t>(batch.node_creates.size()),
+                        static_cast<uint64_t>(batch.edge_creates.size()));
+                    retained_->preview_reservation.emplace(PendingCreationReservation{
+                        batch.node_creates.size(), batch.edge_creates.size(), std::move(reservation)});
+				} else if (retained_->preview_reservation->node_count != batch.node_creates.size() ||
+						   retained_->preview_reservation->edge_count != batch.edge_creates.size()) {
 					throw std::logic_error("relocatable logical transaction must stage or discard its outstanding "
 										   "creation preview first");
 				}
-				return provisionalResult(preview_reservation_->reservation, batch.node_creates.size(),
+				return provisionalResult(retained_->preview_reservation->reservation, batch.node_creates.size(),
 										 batch.edge_creates.size());
 			}
 
@@ -770,49 +858,62 @@ namespace graph::storage {
 							"relocatable logical transaction owns creation identity reservation normalization");
 				}
 				size_t patchEntries = validateStagedPropertyPatches(batch, patches, maximumPropertyEntries, control);
-				if (maximumPropertyEntries > (std::numeric_limits<size_t>::max)() - property_patch_entry_bound_)
+				if (maximumPropertyEntries > (std::numeric_limits<size_t>::max)() - retained_->property_patch_entry_bound)
 					throw std::overflow_error("logical transaction Property patch entry bound overflowed");
-				const size_t nodeOffset = issued_node_ids_.size();
-				const size_t edgeOffset = issued_edge_ids_.size();
-				NativeGraphLogicalIdReservation reservation;
+                auto payloadBudget = std::dynamic_pointer_cast<query::execution::MaterializedByteBudget>(write_memory_);
+                if (!payloadBudget) throw std::logic_error("native staging requires an owning WRITE budget");
+                // Declare credit before private copies so every failure frees data first.
+                query::execution::MaterializedByteReservation nextPayload(payloadBudget.get());
+                nextPayload.set(detail::mutationNestedHeapBytes<true>(retained_->accumulated,
+                    retained_->property_patches, payloadBudget->availableWithParent(), control.checkpoint));
+                auto input = detail::AdmittedMutationInput::copy(payloadBudget, batch, patches, control.checkpoint);
+                auto &normalizedBatch = input->batch;
+                auto &normalizedPatches = input->patches;
+				const size_t nodeOffset = retained_->issued_node_ids.size();
+				const size_t edgeOffset = retained_->issued_edge_ids.size();
+				OwnedCreationReservation reservation(retained_->issued_node_ids.get_allocator().owner());
 				bool reservedForThisStage = false;
-				if (preview_reservation_.has_value()) {
-					if (preview_reservation_->node_count != batch.node_creates.size() ||
-						preview_reservation_->edge_count != batch.edge_creates.size()) {
+				if (retained_->preview_reservation.has_value()) {
+					if (retained_->preview_reservation->node_count != normalizedBatch.node_creates.size() ||
+						retained_->preview_reservation->edge_count != normalizedBatch.edge_creates.size()) {
 						throw std::logic_error("relocatable logical transaction stage does not match its outstanding "
 											   "creation preview");
 					}
 					// Keep the preview capability intact until the complete statement
 					// validates. A failed statement may be corrected and retried with
 					// the same preview shape without leaking its outstanding lease.
-					reservation = preview_reservation_->reservation;
-				} else if (!batch.node_creates.empty() || !batch.edge_creates.empty()) {
+					reservation = retained_->preview_reservation->reservation;
+				} else if (!normalizedBatch.node_creates.empty() || !normalizedBatch.edge_creates.empty()) {
 					reservation =
-							backend_.reserveLogicalGraphCreationIds(static_cast<uint64_t>(batch.node_creates.size()),
-																	static_cast<uint64_t>(batch.edge_creates.size()));
+							reserveOwnedCreationIds(static_cast<uint64_t>(normalizedBatch.node_creates.size()),
+																	static_cast<uint64_t>(normalizedBatch.edge_creates.size()));
 					reservedForThisStage = true;
 				}
 				try {
-					const LogicalGraphMutationBatchResult result =
-							provisionalResult(reservation, batch.node_creates.size(), batch.edge_creates.size());
-					std::vector<uint64_t> nextIssuedNodeIds = issued_node_ids_;
-					std::vector<uint64_t> nextIssuedEdgeIds = issued_edge_ids_;
-					std::vector<LogicalGraphCreationIdentityRange> nextNodeIdRanges = node_id_ranges_;
-					std::vector<LogicalGraphCreationIdentityRange> nextEdgeIdRanges = edge_id_ranges_;
-					LogicalGraphMutationBatch nextAccumulated = accumulated_;
-					std::vector<LogicalGraphPropertyPatchRequest> nextPatches = property_patches_;
-					rebaseCreatedReferences(batch, issued_node_ids_, issued_edge_ids_);
-					for (auto &patch : patches)
-						rebaseReference(patch.entity, nodeOffset, edgeOffset, issued_node_ids_, issued_edge_ids_);
-					appendIssuedIds(reservation.node_ranges, nextIssuedNodeIds, nextNodeIdRanges, "Node");
-					appendIssuedIds(reservation.edge_ranges, nextIssuedEdgeIds, nextEdgeIdRanges, "Edge");
-					foldCreatedEntityFinalState(batch, nodeOffset, edgeOffset, nextAccumulated);
+					LogicalGraphMutationBatchResult result =
+							provisionalResult(reservation, normalizedBatch.node_creates.size(), normalizedBatch.edge_creates.size());
+					utils::OwnedVector<uint64_t> nextIssuedNodeIds(retained_->issued_node_ids.begin(), retained_->issued_node_ids.end(), retained_->issued_node_ids.get_allocator());
+					utils::OwnedVector<uint64_t> nextIssuedEdgeIds(retained_->issued_edge_ids.begin(), retained_->issued_edge_ids.end(), retained_->issued_edge_ids.get_allocator());
+					OwnedCreationReservation nextCreationReservations = retained_->creation_reservations;
+					OwnedMutationBatch nextAccumulated(retained_->accumulated, normalizedBatch);
+					utils::OwnedVector<LogicalGraphPropertyPatchRequest> nextPatches(retained_->property_patches.get_allocator());
+                    if (normalizedPatches.size() > nextPatches.max_size() - retained_->property_patches.size())
+                        throw std::length_error("logical transaction patch slots overflowed");
+                    nextPatches.reserve(retained_->property_patches.size() + normalizedPatches.size());
+                    nextPatches.insert(nextPatches.end(), retained_->property_patches.begin(), retained_->property_patches.end());
+					rebaseCreatedReferences(normalizedBatch, retained_->issued_node_ids, retained_->issued_edge_ids);
+					for (auto &patch : normalizedPatches)
+						rebaseReference(patch.entity, nodeOffset, edgeOffset, retained_->issued_node_ids, retained_->issued_edge_ids);
+					appendIssuedIds(reservation.node_ranges, nextIssuedNodeIds, nextCreationReservations.node_ranges, "Node");
+					appendIssuedIds(reservation.edge_ranges, nextIssuedEdgeIds, nextCreationReservations.edge_ranges, "Edge");
+					foldCreatedEntityFinalState(normalizedBatch, nodeOffset, edgeOffset, nextAccumulated);
 					// Complete-map replacement resets all older field operations.
-					for (const auto &replacement : batch.property_replacements)
+					for (const auto &replacement : normalizedBatch.property_replacements)
 						std::erase_if(nextPatches, [&](const auto &patch) { return patch.entity == replacement.entity; });
-					append(nextAccumulated, batch);
-					foldStagedPropertyPatches(nextAccumulated, nextPatches, patches,
+					append(nextAccumulated, normalizedBatch);
+					foldStagedPropertyPatches(nextAccumulated, nextPatches, normalizedPatches,
 						patchEntries, maximumPropertyEntries, control);
+                    if (control.checkpoint) control.checkpoint();
 					debug::PerfTrace::addValue("native_graph.write.transaction_retained_property_targets",
 						static_cast<int64_t>(std::min(nextAccumulated.property_replacements.size(),
 							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
@@ -833,21 +934,29 @@ namespace graph::storage {
 						static_cast<int64_t>(std::min(retainedEntries,
 							static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
 
+                    input->transferNestedTo(nextPayload);
+                    input.reset();
+                    const auto actualPayload = detail::mutationNestedHeapBytes<false>(nextAccumulated,
+                        nextPatches, nextPayload.bytes(), control.checkpoint);
+                    nextPayload.set(actualPayload);
 					if (control.checkpoint) control.checkpoint();
-					issued_node_ids_ = std::move(nextIssuedNodeIds);
-					issued_edge_ids_ = std::move(nextIssuedEdgeIds);
-					node_id_ranges_ = std::move(nextNodeIdRanges);
-					edge_id_ranges_ = std::move(nextEdgeIdRanges);
-					accumulated_ = std::move(nextAccumulated);
-					property_patches_ = std::move(nextPatches);
-					property_patch_entry_bound_ += maximumPropertyEntries;
-					if (preview_reservation_.has_value()) {
-						preview_reservation_.reset();
+                // Returning the receipt must remain non-allocating even when
+                // the compiler does not perform named return-value elision.
+                static_assert(std::is_nothrow_move_constructible_v<LogicalGraphMutationBatchResult>);
+					retained_->issued_node_ids = std::move(nextIssuedNodeIds);
+					retained_->issued_edge_ids = std::move(nextIssuedEdgeIds);
+					retained_->creation_reservations = std::move(nextCreationReservations);
+					retained_->accumulated = std::move(nextAccumulated);
+					retained_->property_patches = std::move(nextPatches);
+                    retained_->nested_payload_charge = std::move(nextPayload);
+					retained_->property_patch_entry_bound += maximumPropertyEntries;
+					if (retained_->preview_reservation.has_value()) {
+						retained_->preview_reservation.reset();
 					}
 					return result;
 				} catch (...) {
 					if (reservedForThisStage) {
-						backend_.abandonLogicalGraphCreationIds(reservation);
+						backend_.abandonLogicalGraphCreationIds(reservation.node_ranges, reservation.edge_ranges);
 					}
 					throw;
 				}
@@ -863,8 +972,8 @@ namespace graph::storage {
 				// Driver ABI writes append to the same bounded scratch writer and must
 				// retain their contiguous ID stream, while ordinary overlay work is still
 				// rejected by stageMutationBatch().
-				if (!hasStreamedBulkEdges() && (!isEmpty(accumulated_) || !property_patches_.empty() || !issued_node_ids_.empty() ||
-												!issued_edge_ids_.empty() || preview_reservation_.has_value())) {
+				if (!hasStreamedBulkEdges() && (!isEmpty(retained_->accumulated) || !retained_->property_patches.empty() || !retained_->issued_node_ids.empty() ||
+												!retained_->issued_edge_ids.empty() || retained_->preview_reservation.has_value())) {
 					throw std::logic_error("relocatable streamed bulk Edge transaction requires an otherwise empty "
 										   "logical transaction");
 				}
@@ -991,16 +1100,19 @@ namespace graph::storage {
 			[[nodiscard]] LogicalGraphMutationBatchResult commit() override {
 				requireActive("commit");
 				if (read_only_) {
-					if (!isEmpty(accumulated_) || !property_patches_.empty()) { // read-only entry points reject writes before staging.
+                    LogicalGraphMutationBatchResult emptyResult;
+					if (!isEmpty(retained_->accumulated) || !retained_->property_patches.empty()) { // read-only entry points reject writes before staging.
 						throw std::logic_error(
 								"relocatable read-only logical transaction contains staged graph mutations");
 					}
 					state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
+                    releaseRetainedMutationState();
 					snapshot_.reset();
 					raw_snapshot_.release();
-					return {};
+					return emptyResult;
 				}
 				if (hasStreamedBulkEdges()) {
+                    LogicalGraphMutationBatchResult emptyResult;
 					std::exception_ptr cleanup_failure;
 					try {
 						snapshot_.reset();
@@ -1033,7 +1145,7 @@ namespace graph::storage {
 						NativeStreamedGraphPublicationPlan plan;
 						if (backend_.currentNativeLogicalGraphMutationFence() == fence_) {
 							plan = NativeStreamedGraphPublicationPlan::derive(
-									source, streamed_edge_reservation_.edge_ranges,
+									source, retained_->streamed_edge_reservation.edge_ranges,
 									backend_.nativeBulkEdgePublicationPreflightOptions(), [this](uint64_t nodeId) {
 										return snapshot_->supportsNodeExistenceProbes()
 												   ? snapshot_->containsNode(nodeId)
@@ -1041,16 +1153,16 @@ namespace graph::storage {
 									});
 						}
 						backend_.commitNativeStreamedBulkEdges(*bulk_edge_store_, bulk_edge_manifest_->location,
-															   streamed_edge_reservation_, plan, fence_);
+															   retained_->streamed_edge_reservation, plan, fence_);
 						bulk_edge_writer_.reset();
 						bulk_edge_store_.reset();
 						bulk_edge_manifest_.reset();
-						streamed_edge_reservation_ = {};
 						bulk_session_lease_.reset();
 						state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
+                        releaseRetainedMutationState();
 						snapshot_.reset();
 						raw_snapshot_.release();
-						return {};
+						return emptyResult;
 					} catch (...) {
 						cleanup_failure = std::current_exception();
 					}
@@ -1062,6 +1174,7 @@ namespace graph::storage {
 					}
 					state_ = backend_.hasIndeterminateWriteOutcome() ? LogicalGraphTransactionState::LGTTS_INDETERMINATE
 																	 : LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
+                    releaseRetainedMutationState();
 					snapshot_.reset();
 					raw_snapshot_.release();
 					if (cleanup_failure != nullptr) {
@@ -1073,7 +1186,7 @@ namespace graph::storage {
 
 				try {
 					CanonicalMutation canonical = canonicalizeFinalState();
-					const bool blindRebase = !reads_exposed_ && property_patches_.empty() &&
+					const bool blindRebase = !reads_exposed_ && retained_->property_patches.empty() &&
 						!canonical.batch.property_replacements.empty() && canonical.batch.property_replacements.size() <= 64U &&
 						canonical.batch.node_creates.empty() && canonical.batch.edge_creates.empty() &&
 						canonical.batch.node_label_replacements.empty() && canonical.batch.node_deletes.empty() &&
@@ -1082,10 +1195,12 @@ namespace graph::storage {
 							return request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE &&
 								request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED;
 						});
-					if (!blindRebase && (!canonical.batch.property_replacements.empty() || !property_patches_.empty()) &&
+					if (!blindRebase && (!canonical.batch.property_replacements.empty() || !retained_->property_patches.empty()) &&
 						backend_.currentNativeLogicalGraphMutationFence() != fence_)
 						throw LogicalGraphMutationConflict("logical transaction Property source fence changed before final planning");
-					CanonicalPropertyPatches patches = blindRebase ? CanonicalPropertyPatches{} : extractFinalPropertyPatches(canonical.batch);
+					CanonicalPropertyPatches patches = blindRebase
+                        ? CanonicalPropertyPatches(write_memory_, retained_->property_patches.size())
+                        : extractFinalPropertyPatches(canonical.batch);
 					appendCanonicalStagedPropertyPatches(canonical.batch, patches);
 					LogicalGraphMutationBatchResult result = blindRebase
 						? backend_.executeNativeBlindNodePropertyReplacements(canonical.batch, raw_snapshot_, fence_)
@@ -1099,17 +1214,14 @@ namespace graph::storage {
 					}
 					abandonOutstandingCreationReservations();
 					state_ = LogicalGraphTransactionState::LGTTS_COMMITTED;
-					property_patches_.clear();
-					property_patch_entry_bound_ = 0U;
+                    releaseRetainedMutationState();
 					snapshot_.reset();
 					raw_snapshot_.release();
 					return result;
 				} catch (const LogicalGraphMutationConflict &) {
 					abandonOutstandingCreationReservations();
 					state_ = LogicalGraphTransactionState::LGTTS_CONFLICTED;
-					accumulated_ = {};
-					property_patches_.clear();
-					property_patch_entry_bound_ = 0U;
+					releaseRetainedMutationState();
 					snapshot_.reset();
 					raw_snapshot_.release();
 					throw;
@@ -1120,9 +1232,7 @@ namespace graph::storage {
 					state_ = backend_.hasIndeterminateWriteOutcome()
 						? LogicalGraphTransactionState::LGTTS_INDETERMINATE
 						: LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
-					accumulated_ = {};
-					property_patches_.clear();
-					property_patch_entry_bound_ = 0U;
+					releaseRetainedMutationState();
 					snapshot_.reset();
 					raw_snapshot_.release();
 					throw;
@@ -1140,9 +1250,7 @@ namespace graph::storage {
 					cleanup_failure = std::current_exception();
 				}
 				abandonOutstandingCreationReservations();
-				accumulated_ = {};
-				property_patches_.clear();
-				property_patch_entry_bound_ = 0U;
+				releaseRetainedMutationState();
 				snapshot_.reset();
 				raw_snapshot_.release();
 				state_ = LogicalGraphTransactionState::LGTTS_ROLLED_BACK;
@@ -1180,8 +1288,8 @@ namespace graph::storage {
 					throw std::logic_error(
 							"relocatable streamed bulk Edge transaction received an invalid durable ID lease");
 				}
-				if (!streamed_edge_reservation_.edge_ranges.empty()) {
-					const NativeGraphLogicalIdLeaseRange previous = streamed_edge_reservation_.edge_ranges.back();
+				if (!retained_->streamed_edge_reservation.edge_ranges.empty()) {
+					const NativeGraphLogicalIdLeaseRange previous = retained_->streamed_edge_reservation.edge_ranges.back();
 						if (previous.count - 1U > std::numeric_limits<uint64_t>::max() - previous.first_id || // stored lease ranges are validated and strictly ordered when acquired.
 						previous.first_id + previous.count - 1U >= range.first_id) {
 						backend_.abandonLogicalGraphCreationIds(lease);
@@ -1189,7 +1297,7 @@ namespace graph::storage {
 					}
 				}
 				try {
-					streamed_edge_reservation_.edge_ranges.push_back(range);
+					retained_->streamed_edge_reservation.edge_ranges.push_back(range);
 				} catch (...) {
 					backend_.abandonLogicalGraphCreationIds(lease);
 					throw;
@@ -1262,10 +1370,13 @@ namespace graph::storage {
 					bulk_edge_store_.reset();
 					bulk_edge_manifest_.reset();
 				}
-				if (!streamed_edge_reservation_.empty()) {
-					backend_.abandonLogicalGraphCreationIds(streamed_edge_reservation_);
-					streamed_edge_reservation_ = {};
-				}
+                if (retained_ && !retained_->streamed_edge_reservation.empty()) {
+                    backend_.abandonLogicalGraphCreationIds(retained_->streamed_edge_reservation);
+                    // Keep capacity while this transaction remains active. The
+                    // optional state frees it at termination without new proxies.
+                    retained_->streamed_edge_reservation.node_ranges.clear();
+                    retained_->streamed_edge_reservation.edge_ranges.clear();
+                }
 				streamed_edge_next_id_ = 0U;
 				streamed_edge_lease_last_id_ = 0U;
 				streamed_edge_record_count_ = 0U;
@@ -1277,7 +1388,7 @@ namespace graph::storage {
 				}
 			}
 
-			[[nodiscard]] static std::optional<size_t> findIssuedOrdinal(const std::vector<uint64_t> &ids,
+			[[nodiscard]] static std::optional<size_t> findIssuedOrdinal(std::span<const uint64_t> ids,
 																		 uint64_t id) {
 				const auto iterator = std::lower_bound(ids.begin(), ids.end(), id);
 				if (iterator == ids.end() || *iterator != id) {
@@ -1287,8 +1398,8 @@ namespace graph::storage {
 			}
 
 			static void rebaseReference(LogicalGraphMutationEntityReference &reference, size_t nodeOffset,
-										size_t edgeOffset, const std::vector<uint64_t> &issuedNodeIds,
-										const std::vector<uint64_t> &issuedEdgeIds) {
+										size_t edgeOffset, std::span<const uint64_t> issuedNodeIds,
+										std::span<const uint64_t> issuedEdgeIds) {
 				if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE && // public mutation builders validate entity references before rebasing.
 					reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE) {
 					throw std::invalid_argument("relocatable logical transaction has an unknown entity kind");
@@ -1323,8 +1434,8 @@ namespace graph::storage {
 			}
 
 			static void rebaseCreatedReferences(LogicalGraphMutationBatch &batch,
-												const std::vector<uint64_t> &issuedNodeIds,
-												const std::vector<uint64_t> &issuedEdgeIds) {
+												std::span<const uint64_t> issuedNodeIds,
+												std::span<const uint64_t> issuedEdgeIds) {
 				const size_t nodeOffset = issuedNodeIds.size();
 				const size_t edgeOffset = issuedEdgeIds.size();
 					if (nodeOffset > static_cast<size_t>(std::numeric_limits<uint64_t>::max()) || // transaction creation vectors are bounded by the uint64 logical-ID domain.
@@ -1369,8 +1480,8 @@ namespace graph::storage {
 			}
 
 			static void appendIssuedIds(std::span<const NativeGraphLogicalIdLeaseRange> ranges,
-										std::vector<uint64_t> &ids,
-										std::vector<LogicalGraphCreationIdentityRange> &identityRanges,
+										utils::OwnedVector<uint64_t> &ids,
+										utils::OwnedVector<NativeGraphLogicalIdLeaseRange> &identityRanges,
 										const char *entityName) {
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
 						if (range.first_id == 0U || range.count == 0U || // metadata-issued ranges are validated before canonicalization.
@@ -1380,6 +1491,7 @@ namespace graph::storage {
 						throw std::logic_error(std::string("relocatable logical transaction ") + entityName +
 											   " received a noncanonical durable ID lease");
 					}
+					ids.reserve(ids.size() + static_cast<size_t>(range.count));
 					for (uint64_t offset = 0U; offset < range.count; ++offset) {
 						ids.push_back(range.first_id + offset);
 					}
@@ -1387,8 +1499,9 @@ namespace graph::storage {
 				}
 			}
 
+            template<class Reservation>
 			[[nodiscard]] static LogicalGraphMutationBatchResult
-			provisionalResult(const NativeGraphLogicalIdReservation &reservation, size_t nodeCount, size_t edgeCount) {
+			provisionalResult(const Reservation &reservation, size_t nodeCount, size_t edgeCount) {
 				LogicalGraphMutationBatchResult result;
 				result.created_node_ids = collectIssuedIds(reservation.node_ranges, nodeCount, "Node");
 				result.created_edge_ids = collectIssuedIds(reservation.edge_ranges, edgeCount, "Edge");
@@ -1396,14 +1509,14 @@ namespace graph::storage {
 			}
 
 			template<typename Mutation, typename Reference>
-			static void mergeFinalReplacements(std::vector<Mutation> &destination, std::vector<Mutation> &source,
+			static void mergeFinalReplacements(utils::OwnedVector<Mutation> &destination, std::vector<Mutation> &source,
 				const Reference &reference) {
 				const auto target = [&](const Mutation &mutation) {
 					const auto &entity = reference(mutation);
 					return std::tuple{static_cast<uint8_t>(entity.entity_kind),
 						static_cast<uint8_t>(entity.reference_kind), entity.value};
 				};
-				std::map<std::tuple<uint8_t, uint8_t, uint64_t>, size_t> positions;
+				std::pmr::map<std::tuple<uint8_t, uint8_t, uint64_t>, size_t> positions(destination.get_allocator().resource());
 				for (size_t index = 0U; index < destination.size(); ++index)
 					positions.emplace(target(destination[index]), index);
 				for (auto &replacement : source) {
@@ -1419,7 +1532,7 @@ namespace graph::storage {
 				}
 			}
 
-			static void append(LogicalGraphMutationBatch &destination, LogicalGraphMutationBatch &source) {
+			static void append(OwnedMutationBatch &destination, LogicalGraphMutationBatch &source) {
 				destination.node_creates.insert(destination.node_creates.end(),
 					std::make_move_iterator(source.node_creates.begin()), std::make_move_iterator(source.node_creates.end()));
 				destination.edge_creates.insert(destination.edge_creates.end(),
@@ -1441,14 +1554,14 @@ namespace graph::storage {
 					static_cast<uint8_t>(entity.reference_kind), entity.value};
 			}
 
-			static size_t validateStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
+			size_t validateStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
 				const std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t maximumEntries,
-				const LogicalGraphMutationReadControl &control) {
+				const LogicalGraphMutationReadControl &control) const {
 				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
 				if (!patches.empty() && (maximumEntries == 0U || patches.size() > maximumEntries))
 					throw std::invalid_argument("logical transaction Property patches require a positive work bound");
 				size_t entries = 0U;
-				std::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets;
+				std::pmr::set<std::tuple<uint8_t, uint8_t, uint64_t>> targets(retained_->issued_node_ids.get_allocator().resource());
 				for (const auto &patch : patches) {
 					checkpoint();
 					const auto &entity = patch.entity;
@@ -1464,7 +1577,7 @@ namespace graph::storage {
 							throw std::length_error("logical transaction Property patches exceeded their entry bound");
 						entries += count;
 					}
-					std::set<std::string_view> keys;
+					std::pmr::set<std::string_view> keys(retained_->issued_node_ids.get_allocator().resource());
 					for (const auto &field : patch.sets) {
 						checkpoint();
 						if (field.key.empty() || field.value.getType() == PropertyType::NULL_TYPE || !keys.insert(field.key).second)
@@ -1490,43 +1603,95 @@ namespace graph::storage {
 				return entries;
 			}
 
-			static void applyStagedPropertyPatch(std::vector<LogicalGraphWriteProperty> &properties,
-				LogicalGraphPropertyPatchRequest &patch, const LogicalGraphMutationReadControl &control) {
-				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
-				std::map<std::string, PropertyValue> fields;
-				for (auto &field : properties) {
-					checkpoint();
-					if (field.key.empty() || !fields.emplace(std::move(field.key), std::move(field.value)).second)
-						throw std::invalid_argument("logical transaction Property source has duplicate or empty keys");
-				}
-				for (auto &field : patch.sets) { checkpoint(); fields.insert_or_assign(std::move(field.key), std::move(field.value)); }
-				for (const auto &key : patch.removals) { checkpoint(); fields.erase(key); }
-				properties.clear();
-				properties.reserve(fields.size());
-				for (auto &[key, value] : fields) { checkpoint(); properties.push_back({key, std::move(value)}); }
-			}
+            void applyStagedPropertyPatch(std::vector<LogicalGraphWriteProperty> &properties,
+                LogicalGraphPropertyPatchRequest &patch, const LogicalGraphMutationReadControl &control) const {
+                auto *budget = requirePayloadBudget(write_memory_);
+                query::execution::MaterializedByteReservation outputCharge(budget);
+                // Borrow inputs without moving their heap headers. Map slots are
+                // PMR-owned; the complete output is admitted before its first copy.
+                std::pmr::map<std::string_view, std::pair<const std::string *, const PropertyValue *>> fields(budget);
+                const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
+                for (const auto &field : properties) {
+                    checkpoint();
+                    if (field.key.empty() || !fields.emplace(field.key, std::pair{&field.key, &field.value}).second)
+                        throw std::invalid_argument("logical transaction Property source has duplicate or empty keys");
+                }
+                for (const auto &field : patch.sets) { checkpoint(); fields.insert_or_assign(field.key, std::pair{&field.key, &field.value}); }
+                for (const auto &key : patch.removals) { checkpoint(); fields.erase(key); }
+                detail::WriteCopySizer meter(budget->availableWithParent(), control.checkpoint);
+                meter.add(detail::writeVectorCopyHeapBytes<LogicalGraphWriteProperty>(fields.size()));
+                size_t temporaryHeader = 0U;
+                for (const auto &[key, value] : fields) {
+                    meter.tick();
+                    if (value.second) temporaryHeader = (std::max)(temporaryHeader,
+                        detail::movedPropertyHeaderHeapUpper(*value.second));
+                    meter.add(detail::writeStringCopyHeapUpper(*value.first)); meter.property(*value.second);
+                }
+                // variant copy assignment may create one temporary before a
+                // nonthrowing move into its previously scalar alternative.
+                meter.add(temporaryHeader);
+                outputCharge.set(meter.bytes());
+                std::vector<LogicalGraphWriteProperty> output; output.reserve(fields.size());
+                for (const auto &[key, value] : fields) {
+                    checkpoint();
+                    // Construct members in place, avoiding an allocating moved
+                    // PropertyValue header on MSVC.
+                    auto &field = output.emplace_back();
+                    field.key.assign(key.data(), key.size()); field.value = *value.second;
+                }
+                checkpoint(); properties.swap(output);
+                // The output may contain copies of incoming fields. Free those
+                // consumed private inputs before refunding the output workspace;
+                // their retained-input credit now covers the adopted output.
+                std::vector<LogicalGraphWriteProperty>().swap(patch.sets);
+                std::vector<std::string>().swap(patch.removals);
+            }
 
-			static void mergeStagedPropertyPatch(LogicalGraphPropertyPatchRequest &previous,
-				LogicalGraphPropertyPatchRequest &next, const LogicalGraphMutationReadControl &control) {
-				const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
-				std::map<std::string, std::optional<PropertyValue>> fields;
-				for (auto &field : previous.sets) { checkpoint(); fields.emplace(std::move(field.key), std::move(field.value)); }
-				for (auto &key : previous.removals) { checkpoint(); fields.emplace(std::move(key), std::nullopt); }
-				for (auto &field : next.sets) { checkpoint(); fields.insert_or_assign(std::move(field.key), std::move(field.value)); }
-				for (auto &key : next.removals) { checkpoint(); fields.insert_or_assign(std::move(key), std::nullopt); }
-				previous.sets.clear();
-				previous.removals.clear();
-				for (auto &[key, value] : fields) {
-					checkpoint();
-					if (value) previous.sets.push_back({key, std::move(*value)});
-					else previous.removals.push_back(key);
-				}
-			}
+            void mergeStagedPropertyPatch(LogicalGraphPropertyPatchRequest &previous,
+                LogicalGraphPropertyPatchRequest &next, const LogicalGraphMutationReadControl &control) const {
+                auto *budget = requirePayloadBudget(write_memory_);
+                query::execution::MaterializedByteReservation outputCharge(budget);
+                std::pmr::map<std::string_view, std::pair<const std::string *, const PropertyValue *>> fields(budget);
+                const auto checkpoint = [&] { if (control.checkpoint) control.checkpoint(); };
+                for (const auto &field : previous.sets) { checkpoint(); fields.emplace(field.key, std::pair{&field.key, &field.value}); }
+                for (const auto &key : previous.removals) { checkpoint(); fields.emplace(key, std::pair<const std::string *, const PropertyValue *>{&key, nullptr}); }
+                for (const auto &field : next.sets) { checkpoint(); fields.insert_or_assign(field.key, std::pair{&field.key, &field.value}); }
+                for (const auto &key : next.removals) { checkpoint(); fields.insert_or_assign(key, std::pair<const std::string *, const PropertyValue *>{&key, nullptr}); }
+                size_t sets = 0U;
+                for (const auto &[key, value] : fields) if (value.second) ++sets;
+                detail::WriteCopySizer meter(budget->availableWithParent(), control.checkpoint);
+                meter.add(detail::writeVectorCopyHeapBytes<LogicalGraphWriteProperty>(sets));
+                meter.add(detail::writeVectorCopyHeapBytes<std::string>(fields.size() - sets));
+                size_t temporaryHeader = 0U;
+                for (const auto &[key, value] : fields) {
+                    meter.tick();
+                    if (value.second) temporaryHeader = (std::max)(temporaryHeader,
+                        detail::movedPropertyHeaderHeapUpper(*value.second));
+                    meter.add(detail::writeStringCopyHeapUpper(*value.first));
+                    if (value.second) meter.property(*value.second);
+                }
+                // variant copy assignment may create one temporary before a
+                // nonthrowing move into its previously scalar alternative.
+                meter.add(temporaryHeader);
+                outputCharge.set(meter.bytes());
+                std::vector<LogicalGraphWriteProperty> outputSets; outputSets.reserve(sets);
+                std::vector<std::string> outputRemovals; outputRemovals.reserve(fields.size() - sets);
+                for (const auto &[key, value] : fields) {
+                    checkpoint();
+                    if (value.second) {
+                        auto &field = outputSets.emplace_back();
+                        field.key.assign(key.data(), key.size()); field.value = *value.second;
+                    } else outputRemovals.emplace_back(key);
+                }
+                checkpoint(); previous.sets.swap(outputSets); previous.removals.swap(outputRemovals);
+                std::vector<LogicalGraphWriteProperty>().swap(next.sets);
+                std::vector<std::string>().swap(next.removals);
+            }
 
-			static void foldStagedPropertyPatches(LogicalGraphMutationBatch &accumulated,
-				std::vector<LogicalGraphPropertyPatchRequest> &retained,
+			void foldStagedPropertyPatches(OwnedMutationBatch &accumulated,
+				utils::OwnedVector<LogicalGraphPropertyPatchRequest> &retained,
 				std::vector<LogicalGraphPropertyPatchRequest> &patches, size_t &entries, size_t maximumEntries,
-				const LogicalGraphMutationReadControl &control) {
+				const LogicalGraphMutationReadControl &control) const {
 				for (auto &patch : patches) {
 					if (control.checkpoint) control.checkpoint();
 					std::vector<LogicalGraphWriteProperty> *source = nullptr;
@@ -1553,7 +1718,7 @@ namespace graph::storage {
 			}
 
 			void foldCreatedEntityFinalState(LogicalGraphMutationBatch &batch, size_t nodeOffset, size_t edgeOffset,
-											 LogicalGraphMutationBatch &previouslyAccumulated) {
+											 OwnedMutationBatch &previouslyAccumulated) {
 				const auto nodeCreate = [&previouslyAccumulated, &batch,
 										 nodeOffset](uint64_t ordinal) -> LogicalGraphNodeCreateRequest & {
 					if (ordinal < nodeOffset) {
@@ -1579,11 +1744,14 @@ namespace graph::storage {
 					return batch.edge_creates.at(static_cast<size_t>(local));
 				};
 
-				std::vector<LogicalGraphPropertyMutationRequest> persistedProperties;
-				persistedProperties.reserve(batch.property_replacements.size());
-				std::set<std::tuple<uint8_t, uint64_t>> createdPropertyTargets;
-				std::set<std::tuple<uint8_t, uint64_t>> persistedPropertyTargets;
-				for (LogicalGraphPropertyMutationRequest &mutation: batch.property_replacements) {
+                static_assert(std::is_nothrow_move_assignable_v<LogicalGraphPropertyMutationRequest>);
+                static_assert(std::is_nothrow_move_assignable_v<LogicalGraphNodeLabelMutationRequest>);
+                auto *const memory = retained_->issued_node_ids.get_allocator().resource();
+                std::pmr::set<std::tuple<uint8_t, uint64_t>> createdPropertyTargets(memory);
+                std::pmr::set<std::tuple<uint8_t, uint64_t>> persistedPropertyTargets(memory);
+                // Only the disposable statement and its draft are modified here.
+                // Stable compaction avoids a second unaccounted request buffer.
+                std::erase_if(batch.property_replacements, [&](LogicalGraphPropertyMutationRequest &mutation) {
 					switch (mutation.entity.reference_kind) {
 						case LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE:
 							if (mutation.entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
@@ -1595,7 +1763,7 @@ namespace graph::storage {
 															"created Node Properties");
 							}
 							nodeCreate(mutation.entity.value).properties = std::move(mutation.properties);
-							break;
+                            return true;
 					case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
 						if (mutation.entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE ||
 								!createdPropertyTargets
@@ -1606,7 +1774,7 @@ namespace graph::storage {
 															"created Edge Properties");
 							}
 							edgeCreate(mutation.entity.value).properties = std::move(mutation.properties);
-							break;
+                            return true;
 						case LogicalGraphMutationReferenceKind::LGRK_PERSISTED:
 							if (!persistedPropertyTargets
 										 .insert({static_cast<uint8_t>(mutation.entity.entity_kind),
@@ -1616,20 +1784,16 @@ namespace graph::storage {
 										"relocatable logical transaction has duplicate persisted Property replacements "
 										"within one statement");
 							}
-							persistedProperties.push_back(std::move(mutation));
-							break;
+							return false;
 						default:
 							throw std::invalid_argument(
 									"relocatable logical transaction has an unknown Property reference kind");
 					}
-				}
-				batch.property_replacements = std::move(persistedProperties);
+                });
 
-				std::vector<LogicalGraphNodeLabelMutationRequest> persistedLabels;
-				persistedLabels.reserve(batch.node_label_replacements.size());
-				std::set<uint64_t> createdLabelTargets;
-				std::set<uint64_t> persistedLabelTargets;
-				for (LogicalGraphNodeLabelMutationRequest &mutation: batch.node_label_replacements) {
+                std::pmr::set<uint64_t> createdLabelTargets(memory);
+                std::pmr::set<uint64_t> persistedLabelTargets(memory);
+                std::erase_if(batch.node_label_replacements, [&](LogicalGraphNodeLabelMutationRequest &mutation) {
 					switch (mutation.node.reference_kind) {
 						case LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE:
 							if (mutation.node.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
@@ -1638,44 +1802,109 @@ namespace graph::storage {
 										"relocatable logical transaction has duplicate or invalid created Node labels");
 							}
 							nodeCreate(mutation.node.value).labels = std::move(mutation.labels);
-							break;
+                            return true;
 						case LogicalGraphMutationReferenceKind::LGRK_PERSISTED:
 							if (!persistedLabelTargets.insert(mutation.node.value).second) {
 								throw std::invalid_argument("relocatable logical transaction has duplicate persisted "
 															"Node label replacements "
 															"within one statement");
 							}
-							persistedLabels.push_back(std::move(mutation));
-							break;
+							return false;
 						case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
 						default:
 							throw std::invalid_argument(
 									"relocatable logical transaction has an unknown Node label reference kind");
 					}
-				}
-				batch.node_label_replacements = std::move(persistedLabels);
+                });
 			}
 
-			struct CanonicalMutation {
-				LogicalGraphMutationBatch batch;
-				LogicalGraphMutationBatchResult durable_result;
-			};
+            struct CanonicalMutation {
+                query::execution::MaterializedByteReservation payload_charge;
+                LogicalGraphMutationBatch batch;
+                LogicalGraphMutationBatchResult durable_result;
+                static query::execution::MaterializedByteReservation admit(
+                        query::execution::MaterializedByteBudget *budget, const OwnedMutationBatch &source,
+                        size_t nodeRanges, size_t edgeRanges) {
+                    const std::function<void()> checkpoint;
+                    detail::WriteCopySizer meter(budget->availableWithParent(), checkpoint);
+                    meter.add(detail::mutationNestedHeapBytes<true>(source,
+                        std::span<const LogicalGraphPropertyPatchRequest>{}, budget->availableWithParent()));
+                    const auto slots = [&]<class T>(const auto &values, std::type_identity<T>) {
+                        meter.add(detail::writeVectorCopyHeapBytes<T>(values.size()));
+                    };
+                    slots(source.node_creates, std::type_identity<LogicalGraphNodeCreateRequest>{});
+                    slots(source.edge_creates, std::type_identity<LogicalGraphBatchEdgeCreateRequest>{});
+                    slots(source.property_replacements, std::type_identity<LogicalGraphPropertyMutationRequest>{});
+                    meter.add(query::execution::detail::multiplyPropertyBufferBytes(
+                        source.property_replacements.size(), 2U * query::execution::detail::standardContainerProxyBytes()));
+                    slots(source.node_label_replacements, std::type_identity<LogicalGraphNodeLabelMutationRequest>{});
+                    slots(source.edge_deletes, std::type_identity<LogicalGraphEdgeDeleteRequest>{});
+                    slots(source.node_deletes, std::type_identity<LogicalGraphNodeDeleteRequest>{});
+                    meter.add(detail::writeVectorCopyHeapBytes<uint64_t>(source.node_creates.size()));
+                    meter.add(detail::writeVectorCopyHeapBytes<uint64_t>(source.edge_creates.size()));
+                    if (!source.node_creates.empty() || !source.edge_creates.empty()) {
+                        using Range = decltype(LogicalGraphCreationIdentityPlan::node_id_ranges)::value_type;
+                        meter.add(detail::writeVectorCopyHeapBytes<Range>(nodeRanges));
+                        meter.add(detail::writeVectorCopyHeapBytes<Range>(edgeRanges));
+                        meter.add(detail::writeVectorCopyHeapBytes<uint64_t>(source.node_creates.size()));
+                        meter.add(detail::writeVectorCopyHeapBytes<uint64_t>(source.edge_creates.size()));
+                        // Moving the local plan leaves four empty debug headers.
+                        meter.add(4U * query::execution::detail::standardContainerProxyBytes());
+                    }
+                    query::execution::MaterializedByteReservation charge(budget);
+                    charge.set(meter.bytes()); return charge;
+                }
+                CanonicalMutation(query::execution::MaterializedByteBudget *budget,
+                        const OwnedMutationBatch &source, size_t nodeRanges, size_t edgeRanges)
+                    : payload_charge(admit(budget, source, nodeRanges, edgeRanges)) {
+                    batch.node_creates.reserve(source.node_creates.size());
+                    batch.edge_creates.reserve(source.edge_creates.size());
+                    batch.property_replacements.reserve(source.property_replacements.size());
+                    batch.node_label_replacements.reserve(source.node_label_replacements.size());
+                    batch.edge_deletes.reserve(source.edge_deletes.size());
+                    batch.node_deletes.reserve(source.node_deletes.size());
+                    durable_result.created_node_ids.reserve(source.node_creates.size());
+                    durable_result.created_edge_ids.reserve(source.edge_creates.size());
+                }
+                CanonicalMutation(CanonicalMutation &&) noexcept = default;
+            };
 
-			struct CanonicalPropertyPatches {
-				std::vector<LogicalGraphPropertyPatchRequest> requests;
-				size_t entry_bound = 0U;
-			};
+            struct CanonicalPropertyPatches {
+                query::execution::MaterializedByteBudget *budget;
+                query::execution::MaterializedByteReservation payload_charge;
+                utils::OwnedVector<LogicalGraphPropertyPatchRequest> requests;
+                size_t entry_bound = 0U;
+                CanonicalPropertyPatches(const std::shared_ptr<std::pmr::memory_resource> &memory, size_t maximumRequests)
+                    : budget(requirePayloadBudget(memory)), payload_charge(budget),
+                      requests(utils::OwnedPmrAllocator<LogicalGraphPropertyPatchRequest>(memory)) {
+                    requests.reserve(maximumRequests);
+                }
+                CanonicalPropertyPatches(CanonicalPropertyPatches &&) noexcept = default;
+                void admitPatch(std::span<const LogicalGraphWriteProperty> sets,
+                        std::span<const std::string> removals, bool willMove) {
+                    const std::function<void()> checkpoint;
+                    detail::WriteCopySizer meter(budget->availableWithParent(), checkpoint);
+                    meter.properties(sets); meter.strings(removals);
+                    if (willMove) meter.add(2U * query::execution::detail::standardContainerProxyBytes());
+                    payload_charge.set(query::execution::detail::addPropertyBufferBytes(payload_charge.bytes(), meter.bytes()));
+                }
+                void appendCopy(const LogicalGraphPropertyPatchRequest &patch) {
+                    admitPatch(patch.sets, patch.removals, false);
+                    requests.push_back(patch);
+                }
+            };
 
 			void appendCanonicalStagedPropertyPatches(const LogicalGraphMutationBatch &batch,
 				CanonicalPropertyPatches &result) const {
-				if (property_patches_.empty()) return;
-				std::set<uint64_t> deletedNodes, detachedNodes, deletedEdges;
+				if (retained_->property_patches.empty()) return;
+				auto *const memory = retained_->issued_node_ids.get_allocator().resource();
+                std::pmr::set<uint64_t> deletedNodes(memory), detachedNodes(memory), deletedEdges(memory);
 				for (const auto &deletion : batch.node_deletes) {
 					deletedNodes.insert(deletion.node_id);
 					if (deletion.detach) detachedNodes.insert(deletion.node_id);
 				}
 				for (const auto &deletion : batch.edge_deletes) deletedEdges.insert(deletion.edge_id);
-				for (const auto &patch : property_patches_) {
+				for (const auto &patch : retained_->property_patches) {
 					if (patch.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
 						if (deletedNodes.contains(patch.entity.value)) continue;
 					} else {
@@ -1685,21 +1914,26 @@ namespace graph::storage {
 							if (detachedNodes.contains(edge.source_node_id) || detachedNodes.contains(edge.target_node_id)) continue;
 						}
 					}
-					result.requests.push_back(patch);
+					result.appendCopy(patch);
 				}
-				if (property_patch_entry_bound_ > (std::numeric_limits<size_t>::max)() - result.entry_bound)
+				if (retained_->property_patch_entry_bound > (std::numeric_limits<size_t>::max)() - result.entry_bound)
 					throw std::overflow_error("logical transaction final Property patch bound overflowed");
-				result.entry_bound += property_patch_entry_bound_;
+				result.entry_bound += retained_->property_patch_entry_bound;
 			}
 
 			// Stage/overlay continue to own complete visible collections. At commit,
 			// derive the delta from the pinned base and authoritative final state;
 			// never trust a caller-supplied hint about which fields changed.
 			[[nodiscard]] CanonicalPropertyPatches extractFinalPropertyPatches(LogicalGraphMutationBatch &batch) const {
-				CanonicalPropertyPatches result;
-				std::vector<LogicalGraphPropertyMutationRequest> remaining;
+                const auto maximumRequests = query::execution::detail::addPropertyBufferBytes(
+                    batch.property_replacements.size(), retained_->property_patches.size());
+                CanonicalPropertyPatches result(write_memory_, maximumRequests);
+                query::execution::MaterializedByteReservation remainingCharge(requirePayloadBudget(write_memory_));
+                remainingCharge.set(detail::writeVectorCopyHeapBytes<LogicalGraphPropertyMutationRequest>(
+                    batch.property_replacements.size()));
+                std::vector<LogicalGraphPropertyMutationRequest> remaining;
 				remaining.reserve(batch.property_replacements.size());
-				result.requests.reserve(batch.property_replacements.size());
+
 				for (auto &replacement : batch.property_replacements) {
 					// Explicit NULL in a complete map is distinct from patch REMOVE.
 					if (replacement.entity.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED ||
@@ -1709,13 +1943,14 @@ namespace graph::storage {
 						remaining.push_back(std::move(replacement));
 						continue;
 					}
+                    detail::PropertyDecodeWorkspace decodedSource(write_memory_);
 					const EntityReadShape shape{.all_properties = true};
 					std::vector<LogicalGraphPropertyEntry> source =
 						replacement.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE
 							? snapshot_->readNodeShaped(replacement.entity.value, shape).properties
 							: snapshot_->readEdgeShaped(replacement.entity.value, shape).properties;
 					std::ranges::sort(source, {}, &LogicalGraphPropertyEntry::key);
-					std::vector<const LogicalGraphWriteProperty *> final;
+					std::pmr::vector<const LogicalGraphWriteProperty *> final(retained_->issued_node_ids.get_allocator().resource());
 					final.reserve(replacement.properties.size());
 					for (const auto &field : replacement.properties) final.push_back(&field);
 					std::ranges::sort(final, [](const auto *left, const auto *right) { return left->key < right->key; });
@@ -1723,7 +1958,23 @@ namespace graph::storage {
 						if (final[index]->key.empty() || (index != 0U && final[index - 1U]->key == final[index]->key))
 							throw std::invalid_argument("logical transaction final properties require unique nonempty keys");
 					}
-					LogicalGraphPropertyPatchRequest patch{replacement.entity, {}, {}};
+                    // Reserve the maximum possible normalized delta before
+                    // constructing its standard containers. Each final field
+                    // and each source key is copied at most once.
+                    {
+                        auto *budget = requirePayloadBudget(write_memory_);
+                        const std::function<void()> checkpoint;
+                        detail::WriteCopySizer meter(budget->availableWithParent(), checkpoint);
+                        meter.properties(replacement.properties);
+                        meter.add(detail::writeVectorCopyHeapBytes<std::string>(source.size()));
+                        for (const auto &field : source) meter.add(detail::writeStringCopyHeapUpper(field.key));
+                        meter.add(2U * query::execution::detail::standardContainerProxyBytes());
+                        result.payload_charge.set(query::execution::detail::addPropertyBufferBytes(
+                            result.payload_charge.bytes(), meter.bytes()));
+                    }
+                    LogicalGraphPropertyPatchRequest patch{replacement.entity, {}, {}};
+                    patch.sets.reserve(replacement.properties.size());
+                    patch.removals.reserve(source.size());
 					size_t oldIndex = 0U, finalIndex = 0U;
 					while (oldIndex < source.size() || finalIndex < final.size()) {
 						if (finalIndex == final.size() || (oldIndex < source.size() && source[oldIndex].key < final[finalIndex]->key)) {
@@ -1756,29 +2007,30 @@ namespace graph::storage {
 			struct PendingCreationReservation {
 				size_t node_count = 0U;
 				size_t edge_count = 0U;
-				NativeGraphLogicalIdReservation reservation;
+				OwnedCreationReservation reservation;
 			};
 
 			[[nodiscard]] CanonicalMutation canonicalizeFinalState() const {
-				const size_t nodeCount = accumulated_.node_creates.size();
-				const size_t edgeCount = accumulated_.edge_creates.size();
-				if (issued_node_ids_.size() != nodeCount || issued_edge_ids_.size() != edgeCount) { // each creation request obtains its IDs before canonicalization.
+				auto *const memory = retained_->issued_node_ids.get_allocator().resource();
+				const size_t nodeCount = retained_->accumulated.node_creates.size();
+				const size_t edgeCount = retained_->accumulated.edge_creates.size();
+				if (retained_->issued_node_ids.size() != nodeCount || retained_->issued_edge_ids.size() != edgeCount) { // each creation request obtains its IDs before canonicalization.
 					throw std::logic_error("relocatable logical transaction lost its durable creation identity");
 				}
-				std::vector<bool> cancelledNodes(nodeCount, false);
-				std::vector<bool> cancelledEdges(edgeCount, false);
-				std::vector<const LogicalGraphNodeDeleteRequest *> createdNodeDeletes(nodeCount, nullptr);
-				std::set<uint64_t> uniqueNodeDeletes;
-				std::set<uint64_t> persistedNodeDeletes;
-				std::map<uint64_t, const LogicalGraphNodeDeleteRequest *> persistedNodeDeleteRequests;
-				for (const LogicalGraphNodeDeleteRequest &request: accumulated_.node_deletes) {
+				std::pmr::vector<bool> cancelledNodes(nodeCount, false, memory);
+				std::pmr::vector<bool> cancelledEdges(edgeCount, false, memory);
+				std::pmr::vector<const LogicalGraphNodeDeleteRequest *> createdNodeDeletes(nodeCount, nullptr, memory);
+				std::pmr::set<uint64_t> uniqueNodeDeletes(memory);
+				std::pmr::set<uint64_t> persistedNodeDeletes(memory);
+				std::pmr::map<uint64_t, const LogicalGraphNodeDeleteRequest *> persistedNodeDeleteRequests(memory);
+				for (const LogicalGraphNodeDeleteRequest &request: retained_->accumulated.node_deletes) {
 					if (request.node_id == 0U || !uniqueNodeDeletes.insert(request.node_id).second ||
 						(request.detach && (request.maximum_detach_edges == 0U ||
 											request.maximum_detach_edges == std::numeric_limits<size_t>::max()))) {
 						throw std::invalid_argument("relocatable logical transaction requires unique Node deletes and "
 																"positive finite detach bounds");
 					}
-					const std::optional<size_t> ordinal = findIssuedOrdinal(issued_node_ids_, request.node_id);
+					const std::optional<size_t> ordinal = findIssuedOrdinal(retained_->issued_node_ids, request.node_id);
 					if (!ordinal.has_value()) {
 						persistedNodeDeletes.insert(request.node_id);
 						persistedNodeDeleteRequests.emplace(request.node_id, &request);
@@ -1787,14 +2039,14 @@ namespace graph::storage {
 					cancelledNodes.at(*ordinal) = true;
 					createdNodeDeletes.at(*ordinal) = &request;
 				}
-				std::set<uint64_t> uniqueEdgeDeletes;
-				std::set<uint64_t> persistedEdgeDeletes;
-				for (const LogicalGraphEdgeDeleteRequest &request: accumulated_.edge_deletes) {
+				std::pmr::set<uint64_t> uniqueEdgeDeletes(memory);
+				std::pmr::set<uint64_t> persistedEdgeDeletes(memory);
+				for (const LogicalGraphEdgeDeleteRequest &request: retained_->accumulated.edge_deletes) {
 					if (request.edge_id == 0U || !uniqueEdgeDeletes.insert(request.edge_id).second) {
 						throw std::invalid_argument(
 								"relocatable logical transaction requires unique nonzero Edge deletes");
 					}
-					if (const std::optional<size_t> ordinal = findIssuedOrdinal(issued_edge_ids_, request.edge_id);
+					if (const std::optional<size_t> ordinal = findIssuedOrdinal(retained_->issued_edge_ids, request.edge_id);
 						ordinal.has_value()) {
 						cancelledEdges.at(*ordinal) = true;
 					} else {
@@ -1830,8 +2082,8 @@ namespace graph::storage {
 						continue;
 					}
 					size_t liveIncidentCreatedEdges = 0U;
-					for (size_t edgeOrdinal = 0U; edgeOrdinal < accumulated_.edge_creates.size(); ++edgeOrdinal) {
-						const LogicalGraphBatchEdgeCreateRequest &edge = accumulated_.edge_creates[edgeOrdinal];
+					for (size_t edgeOrdinal = 0U; edgeOrdinal < retained_->accumulated.edge_creates.size(); ++edgeOrdinal) {
+						const LogicalGraphBatchEdgeCreateRequest &edge = retained_->accumulated.edge_creates[edgeOrdinal];
 						const bool incident = (createdNodeOrdinal(edge.source, "Edge creation") == nodeOrdinal) ||
 											  (createdNodeOrdinal(edge.target, "Edge creation") == nodeOrdinal);
 						if (!incident || cancelledEdges[edgeOrdinal]) {
@@ -1848,9 +2100,9 @@ namespace graph::storage {
 						}
 					}
 				}
-				std::map<uint64_t, size_t> persistedDetachCreatedEdgeCounts;
-				for (size_t edgeOrdinal = 0U; edgeOrdinal < accumulated_.edge_creates.size(); ++edgeOrdinal) {
-					const LogicalGraphBatchEdgeCreateRequest &edge = accumulated_.edge_creates[edgeOrdinal];
+				std::pmr::map<uint64_t, size_t> persistedDetachCreatedEdgeCounts(memory);
+				for (size_t edgeOrdinal = 0U; edgeOrdinal < retained_->accumulated.edge_creates.size(); ++edgeOrdinal) {
+					const LogicalGraphBatchEdgeCreateRequest &edge = retained_->accumulated.edge_creates[edgeOrdinal];
 					const LogicalGraphNodeDeleteRequest *const persistedSourceDeletion =
 							persistedNodeDeletion(edge.source);
 					const LogicalGraphNodeDeleteRequest *const persistedTargetDeletion =
@@ -1886,7 +2138,7 @@ namespace graph::storage {
 						cancelledEdges[edgeOrdinal] = true;
 					}
 				}
-				std::map<uint64_t, size_t> persistedDetachRemainingBudgets;
+				std::pmr::map<uint64_t, size_t> persistedDetachRemainingBudgets(memory);
 				for (const auto &[nodeId, deletion]: persistedNodeDeleteRequests) {
 					if (!deletion->detach) {
 						continue;
@@ -1906,7 +2158,7 @@ namespace graph::storage {
 								"relocatable logical transaction detach delete cannot derive a bounded Edge scan");
 					}
 					const size_t scanBound = remaining + deletedAllowance + 1U;
-					std::set<uint64_t> remainingPersistedEdges;
+					std::pmr::set<uint64_t> remainingPersistedEdges(memory);
 					const auto collect = [&remainingPersistedEdges, &persistedEdgeDeletes,
 										  remaining](const LogicalGraphEdgeTopology &edge) {
 						if (persistedEdgeDeletes.contains(edge.edge_id)) {
@@ -1931,24 +2183,25 @@ namespace graph::storage {
 					persistedDetachRemainingBudgets.emplace(nodeId, remaining);
 				}
 
-				CanonicalMutation canonical;
-				std::vector<size_t> nodeOrdinals(nodeCount, std::numeric_limits<size_t>::max());
-				std::vector<size_t> edgeOrdinals(edgeCount, std::numeric_limits<size_t>::max());
+				CanonicalMutation canonical(requirePayloadBudget(write_memory_), retained_->accumulated,
+                    retained_->creation_reservations.node_ranges.size(), retained_->creation_reservations.edge_ranges.size());
+				std::pmr::vector<size_t> nodeOrdinals(nodeCount, std::numeric_limits<size_t>::max(), memory);
+				std::pmr::vector<size_t> edgeOrdinals(edgeCount, std::numeric_limits<size_t>::max(), memory);
 				for (size_t ordinal = 0U; ordinal < nodeCount; ++ordinal) {
 					if (cancelledNodes[ordinal]) {
 						continue;
 					}
 					nodeOrdinals[ordinal] = canonical.batch.node_creates.size();
-					canonical.batch.node_creates.push_back(accumulated_.node_creates[ordinal]);
-					canonical.durable_result.created_node_ids.push_back(issued_node_ids_.at(ordinal));
+					canonical.batch.node_creates.push_back(retained_->accumulated.node_creates[ordinal]);
+					canonical.durable_result.created_node_ids.push_back(retained_->issued_node_ids.at(ordinal));
 				}
 				for (size_t ordinal = 0U; ordinal < edgeCount; ++ordinal) {
 					if (cancelledEdges[ordinal]) {
 						continue;
 					}
 					edgeOrdinals[ordinal] = canonical.batch.edge_creates.size();
-					canonical.batch.edge_creates.push_back(accumulated_.edge_creates[ordinal]);
-					canonical.durable_result.created_edge_ids.push_back(issued_edge_ids_.at(ordinal));
+					canonical.batch.edge_creates.push_back(retained_->accumulated.edge_creates[ordinal]);
+					canonical.durable_result.created_edge_ids.push_back(retained_->issued_edge_ids.at(ordinal));
 				}
 				const auto remapReference = [&nodeOrdinals,
 											 &edgeOrdinals](LogicalGraphMutationEntityReference &reference,
@@ -1990,10 +2243,10 @@ namespace graph::storage {
 				// native executor receives one final publication. Keep only the final
 				// replacement for each persisted entity so successive SET/REMOVE-style
 				// statements do not become duplicate targets in that one publication.
-				std::map<std::tuple<uint8_t, uint64_t>, LogicalGraphPropertyMutationRequest>
-						persistedPropertyReplacements;
-				for (const LogicalGraphPropertyMutationRequest &source: accumulated_.property_replacements) {
-					LogicalGraphPropertyMutationRequest request = source;
+				std::pmr::map<std::tuple<uint8_t, uint64_t>, const LogicalGraphPropertyMutationRequest *>
+						persistedPropertyReplacements(memory);
+				for (const LogicalGraphPropertyMutationRequest &source: retained_->accumulated.property_replacements) {
+					const auto &request = source;
 					if (request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
 						if ((request.entity.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE &&
 							 persistedNodeDeletes.contains(request.entity.value)) ||
@@ -2011,8 +2264,7 @@ namespace graph::storage {
 							if (detached(edge.source_node_id) || detached(edge.target_node_id)) continue;
 						}
 						persistedPropertyReplacements.insert_or_assign(
-								{static_cast<uint8_t>(request.entity.entity_kind), request.entity.value},
-								std::move(request));
+								{static_cast<uint8_t>(request.entity.entity_kind), request.entity.value}, &request);
 						continue;
 					}
 					if ((request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE && // every created-entity replacement is folded into its CREATE request before this final canonicalization pass.
@@ -2025,21 +2277,21 @@ namespace graph::storage {
 								 std::numeric_limits<size_t>::max())) {
 						continue;
 					}
-					remapReference(request.entity, "Property replacement");
-					canonical.batch.property_replacements.push_back(std::move(request));
+                    canonical.batch.property_replacements.push_back(request);
+                    remapReference(canonical.batch.property_replacements.back().entity, "Property replacement");
 				}
 				for (auto &[key, request]: persistedPropertyReplacements) {
 					static_cast<void>(key);
-					canonical.batch.property_replacements.push_back(std::move(request));
+					canonical.batch.property_replacements.push_back(*request);
 				}
-				std::map<uint64_t, LogicalGraphNodeLabelMutationRequest> persistedLabelReplacements;
-				for (const LogicalGraphNodeLabelMutationRequest &source: accumulated_.node_label_replacements) {
-					LogicalGraphNodeLabelMutationRequest request = source;
+				std::pmr::map<uint64_t, const LogicalGraphNodeLabelMutationRequest *> persistedLabelReplacements(memory);
+				for (const LogicalGraphNodeLabelMutationRequest &source: retained_->accumulated.node_label_replacements) {
+					const auto &request = source;
 					if (request.node.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
 						if (persistedNodeDeletes.contains(request.node.value)) {
 							continue;
 						}
-						persistedLabelReplacements.insert_or_assign(request.node.value, std::move(request));
+						persistedLabelReplacements.insert_or_assign(request.node.value, &request);
 						continue;
 					}
 					if (request.node.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE && // created-Node labels are folded into CREATE before final canonicalization.
@@ -2047,20 +2299,20 @@ namespace graph::storage {
 						nodeOrdinals[static_cast<size_t>(request.node.value)] == std::numeric_limits<size_t>::max()) {
 						continue;
 					}
-					remapReference(request.node, "Node label replacement");
-					canonical.batch.node_label_replacements.push_back(std::move(request));
+                    canonical.batch.node_label_replacements.push_back(request);
+                    remapReference(canonical.batch.node_label_replacements.back().node, "Node label replacement");
 				}
 				for (auto &[nodeId, request]: persistedLabelReplacements) {
 					static_cast<void>(nodeId);
-					canonical.batch.node_label_replacements.push_back(std::move(request));
+					canonical.batch.node_label_replacements.push_back(*request);
 				}
-				for (const LogicalGraphEdgeDeleteRequest &request: accumulated_.edge_deletes) {
-					if (!findIssuedOrdinal(issued_edge_ids_, request.edge_id).has_value()) {
+				for (const LogicalGraphEdgeDeleteRequest &request: retained_->accumulated.edge_deletes) {
+					if (!findIssuedOrdinal(retained_->issued_edge_ids, request.edge_id).has_value()) {
 						canonical.batch.edge_deletes.push_back(request);
 					}
 				}
-				for (const LogicalGraphNodeDeleteRequest &request: accumulated_.node_deletes) {
-					if (!findIssuedOrdinal(issued_node_ids_, request.node_id).has_value()) {
+				for (const LogicalGraphNodeDeleteRequest &request: retained_->accumulated.node_deletes) {
+					if (!findIssuedOrdinal(retained_->issued_node_ids, request.node_id).has_value()) {
 						LogicalGraphNodeDeleteRequest canonicalRequest = request;
 						if (request.detach) {
 							const size_t remaining = persistedDetachRemainingBudgets.at(request.node_id);
@@ -2079,11 +2331,15 @@ namespace graph::storage {
 				if (nodeCount != 0U || edgeCount != 0U) {
 					LogicalGraphCreationIdentityPlan plan;
 					if (nodeCount != 0U) {
-						plan.node_id_ranges = node_id_ranges_;
+						plan.node_id_ranges.reserve(retained_->creation_reservations.node_ranges.size());
+                        for (const auto &range : retained_->creation_reservations.node_ranges)
+                            plan.node_id_ranges.push_back({range.first_id, range.count});
 						plan.node_ids = canonical.durable_result.created_node_ids;
 					}
 					if (edgeCount != 0U) {
-						plan.edge_id_ranges = edge_id_ranges_;
+						plan.edge_id_ranges.reserve(retained_->creation_reservations.edge_ranges.size());
+                        for (const auto &range : retained_->creation_reservations.edge_ranges)
+                            plan.edge_id_ranges.push_back({range.first_id, range.count});
 						plan.edge_ids = canonical.durable_result.created_edge_ids;
 					}
 					canonical.batch.creation_identity_plan = std::move(plan);
@@ -2091,36 +2347,72 @@ namespace graph::storage {
 				return canonical;
 			}
 
-			static bool isEmpty(const LogicalGraphMutationBatch &batch) {
+			static bool isEmpty(const OwnedMutationBatch &batch) {
 				return batch.node_creates.empty() && batch.edge_creates.empty() &&
 					   batch.property_replacements.empty() && batch.node_label_replacements.empty() &&
-					   batch.edge_deletes.empty() && batch.node_deletes.empty() &&
-					   !batch.creation_identity_plan.has_value();
+					   batch.edge_deletes.empty() && batch.node_deletes.empty();
 			}
 
-			void abandonOutstandingCreationReservations() noexcept {
-				NativeGraphLogicalIdReservation reservation;
-				reservation.node_ranges.reserve(node_id_ranges_.size());
-				reservation.edge_ranges.reserve(edge_id_ranges_.size());
-				for (const LogicalGraphCreationIdentityRange &range: node_id_ranges_) {
-					reservation.node_ranges.push_back({range.first_id, range.count});
-				}
-				for (const LogicalGraphCreationIdentityRange &range: edge_id_ranges_) {
-					reservation.edge_ranges.push_back({range.first_id, range.count});
-				}
-				backend_.abandonLogicalGraphCreationIds(reservation);
-				if (preview_reservation_.has_value()) {
-					backend_.abandonLogicalGraphCreationIds(preview_reservation_->reservation);
-					preview_reservation_.reset();
+            [[nodiscard]] OwnedCreationReservation reserveOwnedCreationIds(uint64_t nodes, uint64_t edges) const {
+                auto native = backend_.reserveLogicalGraphCreationIds(nodes, edges);
+                try {
+                    OwnedCreationReservation owned(retained_->issued_node_ids.get_allocator().owner());
+                    owned.node_ranges.assign(native.node_ranges.begin(), native.node_ranges.end());
+                    owned.edge_ranges.assign(native.edge_ranges.begin(), native.edge_ranges.end());
+                    return owned;
+                } catch (...) {
+                    backend_.abandonLogicalGraphCreationIds(native);
+                    throw;
+                }
+            }
+
+            void abandonOutstandingCreationReservations() noexcept {
+                if (!retained_) return;
+                // Keep native lease ranges in their native representation while
+                // staging. Rollback must not allocate conversion vectors.
+                backend_.abandonLogicalGraphCreationIds(retained_->creation_reservations.node_ranges, retained_->creation_reservations.edge_ranges);
+				if (retained_->preview_reservation.has_value()) {
+					backend_.abandonLogicalGraphCreationIds(retained_->preview_reservation->reservation.node_ranges, retained_->preview_reservation->reservation.edge_ranges);
+					retained_->preview_reservation.reset();
 				}
 			}
+
+            void releaseRetainedMutationState() noexcept {
+                // Destruction releases every buffer without constructing empty
+                // containers (which may allocate standard-library proxies).
+                retained_.reset();
+            }
 
 			void requireActive(const char *operation) const {
-				if (state_ != LogicalGraphTransactionState::LGTTS_ACTIVE || snapshot_ == nullptr) {
+				if (state_ != LogicalGraphTransactionState::LGTTS_ACTIVE || snapshot_ == nullptr || !retained_) {
 					throw std::logic_error(std::string("relocatable logical transaction cannot ") + operation +
 										   " after it has finished");
 				}
 			}
+
+
+            static query::execution::MaterializedByteBudget *requirePayloadBudget(
+                    const std::shared_ptr<std::pmr::memory_resource> &memory) {
+                auto *budget = dynamic_cast<query::execution::MaterializedByteBudget *>(memory.get());
+                if (!budget) throw std::logic_error("native transaction requires an owning WRITE budget");
+                return budget;
+            }
+            struct RetainedMutationState {
+                // Last to be destroyed: nested standard buffers precede their refund.
+                query::execution::MaterializedByteReservation nested_payload_charge;
+                OwnedMutationBatch accumulated;
+                utils::OwnedVector<LogicalGraphPropertyPatchRequest> property_patches;
+                size_t property_patch_entry_bound = 0U;
+                mutable std::optional<PendingCreationReservation> preview_reservation;
+                utils::OwnedVector<uint64_t> issued_node_ids;
+                utils::OwnedVector<uint64_t> issued_edge_ids;
+                OwnedCreationReservation creation_reservations;
+                NativeGraphLogicalIdReservation streamed_edge_reservation;
+                explicit RetainedMutationState(const std::shared_ptr<std::pmr::memory_resource> &memory)
+                    : nested_payload_charge(requirePayloadBudget(memory)), accumulated(memory), property_patches(utils::OwnedPmrAllocator<LogicalGraphPropertyPatchRequest>(memory)),
+                      issued_node_ids(utils::OwnedPmrAllocator<uint64_t>(memory)),
+                      issued_edge_ids(utils::OwnedPmrAllocator<uint64_t>(memory)), creation_reservations(memory) {}
+            };
 
 			RelocatableStorageBackend &backend_;
 			bool read_only_ = false;
@@ -2130,19 +2422,13 @@ namespace graph::storage {
 			Generation metadata_generation_{};
 			RelocatableReadSnapshot raw_snapshot_;
 			bool reads_exposed_ = false;
-			LogicalGraphMutationBatch accumulated_;
-			std::vector<LogicalGraphPropertyPatchRequest> property_patches_;
-			size_t property_patch_entry_bound_ = 0U;
-			mutable std::optional<PendingCreationReservation> preview_reservation_;
-			std::vector<uint64_t> issued_node_ids_;
-			std::vector<uint64_t> issued_edge_ids_;
-			std::vector<LogicalGraphCreationIdentityRange> node_id_ranges_;
-			std::vector<LogicalGraphCreationIdentityRange> edge_id_ranges_;
+            std::shared_ptr<std::pmr::memory_resource> write_memory_;
+            std::optional<RetainedMutationState> retained_;
 			std::unique_ptr<NativeBulkRunStore> bulk_edge_store_;
 			std::unique_ptr<NativeBulkEdgeRunStreamingWriter> bulk_edge_writer_;
 			std::unique_ptr<NativeBulkSessionLease> bulk_session_lease_;
 			std::optional<NativeBulkEdgeRunManifest> bulk_edge_manifest_;
-			NativeGraphLogicalIdReservation streamed_edge_reservation_;
+
 			uint64_t streamed_edge_next_id_ = 0U;
 			uint64_t streamed_edge_lease_last_id_ = 0U;
 			size_t streamed_edge_record_count_ = 0U;
@@ -2185,6 +2471,11 @@ namespace graph::storage {
 			}
 			return parent / absolute.filename();
 		}
+
+        void validateDatabaseFileLimit(uint64_t maximumBytes) {
+            if (maximumBytes == 0U || maximumBytes >= static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()))
+                throw std::invalid_argument("relocatable database requires a finite addressable file byte limit");
+        }
 
 		void validateBufferPoolCapacity(size_t capacityBytes) {
 			if (capacityBytes < RSS_BUFFER_POOL_PAGE_BYTES) {
@@ -2462,12 +2753,15 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable native initialization requires a create-capable open mode");
 		}
 		validateBufferPoolCapacity(options.buffer_pool_bytes);
+        validateDatabaseFileLimit(options.maximum_database_file_bytes);
+        if (options.maximum_reclaim_workspace_bytes == 0U || options.maximum_integrity_workspace_bytes == 0U)
+            throw std::invalid_argument("native maintenance workspace limits must be positive");
 		const std::filesystem::path dataPath = canonicalNewPath(options.data_path, "database");
 
 		std::unique_ptr<OwnedRelocatableBackendFile> data;
 		bool created = false;
 		try {
-			data = OwnedRelocatableBackendFile::create(dataPath, options.buffer_pool_bytes);
+			data = OwnedRelocatableBackendFile::create(dataPath, options.maximum_database_file_bytes);
 			created = true;
 			Superblock initial;
 			initial.database_id = DatabaseId(generateDatabaseId());
@@ -2475,7 +2769,15 @@ namespace graph::storage {
 			initial.checkpoint_lsn = LogSequenceNumber(1U);
 			initial.flags = 0U;
 			static_cast<void>(SuperblockCodec::encode(initial));
-			auto metadata = RelocatableMetadataStore::initializeNewComplete(data->io(), initial);
+            auto owner = query::execution::detail::ProcessResourceDomains::defaultOwner();
+            auto domain = owner->domain(nativeOpenedFileIdentity(data->io()->getWriteFd()) + ":" +
+                                        std::to_string(initial.database_id.value()));
+            auto fileLimit = owner->fileLimit(domain, options.maximum_database_file_bytes);
+            auto cacheMemory = owner->cacheGrant(domain);
+            auto controlMemory = owner->controlGrant(domain);
+            auto logicalIdMemory = owner->logicalIdGrant(domain);
+            data->io()->enableBufferPool(options.buffer_pool_bytes, cacheMemory);
+			auto metadata = RelocatableMetadataStore::initializeNewComplete(data->io(), initial, cacheMemory, controlMemory, logicalIdMemory);
 			// Do not expose a pre-bootstrap file: creation converges the initial
 			// Catalog ownership and typed route/header in one durable transaction.
 			metadata.reset();
@@ -2522,6 +2824,9 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable background maintenance requires a writable backend");
 		}
 		validateBufferPoolCapacity(options_.buffer_pool_bytes);
+        validateDatabaseFileLimit(options_.maximum_database_file_bytes);
+        if (options_.maximum_reclaim_workspace_bytes == 0U || options_.maximum_integrity_workspace_bytes == 0U)
+            throw std::invalid_argument("native maintenance workspace limits must be positive");
 
 		const std::filesystem::path dataPath = canonicalExistingPath(options_.data_path, "database");
 
@@ -2529,16 +2834,30 @@ namespace graph::storage {
 		options_.data_path = dataPath;
 
 		const bool writable = !isReadOnly();
-		auto data = OwnedRelocatableBackendFile::open(dataPath, writable, options_.buffer_pool_bytes);
+		auto data = OwnedRelocatableBackendFile::open(dataPath, writable, options_.maximum_database_file_bytes);
 		if (!StorageFormatProbe::inspect(*data->io()).isRelocatable()) {
 			throw std::runtime_error("relocatable backend refuses a non-complete relocatable database file");
 		}
-		static_cast<void>(SuperblockFile(data->io()).recover());
-		auto metadata = writable ? RelocatableMetadataStore::open(data->io())
-								 : RelocatableMetadataStore::openReadOnly(data->io());
+		const Superblock recovered = SuperblockFile(data->io()).recover();
+		const auto identityHandle = data->io()->getWriteFd() != INVALID_FILE_HANDLE
+			? data->io()->getWriteFd() : data->io()->readFd_;
+		auto resourceDomain = query::execution::detail::ProcessResourceDomains::defaultOwner()->domain(
+			nativeOpenedFileIdentity(identityHandle) + ":" + std::to_string(recovered.database_id.value()));
+        auto fileLimit = writable ? query::execution::detail::ProcessResourceDomains::defaultOwner()->fileLimit(
+            resourceDomain, options_.maximum_database_file_bytes) : nullptr;
+        auto cacheMemory = query::execution::detail::ProcessResourceDomains::defaultOwner()->cacheGrant(resourceDomain);
+        auto controlMemory = query::execution::detail::ProcessResourceDomains::defaultOwner()->controlGrant(resourceDomain);
+        auto logicalIdMemory = writable ? query::execution::detail::ProcessResourceDomains::defaultOwner()->logicalIdGrant(resourceDomain) : nullptr;
+        data->io()->enableBufferPool(options_.buffer_pool_bytes, cacheMemory);
+        auto metadata = writable ? RelocatableMetadataStore::open(data->io(), cacheMemory, controlMemory, logicalIdMemory)
+                                 : RelocatableMetadataStore::openReadOnly(data->io(), cacheMemory, controlMemory, logicalIdMemory);
+
 
 		try {
 			data_file_ = std::move(data);
+			resource_domain_ = std::move(resourceDomain);
+            database_file_limit_ = std::move(fileLimit);
+            native_cache_memory_ = std::move(cacheMemory);
 			metadata_ = std::move(metadata);
 			physical_ = std::make_unique<PhysicalSegmentAllocator>(data_file_->io(), *metadata_);
 			if (writable) {
@@ -2563,7 +2882,7 @@ namespace graph::storage {
 					if(queryRecoverySnapshot.superblock().checkpoint_lsn.value()==std::numeric_limits<uint64_t>::max())throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,"query scratch recovery cannot advance its checkpoint");
 					const auto queryRecoveryLsn=LogSequenceNumber(queryRecoverySnapshot.superblock().checkpoint_lsn.value()+1U);queryRecoverySnapshot.release();
 					NativeBulkRunStore(*physical_,*metadata_,queryOptions).reclaimUnpublishedOnOpen(queryRecoveryLsn);
-					detail::QueryScratchDiskBudget::processBudget()->recovered(nativeBulkSessionFileIdentity(data_file_->io()->getWriteFd()));
+					detail::QueryScratchDiskBudget::processBudget()->recovered(nativeOpenedFileIdentity(data_file_->io()->getWriteFd()));
 
 					// Reclaim any allocator-free suffix left by an interrupted metadata or
 					// segment publication after authoritative Catalog recovery.
@@ -2576,7 +2895,7 @@ namespace graph::storage {
 			}
 			vector_codebooks_ = std::make_unique<VectorCodebookStore>(*physical_, *metadata_,
 															options_.maximum_vector_codebook_cache_bytes,
-															options_.maximum_vector_codebook_cache_entries);
+															options_.maximum_vector_codebook_cache_entries, native_cache_memory_);
 			// A normal open follows the published roots and must not scan every data
 			// pool. A writable allocator reconciles its selected pool before frame
 			// reuse; routed reads still authenticate each current owner header.
@@ -2712,13 +3031,8 @@ namespace graph::storage {
 				[this] { return !requires_reopen_after_indeterminate_write_.load(std::memory_order_acquire); },
 				[this](uint64_t indexId) {
 					MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-					const std::vector<IndexDefinition> definitions =
-							readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
-					const auto definition =
-							std::ranges::find_if(definitions, [indexId](const IndexDefinition &candidate) {
-								return candidate.index_id == indexId;
-							});
-					if (definition == definitions.end() || definition->kind != IndexDefinitionKind::IDK_VECTOR) {
+                    const auto definition = system_catalog_->findIndexDefinitionById(snapshot, indexId);
+                    if (!definition || definition->kind != IndexDefinitionKind::IDK_VECTOR) {
 						snapshot.release();
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "relocatable Vector maintenance request names an unknown Vector Index");
@@ -2733,18 +3047,15 @@ namespace graph::storage {
 				[this](uint64_t afterIndexId, size_t maximumMetadataPages) {
 					RelocatableVectorRebuildDebtScan result;
 					MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-					std::set<uint64_t> knownVectorIndexes;
-					for (const IndexDefinition &definition:
-						 readAllIndexDefinitions(snapshot, options_.maximum_index_definitions)) {
-						if (definition.kind == IndexDefinitionKind::IDK_VECTOR) {
-							knownVectorIndexes.insert(definition.index_id);
-						}
-					}
+                    // Startup validates the complete schema/root set. A recovery
+                    // cycle validates only the route it visits, using canonical
+                    // ID/name/semantic checks rather than copying all definitions.
 					size_t visitedMetadataPages = 0U;
 					result.exhausted = metadata_->visitVectorManifestLocationsAfter(
 							snapshot, afterIndexId, maximumMetadataPages,
-							[this, &snapshot, &knownVectorIndexes, &result](const VectorManifestLocation &location) {
-								if (!knownVectorIndexes.contains(location.index_id)) {
+							[this, &snapshot, &result](const VectorManifestLocation &location) {
+                                const auto definition = system_catalog_->findIndexDefinitionById(snapshot, location.index_id);
+                                if (!definition || definition->kind != IndexDefinitionKind::IDK_VECTOR) {
 									throw FormatException(
 											FormatError::FERR_INVALID_STATE,
 											"relocatable Vector Manifest has no matching Vector Index definition");
@@ -2756,7 +3067,7 @@ namespace graph::storage {
 									result.index_id = location.index_id;
 									return false;
 								}
-								return true;
+                                return false;
 							},
 							&visitedMetadataPages);
 					result.scanned_metadata_pages = visitedMetadataPages;
@@ -2786,10 +3097,25 @@ namespace graph::storage {
 					});
 					snapshot.release();
 					return result;
-				});
+                },
+                [this]() -> std::unique_ptr<RelocatableMaintenanceWorkspace> {
+                    try {
+                        const size_t bytes = options_.maximum_reclaim_workspace_bytes;
+                        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+                            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, bytes);
+                        auto memory = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+                            std::move(account), bytes, std::pmr::new_delete_resource());
+                        return std::unique_ptr<RelocatableMaintenanceWorkspace>(
+                            new (memory) RelocatableMaintenanceWorkspace(data_file_->io(), memory));
+                    } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        return {};
+                    } catch (const std::bad_alloc &) {
+                        return {};
+                    }
+                });
 		// Validate every persisted Vector route before a worker can inspect it.
 		MetadataSnapshotPin maintenanceSnapshot = metadata_->openSnapshot();
-		std::set<uint64_t> knownVectorIndexes;
+		utils::OwnedSet<uint64_t> knownVectorIndexes;
 		for (const IndexDefinition &definition:
 			 readAllIndexDefinitions(maintenanceSnapshot, options_.maximum_index_definitions)) {
 			if (definition.kind == IndexDefinitionKind::IDK_VECTOR) {
@@ -2954,6 +3280,18 @@ namespace graph::storage {
 			requireNoIndeterminateWrite();
 		}
 
+        // Transaction wrapper metadata belongs to the WRITE memory class even
+        // in read-only mode; that classification grants no disk-write permission.
+        // Only wrapper/issued-ID allocation and release use this parent allocator,
+        // outside publication gates. Other staging/COW need prepaid workspaces.
+        const auto maximum = query::execution::detail::ProcessResourceDomains::databaseDefaults()
+            .classes[static_cast<size_t>(query::execution::detail::ResourceClass::RCK_WRITE)];
+        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_WRITE, maximum);
+        auto memory = std::make_shared<query::execution::MaterializedByteBudget>(
+            maximum, std::move(account), std::pmr::new_delete_resource());
+        static_assert(alignof(RelocatableLogicalGraphTransaction) <= alignof(std::max_align_t));
+
 		// The logical wrapper and the provisional entity-ID range must originate
 		// from one graph generation. Metadata-only allocator publications are safe,
 		// while a concurrent graph publication is retried before the transaction is
@@ -2970,8 +3308,8 @@ namespace graph::storage {
 			}
 			const std::optional<LogicalGraphMutationFence> actualFence = logicalSnapshot->mutationFence();
 			if (actualFence.has_value() && *actualFence == expectedFence) {
-				return std::make_unique<RelocatableLogicalGraphTransaction>(*this, readOnly, std::move(logicalSnapshot),
-																			expectedFence, baseMetadataGeneration, std::move(rawSnapshot));
+				return std::unique_ptr<LogicalGraphTransaction>(new (memory) RelocatableLogicalGraphTransaction(
+                    *this, readOnly, std::move(logicalSnapshot), expectedFence, baseMetadataGeneration, std::move(rawSnapshot), memory));
 			}
 			logicalSnapshot.reset();
 			rawSnapshot.release();
@@ -3005,8 +3343,14 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::abandonLogicalGraphCreationIds(
 			const NativeGraphLogicalIdReservation &reservation) noexcept {
+        abandonLogicalGraphCreationIds(reservation.node_ranges, reservation.edge_ranges);
+    }
+
+    void RelocatableStorageBackend::abandonLogicalGraphCreationIds(
+            std::span<const NativeGraphLogicalIdLeaseRange> nodes,
+            std::span<const NativeGraphLogicalIdLeaseRange> edges) noexcept {
 		if (metadata_ != nullptr) {
-			metadata_->abandonNativeGraphLogicalIdReservation(reservation);
+			metadata_->abandonNativeGraphLogicalIdReservation(nodes, edges);
 		}
 	}
 
@@ -3041,12 +3385,30 @@ namespace graph::storage {
 	}
 
 	std::unique_ptr<LogicalQueryScratchSession> RelocatableStorageBackend::openNativeQueryScratchSession(size_t bytes,size_t fragments) {
+        return openNativeQueryScratchSession(bytes, fragments, {});
+    }
+
+    std::unique_ptr<LogicalQueryScratchSession> RelocatableStorageBackend::openNativeQueryScratchSession(
+            size_t bytes, size_t fragments, std::shared_ptr<query::execution::detail::ResourceAccount> queryAccount) {
 		requireOpen();requireNoIndeterminateWrite();if(isReadOnly() || !options_.query_scratch_enabled)return nullptr;
 		if(bytes<RSS_SEGMENT_SIZE || fragments==0U || fragments>4096U)throw std::invalid_argument("query scratch requires finite disk and handle bounds");
 		bytes=std::min({bytes,size_t{128}*1024U*1024U,options_.maximum_database_query_scratch_bytes});
 		if(bytes<RSS_SEGMENT_SIZE)throw std::invalid_argument("database query scratch disk quota is smaller than one segment");
+        // Admit bounded handle metadata before acquiring the file lease or
+        // publishing the scratch owner. The entire grant remains charged while
+        // a finished session object is retained. Payload/IO workspaces are separate.
+        const size_t grantBytes = 4096U + fragments * 256U;
+        auto account = std::move(queryAccount);
+        if (account && (!account->belongsTo(*resource_domain_) ||
+                account->resourceClass() != query::execution::detail::ResourceClass::RCK_QUERY))
+            throw std::invalid_argument("scratch memory requires its database's QUERY account");
+        if (!account) account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_QUERY, grantBytes);
+        auto memory = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+            std::move(account), grantBytes, std::pmr::new_delete_resource());
+        static_assert(alignof(NativeQueryScratchSession) <= alignof(std::max_align_t));
 		auto disk=detail::QueryScratchDiskBudget::processBudget()->open(
-			nativeBulkSessionFileIdentity(data_file_->io()->getWriteFd()),options_.maximum_database_query_scratch_bytes,bytes);
+			nativeOpenedFileIdentity(data_file_->io()->getWriteFd()),options_.maximum_database_query_scratch_bytes,bytes);
 		std::shared_ptr<NativeBulkSessionLease> lease;
 		{std::lock_guard lock(query_scratch_registry_mutex_);
 			if(!query_scratch_lease_){auto exclusive=tryAcquireNativeBulkSessionLease();if(!exclusive)throw std::runtime_error("query scratch is unavailable while another scratch owner holds the file lease");query_scratch_lease_=std::move(exclusive);}
@@ -3058,7 +3420,7 @@ namespace graph::storage {
 			{auto gate=acquireNativePublicationGate();owner=metadata_->allocateLogicalNodeId(nextNativeBulkScratchCheckpointLsn());}
 			auto options=NativeBulkRunStoreOptions{PhysicalSlotId(1U),PhysicalSlotId(std::numeric_limits<uint64_t>::max()),RSS_SEGMENT_SIZE-RSS_ENVELOPE_BYTES,64U,8U,SegmentKind::SGK_QUERY_SCRATCH};
 			auto store=std::make_unique<NativeBulkRunStore>(*physical_,*metadata_,options);
-			return std::make_unique<NativeQueryScratchSession>(*this,std::move(store),std::move(lease),refund,owner,bytes,fragments,std::move(disk));
+			return std::unique_ptr<LogicalQueryScratchSession>(new (memory) NativeQueryScratchSession(*this,std::move(store),std::move(lease),refund,owner,bytes,fragments,std::move(disk),memory,data_file_->io(),options_.maximum_reclaim_workspace_bytes));
 		}catch(...){refund();throw;}
 	}
 
@@ -3133,7 +3495,7 @@ namespace graph::storage {
 
 		vector_codebooks_ = std::make_unique<VectorCodebookStore>(*physical_, *metadata_,
 																  options_.maximum_vector_codebook_cache_bytes,
-																  options_.maximum_vector_codebook_cache_entries);
+																  options_.maximum_vector_codebook_cache_entries, native_cache_memory_);
 		const SharedPagePoolOpenMode poolOpenMode = SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION;
 		slotted_pages_ = std::make_unique<SlottedPagePool>(data_file_->io(), *metadata_, poolOpenMode);
 		btree_pages_ = std::make_unique<BTreePageStore>(*slotted_pages_, *metadata_);
@@ -3659,7 +4021,7 @@ namespace graph::storage {
 				estimate->first.edge_count, estimate->second, maximumRecords, true)) return std::nullopt;
 		const auto *definitions = session == nullptr ? nullptr :
 				session->indexDefinitions(options_.maximum_index_definitions);
-		std::vector<IndexDefinition> loaded;
+		utils::OwnedStdVector<IndexDefinition> loaded;
 		if (definitions == nullptr) {
 			loaded = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 			if (session != nullptr) session->putIndexDefinitions(loaded);
@@ -3755,7 +4117,7 @@ namespace graph::storage {
 				estimate->first.node_count, estimate->second, maximumRecords, false)) return std::nullopt;
 		const auto *definitions = session == nullptr ? nullptr :
 				session->indexDefinitions(options_.maximum_index_definitions);
-		std::vector<IndexDefinition> loaded;
+		utils::OwnedStdVector<IndexDefinition> loaded;
 		if (definitions == nullptr) {
 			loaded = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 			if (session != nullptr) session->putIndexDefinitions(loaded);
@@ -3937,7 +4299,7 @@ namespace graph::storage {
 		}
 		const std::vector<ConstraintDefinition> *cachedConstraints =
 				session == nullptr ? nullptr : session->constraintDefinitions(options_.maximum_constraint_definitions);
-		std::vector<ConstraintDefinition> loadedConstraints;
+		utils::OwnedStdVector<ConstraintDefinition> loadedConstraints;
 		if (cachedConstraints == nullptr) {
 			debug::PerfTrace::addValue("native_graph.read.index_candidate_constraint_definition_read", 1);
 			loadedConstraints = readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
@@ -4075,7 +4437,7 @@ namespace graph::storage {
 
 		const std::vector<IndexDefinition> *cachedIndexes =
 				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
-		std::vector<IndexDefinition> loadedIndexes;
+		utils::OwnedStdVector<IndexDefinition> loadedIndexes;
 		if (cachedIndexes == nullptr) {
 			debug::PerfTrace::addValue("native_graph.read.index_candidate_definition_read", 1);
 			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
@@ -4461,7 +4823,7 @@ namespace graph::storage {
 
 		const std::vector<IndexDefinition> *cachedIndexes =
 				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
-		std::vector<IndexDefinition> loadedIndexes;
+		utils::OwnedStdVector<IndexDefinition> loadedIndexes;
 		if (cachedIndexes == nullptr) {
 			debug::PerfTrace::addValue("native_graph.read.range_index_definition_read", 1);
 			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
@@ -4961,7 +5323,7 @@ namespace graph::storage {
 		}
 		const std::vector<IndexDefinition> *cachedIndexes =
 				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
-		std::vector<IndexDefinition> loadedIndexes;
+		utils::OwnedStdVector<IndexDefinition> loadedIndexes;
 		if (cachedIndexes == nullptr) {
 			debug::PerfTrace::addValue("native_graph.read.composite_range_index_definition_read", 1);
 			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
@@ -5561,7 +5923,7 @@ namespace graph::storage {
 				snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
 	}
 
-	std::vector<IndexDefinition>
+	utils::OwnedStdVector<IndexDefinition>
 	RelocatableStorageBackend::readIndexDefinitions(const RelocatableReadSnapshot &snapshot,
 													size_t maximumDefinitions) const {
 		requireOwnedSnapshot(snapshot);
@@ -5587,7 +5949,7 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable logical Vector search received an unknown search mode");
 		}
 
-		const std::vector<IndexDefinition> definitions =
+		const utils::OwnedStdVector<IndexDefinition> definitions =
 				readAllIndexDefinitions(snapshot.pin_, options_.maximum_index_definitions);
 		const auto definition = std::ranges::find_if(
 				definitions, [&](const IndexDefinition &candidate) { return candidate.name == request.index_name; });
@@ -5633,7 +5995,7 @@ namespace graph::storage {
 			request.mode != LogicalGraphVectorSearchMode::LGVSM_EXACT) {
 			throw std::invalid_argument("relocatable logical Vector search received an unknown search mode");
 		}
-		const std::vector<IndexDefinition> definitions =
+		const utils::OwnedStdVector<IndexDefinition> definitions =
 				readAllIndexDefinitions(snapshot.pin_, options_.maximum_index_definitions);
 		const auto definition = std::ranges::find_if(
 				definitions, [&](const IndexDefinition &candidate) { return candidate.name == request.index_name; });
@@ -5747,7 +6109,7 @@ namespace graph::storage {
 		// Keep the writer fence until commit so the status inspected by the result
 		// pipeline cannot diverge from the generation ultimately published.
 		MetadataSnapshotPin sourceSnapshot = metadata_->openSnapshot();
-		const std::vector<IndexDefinition> definitions =
+		const utils::OwnedStdVector<IndexDefinition> definitions =
 				readAllIndexDefinitions(sourceSnapshot, options_.maximum_index_definitions);
 		const auto definition = std::ranges::find_if(
 				definitions, [&](const IndexDefinition &candidate) { return candidate.name == request.index_name; });
@@ -5807,12 +6169,8 @@ namespace graph::storage {
 		{
 			MetadataSnapshotPin sourceSnapshot = metadata_->openSnapshot();
 			checkVectorTrainingCancellation(request);
-			const std::vector<IndexDefinition> definitions =
-					readAllIndexDefinitions(sourceSnapshot, options_.maximum_index_definitions);
-			const auto definition = std::ranges::find_if(definitions, [&](const IndexDefinition &candidate) {
-				return candidate.name == request.index_name;
-			});
-			if (definition == definitions.end() || definition->kind != IndexDefinitionKind::IDK_VECTOR ||
+            const auto definition = system_catalog_->findIndexDefinitionByName(sourceSnapshot, request.index_name);
+            if (!definition || definition->kind != IndexDefinitionKind::IDK_VECTOR ||
 				definition->entity_kind != IndexDefinitionEntityKind::IDEK_NODE) {
 				throw std::runtime_error("Vector index not found: " + request.index_name);
 			}
@@ -6186,13 +6544,13 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<IndexDefinition> RelocatableStorageBackend::readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
+	utils::OwnedStdVector<IndexDefinition> RelocatableStorageBackend::readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																									size_t maximumDefinitions) const {
 		if (maximumDefinitions == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Index definition read requires a positive caller-provided bound");
 		}
-		const std::vector<IndexDefinition> canonical =
+		const utils::OwnedStdVector<IndexDefinition> canonical =
 				system_catalog_->readIndexDefinitions(snapshot, maximumDefinitions);
 		for (const IndexDefinition &definition: canonical) {
 			if (definition.kind != IndexDefinitionKind::IDK_VECTOR &&
@@ -6206,7 +6564,7 @@ namespace graph::storage {
 		return canonical;
 	}
 
-	std::vector<ConstraintDefinition>
+	utils::OwnedStdVector<ConstraintDefinition>
 	RelocatableStorageBackend::readAllConstraintDefinitions(const MetadataSnapshotPin &snapshot,
 															size_t maximumDefinitions) const {
 		if (maximumDefinitions == 0U) {
@@ -6418,7 +6776,7 @@ namespace graph::storage {
 		ExternalBTreeEntrySorter sorter({options_.maximum_online_index_entries,
 				options_.online_index_sort_run_bytes, options_.maximum_online_index_sort_runs});
 		NativeGraphCardinalityStatistics totals;
-		NativeReadSession session; session.bind(snapshot);
+		NativeReadSession session(snapshot); session.bind(snapshot);
 		const auto addMember = [&](SystemCatalogSchemaTokenKind kind, uint64_t token, uint64_t entity) {
 			auto key = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
 			for (int shift = 56; shift >= 0; shift -= 8) key.push_back(static_cast<std::byte>((entity >> shift) & 0xffU));
@@ -6572,7 +6930,7 @@ namespace graph::storage {
 					options_.maximum_online_index_sort_runs});
 		}
 		NativeGraphCardinalityStatistics scannedCounts;
-		NativeReadSession session;
+		NativeReadSession session(snapshot);
 		session.bind(snapshot);
 		const auto addMember = [&](size_t ordinal, uint64_t token, uint64_t id) {
 			if (token > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
@@ -6702,14 +7060,14 @@ namespace graph::storage {
 		NativeGraphWriteTransaction transaction = native_graph_write_planner_->beginTransaction();
 		SystemCatalogWriteSession catalogSession = system_catalog_->beginWrite(transaction);
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
-		const std::vector<IndexDefinition> existing =
+		const utils::OwnedStdVector<IndexDefinition> existing =
 				readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 		if (requests.size() > options_.maximum_index_definitions - existing.size()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical node Index batch exceeds the configured definition capacity");
 		}
 
-		std::vector<IndexDefinition> definitions;
+		utils::OwnedStdVector<IndexDefinition> definitions;
 		std::vector<std::vector<uint32_t>> propertyTokens;
 		definitions.reserve(requests.size());
 		propertyTokens.reserve(requests.size());
@@ -6802,7 +7160,7 @@ namespace graph::storage {
 		constexpr size_t ONLINE_INDEX_NODE_BATCH_ENTRIES = 512U;
 		std::vector<uint64_t> nodeBatch;
 		nodeBatch.reserve(ONLINE_INDEX_NODE_BATCH_ENTRIES);
-		NativeReadSession readSession;
+		NativeReadSession readSession(snapshot);
 		const auto flushNodeBatch = [&]() {
 			if (checkpoint) checkpoint();
 			if (nodeBatch.empty()) {
@@ -6975,12 +7333,12 @@ namespace graph::storage {
 		definition.kind = IndexDefinitionKind::IDK_VECTOR;
 		definition.label_token_id =
 				catalogSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, request.label);
-		definition.property_names = {request.property_key};
+		definition.property_names.push_back(request.property_key);
 		definition.vector_dimensions = request.dimensions;
 		definition.vector_metric = metric;
 		const uint32_t propertyToken = catalogSession.ensurePropertyToken(request.property_key);
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
-		const std::vector<IndexDefinition> existing =
+		const utils::OwnedStdVector<IndexDefinition> existing =
 				readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 		if (existing.size() >= options_.maximum_index_definitions) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -7005,7 +7363,7 @@ namespace graph::storage {
 		constexpr size_t ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES = 512U;
 		std::vector<uint64_t> pendingNodeIds;
 		pendingNodeIds.reserve(ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES);
-		NativeReadSession readSession;
+		NativeReadSession readSession(snapshot);
 		const auto flushPropertyBatch = [&]() {
 			if (checkpoint) checkpoint();
 			if (pendingNodeIds.empty()) {
@@ -7141,7 +7499,7 @@ namespace graph::storage {
 			return false;
 		}
 		const std::array<std::string, 1U> properties = {std::string(propertyKey)};
-		const std::vector<IndexDefinition> definitions =
+		const utils::OwnedStdVector<IndexDefinition> definitions =
 				readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 		const auto found = std::ranges::find_if(definitions, [&](const IndexDefinition &definition) {
 			return sameIndexSchema(definition, IndexDefinitionEntityKind::IDEK_NODE, IndexDefinitionKind::IDK_PROPERTY,
@@ -7163,7 +7521,7 @@ namespace graph::storage {
 					"relocatable logical Index list requires a positive result bound");
 		}
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-		const std::vector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+		const utils::OwnedStdVector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
 		std::vector<LogicalGraphIndexDefinition> result;
 		result.reserve(definitions.size());
 		for (const IndexDefinition &definition: definitions) {
@@ -7243,14 +7601,14 @@ namespace graph::storage {
 		}
 
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
-		const std::vector<ConstraintDefinition> existing =
+		const utils::OwnedStdVector<ConstraintDefinition> existing =
 				readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
 		if (existing.size() >= options_.maximum_constraint_definitions) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical constraint catalog reached its configured definition bound");
 		}
 
-		std::vector<ConstraintDefinition> validationDefinitions = existing;
+		utils::OwnedStdVector<ConstraintDefinition> validationDefinitions = existing;
 		validationDefinitions.push_back(definition);
 		PageBackedConstraintMutationAdapter validationAdapter(
 				snapshot, *native_graph_reads_, *btree_pages_, *metadata_,
@@ -7349,7 +7707,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::listLogicalConstraints(size_t maximumConstraints) const {
 		requireOpen();
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-		const std::vector<ConstraintDefinition> definitions =
+		const utils::OwnedStdVector<ConstraintDefinition> definitions =
 				readAllConstraintDefinitions(snapshot, maximumConstraints);
 		std::vector<LogicalGraphConstraintDefinition> result;
 		result.reserve(definitions.size());
@@ -7377,6 +7735,13 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete scalar Index trees");
 		}
 		requireNoIndeterminateWrite();
+        const size_t workspaceBytes = options_.maximum_reclaim_workspace_bytes;
+        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, workspaceBytes);
+        auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+            std::move(account), workspaceBytes, std::pmr::new_delete_resource());
+        utils::OwnedAllocationScope allocationScope(workspace);
+        StorageIO::SequentialReadScope sequentialReads(*data_file_->io());
 		ScalarIndexTreeReclaimReport report;
 		std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
 		{
@@ -7408,6 +7773,13 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete Vector Index state");
 		}
 		requireNoIndeterminateWrite();
+        const size_t workspaceBytes = options_.maximum_reclaim_workspace_bytes;
+        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, workspaceBytes);
+        auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+            std::move(account), workspaceBytes, std::pmr::new_delete_resource());
+        utils::OwnedAllocationScope allocationScope(workspace);
+        StorageIO::SequentialReadScope sequentialReads(*data_file_->io());
 		VectorIndexStateReclaimReport report;
 		std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
 		{
@@ -7441,6 +7813,13 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim unreachable LargeValues");
 		}
 		requireNoIndeterminateWrite();
+        const size_t workspaceBytes = options_.maximum_reclaim_workspace_bytes;
+        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, workspaceBytes);
+        auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+            std::move(account), workspaceBytes, std::pmr::new_delete_resource());
+        utils::OwnedAllocationScope allocationScope(workspace);
+        StorageIO::SequentialReadScope sequentialReads(*data_file_->io());
 		LargeValueReachabilityReclaimReport report;
 		std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
 		{
@@ -7561,7 +7940,16 @@ namespace graph::storage {
 
 	RelocatableIntegrityReport RelocatableStorageBackend::verifyIntegrity() const {
 		requireOpen();
-		const RelocatableIntegrityReport report = RelocatableIntegrityScanner(data_file_->io(), *metadata_).scan();
+		// Admit outside metadata publication; scanner allocations use local grant
+        // accounting and cannot acquire the process coordinator under its gate.
+        const size_t workspaceBytes = options_.maximum_integrity_workspace_bytes;
+        auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+            resource_domain_, query::execution::detail::ResourceClass::RCK_MAINTENANCE, workspaceBytes);
+        auto workspace = std::make_shared<query::execution::detail::PrepaidMemoryResource>(
+            std::move(account), workspaceBytes, std::pmr::new_delete_resource());
+        utils::OwnedAllocationScope allocationScope(workspace);
+        StorageIO::SequentialReadScope sequentialReads(*data_file_->io());
+        const RelocatableIntegrityReport report = RelocatableIntegrityScanner(data_file_->io(), *metadata_, workspace).scan();
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		verifyConstraintSupportTrees(snapshot);
 		return report;
@@ -7574,7 +7962,7 @@ namespace graph::storage {
 								  "relocatable native constraint support-tree integrity verification requires finite "
 								  "positive bounds");
 		}
-		const std::vector<ConstraintDefinition> definitions =
+		const utils::OwnedStdVector<ConstraintDefinition> definitions =
 				readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
 		for (const ConstraintDefinition &definition: definitions) {
 			if (!requiresConstraintSupportTree(definition))
@@ -7739,13 +8127,13 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid Node-label resolver state");
 		}
-		const std::optional<SystemCatalogSchemaToken> token =
+		std::optional<SystemCatalogSchemaToken> token =
 				system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, tokenId);
 		if (!token.has_value() || token->name.empty()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader found an unknown Node-label Token");
 		}
-		return token->name;
+		return std::move(token->name);
 	}
 
 	std::string RelocatableStorageBackend::resolveRelationshipTypeToken(const MetadataSnapshotPin &snapshot,
@@ -7783,13 +8171,13 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid Property-key resolver state");
 		}
-		const std::optional<std::string> resolved = system_catalog_->findPropertyName(snapshot, tokenId);
+		std::optional<std::string> resolved = system_catalog_->findPropertyName(snapshot, tokenId);
 		if (!resolved.has_value() || resolved->empty()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader found an unknown Property-key Token: " +
 										  std::to_string(tokenId));
 		}
-		return *resolved;
+		return std::move(*resolved);
 	}
 
 	std::string RelocatableStorageBackend::resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
@@ -7851,6 +8239,9 @@ namespace graph::storage {
 		physical_.reset();
 		metadata_.reset();
 		data_file_.reset();
+        database_file_limit_.reset();
+        native_cache_memory_.reset();
+		resource_domain_.reset();
 	}
 
 } // namespace graph::storage

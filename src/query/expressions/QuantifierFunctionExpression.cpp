@@ -12,8 +12,8 @@
 namespace graph::query::expressions {
 
 QuantifierFunctionExpression::QuantifierFunctionExpression(
-	std::string functionName,
-	std::string variable,
+	utils::OwnedStdString functionName,
+	utils::OwnedStdString variable,
 	std::unique_ptr<Expression> listExpr,
 	std::unique_ptr<Expression> whereExpr
 )

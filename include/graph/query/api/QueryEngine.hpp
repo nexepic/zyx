@@ -124,6 +124,8 @@ namespace graph::query {
 		[[nodiscard]] cache::PlanCache &getPlanCache() { return planCache_; }
 
 	private:
+        QueryResult executePlanWithAccount(QueryPlan plan, const QueryContext &ctx,
+            std::shared_ptr<execution::detail::ResourceAccount> account);
 		std::shared_ptr<storage::LogicalGraphReadBackend> logicalBackend_;
 		std::shared_ptr<storage::LogicalGraphWriteBackend> logicalWriteBackend_;
 		std::shared_ptr<storage::LogicalGraphSchemaBackend> logicalSchemaBackend_;
@@ -143,6 +145,8 @@ namespace graph::query {
 		bool planCacheIdentityInitialized_ = false;
 
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);
+        QueryPlan buildPlanWithAccount(const std::string &query, Language lang,
+            std::shared_ptr<execution::detail::ResourceAccount> account);
 
 	};
 

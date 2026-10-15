@@ -6,6 +6,11 @@
  **/
 
 #pragma once
+#include "graph/query/expressions/OwnedExpressionMap.hpp"
+#include "graph/core/OwnedPropertyMap.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -28,10 +33,10 @@ namespace graph::query::logical {
 class LogicalCreateNode : public LogicalOperator {
 public:
 	LogicalCreateNode(
-		std::string variable,
-		std::vector<std::string> labels,
-		std::unordered_map<std::string, graph::PropertyValue> properties,
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs,
+		utils::OwnedStdString variable,
+		utils::OwnedStringVector labels,
+		graph::OwnedPropertyMap properties,
+		graph::query::expressions::OwnedExpressionMap propertyExprs,
 		std::unique_ptr<LogicalOperator> child = nullptr)
 		: variable_(std::move(variable))
 		, labels_(std::move(labels))
@@ -54,11 +59,17 @@ public:
 		return out;
 	}
 
-	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> exprsCopy;
-		for (const auto &[k, v] : propertyExprs_) {
-			exprsCopy[k] = v ? v->clone() : nullptr;
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		utils::OwnedStringVector out;
+		if (child_) {
+			out = child_->getOwnedOutputVariables();
 		}
+		out.push_back(variable_);
+		return out;
+	}
+
+	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
+		auto exprsCopy = graph::query::expressions::cloneExpressionMap(propertyExprs_);
 		return std::make_unique<LogicalCreateNode>(
 			variable_,
 			labels_,
@@ -87,10 +98,10 @@ public:
 	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> &getPropertyExprs() const { return propertyExprs_; }
 
 private:
-	std::string variable_;
-	std::vector<std::string> labels_;
-	std::unordered_map<std::string, graph::PropertyValue> properties_;
-	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs_;
+	utils::OwnedStdString variable_;
+	utils::OwnedStringVector labels_;
+	graph::OwnedPropertyMap properties_;
+	graph::query::expressions::OwnedExpressionMap propertyExprs_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

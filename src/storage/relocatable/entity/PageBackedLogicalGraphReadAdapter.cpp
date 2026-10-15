@@ -20,6 +20,8 @@
 #include <vector>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
 
 namespace graph::storage {
@@ -34,7 +36,11 @@ namespace graph::storage {
 		// The caller reconciles released temporary storage after materialization.
 		class AdmittedTemporaryResource final : public std::pmr::memory_resource {
 		public:
-			explicit AdmittedTemporaryResource(const std::function<void(size_t)> &admission) : admission_(admission) {}
+            explicit AdmittedTemporaryResource(const std::function<void(size_t)> &admission,
+                    std::shared_ptr<std::pmr::memory_resource> fallbackOwner = {})
+                : admission_(admission), memory_owner_(admission ? nullptr :
+                    (utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : std::move(fallbackOwner))),
+                  upstream_(memory_owner_ ? memory_owner_.get() : std::pmr::new_delete_resource()) {}
 		private:
 			void *do_allocate(size_t bytes, size_t alignment) override {
 				if (bytes > std::numeric_limits<size_t>::max() - retained_) throw std::overflow_error("temporary allocation size overflowed");
@@ -48,9 +54,10 @@ namespace graph::storage {
 				retained_ -= bytes;
 			}
 			bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
-			const std::function<void(size_t)> &admission_;
-			size_t retained_ = 0U;
-			std::pmr::memory_resource *upstream_ = std::pmr::get_default_resource();
+            const std::function<void(size_t)> &admission_;
+            std::shared_ptr<std::pmr::memory_resource> memory_owner_;
+            size_t retained_ = 0U;
+            std::pmr::memory_resource *upstream_;
 		};
 
 		void validateNamedPropertyColumnRequest(std::span<const uint64_t> ids,
@@ -106,10 +113,8 @@ namespace graph::storage {
 		}
 
 		NativeReadSession &activeSession(const MetadataSnapshotPin &snapshot, NativeReadSession *session,
-																			 NativeReadSession &localSession) {
-			NativeReadSession &active = session == nullptr ? localSession : *session;
-			active.bind(snapshot);
-			return active;
+																			 std::optional<NativeReadSession> &localSession) {
+			return selectNativeReadSession(snapshot, session, localSession);
 		}
 
 	} // namespace
@@ -157,9 +162,9 @@ namespace graph::storage {
 
 	std::string PageBackedLogicalGraphReadAdapter::resolveNodeLabelName(const MetadataSnapshotPin &snapshot,
 																			uint64_t tokenId, NativeReadSession &session) const {
-		if (const auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_NODE_LABEL, tokenId);
-			cached.has_value()) {
-			return *cached;
+		if (auto cached = session.tokenName(NativeReadSession::TokenNameKind::TNK_NODE_LABEL, tokenId);
+            cached.has_value()) {
+            return std::move(*cached);
 		}
 		std::string resolved = names_.resolveNodeLabelToken(snapshot, tokenId);
 		if (!resolved.empty()) {
@@ -248,9 +253,15 @@ namespace graph::storage {
 		}
 		LogicalGraphNode result;
 		result.node_id = node.node_id;
-		result.labels.reserve(node.label_token_ids.size());
-		std::unordered_set<std::string> labelNames;
-		labelNames.reserve(node.label_token_ids.size());
+        detail::admitScopedPropertyVectorGrowth(result.labels, node.label_token_ids.size());
+        result.labels.reserve(node.label_token_ids.size());
+        // Output reserve keeps SSO and external string storage stable while
+        // these duplicate-detection tables borrow its keys.
+        const auto nameMemory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+            session.memoryOwner();
+        auto *const nameResource = nameMemory ? nameMemory.get() : std::pmr::new_delete_resource();
+        std::pmr::unordered_set<std::string_view> labelNames(nameResource);
+        labelNames.reserve(node.label_token_ids.size());
 		for (const uint64_t tokenId: node.label_token_ids) {
 			// NodeEntityRecordCodec rejects zero inline label tokens.
 			if (tokenId == 0U) {
@@ -258,15 +269,17 @@ namespace graph::storage {
 										 "page-backed logical graph adapter received a zero Node label token");
 			}
 			std::string name = resolveNodeLabelName(snapshot, tokenId, session);
-			if (name.empty() || !labelNames.insert(name).second) {
+			if (name.empty() || labelNames.contains(name)) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter resolved invalid or duplicate Node labels");
 			}
-			result.labels.push_back(std::move(name));
-		}
-		result.properties.reserve(node.properties.size());
-		std::unordered_set<std::string> propertyNames;
-		propertyNames.reserve(node.properties.size());
+            result.labels.push_back(std::move(name));
+            labelNames.insert(result.labels.back());
+        }
+        detail::admitScopedPropertyVectorGrowth(result.properties, node.properties.size());
+        result.properties.reserve(node.properties.size());
+        std::pmr::unordered_set<std::string_view> propertyNames(nameResource);
+        propertyNames.reserve(node.properties.size());
 		for (auto &property: node.properties) {
 			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
@@ -274,7 +287,7 @@ namespace graph::storage {
 										 "page-backed logical graph adapter received a zero Node Property token");
 			}
 			std::string key = resolvePropertyKeyName(snapshot, property.key_token, session);
-			if (key.empty() || !propertyNames.insert(key).second) {
+			if (key.empty() || propertyNames.contains(key)) {
 				throwLogicalAdapterError(
 						FormatError::FERR_INVALID_STATE,
 						"page-backed logical graph adapter resolved invalid or duplicate Node Properties");
@@ -288,9 +301,10 @@ namespace graph::storage {
 				result.properties.push_back({std::move(key), property.value});
 			} else {
 				result.properties.push_back({std::move(key), std::move(property.value)});
-			}
-		}
-		debug::PerfTrace::addValue("native_graph.read.full_materializations", 1);
+            }
+            propertyNames.insert(result.properties.back().key);
+        }
+        debug::PerfTrace::addValue("native_graph.read.full_materializations", 1);
 		return result;
 	}
 
@@ -334,11 +348,12 @@ namespace graph::storage {
 			}
 			if (propertySlotsAdmission) propertySlotsAdmission(count * sizeof(LogicalGraphPropertyEntry));
 		};
-		admitPropertySlots(edge.properties.size());
-		result.properties.reserve(edge.properties.size());
+        admitPropertySlots(edge.properties.size());
+        if (!propertySlotsAdmission) detail::admitScopedPropertyVectorGrowth(result.properties, edge.properties.size());
+        result.properties.reserve(edge.properties.size());
 		admitPropertySlots(result.properties.capacity());
 		// reserve keeps output keys stable while the duplicate set borrows them.
-		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission);
+		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission, session.memoryOwner());
 		std::pmr::unordered_set<std::string_view> propertyNames(&propertyNameMemory);
 		propertyNames.reserve(edge.properties.size());
 		for (auto &property: edge.properties) {
@@ -377,7 +392,7 @@ namespace graph::storage {
 
 	LogicalGraphNode PageBackedLogicalGraphReadAdapter::readNode(const MetadataSnapshotPin &snapshot,
 																																				 uint64_t nodeId, NativeReadSession *session) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return materializeNode(snapshot, pages_.readNode(snapshot, nodeId, &active), active);
 	}
@@ -387,7 +402,7 @@ namespace graph::storage {
 			NativeReadSession *session) const {
 		validateEntityReadShape(shape);
 		if (shape.all_properties) {
-			NativeReadSession localSession;
+			std::optional<NativeReadSession> localSession;
 			NativeReadSession &active = activeSession(snapshot, session, localSession);
 			PageBackedGraphNode raw;
 			raw.node_id = nodeId;
@@ -395,9 +410,9 @@ namespace graph::storage {
 				raw.label_token_ids = pages_.readNodeLabelTokens(snapshot, nodeId, &active);
 			}
 			raw.properties = pages_.readNodeProperties(snapshot, nodeId, &active);
-			return materializeNode(snapshot, raw, active);
+			return materializeNode(snapshot, std::move(raw), active);
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		static_cast<void>(pages_.readNodeRecord(snapshot, nodeId, &active));
 		LogicalGraphNode result;
@@ -442,7 +457,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
 			const EntityReadShape &shape, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		validateEntityReadShape(shape);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		if (nodeIds.empty()) {
 			return {};
@@ -539,13 +554,13 @@ namespace graph::storage {
 
 	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNativeNode(
 			const MetadataSnapshotPin &snapshot, const PageBackedGraphNode &node, NativeReadSession *session) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		return materializeNode(snapshot, node, activeSession(snapshot, session, localSession));
 	}
 
 	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::readEdge(const MetadataSnapshotPin &snapshot,
 																				 uint64_t edgeId, NativeReadSession *session) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return materializeEdge(snapshot, pages_.readEdge(snapshot, edgeId, &active), active);
 	}
@@ -555,15 +570,15 @@ namespace graph::storage {
 			NativeReadSession *session) const {
 		validateEntityReadShape(shape);
 		if (shape.all_properties) {
-			NativeReadSession localSession;
+			std::optional<NativeReadSession> localSession;
 			NativeReadSession &active = activeSession(snapshot, session, localSession);
 			PageBackedGraphEdge raw = pages_.readEdge(snapshot, edgeId, &active);
 			if (!shape.include_type) {
 				raw.type_id = 0U;
 			}
-			return materializeEdge(snapshot, raw, active);
+			return materializeEdge(snapshot, std::move(raw), active);
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const EdgeEntityRecord record = pages_.readEdgeTopology(snapshot, edgeId, &active);
 		LogicalGraphEdge result{edgeId, record.source_node_id, record.target_node_id, {}, {}};
@@ -600,7 +615,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
 			const EntityReadShape &shape, NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		validateEntityReadShape(shape);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		if (edgeIds.empty()) {
 			return {};
@@ -709,7 +724,7 @@ namespace graph::storage {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 											 "page-backed Node Property read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -730,7 +745,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									"page-backed Node Property presence read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -747,7 +762,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									  "page-backed sorted Node Property read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -776,7 +791,7 @@ namespace graph::storage {
 			const std::span<const std::string_view> keys, NativeReadSession *session,
 			const SelectedPropertyReadAdmission *admission) const {
 		validateNamedPropertyColumnRequest(nodeIds, keys);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		auto result = makeEmptyPropertyColumns(keys.size(), nodeIds.size());
 		std::vector<std::pair<uint32_t, size_t>> resolved;
@@ -848,7 +863,7 @@ namespace graph::storage {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 											 "page-backed Edge Property read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -869,7 +884,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									"page-backed Edge Property presence read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -886,7 +901,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									  "page-backed sorted Edge Property read requires a non-empty key");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::optional<uint32_t>> cached = active.propertyToken(key);
 		const std::optional<uint32_t> token = cached.has_value() ? *cached : names_.resolvePropertyToken(snapshot, key);
@@ -915,7 +930,7 @@ namespace graph::storage {
 			const std::span<const std::string_view> keys, NativeReadSession *session,
 			const SelectedPropertyReadAdmission *admission) const {
 		validateNamedPropertyColumnRequest(edgeIds, keys);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		auto result = makeEmptyPropertyColumns(keys.size(), edgeIds.size());
 		std::vector<std::pair<uint32_t, size_t>> resolved;
@@ -1001,7 +1016,7 @@ namespace graph::storage {
 	bool PageBackedLogicalGraphReadAdapter::nodeHasLabels(const MetadataSnapshotPin &snapshot, const uint64_t nodeId,
 													 const std::vector<std::string> &labels,
 													 NativeReadSession *session) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::vector<uint64_t>> tokens = resolveNodeLabelTokens(snapshot, labels, active);
 		return tokens.has_value() && pages_.nodeHasLabelTokens(snapshot, nodeId, *tokens, &active);
@@ -1010,7 +1025,7 @@ namespace graph::storage {
 	std::vector<bool> PageBackedLogicalGraphReadAdapter::readNodeLabelMatchesSorted(
 			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
 			const std::vector<std::string> &labels, NativeReadSession *session) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::vector<uint64_t>> tokens = resolveNodeLabelTokens(snapshot, labels, active);
 		if (!tokens.has_value()) {
@@ -1027,7 +1042,7 @@ namespace graph::storage {
 		// shape are prefetched into the same session so a later consumer can reuse
 		// the authenticated column values without another directory lookup.
 		validateEntityReadShape(shape);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		static_cast<void>(pages_.readNodeRecord(snapshot, nodeId, &active));
 		if (shape.include_labels) {
@@ -1057,7 +1072,7 @@ namespace graph::storage {
 																																				const EntityReadShape &shape,
 																																				NativeReadSession *session) const {
 		validateEntityReadShape(shape);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const EdgeEntityRecord edge = pages_.readEdgeTopology(snapshot, edgeId, &active);
 		if (edge.source_node_id == 0U || edge.target_node_id == 0U) {
@@ -1092,7 +1107,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									 "page-backed logical graph Node scan requires a visitor");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitNodesUntil(snapshot, maximumRecords,
 															  [this, &snapshot, &visitor, &active](const PageBackedGraphNode &node) {
@@ -1117,7 +1132,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 								  "page-backed logical graph labeled Node reference scan requires a visitor");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const std::optional<std::vector<uint64_t>> tokens = resolveNodeLabelTokens(snapshot, labels, active);
 		if (!tokens.has_value()) {
@@ -1139,7 +1154,7 @@ namespace graph::storage {
 		uint64_t nameMaterializationNanoseconds = 0U;
 		uint64_t visitorNanoseconds = 0U;
 		uint64_t records = 0U;
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const bool exhausted = pages_.visitEdgesUntil(
 				snapshot, maximumRecords,
@@ -1185,7 +1200,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 								 "page-backed logical graph Edge topology scan requires a visitor");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitEdgeTopologiesUntil(
 				snapshot, maximumRecords,
@@ -1220,7 +1235,7 @@ namespace graph::storage {
 																																								   size_t maximumMetadataPages, const EntityReadShape &shape,
 																																								   NativeReadSession *session) const {
 		validateEntityReadShape(shape);
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		const PageBackedGraphNodePage raw =
 				pages_.scanNodesAfter(snapshot, afterNodeId, maximumRecords, maximumMetadataPages, shape, &active);
@@ -1239,7 +1254,7 @@ namespace graph::storage {
 			std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
 			NativeReadSession *session, const SelectedPropertyReadAdmission *admission,
 			const std::function<void(size_t)> &retainedBufferAdmission) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		PageBackedGraphAdjacencyPage raw = pages_.scanAdjacentEdges(
 				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, admission, retainedBufferAdmission);
@@ -1286,7 +1301,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, const LogicalGraphReadDirection direction,
 			const std::optional<LogicalGraphAdjacencyContinuation> continuation, const size_t maximumRecords,
 			NativeReadSession *session, const std::function<void(size_t)> &retainedBufferAdmission) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
 				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, retainedBufferAdmission);
@@ -1340,7 +1355,7 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const uint64_t nodeId, const LogicalGraphReadDirection direction,
 			const std::optional<LogicalGraphAdjacencyContinuation> continuation, const size_t maximumRecords,
 			NativeReadSession *session, const std::function<void(size_t)> &retainedBufferAdmission) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		PageBackedGraphAdjacencyTopologyPage raw = pages_.scanAdjacentEdgeTopologies(
 				snapshot, nodeId, pageDirection(direction), pageContinuation(continuation), maximumRecords, &active, retainedBufferAdmission);
@@ -1384,7 +1399,7 @@ namespace graph::storage {
 			const LogicalGraphReadDirection direction, const size_t maximumRecords,
 			const std::function<bool(const EntityRef &)> &visitor, NativeReadSession *session,
 			const std::function<void(size_t)> &retainedBufferAdmission) const {
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitAdjacentEdgeRefsForNodesUntil(snapshot, nodeIds, pageDirection(direction), maximumRecords,
 				[&visitor](const EntityRef &reference) { return visitor(reference); }, &active, retainedBufferAdmission);
@@ -1396,7 +1411,9 @@ namespace graph::storage {
 		std::unique_ptr<NativeReadSession> ownedSession;
 		NativeReadSession *active = session;
 		if (active == nullptr) {
-			ownedSession = std::make_unique<NativeReadSession>();
+			const auto memory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+                (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr);
+			ownedSession.reset(new (memory) NativeReadSession(snapshot));
 			active = ownedSession.get();
 		}
 		active->bind(snapshot);
@@ -1412,7 +1429,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									 "page-backed logical graph adjacency traversal requires a visitor");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitAdjacentEdgesUntil(snapshot, nodeId, pageDirection(direction), maximumRecords,
 												  [this, &snapshot, &visitor, &active](const PageBackedGraphEdge &edge) {
@@ -1428,7 +1445,7 @@ namespace graph::storage {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_HEADER,
 									 "page-backed logical graph adjacency topology traversal requires a visitor");
 		}
-		NativeReadSession localSession;
+		std::optional<NativeReadSession> localSession;
 		NativeReadSession &active = activeSession(snapshot, session, localSession);
 		return pages_.visitAdjacentEdgeTopologiesUntil(
 				snapshot, nodeId, pageDirection(direction), maximumRecords,

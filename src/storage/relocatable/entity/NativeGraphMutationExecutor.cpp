@@ -512,7 +512,7 @@ namespace graph::storage {
 			transaction.adoptLogicalIdReservation(std::move(reservation));
 		}
 		const MetadataSnapshotPin &snapshot = transaction.baseSnapshot();
-		NativeReadSession oldStateReads;
+		NativeReadSession oldStateReads(snapshot);
 		std::optional<SystemCatalogWriteSession> catalogSession;
 		if (system_catalog_ != nullptr) {
 			catalogSession.emplace(system_catalog_->beginWrite(transaction));
@@ -580,7 +580,7 @@ namespace graph::storage {
 			return tokens_.property_key_name(snapshot, token);
 		};
 
-		const std::vector<ConstraintDefinition> constraintDefinitions = constraint_definitions_(snapshot);
+		const utils::OwnedStdVector<ConstraintDefinition> constraintDefinitions = constraint_definitions_(snapshot);
 		if (constraintDefinitions.size() > options_.maximum_constraint_definitions)
 			fail(FormatError::FERR_INVALID_STATE, "native logical graph mutation constraint reader exceeded its bound");
 		// The validator returns immediately without definitions. Avoid a second
@@ -791,7 +791,7 @@ namespace graph::storage {
 			}
 		}
 
-		const std::vector<IndexDefinition> indexDefinitions = index_definitions_(snapshot);
+		const utils::OwnedStdVector<IndexDefinition> indexDefinitions = index_definitions_(snapshot);
 		if (indexDefinitions.size() > options_.maximum_index_definitions ||
 			constraintDefinitions.size() > options_.maximum_constraint_definitions) {
 			fail(FormatError::FERR_INVALID_STATE,

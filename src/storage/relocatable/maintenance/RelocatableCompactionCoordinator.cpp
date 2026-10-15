@@ -472,8 +472,7 @@ namespace graph::storage {
 		if (metadata_.activeSnapshotCount() != 0U) {
 			return false;
 		}
-		static_cast<void>(pages_.releaseRetiredEmptyPool(segmentId, generation, checkpointLsn, options));
-		return true;
+        return pages_.tryReleaseRetiredEmptyPool(segmentId, generation, checkpointLsn, options).has_value();
 	}
 
 	bool RelocatableCompactionCoordinator::releaseRetiredEntityPool(SegmentId segmentId, Generation generation,
@@ -489,8 +488,7 @@ namespace graph::storage {
 		if (metadata_.activeSnapshotCount() != 0U) {
 			return false;
 		}
-		static_cast<void>(entity_pages_->releaseRetiredEmptyPool(segmentId, generation, checkpointLsn, options));
-		return true;
+        return entity_pages_->tryReleaseRetiredEmptyPool(segmentId, generation, checkpointLsn, options).has_value();
 	}
 
 	RelocatableExtentCompactionResult
@@ -538,8 +536,7 @@ namespace graph::storage {
 		if (metadata_.activeSnapshotCount() != 0U) {
 			return false;
 		}
-		static_cast<void>(physical_->releaseRelocatedSource(segmentId, generation, checkpointLsn, options));
-		return true;
+        return physical_->tryReleaseRelocatedSource(segmentId, generation, checkpointLsn, options).has_value();
 	}
 
 } // namespace graph::storage

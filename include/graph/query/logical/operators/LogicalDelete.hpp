@@ -6,6 +6,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStringVector.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 
@@ -24,7 +25,7 @@ namespace graph::query::logical {
  */
 class LogicalDelete : public LogicalOperator {
 public:
-	LogicalDelete(std::vector<std::string> variables, bool detach, std::unique_ptr<LogicalOperator> child = nullptr)
+	LogicalDelete(utils::OwnedStringVector variables, bool detach, std::unique_ptr<LogicalOperator> child = nullptr)
 		: variables_(std::move(variables)), detach_(detach), child_(std::move(child)) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_DELETE; }
@@ -35,6 +36,10 @@ public:
 
 	[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 		return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
+	}
+
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
 	}
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
@@ -59,7 +64,7 @@ public:
 	[[nodiscard]] bool isDetach() const { return detach_; }
 
 private:
-	std::vector<std::string> variables_;
+	utils::OwnedStringVector variables_;
 	bool detach_;
 	std::unique_ptr<LogicalOperator> child_;
 };

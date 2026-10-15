@@ -6,6 +6,10 @@
  **/
 
 #pragma once
+#include "graph/query/expressions/OwnedExpressionMap.hpp"
+#include "graph/core/OwnedPropertyMap.hpp"
+#include "graph/core/OwnedPropertyPredicates.hpp"
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -28,13 +32,13 @@ namespace graph::query::logical {
 class LogicalCreateEdge : public LogicalOperator {
 public:
 	LogicalCreateEdge(
-		std::string variable,
-		std::string type,
-		std::unordered_map<std::string, graph::PropertyValue> properties,
-		std::string sourceVar,
-		std::string targetVar,
+		utils::OwnedStdString variable,
+		utils::OwnedStdString type,
+		graph::OwnedPropertyMap properties,
+		utils::OwnedStdString sourceVar,
+		utils::OwnedStdString targetVar,
 		std::unique_ptr<LogicalOperator> child = nullptr,
-		std::string direction = "out")
+		utils::OwnedStdString direction = "out")
 		: variable_(std::move(variable))
 		, type_(std::move(type))
 		, properties_(std::move(properties))
@@ -44,14 +48,14 @@ public:
 		, child_(std::move(child)) {}
 
 	LogicalCreateEdge(
-		std::string variable,
-		std::string type,
-		std::unordered_map<std::string, graph::PropertyValue> properties,
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs,
-		std::string sourceVar,
-		std::string targetVar,
+		utils::OwnedStdString variable,
+		utils::OwnedStdString type,
+		graph::OwnedPropertyMap properties,
+		graph::query::expressions::OwnedExpressionMap propertyExprs,
+		utils::OwnedStdString sourceVar,
+		utils::OwnedStdString targetVar,
 		std::unique_ptr<LogicalOperator> child = nullptr,
-		std::string direction = "out")
+		utils::OwnedStdString direction = "out")
 		: variable_(std::move(variable))
 		, type_(std::move(type))
 		, properties_(std::move(properties))
@@ -78,11 +82,19 @@ public:
 		return out;
 	}
 
-	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
-		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> exprsCopy;
-		for (const auto &[key, expression]: propertyExprs_) {
-			exprsCopy[key] = expression ? expression->clone() : nullptr;
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+		utils::OwnedStringVector out;
+		if (child_) {
+			out = child_->getOwnedOutputVariables();
 		}
+		if (!variable_.empty()) {
+			out.push_back(variable_);
+		}
+		return out;
+	}
+
+	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
+		auto exprsCopy = graph::query::expressions::cloneExpressionMap(propertyExprs_);
 		return std::make_unique<LogicalCreateEdge>(
 			variable_,
 			type_,
@@ -120,13 +132,13 @@ public:
 	[[nodiscard]] const std::string &getDirection() const { return direction_; }
 
 private:
-	std::string variable_;
-	std::string type_;
-	std::unordered_map<std::string, graph::PropertyValue> properties_;
-	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs_;
-	std::string sourceVar_;
-	std::string targetVar_;
-	std::string direction_;
+	utils::OwnedStdString variable_;
+	utils::OwnedStdString type_;
+	graph::OwnedPropertyMap properties_;
+	graph::query::expressions::OwnedExpressionMap propertyExprs_;
+	utils::OwnedStdString sourceVar_;
+	utils::OwnedStdString targetVar_;
+	utils::OwnedStdString direction_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

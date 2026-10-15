@@ -1,0 +1,9 @@
+# Stage receipts must not allocate after state changes
+
+Native staging and the transaction overlay returned const local LogicalGraphMutationBatchResult values after changing staged state. If the compiler declines named return-value optimization, the const vectors are copied. OOM during that copy reports a failed statement after accepting its creation into the transaction prefix. Returning mutable locals permits a nonthrowing implicit move; static assertions guard the result type’s nonthrowing move contract. No durable format changes.
+
+Independent old/new backend and overlay translation units were compiled with -fno-elide-constructors and linked into isolated allocation-fault workers. The old native path fails at allocation 10 and the old overlay path at allocation 21: the reported failed creation appears after committing the earlier prefix. The fixed configuration passes all 10 native and 21 overlay creation allocations without relying on elision. Frozen previous sources, compiler flags/hashes, logs and reproduction are archived.
+
+The ordinary current-source selection passes 118 affected tests. The current fault matrix passes 6/6 raw stage, 17/17 overlay Property stage, 10/10 native creation and 21/21 overlay creation positions, plus 96 sampled positions from the 3,923-allocation commit trace, four legacy cases and 32 same-file crash/recovery cycles. All recovered sizes remain 1,572,864 bytes and readonly SHA256 is unchanged each cycle. Commit sampling is explicitly not exhaustive; the older exhaustive commit proof remains a separate source checkpoint. No full unit suite or performance campaign was run.
+
+No fixed delivery is newly accepted: 22/34 (64.7%). Continue the remaining resource ownership, bounded backlog, partitioned operators and final validation. A following lease-registration audit found map allocations after durable ID namespace publication and possible partial registration; that path is not fixed by this receipt change.

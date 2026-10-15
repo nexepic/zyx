@@ -1,0 +1,100 @@
+{
+  "status": "decode_upper_bound_foundation_not_native_source_integration",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 113,
+  "failures": 0,
+  "isolated_cases_passed": 9,
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "property-heap-accounting",
+      "shape_cases": 22,
+      "maximum_observed_requested_bytes": 320376,
+      "passed": true
+    },
+    {
+      "mode": "native-stage-heap-accounting",
+      "shape_cases": 5,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 357601,
+      "passed": true
+    },
+    {
+      "mode": "overlay-payload-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "codec-inspection-allocation-free",
+      "shape_values": 1025,
+      "decoded_string_bytes": 524288,
+      "passed": true
+    },
+    {
+      "mode": "codec-admitted-heap-accounting",
+      "shape_cases": 11,
+      "maximum_uncovered_private_bytes": 0,
+      "maximum_observed_requested_bytes": 590848,
+      "passed": true
+    }
+  ],
+  "model_contract": "Upper bound of C++ allocator requests, excluding encoded input, malloc/runtime/RSS; only decodeNextWithAdmission reserves maps according to this model. Ordinary decodeNext keeps its existing growth policy. Caller retains the admission lifetime.",
+  "upstream_pins": {
+    "libcxx": "cd708029e0b2869e80abe31ddb175f7c35361f90",
+    "libstdcxx": "04696df09633baf97cdbbdd6e9929b9d472161d3",
+    "msvc_stl": "da52dc0fcadbd83690cfd1ed32408d2847439493"
+  },
+  "reachable_prime_table_audit": {
+    "max_map_entries": 429496729,
+    "checked_gap_pairs": 226,
+    "violations": 0,
+    "scope": "uint32 payload size and ten-byte minimum map entry; not all possible size_t reserves"
+  },
+  "source_sha256": {
+    "include/graph/storage/relocatable/property/PropertyValueCodec.hpp": "7a2aa33ecc75956ba0a38eabebd0881868ab5d5074476304d0e6b8a098b92045",
+    "src/storage/relocatable/property/PropertyValueCodec.cpp": "05719c437f2e45012ae949a9429b63803c244e01e58092b28160321b43b0b3fd",
+    "tests/support/TransactionResourceFaultWorker.cpp": "e2194a485da7170b0549ac7703ac8db12b2df41018ecb6f2698f5196ede5fd06",
+    "scripts/test_transaction_resource_faults.py": "b7fdce1cbe7f26b983bc2251de71fee7c4c9cb27006cf33aa320e6a4812d4661",
+    "tests/src/storage/relocatable/property/test_PropertyValueCodec_Inspection.cpp": "0b1eef3882154662d0dcde19d6d9f4e5310578618cf61d608ebf53d6b544fdcb",
+    "tests/src/storage/relocatable/property/test_PropertyValueCodec_Bytes.cpp": "aad8235723e650fcea1b5d1c6c2e862e98ae05ae8535573d6a8a15d836f3216e"
+  },
+  "upstream_sha256": {
+    "zyx-libcxx19-string.hpp": "365573cfa8816ddcdda29639ed8fc718f8a51afd42878e396c6862fa62543f03",
+    "zyx-libcxx19-hash-table.hpp": "e85afa860c592ffbead7b4d7bb704415f5b4951f807f17cccf5b0164a2c8ae03",
+    "zyx-libcxx19-allocate-at-least.hpp": "4855ae92a219a44f159498afff7f4e3cb1be90afb7b9f9b5c655e93d93746c78",
+    "zyx-libcxx19-allocator.hpp": "d6a4774ac670b3efe1c8f8a0a1cb4bc8cbe831b7bf66643d3b62880423916899",
+    "zyx-libcxx19-LICENSE.txt": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+    "zyx-libstdcxx14-hashtable.cc": "177970e4dc3de9103f065773bf717c703c3a452df94b598b66cbbbc1509cc4ae",
+    "zyx-libstdcxx14-hashtable-aux.cc": "6c16b7edd3be00f9270d523d197b3010a07e7e90c7d193ced73f4427604f34ca",
+    "zyx-libstdcxx14-COPYING3.txt": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "zyx-libstdcxx14-COPYING.RUNTIME.txt": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+    "zyx-msvc-xhash-pinned.hpp": "f5d80b3f77ee09cefd52f71dece364b545c8cdbb2429652737c432366089b02b",
+    "zyx-msvc-xstring.hpp": "c32b1d3ccdeebfa0bba6f71fad167655d15ef3500f6f29b7fe1a44df29a2debb"
+  },
+  "worker_sha256": "5c067889bd473e26b442efba056c9dab24d8c6e2d0170164d757b84e6b584d24",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_execution": "Linux clang19/libstdc++; source audits do not claim Windows/macOS execution or universal OOM behavior"
+}

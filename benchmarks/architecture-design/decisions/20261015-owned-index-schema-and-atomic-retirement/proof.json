@@ -1,0 +1,17 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1278,
+  "isolated_cases": 885,
+  "crash_cycles": 32,
+  "post_fix_concurrent_repetitions": 10,
+  "index_definition_and_cache_heap_shapes": 6,
+  "uncovered_requests": 0,
+  "schema_cache_fault_points": 10,
+  "schema_cache_sweep_exhaustive": true,
+  "long_other_sweeps_sample_maximum": 96,
+  "full_suite": false,
+  "new_performance_campaign": false
+}

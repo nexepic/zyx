@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <memory_resource>
 
 #include "graph/storage/relocatable/format/Format.hpp"
 
@@ -46,11 +47,13 @@ namespace graph::storage {
 	// FormatException before the report is returned.
 	class RelocatableIntegrityScanner final {
 	public:
-		RelocatableIntegrityScanner(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata);
+		RelocatableIntegrityScanner(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+            std::shared_ptr<std::pmr::memory_resource> workspaceOwner = {});
 
 		[[nodiscard]] RelocatableIntegrityReport scan() const;
 
 	private:
+		std::shared_ptr<std::pmr::memory_resource> workspace_owner_;
 		std::shared_ptr<StorageIO> io_;
 		RelocatableMetadataStore &metadata_;
 	};

@@ -1,0 +1,109 @@
+{
+  "status": "component_implementation_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 706,
+  "selected_suites": 80,
+  "isolated_cases_passed": 105,
+  "failures": 0,
+  "probes": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "owned-plan-heap-accounting",
+      "shape_cases": 3,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-string-containers-heap-accounting",
+      "shape_cases": 7,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-property-heap-accounting",
+      "shape_cases": 10,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-expression-heap-accounting",
+      "shape_cases": 9,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    },
+    {
+      "mode": "owned-std-string-heap-accounting",
+      "shape_cases": 12,
+      "maximum_uncovered_private_bytes": 0,
+      "passed": true
+    }
+  ],
+  "string_vector_inventory": {
+    "include/graph/query/logical/operators/LogicalAggregate.hpp": [
+      "groupByAliases"
+    ],
+    "include/graph/query/logical/operators/LogicalCallProcedure.hpp": [
+      "parameter_names"
+    ],
+    "include/graph/query/logical/operators/LogicalCallSubquery.hpp": [
+      "importedVars",
+      "returnedVars"
+    ],
+    "include/graph/query/logical/operators/LogicalCreateConstraint.hpp": [
+      "properties"
+    ],
+    "include/graph/query/logical/operators/LogicalCreateIndex.hpp": [
+      "propertyKeys"
+    ],
+    "include/graph/query/logical/operators/LogicalCreateNode.hpp": [
+      "labels"
+    ],
+    "include/graph/query/logical/operators/LogicalDelete.hpp": [
+      "variables"
+    ],
+    "include/graph/query/logical/operators/LogicalMergeNode.hpp": [
+      "labels"
+    ],
+    "include/graph/query/logical/operators/LogicalNamedPath.hpp": [
+      "nodeVariables",
+      "edgeVariables"
+    ],
+    "include/graph/query/logical/operators/LogicalNodeScan.hpp": [
+      "labels"
+    ],
+    "include/graph/query/logical/operators/LogicalOptionalMatch.hpp": [
+      "requiredVariables"
+    ],
+    "include/graph/query/logical/operators/LogicalTraversal.hpp": [
+      "targetLabels"
+    ],
+    "include/graph/query/logical/operators/LogicalVarLengthTraversal.hpp": [
+      "targetLabels"
+    ]
+  },
+  "worker_sha256": "2482c9dffca30ef5b3aad8b8f348e2978dc87985fba80d6da01d4ceacba83106",
+  "full_suite": false,
+  "performance_campaign": false,
+  "runtime_platform": "Linux clang19/libstdc++14"
+}

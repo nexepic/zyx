@@ -6,6 +6,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdString.hpp"
 
 #include "graph/query/expressions/Expression.hpp"
 #include <memory>
@@ -38,9 +39,9 @@ public:
 	 * @param bodyExpr Expression evaluated for each element (updates accumulator)
 	 */
 	ReduceExpression(
-		std::string accumulator,
+		utils::OwnedStdString accumulator,
 		std::unique_ptr<Expression> initialExpr,
-		std::string variable,
+		utils::OwnedStdString variable,
 		std::unique_ptr<Expression> listExpr,
 		std::unique_ptr<Expression> bodyExpr
 	);
@@ -62,9 +63,9 @@ public:
 	[[nodiscard]] const Expression* getBodyExpr() const { return bodyExpr_.get(); }
 
 private:
-	std::string accumulator_;
+	utils::OwnedStdString accumulator_;
 	std::unique_ptr<Expression> initialExpr_;
-	std::string variable_;
+	utils::OwnedStdString variable_;
 	std::unique_ptr<Expression> listExpr_;
 	std::unique_ptr<Expression> bodyExpr_;
 };

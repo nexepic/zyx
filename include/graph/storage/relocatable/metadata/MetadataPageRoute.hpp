@@ -7,6 +7,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedVector.hpp"
 
 #include <array>
 #include <cstddef>
@@ -38,7 +39,7 @@ namespace graph::storage {
 		MetadataPageId page_id{};
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
-		std::vector<MetadataPageRoute> routes;
+		utils::OwnedVector<MetadataPageRoute> routes;
 	};
 
 	class MetadataPageRouteLeafCodec {

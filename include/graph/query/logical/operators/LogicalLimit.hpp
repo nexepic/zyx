@@ -43,6 +43,10 @@ public:
         return child_ ? child_->getOutputVariables() : std::vector<std::string>{};
     }
 
+    [[nodiscard]] utils::OwnedStringVector getOwnedOutputVariables() const override {
+        return child_ ? child_->getOwnedOutputVariables() : utils::OwnedStringVector{};
+    }
+
     [[nodiscard]] std::string toString() const override {
         return "Limit(" + std::to_string(limit_) + ")";
     }

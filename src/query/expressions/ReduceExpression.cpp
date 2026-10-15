@@ -12,9 +12,9 @@
 namespace graph::query::expressions {
 
 ReduceExpression::ReduceExpression(
-	std::string accumulator,
+	utils::OwnedStdString accumulator,
 	std::unique_ptr<Expression> initialExpr,
-	std::string variable,
+	utils::OwnedStdString variable,
 	std::unique_ptr<Expression> listExpr,
 	std::unique_ptr<Expression> bodyExpr
 )

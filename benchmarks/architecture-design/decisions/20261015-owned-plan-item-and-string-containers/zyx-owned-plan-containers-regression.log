@@ -1,0 +1,1943 @@
+[0/2] Re-checking globbed directories...
+-- GLOB mismatch!
+[1/2] Re-running CMake...
+-- Configuring done (1.0s)
+CMake Warning at CMakeLists.txt:124 (add_library):
+  Cannot generate a safe runtime search path for target zyx because files in
+  some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:145 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_cli because files
+  in some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:149 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:154 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_compare_bench
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:158 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_workload_contract_worker because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:162 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_vector_calibrate
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:169 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_vector_build_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:176 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_large_value_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:183 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_bulk_edge_calibrate because files in some directories may conflict with
+  libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:212 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_query_scratch_crash_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:216 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_transaction_resource_fault_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:219 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_test_suite
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at benchmarks/leiden/CMakeLists.txt:5 (add_executable):
+  Cannot generate a safe runtime search path for target leiden_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+-- Generating done (0.1s)
+-- Build files have been written to: /workspace/zyx/buildDir
+[0/4] Re-checking globbed directories...
+[1/17] Building CXX object CMakeFiles/zyx_core.dir/src/api/PreparedQuery.cpp.o
+[2/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/api/QueryEngine.cpp.o
+In file included from /workspace/zyx/src/query/api/QueryEngine.cpp:21:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/query/api/QueryEngine.cpp:21:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[3/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanProcedureRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:18:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:77:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   77 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:1273:83: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1273 |                                         auto nodes = snapshot.readNodesShapedSorted(batchIds, {.include_labels = true});
+      |                                                                                                                      ^
+8 warnings generated.
+[4/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanMutationRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:9:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:141:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  141 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanMutationRuntime.cpp:145:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  145 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+7 warnings generated.
+[5/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/ir/LogicalPlanBuilder.cpp.o
+[6/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/optimization/LogicalPlanOptimizer.cpp.o
+[7/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_OwnedStringSet.cpp.o
+[8/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/ir/test_LogicalPlanBuilder_Coverage.cpp.o
+[9/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalReadOperator_NullGuards.cpp.o
+[10/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/logical/test_LogicalReadOperators.cpp.o
+[11/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherLogicalOnlyParser.cpp.o
+[12/17] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/optimization/test_LogicalPlanOptimizer.cpp.o
+[13/17] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanReadRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:10:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:222:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  222 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:226:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  226 |                         return {.include_labels = false, .include_type = true, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:2917:55: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2917 |                                                                         state, pageTargetIds, {.include_labels = true}, &nodesBytes);
+      |                                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3588:101: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3588 |                                                 return state.shared.snapshot.readNodeShaped(referenceValue->entity_id, {.include_labels = true});
+      |                                                                                                                                               ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:3616:93: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 3616 |                                                         state.shared.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
+      |                                                                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7700:33: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7700 |                                                                         {.include_labels = true}, &sourceBytes);
+      |                                                                                                ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:7730:31: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 7730 |                                                                         {.include_type = true}, &sourceBytes);
+      |                                                                                              ^
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:14018:57: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 14018 |                                                         {.include_labels = targetReadShape.include_labels}, &retainedTargets);
+       |                                                                                                          ^
+13 warnings generated.
+[14/17] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 706 tests from 80 test suites.
+[----------] Global test environment set-up.
+[----------] 2 tests from OwnedStringSetTest
+[ RUN      ] OwnedStringSetTest.RejectedReplacementPreservesItsKeysAndOriginalAuthority
+[       OK ] OwnedStringSetTest.RejectedReplacementPreservesItsKeysAndOriginalAuthority (0 ms)
+[ RUN      ] OwnedStringSetTest.SparseCopiesAndMovedSourcesRetainCreditUntilTheirStorageDies
+[       OK ] OwnedStringSetTest.SparseCopiesAndMovedSourcesRetainCreditUntilTheirStorageDies (0 ms)
+[----------] 2 tests from OwnedStringSetTest (0 ms total)
+
+[----------] 3 tests from OwnedStringVectorTest
+[ RUN      ] OwnedStringVectorTest.RejectsNestedCopyBeforeChangingTheSourceOrOldValues
+[       OK ] OwnedStringVectorTest.RejectsNestedCopyBeforeChangingTheSourceOrOldValues (0 ms)
+[ RUN      ] OwnedStringVectorTest.AppendingAnAliasedStringSurvivesSsoAndLongBufferRelocation
+[       OK ] OwnedStringVectorTest.AppendingAnAliasedStringSurvivesSsoAndLongBufferRelocation (0 ms)
+[ RUN      ] OwnedStringVectorTest.CopiesAndMovesRetainNestedCreditAfterTheAllocationScopeEnds
+[       OK ] OwnedStringVectorTest.CopiesAndMovesRetainNestedCreditAfterTheAllocationScopeEnds (0 ms)
+[----------] 3 tests from OwnedStringVectorTest (0 ms total)
+
+[----------] 4 tests from OwnedStdVectorTest
+[ RUN      ] OwnedStdVectorTest.GrowthDenialPreservesValuesCapacityAndTheirOriginalCredit
+[       OK ] OwnedStdVectorTest.GrowthDenialPreservesValuesCapacityAndTheirOriginalCredit (0 ms)
+[ RUN      ] OwnedStdVectorTest.AdmissionPrecedesAdoptingAnExternalVector
+[       OK ] OwnedStdVectorTest.AdmissionPrecedesAdoptingAnExternalVector (0 ms)
+[ RUN      ] OwnedStdVectorTest.AliasedMovedElementsRemainValidAcrossBackingGrowth
+[       OK ] OwnedStdVectorTest.AliasedMovedElementsRemainValidAcrossBackingGrowth (0 ms)
+[ RUN      ] OwnedStdVectorTest.MovedEmptyVectorsRetainTheirAuthorityForReuse
+[       OK ] OwnedStdVectorTest.MovedEmptyVectorsRetainTheirAuthorityForReuse (0 ms)
+[----------] 4 tests from OwnedStdVectorTest (0 ms total)
+
+[----------] 5 tests from OwnedPropertyValueTest
+[ RUN      ] OwnedPropertyValueTest.CopiesWithinOneOwnerShareImmutableDataAndReplaceIndependently
+[       OK ] OwnedPropertyValueTest.CopiesWithinOneOwnerShareImmutableDataAndReplaceIndependently (0 ms)
+[ RUN      ] OwnedPropertyValueTest.ScopeChangesClonePayloadBeforeReplacingItsOwner
+[       OK ] OwnedPropertyValueTest.ScopeChangesClonePayloadBeforeReplacingItsOwner (0 ms)
+[ RUN      ] OwnedPropertyValueTest.DeniedNestedReplacementPreservesTheOldLiteralAndCredit
+[       OK ] OwnedPropertyValueTest.DeniedNestedReplacementPreservesTheOldLiteralAndCredit (0 ms)
+[ RUN      ] OwnedPropertyValueTest.EmptyMovedOwnersRemainReusableAfterTheDestinationIsDestroyed
+[       OK ] OwnedPropertyValueTest.EmptyMovedOwnersRemainReusableAfterTheDestinationIsDestroyed (0 ms)
+[ RUN      ] OwnedPropertyValueTest.LiteralConstructorDenialRefundsItsPartiallyAllocatedExpression
+[       OK ] OwnedPropertyValueTest.LiteralConstructorDenialRefundsItsPartiallyAllocatedExpression (0 ms)
+[----------] 5 tests from OwnedPropertyValueTest (0 ms total)
+
+[----------] 3 tests from OwnedPropertyListTest
+[ RUN      ] OwnedPropertyListTest.WholeListAdmissionPrecedesCopyingAnyBorrowedScalarPayload
+[       OK ] OwnedPropertyListTest.WholeListAdmissionPrecedesCopyingAnyBorrowedScalarPayload (0 ms)
+[ RUN      ] OwnedPropertyListTest.BorrowedViewsPreserveMixedTypesAndEmbeddedNulls
+[       OK ] OwnedPropertyListTest.BorrowedViewsPreserveMixedTypesAndEmbeddedNulls (0 ms)
+[ RUN      ] OwnedPropertyListTest.FailureDuringTheCopyPassRefundsPartiallyConstructedElements
+[       OK ] OwnedPropertyListTest.FailureDuringTheCopyPassRefundsPartiallyConstructedElements (0 ms)
+[----------] 3 tests from OwnedPropertyListTest (0 ms total)
+
+[----------] 42 tests from ExpressionClone
+[ RUN      ] ExpressionClone.CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChildren
+[       OK ] ExpressionClone.CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChildren (0 ms)
+[ RUN      ] ExpressionClone.LiteralNull
+[       OK ] ExpressionClone.LiteralNull (0 ms)
+[ RUN      ] ExpressionClone.LiteralBoolTrue
+[       OK ] ExpressionClone.LiteralBoolTrue (0 ms)
+[ RUN      ] ExpressionClone.LiteralBoolFalse
+[       OK ] ExpressionClone.LiteralBoolFalse (0 ms)
+[ RUN      ] ExpressionClone.LiteralInteger
+[       OK ] ExpressionClone.LiteralInteger (0 ms)
+[ RUN      ] ExpressionClone.LiteralDouble
+[       OK ] ExpressionClone.LiteralDouble (0 ms)
+[ RUN      ] ExpressionClone.LiteralString
+[       OK ] ExpressionClone.LiteralString (0 ms)
+[ RUN      ] ExpressionClone.LiteralPropertyValuePreservesCompositeValues
+[       OK ] ExpressionClone.LiteralPropertyValuePreservesCompositeValues (0 ms)
+[ RUN      ] ExpressionClone.VariableReferenceSimple
+[       OK ] ExpressionClone.VariableReferenceSimple (0 ms)
+[ RUN      ] ExpressionClone.VariableReferenceWithProperty
+[       OK ] ExpressionClone.VariableReferenceWithProperty (0 ms)
+[ RUN      ] ExpressionClone.BinaryOpCloneAndToString
+[       OK ] ExpressionClone.BinaryOpCloneAndToString (0 ms)
+[ RUN      ] ExpressionClone.BinaryOpNestedClone
+[       OK ] ExpressionClone.BinaryOpNestedClone (0 ms)
+[ RUN      ] ExpressionClone.UnaryOpMinusClone
+[       OK ] ExpressionClone.UnaryOpMinusClone (0 ms)
+[ RUN      ] ExpressionClone.UnaryOpNotClone
+[       OK ] ExpressionClone.UnaryOpNotClone (0 ms)
+[ RUN      ] ExpressionClone.FunctionCallNoArgs
+[       OK ] ExpressionClone.FunctionCallNoArgs (0 ms)
+[ RUN      ] ExpressionClone.FunctionCallDistinctPreservesItsPublicModifier
+[       OK ] ExpressionClone.FunctionCallDistinctPreservesItsPublicModifier (0 ms)
+[ RUN      ] ExpressionClone.FunctionCallOneArg
+[       OK ] ExpressionClone.FunctionCallOneArg (0 ms)
+[ RUN      ] ExpressionClone.FunctionCallMultipleArgs
+[       OK ] ExpressionClone.FunctionCallMultipleArgs (0 ms)
+[ RUN      ] ExpressionClone.IsNullExpressionClonesItsChildAndDispatchesBothVisitors
+[       OK ] ExpressionClone.IsNullExpressionClonesItsChildAndDispatchesBothVisitors (0 ms)
+[ RUN      ] ExpressionClone.IsNotNullExpressionHandlesAnAbsentChild
+[       OK ] ExpressionClone.IsNotNullExpressionHandlesAnAbsentChild (0 ms)
+[ RUN      ] ExpressionClone.ListComprehensionFilterPreservesItsPredicateAndDispatchesVisitors
+[       OK ] ExpressionClone.ListComprehensionFilterPreservesItsPredicateAndDispatchesVisitors (0 ms)
+[ RUN      ] ExpressionClone.ListComprehensionExtractAndReduceRenderOptionalClauses
+[       OK ] ExpressionClone.ListComprehensionExtractAndReduceRenderOptionalClauses (0 ms)
+[ RUN      ] ExpressionClone.ListComprehensionClonePreservesAbsentChildren
+[       OK ] ExpressionClone.ListComprehensionClonePreservesAbsentChildren (0 ms)
+[ RUN      ] ExpressionClone.ListComprehensionUnknownTypeRendersAnEmptyDiagnosticString
+[       OK ] ExpressionClone.ListComprehensionUnknownTypeRendersAnEmptyDiagnosticString (0 ms)
+[ RUN      ] ExpressionClone.ListLiteralExpressionValidatesClonesAndDispatchesVisitors
+[       OK ] ExpressionClone.ListLiteralExpressionValidatesClonesAndDispatchesVisitors (0 ms)
+[ RUN      ] ExpressionClone.DynamicListLiteralClonesChildrenAndRejectsStaticAccess
+[       OK ] ExpressionClone.DynamicListLiteralClonesChildrenAndRejectsStaticAccess (0 ms)
+[ RUN      ] ExpressionClone.ExistsExpressionPreservesStructuredPatternMetadata
+[       OK ] ExpressionClone.ExistsExpressionPreservesStructuredPatternMetadata (0 ms)
+[ RUN      ] ExpressionClone.ExistsExpressionCompatibilityConstructorClonesWithoutWhereClause
+[       OK ] ExpressionClone.ExistsExpressionCompatibilityConstructorClonesWithoutWhereClause (0 ms)
+[ RUN      ] ExpressionClone.PatternComprehensionPreservesPatternMetadataAndExpressions
+[       OK ] ExpressionClone.PatternComprehensionPreservesPatternMetadataAndExpressions (0 ms)
+[ RUN      ] ExpressionClone.PatternComprehensionCompatibilityConstructorAllowsAbsentClauses
+[       OK ] ExpressionClone.PatternComprehensionCompatibilityConstructorAllowsAbsentClauses (0 ms)
+[ RUN      ] ExpressionClone.PatternComprehensionPreservesAWhereClauseWithoutAMapExpression
+[       OK ] ExpressionClone.PatternComprehensionPreservesAWhereClauseWithoutAMapExpression (0 ms)
+[ RUN      ] ExpressionClone.ListSliceExpressionClonesRangeBoundsAndDispatchesVisitors
+[       OK ] ExpressionClone.ListSliceExpressionClonesRangeBoundsAndDispatchesVisitors (0 ms)
+[ RUN      ] ExpressionClone.ListSliceExpressionRendersOpenAndSingleElementForms
+[       OK ] ExpressionClone.ListSliceExpressionRendersOpenAndSingleElementForms (0 ms)
+[ RUN      ] ExpressionClone.QuantifierFunctionExpressionPreservesScopedExpressionContract
+[       OK ] ExpressionClone.QuantifierFunctionExpressionPreservesScopedExpressionContract (0 ms)
+[ RUN      ] ExpressionClone.ReduceExpressionPreservesAllScopedChildrenAndDispatchesVisitors
+[       OK ] ExpressionClone.ReduceExpressionPreservesAllScopedChildrenAndDispatchesVisitors (0 ms)
+[ RUN      ] ExpressionClone.InExpressionCloneAndToString
+[       OK ] ExpressionClone.InExpressionCloneAndToString (0 ms)
+[ RUN      ] ExpressionClone.InExpressionEmptyList
+[       OK ] ExpressionClone.InExpressionEmptyList (0 ms)
+[ RUN      ] ExpressionClone.CaseExpressionSimpleClone
+[       OK ] ExpressionClone.CaseExpressionSimpleClone (0 ms)
+[ RUN      ] ExpressionClone.CaseExpressionSearchedClone
+[       OK ] ExpressionClone.CaseExpressionSearchedClone (0 ms)
+[ RUN      ] ExpressionClone.CaseExpressionMultipleBranches
+[       OK ] ExpressionClone.CaseExpressionMultipleBranches (0 ms)
+[ RUN      ] ExpressionClone.CaseExpressionDefaultElse
+[       OK ] ExpressionClone.CaseExpressionDefaultElse (0 ms)
+[ RUN      ] ExpressionClone.ExpressionTypes
+[       OK ] ExpressionClone.ExpressionTypes (0 ms)
+[----------] 42 tests from ExpressionClone (0 ms total)
+
+[----------] 7 tests from ExpressionUtility
+[ RUN      ] ExpressionUtility.BinaryOperatorToStringAllTypes
+[       OK ] ExpressionUtility.BinaryOperatorToStringAllTypes (0 ms)
+[ RUN      ] ExpressionUtility.BinaryOperatorToStringDefaultCase
+[       OK ] ExpressionUtility.BinaryOperatorToStringDefaultCase (0 ms)
+[ RUN      ] ExpressionUtility.UnaryOperatorToStringAllTypes
+[       OK ] ExpressionUtility.UnaryOperatorToStringAllTypes (0 ms)
+[ RUN      ] ExpressionUtility.UnaryOperatorToStringDefaultCase
+[       OK ] ExpressionUtility.UnaryOperatorToStringDefaultCase (0 ms)
+[ RUN      ] ExpressionUtility.IsArithmeticOperator
+[       OK ] ExpressionUtility.IsArithmeticOperator (0 ms)
+[ RUN      ] ExpressionUtility.IsComparisonOperator
+[       OK ] ExpressionUtility.IsComparisonOperator (0 ms)
+[ RUN      ] ExpressionUtility.IsLogicalOperator
+[       OK ] ExpressionUtility.IsLogicalOperator (0 ms)
+[----------] 7 tests from ExpressionUtility (0 ms total)
+
+[----------] 4 tests from ExpressionAcceptNonConstTest
+[ RUN      ] ExpressionAcceptNonConstTest.ListLiteralAcceptUsesNonConstVisitor
+[       OK ] ExpressionAcceptNonConstTest.ListLiteralAcceptUsesNonConstVisitor (0 ms)
+[ RUN      ] ExpressionAcceptNonConstTest.ListComprehensionAcceptUsesNonConstVisitor
+[       OK ] ExpressionAcceptNonConstTest.ListComprehensionAcceptUsesNonConstVisitor (0 ms)
+[ RUN      ] ExpressionAcceptNonConstTest.ListSliceAcceptUsesNonConstVisitor
+[       OK ] ExpressionAcceptNonConstTest.ListSliceAcceptUsesNonConstVisitor (0 ms)
+[ RUN      ] ExpressionAcceptNonConstTest.ReduceAcceptUsesNonConstVisitor
+[       OK ] ExpressionAcceptNonConstTest.ReduceAcceptUsesNonConstVisitor (0 ms)
+[----------] 4 tests from ExpressionAcceptNonConstTest (0 ms total)
+
+[----------] 5 tests from OwnedSharedPtrTest
+[ RUN      ] OwnedSharedPtrTest.InPlaceObjectAndControlBlockRetainTheResourceAfterTheirScopeEnds
+[       OK ] OwnedSharedPtrTest.InPlaceObjectAndControlBlockRetainTheResourceAfterTheirScopeEnds (0 ms)
+[ RUN      ] OwnedSharedPtrTest.ControlBlockDenialDeletesTheConsumedUniqueObjectExactlyOnce
+[       OK ] OwnedSharedPtrTest.ControlBlockDenialDeletesTheConsumedUniqueObjectExactlyOnce (0 ms)
+[ RUN      ] OwnedSharedPtrTest.ConstructorFailureRefundsTheInPlaceAllocation
+[       OK ] OwnedSharedPtrTest.ConstructorFailureRefundsTheInPlaceAllocation (0 ms)
+[ RUN      ] OwnedSharedPtrTest.LegacyFactoriesIgnoreUnrelatedAmbientPmrResources
+[       OK ] OwnedSharedPtrTest.LegacyFactoriesIgnoreUnrelatedAmbientPmrResources (0 ms)
+[ RUN      ] OwnedSharedPtrTest.ExpressionClonesAndTheirControlBlocksSelectTheActiveOwner
+[       OK ] OwnedSharedPtrTest.ExpressionClonesAndTheirControlBlocksSelectTheActiveOwner (0 ms)
+[----------] 5 tests from OwnedSharedPtrTest (0 ms total)
+
+[----------] 4 tests from OwnedStdStringTest
+[ RUN      ] OwnedStdStringTest.AdmissionPrecedesCopiesAndRejectedAssignmentKeepsThePreviousValue
+[       OK ] OwnedStdStringTest.AdmissionPrecedesCopiesAndRejectedAssignmentKeepsThePreviousValue (0 ms)
+[ RUN      ] OwnedStdStringTest.CopiesSelectTheActiveOwnerAndSwapsPreserveBothAuthorities
+[       OK ] OwnedStdStringTest.CopiesSelectTheActiveOwnerAndSwapsPreserveBothAuthorities (0 ms)
+[ RUN      ] OwnedStdStringTest.MovedSourcesRemainAdmittedAndReusableAfterTheDestinationDies
+[       OK ] OwnedStdStringTest.MovedSourcesRemainAdmittedAndReusableAfterTheDestinationDies (0 ms)
+[ RUN      ] OwnedStdStringTest.ScanVariableDenialRefundsThePartiallyAllocatedOperatorObject
+[       OK ] OwnedStdStringTest.ScanVariableDenialRefundsThePartiallyAllocatedOperatorObject (0 ms)
+[----------] 4 tests from OwnedStdStringTest (0 ms total)
+
+[----------] 3 tests from OwnedHeapReservationTest
+[ RUN      ] OwnedHeapReservationTest.RetainsAuthorityAndMoveOwnershipWithoutBackingAllocations
+[       OK ] OwnedHeapReservationTest.RetainsAuthorityAndMoveOwnershipWithoutBackingAllocations (0 ms)
+[ RUN      ] OwnedHeapReservationTest.PrepaidDenialAndCrossResourceSwapPreserveTheOriginalCharges
+[       OK ] OwnedHeapReservationTest.PrepaidDenialAndCrossResourceSwapPreserveTheOriginalCharges (0 ms)
+[ RUN      ] OwnedHeapReservationTest.LegacyResourcesDoNotTurnAdmissionIntoDummyAllocations
+[       OK ] OwnedHeapReservationTest.LegacyResourcesDoNotTurnAdmissionIntoDummyAllocations (0 ms)
+[----------] 3 tests from OwnedHeapReservationTest (0 ms total)
+
+[----------] 16 tests from PrepaidMemoryResourceTest
+[ RUN      ] PrepaidMemoryResourceTest.UnusedGrantStaysChargedAndContainersChargeActualCapacity
+[       OK ] PrepaidMemoryResourceTest.UnusedGrantStaysChargedAndContainersChargeActualCapacity (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer
+[       OK ] PrepaidMemoryResourceTest.VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.UpstreamFailureRefundsLocalUsageWithoutReleasingTheSharedGrant
+[       OK ] PrepaidMemoryResourceTest.UpstreamFailureRefundsLocalUsageWithoutReleasingTheSharedGrant (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ConcurrentConsumersCannotSpendTheSameGrantTwice
+[       OK ] PrepaidMemoryResourceTest.ConcurrentConsumersCannotSpendTheSameGrantTwice (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ParentLifetimeExtendsUntilEveryGrantedContainerIsDestroyed
+[       OK ] PrepaidMemoryResourceTest.ParentLifetimeExtendsUntilEveryGrantedContainerIsDestroyed (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.InvalidGrantCannotConsumeOrHideParentQuota
+[       OK ] PrepaidMemoryResourceTest.InvalidGrantCannotConsumeOrHideParentQuota (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.CachedGrantAndQueriesShareTheSameProcessCapacity
+[       OK ] PrepaidMemoryResourceTest.CachedGrantAndQueriesShareTheSameProcessCapacity (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.OwningAllocatorRetainsTheGrantThroughTheLastSharedControlBlock
+[       OK ] PrepaidMemoryResourceTest.OwningAllocatorRetainsTheGrantThroughTheLastSharedControlBlock (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership
+[       OK ] PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner
+[       OK ] PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction
+[       OK ] PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.AllocationScopeIsThreadLocalAcrossIndependentDomains
+[       OK ] PrepaidMemoryResourceTest.AllocationScopeIsThreadLocalAcrossIndependentDomains (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.BorrowedDefaultAllocatorKeepsItsCapturedUpstreamAfterTheDefaultChanges
+[       OK ] PrepaidMemoryResourceTest.BorrowedDefaultAllocatorKeepsItsCapturedUpstreamAfterTheDefaultChanges (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalBuffersShareTheGrantWithoutAllocatingDuplicateStorage
+[       OK ] PrepaidMemoryResourceTest.ExternalBuffersShareTheGrantWithoutAllocatingDuplicateStorage (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalBufferReservationKeepsItsGrantAliveUntilReleased
+[       OK ] PrepaidMemoryResourceTest.ExternalBufferReservationKeepsItsGrantAliveUntilReleased (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalResizeRejectsBeforeChangingCreditAndSupportsRetry
+[       OK ] PrepaidMemoryResourceTest.ExternalResizeRejectsBeforeChangingCreditAndSupportsRetry (0 ms)
+[----------] 16 tests from PrepaidMemoryResourceTest (0 ms total)
+
+[----------] 15 tests from ProcessResourceDomainsTest
+[ RUN      ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance
+[       OK ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit
+[       OK ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied
+[       OK ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot
+[       OK ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected
+[       OK ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner
+[       OK ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance
+[       OK ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime
+[       OK ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass
+[       OK ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains
+[       OK ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases
+[       OK ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity
+[       OK ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling
+[       OK ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase
+[       OK ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase (0 ms)
+[----------] 15 tests from ProcessResourceDomainsTest (0 ms total)
+
+[----------] 8 tests from CypherParserReuseTest
+[ RUN      ] CypherParserReuseTest.ParsesManyQueriesSequentially
+[       OK ] CypherParserReuseTest.ParsesManyQueriesSequentially (8 ms)
+[ RUN      ] CypherParserReuseTest.ParsesAlternatingReadAndWriteQueries
+[       OK ] CypherParserReuseTest.ParsesAlternatingReadAndWriteQueries (1 ms)
+[ RUN      ] CypherParserReuseTest.ParsesTheSameQueryRepeatedly
+[       OK ] CypherParserReuseTest.ParsesTheSameQueryRepeatedly (4 ms)
+[ RUN      ] CypherParserReuseTest.RecoversAfterSyntaxErrors
+[       OK ] CypherParserReuseTest.RecoversAfterSyntaxErrors (1 ms)
+[ RUN      ] CypherParserReuseTest.RecoversAfterMultipleSyntaxErrors
+[       OK ] CypherParserReuseTest.RecoversAfterMultipleSyntaxErrors (2 ms)
+[ RUN      ] CypherParserReuseTest.ParsesDiverseGrammarPaths
+[       OK ] CypherParserReuseTest.ParsesDiverseGrammarPaths (5 ms)
+[ RUN      ] CypherParserReuseTest.PreservesPrivateAllocationDenialAndRemainsReusable
+[       OK ] CypherParserReuseTest.PreservesPrivateAllocationDenialAndRemainsReusable (0 ms)
+[ RUN      ] CypherParserReuseTest.PreservesBadAllocInsteadOfAllocatingAWrappedDiagnostic
+[       OK ] CypherParserReuseTest.PreservesBadAllocInsteadOfAllocatingAWrappedDiagnostic (0 ms)
+[----------] 8 tests from CypherParserReuseTest (24 ms total)
+
+[----------] 5 tests from CypherLogicalOnlyParserTest
+[ RUN      ] CypherLogicalOnlyParserTest.BuildsAReadOnlyLogicalPlan
+[       OK ] CypherLogicalOnlyParserTest.BuildsAReadOnlyLogicalPlan (0 ms)
+[ RUN      ] CypherLogicalOnlyParserTest.ClassifiesReadAndDataMutationPlansForCaching
+[       OK ] CypherLogicalOnlyParserTest.ClassifiesReadAndDataMutationPlansForCaching (0 ms)
+[ RUN      ] CypherLogicalOnlyParserTest.ClassifiesSchemaControlAndObservabilityPlansAsNonCacheable
+[       OK ] CypherLogicalOnlyParserTest.ClassifiesSchemaControlAndObservabilityPlansAsNonCacheable (1 ms)
+[ RUN      ] CypherLogicalOnlyParserTest.BuildsPlansForPublicClauseAndSubqueryForms
+[       OK ] CypherLogicalOnlyParserTest.BuildsPlansForPublicClauseAndSubqueryForms (15 ms)
+[ RUN      ] CypherLogicalOnlyParserTest.ReturnsNoPlanBeforeTheVisitorHasProcessedAStatement
+[       OK ] CypherLogicalOnlyParserTest.ReturnsNoPlanBeforeTheVisitorHasProcessedAStatement (0 ms)
+[----------] 5 tests from CypherLogicalOnlyParserTest (17 ms total)
+
+[----------] 5 tests from LogicalCreateIndexTest
+[ RUN      ] LogicalCreateIndexTest.SinglePropertyConstruction
+[       OK ] LogicalCreateIndexTest.SinglePropertyConstruction (0 ms)
+[ RUN      ] LogicalCreateIndexTest.CompositeConstruction
+[       OK ] LogicalCreateIndexTest.CompositeConstruction (0 ms)
+[ RUN      ] LogicalCreateIndexTest.LeafNode
+[       OK ] LogicalCreateIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateIndexTest.Clone
+[       OK ] LogicalCreateIndexTest.Clone (0 ms)
+[ RUN      ] LogicalCreateIndexTest.ToString
+[       OK ] LogicalCreateIndexTest.ToString (0 ms)
+[----------] 5 tests from LogicalCreateIndexTest (0 ms total)
+
+[----------] 5 tests from LogicalDropIndexTest
+[ RUN      ] LogicalDropIndexTest.BasicConstruction
+[       OK ] LogicalDropIndexTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDropIndexTest.ToStringWithIndexName
+[       OK ] LogicalDropIndexTest.ToStringWithIndexName (0 ms)
+[ RUN      ] LogicalDropIndexTest.ToStringWithoutIndexName
+[       OK ] LogicalDropIndexTest.ToStringWithoutIndexName (0 ms)
+[ RUN      ] LogicalDropIndexTest.LeafNode
+[       OK ] LogicalDropIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalDropIndexTest.Clone
+[       OK ] LogicalDropIndexTest.Clone (0 ms)
+[----------] 5 tests from LogicalDropIndexTest (0 ms total)
+
+[----------] 3 tests from LogicalShowIndexesTest
+[ RUN      ] LogicalShowIndexesTest.IsLeaf
+[       OK ] LogicalShowIndexesTest.IsLeaf (0 ms)
+[ RUN      ] LogicalShowIndexesTest.LeafRejectsChildren
+[       OK ] LogicalShowIndexesTest.LeafRejectsChildren (0 ms)
+[ RUN      ] LogicalShowIndexesTest.Clone
+[       OK ] LogicalShowIndexesTest.Clone (0 ms)
+[----------] 3 tests from LogicalShowIndexesTest (0 ms total)
+
+[----------] 4 tests from LogicalCreateVectorIndexTest
+[ RUN      ] LogicalCreateVectorIndexTest.BasicConstruction
+[       OK ] LogicalCreateVectorIndexTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.LeafNode
+[       OK ] LogicalCreateVectorIndexTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.Clone
+[       OK ] LogicalCreateVectorIndexTest.Clone (0 ms)
+[ RUN      ] LogicalCreateVectorIndexTest.ToString
+[       OK ] LogicalCreateVectorIndexTest.ToString (0 ms)
+[----------] 4 tests from LogicalCreateVectorIndexTest (0 ms total)
+
+[----------] 4 tests from LogicalCreateConstraintTest
+[ RUN      ] LogicalCreateConstraintTest.BasicConstruction
+[       OK ] LogicalCreateConstraintTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.LeafNode
+[       OK ] LogicalCreateConstraintTest.LeafNode (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.Clone
+[       OK ] LogicalCreateConstraintTest.Clone (0 ms)
+[ RUN      ] LogicalCreateConstraintTest.ToString
+[       OK ] LogicalCreateConstraintTest.ToString (0 ms)
+[----------] 4 tests from LogicalCreateConstraintTest (0 ms total)
+
+[----------] 5 tests from LogicalDropConstraintTest
+[ RUN      ] LogicalDropConstraintTest.BasicConstruction
+[       OK ] LogicalDropConstraintTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDropConstraintTest.IfExistsFlag
+[       OK ] LogicalDropConstraintTest.IfExistsFlag (0 ms)
+[ RUN      ] LogicalDropConstraintTest.LeafNode
+[       OK ] LogicalDropConstraintTest.LeafNode (0 ms)
+[ RUN      ] LogicalDropConstraintTest.Clone
+[       OK ] LogicalDropConstraintTest.Clone (0 ms)
+[ RUN      ] LogicalDropConstraintTest.ToString
+[       OK ] LogicalDropConstraintTest.ToString (0 ms)
+[----------] 5 tests from LogicalDropConstraintTest (0 ms total)
+
+[----------] 3 tests from LogicalShowConstraintsTest
+[ RUN      ] LogicalShowConstraintsTest.IsLeaf
+[       OK ] LogicalShowConstraintsTest.IsLeaf (0 ms)
+[ RUN      ] LogicalShowConstraintsTest.LeafRejectsChildren
+[       OK ] LogicalShowConstraintsTest.LeafRejectsChildren (0 ms)
+[ RUN      ] LogicalShowConstraintsTest.Clone
+[       OK ] LogicalShowConstraintsTest.Clone (0 ms)
+[----------] 3 tests from LogicalShowConstraintsTest (0 ms total)
+
+[----------] 8 tests from LogicalTransactionControlTest
+[ RUN      ] LogicalTransactionControlTest.BeginConstruction
+[       OK ] LogicalTransactionControlTest.BeginConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.CommitConstruction
+[       OK ] LogicalTransactionControlTest.CommitConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.RollbackConstruction
+[       OK ] LogicalTransactionControlTest.RollbackConstruction (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringBegin
+[       OK ] LogicalTransactionControlTest.ToStringBegin (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringCommit
+[       OK ] LogicalTransactionControlTest.ToStringCommit (0 ms)
+[ RUN      ] LogicalTransactionControlTest.ToStringRollback
+[       OK ] LogicalTransactionControlTest.ToStringRollback (0 ms)
+[ RUN      ] LogicalTransactionControlTest.LeafNode
+[       OK ] LogicalTransactionControlTest.LeafNode (0 ms)
+[ RUN      ] LogicalTransactionControlTest.Clone
+[       OK ] LogicalTransactionControlTest.Clone (0 ms)
+[----------] 8 tests from LogicalTransactionControlTest (0 ms total)
+
+[----------] 6 tests from LogicalCallProcedureTest
+[ RUN      ] LogicalCallProcedureTest.BasicConstruction
+[       OK ] LogicalCallProcedureTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCallProcedureTest.LeafNode
+[       OK ] LogicalCallProcedureTest.LeafNode (0 ms)
+[ RUN      ] LogicalCallProcedureTest.Clone
+[       OK ] LogicalCallProcedureTest.Clone (0 ms)
+[ RUN      ] LogicalCallProcedureTest.ToString
+[       OK ] LogicalCallProcedureTest.ToString (0 ms)
+[ RUN      ] LogicalCallProcedureTest.ResolvesBoundArgumentsAndPreservesThemWhenCloned
+[       OK ] LogicalCallProcedureTest.ResolvesBoundArgumentsAndPreservesThemWhenCloned (0 ms)
+[ RUN      ] LogicalCallProcedureTest.RejectsMalformedOrUnresolvedBoundArguments
+[       OK ] LogicalCallProcedureTest.RejectsMalformedOrUnresolvedBoundArguments (0 ms)
+[----------] 6 tests from LogicalCallProcedureTest (0 ms total)
+
+[----------] 5 tests from LogicalAggregateTest
+[ RUN      ] LogicalAggregateTest.PreservesGroupingAggregateAndChildContractsAcrossClone
+[       OK ] LogicalAggregateTest.PreservesGroupingAggregateAndChildContractsAcrossClone (0 ms)
+[ RUN      ] LogicalAggregateTest.BasicConstruction
+[       OK ] LogicalAggregateTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalAggregateTest.AggItemProperties
+[       OK ] LogicalAggregateTest.AggItemProperties (0 ms)
+[ RUN      ] LogicalAggregateTest.OutputVariablesIncludesGroupByAndAggs
+[       OK ] LogicalAggregateTest.OutputVariablesIncludesGroupByAndAggs (0 ms)
+[ RUN      ] LogicalAggregateTest.Clone
+[       OK ] LogicalAggregateTest.Clone (0 ms)
+[----------] 5 tests from LogicalAggregateTest (0 ms total)
+
+[----------] 9 tests from LogicalExplainTest
+[ RUN      ] LogicalExplainTest.BasicConstruction
+[       OK ] LogicalExplainTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalExplainTest.ExposesTheInnerPlanThroughTheConstInspectionSurface
+[       OK ] LogicalExplainTest.ExposesTheInnerPlanThroughTheConstInspectionSurface (0 ms)
+[ RUN      ] LogicalExplainTest.OutputVariables_Admin
+[       OK ] LogicalExplainTest.OutputVariables_Admin (0 ms)
+[ RUN      ] LogicalExplainTest.NullInnerPlan
+[       OK ] LogicalExplainTest.NullInnerPlan (0 ms)
+[ RUN      ] LogicalExplainTest.SetChildIgnoresIndex
+[       OK ] LogicalExplainTest.SetChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalExplainTest.DetachChildIgnoresIndex
+[       OK ] LogicalExplainTest.DetachChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalExplainTest.Clone
+[       OK ] LogicalExplainTest.Clone (0 ms)
+[ RUN      ] LogicalExplainTest.CloneWithNull
+[       OK ] LogicalExplainTest.CloneWithNull (0 ms)
+[ RUN      ] LogicalExplainTest.ToString
+[       OK ] LogicalExplainTest.ToString (0 ms)
+[----------] 9 tests from LogicalExplainTest (0 ms total)
+
+[----------] 8 tests from LogicalProfileTest
+[ RUN      ] LogicalProfileTest.BasicConstruction
+[       OK ] LogicalProfileTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalProfileTest.OutputVariablesEmpty
+[       OK ] LogicalProfileTest.OutputVariablesEmpty (0 ms)
+[ RUN      ] LogicalProfileTest.NullInnerPlan
+[       OK ] LogicalProfileTest.NullInnerPlan (0 ms)
+[ RUN      ] LogicalProfileTest.SetChildIgnoresIndex
+[       OK ] LogicalProfileTest.SetChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalProfileTest.DetachChildIgnoresIndex
+[       OK ] LogicalProfileTest.DetachChildIgnoresIndex (0 ms)
+[ RUN      ] LogicalProfileTest.Clone
+[       OK ] LogicalProfileTest.Clone (0 ms)
+[ RUN      ] LogicalProfileTest.CloneWithNull
+[       OK ] LogicalProfileTest.CloneWithNull (0 ms)
+[ RUN      ] LogicalProfileTest.ToString
+[       OK ] LogicalProfileTest.ToString (0 ms)
+[----------] 8 tests from LogicalProfileTest (0 ms total)
+
+[----------] 2 tests from LogicalLimitNullChildTest
+[ RUN      ] LogicalLimitNullChildTest.OutputVariablesAndCloneHandleNullChild
+[       OK ] LogicalLimitNullChildTest.OutputVariablesAndCloneHandleNullChild (0 ms)
+[ RUN      ] LogicalLimitNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards
+[       OK ] LogicalLimitNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards (0 ms)
+[----------] 2 tests from LogicalLimitNullChildTest (0 ms total)
+
+[----------] 2 tests from LogicalSkipNullChildTest
+[ RUN      ] LogicalSkipNullChildTest.OutputVariablesAndCloneHandleNullChild
+[       OK ] LogicalSkipNullChildTest.OutputVariablesAndCloneHandleNullChild (0 ms)
+[ RUN      ] LogicalSkipNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards
+[       OK ] LogicalSkipNullChildTest.OutputVariablesFromChildAndOutOfRangeGuards (0 ms)
+[----------] 2 tests from LogicalSkipNullChildTest (0 ms total)
+
+[----------] 15 tests from LogicalNamedPathTest
+[ RUN      ] LogicalNamedPathTest.GetType
+[       OK ] LogicalNamedPathTest.GetType (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetPathVariable
+[       OK ] LogicalNamedPathTest.GetPathVariable (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetNodeVariables
+[       OK ] LogicalNamedPathTest.GetNodeVariables (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetEdgeVariables
+[       OK ] LogicalNamedPathTest.GetEdgeVariables (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetChildren
+[       OK ] LogicalNamedPathTest.GetChildren (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetOutputVariables_IncludesChildVarsAndPathVar
+[       OK ] LogicalNamedPathTest.GetOutputVariables_IncludesChildVarsAndPathVar (0 ms)
+[ RUN      ] LogicalNamedPathTest.GetOutputVariables_NullChild
+[       OK ] LogicalNamedPathTest.GetOutputVariables_NullChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.Clone
+[       OK ] LogicalNamedPathTest.Clone (0 ms)
+[ RUN      ] LogicalNamedPathTest.CloneWithNullChild
+[       OK ] LogicalNamedPathTest.CloneWithNullChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.ToString
+[       OK ] LogicalNamedPathTest.ToString (0 ms)
+[ RUN      ] LogicalNamedPathTest.SetChild
+[       OK ] LogicalNamedPathTest.SetChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.SetChildNonZeroIndex
+[       OK ] LogicalNamedPathTest.SetChildNonZeroIndex (0 ms)
+[ RUN      ] LogicalNamedPathTest.DetachChild
+[       OK ] LogicalNamedPathTest.DetachChild (0 ms)
+[ RUN      ] LogicalNamedPathTest.DetachChildNonZeroIndex
+[       OK ] LogicalNamedPathTest.DetachChildNonZeroIndex (0 ms)
+[ RUN      ] LogicalNamedPathTest.EmptyVariableLists
+[       OK ] LogicalNamedPathTest.EmptyVariableLists (0 ms)
+[----------] 15 tests from LogicalNamedPathTest (0 ms total)
+
+[----------] 6 tests from LogicalOpTypeToStringTest
+[ RUN      ] LogicalOpTypeToStringTest.ReadOperators
+[       OK ] LogicalOpTypeToStringTest.ReadOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.WriteOperators
+[       OK ] LogicalOpTypeToStringTest.WriteOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.DDLAndAdminOperators
+[       OK ] LogicalOpTypeToStringTest.DDLAndAdminOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.ObservabilityOperators
+[       OK ] LogicalOpTypeToStringTest.ObservabilityOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.SubqueryAndAdvancedOperators
+[       OK ] LogicalOpTypeToStringTest.SubqueryAndAdvancedOperators (0 ms)
+[ RUN      ] LogicalOpTypeToStringTest.UnknownFallback
+[       OK ] LogicalOpTypeToStringTest.UnknownFallback (0 ms)
+[----------] 6 tests from LogicalOpTypeToStringTest (0 ms total)
+
+[----------] 4 tests from LogicalOpTypeMutationTest
+[ RUN      ] LogicalOpTypeMutationTest.DataMutatingOps_ReturnTrue
+[       OK ] LogicalOpTypeMutationTest.DataMutatingOps_ReturnTrue (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.NonDataMutatingOps_ReturnFalse
+[       OK ] LogicalOpTypeMutationTest.NonDataMutatingOps_ReturnFalse (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.SchemaMutatingOps_ReturnTrue
+[       OK ] LogicalOpTypeMutationTest.SchemaMutatingOps_ReturnTrue (0 ms)
+[ RUN      ] LogicalOpTypeMutationTest.NonSchemaMutatingOps_ReturnFalse
+[       OK ] LogicalOpTypeMutationTest.NonSchemaMutatingOps_ReturnFalse (0 ms)
+[----------] 4 tests from LogicalOpTypeMutationTest (0 ms total)
+
+[----------] 1 test from LogicalFilterNullGuardTest
+[ RUN      ] LogicalFilterNullGuardTest.HandlesNullChildAndNullPredicate
+[       OK ] LogicalFilterNullGuardTest.HandlesNullChildAndNullPredicate (0 ms)
+[----------] 1 test from LogicalFilterNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalSortNullGuardTest
+[ RUN      ] LogicalSortNullGuardTest.CloneCoversNullExpressionAndNullChild
+[       OK ] LogicalSortNullGuardTest.CloneCoversNullExpressionAndNullChild (0 ms)
+[----------] 1 test from LogicalSortNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalProjectNullGuardTest
+[ RUN      ] LogicalProjectNullGuardTest.CloneCoversNullExpressionAndNullChild
+[       OK ] LogicalProjectNullGuardTest.CloneCoversNullExpressionAndNullChild (0 ms)
+[----------] 1 test from LogicalProjectNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalAggregateNullGuardTest
+[ RUN      ] LogicalAggregateNullGuardTest.OutputAndCloneHandleNullExpressionsAndChild
+[       OK ] LogicalAggregateNullGuardTest.OutputAndCloneHandleNullExpressionsAndChild (0 ms)
+[----------] 1 test from LogicalAggregateNullGuardTest (0 ms total)
+
+[----------] 1 test from LogicalJoinNullGuardTest
+[ RUN      ] LogicalJoinNullGuardTest.OutputAndCloneHandleNullChildren
+[       OK ] LogicalJoinNullGuardTest.OutputAndCloneHandleNullChildren (0 ms)
+[----------] 1 test from LogicalJoinNullGuardTest (0 ms total)
+
+[----------] 2 tests from LogicalUnwindNullGuardTest
+[ RUN      ] LogicalUnwindNullGuardTest.OutputAndCloneHandleNullChildInLiteralMode
+[       OK ] LogicalUnwindNullGuardTest.OutputAndCloneHandleNullChildInLiteralMode (0 ms)
+[ RUN      ] LogicalUnwindNullGuardTest.CloneHandlesNullChildInExpressionMode
+[       OK ] LogicalUnwindNullGuardTest.CloneHandlesNullChildInExpressionMode (0 ms)
+[----------] 2 tests from LogicalUnwindNullGuardTest (0 ms total)
+
+[----------] 9 tests from LogicalNodeScanTest
+[ RUN      ] LogicalNodeScanTest.BasicConstruction
+[       OK ] LogicalNodeScanTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalNodeScanTest.OutputVariables
+[       OK ] LogicalNodeScanTest.OutputVariables (0 ms)
+[ RUN      ] LogicalNodeScanTest.PropertyPredicates
+[       OK ] LogicalNodeScanTest.PropertyPredicates (0 ms)
+[ RUN      ] LogicalNodeScanTest.MutablePropertyPredicates
+[       OK ] LogicalNodeScanTest.MutablePropertyPredicates (0 ms)
+[ RUN      ] LogicalNodeScanTest.PreferredScanHint
+[       OK ] LogicalNodeScanTest.PreferredScanHint (0 ms)
+[ RUN      ] LogicalNodeScanTest.ClonePreservesState
+[       OK ] LogicalNodeScanTest.ClonePreservesState (0 ms)
+[ RUN      ] LogicalNodeScanTest.ToString
+[       OK ] LogicalNodeScanTest.ToString (0 ms)
+[ RUN      ] LogicalNodeScanTest.ToStringWithoutLabelsCoversEmptyBranch
+[       OK ] LogicalNodeScanTest.ToStringWithoutLabelsCoversEmptyBranch (0 ms)
+[ RUN      ] LogicalNodeScanTest.LeafNodeRejectsChildren
+[       OK ] LogicalNodeScanTest.LeafNodeRejectsChildren (0 ms)
+[----------] 9 tests from LogicalNodeScanTest (0 ms total)
+
+[----------] 6 tests from LogicalFilterTest
+[ RUN      ] LogicalFilterTest.BasicConstruction
+[       OK ] LogicalFilterTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalFilterTest.OutputVariablesFromChild
+[       OK ] LogicalFilterTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalFilterTest.DetachAndSetChild
+[       OK ] LogicalFilterTest.DetachAndSetChild (0 ms)
+[ RUN      ] LogicalFilterTest.OutOfRangeChild
+[       OK ] LogicalFilterTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalFilterTest.Clone
+[       OK ] LogicalFilterTest.Clone (0 ms)
+[ RUN      ] LogicalFilterTest.ToStringContainsPredicate
+[       OK ] LogicalFilterTest.ToStringContainsPredicate (0 ms)
+[----------] 6 tests from LogicalFilterTest (0 ms total)
+
+[----------] 7 tests from LogicalProjectTest
+[ RUN      ] LogicalProjectTest.BasicConstruction
+[       OK ] LogicalProjectTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalProjectTest.DistinctFlag
+[       OK ] LogicalProjectTest.DistinctFlag (0 ms)
+[ RUN      ] LogicalProjectTest.FormatsMultipleAliasesWithThePublicSeparatorContract
+[       OK ] LogicalProjectTest.FormatsMultipleAliasesWithThePublicSeparatorContract (0 ms)
+[ RUN      ] LogicalProjectTest.OutputVariablesMatchAliases
+[       OK ] LogicalProjectTest.OutputVariablesMatchAliases (0 ms)
+[ RUN      ] LogicalProjectTest.RequiredColumns
+[       OK ] LogicalProjectTest.RequiredColumns (0 ms)
+[ RUN      ] LogicalProjectTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalProjectTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalProjectTest.Clone
+[       OK ] LogicalProjectTest.Clone (0 ms)
+[----------] 7 tests from LogicalProjectTest (0 ms total)
+
+[----------] 6 tests from LogicalJoinTest
+[ RUN      ] LogicalJoinTest.BasicConstruction
+[       OK ] LogicalJoinTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalJoinTest.OutputVariablesCombined
+[       OK ] LogicalJoinTest.OutputVariablesCombined (0 ms)
+[ RUN      ] LogicalJoinTest.DetachChildren
+[       OK ] LogicalJoinTest.DetachChildren (0 ms)
+[ RUN      ] LogicalJoinTest.SetChildren
+[       OK ] LogicalJoinTest.SetChildren (0 ms)
+[ RUN      ] LogicalJoinTest.OutOfRangeChild
+[       OK ] LogicalJoinTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalJoinTest.Clone
+[       OK ] LogicalJoinTest.Clone (0 ms)
+[----------] 6 tests from LogicalJoinTest (0 ms total)
+
+[----------] 5 tests from LogicalSortTest
+[ RUN      ] LogicalSortTest.BasicConstruction
+[       OK ] LogicalSortTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalSortTest.DescendingSort
+[       OK ] LogicalSortTest.DescendingSort (0 ms)
+[ RUN      ] LogicalSortTest.OutputVariablesPassThrough
+[       OK ] LogicalSortTest.OutputVariablesPassThrough (0 ms)
+[ RUN      ] LogicalSortTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalSortTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalSortTest.Clone
+[       OK ] LogicalSortTest.Clone (0 ms)
+[----------] 5 tests from LogicalSortTest (0 ms total)
+
+[----------] 1 test from LogicalLimitTest
+[ RUN      ] LogicalLimitTest.BasicConstruction
+[       OK ] LogicalLimitTest.BasicConstruction (0 ms)
+[----------] 1 test from LogicalLimitTest (0 ms total)
+
+[----------] 1 test from LogicalSkipTest
+[ RUN      ] LogicalSkipTest.BasicConstruction
+[       OK ] LogicalSkipTest.BasicConstruction (0 ms)
+[----------] 1 test from LogicalSkipTest (0 ms total)
+
+[----------] 2 tests from LogicalSingleRowTest
+[ RUN      ] LogicalSingleRowTest.IsLeaf
+[       OK ] LogicalSingleRowTest.IsLeaf (0 ms)
+[ RUN      ] LogicalSingleRowTest.Clone
+[       OK ] LogicalSingleRowTest.Clone (0 ms)
+[----------] 2 tests from LogicalSingleRowTest (0 ms total)
+
+[----------] 8 tests from LogicalUnwindTest
+[ RUN      ] LogicalUnwindTest.LiteralListConstruction
+[       OK ] LogicalUnwindTest.LiteralListConstruction (0 ms)
+[ RUN      ] LogicalUnwindTest.ExpressionConstruction
+[       OK ] LogicalUnwindTest.ExpressionConstruction (0 ms)
+[ RUN      ] LogicalUnwindTest.OutputVariablesIncludesAlias
+[       OK ] LogicalUnwindTest.OutputVariablesIncludesAlias (0 ms)
+[ RUN      ] LogicalUnwindTest.CloneLiteralList
+[       OK ] LogicalUnwindTest.CloneLiteralList (0 ms)
+[ RUN      ] LogicalUnwindTest.CloneExpression
+[       OK ] LogicalUnwindTest.CloneExpression (0 ms)
+[ RUN      ] LogicalUnwindTest.SetAndDetachChild
+[       OK ] LogicalUnwindTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalUnwindTest.OutOfRangeChild
+[       OK ] LogicalUnwindTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalUnwindTest.ToString
+[       OK ] LogicalUnwindTest.ToString (0 ms)
+[----------] 8 tests from LogicalUnwindTest (0 ms total)
+
+[----------] 10 tests from LogicalOptionalMatchTest
+[ RUN      ] LogicalOptionalMatchTest.BasicConstruction
+[       OK ] LogicalOptionalMatchTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.RequiredVariables
+[       OK ] LogicalOptionalMatchTest.RequiredVariables (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesBothChildren
+[       OK ] LogicalOptionalMatchTest.OutputVariablesBothChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesWithNullChildren
+[       OK ] LogicalOptionalMatchTest.OutputVariablesWithNullChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutputVariablesOneChildNull
+[       OK ] LogicalOptionalMatchTest.OutputVariablesOneChildNull (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.SetAndDetachChildren
+[       OK ] LogicalOptionalMatchTest.SetAndDetachChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.OutOfRangeChild
+[       OK ] LogicalOptionalMatchTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.Clone
+[       OK ] LogicalOptionalMatchTest.Clone (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.CloneWithNullChildren
+[       OK ] LogicalOptionalMatchTest.CloneWithNullChildren (0 ms)
+[ RUN      ] LogicalOptionalMatchTest.ToString
+[       OK ] LogicalOptionalMatchTest.ToString (0 ms)
+[----------] 10 tests from LogicalOptionalMatchTest (0 ms total)
+
+[----------] 9 tests from LogicalUnionTest
+[ RUN      ] LogicalUnionTest.UnionAllConstruction
+[       OK ] LogicalUnionTest.UnionAllConstruction (0 ms)
+[ RUN      ] LogicalUnionTest.UnionDistinctConstruction
+[       OK ] LogicalUnionTest.UnionDistinctConstruction (0 ms)
+[ RUN      ] LogicalUnionTest.ToStringDifference
+[       OK ] LogicalUnionTest.ToStringDifference (0 ms)
+[ RUN      ] LogicalUnionTest.OutputVariablesFromLeft
+[       OK ] LogicalUnionTest.OutputVariablesFromLeft (0 ms)
+[ RUN      ] LogicalUnionTest.OutputVariablesNullLeft
+[       OK ] LogicalUnionTest.OutputVariablesNullLeft (0 ms)
+[ RUN      ] LogicalUnionTest.SetAndDetachChildren
+[       OK ] LogicalUnionTest.SetAndDetachChildren (0 ms)
+[ RUN      ] LogicalUnionTest.OutOfRangeChild
+[       OK ] LogicalUnionTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalUnionTest.Clone
+[       OK ] LogicalUnionTest.Clone (0 ms)
+[ RUN      ] LogicalUnionTest.CloneWithNullChildren
+[       OK ] LogicalUnionTest.CloneWithNullChildren (0 ms)
+[----------] 9 tests from LogicalUnionTest (0 ms total)
+
+[----------] 1 test from LogicalTreeTest
+[ RUN      ] LogicalTreeTest.DeepTreeClone
+[       OK ] LogicalTreeTest.DeepTreeClone (0 ms)
+[----------] 1 test from LogicalTreeTest (0 ms total)
+
+[----------] 2 tests from LogicalSingleRowStandaloneTest
+[ RUN      ] LogicalSingleRowStandaloneTest.ToStringAndLeafShape
+[       OK ] LogicalSingleRowStandaloneTest.ToStringAndLeafShape (0 ms)
+[ RUN      ] LogicalSingleRowStandaloneTest.RejectsChildMutations
+[       OK ] LogicalSingleRowStandaloneTest.RejectsChildMutations (0 ms)
+[----------] 2 tests from LogicalSingleRowStandaloneTest (0 ms total)
+
+[----------] 2 tests from LogicalPlanPrinterTest
+[ RUN      ] LogicalPlanPrinterTest.NullPlanPrintsPlaceholder
+[       OK ] LogicalPlanPrinterTest.NullPlanPrintsPlaceholder (0 ms)
+[ RUN      ] LogicalPlanPrinterTest.PrintsIndentedTreeAndSkipsNullChildren
+[       OK ] LogicalPlanPrinterTest.PrintsIndentedTreeAndSkipsNullChildren (0 ms)
+[----------] 2 tests from LogicalPlanPrinterTest (0 ms total)
+
+[----------] 14 tests from LogicalLoadCsvTest
+[ RUN      ] LogicalLoadCsvTest.BasicConstruction
+[       OK ] LogicalLoadCsvTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DefaultParams
+[       OK ] LogicalLoadCsvTest.DefaultParams (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenNoChild
+[       OK ] LogicalLoadCsvTest.GetChildrenNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.GetChildrenWithChild
+[       OK ] LogicalLoadCsvTest.GetChildrenWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesNoChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.OutputVariablesWithChild
+[       OK ] LogicalLoadCsvTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneWithChild
+[       OK ] LogicalLoadCsvTest.CloneWithChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.CloneNoChild
+[       OK ] LogicalLoadCsvTest.CloneNoChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.ToStringWithoutHeaders
+[       OK ] LogicalLoadCsvTest.ToStringWithoutHeaders (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChild
+[       OK ] LogicalLoadCsvTest.SetChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.SetChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChild
+[       OK ] LogicalLoadCsvTest.DetachChild (0 ms)
+[ RUN      ] LogicalLoadCsvTest.DetachChildInvalidIndex
+[       OK ] LogicalLoadCsvTest.DetachChildInvalidIndex (0 ms)
+[----------] 14 tests from LogicalLoadCsvTest (0 ms total)
+
+[----------] 19 tests from LogicalCallSubqueryTest
+[ RUN      ] LogicalCallSubqueryTest.BasicConstruction
+[       OK ] LogicalCallSubqueryTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ConstructionWithParams
+[       OK ] LogicalCallSubqueryTest.ConstructionWithParams (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenBothPresent
+[       OK ] LogicalCallSubqueryTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlyInput
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlyInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenOnlySubquery
+[       OK ] LogicalCallSubqueryTest.GetChildrenOnlySubquery (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.GetChildrenEmpty
+[       OK ] LogicalCallSubqueryTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesNoInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesNoInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.OutputVariablesWithInput
+[       OK ] LogicalCallSubqueryTest.OutputVariablesWithInput (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneBothChildren
+[       OK ] LogicalCallSubqueryTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.CloneNoChildren
+[       OK ] LogicalCallSubqueryTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringBasic
+[       OK ] LogicalCallSubqueryTest.ToStringBasic (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactions
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactions (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize
+[       OK ] LogicalCallSubqueryTest.ToStringInTransactionsWithBatchSize (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex0
+[       OK ] LogicalCallSubqueryTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildIndex1
+[       OK ] LogicalCallSubqueryTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.SetChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex0
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildIndex1
+[       OK ] LogicalCallSubqueryTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalCallSubqueryTest.DetachChildInvalidIndex
+[       OK ] LogicalCallSubqueryTest.DetachChildInvalidIndex (0 ms)
+[----------] 19 tests from LogicalCallSubqueryTest (0 ms total)
+
+[----------] 17 tests from LogicalForeachTest
+[ RUN      ] LogicalForeachTest.BasicConstruction
+[       OK ] LogicalForeachTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalForeachTest.WithChildAndBody
+[       OK ] LogicalForeachTest.WithChildAndBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenBothPresent
+[       OK ] LogicalForeachTest.GetChildrenBothPresent (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyChild
+[       OK ] LogicalForeachTest.GetChildrenOnlyChild (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenOnlyBody
+[       OK ] LogicalForeachTest.GetChildrenOnlyBody (0 ms)
+[ RUN      ] LogicalForeachTest.GetChildrenEmpty
+[       OK ] LogicalForeachTest.GetChildrenEmpty (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesNoChild
+[       OK ] LogicalForeachTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalForeachTest.OutputVariablesWithChild
+[       OK ] LogicalForeachTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalForeachTest.CloneBothChildren
+[       OK ] LogicalForeachTest.CloneBothChildren (0 ms)
+[ RUN      ] LogicalForeachTest.CloneNoChildren
+[       OK ] LogicalForeachTest.CloneNoChildren (0 ms)
+[ RUN      ] LogicalForeachTest.ToString
+[       OK ] LogicalForeachTest.ToString (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex0
+[       OK ] LogicalForeachTest.SetChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildIndex1
+[       OK ] LogicalForeachTest.SetChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.SetChildInvalidIndex
+[       OK ] LogicalForeachTest.SetChildInvalidIndex (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex0
+[       OK ] LogicalForeachTest.DetachChildIndex0 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildIndex1
+[       OK ] LogicalForeachTest.DetachChildIndex1 (0 ms)
+[ RUN      ] LogicalForeachTest.DetachChildInvalidIndex
+[       OK ] LogicalForeachTest.DetachChildInvalidIndex (0 ms)
+[----------] 17 tests from LogicalForeachTest (0 ms total)
+
+[----------] 11 tests from LogicalTraversalTest
+[ RUN      ] LogicalTraversalTest.BasicConstruction
+[       OK ] LogicalTraversalTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalTraversalTest.WithTargetLabelsAndProperties
+[       OK ] LogicalTraversalTest.WithTargetLabelsAndProperties (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesWithBothVars
+[       OK ] LogicalTraversalTest.OutputVariablesWithBothVars (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalTraversalTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesEmptyTargetVar
+[       OK ] LogicalTraversalTest.OutputVariablesEmptyTargetVar (0 ms)
+[ RUN      ] LogicalTraversalTest.OutputVariablesBothEmpty
+[       OK ] LogicalTraversalTest.OutputVariablesBothEmpty (0 ms)
+[ RUN      ] LogicalTraversalTest.Clone
+[       OK ] LogicalTraversalTest.Clone (0 ms)
+[ RUN      ] LogicalTraversalTest.SetAndDetachChild
+[       OK ] LogicalTraversalTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalTraversalTest.OutOfRangeChild
+[       OK ] LogicalTraversalTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalTraversalTest.ToString
+[       OK ] LogicalTraversalTest.ToString (0 ms)
+[ RUN      ] LogicalTraversalTest.NullChildOutputAndCloneCoverage
+[       OK ] LogicalTraversalTest.NullChildOutputAndCloneCoverage (0 ms)
+[----------] 11 tests from LogicalTraversalTest (0 ms total)
+
+[----------] 10 tests from LogicalVarLengthTraversalTest
+[ RUN      ] LogicalVarLengthTraversalTest.BasicConstruction
+[       OK ] LogicalVarLengthTraversalTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.DifferentHopValues
+[       OK ] LogicalVarLengthTraversalTest.DifferentHopValues (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesWithBothVars
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesWithBothVars (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutputVariablesEmptyTargetVar
+[       OK ] LogicalVarLengthTraversalTest.OutputVariablesEmptyTargetVar (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.Clone
+[       OK ] LogicalVarLengthTraversalTest.Clone (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.SetAndDetachChild
+[       OK ] LogicalVarLengthTraversalTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.OutOfRangeChild
+[       OK ] LogicalVarLengthTraversalTest.OutOfRangeChild (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.ToString
+[       OK ] LogicalVarLengthTraversalTest.ToString (0 ms)
+[ RUN      ] LogicalVarLengthTraversalTest.NullChildOutputAndCloneCoverage
+[       OK ] LogicalVarLengthTraversalTest.NullChildOutputAndCloneCoverage (0 ms)
+[----------] 10 tests from LogicalVarLengthTraversalTest (0 ms total)
+
+[----------] 9 tests from LogicalCreateNodeTest
+[ RUN      ] LogicalCreateNodeTest.BasicConstruction
+[       OK ] LogicalCreateNodeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateNodeTest.WithChild
+[       OK ] LogicalCreateNodeTest.WithChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.OutputVariablesAlwaysIncludesVariable
+[       OK ] LogicalCreateNodeTest.OutputVariablesAlwaysIncludesVariable (0 ms)
+[ RUN      ] LogicalCreateNodeTest.OutputVariablesWithChild
+[       OK ] LogicalCreateNodeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.Clone
+[       OK ] LogicalCreateNodeTest.Clone (0 ms)
+[ RUN      ] LogicalCreateNodeTest.CloneWithNullExpression
+[       OK ] LogicalCreateNodeTest.CloneWithNullExpression (0 ms)
+[ RUN      ] LogicalCreateNodeTest.SetAndDetachChild
+[       OK ] LogicalCreateNodeTest.SetAndDetachChild (0 ms)
+[ RUN      ] LogicalCreateNodeTest.InvalidChildIndex
+[       OK ] LogicalCreateNodeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalCreateNodeTest.ToString
+[       OK ] LogicalCreateNodeTest.ToString (0 ms)
+[----------] 9 tests from LogicalCreateNodeTest (0 ms total)
+
+[----------] 11 tests from LogicalCreateEdgeTest
+[ RUN      ] LogicalCreateEdgeTest.BasicConstruction
+[       OK ] LogicalCreateEdgeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.PreservesIncomingDirectionAcrossClone
+[       OK ] LogicalCreateEdgeTest.PreservesIncomingDirectionAcrossClone (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesNonEmptyVariable
+[       OK ] LogicalCreateEdgeTest.OutputVariablesNonEmptyVariable (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesEmptyVariable
+[       OK ] LogicalCreateEdgeTest.OutputVariablesEmptyVariable (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.OutputVariablesWithChild
+[       OK ] LogicalCreateEdgeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.Clone
+[       OK ] LogicalCreateEdgeTest.Clone (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ClonesDynamicPropertyExpressionsWithoutAliasingThem
+[       OK ] LogicalCreateEdgeTest.ClonesDynamicPropertyExpressionsWithoutAliasingThem (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.NullChildGetChildrenAndCloneCoverage
+[       OK ] LogicalCreateEdgeTest.NullChildGetChildrenAndCloneCoverage (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.InvalidChildIndex
+[       OK ] LogicalCreateEdgeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalCreateEdgeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalCreateEdgeTest.ToString
+[       OK ] LogicalCreateEdgeTest.ToString (0 ms)
+[----------] 11 tests from LogicalCreateEdgeTest (0 ms total)
+
+[----------] 9 tests from LogicalDeleteTest
+[ RUN      ] LogicalDeleteTest.BasicConstruction
+[       OK ] LogicalDeleteTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalDeleteTest.DetachMode
+[       OK ] LogicalDeleteTest.DetachMode (0 ms)
+[ RUN      ] LogicalDeleteTest.ToStringDetachVsDelete
+[       OK ] LogicalDeleteTest.ToStringDetachVsDelete (0 ms)
+[ RUN      ] LogicalDeleteTest.OutputVariablesFromChild
+[       OK ] LogicalDeleteTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalDeleteTest.OutputVariablesNoChild
+[       OK ] LogicalDeleteTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalDeleteTest.Clone
+[       OK ] LogicalDeleteTest.Clone (0 ms)
+[ RUN      ] LogicalDeleteTest.NullChildGetChildrenAndCloneCoverage
+[       OK ] LogicalDeleteTest.NullChildGetChildrenAndCloneCoverage (0 ms)
+[ RUN      ] LogicalDeleteTest.InvalidChildIndex
+[       OK ] LogicalDeleteTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalDeleteTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalDeleteTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[----------] 9 tests from LogicalDeleteTest (0 ms total)
+
+[----------] 9 tests from LogicalSetTest
+[ RUN      ] LogicalSetTest.PropertySet
+[       OK ] LogicalSetTest.PropertySet (0 ms)
+[ RUN      ] LogicalSetTest.LabelSet
+[       OK ] LogicalSetTest.LabelSet (0 ms)
+[ RUN      ] LogicalSetTest.MapMerge
+[       OK ] LogicalSetTest.MapMerge (0 ms)
+[ RUN      ] LogicalSetTest.OutputVariablesFromChild
+[       OK ] LogicalSetTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalSetTest.OutputVariablesNoChild
+[       OK ] LogicalSetTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalSetTest.Clone
+[       OK ] LogicalSetTest.Clone (0 ms)
+[ RUN      ] LogicalSetTest.TransfersAndClonesItsOptionalChild
+[       OK ] LogicalSetTest.TransfersAndClonesItsOptionalChild (0 ms)
+[ RUN      ] LogicalSetTest.InvalidChildIndex
+[       OK ] LogicalSetTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalSetTest.ToString
+[       OK ] LogicalSetTest.ToString (0 ms)
+[----------] 9 tests from LogicalSetTest (0 ms total)
+
+[----------] 8 tests from LogicalRemoveTest
+[ RUN      ] LogicalRemoveTest.PropertyRemove
+[       OK ] LogicalRemoveTest.PropertyRemove (0 ms)
+[ RUN      ] LogicalRemoveTest.LabelRemove
+[       OK ] LogicalRemoveTest.LabelRemove (0 ms)
+[ RUN      ] LogicalRemoveTest.OutputVariablesFromChild
+[       OK ] LogicalRemoveTest.OutputVariablesFromChild (0 ms)
+[ RUN      ] LogicalRemoveTest.OutputVariablesNoChild
+[       OK ] LogicalRemoveTest.OutputVariablesNoChild (0 ms)
+[ RUN      ] LogicalRemoveTest.Clone
+[       OK ] LogicalRemoveTest.Clone (0 ms)
+[ RUN      ] LogicalRemoveTest.TransfersAndClonesItsOptionalChild
+[       OK ] LogicalRemoveTest.TransfersAndClonesItsOptionalChild (0 ms)
+[ RUN      ] LogicalRemoveTest.InvalidChildIndex
+[       OK ] LogicalRemoveTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalRemoveTest.ToString
+[       OK ] LogicalRemoveTest.ToString (0 ms)
+[----------] 8 tests from LogicalRemoveTest (0 ms total)
+
+[----------] 9 tests from LogicalMergeNodeTest
+[ RUN      ] LogicalMergeNodeTest.BasicConstruction
+[       OK ] LogicalMergeNodeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OutputVariables
+[       OK ] LogicalMergeNodeTest.OutputVariables (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OutputVariablesWithChild
+[       OK ] LogicalMergeNodeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalMergeNodeTest.OnCreateAndOnMatchActions
+[       OK ] LogicalMergeNodeTest.OnCreateAndOnMatchActions (0 ms)
+[ RUN      ] LogicalMergeNodeTest.Clone
+[       OK ] LogicalMergeNodeTest.Clone (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ClonesDynamicMatchPropertyExpressionsWithoutAliasingThem
+[       OK ] LogicalMergeNodeTest.ClonesDynamicMatchPropertyExpressionsWithoutAliasingThem (0 ms)
+[ RUN      ] LogicalMergeNodeTest.InvalidChildIndex
+[       OK ] LogicalMergeNodeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalMergeNodeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalMergeNodeTest.ToString
+[       OK ] LogicalMergeNodeTest.ToString (0 ms)
+[----------] 9 tests from LogicalMergeNodeTest (0 ms total)
+
+[----------] 9 tests from LogicalMergeEdgeTest
+[ RUN      ] LogicalMergeEdgeTest.BasicConstruction
+[       OK ] LogicalMergeEdgeTest.BasicConstruction (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesNonEmptyEdgeVar
+[       OK ] LogicalMergeEdgeTest.OutputVariablesNonEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesEmptyEdgeVar
+[       OK ] LogicalMergeEdgeTest.OutputVariablesEmptyEdgeVar (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OutputVariablesWithChild
+[       OK ] LogicalMergeEdgeTest.OutputVariablesWithChild (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.OnCreateAndOnMatchActions
+[       OK ] LogicalMergeEdgeTest.OnCreateAndOnMatchActions (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.Clone
+[       OK ] LogicalMergeEdgeTest.Clone (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.InvalidChildIndex
+[       OK ] LogicalMergeEdgeTest.InvalidChildIndex (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.ReplacesAndDetachesItsOnlyChild
+[       OK ] LogicalMergeEdgeTest.ReplacesAndDetachesItsOnlyChild (0 ms)
+[ RUN      ] LogicalMergeEdgeTest.ToString
+[       OK ] LogicalMergeEdgeTest.ToString (0 ms)
+[----------] 9 tests from LogicalMergeEdgeTest (0 ms total)
+
+[----------] 1 test from LogicalCardinalityEstimateTest
+[ RUN      ] LogicalCardinalityEstimateTest.AcceptsOrderedBoundsAndRejectsInconsistentEstimates
+[       OK ] LogicalCardinalityEstimateTest.AcceptsOrderedBoundsAndRejectsInconsistentEstimates (0 ms)
+[----------] 1 test from LogicalCardinalityEstimateTest (0 ms total)
+
+[----------] 1 test from LogicalStatisticsProviderContractTest
+[ RUN      ] LogicalStatisticsProviderContractTest.DestroysProvidersPolymorphically
+[       OK ] LogicalStatisticsProviderContractTest.DestroysProvidersPolymorphically (0 ms)
+[----------] 1 test from LogicalStatisticsProviderContractTest (0 ms total)
+
+[----------] 31 tests from LogicalPlanOptimizerTest
+[ RUN      ] LogicalPlanOptimizerTest.FusesNestedLimitsWithoutChangingTheScan
+[       OK ] LogicalPlanOptimizerTest.FusesNestedLimitsWithoutChangingTheScan (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesAFilterWithAnInvalidChildShapeUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesAFilterWithAnInvalidChildShapeUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesLimitBelowAValidNonDistinctProjection
+[       OK ] LogicalPlanOptimizerTest.PushesLimitBelowAValidNonDistinctProjection (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesPositiveLimitBelowNonNegativeSkip
+[       OK ] LogicalPlanOptimizerTest.PushesPositiveLimitBelowNonNegativeSkip (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.RetainsDistinctAndMalformedProjectionsAboveLimit
+[       OK ] LogicalPlanOptimizerTest.RetainsDistinctAndMalformedProjectionsAboveLimit (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.FusesNestedSkipsWhenTheExactSumIsRepresentable
+[       OK ] LogicalPlanOptimizerTest.FusesNestedSkipsWhenTheExactSumIsRepresentable (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesDirectLiteralPropertyEqualityIntoNodeScanWithoutRemovingFilter
+[       OK ] LogicalPlanOptimizerTest.PushesDirectLiteralPropertyEqualityIntoNodeScanWithoutRemovingFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesConjunctiveLiteralEqualitiesIntoOneNodeScanWithoutRemovingTheFilter
+[       OK ] LogicalPlanOptimizerTest.PushesConjunctiveLiteralEqualitiesIntoOneNodeScanWithoutRemovingTheFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesNonExactOrAlreadyRepresentedFilterPredicatesUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter
+[       OK ] LogicalPlanOptimizerTest.PushesOneDirectLiteralRangeIntoNodeScanWithoutRemovingFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.CanonicalizesConjunctiveBoundsForOneRangeProperty
+[       OK ] LogicalPlanOptimizerTest.CanonicalizesConjunctiveBoundsForOneRangeProperty (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PrefersExclusiveBoundsWhenEqualRangeEndpointsAreConjoined
+[       OK ] LogicalPlanOptimizerTest.PrefersExclusiveBoundsWhenEqualRangeEndpointsAreConjoined (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ReplacesLooserRangeBoundsWithStricterEndpoints
+[       OK ] LogicalPlanOptimizerTest.ReplacesLooserRangeBoundsWithStricterEndpoints (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesMalformedOrConflictingExistingScanPredicatesUntouched
+[       OK ] LogicalPlanOptimizerTest.LeavesMalformedOrConflictingExistingScanPredicatesUntouched (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesEveryNonNullLiteralRepresentationAndRejectsInvalidFilterShapes
+[       OK ] LogicalPlanOptimizerTest.PushesEveryNonNullLiteralRepresentationAndRejectsInvalidFilterShapes (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.LeavesMalformedOrOverflowingWindowsForRuntimeValidation
+[       OK ] LogicalPlanOptimizerTest.LeavesMalformedOrOverflowingWindowsForRuntimeValidation (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ValidatesStatisticsAndPlanTraversalBounds
+[       OK ] LogicalPlanOptimizerTest.ValidatesStatisticsAndPlanTraversalBounds (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide
+[       OK ] LogicalPlanOptimizerTest.PlacesTheSmallerCartesianInputOnTheMaterializedRightSide (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.HandlesEmptyInputsAndInvalidConfiguration
+[       OK ] LogicalPlanOptimizerTest.HandlesEmptyInputsAndInvalidConfiguration (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.FailsClosedForMalformedOperatorContracts
+[       OK ] LogicalPlanOptimizerTest.FailsClosedForMalformedOperatorContracts (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.EnforcesItsFixedPointBound
+[       OK ] LogicalPlanOptimizerTest.EnforcesItsFixedPointBound (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter
+[       OK ] LogicalPlanOptimizerTest.PushesExactConjunctionIntoIndependentJoinScansAndRetainsFilter (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction
+[       OK ] LogicalPlanOptimizerTest.JoinFilterPushdownRejectsSharedVariablesNullOrNonConjunction (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged
+[       OK ] LogicalPlanOptimizerTest.JoinPushdownKeepsDisjunctionMixedExpressionsAndForeignScopeUnchanged (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable
+[       OK ] LogicalPlanOptimizerTest.JoinFilterPushdownRequiresEstimatedRepetitionWhenStatisticsAreAvailable (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity
+[       OK ] LogicalPlanOptimizerTest.ExposesJoinFilterBeforeCostingAndKeepsOrderOnUnknownSelectivity (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates
+[       OK ] LogicalPlanOptimizerTest.ReversesReadSingleHopAnchorAndPreservesProjectionAndPredicates (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.KeepsUnsupportedOrUncostedAnchorsOnOriginalPath
+[       OK ] LogicalPlanOptimizerTest.KeepsUnsupportedOrUncostedAnchorsOnOriginalPath (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof
+[       OK ] LogicalPlanOptimizerTest.KeepsRestrictedLabelAnchorWithoutIncidentEdgeCostProof (0 ms)
+[ RUN      ] LogicalPlanOptimizerTest.RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor
+[       OK ] LogicalPlanOptimizerTest.RetainsGlobalDirectedEdgeScanAndAllowsUnlabeledBothAnchor (0 ms)
+[----------] 31 tests from LogicalPlanOptimizerTest (1 ms total)
+
+[----------] 4 tests from LogicalPlanBuilderFlagsTest
+[ RUN      ] LogicalPlanBuilderFlagsTest.InitialState
+[       OK ] LogicalPlanBuilderFlagsTest.InitialState (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkDataMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkDataMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation
+[       OK ] LogicalPlanBuilderFlagsTest.MarkSchemaMutation (0 ms)
+[ RUN      ] LogicalPlanBuilderFlagsTest.MarkBothMutations
+[       OK ] LogicalPlanBuilderFlagsTest.MarkBothMutations (0 ms)
+[----------] 4 tests from LogicalPlanBuilderFlagsTest (0 ms total)
+
+[----------] 45 tests from LogicalPlanBuilderCoverageTest
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipAndLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithSkipOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnStarWithLimitOnly (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithAggregateAndSortSkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNestedAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithDistinctAggregate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity
+[       OK ] LogicalPlanBuilderCoverageTest.PreservesTopLevelPercentileArgumentAndRejectsInvalidAggregateArity (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnSimpleWithOrderBySkipLimit (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput
+[       OK ] LogicalPlanBuilderCoverageTest.ReturnWithNullInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithAggregates
+[       OK ] LogicalPlanBuilderCoverageTest.WithAggregates (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithReturnStar
+[       OK ] LogicalPlanBuilderCoverageTest.WithReturnStar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithWhereFilter
+[       OK ] LogicalPlanBuilderCoverageTest.WithWhereFilter (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.WithNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.WithDistinct
+[       OK ] LogicalPlanBuilderCoverageTest.WithDistinct (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns
+[       OK ] LogicalPlanBuilderCoverageTest.MatchEmptyPatterns (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMultiplePatternsWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput
+[       OK ] LogicalPlanBuilderCoverageTest.MatchSinglePatternWithInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithNamedPath (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithVarLengthTraversal (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchWithWhere
+[       OK ] LogicalPlanBuilderCoverageTest.MatchWithWhere (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables
+[       OK ] LogicalPlanBuilderCoverageTest.MatchMaterializesAnonymousNodeAndEdgeVariables (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithAnonymousNodes (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithChainAndAnonymousVars (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput
+[       OK ] LogicalPlanBuilderCoverageTest.CreateWithExistingInput (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithMapMergeType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetWithDefaultType
+[       OK ] LogicalPlanBuilderCoverageTest.SetWithDefaultType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.SetNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.SetNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.DeleteNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveLabelType
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveLabelType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemovePropertyType
+[       OK ] LogicalPlanBuilderCoverageTest.RemovePropertyType (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows
+[       OK ] LogicalPlanBuilderCoverageTest.RemoveNullInputThrows (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeSingleNode
+[       OK ] LogicalPlanBuilderCoverageTest.MergeSingleNode (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain
+[       OK ] LogicalPlanBuilderCoverageTest.MergeEdgeMultiChain (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithLiteralList (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.UnwindWithExpression
+[       OK ] LogicalPlanBuilderCoverageTest.UnwindWithExpression (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithYieldPredicate (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CallWithoutYield
+[       OK ] LogicalPlanBuilderCoverageTest.CallWithoutYield (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexComposite
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexComposite (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.CreateIndexSingle
+[       OK ] LogicalPlanBuilderCoverageTest.CreateIndexSingle (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar
+[       OK ] LogicalPlanBuilderCoverageTest.MatchNamedPathNoRelVar (0 ms)
+[ RUN      ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars
+[       OK ] LogicalPlanBuilderCoverageTest.MatchOptionalWithDuplicateVars (0 ms)
+[----------] 45 tests from LogicalPlanBuilderCoverageTest (0 ms total)
+
+[----------] 17 tests from PlanCacheTest
+[ RUN      ] PlanCacheTest.MissThenHitAndUpdateExistingEntry
+[       OK ] PlanCacheTest.MissThenHitAndUpdateExistingEntry (0 ms)
+[ RUN      ] PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity
+[       OK ] PlanCacheTest.EvictsLeastRecentlyUsedWhenAtCapacity (0 ms)
+[ RUN      ] PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList
+[       OK ] PlanCacheTest.ZeroCapacityDisablesCachingWithoutCloningOrEvictingAnEmptyList (0 ms)
+[ RUN      ] PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder
+[       OK ] PlanCacheTest.CloneFailureKeepsThePriorEntryAndItsEvictionOrder (0 ms)
+[ RUN      ] PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant
+[       OK ] PlanCacheTest.QueryTextAndMetadataCapacityCannotBypassItsAllocationGrant (0 ms)
+[ RUN      ] PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry
+[       OK ] PlanCacheTest.EveryMetadataAllocationFailureLeavesNoUnindexedPlanAndAllowsRetry (0 ms)
+[ RUN      ] PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode
+[       OK ] PlanCacheTest.CacheHitsAndUpdatesDoNotAllocateAnotherQueryTextOrQueueNode (0 ms)
+[ RUN      ] PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed
+[       OK ] PlanCacheTest.CacheRetainsItsAllocatorUntilItsLastOwnedMetadataIsDestroyed (0 ms)
+[ RUN      ] PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds
+[       OK ] PlanCacheTest.OperatorObjectsRetainTheirResourceAfterTheAllocationScopeEnds (0 ms)
+[ RUN      ] PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners
+[       OK ] PlanCacheTest.CachedOperatorAndHitCloneUseSeparateAllocationOwners (0 ms)
+[ RUN      ] PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan
+[       OK ] PlanCacheTest.OperatorAdmissionFailureCannotReplaceAnExistingCachedPlan (0 ms)
+[ RUN      ] PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity
+[       OK ] PlanCacheTest.RebindingIsAtomicAndClearingReleasesEvenEmptyMetadataCapacity (0 ms)
+[ RUN      ] PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion
+[       OK ] PlanCacheTest.ClearPreservesAdmissionAuthorityForTheNextInsertion (0 ms)
+[ RUN      ] PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation
+[       OK ] PlanCacheTest.FailedOperatorConstructionRefundsItsInheritedAllocation (0 ms)
+[ RUN      ] PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy
+[       OK ] PlanCacheTest.IndexBorrowsTheOwnedQueryTextInsteadOfAllocatingASecondCopy (0 ms)
+[ RUN      ] PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices
+[       OK ] PlanCacheTest.BorrowedIndexKeysSurviveCallerMutationRehashUpdatesAndLruSplices (0 ms)
+[ RUN      ] PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate
+[       OK ] PlanCacheTest.ColdCacheStateIsOptionalAndFailedFirstInsertionRefundsItsCandidate (0 ms)
+[----------] 17 tests from PlanCacheTest (1 ms total)
+
+[----------] 4 tests from QueryEngineLogicalBackendBoundaryTest
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.InvalidatesLogicalCacheOnIdentityOrCapabilityChangeWithoutOpeningLogicalSnapshots
+[       OK ] QueryEngineLogicalBackendBoundaryTest.InvalidatesLogicalCacheOnIdentityOrCapabilityChangeWithoutOpeningLogicalSnapshots (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.RebindsCacheOwnershipWithoutOpeningLogicalSnapshots
+[       OK ] QueryEngineLogicalBackendBoundaryTest.RebindsCacheOwnershipWithoutOpeningLogicalSnapshots (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.SharedCachePressureDoesNotRejectAnOtherwiseAdmittedCompilation
+[       OK ] QueryEngineLogicalBackendBoundaryTest.SharedCachePressureDoesNotRejectAnOtherwiseAdmittedCompilation (0 ms)
+[ RUN      ] QueryEngineLogicalBackendBoundaryTest.ManagedBackendsWithoutSharedCacheAuthorityDoNotRetainPrivateQueryAccounts
+[       OK ] QueryEngineLogicalBackendBoundaryTest.ManagedBackendsWithoutSharedCacheAuthorityDoNotRetainPrivateQueryAccounts (4 ms)
+[----------] 4 tests from QueryEngineLogicalBackendBoundaryTest (5 ms total)
+
+[----------] 8 tests from GuardedPropertyCopyTest
+[ RUN      ] GuardedPropertyCopyTest.CancelsNestedCopyWithoutChangingSourceAndRetries
+[       OK ] GuardedPropertyCopyTest.CancelsNestedCopyWithoutChangingSourceAndRetries (4 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsLargeScalarBuffersAndRetriesExactPayloads
+[       OK ] GuardedPropertyCopyTest.CancelsLargeScalarBuffersAndRetriesExactPayloads (1 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsLargeMapKeyCopyAndPreservesEmbeddedNullsOnRetry
+[       OK ] GuardedPropertyCopyTest.CancelsLargeMapKeyCopyAndPreservesEmbeddedNullsOnRetry (0 ms)
+[ RUN      ] GuardedPropertyCopyTest.CancelsWideStringVectorAndRetriesInOriginalOrder
+[       OK ] GuardedPropertyCopyTest.CancelsWideStringVectorAndRetriesInOriginalOrder (1 ms)
+[ RUN      ] GuardedPropertyCopyTest.EntityCopiesCancelWithoutChangingIdentityOrPayloadAndRetry
+[       OK ] GuardedPropertyCopyTest.EntityCopiesCancelWithoutChangingIdentityOrPayloadAndRetry (4 ms)
+[ RUN      ] GuardedPropertyCopyTest.RowCopiesPreserveAllCachesAndCancelWithoutChangingSource
+[       OK ] GuardedPropertyCopyTest.RowCopiesPreserveAllCachesAndCancelWithoutChangingSource (25 ms)
+[ RUN      ] GuardedPropertyCopyTest.PathCopiesCancelInsideNestedEntityAndRetryReferences
+[       OK ] GuardedPropertyCopyTest.PathCopiesCancelInsideNestedEntityAndRetryReferences (4 ms)
+[ RUN      ] GuardedPropertyCopyTest.RejectsExcessiveNestingAndCopiesTheDepthBoundary
+[       OK ] GuardedPropertyCopyTest.RejectsExcessiveNestingAndCopiesTheDepthBoundary (0 ms)
+[----------] 8 tests from GuardedPropertyCopyTest (43 ms total)
+
+[----------] 1 test from PageBackedGraphNameResolverContractTest
+[ RUN      ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface
+[       OK ] PageBackedGraphNameResolverContractTest.SupportsVirtualDestructionThroughThePublicInterface (0 ms)
+[----------] 1 test from PageBackedGraphNameResolverContractTest (0 ms total)
+
+[----------] 9 tests from NativeReadSessionTest
+[ RUN      ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames
+[       OK ] NativeReadSessionTest.KeepsTokenNamesBoundedAndReplacesExistingNames (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets
+[       OK ] NativeReadSessionTest.KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound
+[       OK ] NativeReadSessionTest.CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound (0 ms)
+[ RUN      ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded
+[       OK ] NativeReadSessionTest.KeepsSelectedPropertyValuesAndMissingFieldsBounded (0 ms)
+[ RUN      ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound
+[       OK ] NativeReadSessionTest.CachesPresentAndAbsentNodeExistenceWithTheEntityBound (0 ms)
+[ RUN      ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder
+[       OK ] NativeReadSessionTest.EntityRecordCacheReplacementKeepsBoundedFifoOrder (0 ms)
+[ RUN      ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget
+[       OK ] NativeReadSessionTest.DoesNotRetainPropertyValuesOverTheByteBudget (3 ms)
+[ RUN      ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap
+[       OK ] NativeReadSessionTest.ReplacementPayloadsEvictOtherKeysBeforeExceedingTheRetainedCap (8 ms)
+[ RUN      ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry
+[       OK ] NativeReadSessionTest.OversizedCachePublicationDoesNotConsumeCallerPayloadAndRemovesOldEntry (0 ms)
+[----------] 9 tests from NativeReadSessionTest (13 ms total)
+
+[----------] 28 tests from PageBackedGraphReadAdapterTest
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations
+[       OK ] PageBackedGraphReadAdapterTest.RejectsReusingAReadSessionAcrossMetadataGenerations (4 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity
+[       OK ] PageBackedGraphReadAdapterTest.ReturnsFullEdgeTopologyWithoutPersistedLogicalIdentity (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs
+[       OK ] PageBackedGraphReadAdapterTest.ColumnAdmissionCoversColdReadsCacheHitsAndDuplicateOutputs (18 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse
+[       OK ] PageBackedGraphReadAdapterTest.PropertyColumnOwnershipPreservesDuplicateKeysNullsAndSessionReuse (17 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot
+[       OK ] PageBackedGraphReadAdapterTest.ReadsOwnerKeyedPropertiesAndPreservesAnOlderSnapshot (25 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties
+[       OK ] PageBackedGraphReadAdapterTest.ShapeAwareNodeScanAvoidsUnrequestedLabelsAndProperties (15 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession
+[       OK ] PageBackedGraphReadAdapterTest.ReusesNodeLabelsWithinOneReadSession (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession
+[       OK ] PageBackedGraphReadAdapterTest.ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession (13 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity (30 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity
+[       OK ] PageBackedGraphReadAdapterTest.PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity (23 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties
+[       OK ] PageBackedGraphReadAdapterTest.ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties (23 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship
+[       OK ] PageBackedGraphReadAdapterTest.RejectsUnknownLogicalNamesButAllowsAnUntypedNativeRelationship (14 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary
+[       OK ] PageBackedGraphReadAdapterTest.RejectsDuplicateAndUnknownPropertyNamesAtTheLogicalBoundary (28 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds
+[       OK ] PageBackedGraphReadAdapterTest.ScansNativeEntityMapInLogicalOrderWithResumableNodeBounds (24 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly
+[       OK ] PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly (20 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches
+[       OK ] PageBackedGraphReadAdapterTest.StreamsSupernodeVisitorsInBoundedLogicalBatches (34 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch
+[       OK ] PageBackedGraphReadAdapterTest.StreamsLargeAdjacencyTopologyThroughTypedEntityBatch (51 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords
+[       OK ] PageBackedGraphReadAdapterTest.ReopensAndScansNativeEntityMapWithoutFixedRecords (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap
+[       OK ] PageBackedGraphReadAdapterTest.PointReadsAndTypedNodeScansRejectCorruptEntityMap (12 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories
+[       OK ] PageBackedGraphReadAdapterTest.RejectsZeroLogicalIdsBeforeAccessingDirectories (3 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable
+[       OK ] PageBackedGraphReadAdapterTest.MovesAdjacencyCursorsWithoutLeavingTheirOldScanStateUsable (6 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning
+[       OK ] PageBackedGraphReadAdapterTest.RejectsInvalidAdjacencyBoundsDirectionsAndContinuationBeforeScanning (5 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain
+[       OK ] PageBackedGraphReadAdapterTest.RejectsStoresFromAnotherMetadataDomain (3 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads
+[       OK ] PageBackedGraphReadAdapterTest.CombinedColumnsAndCountsAdmitColdWarmAndPartialCachedPayloads (11 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry
+[       OK ] PageBackedGraphReadAdapterTest.ExactValidationAdmitsActualStoredValueBeforeComparisonAndCanRetry (10 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch
+[       OK ] PageBackedGraphReadAdapterTest.CompletePropertyAdmissionRejectsRetriesAndValidatesWholeIdBatch (22 ms)
+[ RUN      ] PageBackedGraphReadAdapterTest.VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch
+[       OK ] PageBackedGraphReadAdapterTest.VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch (12 ms)
+[----------] 28 tests from PageBackedGraphReadAdapterTest (473 ms total)
+
+[----------] 10 tests from RelocatablePropertyValueInspectionTest
+[ RUN      ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue
+[       OK ] RelocatablePropertyValueInspectionTest.CountsNestedShapeAndConsumesOnlyOneOuterValue (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission
+[       OK ] RelocatablePropertyValueInspectionTest.RejectionAndCancellationKeepTheOriginalCursorAndDoNotCallLaterAdmission (1 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation
+[       OK ] RelocatablePropertyValueInspectionTest.ValidationMatchesDecoderForEverySingleBitWireMutation (4 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime
+[       OK ] RelocatablePropertyValueInspectionTest.ScopedPrivateDecodeRejectsBeforeCopyAndRetainsCreditThroughItsSourceLifetime (2 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints
+[       OK ] RelocatablePropertyValueInspectionTest.NestedDecodeScopesReplaceAdmissionAndInheritCancellationCheckpoints (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens
+[       OK ] RelocatablePropertyValueInspectionTest.ImplicitDecodeQuotaCannotHideLaterCorruptCollectionTokens (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation
+[       OK ] RelocatablePropertyValueInspectionTest.ScalarCollectionSlotsAreAdmittedBeforeTheirBackingAllocation (2 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget
+[       OK ] RelocatablePropertyValueInspectionTest.ExternalCollectionDirectoryAndSlotsShareThePrivateDecodeBudget (2 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial
+[       OK ] RelocatablePropertyValueInspectionTest.ProtectedMaintenanceGrantCoversDecodedPayloadsAndRefundsOnDenial (0 ms)
+[ RUN      ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor
+[       OK ] RelocatablePropertyValueInspectionTest.GuardedCopyUpperUsesFreshLayoutRatherThanSourceLoadFactor (1 ms)
+[----------] 10 tests from RelocatablePropertyValueInspectionTest (15 ms total)
+
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount
+[       OK ] RelocatablePropertyValueCodecBytesTest.MaterializedBytesCountSuccessfulOuterValuesWithoutNestedDoubleCount (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEmptyAndBinaryPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsNestedBinaryValuesWithCanonicalMapOrder (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip
+[       OK ] RelocatablePropertyValueCodecBytesTest.NestedPayloadSingleBitMutationsRejectOrExactlyRoundTrip (10 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncationFlagsAndTrailingPayload (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind
+[       OK ] RelocatablePropertyValueCodecBytesTest.RoundTripsEveryCanonicalScalarAndContainerKind (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsInvalidWireValuesAndExcessiveNesting (2 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads
+[       OK ] RelocatablePropertyValueCodecBytesTest.RejectsTruncatedFixedPayloadsAndTrailingInnerPayloads (0 ms)
+[ RUN      ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload
+[       OK ] RelocatablePropertyValueCodecBytesTest.HeaderOnlyNullInspectionValidatesEnvelopeWithoutPayload (0 ms)
+[----------] 9 tests from RelocatablePropertyValueCodecBytesTest (13 ms total)
+
+[----------] 23 tests from LogicalGraphPropertyPatchTest
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationMetadataRejectsItsOwningBudgetBeforeReadingSourceAndCanRetry (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt
+[       OK ] LogicalGraphPropertyPatchTest.CompanionPayloadIsAdmittedBeforeAnEmptyPatchBatchCopiesIt (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit
+[       OK ] LogicalGraphPropertyPatchTest.NormalizedFullAndChangedOutputsRetainTheirSeparateCopiedPayloadCredit (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission
+[       OK ] LogicalGraphPropertyPatchTest.LogicalSourceByteCallbackDoesNotDisablePrivateHeapAdmission (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues
+[       OK ] LogicalGraphPropertyPatchTest.PreservesOtherFieldsAndReadsPreviousStagedValues (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads
+[       OK ] LogicalGraphPropertyPatchTest.NormalizationSeparatesChangedFieldsWithoutStagingOrRetainingEqualPayloads (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback
+[       OK ] LogicalGraphPropertyPatchTest.LegacyTransactionsRejectRawStagingExplicitlyAndOverlayUsesFullStateFallback (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement
+[       OK ] LogicalGraphPropertyPatchTest.UnchangedValuesAndMissingRemovalsDoNotStageAReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList
+[       OK ] LogicalGraphPropertyPatchTest.InvalidFinalRequestRejectsTheWholePatchList (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges
+[       OK ] LogicalGraphPropertyPatchTest.StaleSnapshotAndEntryBoundsDoNotPublishPartialChanges (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging
+[       OK ] LogicalGraphPropertyPatchTest.CancellationAndReadOnlyTransactionsRejectBeforeStaging (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets
+[       OK ] LogicalGraphPropertyPatchTest.AppliesNodeAndEdgePatchesInOneStageAndRejectsMissingTargets (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch
+[       OK ] LogicalGraphPropertyPatchTest.SourceAdmissionFailureCannotStageTheFirstPatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder
+[       OK ] LogicalGraphPropertyPatchTest.MergesUnsortedSetsAndRemovalsIntoCanonicalFieldOrder (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds
+[       OK ] LogicalGraphPropertyPatchTest.RemovesTheWholeCollectionThenAddsToAnEmptyOwnerAtExactBounds (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedOrdinalsAndPersistedIdsRemainSeparateInOneAtomicBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.InvalidCreatedOrdinalRejectsPersistedPatchesBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement
+[       OK ] LogicalGraphPropertyPatchTest.CreatedPatchRejectsAnOverlappingCompleteReplacement (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary
+[       OK ] LogicalGraphPropertyPatchTest.CreatedSourceEntryLimitRejectsBeforeStagingAndAllowsExactBoundary (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch
+[       OK ] LogicalGraphPropertyPatchTest.CreatedReferenceKindsAndDuplicateTargetsRejectTheWholeBatch (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether
+[       OK ] LogicalGraphPropertyPatchTest.PublishesCompanionLabelsAndPatchesTogether (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication
+[       OK ] LogicalGraphPropertyPatchTest.OverlappingReplacementRejectsCompanionLabelsBeforePublication (0 ms)
+[ RUN      ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission
+[       OK ] LogicalGraphPropertyPatchTest.DeletedTargetsRejectAllPatchesBeforeSourceAdmission (0 ms)
+[----------] 23 tests from LogicalGraphPropertyPatchTest (1 ms total)
+
+[----------] 74 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.RepeatedRawPropertyStatementsRetainOnlyChangedNodeAndEdgeFields
+[       OK ] RelocatableStorageBackendTest.RepeatedRawPropertyStatementsRetainOnlyChangedNodeAndEdgeFields (400 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyStagingFoldsLastOperationAcrossSetsRemovalsAndTypes
+[       OK ] RelocatableStorageBackendTest.RawPropertyStagingFoldsLastOperationAcrossSetsRemovalsAndTypes (127 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompleteReplacementResetsRawFieldsAndFollowingPatchPreservesStoredNull
+[       OK ] RelocatableStorageBackendTest.CompleteReplacementResetsRawFieldsAndFollowingPatchPreservesStoredNull (121 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompleteThenRawThenCompleteThenRawKeepsOnlyTheLastFullMap
+[       OK ] RelocatableStorageBackendTest.CompleteThenRawThenCompleteThenRawKeepsOnlyTheLastFullMap (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyStagingFoldsCreatedOrdinalsAndLaterProvisionalReferences
+[       OK ] RelocatableStorageBackendTest.RawPropertyStagingFoldsCreatedOrdinalsAndLaterProvisionalReferences (109 ms)
+[ RUN      ] RelocatableStorageBackendTest.InvalidRawPropertyStagePreservesEarlierFieldsAndActiveTransaction
+[       OK ] RelocatableStorageBackendTest.InvalidRawPropertyStagePreservesEarlierFieldsAndActiveTransaction (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.FailedCreatedSourceAdmissionDoesNotReplaceEarlierCreationFields
+[       OK ] RelocatableStorageBackendTest.FailedCreatedSourceAdmissionDoesNotReplaceEarlierCreationFields (100 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyWorkBoundOverflowRejectsOnlyTheNewStatement
+[       OK ] RelocatableStorageBackendTest.RawPropertyWorkBoundOverflowRejectsOnlyTheNewStatement (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawOnlyPropertyTransactionConflictsWithAnInterveningWriter
+[       OK ] RelocatableStorageBackendTest.RawOnlyPropertyTransactionConflictsWithAnInterveningWriter (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyCommitSourceBoundFailurePublishesNeitherFieldsNorLabels
+[       OK ] RelocatableStorageBackendTest.RawPropertyCommitSourceBoundFailurePublishesNeitherFieldsNorLabels (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.CancellationAtEveryRawStagingCheckpointRestoresOverlayAndPriorTransactionFields
+[       OK ] RelocatableStorageBackendTest.CancellationAtEveryRawStagingCheckpointRestoresOverlayAndPriorTransactionFields (5656 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawOnlyStagingRejectsStreamingModeMixAndReadOnlyBeforeMutation
+[       OK ] RelocatableStorageBackendTest.RawOnlyStagingRejectsStreamingModeMixAndReadOnlyBeforeMutation (123 ms)
+[ RUN      ] RelocatableStorageBackendTest.RawPropertyRestorationPreservesRootsAndDoesNotCreateRemovedTemporaryTokens
+[       OK ] RelocatableStorageBackendTest.RawPropertyRestorationPreservesRootsAndDoesNotCreateRemovedTemporaryTokens (118 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix
+[       OK ] RelocatableStorageBackendTest.NestedRawPropertyPayloadRemainsChargedAndBudgetDenialPreservesThePrefix (164 ms)
+[ RUN      ] RelocatableStorageBackendTest.CancellingAdmittedInputCopyRefundsItsPrivatePayloadAndRetainsEarlierFields
+[       OK ] RelocatableStorageBackendTest.CancellingAdmittedInputCopyRefundsItsPrivatePayloadAndRetainsEarlierFields (120 ms)
+[ RUN      ] RelocatableStorageBackendTest.CanonicalRawPropertyPlanningBudgetDenialRollsBackBeforeGraphPublication
+[       OK ] RelocatableStorageBackendTest.CanonicalRawPropertyPlanningBudgetDenialRollsBackBeforeGraphPublication (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedWidePropertyStatementsRetainOneFinalCollectionPerEntity
+[       OK ] RelocatableStorageBackendTest.RepeatedWidePropertyStatementsRetainOneFinalCollectionPerEntity (275 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitCypherTransactionKeepsIntermediateVisibilityAndUsesNativeFinalPatches
+[       OK ] RelocatableStorageBackendTest.ExplicitCypherTransactionKeepsIntermediateVisibilityAndUsesNativeFinalPatches (190 ms)
+[ RUN      ] RelocatableStorageBackendTest.LaterDetachDeleteDiscardsEarlierPersistedEdgePropertyChanges
+[       OK ] RelocatableStorageBackendTest.LaterDetachDeleteDiscardsEarlierPersistedEdgePropertyChanges (203 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitPropertyTransactionFinalSyncFailureIsIndeterminateUntilReopen
+[       OK ] RelocatableStorageBackendTest.ExplicitPropertyTransactionFinalSyncFailureIsIndeterminateUntilReopen (168 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitCompleteReplacementRetainsItsStoredNullField
+[       OK ] RelocatableStorageBackendTest.ExplicitCompleteReplacementRetainsItsStoredNullField (127 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionFoldsFinalNodeAndEdgePatchesIntoNativePublication
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionFoldsFinalNodeAndEdgePatchesIntoNativePublication (257 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionCompleteMapReplacementStillRemovesUnspecifiedFields
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionCompleteMapReplacementStillRemovesUnspecifiedFields (139 ms)
+[ RUN      ] RelocatableStorageBackendTest.ExplicitTransactionUnchangedReplacementStillDetectsInterveningWriter
+[       OK ] RelocatableStorageBackendTest.ExplicitTransactionUnchangedReplacementStillDetectsInterveningWriter (124 ms)
+[ RUN      ] RelocatableStorageBackendTest.CypherSetAndRemoveReachNativePropertyPatchConsumer
+[       OK ] RelocatableStorageBackendTest.CypherSetAndRemoveReachNativePropertyPatchConsumer (158 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePropertyPatchDispatchRejectsStaleFenceAndKeepsUnspecifiedFields
+[       OK ] RelocatableStorageBackendTest.NativePropertyPatchDispatchRejectsStaleFenceAndKeepsUnspecifiedFields (125 ms)
+[ RUN      ] RelocatableStorageBackendTest.CreatedPropertyPatchesFoldIntoNativeCreationAndSurviveReopen
+[       OK ] RelocatableStorageBackendTest.CreatedPropertyPatchesFoldIntoNativeCreationAndSurviveReopen (143 ms)
+[ RUN      ] RelocatableStorageBackendTest.PersistedPropertyPatchAdmissionFailureAllowsRetryAndPreservesOldLargeValueSnapshot
+[       OK ] RelocatableStorageBackendTest.PersistedPropertyPatchAdmissionFailureAllowsRetryAndPreservesOldLargeValueSnapshot (169 ms)
+[ RUN      ] RelocatableStorageBackendTest.PropertyPatchUniqueFailureRollsBackAllTargetsAndCompanionLabels
+[       OK ] RelocatableStorageBackendTest.PropertyPatchUniqueFailureRollsBackAllTargetsAndCompanionLabels (188 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose
+[       OK ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose (127 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting
+[       OK ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting (122 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge
+[       OK ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains
+[       OK ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains (57 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback
+[       OK ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases
+[       OK ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners
+[       OK ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners (1044 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry
+[       OK ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry (198 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+[       OK ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose (190 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions
+[       OK ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions (51 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge
+[       OK ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge (69 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge
+[       OK ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge (60 ms)
+[ RUN      ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement
+[       OK ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement (87 ms)
+[ RUN      ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction
+[       OK ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry
+[       OK ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner
+[       OK ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession
+[       OK ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext
+[       OK ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext (179 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit
+[       OK ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit (144 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes
+[       OK ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes (105 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback (66 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction (95 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement (120 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases (77 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry (78 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant (53 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan (136 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot (146 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (136 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit (413 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection (84 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease
+[       OK ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease (1848 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites
+[       OK ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication (76 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication (216 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund
+[       OK ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund (193 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain (62 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile
+[       OK ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction (117 ms)
+[ RUN      ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed
+[       OK ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed (62 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult
+[       OK ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult (63 ms)
+[----------] 74 tests from RelocatableStorageBackendTest (17346 ms total)
+
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating
+[       OK ] LogicalGraphTransactionOverlayUndoTest.PrivateReadsOfRetainedWideFieldsAdmitCopiesBeforeAllocating (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft
+[       OK ] LogicalGraphTransactionOverlayUndoTest.NestedUndoAdmissionFailurePreservesTheVisibleOwnerAndRefundsItsDraft (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo
+[       OK ] LogicalGraphTransactionOverlayUndoTest.RejectedStageRestoresNestedNodeAndEdgeChargesWithoutCopyingDuringUndo (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRestoresFirstStateForRepeatedTargetsAndSeparateEntityKinds (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry
+[       OK ] LogicalGraphTransactionOverlayUndoTest.FailedStageRemovesCreatedAndNewlyMaterializedOwnersAndAllowsIdentityRetry (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges
+[       OK ] LogicalGraphTransactionOverlayUndoTest.DetachBoundFailureRestoresPersistedAndCreatedIncidentEdges (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop
+[       OK ] LogicalGraphTransactionOverlayUndoTest.StageFailureAfterDetachRestoresBothIncidentSourcesAndCreatedSelfLoop (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners
+[       OK ] LogicalGraphTransactionOverlayUndoTest.SingleTargetUndoDoesNotRetainUnrelatedWideOwners (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity
+[       OK ] LogicalGraphTransactionOverlayUndoTest.LegacySnapshotsExplicitlyDeclineSchemaIdentity (0 ms)
+[ RUN      ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback
+[       OK ] LogicalGraphTransactionOverlayUndoTest.InvalidSuppliedSchemaIdentityEscapesInsteadOfBecomingUnsupportedFallback (0 ms)
+[----------] 10 tests from LogicalGraphTransactionOverlayUndoTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 706 tests from 80 test suites ran. (17965 ms total)
+[  PASSED  ] 706 tests.

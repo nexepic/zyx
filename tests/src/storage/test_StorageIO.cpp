@@ -213,7 +213,8 @@ TEST_F(StorageIOTest, TypedPagePinsCountDistinctPhysicalIdentitiesOnlyAfterSucce
 		bytes.data(), RSS_BUFFER_POOL_PAGE_BYTES), RSS_BUFFER_POOL_PAGE_BYTES);
 	EXPECT_THROW(static_cast<void>(io->pinTypedPage({1U, 3U})), std::invalid_argument);
 	const auto snapshot = PerfTrace::snapshotAndReset();
-	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins").totalValue, 2);
+	// Copy reads hold the cache lock and do not publish external page pins.
+	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins").totalValue, 1);
 	EXPECT_EQ(snapshot.at("native_graph.read.distinct_page_pins_incomplete").totalValue, 0);
 }
 

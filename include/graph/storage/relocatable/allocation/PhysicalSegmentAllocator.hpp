@@ -116,6 +116,9 @@ namespace graph::storage {
 		[[nodiscard]] Superblock releaseRelocatedSource(SegmentId segmentId, Generation expectedGeneration,
 														LogSequenceNumber checkpointLsn,
 														const MetadataPublishOptions &options = {});
+        [[nodiscard]] std::optional<Superblock> tryReleaseRelocatedSource(SegmentId segmentId, Generation expectedGeneration,
+														LogSequenceNumber checkpointLsn,
+														const MetadataPublishOptions &options = {});
 
 		// Checked conversion used by fixed-slot I/O. The returned offset always
 		// leaves room for one full physical segment.

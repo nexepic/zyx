@@ -12,7 +12,7 @@
 namespace graph::query::expressions {
 
 ExistsExpression::ExistsExpression(
-	std::string pattern,
+	utils::OwnedStdString pattern,
 	std::unique_ptr<Expression> whereExpr
 )
 	: pattern_(std::move(pattern))
@@ -20,13 +20,13 @@ ExistsExpression::ExistsExpression(
 }
 
 ExistsExpression::ExistsExpression(
-	std::string pattern,
-	std::string sourceVar,
-	std::string relType,
-	std::string targetLabel,
+	utils::OwnedStdString pattern,
+	utils::OwnedStdString sourceVar,
+	utils::OwnedStdString relType,
+	utils::OwnedStdString targetLabel,
 	PatternDirection direction,
 	std::unique_ptr<Expression> whereExpr,
-	std::string targetVar
+	utils::OwnedStdString targetVar
 )
 	: pattern_(std::move(pattern))
 	, sourceVar_(std::move(sourceVar))
