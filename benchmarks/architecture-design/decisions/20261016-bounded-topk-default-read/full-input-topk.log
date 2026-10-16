@@ -1,0 +1,2 @@
+{"scale": "medium", "topk_rows": 100, "oracle": "passed", "accepted_samples": 0}
+{"scale": "holdout", "topk_rows": 100, "oracle": "passed", "accepted_samples": 0}

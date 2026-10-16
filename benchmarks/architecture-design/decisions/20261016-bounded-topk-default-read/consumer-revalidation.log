@@ -1,0 +1,2 @@
+{"consumer_revalidated": "medium", "expected": 12500}
+{"consumer_revalidated": "holdout", "expected": 9125}

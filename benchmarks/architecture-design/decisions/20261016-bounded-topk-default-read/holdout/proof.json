@@ -1,0 +1,31 @@
+{
+  "status": "full_topk_oracle_passed",
+  "scale": "holdout",
+  "rows": 100,
+  "binary_sha256": "cc3251b02a2f2a5d87384ac1f11aae29314294a62a2b98ecb78b3ffc6b61d674",
+  "formal_timing_samples_accepted": 0,
+  "command": [
+    "/workspace/zyx/buildDir_perf_control/zyx-compare-bench",
+    "--dataset",
+    "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/datasets/holdout",
+    "--prepared-db",
+    "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/current.zyx",
+    "--db-path",
+    "/workspace/zyx-optimization-final-window-20261016/bounded-preparation/current-topk-full-input-correctness/holdout/private.zyx",
+    "--scale",
+    "holdout",
+    "--profile",
+    "scan",
+    "--workload",
+    "topk_property_sort",
+    "--warmup",
+    "0",
+    "--iterations",
+    "1",
+    "--threads",
+    "1",
+    "--load-batch-rows",
+    "1000",
+    "--emit-result-rows"
+  ]
+}

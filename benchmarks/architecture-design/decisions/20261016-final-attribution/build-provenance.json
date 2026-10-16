@@ -51,5 +51,6 @@
     "/tmp/zyx-mechanism-probe"
   ],
   "source_sha256": "8f7e83da5a6a2dfad7a054789380d6f326ae48551007dd2c665d25560afa9a6d",
-  "binary_sha256": "1cb6adfbae4ff022aa8ec2ac8d87f3bfdf0f6645c62b9d13b41f3ac88cbdcb1d"
+  "binary_sha256": "8cfe5fbbf6cb3f295de142a0ee045d3eef3405f19475c2ec32f1baa55b3ac2c0",
+  "core_archive_sha256": "8ecbf8f8f6a044d7d47e4b23fcfa4198b5013bb2661a180a7a9bf56715e8fa6d"
 }

@@ -1,0 +1,20 @@
+{
+  "status": "affected_correctness_revalidated",
+  "score_change": 0,
+  "accepted_total": 26,
+  "modules": 124,
+  "suites": 163,
+  "tests": 2628,
+  "failures": 0,
+  "full_suite": false,
+  "campaign_module_tests": 29,
+  "adapter_module_tests": 25,
+  "native_smoke": "13 families/886 complete-result operations; supplemental replay passed 4000 four-client operations",
+  "primary_failure": "Default query scratch is disabled, so the standard Sort retained all 100000 User input rows before LIMIT 100 and exceeded 64MiB. Nine other full-input single-pass semantic checks passed. Stack resolves the actual producer.",
+  "fix": "Bounded heap for a Sort under LIMIT through only non-distinct cardinality-preserving Project nodes. Sort keys and row payloads charged, stable ordinal ties, existing NULL and mixed-type order, input exhaustion and guards preserved. DISTINCT/SKIP remain barriers. Singleton input retains delayed key evaluation.",
+  "required_regression": "Full-sort rejection and bounded Top-K success under same 8MiB query cap, including complete parent-account refund after both paths. Exact prefix equality with full sort across owned payloads, NULLs/mixed keys, map-equivalent keys, empty/singleton input and DISTINCT/SKIP barriers.",
+  "full_input_correctness": "Both medium and holdout return 100 unique IDs with exact CSV-derived score order; not accepted timing samples.",
+  "budget_increase": false,
+  "format_change": false,
+  "formal_timing_samples_accepted": 0
+}

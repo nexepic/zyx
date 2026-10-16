@@ -181,6 +181,8 @@ namespace graph::query::execution {
 			const LogicalPlanReadRow *injected_row = nullptr;
 			const ScopedPropertyColumns *property_columns = nullptr;
 			detail::BoundExpressionInputs *bound_inputs = nullptr;
+			const logical::LogicalSort *topk_sort = nullptr;
+			size_t topk_rows = 0U;
 		};
 
 		// A task borrows query resources; scoped input/column views never become
@@ -11792,6 +11794,110 @@ namespace graph::query::execution {
 			return true;
 		}
 
+		// LIMIT may cross only cardinality-preserving projections. Keep the
+		// original input ordinal as the final key so ties match stable full sort.
+		[[nodiscard]] bool visitBoundedTopKSort(const logical::LogicalSort &sort, ExecutionState &state,
+			const InternalVisitor &visitor, const ChargedRowVisitor *chargedReceiver, size_t maximum) {
+			using Record = detail::QuerySpillRowCodec::Record;
+			const auto &items = sort.getSortItems();
+			MaterializedByteReservation metadata(&state.shared.materialized_budget);
+			metadata.set(checkedSizeMul(items.size(), sizeof(const expressions::Expression *), "Top-K metadata overflowed"));
+			std::vector<const expressions::Expression *> candidates;
+			candidates.reserve(items.size());
+			for (const auto &item : items) candidates.push_back(item.expression.get());
+			std::optional<detail::BoundExpressionInputs> inputs;
+			if (state.shared.bound_program)
+				inputs.emplace(*state.shared.bound_program, state.shared.bound_program->id(sort), candidates,
+					state.shared.snapshot, state.shared.materialized_budget, [&] { checkGuardNow(state); },
+					std::pmr::get_default_resource(), state.shared.context);
+			const auto bytes = [&](const Record &record) {
+				size_t total = checkedSizeAdd(logicalReadRowBytes(record.row, state.shared.context),
+					checkedSizeMul(record.keys.capacity(), sizeof(PropertyValue), "Top-K keys overflowed"), "Top-K row overflowed");
+				for (const auto &key : record.keys)
+					total = checkedSizeAdd(total, retainedExpressionValueBytes(key, state), "Top-K payload overflowed");
+				return total;
+			};
+			BoundedBatch<Record> rows(maximum, state.shared.bounds.maximum_materialized_bytes, bytes,
+				&state.shared.materialized_budget, true, sizeof(LogicalPlanReadRow));
+			const auto precedes = [&](const Record &left, const Record &right) {
+				checkGuard(state);
+				for (size_t i = 0; i < items.size(); ++i) {
+					if (left.keys[i] == right.keys[i]) continue;
+					if (detail::orderByPrecedes(left.keys[i], right.keys[i], items[i].ascending)) return true;
+					if (detail::orderByPrecedes(right.keys[i], left.keys[i], items[i].ascending)) return false;
+					return left.ordinal < right.ordinal;
+				}
+				return left.ordinal < right.ordinal;
+			};
+			const auto decorate = [&](Record &record, MaterializedByteReservation &charge) {
+				charge.set(checkedSizeAdd(logicalReadRowBytes(record.row, state.shared.context),
+					checkedSizeMul(items.size(), sizeof(PropertyValue), "Top-K keys overflowed"), "Top-K row overflowed"));
+				record.keys.reserve(items.size());
+				charge.set(bytes(record));
+				for (const auto &item : items) {
+					checkGuard(state);
+					PropertyValue key;
+					{ ScopedBoundInputs scoped(state, inputs, record.row); key = scalarValue(evaluateExpression(*item.expression, record.row, state)); }
+					charge.set(checkedSizeAdd(bytes(record), retainedExpressionValueBytes(key, state), "Top-K key growth overflowed"));
+					record.keys.push_back(std::move(key));
+					charge.set(bytes(record));
+				}
+			};
+			const auto retain = [&](Record record, MaterializedByteReservation charge) {
+				decorate(record, charge);
+				if (rows.size() == maximum) {
+					if (!precedes(record, rows.values().front())) return;
+					std::pop_heap(rows.values().begin(), rows.values().end(), precedes);
+					{ auto removed = rows.popBackCharged(); }
+				}
+				rows.appendCharged(std::move(record), std::move(charge));
+				std::push_heap(rows.values().begin(), rows.values().end(), precedes);
+			};
+			struct Pending { MaterializedByteReservation charge; Record record; };
+			std::optional<Pending> first;
+			size_t seen = 0U;
+			const ChargedRowVisitor collect = [&](LogicalPlanReadRow row, MaterializedByteReservation charge) {
+				checkGuard(state);
+				if (seen == state.shared.bounds.maximum_rows)
+					throw std::runtime_error("logical-plan Sort exceeded its materialization row bound");
+				Record record{std::move(row), {}, seen++};
+				if (seen == 1U) {
+					if (!charge.bytes()) charge.set(bytes(record));
+					first.emplace(Pending{std::move(charge), std::move(record)});
+					return true;
+				}
+				if (first) { retain(std::move(first->record), std::move(first->charge)); first.reset(); }
+				retain(std::move(record), std::move(charge));
+				return true;
+			};
+			const InternalVisitor uncharged = [&](LogicalPlanReadRow row) {
+				return collect(std::move(row), MaterializedByteReservation(&state.shared.materialized_budget));
+			};
+			const auto expressions = selectBatchableExpressions(candidates);
+			const auto complete = selectBatchableCompleteEntityVariables(candidates);
+			const auto &child = requireOnlyChild(sort);
+			const auto batched = tryVisitBatchedPropertyExpressions(child, expressions, state, uncharged, {}, complete, &collect);
+			const bool completed = batched ? *batched : visitOperator(child, state, uncharged,
+				supportsChargedRowHandoff(child.getType()) ? &collect : nullptr);
+			if (!completed) throw std::runtime_error("Top-K could not prove its input was exhausted");
+			const auto emit = [&](Record record, MaterializedByteReservation charge) {
+				std::vector<PropertyValue>().swap(record.keys);
+				charge.set(logicalReadRowBytes(record.row, state.shared.context));
+				if (chargedReceiver) return (*chargedReceiver)(std::move(record.row), std::move(charge));
+				charge.reset(); return visitor(std::move(record.row));
+			};
+			debug::PerfTrace::addValue("logical_plan.sort.topk_input_rows", seen);
+			debug::PerfTrace::addValue("logical_plan.sort.topk_retained_rows", rows.size() + (first ? 1U : 0U));
+			if (first) return emit(std::move(first->record), std::move(first->charge));
+			std::sort_heap(rows.values().begin(), rows.values().end(), precedes);
+			std::reverse(rows.values().begin(), rows.values().end());
+			while (!rows.empty()) {
+				auto row = rows.popBackCharged();
+				if (!emit(std::move(row.value), std::move(row.reservation))) return false;
+			}
+			return true;
+		}
+
 		[[nodiscard]] bool visitSpillableSort(const logical::LogicalSort &sort,ExecutionState &state,
 			const InternalVisitor &visitor,const ChargedRowVisitor *chargedReceiver,
 			storage::LogicalQueryScratchProvider &provider) {
@@ -15410,6 +15516,8 @@ namespace graph::query::execution {
 							throw std::invalid_argument("logical-plan Sort has an empty sort expression");
 						}
 					}
+					if (state.task.topk_sort == &sort && state.task.topk_rows != 0U)
+						return visitBoundedTopKSort(sort, state, visitor, chargedReceiver, state.task.topk_rows);
 					if(state.shared.allow_cross_row_entity_batches && state.shared.bounds.maximum_materialized_bytes>=detail::ExternalQuerySort::MINIMUM_QUERY_BYTES)
 						if(auto *provider=dynamic_cast<storage::LogicalQueryScratchProvider *>(&state.shared.snapshot);provider && provider->queryScratchEnabled())
 							return visitSpillableSort(sort,state,visitor,chargedReceiver,*provider);
@@ -15662,6 +15770,20 @@ namespace graph::query::execution {
 						return true;
 					};
 					const logical::LogicalOperator &child = requireOnlyChild(limit);
+					struct RestoreTopK {
+						ExecutionTaskState &task; const logical::LogicalSort *sort; size_t rows;
+						~RestoreTopK() { task.topk_sort = sort; task.topk_rows = rows; }
+					} restoreTopK{state.task, state.task.topk_sort, state.task.topk_rows};
+					const logical::LogicalOperator *candidate = &child;
+					while (candidate->getType() == logical::LogicalOpType::LOP_PROJECT &&
+						!dynamic_cast<const logical::LogicalProject &>(*candidate).isDistinct())
+						candidate = &requireOnlyChild(*candidate);
+					if (candidate->getType() == logical::LogicalOpType::LOP_SORT &&
+						maximum <= state.shared.bounds.maximum_rows) {
+						state.task.topk_sort = &dynamic_cast<const logical::LogicalSort &>(*candidate);
+						state.task.topk_rows = static_cast<size_t>(maximum);
+					}
+
 					const ChargedRowVisitor chargedRow = acceptRow;
 					const bool childCompleted = visitOperator(
 							child, state,
