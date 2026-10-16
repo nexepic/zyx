@@ -1,0 +1,15 @@
+{
+  "selected_tests": 242,
+  "passed": 242,
+  "original_vector_test_ids": 80,
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "source_sha256": {
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "4cc7d766c772f68e5406bca2d082e437f262443c07d9c282f34a17209f66d68c",
+    "cmake/SourceSets.cmake": "0fcfd34473cc168e0d9d29e560e9acbdf11f9b1ac44961b95819316ec9ae97a5",
+    "tests/include/query/api/LogicalVectorProcedureBatchFixture.hpp": "f5f8f8a84e795130a01af6132e83e047f49c1b835fd4cb28c5353484931bf13b",
+    "tests/src/query/api/test_LogicalVectorProcedureBatch.cpp": "6e871c188e746e37e47d21101316774c96db1d206b3d8a965676c6ebce372a75",
+    "tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp": "a7bbdd9097a56f10d755eee0ad1944bb4596eaaa3ed8b62817b8e25b6e0c9071",
+    "tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp": "18af49bb81206c21a7038427154e40ed69ac5ed5a8f278c4d6704af89e2c9af2"
+  }
+}
