@@ -38,7 +38,7 @@
   },
   "benchmark_configuration_tests": {
     "cpp": 41,
-    "campaign_python": 29,
+    "campaign_python": 30,
     "kuzu_resources": 6,
     "native_adapter": 25
   },

@@ -1,0 +1,32 @@
+{
+  "cases": [
+    {
+      "case": "round-1/control/dynamic",
+      "worker_pid": 161989,
+      "database": "/tmp/zyx-contract-a3agcaf1/database.zyx",
+      "purpose": "Record this task-owned case path for bounded post-campaign cleanup if the registered process cutoff leaves it behind; not a performance metric.",
+      "bytes": 80609280,
+      "sha256": "4c4cacbe3cd3b26a0c97e452eed44388793a0209556ec92a69b453323bc861d4",
+      "cleanup": "removed task-owned stopped case DB after trace/status retention; no recovery or full-case success inferred"
+    },
+    {
+      "case": "round-1/current/dynamic",
+      "worker_pid": 162378,
+      "database": "/tmp/zyx-contract-m8jx4cf8/database.zyx",
+      "purpose": "Task-owned case cleanup provenance, not a performance metric.",
+      "bytes": 71958528,
+      "sha256": "79fd79df63085f16d8974a0e2f850ab352a628dd660862e6927f2b06d6e2179c",
+      "cleanup": "removed task-owned stopped case DB after trace/status retention; no recovery or full-case success inferred"
+    },
+    {
+      "case": "round-1/control/wide_large",
+      "worker_pid": 162595,
+      "database": "/tmp/zyx-contract-jcw8tzjf/database.zyx",
+      "purpose": "Task-owned case cleanup provenance, not a performance metric.",
+      "bytes": 1473642496,
+      "sha256": "0e1ac05197a692c98dcf5f0b9c6b3f3427c5fac38cece20d18defec4800e9021",
+      "cleanup": "removed task-owned stopped case DB after trace/status retention; no recovery or full-case success inferred"
+    }
+  ],
+  "immutable_control_and_prepared_inputs": "retained for subsequent documented performance work"
+}

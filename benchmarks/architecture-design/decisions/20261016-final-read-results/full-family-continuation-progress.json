@@ -738,5 +738,6 @@
     }
   ],
   "scope": "Failed/cutoff/unsupported/skipped slots are not independent successful processes. S0.3 remains pending until complete evidence review.",
-  "reporting_limits": "Only formal reads have repeated warm-query distributions. Other family timers are descriptive and disclose API/observer/deadline differences; no new end-to-end or Kuzu performance pass."
+  "reporting_limits": "Only formal reads have repeated warm-query distributions. Other family timers are descriptive and disclose API/observer/deadline differences; no new end-to-end or Kuzu performance pass.",
+  "historical_checkpoint_superseded_by": "../20261016-s03-complete-versioned-baseline/proof.json"
 }

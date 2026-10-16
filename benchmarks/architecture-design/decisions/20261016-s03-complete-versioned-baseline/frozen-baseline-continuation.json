@@ -1,0 +1,16 @@
+{
+  "source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "worker": "/workspace/zyx-optimization-final-topk-revalidated-20261016/binaries/2/zyx-workload-contract-worker",
+  "worker_sha256": "a4f84fa69acec1aaaa3b54e11544f1661710d3e1bbf2e02ad4c416a3dbadbf38",
+  "preflight_harness": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/frozen-harness/workload_preflight.py",
+  "preflight_sha256": "d1daf7ca169341ac998af98775a10f634d570e3c6d29c61b222e56d344f55749",
+  "policy": "Continue only original source baseline. Post-repair maintenance is a separately registered source/protocol window. Never pool versions or infer newest-source end-to-end gains from original baseline.",
+  "interrupted_aggregate": "Canceled partial case retained; one fresh isolated retry allowed because cancellation was external, not a query failure.",
+  "orchestration_commit_before_resume": "51f2e095",
+  "orchestration_evidence": "benchmarks/architecture-design/decisions/20261016-cache-decline-delete-budget/{versioned-window.py,versioned-contract-case.py}",
+  "original_engine_source_freeze": "/workspace/zyx-optimization-final-topk-revalidated-20261016/manifest.json",
+  "original_source_proof": "benchmarks/architecture-design/decisions/20261016-cache-decline-delete-budget/previous-s61-proof.json",
+  "rss_amendment": "New cases explicitly report native child peak and driver RSS separately. Older elapsed files without rss_scope measure driver RSS only; never treat them as native engine peak or pool resource scopes.",
+  "versioned_window_sha256": "91b3cc2ae84a028d88b750a55822a11c24127b488f86af2d676a236f42a1fcb8",
+  "versioned_case_sha256": "3d3077fc4be19eaf0b3d1deedaeb4f72e787c21e6fd765dbf70278ca50522244"
+}

@@ -27,16 +27,17 @@
     "S5.3",
     "S6.1",
     "S0.4",
-    "S6.4"
+    "S6.4",
+    "S0.3"
   ],
-  "accepted": 28,
+  "accepted": 29,
   "total": 34,
-  "percent": 82.4,
+  "percent": 85.3,
   "stages": {
     "S0": {
-      "accepted": 3,
+      "accepted": 4,
       "total": 4,
-      "percent": 75
+      "percent": 100
     },
     "S1": {
       "accepted": 7,
@@ -151,13 +152,14 @@
       "S5.3",
       "S6.1",
       "S0.4",
-      "S6.4"
+      "S6.4",
+      "S0.3"
     ],
-    "status": "in_progress",
+    "status": "completed",
     "overall_goal_accepted_target": 34,
     "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
     "pending_revalidation_ids": [],
-    "completed": 4,
+    "completed": 5,
     "selection_history": [
       {
         "candidate_ids": [
@@ -169,7 +171,8 @@
         ],
         "amendment": "Replace unaccepted S5.5 with the documented optional-decision/final-documentation delivery S6.4. Keep S5.5 mandatory and unaccepted; no threshold change."
       }
-    ]
+    ],
+    "completion_evidence": "20261016-s03-complete-versioned-baseline/proof.json"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -240,14 +243,16 @@
   "S5.3": "accepted_revalidated",
   "S6.1": "accepted_revalidated",
   "last_certified_checkpoint": {
-    "accepted": 28,
-    "percent": 82.4,
+    "accepted": 29,
+    "percent": 85.3,
     "production_source": "03436b7a75d0ace5830570b13840d9f55910de58",
-    "latest_delivery": "S6.4",
-    "evidence": "20261016-s64-optional-decisions-and-docs/proof.json",
+    "latest_delivery": "S0.3",
+    "evidence": "20261016-s03-complete-versioned-baseline/proof.json",
     "performance_acceptance": false,
-    "source_revalidation_evidence": "20261016-cache-decline-delete-budget/proof.json"
+    "source_revalidation_evidence": "20261016-cache-decline-delete-budget/proof.json",
+    "baseline_source": "6a735df86a678556aa71877b6aa66fe968292df7"
   },
   "S0.4": "accepted_diagnostic_report_with_explicit_limits",
-  "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot"
+  "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot",
+  "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits"
 }
