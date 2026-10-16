@@ -1,0 +1,88 @@
+{
+  "engine": "zyx-native",
+  "profile": "smoke",
+  "seed": 42,
+  "families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "operations": 916,
+  "full_results_checked": true,
+  "performance_timing": false,
+  "maintenance_windows": [
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 520257536,
+      "write_bytes": 2798784
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133033984,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133033984,
+      "write_bytes": 762176
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133033984,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133033984,
+      "write_bytes": 762176
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133246976,
+      "write_bytes": 787072
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133369856,
+      "write_bytes": 778688
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133365760,
+      "write_bytes": 778752
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133369856,
+      "write_bytes": 778816
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45338624,
+      "read_bytes": 133365760,
+      "write_bytes": 778752
+    }
+  ],
+  "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+  "binary_sha256": "47eeea0836bc25a1336a0d63d6912ebeeace7c70c5f736ace8a0fbc294b4f010",
+  "trace_sha256": "b479c18351b79321fc1be0c0cb549c51e3be309540cd7381523500e6052a03c6"
+}

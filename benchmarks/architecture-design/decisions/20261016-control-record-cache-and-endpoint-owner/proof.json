@@ -1,5 +1,5 @@
 {
-  "status": "final_2182_affected_tests_passed_bounded_frame_replay_in_progress",
+  "status": "accepted_final_correctness_regression_and_bounded_concurrency_revalidation",
   "control_record": {
     "cause": "reader refills an old control page after pre-write invalidation and before exact-record pwrite; subsequent publication authentication sees allocated=0",
     "negative_tests": 1,
@@ -27,5 +27,19 @@
     "failures": 0,
     "full_suite": false
   },
-  "remaining": "finish eight preregistered bounded frame replay rounds; final smoke; renew clean source freeze; fresh full inputs remain performance prerequisites"
+  "remaining": "fresh complete read input preparation and final formal S0.3/S0.4/S5.5 performance acceptance",
+  "frame_replay": {
+    "rounds": 8,
+    "clients": 4,
+    "operations_per_client_per_round": 1000,
+    "concurrent_operations": 32000,
+    "failures": 0
+  },
+  "final_native_smoke": {
+    "families": 13,
+    "operations": 916,
+    "full_results_checked": true,
+    "performance_timing": false,
+    "binary_sha256": "47eeea0836bc25a1336a0d63d6912ebeeace7c70c5f736ace8a0fbc294b4f010"
+  }
 }
