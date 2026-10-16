@@ -78,10 +78,10 @@ namespace graph::query::gds {
 	};
 
 	struct LogicalGdsWeightedPath {
-		std::vector<uint64_t> node_ids;
+		utils::OwnedStdVector<uint64_t> node_ids;
 		// Same cardinality as node_ids. The first cost is zero; every subsequent
 		// value is the chosen predecessor arc's weight.
-		std::vector<double> step_weights;
+		utils::OwnedStdVector<double> step_weights;
 		double total_weight = 0.0;
 
 		bool operator==(const LogicalGdsWeightedPath &) const = default;
@@ -115,6 +115,23 @@ namespace graph::query::gds {
 		[[nodiscard]] static LogicalGdsWeightedPath dijkstra(const LogicalGraphProjection &projection,
 				uint64_t source_node_id, uint64_t target_node_id, LogicalGraphAlgorithmBounds bounds,
 				const LogicalGraphAlgorithmCheckpoint &checkpoint = {});
+
+        [[nodiscard]] static utils::OwnedStdVector<LogicalGdsNodeScore> pageRankOwned(const LogicalGraphProjection &projection,
+				LogicalPageRankOptions options, LogicalGraphAlgorithmBounds bounds,
+				const LogicalGraphAlgorithmCheckpoint &checkpoint = {});
+        [[nodiscard]] static utils::OwnedStdVector<LogicalGdsNodeComponent> weaklyConnectedComponentsOwned(
+				const LogicalGraphProjection &projection, LogicalGraphAlgorithmBounds bounds,
+				const LogicalGraphAlgorithmCheckpoint &checkpoint = {});
+        [[nodiscard]] static utils::OwnedStdVector<LogicalGdsNodeScore> betweennessCentralityOwned(
+				const LogicalGraphProjection &projection, LogicalBetweennessOptions options,
+				LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &checkpoint = {});
+        [[nodiscard]] static utils::OwnedStdVector<LogicalGdsNodeScore> closenessCentralityOwned(
+				const LogicalGraphProjection &projection, LogicalGraphAlgorithmBounds bounds,
+				const LogicalGraphAlgorithmCheckpoint &checkpoint = {});
+        [[nodiscard]] static utils::OwnedStdVector<LogicalGdsNodeCommunity> leidenOwned(
+				const LogicalGraphProjection &projection, LogicalLeidenOptions options,
+				LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &checkpoint = {},
+				concurrent::ThreadPool *thread_pool = nullptr);
 
 	private:
 		friend struct LogicalGraphAlgorithmsTestAccess;

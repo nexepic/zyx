@@ -15,6 +15,8 @@
 #include <limits>
 #include <map>
 #include <numeric>
+#include <memory_resource>
+#include <type_traits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -26,9 +28,52 @@ namespace graph::query::gds {
 
 	namespace {
 
+        // Workspace allocators borrow this call-owned authority. No workspace
+        // container escapes an algorithm; owned result vectors retain theirs.
+        class AlgorithmAllocationScope {
+        public:
+            AlgorithmAllocationScope() : owner_(utils::sharedAllocationOwner()), previous_(active_) { active_ = this; }
+            ~AlgorithmAllocationScope() { active_ = previous_; }
+            static std::pmr::memory_resource *resource() noexcept {
+                return active_ ? active_->owner_.get() : std::pmr::new_delete_resource();
+            }
+        private:
+            std::shared_ptr<std::pmr::memory_resource> owner_;
+            AlgorithmAllocationScope *previous_;
+            static inline thread_local AlgorithmAllocationScope *active_ = nullptr;
+        };
+        template<class T> class WorkspaceAllocator {
+        public:
+            using value_type = T;
+            using propagate_on_container_copy_assignment = std::true_type;
+            using propagate_on_container_move_assignment = std::true_type;
+            using propagate_on_container_swap = std::true_type;
+            WorkspaceAllocator() noexcept : resource_(AlgorithmAllocationScope::resource()) {}
+            template<class U> WorkspaceAllocator(const WorkspaceAllocator<U> &other) noexcept : resource_(other.resource()) {}
+            T *allocate(size_t count) {
+                if (count > (std::numeric_limits<size_t>::max)() / sizeof(T)) throw std::bad_array_new_length();
+                return static_cast<T *>(resource_->allocate(count * sizeof(T), alignof(T)));
+            }
+            void deallocate(T *pointer, size_t count) noexcept { resource_->deallocate(pointer, count * sizeof(T), alignof(T)); }
+            std::pmr::memory_resource *resource() const noexcept { return resource_; }
+            template<class U> bool operator==(const WorkspaceAllocator<U> &other) const noexcept {
+                return resource_->is_equal(*other.resource());
+            }
+        private:
+            std::pmr::memory_resource *resource_;
+        };
+        template<class T> using WorkVector = std::vector<T, WorkspaceAllocator<T>>;
+        template<class K, class V> using WorkHashMap = std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
+            WorkspaceAllocator<std::pair<const K, V>>>;
+        template<class K, class V> using WorkOrderedMap = std::map<K, V, std::less<K>,
+            WorkspaceAllocator<std::pair<const K, V>>>;
+        template<class Adjacency, class Community, class Degree>
+        void refineDisconnectedCommunitiesImpl(const Adjacency &, Community &, const Degree &, double,
+            double, double, size_t &, const LogicalGraphAlgorithmBounds &, const LogicalGraphAlgorithmCheckpoint &);
+
 		struct ValidatedCsr {
 			std::shared_ptr<const LogicalProjectionCsr> csr;
-			std::unordered_map<uint64_t, size_t> node_to_index;
+			WorkHashMap<uint64_t, size_t> node_to_index;
 			size_t node_to_index_bytes = 0U;
 		};
 
@@ -134,10 +179,10 @@ namespace graph::query::gds {
 			}
 		}
 
-		[[nodiscard]] std::vector<std::vector<size_t>>
+		[[nodiscard]] WorkVector<WorkVector<size_t>>
 		buildUndirectedAdjacency(const ValidatedCsr &view, size_t &usedWork, const LogicalGraphAlgorithmBounds &bounds,
 								 const LogicalGraphAlgorithmCheckpoint &check) {
-			std::vector<std::vector<size_t>> adjacency(view.csr->node_ids.size());
+			WorkVector<WorkVector<size_t>> adjacency(view.csr->node_ids.size());
 			for (size_t source = 0U; source < adjacency.size(); ++source) {
 				checkpoint(check);
 				for (size_t edge = view.csr->offsets[source]; edge < view.csr->offsets[source + 1U]; ++edge) {
@@ -158,11 +203,11 @@ namespace graph::query::gds {
 			return adjacency;
 		}
 
-		[[nodiscard]] std::vector<std::vector<std::pair<size_t, double>>>
+		[[nodiscard]] WorkVector<WorkVector<std::pair<size_t, double>>>
 		buildUndirectedWeightedAdjacency(const ValidatedCsr &view, size_t &usedWork,
 										 const LogicalGraphAlgorithmBounds &bounds,
 										 const LogicalGraphAlgorithmCheckpoint &check) {
-			std::vector<std::vector<std::pair<size_t, double>>> adjacency(view.csr->node_ids.size());
+			WorkVector<WorkVector<std::pair<size_t, double>>> adjacency(view.csr->node_ids.size());
 			for (size_t source = 0U; source < adjacency.size(); ++source) {
 				checkpoint(check);
 				for (size_t edge = view.csr->offsets[source]; edge < view.csr->offsets[source + 1U]; ++edge) {
@@ -181,7 +226,7 @@ namespace graph::query::gds {
 			return adjacency;
 		}
 
-		void sortScores(std::vector<LogicalGdsNodeScore> &scores) {
+		void sortScores(utils::OwnedStdVector<LogicalGdsNodeScore> &scores) {
 			std::ranges::sort(scores, [](const LogicalGdsNodeScore &left, const LogicalGdsNodeScore &right) {
 				return left.score != right.score ? left.score > right.score : left.node_id < right.node_id;
 			});
@@ -189,9 +234,10 @@ namespace graph::query::gds {
 
 	} // namespace
 
-	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::pageRank(const LogicalGraphProjection &projection,
+	utils::OwnedStdVector<LogicalGdsNodeScore> LogicalGraphAlgorithms::pageRankOwned(const LogicalGraphProjection &projection,
 			const LogicalPageRankOptions options, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical PageRank exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
@@ -209,8 +255,8 @@ namespace graph::query::gds {
 				checkedMultiply(nodeCount, bytesPerNode, std::numeric_limits<size_t>::max()),
 				std::numeric_limits<size_t>::max()),
 				bounds, "PageRank");
-		std::vector<double> scores(nodeCount, 1.0 / static_cast<double>(nodeCount));
-		std::vector<double> next(nodeCount, 0.0);
+		WorkVector<double> scores(nodeCount, 1.0 / static_cast<double>(nodeCount));
+		WorkVector<double> next(nodeCount, 0.0);
 		const double teleport = (1.0 - options.damping_factor) / static_cast<double>(nodeCount);
 		size_t usedWork = 0U;
 		for (size_t iteration = 0U; iteration < options.maximum_iterations; ++iteration) {
@@ -243,7 +289,7 @@ namespace graph::query::gds {
 				break;
 			}
 		}
-		std::vector<LogicalGdsNodeScore> result;
+		utils::OwnedStdVector<LogicalGdsNodeScore> result;
 		result.reserve(nodeCount);
 		for (size_t index = 0U; index < nodeCount; ++index) {
 			result.push_back({view.csr->node_ids[index], scores[index]});
@@ -252,9 +298,10 @@ namespace graph::query::gds {
 		return result;
 	}
 
-	std::vector<LogicalGdsNodeComponent> LogicalGraphAlgorithms::weaklyConnectedComponents(
+	utils::OwnedStdVector<LogicalGdsNodeComponent> LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(
 			const LogicalGraphProjection &projection, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical WCC exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
@@ -269,7 +316,7 @@ namespace graph::query::gds {
 				checkedMultiply(nodeCount, bytesPerNode, std::numeric_limits<size_t>::max()),
 				std::numeric_limits<size_t>::max()),
 				bounds, "WCC");
-		std::vector<size_t> parent(nodeCount);
+		WorkVector<size_t> parent(nodeCount);
 		std::iota(parent.begin(), parent.end(), 0U);
 		const auto find = [&parent](size_t node) {
 			size_t root = node;
@@ -297,7 +344,7 @@ namespace graph::query::gds {
 				consumeWork(usedWork, 1U, bounds);
 			}
 		}
-		std::vector<LogicalGdsNodeComponent> result;
+		utils::OwnedStdVector<LogicalGdsNodeComponent> result;
 		result.reserve(nodeCount);
 		for (size_t index = 0U; index < nodeCount; ++index) {
 			result.push_back({view.csr->node_ids[index], view.csr->node_ids[find(index)]});
@@ -305,9 +352,10 @@ namespace graph::query::gds {
 		return result;
 	}
 
-	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::betweennessCentrality(
+	utils::OwnedStdVector<LogicalGdsNodeScore> LogicalGraphAlgorithms::betweennessCentralityOwned(
 			const LogicalGraphProjection &projection, const LogicalBetweennessOptions options,
 			const LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical Betweenness exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
@@ -315,7 +363,7 @@ namespace graph::query::gds {
 			return {};
 		}
 		const size_t maximumSize = std::numeric_limits<size_t>::max();
-		const size_t perNodeBytes = checkedAdd(sizeof(size_t) + sizeof(std::vector<size_t>),
+		const size_t perNodeBytes = checkedAdd(sizeof(size_t) + sizeof(WorkVector<size_t>),
 				checkedAdd(sizeof(double) * 3U + sizeof(size_t) * 3U,
 						sizeof(LogicalGdsNodeScore), maximumSize), maximumSize);
 		// Both adjacency and predecessor vectors can retain capacity above their
@@ -324,7 +372,7 @@ namespace graph::query::gds {
 				checkedAdd(checkedMultiply(nodeCount, perNodeBytes, maximumSize),
 						checkedMultiply(view.csr->edgeCount(), sizeof(size_t) * 8U, maximumSize), maximumSize), maximumSize);
 		requireMaterializedBytes(stateBytes, bounds, "Betweenness");
-		std::vector<size_t> sources(nodeCount);
+		WorkVector<size_t> sources(nodeCount);
 		std::iota(sources.begin(), sources.end(), 0U);
 		if (options.sampling_size != 0U && options.sampling_size < nodeCount) {
 			std::mt19937_64 generator(42U);
@@ -335,14 +383,14 @@ namespace graph::query::gds {
 				checkedMultiply(view.csr->edgeCount(), 6U, bounds.maximum_work_units), bounds.maximum_work_units);
 		static_cast<void>(checkedMultiply(sources.size(), perSourceEstimate, bounds.maximum_work_units));
 		size_t usedWork = 0U;
-		const std::vector<std::vector<size_t>> adjacency = buildUndirectedAdjacency(view, usedWork, bounds, check);
-		std::vector<double> centrality(nodeCount, 0.0);
-		std::vector<double> sigma(nodeCount, 0.0);
-		std::vector<double> dependency(nodeCount, 0.0);
-		std::vector<size_t> distance(nodeCount, nodeCount);
-		std::vector<std::vector<size_t>> predecessors(nodeCount);
-		std::vector<size_t> queue;
-		std::vector<size_t> stack;
+		const WorkVector<WorkVector<size_t>> adjacency = buildUndirectedAdjacency(view, usedWork, bounds, check);
+		WorkVector<double> centrality(nodeCount, 0.0);
+		WorkVector<double> sigma(nodeCount, 0.0);
+		WorkVector<double> dependency(nodeCount, 0.0);
+		WorkVector<size_t> distance(nodeCount, nodeCount);
+		WorkVector<WorkVector<size_t>> predecessors(nodeCount);
+		WorkVector<size_t> queue;
+		WorkVector<size_t> stack;
 		queue.reserve(nodeCount);
 		stack.reserve(nodeCount);
 		for (const size_t source: sources) {
@@ -350,7 +398,7 @@ namespace graph::query::gds {
 			std::fill(sigma.begin(), sigma.end(), 0.0);
 			std::fill(dependency.begin(), dependency.end(), 0.0);
 			std::fill(distance.begin(), distance.end(), nodeCount);
-			for (std::vector<size_t> &entries: predecessors) {
+			for (WorkVector<size_t> &entries: predecessors) {
 				entries.clear();
 			}
 			consumeWork(usedWork, nodeCount, bounds);
@@ -393,7 +441,7 @@ namespace graph::query::gds {
 		const double normalization = options.sampling_size != 0U && options.sampling_size < nodeCount
 				? static_cast<double>(nodeCount) / static_cast<double>(sources.size() * 2U)
 				: 0.5;
-		std::vector<LogicalGdsNodeScore> result;
+		utils::OwnedStdVector<LogicalGdsNodeScore> result;
 		result.reserve(nodeCount);
 		for (size_t index = 0U; index < nodeCount; ++index) {
 			const double score = centrality[index] * normalization;
@@ -406,9 +454,10 @@ namespace graph::query::gds {
 		return result;
 	}
 
-	std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::closenessCentrality(
+	utils::OwnedStdVector<LogicalGdsNodeScore> LogicalGraphAlgorithms::closenessCentralityOwned(
 			const LogicalGraphProjection &projection, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical Closeness exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
@@ -421,18 +470,18 @@ namespace graph::query::gds {
 		static_cast<void>(checkedAdd(checkedMultiply(view.csr->edgeCount(), 2U, bounds.maximum_work_units),
 				traversalEstimate, bounds.maximum_work_units));
 		const size_t maximumSize = std::numeric_limits<size_t>::max();
-		const size_t perNodeBytes = checkedAdd(sizeof(std::vector<size_t>),
+		const size_t perNodeBytes = checkedAdd(sizeof(WorkVector<size_t>),
 				checkedAdd(sizeof(size_t) * 4U, sizeof(LogicalGdsNodeScore) * 2U, maximumSize), maximumSize);
 		const size_t stateBytes = checkedAdd(view.node_to_index_bytes,
 				checkedAdd(checkedMultiply(nodeCount, perNodeBytes, maximumSize),
 						checkedMultiply(view.csr->edgeCount(), sizeof(size_t) * 4U, maximumSize), maximumSize), maximumSize);
 		requireMaterializedBytes(stateBytes, bounds, "Closeness");
 		size_t usedWork = 0U;
-		const std::vector<std::vector<size_t>> adjacency = buildUndirectedAdjacency(view, usedWork, bounds, check);
-		std::vector<size_t> distance(nodeCount, nodeCount);
-		std::vector<size_t> queue;
+		const WorkVector<WorkVector<size_t>> adjacency = buildUndirectedAdjacency(view, usedWork, bounds, check);
+		WorkVector<size_t> distance(nodeCount, nodeCount);
+		WorkVector<size_t> queue;
 		queue.reserve(nodeCount);
-		std::vector<LogicalGdsNodeScore> result;
+		utils::OwnedStdVector<LogicalGdsNodeScore> result;
 		result.reserve(nodeCount);
 		for (size_t source = 0U; source < nodeCount; ++source) {
 			checkpoint(check);
@@ -467,10 +516,11 @@ namespace graph::query::gds {
 		return result;
 	}
 
-	std::vector<LogicalGdsNodeCommunity> LogicalGraphAlgorithms::leiden(
+	utils::OwnedStdVector<LogicalGdsNodeCommunity> LogicalGraphAlgorithms::leidenOwned(
 			const LogicalGraphProjection &projection, const LogicalLeidenOptions options,
 			const LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check,
 			concurrent::ThreadPool *threadPool) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical Leiden exceeded its materialized byte bound", check);
 		const size_t nodeCount = view.csr->node_ids.size();
@@ -494,9 +544,9 @@ namespace graph::query::gds {
 		requireMaterializedBytes(checkedAdd(view.node_to_index_bytes, estimatedBytes,
 				std::numeric_limits<size_t>::max()), bounds, "Leiden");
 		size_t usedWork = 0U;
-		using WeightedAdjacency = std::vector<std::vector<std::pair<size_t, double>>>;
-		const auto denseLabels = [](std::vector<size_t> &labels) {
-			std::map<size_t, size_t> remap;
+		using WeightedAdjacency = WorkVector<WorkVector<std::pair<size_t, double>>>;
+		const auto denseLabels = [](WorkVector<size_t> &labels) {
+			WorkOrderedMap<size_t, size_t> remap;
 			for (size_t &label: labels) {
 				const auto [found, inserted] = remap.emplace(label, remap.size());
 				static_cast<void>(inserted);
@@ -505,9 +555,9 @@ namespace graph::query::gds {
 			return remap.size();
 		};
 		const auto contract = [&bounds, &check, &usedWork](const WeightedAdjacency &adjacency,
-														   const std::vector<size_t> &labels,
+														   const WorkVector<size_t> &labels,
 														   const size_t communityCount) {
-			std::map<std::pair<size_t, size_t>, double> aggregate;
+			WorkOrderedMap<std::pair<size_t, size_t>, double> aggregate;
 			for (size_t source = 0U; source < adjacency.size(); ++source) {
 				checkpoint(check);
 				for (const auto &[target, weight]: adjacency[source]) {
@@ -533,12 +583,12 @@ namespace graph::query::gds {
 			return result;
 		};
 		WeightedAdjacency adjacency = buildUndirectedWeightedAdjacency(view, usedWork, bounds, check);
-		std::vector<size_t> originalToCurrent(nodeCount);
+		WorkVector<size_t> originalToCurrent(nodeCount);
 		std::iota(originalToCurrent.begin(), originalToCurrent.end(), 0U);
 		for (size_t level = 0U; level < options.maximum_levels; ++level) {
 			checkpoint(check);
 			const size_t currentNodeCount = adjacency.size();
-			std::vector<double> degree(currentNodeCount, 0.0);
+			WorkVector<double> degree(currentNodeCount, 0.0);
 			double totalWeight = 0.0;
 			size_t degreeWork = 0U;
 			for (const auto &neighbors: adjacency) {
@@ -547,7 +597,10 @@ namespace graph::query::gds {
 				}
 				degreeWork += neighbors.size();
 			}
-			const size_t workerLimit = threadPool == nullptr ? 1U :
+			// Governed work stays on the caller until pool task storage and budget access
+			// can share its allocation authority safely; concurrency is an upper bound.
+			const size_t workerLimit = threadPool == nullptr ||
+                AlgorithmAllocationScope::resource() != std::pmr::new_delete_resource() ? 1U :
 					(options.concurrency == 0U ? threadPool->getThreadCount() :
 						std::min(options.concurrency, threadPool->getThreadCount()));
 			const auto computeDegree = [&](const size_t node) {
@@ -572,11 +625,11 @@ namespace graph::query::gds {
 			if (!std::isfinite(totalWeight)) {
 				throw std::runtime_error("logical Leiden total relationship weight overflowed");
 			}
-			std::vector<size_t> community(currentNodeCount);
+			WorkVector<size_t> community(currentNodeCount);
 			std::iota(community.begin(), community.end(), 0U);
 			if (totalWeight > 0.0) {
-				const auto modularity = [&](const std::vector<size_t> &labels) {
-					std::unordered_map<size_t, double> degreeByCommunity;
+				const auto modularity = [&](const WorkVector<size_t> &labels) {
+					WorkHashMap<size_t, double> degreeByCommunity;
 					double internalWeight = 0.0;
 					for (size_t source = 0U; source < currentNodeCount; ++source) {
 						degreeByCommunity[labels[source]] += degree[source];
@@ -592,14 +645,14 @@ namespace graph::query::gds {
 					}
 					return result;
 				};
-				std::vector<double> communityDegree = degree;
+				WorkVector<double> communityDegree = degree;
 				for (size_t iteration = 0U; iteration < options.maximum_iterations; ++iteration) {
 					checkpoint(check);
-					const std::vector<size_t> beforeIteration = community;
+					const WorkVector<size_t> beforeIteration = community;
 					const double beforeModularity = modularity(beforeIteration);
 					bool moved = false;
 					for (size_t node = 0U; node < currentNodeCount; ++node) {
-						std::unordered_map<size_t, double> weightByCommunity;
+						WorkHashMap<size_t, double> weightByCommunity;
 						for (const auto &[neighbor, weight]: adjacency[node]) {
 							if (neighbor != node) weightByCommunity[community[neighbor]] += weight;
 							consumeWork(usedWork, 1U, bounds);
@@ -632,18 +685,18 @@ namespace graph::query::gds {
 					if (!moved) break;
 				}
 			}
-			refineDisconnectedCommunities(adjacency, community, degree, totalWeight, options.resolution,
+			refineDisconnectedCommunitiesImpl(adjacency, community, degree, totalWeight, options.resolution,
 					options.refinement_threshold, usedWork, bounds, check);
 			const size_t communityCount = denseLabels(community);
 			for (size_t &current: originalToCurrent) current = community[current];
 			if (communityCount <= 1U || communityCount >= currentNodeCount || level + 1U == options.maximum_levels) break;
 			adjacency = contract(adjacency, community, communityCount);
 		}
-		std::vector<uint64_t> canonical(adjacency.size(), std::numeric_limits<uint64_t>::max());
+		WorkVector<uint64_t> canonical(adjacency.size(), std::numeric_limits<uint64_t>::max());
 		for (size_t node = 0U; node < nodeCount; ++node) {
 			canonical[originalToCurrent[node]] = std::min(canonical[originalToCurrent[node]], view.csr->node_ids[node]);
 		}
-		std::vector<LogicalGdsNodeCommunity> result;
+		utils::OwnedStdVector<LogicalGdsNodeCommunity> result;
 		result.reserve(nodeCount);
 		for (size_t node = 0U; node < nodeCount; ++node) {
 			result.push_back({view.csr->node_ids[node], canonical[originalToCurrent[node]]});
@@ -651,10 +704,12 @@ namespace graph::query::gds {
 		return result;
 	}
 
-	void LogicalGraphAlgorithms::refineDisconnectedCommunities(const LogicalWeightedAdjacency &adjacency,
-			std::vector<size_t> &community, const std::vector<double> &degree, const double totalWeight,
-			const double resolution, const double refinementThreshold, size_t &usedWork,
-			const LogicalGraphAlgorithmBounds &bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+    namespace {
+    template<class Adjacency, class Community, class Degree>
+    void refineDisconnectedCommunitiesImpl(const Adjacency &adjacency,
+            Community &community, const Degree &degree, const double totalWeight,
+            const double resolution, const double refinementThreshold, size_t &usedWork,
+            const LogicalGraphAlgorithmBounds &bounds, const LogicalGraphAlgorithmCheckpoint &check) {
 		if (refinementThreshold == 0.0 || community.empty() || totalWeight == 0.0) {
 			return;
 		}
@@ -664,12 +719,12 @@ namespace graph::query::gds {
 			throw std::invalid_argument("logical Leiden refinement received invalid input");
 		}
 		const size_t nodeCount = community.size();
-		std::vector<size_t> componentByNode(nodeCount, nodeCount);
-		std::vector<std::vector<size_t>> components;
+		WorkVector<size_t> componentByNode(nodeCount, nodeCount);
+		WorkVector<WorkVector<size_t>> components;
 		for (size_t seed = 0U; seed < nodeCount; ++seed) {
 			if (componentByNode[seed] != nodeCount) continue;
 			const size_t component = components.size();
-			std::vector<size_t> queue{seed};
+			WorkVector<size_t> queue{seed};
 			componentByNode[seed] = component;
 			components.emplace_back();
 			for (size_t head = 0U; head < queue.size(); ++head) {
@@ -689,17 +744,17 @@ namespace graph::query::gds {
 				}
 			}
 		}
-		std::map<size_t, std::vector<size_t>> componentsByCommunity;
+		WorkOrderedMap<size_t, WorkVector<size_t>> componentsByCommunity;
 		for (size_t component = 0U; component < components.size(); ++component) {
 			componentsByCommunity[community[components[component].front()]].push_back(component);
 		}
-		std::vector<size_t> refined(nodeCount);
+		WorkVector<size_t> refined(nodeCount);
 		for (const auto &[communityId, componentIds]: componentsByCommunity) {
 			static_cast<void>(communityId);
-			std::vector<double> componentDegrees(componentIds.size(), 0.0);
+			WorkVector<double> componentDegrees(componentIds.size(), 0.0);
 			size_t corePosition = 0U;
 			for (size_t position = 0U; position < componentIds.size(); ++position) {
-				const std::vector<size_t> &component = components[componentIds[position]];
+				const WorkVector<size_t> &component = components[componentIds[position]];
 				for (const size_t node: component) componentDegrees[position] += degree[node];
 				if (component.size() > components[componentIds[corePosition]].size()) corePosition = position;
 			}
@@ -715,17 +770,29 @@ namespace graph::query::gds {
 				for (const size_t node: components[component]) refined[node] = target;
 			}
 		}
-		community.swap(refined);
+		if constexpr (std::is_same_v<Community, WorkVector<size_t>>) community.swap(refined);
+        else community.assign(refined.begin(), refined.end());
 	}
+
+    } // namespace
+    void LogicalGraphAlgorithms::refineDisconnectedCommunities(const LogicalWeightedAdjacency &adjacency,
+            std::vector<size_t> &community, const std::vector<double> &degree, double totalWeight,
+            double resolution, double refinementThreshold, size_t &usedWork,
+            const LogicalGraphAlgorithmBounds &bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
+        refineDisconnectedCommunitiesImpl(adjacency, community, degree, totalWeight, resolution,
+            refinementThreshold, usedWork, bounds, check);
+    }
 
 	double LogicalGraphAlgorithms::leidenModularity(const LogicalGraphProjection &projection,
 			const std::vector<LogicalGdsNodeCommunity> &communities, const double resolution) {
+        AlgorithmAllocationScope algorithmAllocation;
 		if (!std::isfinite(resolution) || resolution <= 0.0) {
 			throw std::invalid_argument("logical Leiden modularity requires a positive finite resolution");
 		}
 		const ValidatedCsr view = requireWellFormedCsr(projection, {});
 		const std::shared_ptr<const LogicalProjectionCsr> &csr = view.csr;
-		std::unordered_map<uint64_t, uint64_t> communityByNode;
+		WorkHashMap<uint64_t, uint64_t> communityByNode;
 		communityByNode.reserve(communities.size());
 		for (const LogicalGdsNodeCommunity &community: communities) {
 			if (community.node_id == 0U || community.community_id == 0U ||
@@ -741,7 +808,7 @@ namespace graph::query::gds {
 				throw std::invalid_argument("logical Leiden modularity must assign every projection Node exactly once");
 			}
 		}
-		std::unordered_map<uint64_t, double> degreeByCommunity;
+		WorkHashMap<uint64_t, double> degreeByCommunity;
 		double internalWeight = 0.0;
 		double totalWeight = 0.0;
 		for (size_t source = 0U; source < csr->node_ids.size(); ++source) {
@@ -778,6 +845,7 @@ namespace graph::query::gds {
 	LogicalGdsWeightedPath LogicalGraphAlgorithms::dijkstra(const LogicalGraphProjection &projection,
 			const uint64_t sourceNodeId, const uint64_t targetNodeId, const LogicalGraphAlgorithmBounds bounds,
 			const LogicalGraphAlgorithmCheckpoint &check) {
+        AlgorithmAllocationScope algorithmAllocation;
 		const ValidatedCsr view = requireValidCsr(projection, bounds,
 				"logical Dijkstra exceeded its materialized state byte bound", check);
 		const auto source = view.node_to_index.find(sourceNodeId);
@@ -796,11 +864,11 @@ namespace graph::query::gds {
 			throw std::runtime_error("logical Dijkstra exceeded its materialized state byte bound");
 		}
 		const double infinity = std::numeric_limits<double>::infinity();
-		std::vector<double> distance(nodeCount, infinity);
-		std::vector<size_t> parent(nodeCount, nodeCount);
-		std::vector<double> parentWeight(nodeCount, 0.0);
+		WorkVector<double> distance(nodeCount, infinity);
+		WorkVector<size_t> parent(nodeCount, nodeCount);
+		WorkVector<double> parentWeight(nodeCount, 0.0);
 		using QueueEntry = std::pair<double, size_t>;
-		std::vector<QueueEntry> frontier;
+		WorkVector<QueueEntry> frontier;
 		size_t admittedFrontierCapacity = 0U;
 		const auto admitFrontierCapacity = [&](const size_t required) {
 			if (required <= frontier.capacity()) return;
@@ -918,5 +986,32 @@ namespace graph::query::gds {
 		std::ranges::reverse(result.step_weights);
 		return result;
 	}
+
+    std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::pageRank(const LogicalGraphProjection &projection,
+            LogicalPageRankOptions options, LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        auto owned = pageRankOwned(projection, options, bounds, check);
+        return std::move(static_cast<std::vector<LogicalGdsNodeScore> &>(owned));
+    }
+    std::vector<LogicalGdsNodeComponent> LogicalGraphAlgorithms::weaklyConnectedComponents(const LogicalGraphProjection &projection,
+            LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        auto owned = weaklyConnectedComponentsOwned(projection, bounds, check);
+        return std::move(static_cast<std::vector<LogicalGdsNodeComponent> &>(owned));
+    }
+    std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::betweennessCentrality(const LogicalGraphProjection &projection,
+            LogicalBetweennessOptions options, LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        auto owned = betweennessCentralityOwned(projection, options, bounds, check);
+        return std::move(static_cast<std::vector<LogicalGdsNodeScore> &>(owned));
+    }
+    std::vector<LogicalGdsNodeScore> LogicalGraphAlgorithms::closenessCentrality(const LogicalGraphProjection &projection,
+            LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check) {
+        auto owned = closenessCentralityOwned(projection, bounds, check);
+        return std::move(static_cast<std::vector<LogicalGdsNodeScore> &>(owned));
+    }
+    std::vector<LogicalGdsNodeCommunity> LogicalGraphAlgorithms::leiden(const LogicalGraphProjection &projection,
+            LogicalLeidenOptions options, LogicalGraphAlgorithmBounds bounds, const LogicalGraphAlgorithmCheckpoint &check,
+            concurrent::ThreadPool *threadPool) {
+        auto owned = leidenOwned(projection, options, bounds, check, threadPool);
+        return std::move(static_cast<std::vector<LogicalGdsNodeCommunity> &>(owned));
+    }
 
 } // namespace graph::query::gds
