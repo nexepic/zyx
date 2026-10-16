@@ -1,0 +1,32 @@
+[0/2] Re-checking globbed directories...
+[1/5] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/InitialBTreeBuilder.cpp.o
+[2/5] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp.o
+[3/5] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[4/5] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 9 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 9 tests from InitialBTreeBuilderTest
+[ RUN      ] InitialBTreeBuilderTest.PlansAndMaterializesMultiLeafTreeWithStableSiblingLinks
+[       OK ] InitialBTreeBuilderTest.PlansAndMaterializesMultiLeafTreeWithStableSiblingLinks (220 ms)
+[ RUN      ] InitialBTreeBuilderTest.MaterializesKeyOnlyLeavesWithoutEncodingLeafValues
+[       OK ] InitialBTreeBuilderTest.MaterializesKeyOnlyLeavesWithoutEncodingLeafValues (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsUnorderedOrEmptyInputBeforeMaterialization
+[       OK ] InitialBTreeBuilderTest.RejectsUnorderedOrEmptyInputBeforeMaterialization (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.PlansNarrowInternalLevelsWithoutInvalidatingChildKeys
+[       OK ] InitialBTreeBuilderTest.PlansNarrowInternalLevelsWithoutInvalidatingChildKeys (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsAValidlyOrderedEntryThatCannotFitInAnyLeaf
+[       OK ] InitialBTreeBuilderTest.RejectsAValidlyOrderedEntryThatCannotFitInAnyLeaf (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsInvalidMaterializationInputsBeforeWritingPages
+[       OK ] InitialBTreeBuilderTest.RejectsInvalidMaterializationInputsBeforeWritingPages (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsEveryPubliclyConstructibleMalformedPlanNode
+[       OK ] InitialBTreeBuilderTest.RejectsEveryPubliclyConstructibleMalformedPlanNode (204 ms)
+[ RUN      ] InitialBTreeBuilderTest.SizePlanningMatchesCanonicalPackedBoundariesAndMaterializesAllValues
+[       OK ] InitialBTreeBuilderTest.SizePlanningMatchesCanonicalPackedBoundariesAndMaterializesAllValues (64 ms)
+[ RUN      ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit
+[       OK ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit (1 ms)
+[----------] 9 tests from InitialBTreeBuilderTest (493 ms total)
+
+[----------] Global test environment tear-down
+[==========] 9 tests from 1 test suite ran. (493 ms total)
+[  PASSED  ] 9 tests.

@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <span>
 #include <vector>
 
@@ -26,7 +27,9 @@ namespace graph::storage {
 
 	struct InitialBTreePlan {
 		BTreeLeafValueLayout leaf_value_layout = BTreeLeafValueLayout::BLVL_U64;
-		std::vector<InitialBTreePlanNode> nodes;
+		// Append without relocating owned leaf payloads. Their portable moves may
+		// require iterator-proxy credit, so vector growth otherwise deep-copies.
+		std::deque<InitialBTreePlanNode> nodes;
 		size_t leaf_count = 0U;
 		size_t root_ordinal = 0U;
 	};

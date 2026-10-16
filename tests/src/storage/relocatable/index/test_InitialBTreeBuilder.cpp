@@ -17,6 +17,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/relocatable/index/InitialBTreeBuilder.hpp"
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 using namespace graph::storage;
 
@@ -269,4 +271,33 @@ TEST(InitialBTreeBuilderTest, SizePlanningMatchesCanonicalPackedBoundariesAndMat
 		}
 		EXPECT_EQ(consumed, source.size());
 	}
+}
+
+TEST(InitialBTreeBuilderTest, GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit) {
+ using namespace graph::query::execution::detail;
+ constexpr size_t maximum = 2U * 1024U * 1024U;
+ auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+ auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+ auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_WRITE, maximum);
+ auto memory = std::make_shared<PrepaidMemoryResource>(account, maximum);
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  InitialBTreePlan plan;
+  InitialBTreePlanNode leaf;
+  leaf.leaf_entries = entries(2048U);
+  plan.nodes.push_back(std::move(leaf));
+  const auto *backing = plan.nodes.front().leaf_entries.data();
+  const auto retained = memory->used();
+  ASSERT_GT(retained, 65536U);
+  PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - retained - 65536U);
+  EXPECT_NO_THROW({for (size_t ordinal = 0U; ordinal < 128U; ++ordinal) plan.nodes.emplace_back();});
+  ASSERT_EQ(plan.nodes.size(), 129U);
+  EXPECT_EQ(plan.nodes.front().leaf_entries.data(), backing);
+  ASSERT_EQ(plan.nodes.front().leaf_entries.size(), 2048U);
+  for (size_t ordinal = 0U; ordinal < 2048U; ++ordinal) {
+   EXPECT_EQ(plan.nodes.front().leaf_entries[ordinal].value_or_child, ordinal + 1U);
+   EXPECT_EQ(plan.nodes.front().leaf_entries[ordinal].key, keyFor(ordinal + 1U));
+  }
+ }
+ EXPECT_EQ(memory->used(), 0U);
 }

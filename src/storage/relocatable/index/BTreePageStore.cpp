@@ -811,7 +811,10 @@ namespace graph::storage {
 				nodeFor(root_).dirty = true;
 				return true;
 			}
-			const InitialBTreePlan plan = InitialBTreeBuilder::plan(index_id_, entries, leaf_value_layout_);
+			InitialBTreePlan plan = InitialBTreeBuilder::plan(index_id_, entries, leaf_value_layout_);
+			// The immutable plan now owns the gathered keys. Release the input
+			// before constructing replacement nodes under the same WRITE grant.
+			entries = {};
 			const size_t liveVirtualCount = static_cast<size_t>(std::ranges::count_if(
 					virtual_nodes_, [](const OverlayMutationNode &node) { return !node.retired; }));
 			if (requireReduction && plan.nodes.size() >= liveVirtualCount) {
@@ -846,7 +849,9 @@ namespace graph::storage {
 				OverlayMutationNode &node = nodeFor(rebuilt[ordinal]);
 				node.dirty = true;
 				if (planned.level == 0U) {
-					node.leaf_entries = planned.leaf_entries;
+					// Transfer the private plan backing; copying would retain a third
+					// complete leaf set alongside the source and replacement tree.
+					node.leaf_entries = std::move(plan.nodes[ordinal].leaf_entries);
 					node.left_sibling = ordinal == 0U ? std::nullopt : std::optional(rebuilt[ordinal - 1U]);
 					node.right_sibling =
 							ordinal + 1U == plan.leaf_count ? std::nullopt : std::optional(rebuilt[ordinal + 1U]);

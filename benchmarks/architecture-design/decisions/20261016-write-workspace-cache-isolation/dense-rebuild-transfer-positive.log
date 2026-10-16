@@ -1,0 +1,39 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStoreTransactionOverlayStress.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 14 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 14 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant
+[       OK ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant (305 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration
+[       OK ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration (195 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication (223 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication (170 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot (142 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay (21 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay (14 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase
+[       OK ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase (20 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor (9 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks
+[       OK ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks (14 ms)
+[----------] 14 tests from RelocatableBTreePageStoreTest (1156 ms total)
+
+[----------] Global test environment tear-down
+[==========] 14 tests from 1 test suite ran. (1156 ms total)
+[  PASSED  ] 14 tests.
