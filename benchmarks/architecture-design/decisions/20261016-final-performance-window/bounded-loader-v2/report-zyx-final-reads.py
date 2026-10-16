@@ -1,0 +1,40 @@
+from pathlib import Path
+from collections import defaultdict
+import json,statistics,csv,math
+root=Path('/workspace/zyx-optimization-final-window-20261016/bounded-loader-v2')
+assert (root/'read-campaign-completed.json').exists()
+groups=defaultdict(dict)
+def percentile(values,p):
+ values=sorted(values);index=(len(values)-1)*p;lo=math.floor(index);hi=math.ceil(index)
+ return values[lo]+(values[hi]-values[lo])*(index-lo)
+for path in sorted((root/'reads').glob('*/*/*/*/*/raw.jsonl')):
+ scale,round_name,engine,profile=path.relative_to(root/'reads').parts[:4]
+ status=json.loads((path.parent/'run_status.json').read_text());assert status['failure_count']==0 and status['quality_failure_count']==0
+ oracle=json.loads((path.parent/'correctness.json').read_text());assert oracle['scalar']['failures']==0 and oracle['full_results']['failures']==0
+ samples=defaultdict(list)
+ for line in path.read_text().splitlines():
+  event=json.loads(line)
+  if event.get('event')=='sample':
+   assert event['status']=='ok';samples[event['workload']].append(event['latency_ms'])
+ for workload,values in samples.items():
+  assert len(values)==10,(path,workload,len(values))
+  groups[(scale,profile,workload,engine)][round_name]={'p50_ms':statistics.median(values),'p95_ms':percentile(values,.95),'samples':len(values),'source':str(path)}
+rows=[]
+for scale,profile,workload in sorted({key[:3] for key in groups}):
+ engines={}
+ for engine in ['control','current','kuzu']:
+  processes=groups[(scale,profile,workload,engine)];assert len(processes)==3
+  values=[v['p50_ms'] for v in processes.values()]
+  engines[engine]={'median_process_p50_ms':statistics.median(values),'min_process_p50_ms':min(values),'max_process_p50_ms':max(values),'processes':processes}
+ control=engines['control'];current=engines['current'];kuzu=engines['kuzu']
+ gain=1-current['median_process_p50_ms']/control['median_process_p50_ms']
+ spread=control['max_process_p50_ms']/control['min_process_p50_ms']-1
+ primary=workload in ['label_scan_filter','all_nodes_property_filter','label_multi_property_filter','aggregation_group_by','aggregation_count_by_group','topk_property_sort']
+ uncertain=spread>.05 or abs(gain-(.10 if primary else -.05))<=.05
+ rows.append({'scale':scale,'profile':profile,'workload':workload,'engines':engines,'current_p50_reduction_vs_control':gain,'control_p50_range_fraction':spread,'current_over_kuzu_p50':current['median_process_p50_ms']/kuzu['median_process_p50_ms'],'primary':primary,'requires_preregistered_targeted_sampling':uncertain,'p95':'ten-sample descriptive only; no tail protection acceptance'})
+(root/'read-comparison.json').write_text(json.dumps({'aggregation':'median independent-process P50; never pool processes','cases':rows},indent=2)+'\n')
+with (root/'read-comparison.csv').open('w') as stream:
+ writer=csv.writer(stream);writer.writerow(['scale','profile','workload','control_p50_ms','current_p50_ms','kuzu_p50_ms','current_reduction_percent','current_over_kuzu','control_range_percent','targeted_sampling_required'])
+ for row in rows:
+  writer.writerow([row['scale'],row['profile'],row['workload'],*[row['engines'][v]['median_process_p50_ms'] for v in ['control','current','kuzu']],row['current_p50_reduction_vs_control']*100,row['current_over_kuzu_p50'],row['control_p50_range_fraction']*100,row['requires_preregistered_targeted_sampling']])
+print(json.dumps({'workloads':len(rows),'targeted_sampling_candidates':sum(row['requires_preregistered_targeted_sampling'] for row in rows)}))

@@ -1,0 +1,29 @@
+{
+  "stage": "S6.1",
+  "status": "accepted",
+  "source_commit": "ff1da3a06b01234065edf479627285aa6fca8b6a",
+  "frozen_directory": "/workspace/zyx-optimization-final-20261016",
+  "freeze_manifest_sha256": "531d60688aa2042f37801932b7c498a2329b73157d640a8e5709263bd55bc174",
+  "frozen_source_files": 2446,
+  "binaries": [
+    {
+      "original": "/tmp/zyx-gds-resource-tests",
+      "copy": "binaries/0/zyx-gds-resource-tests",
+      "sha256": "e6de95c4e11fae6bba0e03b4b35d7d61b87bb1211a0161483e97d2001a9b43c7"
+    }
+  ],
+  "production_and_test_hashes": "../20261016-s53-budget-and-spill-acceptance/source-sha256.json",
+  "affected_regression": {
+    "modules": 95,
+    "suites": 136,
+    "tests": 1979,
+    "failures": 0,
+    "full_suite": false,
+    "evidence": "../20261016-s53-budget-and-spill-acceptance/affected-tests.xml"
+  },
+  "benchmark_configuration_tests": 4,
+  "doc_links": "passed",
+  "platform": "Linux x86_64, Clang19/libstdc++14; Debug coverage correctness build",
+  "performance": "not run here; final Release/control/Kuzu campaign remains pending",
+  "invalidation_rule": "Any subsequent production source change invalidates this source freeze and requires affected regression before final acceptance."
+}

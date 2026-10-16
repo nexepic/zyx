@@ -1,29 +1,52 @@
 {
   "stage": "S6.1",
-  "status": "accepted",
-  "source_commit": "ff1da3a06b01234065edf479627285aa6fca8b6a",
-  "frozen_directory": "/workspace/zyx-optimization-final-20261016",
-  "freeze_manifest_sha256": "531d60688aa2042f37801932b7c498a2329b73157d640a8e5709263bd55bc174",
-  "frozen_source_files": 2446,
+  "status": "final_affected_regression_and_clean_freeze_verified_medium_preparation_pending",
+  "source_commit": "8b685d5a3f268cfe1c5c6a5e405d9eaaa12a60f6",
+  "frozen_directory": "/workspace/zyx-optimization-final-revalidated-20261016",
+  "freeze_manifest_sha256": "9a73b32cbcf886c0b4550657fa35905f020cf2138143569e7fc5c074a36e02e8",
+  "frozen_source_files": 2528,
   "binaries": [
     {
-      "original": "/tmp/zyx-gds-resource-tests",
-      "copy": "binaries/0/zyx-gds-resource-tests",
-      "sha256": "e6de95c4e11fae6bba0e03b4b35d7d61b87bb1211a0161483e97d2001a9b43c7"
+      "original": "/tmp/zyx-revalidated-affected-tests",
+      "copy": "binaries/0/zyx-revalidated-affected-tests",
+      "sha256": "73b3dec7407aabfda4caecd5e3174605fa27ebdd464297815f1fa810c898b95b"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-compare-bench",
+      "copy": "binaries/1/zyx-compare-bench",
+      "sha256": "240bbb2984616cdf163c37f9c792806ef4179a223d14b7548a0516ac99fd8ee1"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker",
+      "copy": "binaries/2/zyx-workload-contract-worker",
+      "sha256": "f752a31c87ffea713026ed4b572750d3a5be75dcf0a60df7f8e5a99e4138ab82"
+    },
+    {
+      "original": "/tmp/zyx-mechanism-probe",
+      "copy": "binaries/3/zyx-mechanism-probe",
+      "sha256": "4e2b5b2f82f403c02af7a0395ac4083a32a7674c1132840d9fdcc6e2d034b37e"
     }
   ],
-  "production_and_test_hashes": "../20261016-s53-budget-and-spill-acceptance/source-sha256.json",
+  "production_and_test_hashes": "../20261016-write-workspace-cache-isolation/proof.json#production_source_sha256",
   "affected_regression": {
-    "modules": 95,
-    "suites": 136,
-    "tests": 1979,
+    "modules": 99,
+    "suites": 140,
+    "tests": 2060,
     "failures": 0,
     "full_suite": false,
-    "evidence": "../20261016-s53-budget-and-spill-acceptance/affected-tests.xml"
+    "evidence": "../20261016-write-workspace-cache-isolation/combined-regression.xml"
   },
-  "benchmark_configuration_tests": 4,
+  "benchmark_configuration_tests": {
+    "cpp": 41,
+    "campaign_python": 14,
+    "kuzu_resources": 6
+  },
+  "native_correctness_smoke": {
+    "families": 13,
+    "operations": 916,
+    "full_results_checked": true
+  },
   "doc_links": "passed",
-  "platform": "Linux x86_64, Clang19/libstdc++14; Debug coverage correctness build",
-  "performance": "not run here; final Release/control/Kuzu campaign remains pending",
-  "invalidation_rule": "Any subsequent production source change invalidates this source freeze and requires affected regression before final acceptance."
+  "performance": "not started; complete prepared fixtures required before registration",
+  "invalidation_rule": "Any production source change invalidates this freeze and requires affected regression before final acceptance."
 }
