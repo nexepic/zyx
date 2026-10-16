@@ -38,7 +38,7 @@
   },
   "benchmark_configuration_tests": {
     "cpp": 41,
-    "campaign_python": 14,
+    "campaign_python": 16,
     "kuzu_resources": 6
   },
   "native_correctness_smoke": {
@@ -51,5 +51,6 @@
   "performance": "not started; complete prepared fixtures required before registration",
   "invalidation_rule": "Any production source change invalidates this freeze and requires affected regression before final acceptance.",
   "medium_preparation": "pending untimed fixture preparation, not included in final source/affected-module regression acceptance",
-  "revalidation_evidence": "../20261016-control-record-cache-and-endpoint-owner/proof.json"
+  "revalidation_evidence": "../20261016-control-record-cache-and-endpoint-owner/proof.json",
+  "benchmark_harness_updates_after_engine_freeze": "Only diagnostic/benchmark scripts and metadata changed: matched indexed full-size point setup, independent hit/miss oracles, collector bounds and capability recording. No production C++ changes; final performance registration separately hashes actual harness sources."
 }

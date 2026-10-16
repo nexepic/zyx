@@ -12,5 +12,15 @@
   "untimed_preparation_timeout_seconds": 7200,
   "formal_case_timeout_seconds": 1800,
   "frozen_control_holdout": "actual slotted-page replacement failure; preserve raw error, no latency sample or inferred ratio",
-  "progress": "26/34; S5.3/S6.1 final correctness/source revalidated; performance acceptance still pending"
+  "progress": "26/34; S5.3/S6.1 final correctness/source revalidated; performance acceptance still pending",
+  "preflight_lookup_condition": "Native persistent User.id property index and Kuzu User primary key; native schema-epoch probe creates/drops independent User.age index",
+  "point_oracles": {
+    "full_hit_ids": 1000,
+    "full_missing_ids": 100,
+    "smoke_hit_ids": 10,
+    "smoke_missing_ids": 1
+  },
+  "preflight_runner_sha256": "19c7f6d3c4828d1a780a924efa7348364c0e77329e090c90493e24d9180c8f8c",
+  "campaign_python_tests": 16,
+  "unindexed_correctness_attempt": "canceled before measurement and retained separately; indexed full-size correctness is the formal campaign prerequisite"
 }

@@ -144,6 +144,7 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42):
                     "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     "resources": {"threads": 1, "query_materialization_bytes": 67108864,
                                   "budget_probe_bytes": 4096 if profile == "smoke" else 4194304},
+                    "lookup_index": "persistent native User.id property index, matching Kuzu User primary key; separate transient User.age schema-epoch probe",
                     "four_client_mode": "four native threads, separate query engines; explicit conflict interleavings also checked"}
     (output / "registration.json").write_text(json.dumps(registration, indent=2) + "\n")
     count = 32 if profile == "smoke" else 10000
@@ -158,6 +159,9 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42):
             for start in range(0, count, 100):
                 query = "CREATE " + ",".join(f"(:User {cypher(row)})" for row in users[start:start + 100])
                 worker.call("QUERY", query)
+            # Match Kuzu's User primary-key lookup condition before point,
+            # traversal and mixed operations; keep this baseline index alive.
+            worker.call("QUERY", "CREATE INDEX contract_base_user_id FOR (n:User) ON (n.id)")
             # Every expected row is computed from inputs, never copied from another engine.
             for index in point_probe_ids(count, profile, rng):
                 worker.call("QUERY", f"MATCH (n:User {{id:{index}}}) RETURN n.id AS id,n.age AS age",
@@ -215,10 +219,10 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42):
                             expected=[[row["id"]] for row in users if row["id"] < index])
                 worker.call("CLEAR_CACHE")
                 worker.call("PARAM", template, "id", "integer", index, expected=expected)
-            worker.call("QUERY", "CREATE INDEX contract_user_id FOR (n:User) ON (n.id)")
+            worker.call("QUERY", "CREATE INDEX contract_user_age FOR (n:User) ON (n.age)")
             worker.call("PARAM", template, "id", "integer", 0, expected=[[0, users[0]["country"]]])
             worker.call("QUERY", "MATCH (n:User) WHERE n.id < 10 RETURN n.id AS id", expected=[[i] for i in range(min(10, count))])
-            worker.call("QUERY", "DROP INDEX contract_user_id")
+            worker.call("QUERY", "DROP INDEX contract_user_age")
             worker.call("PARAM", template, "id", "integer", 1, expected=[[1, users[1]["country"]]])
             families.append("parameters")
             dynamic_count = 12 if profile == "smoke" else 10000
