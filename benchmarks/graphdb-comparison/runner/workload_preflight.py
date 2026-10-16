@@ -19,6 +19,13 @@ import tempfile
 from runner.optimization_contract import REQUIRED_FAMILIES
 
 
+
+def point_probe_ids(count: int, profile: str, rng: random.Random) -> list[int]:
+    """Registered full-size random hits followed by ten-percent missing IDs."""
+    hits = rng.sample(range(count), min(10 if profile == "smoke" else 1000, count))
+    return hits + [count + ordinal for ordinal in range(max(1, len(hits) // 10))]
+
+
 def typed(value):
     if value is None:
         return ["null", None]
@@ -152,9 +159,9 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42):
                 query = "CREATE " + ",".join(f"(:User {cypher(row)})" for row in users[start:start + 100])
                 worker.call("QUERY", query)
             # Every expected row is computed from inputs, never copied from another engine.
-            for index in rng.sample(range(count), min(10, count)):
+            for index in point_probe_ids(count, profile, rng):
                 worker.call("QUERY", f"MATCH (n:User {{id:{index}}}) RETURN n.id AS id,n.age AS age",
-                            expected=[[index, users[index]["age"]]])
+                            expected=[[index, users[index]["age"]]] if index < count else [])
             families.append("point")
             for fraction in (0.003, 0.37, 1.0):
                 boundary = max(1, int(count * fraction))
@@ -372,8 +379,8 @@ def run_kuzu(output: Path, seed=42, profile="smoke"):
             execute("CREATE REL TABLE LINK(FROM User TO User, weight INT64)")
             for row in users:
                 execute("CREATE (:User " + cypher(row, escaped_keys=True) + ")")
-            for index in rng.sample(range(count), 10):
-                execute(f"MATCH (n:User {{id:{index}}}) RETURN n.id AS id,n.age AS age", [[index, users[index]["age"]]])
+            for index in point_probe_ids(count, profile, rng):
+                execute(f"MATCH (n:User {{id:{index}}}) RETURN n.id AS id,n.age AS age", [[index, users[index]["age"]]] if index < count else [])
             for fraction in (0.003, 0.37, 1.0):
                 boundary = max(1, int(count * fraction))
                 execute(f"MATCH (n:User) WHERE n.id < {boundary} RETURN n.id AS id,n.country AS country",
