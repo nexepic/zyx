@@ -1,0 +1,70 @@
+graph::query::execution::detail::PrepaidMemoryResource::reserveBytes(unsigned long)
+/workspace/zyx/include/graph/query/execution/PrepaidMemoryResource.hpp:?
+graph::query::execution::detail::PrepaidMemoryResource::do_allocate(unsigned long, unsigned long)
+/workspace/zyx/include/graph/query/execution/PrepaidMemoryResource.hpp:79
+std::pmr::memory_resource::allocate(unsigned long, unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/memory_resource.h:76
+std::pmr::polymorphic_allocator<unsigned long*>::allocate(unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/memory_resource.h:162
+std::allocator_traits<std::pmr::polymorphic_allocator<unsigned long*> >::allocate(std::pmr::polymorphic_allocator<unsigned long*>&, unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/memory_resource.h:452
+std::_Deque_base<unsigned long, std::pmr::polymorphic_allocator<unsigned long> >::_M_allocate_map(unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_deque.h:597
+std::_Deque_base<unsigned long, std::pmr::polymorphic_allocator<unsigned long> >::_M_initialize_map(unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_deque.h:646
+std::_Deque_base<unsigned long, std::pmr::polymorphic_allocator<unsigned long> >::_Deque_base(std::pmr::polymorphic_allocator<unsigned long> const&, unsigned long)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_deque.h:468
+std::deque<unsigned long, std::pmr::polymorphic_allocator<unsigned long> >::deque(std::pmr::polymorphic_allocator<unsigned long> const&)
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_deque.h:866
+graph::storage::NativeReadSession::NativeReadSession(std::shared_ptr<std::pmr::memory_resource>)
+/workspace/zyx/include/graph/storage/relocatable/entity/NativeReadSession.hpp:53
+graph::storage::RelocatableLogicalGraphReadSnapshot::RelocatableLogicalGraphReadSnapshot(graph::storage::RelocatableStorageBackend const&, graph::storage::PageBackedLogicalGraphReadAdapter const&, std::shared_ptr<std::pmr::memory_resource>)
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:43
+graph::storage::RelocatableStorageBackend::openLogicalGraphReadSnapshot() const
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:544
+non-virtual thunk to graph::storage::RelocatableStorageBackend::openLogicalGraphReadSnapshot() const
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:?
+graph::query::execution::(anonymous namespace)::executeInternal(graph::storage::LogicalGraphReadBackend const&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:16752
+graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0::operator()(std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const&, unsigned long) const
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:17234
+graph::query::execution::LogicalPlanReadRuntimeStats graph::query::execution::(anonymous namespace)::executeWithBatchedOutputMaterialization<graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1>(graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0&&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1&&, bool, bool, graph::query::QueryContext const*)
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:6704
+graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const
+/workspace/zyx/src/query/execution/LogicalPlanReadRuntime.cpp:17218
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0::operator()() const::{lambda()#1}::operator()() const
+/workspace/zyx/src/query/api/QueryEngine.cpp:?
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0::operator()() const
+/workspace/zyx/src/query/api/QueryEngine.cpp:722
+decltype(auto) graph::query::(anonymous namespace)::withQueryMemoryPolicy<graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0>(graph::query::NativeQueryResourcePolicy const&, graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0&&)
+/workspace/zyx/src/query/api/QueryEngine.cpp:46
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)
+/workspace/zyx/src/query/api/QueryEngine.cpp:658
+graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)::$_0::operator()() const
+/workspace/zyx/src/query/api/QueryEngine.cpp:833
+decltype(auto) graph::query::(anonymous namespace)::withQueryMemoryPolicy<graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)::$_0>(graph::query::NativeQueryResourcePolicy const&, graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)::$_0&&)
+/workspace/zyx/src/query/api/QueryEngine.cpp:46
+graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)
+/workspace/zyx/src/query/api/QueryEngine.cpp:826
+graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::Language)
+/workspace/zyx/src/query/api/QueryEngine.cpp:541
+RelocatableStorageBackendTest_FullNativeReadKeepsPrivateSnapshotAndMetadataOutOfExhaustedCache_Test::TestBody()
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1564
+void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*)
+??:?
+testing::Test::Run()
+??:?
+testing::TestInfo::Run()
+??:?
+testing::TestSuite::Run()
+??:?
+testing::internal::UnitTestImpl::RunAllTests()
+??:?
+bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*)
+??:?
+testing::UnitTest::Run()
+??:?
+main
+??:?
+_start
+??:?

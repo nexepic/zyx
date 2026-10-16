@@ -44,29 +44,31 @@ namespace graph::storage {
 	// than an ID modulo table so sequential scans do not collide.
 	class NativeReadSession final : public utils::OwnedPmrObject {
 	public:
-		explicit NativeReadSession(std::shared_ptr<std::pmr::memory_resource> memory = {})
-			: memory_(std::move(memory)),
-			node_cache_(memoryResource()),
-			edge_cache_(memoryResource()),
-			node_existence_cache_(memoryResource()),
-			node_label_cache_(memoryResource()),
-			node_order_(memoryResource()),
-			edge_order_(memoryResource()),
-			node_existence_order_(memoryResource()),
-			node_label_order_(memoryResource()),
-			property_cache_(memoryResource()),
-			owned_property_cache_(memoryResource()),
-			property_presence_cache_(memoryResource()),
-			property_order_(memoryResource()),
-			property_presence_order_(memoryResource()),
-			token_name_cache_(memoryResource()),
-			token_name_order_(memoryResource()),
-			property_token_cache_(memoryResource()),
-			property_token_order_(memoryResource()),
-			node_label_token_cache_(memoryResource()),
-			node_label_token_order_(memoryResource()),
-			relationship_type_token_cache_(memoryResource()),
-			relationship_type_token_order_(memoryResource()) {}
+		explicit NativeReadSession(std::shared_ptr<std::pmr::memory_resource> memory = {},
+                std::shared_ptr<std::pmr::memory_resource> privateStructure = {})
+            : memory_(std::move(memory)),
+              structure_memory_(privateStructure ? std::move(privateStructure) : memory_),
+			node_cache_(structureMemoryResource()),
+			edge_cache_(structureMemoryResource()),
+			node_existence_cache_(structureMemoryResource()),
+			node_label_cache_(structureMemoryResource()),
+			node_order_(structureMemoryResource()),
+			edge_order_(structureMemoryResource()),
+			node_existence_order_(structureMemoryResource()),
+			node_label_order_(structureMemoryResource()),
+			property_cache_(structureMemoryResource()),
+			owned_property_cache_(structureMemoryResource()),
+			property_presence_cache_(structureMemoryResource()),
+			property_order_(structureMemoryResource()),
+			property_presence_order_(structureMemoryResource()),
+			token_name_cache_(structureMemoryResource()),
+			token_name_order_(structureMemoryResource()),
+			property_token_cache_(structureMemoryResource()),
+			property_token_order_(structureMemoryResource()),
+			node_label_token_cache_(structureMemoryResource()),
+			node_label_token_order_(structureMemoryResource()),
+			relationship_type_token_cache_(structureMemoryResource()),
+			relationship_type_token_order_(structureMemoryResource()) {}
 
         explicit NativeReadSession(const MetadataSnapshotPin &snapshot)
             : NativeReadSession(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
@@ -178,7 +180,9 @@ namespace graph::storage {
 					throw std::invalid_argument("native read session Node label cache requires ordered nonzero tokens");
 				}
 			}
-			std::pmr::vector<uint64_t> replacement(labels.begin(), labels.end(), memoryResource());
+			// Nested PMR values inherit the lookup map's allocator. Replacements
+            // must use that same private allocator before a noexcept swap.
+            std::pmr::vector<uint64_t> replacement(labels.begin(), labels.end(), structureMemoryResource());
 			const size_t bytes = replacement.capacity() * sizeof(uint64_t);
 			if (bytes > MAXIMUM_CACHED_NODE_LABEL_BYTES) { discardPrevious(); return; }
 			const auto evictOldest = [&]() {
@@ -470,6 +474,9 @@ namespace graph::storage {
 		}
 
 	private:
+        [[nodiscard]] std::pmr::memory_resource *structureMemoryResource() const noexcept {
+            return structure_memory_ ? structure_memory_.get() : std::pmr::get_default_resource();
+        }
 		[[nodiscard]] std::pmr::memory_resource *memoryResource() const noexcept {
 			return memory_ ? memory_.get() : std::pmr::get_default_resource();
 		}
@@ -757,6 +764,10 @@ namespace graph::storage {
 
 		// Declared before every borrowing PMR container, so destroyed last.
 		std::shared_ptr<std::pmr::memory_resource> memory_;
+        // Reader-local lookup/FIFO bookkeeping must not require spare CACHE
+        // credit just to construct an empty session. Payload publication still
+        // uses memory_ and remains optional under CACHE pressure.
+        std::shared_ptr<std::pmr::memory_resource> structure_memory_;
 		mutable uint64_t generation_ = 0U;
 		mutable uint64_t database_id_ = 0U;
 		mutable bool bound_ = false;

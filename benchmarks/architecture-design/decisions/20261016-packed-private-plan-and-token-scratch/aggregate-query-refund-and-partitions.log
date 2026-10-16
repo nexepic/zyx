@@ -1,0 +1,14 @@
+baseline {'ok': True, 'read_bytes': 34123792, 'write_bytes': 768, 'file_bytes': 37748736, 'cache_hits': 0, 'rss_bytes': 16531456, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 9434152}
+skew passed {'ok': True, 'read_bytes': 76484624, 'write_bytes': 768, 'file_bytes': 37748736, 'cache_hits': 0, 'rss_bytes': 25792512, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 10070150}
+high-cardinality defined denial {'ok': True, 'read_bytes': 118845456, 'write_bytes': 768, 'file_bytes': 37748736, 'cache_hits': 0, 'rss_bytes': 57597952, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 10071566}
+bounded exact partition 0
+bounded exact partition 10000
+bounded exact partition 20000
+bounded exact partition 30000
+bounded exact partition 40000
+bounded exact partition 50000
+bounded exact partition 60000
+bounded exact partition 70000
+bounded exact partition 80000
+bounded exact partition 90000
+all 100000 typed group counts validated through bounded partitions; original complete-output query remains rejected {'ok': True, 'read_bytes': 4381700112, 'write_bytes': 768, 'file_bytes': 37748736, 'cache_hits': 0, 'rss_bytes': 57679872, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 10339674}

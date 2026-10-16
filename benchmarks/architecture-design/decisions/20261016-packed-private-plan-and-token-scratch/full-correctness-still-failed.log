@@ -1,0 +1,10 @@
+{"event": "family_correctness", "family": "point", "wall_seconds": 4.432848095995723, "completed": 1, "total": 13}
+{"event": "family_correctness", "family": "scan", "wall_seconds": 0.2285631170088891, "completed": 2, "total": 13}
+{"event": "family_correctness", "family": "traversal", "wall_seconds": 18.076912153002922, "completed": 3, "total": 13}
+Traceback (most recent call last):
+  File "<stdin>", line 6, in <module>
+  File "/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 251, in run_native
+    worker.call("QUERY", "MATCH (n:Aggregate) RETURN n.group AS group,count(*) AS count", expected=[[key, value] for key, value in skew.items()])
+  File "/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 167, in call
+    raise RuntimeError(response.get("error", "worker failure"))
+RuntimeError: hierarchical resource admission denied

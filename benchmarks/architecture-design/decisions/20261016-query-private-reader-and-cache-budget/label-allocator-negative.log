@@ -1,0 +1,33 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from NativeReadSessionTokenBudgetTest
+[ RUN      ] NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:743: Failure
+Expected equality of these values:
+  cache->live
+    Which is: 8
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:744: Failure
+Expected equality of these values:
+  structure->live
+    Which is: 18446744073709551608
+  0U
+    Which is: 0
+
+[  FAILED  ] NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect (0 ms)
+[----------] 1 test from NativeReadSessionTokenBudgetTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] NativeReadSessionTokenBudgetTest.SeparatePrivateBookkeepingKeepsLabelReplacementAllocatorsAndPayloadRefundsCorrect
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

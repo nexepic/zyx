@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.46" timestamp="2026-10-16T14:38:55.894" name="AllTests">
+  <testsuite name="RelocatableStorageBackendTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.46" timestamp="2026-10-16T14:38:55.894">
+    <testcase name="CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose" file="/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp" line="193" status="run" result="completed" time="0.257" timestamp="2026-10-16T14:38:55.894" classname="RelocatableStorageBackendTest" />
+    <testcase name="FullNativeReadKeepsPrivateSnapshotAndMetadataOutOfExhaustedCache" file="/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp" line="1552" status="run" result="completed" time="0.203" timestamp="2026-10-16T14:38:56.152" classname="RelocatableStorageBackendTest" />
+  </testsuite>
+</testsuites>

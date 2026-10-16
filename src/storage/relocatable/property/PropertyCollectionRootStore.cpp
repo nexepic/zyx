@@ -25,6 +25,7 @@
 #include "storage/relocatable/property/PropertyBatchOrder.hpp"
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -1318,12 +1319,21 @@ namespace graph::storage {
 		// never retain a buffer-pool pin beyond this read. Only the final page
 		// is copied, while borrowed slots were decoded directly above.
 		if (pinned.has_value()) {
-			auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
-					utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
-			debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_copy_bytes",
-					static_cast<int64_t>(pinned->contents.payload().size()));
-			current_page_.emplace(std::move(retained));
-			current_page_id_ = previousPage;
+            // Results above are already decoded. Retaining an extra image is
+            // optional and must not turn a valid bounded read into rejection.
+            current_page_.reset(); current_page_id_ = {};
+            try {
+                auto retained = SlottedPage::open(pinned->contents.owner, pinned->contents.payload(),
+                    utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() :
+                        (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_copy_bytes",
+                    static_cast<int64_t>(pinned->contents.payload().size()));
+                current_page_.emplace(std::move(retained)); current_page_id_ = previousPage;
+            } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_declined", 1);
+            } catch (const query::execution::MaterializedByteLimitExceeded &) {
+                debug::PerfTrace::addValue("native_graph.read.property_selected_last_page_cache_declined", 1);
+            }
 		}
 		if (columnBatch) {
 			debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_pages",

@@ -1002,10 +1002,11 @@ namespace graph::storage {
 
 	struct LocationDirectoryRangeCursor::Impl final : utils::OwnedPmrObject {
 		struct RouteFrame final {
+            explicit RouteFrame(std::pmr::memory_resource *memory) : children(memory) {}
 			uint16_t level = 0U;
 			// Only the cursor's bounded ordinal range is resolved. Keep this view
 			// separate from the codec page, whose full-resolution flag stays false.
-			std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> children{};
+			std::pmr::vector<PhysicalPageRef> children;
 			PhysicalPageRef reference{};
 			uint64_t ordinal_base = 0U;
 			uint32_t next_child = 0U;
@@ -1043,7 +1044,7 @@ namespace graph::storage {
 
 		[[nodiscard]] RouteFrame resolveFrame(const CatalogRadixPage &page,
 				PhysicalPageRef reference, uint64_t ordinalBase) {
-			RouteFrame frame;
+			RouteFrame frame(route.get_allocator().resource());
 			frame.level = page.level;
 			frame.reference = reference;
 			frame.ordinal_base = ordinalBase;
@@ -1083,6 +1084,9 @@ namespace graph::storage {
 			checkCancellation();
 			pages->resolveMetadataRadixChildren(page, superblock, std::span(indices).first(count),
 					std::span(references).first(count));
+            // Keep canonical child indices, but allocate only their requested
+            // prefix. Shallow/sparse lookups need not retain 256 empty refs.
+            frame.children.resize(count == 0U ? 0U : static_cast<size_t>(indices[count - 1U]) + 1U);
 			for (size_t index = 0U; index < count; ++index) frame.children[indices[index]] = references[index];
 			return frame;
 		}
@@ -1112,7 +1116,9 @@ namespace graph::storage {
 			}
 			validateVisible(root.generation, root.committed_lsn, superblock,
 							"relocatable location range cursor root is newer than its Superblock");
-			route.reserve(static_cast<size_t>(RSS_CATALOG_RADIX_MAX_LEVEL) + 1U);
+			// The immutable authenticated root fixes the maximum live route depth.
+            // Reserving the format's maximum wastes nine frames for shallow trees.
+            route.reserve(static_cast<size_t>(root.level) + 1U);
 			route.push_back(resolveFrame(root, rootReference, 0U));
 		}
 
@@ -1132,7 +1138,7 @@ namespace graph::storage {
 				RouteFrame &frame = route.back();
 				const uint64_t factor = radixFactor(frame.level);
 				bool descended = false;
-				while (frame.next_child < RSS_CATALOG_RADIX_FANOUT) {
+				while (frame.next_child < frame.children.size()) {
 					const uint32_t childIndex = frame.next_child++;
 					if (childIndex != 0U &&
 						factor > (std::numeric_limits<uint64_t>::max() - frame.ordinal_base) / childIndex) {
@@ -1213,7 +1219,7 @@ namespace graph::storage {
 					descended = true;
 					break;
 				}
-				if (!descended && frame.next_child >= RSS_CATALOG_RADIX_FANOUT) {
+				if (!descended && frame.next_child >= frame.children.size()) {
 					route.pop_back();
 				}
 			}

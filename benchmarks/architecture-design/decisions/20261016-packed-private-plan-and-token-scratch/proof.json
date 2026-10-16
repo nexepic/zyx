@@ -1,5 +1,5 @@
 {
-  "status": "focused_correctness_passed_final_regression_and_input_revalidation_pending",
+  "status": "affected_regression_passed_full_contract_still_blocked",
   "progress_credit_added": 0,
   "focused_tests": 103,
   "source_sha256": {
@@ -13,5 +13,13 @@
     "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "703ffe896f5cf2f4114809f5373a9b144fb9fbd6b22a090a2229e6c74a6e3019"
   },
   "negative_stack_producer": "Frozen current worker 47eeea0836bc25a1336a0d63d6912ebeeace7c70c5f736ace8a0fbc294b4f010 for aggregate; /tmp/zyx-slot-repro-before-packed-plan for the dense-plan failure. Offsets resolved against exact producer executables.",
-  "budgets": "No resource ceiling increased; packed plan uses existing canonical persisted codec; token scratch is charged to the existing query budget."
+  "budgets": "No resource ceiling increased; packed plan uses existing canonical persisted codec; token scratch is charged to the existing query budget.",
+  "affected_regression": {
+    "modules": 104,
+    "suites": 144,
+    "tests": 2202,
+    "failures": 0,
+    "full_suite": false
+  },
+  "full_contract": "Original setup still rejected skewed aggregate; exact-stack reproduction in progress. Batched diagnostic passed skewed aggregate but 100000-group owning output hit QUERY reservation. Neither failure is represented as a performance pass."
 }

@@ -1,0 +1,60 @@
+graph::query::execution::detail::PrepaidMemoryResource::do_allocate(unsigned long, unsigned long)
+??:?
+graph::storage::MetadataPageRouteLeafCodec::decode(std::span<std::byte const, 18446744073709551615ul>)
+??:?
+graph::storage::MetadataPageFile::readMetadataPageRouteLeaf(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:?
+graph::storage::MetadataPageFile::readMetadataPageRouteLeafView(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:?
+void graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const::$_2::operator()<$_2>($_2 const&, graph::storage::CatalogRadixPage const&, unsigned long, unsigned long) const
+MetadataPageRouteDirectory.cpp:?
+void graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const::$_2::operator()<$_2>($_2 const&, graph::storage::CatalogRadixPage const&, unsigned long, unsigned long) const
+MetadataPageRouteDirectory.cpp:?
+void graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const::$_2::operator()<$_2>($_2 const&, graph::storage::CatalogRadixPage const&, unsigned long, unsigned long) const
+MetadataPageRouteDirectory.cpp:?
+graph::storage::MetadataPageRouteDirectory::findMany(graph::storage::Superblock const&, graph::storage::PhysicalPageRef, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const
+??:?
+graph::storage::MetadataPageFile::resolveLogicalMetadataReferences(graph::storage::Superblock const&, std::span<graph::storage::StrongUInt64<graph::storage::MetadataPageIdTag> const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const
+??:?
+graph::storage::MetadataPageFile::resolveMetadataRadixChildren(graph::storage::CatalogRadixPage const&, graph::storage::Superblock const&, std::span<unsigned int const, 18446744073709551615ul>, std::span<graph::storage::PhysicalPageRef, 18446744073709551615ul>) const
+??:?
+graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const
+??:?
+graph::storage::LocationDirectory::findIndexRootOptional(graph::storage::Superblock const&, unsigned long) const
+??:?
+graph::storage::RelocatableMetadataStore::findIndexRootOptional(graph::storage::MetadataSnapshotPin const&, unsigned long) const
+??:?
+graph::storage::BTreeIndex::resolveRoot(graph::storage::MetadataSnapshotPin const&, graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>*) const
+??:?
+graph::utils::OwnedStdVector<std::optional<unsigned long> > graph::storage::BTreeIndex::findSortedKeys<graph::utils::OwnedStdVector<std::byte> >(graph::storage::MetadataSnapshotPin const&, std::span<graph::utils::OwnedStdVector<std::byte> const, 18446744073709551615ul>) const
+??:?
+graph::storage::BTreeIndex::findSortedOwned(graph::storage::MetadataSnapshotPin const&, std::span<graph::utils::OwnedStdVector<std::byte> const, 18446744073709551615ul>) const
+??:?
+graph::storage::SystemCatalog::findSchemaToken(graph::storage::MetadataSnapshotPin const&, graph::storage::SystemCatalogSchemaTokenKind, std::basic_string_view<char, std::char_traits<char> >) const
+??:?
+graph::storage::RelocatableStorageBackend::visitNativeNodeLabelCandidates(graph::storage::MetadataSnapshotPin const&, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, unsigned long, std::function<bool (graph::storage::EntityRef const&, bool)> const&, graph::storage::NativeReadSession*) const
+??:?
+graph::storage::RelocatableLogicalGraphReadSnapshot::visitNodeRefsForLabelPredicate(unsigned long, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, std::function<bool (graph::storage::EntityRef const&, bool)> const&) const
+??:?
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::tryVisitBatchedPropertyExpressions(graph::query::logical::LogicalOperator const&, std::vector<graph::query::expressions::Expression const*, std::allocator<graph::query::expressions::Expression const*> > const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, bool)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::executeOnSnapshot(graph::storage::LogicalGraphReadSnapshot&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::executeInternal(graph::storage::LogicalGraphReadBackend const&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const
+??:?
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0::operator()() const::{lambda()#1}::operator()() const
+QueryEngine.cpp:?
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)
+??:?
+graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)
+??:?
+main
+??:?
+_start
+??:?
