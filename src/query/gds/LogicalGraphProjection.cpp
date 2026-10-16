@@ -34,7 +34,7 @@ namespace graph::query::gds {
 		constexpr size_t MAXIMUM_WEIGHT_COLUMN_BATCH = 256U;
 
 		[[nodiscard]] bool containsLabel(const storage::LogicalGraphNode &node,
-												const std::unordered_set<std::string_view> &labels) {
+												const std::pmr::unordered_set<std::string_view> &labels) {
 			if (labels.empty()) {
 				return true;
 			}
@@ -139,7 +139,8 @@ namespace graph::query::gds {
 			throw std::overflow_error("logical projection adjacency bound overflows its size domain");
 		}
 
-		std::unordered_set<std::string_view> labelFilter;
+		const auto workspaceOwner = utils::sharedAllocationOwner();
+		std::pmr::unordered_set<std::string_view> labelFilter(workspaceOwner.get());
 		labelFilter.reserve(spec.node_labels.size());
 		for (const std::string &label: spec.node_labels) {
 			if (label.empty() || !labelFilter.insert(label).second) {
@@ -153,7 +154,7 @@ namespace graph::query::gds {
 		if (relationships->empty()) {
 			relationships = nullptr;
 		}
-		std::unordered_map<std::string_view, const LogicalRelationshipProjection *> byType;
+		std::pmr::unordered_map<std::string_view, const LogicalRelationshipProjection *> byType(workspaceOwner.get());
 		const LogicalRelationshipProjection *allTypes = relationships == nullptr ? &defaultRelationship : nullptr;
 		if (relationships != nullptr) {
 			byType.reserve(relationships->size());
@@ -231,7 +232,7 @@ namespace graph::query::gds {
 			}
 			afterNodeId = page.nodes.back().node_id;
 		}
-		std::unordered_set<uint64_t> selectedNodes;
+		std::pmr::unordered_set<uint64_t> selectedNodes(workspaceOwner.get());
 		selectedNodes.reserve(projection.node_ids_.size());
 		selectedNodes.insert(projection.node_ids_.begin(), projection.node_ids_.end());
 
@@ -243,7 +244,7 @@ namespace graph::query::gds {
 			const LogicalRelationshipProjection *relationship = nullptr;
 			double weight = 1.0;
 		};
-		std::map<std::string, size_t> weightColumnBytes;
+		std::pmr::map<std::string_view, size_t> weightColumnBytes(workspaceOwner.get());
 		for (const uint64_t nodeId: projection.node_ids_) {
 			// A physical adjacency page may be smaller than the logical per-Node
 			// budget. Consume its continuation until the bounded budget is exhausted;
@@ -268,7 +269,7 @@ namespace graph::query::gds {
 				}
 				utils::OwnedStdVector<PendingRelationship> pending;
 				pending.reserve(page.edges.size());
-				std::map<std::string, std::vector<size_t>> weightColumns;
+				std::pmr::map<std::string_view, utils::OwnedStdVector<size_t>> weightColumns(workspaceOwner.get());
 				for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 				checkBuild();
 				if (edge.edge_id == 0U || edge.edge_id <= previousEdgeId || edge.source_node_id == 0U ||
@@ -308,7 +309,7 @@ namespace graph::query::gds {
 					for (size_t offset = 0U; offset < indexes.size(); offset += MAXIMUM_WEIGHT_COLUMN_BATCH) {
 						checkBuild();
 						const size_t count = std::min(MAXIMUM_WEIGHT_COLUMN_BATCH, indexes.size() - offset);
-						std::vector<uint64_t> edgeIds;
+						utils::OwnedStdVector<uint64_t> edgeIds;
 						edgeIds.reserve(count);
 						for (size_t position = 0U; position < count; ++position) {
 							edgeIds.push_back(pending[indexes[offset + position]].topology->edge_id);
