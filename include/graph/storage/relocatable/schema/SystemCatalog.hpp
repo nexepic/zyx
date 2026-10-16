@@ -100,14 +100,23 @@ namespace graph::storage {
 	class SystemCatalogTokenKeyCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> bootstrapKey();
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> bootstrapKeyOwned();
 		[[nodiscard]] static std::vector<std::byte> propertyNameKey(std::string_view name);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> propertyNameKeyOwned(std::string_view name);
 		[[nodiscard]] static std::vector<std::byte> propertyTokenKey(uint32_t token, std::string_view name);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> propertyTokenKeyOwned(uint32_t token, std::string_view name);
 		[[nodiscard]] static std::vector<std::byte> schemaNameKey(SystemCatalogSchemaTokenKind kind,
+																  std::string_view name);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> schemaNameKeyOwned(SystemCatalogSchemaTokenKind kind,
 																  std::string_view name);
 		[[nodiscard]] static std::vector<std::byte> schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token,
 																   std::string_view name);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> schemaTokenKeyOwned(SystemCatalogSchemaTokenKind kind, uint64_t token,
+																   std::string_view name);
 		[[nodiscard]] static std::vector<std::byte> propertyTokenSequenceKey();
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> propertyTokenSequenceKeyOwned();
 		[[nodiscard]] static std::vector<std::byte> schemaTokenSequenceKey();
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> schemaTokenSequenceKeyOwned();
 		static void validateName(std::string_view name);
 		static void validateSchemaKind(SystemCatalogSchemaTokenKind kind);
 	};
@@ -117,7 +126,9 @@ namespace graph::storage {
 	class SystemCatalogGraphCardinalityCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> nodeCountKey();
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> nodeCountKeyOwned();
 		[[nodiscard]] static std::vector<std::byte> edgeCountKey();
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> edgeCountKeyOwned();
 		[[nodiscard]] static uint64_t encodeCount(uint64_t count);
 		[[nodiscard]] static uint64_t decodeCount(uint64_t encoded);
 	};
@@ -127,7 +138,9 @@ namespace graph::storage {
 	class SystemCatalogTokenCardinalityCodec final {
 	public:
 		[[nodiscard]] static std::vector<std::byte> countKey(SystemCatalogSchemaTokenKind kind, uint64_t token);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> countKeyOwned(SystemCatalogSchemaTokenKind kind, uint64_t token);
 		[[nodiscard]] static std::vector<std::byte> completeKey(SystemCatalogSchemaTokenKind kind);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> completeKeyOwned(SystemCatalogSchemaTokenKind kind);
 	};
 
 	constexpr uint64_t RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE = UINT64_C(0x5A5958434154414C);
@@ -213,8 +226,8 @@ namespace graph::storage {
             auto owner = staged_property_tokens_.get_allocator().owner();
             return owner ? std::move(owner) : utils::OwnedAllocationScope::owner();
         }
-		void stageUpsert(std::vector<std::byte> key, uint64_t value);
-		void stageErase(const std::vector<std::byte> &key);
+		void stageUpsert(utils::OwnedStdVector<std::byte> key, uint64_t value);
+		void stageErase(const utils::OwnedStdVector<std::byte> &key);
 		[[nodiscard]] uint64_t nextPropertyToken();
 		[[nodiscard]] uint64_t nextSchemaToken();
 		[[nodiscard]] uint64_t nextIndexDefinitionId();

@@ -89,7 +89,7 @@ namespace graph::storage {
 			if (definition.kind != IndexDefinitionKind::IDK_VECTOR) {
 				continue;
 			}
-			static_cast<void>(IndexDefinitionCodec::encode(definition));
+			IndexDefinitionCodec::validate(definition);
 			if (definition.vector_dimensions > options.maximum_dimensions) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable Vector semantic scan definition exceeds its configured raw-page dimension bound");

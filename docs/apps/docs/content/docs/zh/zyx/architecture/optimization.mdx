@@ -374,3 +374,5 @@ A1：表达式类型/NULL/溢出、重复行、ORDER BY、optional/路径、子�
 2026-10-16 逻辑索引/约束 DTO 字段保留字符串及属性数组额度；新增原生 owned-list 接口保持 backing 准入，保留调用方自管数组的兼容接口。schema runtime 选择 QUERY 所有者，SHOW 使用借用列名及字符串字段，属性显示保持原来的无空格逗号分隔。CREATE/DROP 在调用写后端前准备确认结果。6 种写边界验证额度拒绝时后端调用为零；原生 SHOW 结果在关闭数据库后仅保留自己的查询存储额度。1628 项受影响测试、4 种 DTO 堆形状通过，未覆盖私有请求为零。DDL 原始请求/校验临时数据、WRITE 工作区、token 名称及其他 S5/S6 合同仍待完成。仅组件证据，22/34（64.7%）；未运行全量测试或新性能评估。 Evidence: `benchmarks/architecture-design/decisions/20261016-owned-schema-query-results/`.
 
 2026-10-16 DDL WRITE 工作区、目录写表及请求/结果生命周期计费接入；修复持久内存政策的公开错误类型。1727项相关测试、1274个基础隔离案例、384个历史数据 DDL 抽样故障、32轮恢复，以及历史数据取消检查通过。原始目录 key 临时数据、编译/运行及闭包边界和稳态/长期合同继续推进。 **22/34 (64.7%), component evidence only.** Evidence: `benchmarks/architecture-design/decisions/20261016-ddl-write-workspaces-and-result-lifetimes/`.
+
+2026-10-16 目录键/嵌套数组/有序查询结果和 schema wire 编码接入预算，纯验证不再分配编码缓冲；公开原始键接口保持兼容。1754项相关测试、1275个隔离案例和32轮恢复通过；13种键布局及12种定义形状未发现漏计。闭包、编译/其他运行工作区及稳态/长期合同仍待完成。 **22/34 (64.7%), component evidence only.** Evidence: `benchmarks/architecture-design/decisions/20261016-owned-catalog-keys-and-schema-encoding/`.

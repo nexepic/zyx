@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <functional>
 #include <limits>
 #include <string>
@@ -245,4 +246,27 @@ TEST(ConstraintDefinitionCodecBudgetTest, ValidatesMalformedWireBeforeNameAdmiss
             graph::query::execution::MaterializedByteLimitExceeded);
     }
     EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST(ConstraintDefinitionCodecBudgetTest, OwnedEncodingAdmitsBeforeItsBufferAndKeepsTheAuthorityAfterScopeExit) {
+    auto input = definition(std::string(4096U, 'n'), ConstraintDefinitionEntityKind::CDEK_NODE,
+        ConstraintDefinitionKind::CDK_UNIQUE, {"key"});
+    const auto original = input;
+    auto small = std::make_shared<graph::query::execution::MaterializedByteBudget>(1024U);
+    {
+        graph::utils::OwnedAllocationScope scope(small);
+        EXPECT_THROW((void)ConstraintDefinitionCodec::encodeOwned(input), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(small->used(), 0U); EXPECT_EQ(input, original);
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    std::optional<graph::utils::OwnedStdVector<std::byte>> encoded;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        encoded.emplace(ConstraintDefinitionCodec::encodeOwned(input));
+    }
+    EXPECT_GE(memory->used(), encoded->size());
+    EXPECT_EQ(ConstraintDefinitionCodec::decode(*encoded), input);
+    memory.reset(); EXPECT_FALSE(authority.expired());
+    encoded.reset(); EXPECT_TRUE(authority.expired());
 }

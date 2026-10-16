@@ -67,6 +67,9 @@ namespace graph::storage {
 		// within its authenticated separator bounds; never scan unrelated gaps.
 		[[nodiscard]] std::vector<std::optional<uint64_t>> findSorted(
 				const MetadataSnapshotPin &snapshot, std::span<const std::vector<std::byte>> keys) const;
+        [[nodiscard]] utils::OwnedStdVector<std::optional<uint64_t>> findSortedOwned(
+            const MetadataSnapshotPin &snapshot, std::span<const utils::OwnedStdVector<std::byte>> keys) const;
+
 		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> scan(const MetadataSnapshotPin &snapshot,
 																	   std::optional<std::span<const std::byte>> lowerBound,
 																	   size_t maximumEntries,
@@ -87,6 +90,9 @@ namespace graph::storage {
 																	 size_t cursorBatchEntries = 0U) const;
 
 	private:
+        template<class Key>
+        [[nodiscard]] utils::OwnedStdVector<std::optional<uint64_t>> findSortedKeys(
+            const MetadataSnapshotPin &snapshot, std::span<const Key> keys) const;
 		struct TraversalStep {
             using OwnedHeapElement = void;
 			PageId page_id{};

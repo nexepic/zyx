@@ -297,7 +297,7 @@ namespace graph::storage {
 		MetadataSnapshotPin sourceSnapshot = metadata.openSnapshot();
 		OfflineScalarIndexMaterializationResult result;
 		for (const IndexDefinition &definition: definitions) {
-			static_cast<void>(IndexDefinitionCodec::encode(definition));
+			IndexDefinitionCodec::validate(definition);
 			if (definition.kind == IndexDefinitionKind::IDK_VECTOR) {
 				++result.deferred_vector_indexes;
 				continue;

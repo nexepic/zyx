@@ -102,13 +102,13 @@ namespace graph::storage {
 			}
 		}
 
-		void appendU16(std::vector<std::byte> &bytes, uint16_t value) {
+		void appendU16(utils::OwnedStdVector<std::byte> &bytes, uint16_t value) {
 			const size_t offset = bytes.size();
 			bytes.resize(offset + sizeof(value));
 			LittleEndianCodec::writeU16(bytes, offset, value);
 		}
 
-		void appendBytes(std::vector<std::byte> &bytes, std::string_view value) {
+		void appendBytes(utils::OwnedStdVector<std::byte> &bytes, std::string_view value) {
 		if (!value.empty()) {
 			const std::byte *begin = reinterpret_cast<const std::byte *>(value.data());
 			bytes.insert(bytes.end(), begin, begin + static_cast<std::ptrdiff_t>(value.size()));
@@ -128,22 +128,26 @@ namespace graph::storage {
 	} // namespace
 
 	std::vector<std::byte> IndexDefinitionCodec::encode(const IndexDefinition &definition) {
+        auto bytes = encodeOwned(definition);
+        // The legacy raw output is caller-owned; native private paths use encodeOwned.
+        return std::move(static_cast<std::vector<std::byte> &>(bytes));
+    }
+
+    void IndexDefinitionCodec::validate(const IndexDefinition &definition) { validateDefinition(definition); }
+
+    utils::OwnedStdVector<std::byte> IndexDefinitionCodec::encodeOwned(const IndexDefinition &definition) {
 		validateDefinition(definition);
-		std::vector<std::byte> payload;
-		payload.reserve(definition.name.size() + definition.vector_metric.size() +
-						definition.property_names.size() * (sizeof(uint16_t) + 16U));
-		appendBytes(payload, definition.name);
-		appendBytes(payload, definition.vector_metric);
-		for (const auto &property: definition.property_names) {
-			appendU16(payload, static_cast<uint16_t>(property.size()));
-			appendBytes(payload, property);
-		}
+        size_t payloadBytes = definition.name.size() + definition.vector_metric.size();
+        for (const auto &property : definition.property_names)
+            payloadBytes = utils::detail::addStandardHeapBytes(payloadBytes, sizeof(uint16_t) + property.size());
 		// ZYX_COV_EXCL_START: the fixed field and component bounds keep this below the 32-bit wire limit.
-		if (payload.size() > std::numeric_limits<uint32_t>::max()) {
+		if (payloadBytes > std::numeric_limits<uint32_t>::max()) {
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable index definition payload exceeds its wire capacity");
 		}
 		// ZYX_COV_EXCL_STOP
-		std::vector<std::byte> bytes(RSS_INDEX_DEFINITION_HEADER_BYTES);
+        utils::OwnedStdVector<std::byte> bytes;
+        bytes.reserve(utils::detail::addStandardHeapBytes(RSS_INDEX_DEFINITION_HEADER_BYTES, payloadBytes));
+        bytes.resize(RSS_INDEX_DEFINITION_HEADER_BYTES);
 		LittleEndianCodec::writeU32(bytes, 0, RSS_INDEX_DEFINITION_MAGIC);
 		LittleEndianCodec::writeU16(bytes, 4, RSS_INDEX_DEFINITION_VERSION);
 		LittleEndianCodec::writeU16(bytes, 6, RSS_INDEX_DEFINITION_HEADER_BYTES);
@@ -156,9 +160,14 @@ namespace graph::storage {
 		LittleEndianCodec::writeU32(bytes, NAME_BYTES_OFFSET, static_cast<uint32_t>(definition.name.size()));
 		LittleEndianCodec::writeU32(bytes, METRIC_BYTES_OFFSET, static_cast<uint32_t>(definition.vector_metric.size()));
 		LittleEndianCodec::writeU32(bytes, VECTOR_DIMENSIONS_OFFSET, definition.vector_dimensions);
-		LittleEndianCodec::writeU32(bytes, PAYLOAD_BYTES_OFFSET, static_cast<uint32_t>(payload.size()));
+		LittleEndianCodec::writeU32(bytes, PAYLOAD_BYTES_OFFSET, static_cast<uint32_t>(payloadBytes));
 		LittleEndianCodec::writeU32(bytes, RESERVED_OFFSET, 0U);
-		bytes.insert(bytes.end(), payload.begin(), payload.end());
+        appendBytes(bytes, definition.name);
+        appendBytes(bytes, definition.vector_metric);
+        for (const auto &property : definition.property_names) {
+            appendU16(bytes, static_cast<uint16_t>(property.size()));
+            appendBytes(bytes, property);
+        }
 		return bytes;
 	}
 

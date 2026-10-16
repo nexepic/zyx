@@ -392,3 +392,34 @@ TEST_F(BTreeIndexScanCacheTest, EscapedCursorUsesItsCapturedAuthorityForFollowin
     EXPECT_EQ(emitted, 4U);
     cursor.reset(); EXPECT_TRUE(authority.expired());
 }
+
+TEST_F(BTreeIndexScanCacheTest, OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds) {
+    using OwnedKey = graph::utils::OwnedStdVector<std::byte>;
+    const std::array<OwnedKey, 2U> keys{OwnedKey(key("a")), OwnedKey(key("z"))};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    std::optional<graph::utils::OwnedStdVector<std::optional<uint64_t>>> values;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        values.emplace(index_->findSortedOwned(snapshot_, keys));
+    }
+    ASSERT_EQ(values->size(), 2U);
+    EXPECT_EQ((*values)[0], static_cast<uint64_t>('a')); EXPECT_FALSE((*values)[1]);
+    EXPECT_GT(memory->used(), 0U);
+    memory.reset(); EXPECT_FALSE(authority.expired());
+    values.reset(); EXPECT_TRUE(authority.expired());
+}
+
+TEST_F(BTreeIndexScanCacheTest, OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact) {
+    using OwnedKey = graph::utils::OwnedStdVector<std::byte>;
+    const std::array<OwnedKey, 1U> keys{OwnedKey(key("a"))};
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    const auto before = io_->bufferPoolStats();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW((void)index_->findSortedOwned(snapshot_, keys), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(keys[0], key("a")); EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+    EXPECT_EQ(io_->bufferPoolStats().hits, before.hits);
+}

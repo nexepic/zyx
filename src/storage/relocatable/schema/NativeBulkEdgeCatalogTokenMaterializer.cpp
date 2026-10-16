@@ -25,7 +25,7 @@ namespace graph::storage {
 			return std::lexicographical_compare(left.begin(), left.end(), right.begin(), right.end());
 		}
 
-		[[nodiscard]] std::optional<BTreePageEntry> entry(std::vector<std::byte> key, uint64_t value) {
+		[[nodiscard]] std::optional<BTreePageEntry> entry(utils::OwnedStdVector<std::byte> key, uint64_t value) {
 			return BTreePageEntry{std::move(key), value};
 		}
 
@@ -147,9 +147,9 @@ namespace graph::storage {
 				};
 				AllocationState allocation;
 				allocation.next_property =
-						nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::propertyTokenSequenceKey(), 1U);
+						nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::propertyTokenSequenceKeyOwned(), 1U);
 				allocation.next_schema =
-						nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::schemaTokenSequenceKey(), 1U);
+						nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::schemaTokenSequenceKeyOwned(), 1U);
 				auto cursor = std::make_shared<Cursor>(Cursor{
 						&catalog, &snapshot, tokens(), options.maximum_token_entries, 0U, std::nullopt, allocation});
 				if (!cursor->tokens) {
@@ -180,26 +180,26 @@ namespace graph::storage {
 			switch (pass) {
 				case OverlayPass::OP_PROPERTY_NAME:
 					if (resolution.kind == NativeBulkEdgeTokenKind::NBETK_PROPERTY) {
-						return entry(SystemCatalogTokenKeyCodec::propertyNameKey(resolution.name), resolution.token_id);
+						return entry(SystemCatalogTokenKeyCodec::propertyNameKeyOwned(resolution.name), resolution.token_id);
 					}
 					return std::nullopt;
 				case OverlayPass::OP_PROPERTY_REVERSE:
 					if (resolution.kind == NativeBulkEdgeTokenKind::NBETK_PROPERTY) {
-						return entry(SystemCatalogTokenKeyCodec::propertyTokenKey(
+						return entry(SystemCatalogTokenKeyCodec::propertyTokenKeyOwned(
 											 static_cast<uint32_t>(resolution.token_id), resolution.name),
 									 resolution.token_id);
 					}
 					return std::nullopt;
 				case OverlayPass::OP_SCHEMA_NAME:
 					if (resolution.kind == NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE) {
-						return entry(SystemCatalogTokenKeyCodec::schemaNameKey(
+						return entry(SystemCatalogTokenKeyCodec::schemaNameKeyOwned(
 											 SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, resolution.name),
 									 resolution.token_id);
 					}
 					return std::nullopt;
 				case OverlayPass::OP_SCHEMA_REVERSE:
 					if (resolution.kind == NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE) {
-						return entry(SystemCatalogTokenKeyCodec::schemaTokenKey(
+						return entry(SystemCatalogTokenKeyCodec::schemaTokenKeyOwned(
 											 SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, resolution.token_id,
 											 resolution.name),
 									 resolution.token_id);
@@ -233,28 +233,28 @@ namespace graph::storage {
 							if (pass == OverlayPass::OP_BOOTSTRAP) {
 								pass = OverlayPass::OP_PROPERTY_NAME;
 								if (initial_root) {
-									return entry(SystemCatalogTokenKeyCodec::bootstrapKey(),
+									return entry(SystemCatalogTokenKeyCodec::bootstrapKeyOwned(),
 												 RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE);
 								}
 							}
 							if (pass == OverlayPass::OP_PROPERTY_SEQUENCE) {
 								pass = OverlayPass::OP_SCHEMA_SEQUENCE;
 								if (new_property_tokens != 0U) {
-									return entry(SystemCatalogTokenKeyCodec::propertyTokenSequenceKey(), next_property);
+									return entry(SystemCatalogTokenKeyCodec::propertyTokenSequenceKeyOwned(), next_property);
 								}
 								continue;
 							}
 							if (pass == OverlayPass::OP_SCHEMA_SEQUENCE) {
 								pass = OverlayPass::OP_NODE_CARDINALITY;
 								if (new_schema_tokens != 0U) {
-									return entry(SystemCatalogTokenKeyCodec::schemaTokenSequenceKey(), next_schema);
+									return entry(SystemCatalogTokenKeyCodec::schemaTokenSequenceKeyOwned(), next_schema);
 								}
 								continue;
 							}
 							if (pass == OverlayPass::OP_NODE_CARDINALITY) {
 								pass = OverlayPass::OP_EDGE_CARDINALITY;
 								if (graph_statistics.has_value()) {
-									return entry(SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+									return entry(SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned(),
 												 SystemCatalogGraphCardinalityCodec::encodeCount(
 														 graph_statistics->node_count));
 								}
@@ -263,7 +263,7 @@ namespace graph::storage {
 							if (pass == OverlayPass::OP_EDGE_CARDINALITY) {
 								pass = OverlayPass::OP_DONE;
 								if (graph_statistics.has_value()) {
-									return entry(SystemCatalogGraphCardinalityCodec::edgeCountKey(),
+									return entry(SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned(),
 												 SystemCatalogGraphCardinalityCodec::encodeCount(
 														 graph_statistics->edge_count));
 								}
@@ -399,9 +399,9 @@ namespace graph::storage {
 		const bool initialRoot =
 				!catalog.metadataStore().findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID).has_value();
 		const uint64_t initialProperty =
-				nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::propertyTokenSequenceKey(), 1U);
+				nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::propertyTokenSequenceKeyOwned(), 1U);
 		const uint64_t initialSchema =
-				nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::schemaTokenSequenceKey(), 1U);
+				nextSequence(catalog, snapshot, SystemCatalogTokenKeyCodec::schemaTokenSequenceKeyOwned(), 1U);
 		const NativeBulkEdgeCatalogTokenResolutionSource resolutions =
 				makeResolutionSource(catalog, snapshot, sortedTokenEntries, options);
 
