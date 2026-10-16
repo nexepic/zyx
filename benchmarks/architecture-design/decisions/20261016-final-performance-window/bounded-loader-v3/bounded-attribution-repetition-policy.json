@@ -1,0 +1,11 @@
+{
+  "scope": "Collector only, before first attribution process; no formal sample, semantic input or binary changes.",
+  "reason": "The first full-size successful process shows scans/aggregate/Top-K about 3s and point/traversal about 22-64ms each. These are no longer microsecond cases; collect bounded CPU/heap windows with fewer diagnostic repetitions.",
+  "iterations": {
+    "scan_aggregate_sort": 3,
+    "point_traversal": 100
+  },
+  "boundary": "Resume after first measured event, pause after final event; at least two observed windows for long cases and 99 for point/traversal. Keep documented signal/cleanup caveats.",
+  "formal_timing": "unchanged: 3 warmups, 10 owning-output samples, 3 independent processes",
+  "script_sha256": "053bd5779ddc81301763d1a6416baa046151af4f1ac11b430f9b4e94898ec659"
+}

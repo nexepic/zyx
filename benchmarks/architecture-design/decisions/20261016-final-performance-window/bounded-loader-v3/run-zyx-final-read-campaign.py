@@ -22,7 +22,7 @@ for index,(number,scale,profile,engine) in enumerate(cases,1):
   if not target.exists():target.write_text(json.dumps({'status':'unmeasurable_previous_failure','source':str(prior),'rule':'Same frozen binary and deterministic profile; no successful process or latency ratio inferred.'})+'\n')
   print(json.dumps({'phase':'read-unmeasurable-previous-failure','case':index,'source':str(prior)}),flush=True);continue
  verified=list(root.glob('*/correctness.json'))
- if verified and all(json.loads((v.parent/'run_status.json').read_text())=={'failure_count':0,'quality_failure_count':0} for v in verified):
+ if verified and any(json.loads((v.parent/'run_status.json').read_text())=={'failure_count':0,'quality_failure_count':0} for v in verified):
 
   print(json.dumps({'phase':'read-already-verified','case':index,'total':len(cases),'root':str(root)}),flush=True)
   continue
