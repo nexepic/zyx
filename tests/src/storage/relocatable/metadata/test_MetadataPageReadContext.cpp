@@ -454,3 +454,60 @@ TEST_F(MetadataPageReadContextTest, ExhaustedCacheCannotPreventEmptyContextAndOp
     }
     context.reset(); EXPECT_EQ(memory->used(), 0U);
 }
+
+TEST_F(MetadataPageReadContextTest, PrivateCatalogCopyUsesTheCallerWhileCacheCreditIsExhausted) {
+    using graph::query::execution::detail::PrepaidMemoryResource;
+    MetadataPageFile pages(io, root);
+    const auto input = oneCatalogPage();
+    const PhysicalPageRef reference{PhysicalSlotId(1U), 2U, Generation(1U)};
+    pages.writeCatalogLeaf(reference, input);
+    auto cache = metadataReadGrant(32U * 1024U);
+    auto caller = metadataReadGrant(32U * 1024U);
+    auto context = std::make_shared<MetadataPageReadContext>(root,
+        MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, cache);
+    MetadataPageReadContext::Scope readScope(context, *io);
+    static_cast<void>(pages.readCatalogLeafView(reference)); // Warm the immutable shared entry first.
+    const auto original = pages.readCatalogLeafView(reference);
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        graph::utils::OwnedAllocationScope callerScope(caller);
+        {
+            auto copied = pages.readCatalogLeaf(reference);
+            EXPECT_EQ(CatalogLeafPageCodec::encode(copied), CatalogLeafPageCodec::encode(*original));
+            EXPECT_NE(copied.entries.data(), original->entries.data());
+            EXPECT_GT(caller->used(), 0U);
+            EXPECT_EQ(cache->used(), cache->capacity());
+            copied.entries.clear(); EXPECT_EQ(original->entries.size(), input.entries.size());
+        }
+        EXPECT_EQ(caller->used(), 0U);
+        EXPECT_EQ(pages.readCatalogLeafView(reference).get(), original.get());
+    }
+}
+
+TEST_F(MetadataPageReadContextTest, PrivateCopyDenialPreservesTheSharedEntryAndAvoidsARedecode) {
+    using graph::query::execution::detail::PrepaidMemoryResource;
+    using graph::query::execution::detail::ResourceAdmissionDenied;
+    MetadataPageFile pages(io, root);
+    const auto input = oneCatalogPage();
+    const PhysicalPageRef reference{PhysicalSlotId(1U), 2U, Generation(1U)};
+    pages.writeCatalogLeaf(reference, input);
+    auto cache = metadataReadGrant(32U * 1024U);
+    auto caller = metadataReadGrant(32U * 1024U);
+    auto context = std::make_shared<MetadataPageReadContext>(root,
+        MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, cache);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readCatalogLeafView(reference)); // Warm the immutable shared entry first.
+    const auto original = pages.readCatalogLeafView(reference);
+    const auto cachedBytes = cache->used();
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(caller, caller->capacity());
+        graph::utils::OwnedAllocationScope callerScope(caller);
+        io->resetStats();
+        EXPECT_THROW(static_cast<void>(pages.readCatalogLeaf(reference)), ResourceAdmissionDenied);
+        EXPECT_EQ(io->stats().read_bytes, 0U);
+        EXPECT_EQ(context->size(), 1U);
+        EXPECT_EQ(pages.readCatalogLeafView(reference).get(), original.get());
+        EXPECT_EQ(cache->used(), cachedBytes);
+    }
+    EXPECT_EQ(caller->used(), 0U);
+}

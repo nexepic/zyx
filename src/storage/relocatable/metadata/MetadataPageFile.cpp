@@ -154,7 +154,9 @@ namespace graph::storage {
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.catalog");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.catalog", 1);
         std::optional<utils::OwnedAllocationScope> allocation;
-        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        if (!utils::OwnedAllocationScope::active()) {
+            if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        }
 		CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -343,7 +345,9 @@ namespace graph::storage {
 			}
 			case RSS_CATALOG_PAGE_MAGIC: {
 		        std::optional<utils::OwnedAllocationScope> allocation;
-        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        if (!utils::OwnedAllocationScope::active()) {
+            if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        }
 		CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
 				page.generation = batch.generation();
 				page.committed_lsn = batch.checkpointLsn();
@@ -359,7 +363,9 @@ namespace graph::storage {
 			}
 			case RSS_LOCATION_LEAF_MAGIC: {
 		        std::optional<utils::OwnedAllocationScope> allocation;
-        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        if (!utils::OwnedAllocationScope::active()) {
+            if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        }
 		LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
 				page.generation = batch.generation();
 				page.committed_lsn = batch.checkpointLsn();
@@ -505,7 +511,9 @@ namespace graph::storage {
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.location");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.location", 1);
         std::optional<utils::OwnedAllocationScope> allocation;
-        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        if (!utils::OwnedAllocationScope::active()) {
+            if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        }
 		LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -535,7 +543,9 @@ namespace graph::storage {
 		debug::ScopedPerfTimer decodeTimer("native_graph.read.metadata_decode.route_leaf");
 		debug::PerfTrace::addValue("native_graph.read.metadata_decodes.route_leaf", 1);
         std::optional<utils::OwnedAllocationScope> allocation;
-        if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        if (!utils::OwnedAllocationScope::active()) {
+            if (auto *decodedContext = MetadataPageReadContext::current(*io_)) allocation.emplace(decodedContext->memoryOwner());
+        }
 		MetadataPageRouteLeafPage page = MetadataPageRouteLeafCodec::decode(bytes);
 		if (page.generation != reference.generation) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,

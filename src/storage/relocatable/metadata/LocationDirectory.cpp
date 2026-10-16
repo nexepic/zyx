@@ -1327,7 +1327,8 @@ namespace graph::storage {
 									"relocatable location range cursor requires a valid type and logical range");
 		}
 		auto context = MetadataPageReadContext::Scope::currentOwner(*pages_.storageIO());
-        const auto memory = context ? context->memoryOwner() : nullptr;
+        const auto memory = utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (context ? context->memoryOwner() : nullptr);
         static_assert(alignof(LocationDirectoryRangeCursor::Impl) <= alignof(std::max_align_t));
         auto implementation = std::unique_ptr<LocationDirectoryRangeCursor::Impl>(
             new (memory) LocationDirectoryRangeCursor::Impl(memory));

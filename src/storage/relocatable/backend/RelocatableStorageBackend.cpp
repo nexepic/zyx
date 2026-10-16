@@ -817,6 +817,7 @@ namespace graph::storage {
 			[[nodiscard]] LogicalGraphMutationBatchResult
 			previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
 				requireActive("preview a mutation batch");
+                utils::OwnedAllocationScope writeOwner(write_memory_);
 				if (read_only_) {
 					throw std::logic_error("relocatable read-only logical transaction cannot preview graph mutations");
 				}
@@ -847,6 +848,7 @@ namespace graph::storage {
 				LogicalGraphMutationBatch batch, std::vector<LogicalGraphPropertyPatchRequest> patches,
 				size_t maximumPropertyEntries, const LogicalGraphMutationReadControl &control = {}) override {
 				requireActive("stage a mutation batch");
+                utils::OwnedAllocationScope writeOwner(write_memory_);
 				if (control.checkpoint) control.checkpoint();
 				if (hasStreamedBulkEdges()) {
 					throw std::logic_error(
@@ -967,6 +969,7 @@ namespace graph::storage {
 			[[nodiscard]] std::vector<uint64_t>
 			appendPersistedBulkEdges(const LogicalGraphPersistedBulkEdgeAppendRequest &request) override {
 				requireActive("append streamed bulk Edges");
+                utils::OwnedAllocationScope writeOwner(write_memory_);
 				if (read_only_) {
 					throw std::logic_error("relocatable read-only logical transaction cannot append bulk Edges");
 				}
@@ -1101,6 +1104,7 @@ namespace graph::storage {
 
 			[[nodiscard]] LogicalGraphMutationBatchResult commit() override {
 				requireActive("commit");
+                utils::OwnedAllocationScope writeOwner(write_memory_);
 				if (read_only_) {
                     LogicalGraphMutationBatchResult emptyResult;
 					if (!isEmpty(retained_->accumulated) || !retained_->property_patches.empty()) { // read-only entry points reject writes before staging.
@@ -2512,6 +2516,25 @@ namespace graph::storage {
 							  propertyNames.begin());
 		}
 
+        [[nodiscard]] std::shared_ptr<query::execution::detail::PrepaidMemoryResource> mutationWriteWorkspace(
+                const std::shared_ptr<query::execution::detail::DatabaseResourceBudget> &domain) {
+            using namespace query::execution::detail;
+            // Private COW/B+Tree decode must not fall back to the snapshot's
+            // CACHE owner. Prepay outside the publication gate; a bounded share
+            // leaves WRITE headroom for staging and concurrent callers.
+            constexpr size_t maximumWorkspace = 32U * 1024U * 1024U;
+            const size_t maximum = (std::min)(maximumWorkspace, domain->classMaximum(ResourceClass::RCK_WRITE));
+            if (!maximum) throw ResourceAdmissionDenied();
+            auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, maximum);
+            const size_t available = account->available();
+            // Logical-ID capability nodes use a separate WRITE owner; leave
+            // their bounded publication metadata room before taking the gate.
+            constexpr size_t capabilityHeadroom = 4096U;
+            if (available <= capabilityHeadroom) throw ResourceAdmissionDenied();
+            const size_t capacity = available - capabilityHeadroom;
+            return std::make_shared<PrepaidMemoryResource>(std::move(account), capacity, std::pmr::new_delete_resource());
+        }
+
         [[nodiscard]] std::shared_ptr<query::execution::MaterializedByteBudget> ddlWriteWorkspace(
                 const std::shared_ptr<query::execution::detail::DatabaseResourceBudget> &domain) {
             const auto maximum = domain->classMaximum(query::execution::detail::ResourceClass::RCK_WRITE);
@@ -3353,7 +3376,9 @@ namespace graph::storage {
 					"relocatable logical creation identity reservation requires an open writable native graph backend");
 		}
 		requireNoIndeterminateWrite();
-		return native_graph_write_planner_->reserveLogicalIds(nodeCount, edgeCount);
+		auto workspace = mutationWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope allocation(workspace);
+        return native_graph_write_planner_->reserveLogicalIds(nodeCount, edgeCount);
 	}
 
 	NativeGraphLogicalIdReservation RelocatableStorageBackend::reserveNativeBulkEdgeSessionIds(uint64_t edgeCount) {
@@ -3364,7 +3389,9 @@ namespace graph::storage {
 					"relocatable streamed bulk Edge session requires bounded positive writable work");
 		}
 		requireNoIndeterminateWrite();
-		const NativeGraphLogicalIdLease lease = metadata_->reserveNativeGraphLogicalIds(0U, edgeCount);
+		auto workspace = mutationWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope allocation(workspace);
+        const NativeGraphLogicalIdLease lease = metadata_->reserveNativeGraphLogicalIds(0U, edgeCount);
 		return {{}, {lease.edges}};
 	}
 
@@ -3919,7 +3946,11 @@ namespace graph::storage {
 					"relocatable logical graph mutation batch received an invalid optimistic read fence");
 		}
 
-		std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
+		auto writeWorkspace = mutationWriteWorkspace(resource_domain_);
+        std::optional<utils::OwnedAllocationScope> writeAllocation;
+        writeAllocation.emplace(writeWorkspace);
+
+        std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
 		NativeGraphMutationFenceValidator fenceValidator;
 		if (expectedFence.has_value()) {
 			const LogicalGraphMutationFence expected = *expectedFence;
@@ -3968,6 +3999,9 @@ namespace graph::storage {
 				throw;
 			}
 			if (execution.committed()) {
+                debug::PerfTrace::addValue("native_graph.write.private_workspace_peak_bytes", static_cast<int64_t>(writeWorkspace->peakAdmitted()));
+                debug::PerfTrace::addValue("native_graph.write.private_workspace_grant_bytes", static_cast<int64_t>(writeWorkspace->capacity()));
+                writeAllocation.reset(); // Queue/cache publication retains its own resource class.
 				// Queue only after the graph/Vector delta generation is durable.
 				// A full transient queue cannot change the already durable commit.
 				if (maintenance_ != nullptr) {
