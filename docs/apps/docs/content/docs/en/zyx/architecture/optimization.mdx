@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Architecture and General Performance Implementation Plan
 
-Updated: 2026-10-16. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress on remote work is 26/34 (76.5%); see section 5 for each phase. Eight deliveries remain unaccepted, and Kuzu superiority is not established. Synchronizing this document does not accept new implementation work.**
+Updated: 2026-10-16. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress on remote work is 27/34 (79.4%); see section 5 for each phase. Seven deliveries remain unaccepted, and Kuzu superiority is not established. Synchronizing this document does not accept new implementation work.**
 
 The previous P0–P7 result of 40/40 closed that checklist only; it did not establish architectural completeness or Kuzu parity. The previous optimization document and storage stage ledger are outside the documentation site at `benchmarks/architecture-design/archive/20261011-completed-optimization/`, with original-file SHA-256 hashes. Earlier records are in `20261009-superseded-plans/`. These are historical evidence, not execution plans.
 
@@ -186,14 +186,14 @@ The acceptance sequence is S0 → S1 → S2 → S3 → S4 → S5 → S6; depende
 
 | Phase | Fixed deliverables | Accepted/total | Progress |
 |---|---|---:|---:|
-| S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 2/4 | 50% |
+| S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 3/4 | 75% |
 | S1 Architecture | S1.1 A1; S1.2 A2; S1.3 A3; S1.4 A4; S1.5 A5; S1.6 A6; S1.7 A7 complete decision records | 7/7 | 100% |
 | S2 Execution | S2.1 binding/batches/cache identity; S2.2 scan/filter/project/aggregate; S2.3 other operators and read/write consumers; S2.4 focused semantics tests; S2.5 O1/O2/O4 comparisons | 4/5 | 80% |
 | S3 Properties | S3.1 A2/current-layout regressions; S3.2 complete A3 prototype/admission decision; S3.3 admitted production layout/specification; S3.4 correctness/fault tests; S3.5 O3/O5 read/write/resources | 4/5 | 80% |
 | S4 Graph access | S4.1 consistency protocol/candidate comparisons; S4.2 admitted production path/format; S4.3 graph semantics/fault tests; S4.4 read/write/space acceptance | 3/4 | 75% |
 | S5 Transactions/resources | S5.1 conflict validation/safe rebase; S5.2 isolation/retry/fault tests; S5.3 single-file spill/budgets; S5.4 out-of-memory/cancel/disk-full/read-only/crash-cleanup tests; S5.5 O6 steady-state acceptance | 4/5 | 80% |
 | S6 Integration | S6.1 final source/affected-module regressions; S6.2 workload classes/Kuzu comparison; S6.3 long-run resources/recovery/cleanup; S6.4 O7/O8 adoption decisions/final docs | 2/4 | 50% |
-| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 26/34 | 76.5% |
+| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 27/34 | 79.4% |
 
 2026-10-15 progress synchronization (existing acceptance, no new credit): S0.1–S0.2, S1.1–S1.7, S2.1–S2.4, S3.1–S3.4, S4.1–S4.3 and S5.1–S5.2 are accepted: 22 deliveries. Acceptance records are in `benchmarks/architecture-design/decisions/`, indexed by `current-progress.json`. Remaining: S0.3, S0.4, S2.5, S3.5, S4.4, S5.3–S5.5 and S6.1–S6.4. Scratch/resource foundations do not complete S5.3/S5.4. The following 2026-10-11 entries describe historical status.
 
@@ -398,3 +398,5 @@ These identify owners, not instructions to rewrite entire files:
 2026-10-16 final recovery revalidation (no score change): startup temporary allocations use the existing MAINT control grant; optional cache denial no longer blocks ordinary copy reads. All 2614 tests in 160 suites from 121 affected modules passed, plus 13 families / 886 full-result operations and 4000 four-client supplemental operations. Both complete inputs passed typed node/edge counts, index and filter checks with the final consumer. No budget increase, format change, or full-suite run. Progress remains **26/34 (76.5%), 2/5 this request**. Evidence: `benchmarks/architecture-design/decisions/20261016-recovery-and-optional-read-admission/`.
 
 2026-10-16 All 2628 tests in 124 selected modules passed, including full-sort denial and bounded Top-K success under the same 8MiB cap with complete parent-account refunds. Both complete medium/holdout CSV oracles checked all 100 IDs and scores. The old performance window is excluded, with no budget increase. Progress remains 26/34 (76.5%), 2/5 this request; final performance acceptance is pending. Evidence: `benchmarks/architecture-design/decisions/20261016-bounded-topk-default-read/`.
+
+2026-10-16 **S0.4 accepted: 27/34 (79.4%), 3/5 this request**. Five real-query CPU/bounded-heap/native-counter investigations and 150 fully checked mechanism samples from three processes are reported. The conversion-inclusive typed filter is slower for this source; full sort and Top-K have different output sizes. No speedup claim. CPU-clock discrepancy and bounded heap scope are explicit. Kuzu goal is not met; S0.3 full matrix and S5.5 remain pending. Evidence: `benchmarks/architecture-design/decisions/20261016-s04-hotspot-and-falsification/`.

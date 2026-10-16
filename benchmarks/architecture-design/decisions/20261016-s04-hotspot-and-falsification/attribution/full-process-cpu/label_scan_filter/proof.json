@@ -1,0 +1,10 @@
+{
+  "workload": "label_scan_filter",
+  "sampled_cpu_seconds": 0.272,
+  "child_user_seconds": 25.946035,
+  "child_system_seconds": 1.7254459999999998,
+  "wall_seconds": 28.132326079998165,
+  "sampled_over_child_total": 0.00982961482979534,
+  "validated_results": 3,
+  "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+}

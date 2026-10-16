@@ -1,0 +1,48 @@
+{
+  "pid": 156444,
+  "resume_after_event": {
+    "event": "result",
+    "workload": "aggregation_count_by_group",
+    "iteration": 0,
+    "value": 8,
+    "rows": [
+      [
+        "CN",
+        12500
+      ],
+      [
+        "US",
+        12500
+      ],
+      [
+        "DE",
+        12500
+      ],
+      [
+        "JP",
+        12500
+      ],
+      [
+        "SG",
+        12500
+      ],
+      [
+        "BR",
+        12500
+      ],
+      [
+        "IN",
+        12500
+      ],
+      [
+        "FR",
+        12500
+      ]
+    ]
+  },
+  "resume_monotonic_ns": 138196509110791,
+  "pause_reason": "bounded_heap_window",
+  "pause_monotonic_ns": 138196709796903,
+  "pause_delivered": true,
+  "cleanup_may_be_included": false
+}

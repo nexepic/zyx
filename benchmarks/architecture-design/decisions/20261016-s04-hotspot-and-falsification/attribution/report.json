@@ -1,0 +1,125 @@
+{
+  "status": "completed_separate_cpu_bounded_heap_and_counters",
+  "cases": [
+    {
+      "workload": "label_scan_filter",
+      "mode": "cpu",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-label_scan_filter/cpu",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "label_scan_filter",
+      "mode": "heap",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-label_scan_filter/heap",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "label_scan_filter",
+      "mode": "counters",
+      "validated_results": 1,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-label_scan_filter/counters",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "aggregation_count_by_group",
+      "mode": "cpu",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-aggregation_count_by_group/cpu",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "aggregation_count_by_group",
+      "mode": "heap",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-aggregation_count_by_group/heap",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "aggregation_count_by_group",
+      "mode": "counters",
+      "validated_results": 1,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-aggregation_count_by_group/counters",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "topk_property_sort",
+      "mode": "cpu",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-topk_property_sort/cpu",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "topk_property_sort",
+      "mode": "heap",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-topk_property_sort/heap",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "topk_property_sort",
+      "mode": "counters",
+      "validated_results": 1,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-topk_property_sort/counters",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "point_node_fetch_by_id",
+      "mode": "cpu",
+      "validated_results": 100,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-point_node_fetch_by_id/cpu",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "point_node_fetch_by_id",
+      "mode": "heap",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-point_node_fetch_by_id/heap",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "point_node_fetch_by_id",
+      "mode": "counters",
+      "validated_results": 1,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-point_node_fetch_by_id/counters",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "two_hop_expand",
+      "mode": "cpu",
+      "validated_results": 100,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-two_hop_expand/cpu",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "two_hop_expand",
+      "mode": "heap",
+      "validated_results": 3,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-two_hop_expand/heap",
+      "formal_timing_samples_accepted": 0
+    },
+    {
+      "workload": "two_hop_expand",
+      "mode": "counters",
+      "validated_results": 1,
+      "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-two_hop_expand/counters",
+      "formal_timing_samples_accepted": 0
+    }
+  ],
+  "registration": {
+    "scope": "Separate diagnostic processes only, never formal timing. CPU collection without heap tracing or native timers; heap collection only a bounded 200ms wall window, not whole-query allocation totals; native value counters in a separate process.",
+    "reason": "Combined unbounded heap tracing reached the existing 30000ms query timeout; preserve failed experiment. No deadline or memory increase.",
+    "cpu_iterations": {
+      "scan_aggregate_sort": 3,
+      "point_traversal": 100
+    },
+    "heap_iterations": 3,
+    "warmups": 3,
+    "heap_window_wall_seconds": 0.2,
+    "caveats": "Signals are approximate boundaries; a final cleanup race is recorded. Heap-window allocations include collector/entry effects and cannot be extrapolated to whole queries. CPU samples and counter processes are distinct. Process I/O may be unavailable and is not physical database I/O.",
+    "binary_sha256": "cc3251b02a2f2a5d87384ac1f11aae29314294a62a2b98ecb78b3ffc6b61d674",
+    "formal_timing_samples_accepted": 0
+  },
+  "performance_gain_claim": false
+}

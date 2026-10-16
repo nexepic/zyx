@@ -51,4 +51,4 @@ finally:
  location.mkdir(parents=True,exist_ok=True)
  if a.engine=='kuzu':
   (location/'ipc-operation-timings.json').write_text(json.dumps({'scope':'Kuzu Python execute through full result drain, semantic validation and close; compare API/IPC overhead disclosed','operations':records},indent=2)+'\n')
- (location/'elapsed.json').write_text(json.dumps({'wall_seconds':time.monotonic()-begin,'maxrss_kib':__import__('resource').getrusage(__import__('resource').RUSAGE_SELF).ru_maxrss,'seed':a.seed},indent=2)+'\n')
+ (location/'elapsed.json').write_text(json.dumps({'wall_seconds':time.monotonic()-begin,'maxrss_kib':__import__('resource').getrusage(__import__('resource').RUSAGE_SELF if a.engine=='kuzu' else __import__('resource').RUSAGE_CHILDREN).ru_maxrss,'rss_scope':'Kuzu in-process driver and engine' if a.engine=='kuzu' else 'native worker child peak; one worker per isolated case','driver_maxrss_kib':__import__('resource').getrusage(__import__('resource').RUSAGE_SELF).ru_maxrss,'seed':a.seed},indent=2)+'\n')

@@ -1,0 +1,14 @@
+{
+  "pid": 156379,
+  "resume_after_event": {
+    "event": "result",
+    "workload": "label_scan_filter",
+    "iteration": 0,
+    "value": 12500
+  },
+  "resume_monotonic_ns": 138097804660105,
+  "pause_reason": "final_result",
+  "pause_monotonic_ns": 138104180994735,
+  "pause_delivered": true,
+  "cleanup_may_be_included": false
+}

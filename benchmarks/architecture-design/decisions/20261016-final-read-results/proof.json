@@ -1,0 +1,20 @@
+{
+  "status": "read_matrix_complete_full_family_matrix_and_attribution_pending",
+  "score_change": 0,
+  "registered_workloads": 23,
+  "comparable_workloads": 20,
+  "independent_profile_processes": 24,
+  "process_workload_distributions": 120,
+  "valid_owning_output_samples": 1200,
+  "rounds": 3,
+  "warmups_per_workload_process": 3,
+  "measurements_per_workload_process": 10,
+  "all_successful_result_oracles_passed": true,
+  "control": "Both complete native control inputs unavailable: medium preparation timeout, holdout format rejection. No control gain or latency ratio.",
+  "indexed": "Native whole indexed profile rejected after default 30000ms query timeout; Kuzu capability-only setup failure preserved and corrected separate witness proves secondary scalar indexes unsupported. These three workload rows remain unmeasurable, including the unmeasured primary-key profile variant; no false unsupported-primary-key claim.",
+  "kuzu_goal": "Not achieved in these supported read workloads. Median-of-independent-process P50 ratios retained in report, with per-process min/max and ten-sample P95 descriptive only.",
+  "production_source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "formal_window": "bounded-loader-v3",
+  "S0.3": "pending full declared family matrix, not accepted from reads alone",
+  "S0.4": "pending actual CPU/heap/I/O and mechanism report"
+}

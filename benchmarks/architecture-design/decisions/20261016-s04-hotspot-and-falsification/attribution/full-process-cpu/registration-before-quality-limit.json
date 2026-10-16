@@ -1,0 +1,6 @@
+{
+  "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency.",
+  "reason": "Delayed-initialization CPU reports contain only about 0.06s CPU for a multi-second active window; do not treat those fractions as complete-query evidence. Compare captured CPU with isolated child user/system usage.",
+  "formal_timing_samples_accepted": 0,
+  "budgets_or_deadlines_changed": false
+}

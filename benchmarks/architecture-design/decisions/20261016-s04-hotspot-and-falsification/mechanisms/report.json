@@ -1,0 +1,143 @@
+{
+  "scope": "mechanism falsification only, not end-to-end acceptance",
+  "independent_processes": 3,
+  "warmups": 3,
+  "samples_per_mechanism_per_process": 10,
+  "correctness": "all 4096 native property values, every filter selection and every requested sort output/order checked",
+  "sort_limit": "full sort returns all 4096 rows; Top-K returns 128. Cardinalities differ and this is not a strict end-to-end ratio.",
+  "filter_limit": "typed includes conversion; generic uses the identical already materialized source",
+  "results": {
+    "native_selected_storage": {
+      "median_process_p50_ms": 3.62371,
+      "process_p50_ms": [
+        4.236325,
+        3.517335,
+        3.62371
+      ]
+    },
+    "typed_filter_including_conversion": {
+      "median_process_p50_ms": 0.06333349999999999,
+      "process_p50_ms": [
+        0.06593199999999999,
+        0.063218,
+        0.06333349999999999
+      ]
+    },
+    "generic_filter_same_source": {
+      "median_process_p50_ms": 0.039903999999999995,
+      "process_p50_ms": [
+        0.039903999999999995,
+        0.0388425,
+        0.040164000000000005
+      ]
+    },
+    "native_full_sort_all_output": {
+      "median_process_p50_ms": 17.05245,
+      "process_p50_ms": [
+        18.32065,
+        17.05245,
+        16.729950000000002
+      ]
+    },
+    "native_topk_128_output": {
+      "median_process_p50_ms": 11.81615,
+      "process_p50_ms": [
+        12.74005,
+        11.81615,
+        11.462599999999998
+      ]
+    }
+  },
+  "processes": [
+    {
+      "round": 1,
+      "mechanism": "native_full_sort_all_output",
+      "p50_ms": 18.32065,
+      "validated_rows": 4096
+    },
+    {
+      "round": 1,
+      "mechanism": "native_topk_128_output",
+      "p50_ms": 12.74005,
+      "validated_rows": 128
+    },
+    {
+      "round": 1,
+      "mechanism": "native_selected_storage",
+      "p50_ms": 4.236325,
+      "validated_rows": 4096
+    },
+    {
+      "round": 1,
+      "mechanism": "typed_filter_including_conversion",
+      "p50_ms": 0.06593199999999999,
+      "validated_rows": 2000
+    },
+    {
+      "round": 1,
+      "mechanism": "generic_filter_same_source",
+      "p50_ms": 0.039903999999999995,
+      "validated_rows": 2000
+    },
+    {
+      "round": 2,
+      "mechanism": "native_full_sort_all_output",
+      "p50_ms": 17.05245,
+      "validated_rows": 4096
+    },
+    {
+      "round": 2,
+      "mechanism": "native_topk_128_output",
+      "p50_ms": 11.81615,
+      "validated_rows": 128
+    },
+    {
+      "round": 2,
+      "mechanism": "native_selected_storage",
+      "p50_ms": 3.517335,
+      "validated_rows": 4096
+    },
+    {
+      "round": 2,
+      "mechanism": "typed_filter_including_conversion",
+      "p50_ms": 0.063218,
+      "validated_rows": 2000
+    },
+    {
+      "round": 2,
+      "mechanism": "generic_filter_same_source",
+      "p50_ms": 0.0388425,
+      "validated_rows": 2000
+    },
+    {
+      "round": 3,
+      "mechanism": "native_full_sort_all_output",
+      "p50_ms": 16.729950000000002,
+      "validated_rows": 4096
+    },
+    {
+      "round": 3,
+      "mechanism": "native_topk_128_output",
+      "p50_ms": 11.462599999999998,
+      "validated_rows": 128
+    },
+    {
+      "round": 3,
+      "mechanism": "native_selected_storage",
+      "p50_ms": 3.62371,
+      "validated_rows": 4096
+    },
+    {
+      "round": 3,
+      "mechanism": "typed_filter_including_conversion",
+      "p50_ms": 0.06333349999999999,
+      "validated_rows": 2000
+    },
+    {
+      "round": 3,
+      "mechanism": "generic_filter_same_source",
+      "p50_ms": 0.040164000000000005,
+      "validated_rows": 2000
+    }
+  ]
+}

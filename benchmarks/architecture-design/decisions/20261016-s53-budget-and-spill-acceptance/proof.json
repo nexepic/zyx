@@ -25,5 +25,16 @@
   "performance_acceptance": "S5.5 remains pending; this is implementation/resource correctness acceptance",
   "revalidation_evidence": "../20261016-write-workspace-cache-isolation/proof.json",
   "medium_preparation": "both control/current untimed preparation timed out after 1800 seconds; no measured samples or full-medium correctness acceptance; S0.3 and S5.5 remain pending",
-  "additional_revalidation": "../20261016-control-record-cache-and-endpoint-owner/proof.json"
+  "additional_revalidation": "../20261016-control-record-cache-and-endpoint-owner/proof.json",
+  "latest_final_source_revalidation": {
+    "evidence": "../20261016-bounded-topk-default-read/proof.json",
+    "modules": 124,
+    "tests": 2628,
+    "failures": 0,
+    "full_suite": false,
+    "budget_changes": false,
+    "native_smoke_families": 13,
+    "topk_full_medium_and_holdout_oracles": "passed",
+    "remaining_performance": "S5.5 pending"
+  }
 }

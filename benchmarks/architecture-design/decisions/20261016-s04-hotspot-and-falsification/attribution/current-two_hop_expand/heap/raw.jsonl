@@ -1,0 +1,7 @@
+Creating experiment directory /workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-two_hop_expand/heap/samples.er (Process ID: 156534) ...
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":0,"latency_ms":47.6948,"scale":"medium","status":"ok","workload":"two_hop_expand"}
+{"event":"result","workload":"two_hop_expand","iteration":0,"value":25}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":1,"latency_ms":245.57,"scale":"medium","status":"ok","workload":"two_hop_expand"}
+{"event":"result","workload":"two_hop_expand","iteration":1,"value":25}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":2,"latency_ms":44.1799,"scale":"medium","status":"ok","workload":"two_hop_expand"}
+{"event":"result","workload":"two_hop_expand","iteration":2,"value":25}

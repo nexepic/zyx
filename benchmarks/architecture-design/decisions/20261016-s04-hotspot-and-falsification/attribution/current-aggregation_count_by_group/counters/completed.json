@@ -1,0 +1,7 @@
+{
+  "workload": "aggregation_count_by_group",
+  "mode": "counters",
+  "validated_results": 1,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-aggregation_count_by_group/counters",
+  "formal_timing_samples_accepted": 0
+}

@@ -1,0 +1,7 @@
+{
+  "workload": "topk_property_sort",
+  "mode": "heap",
+  "validated_results": 3,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-topk_property_sort/heap",
+  "formal_timing_samples_accepted": 0
+}

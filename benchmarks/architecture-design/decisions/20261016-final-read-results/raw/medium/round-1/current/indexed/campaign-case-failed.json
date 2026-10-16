@@ -1,0 +1,6 @@
+{
+  "status": "failed_query_timeout",
+  "original_error": "Query exceeded timeout of 30000ms",
+  "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-current.log",
+  "rule": "Retain original engine timeout; no raised limits and no accepted latency ratio for this profile."
+}

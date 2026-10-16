@@ -1,0 +1,21 @@
+{
+  "status": "preparation_failed",
+  "engine": "control",
+  "scale": "medium",
+  "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+  "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+  "dataset_sha256": {
+    "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+    "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+    "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+    "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+    "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+    "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+  },
+  "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+  "stderr": "/tmp/zyx-control-medium-input-retry.log",
+  "formal_timing_samples_accepted": 0,
+  "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+  "seed": 42,
+  "untimed_preparation_timeout_seconds": 7200
+}

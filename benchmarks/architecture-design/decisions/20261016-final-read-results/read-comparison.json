@@ -1,0 +1,1972 @@
+{
+  "aggregation": "median independent-process P50; never pool processes",
+  "cases": [
+    {
+      "scale": "holdout",
+      "profile": "retrieval",
+      "workload": "point_node_fetch_by_id",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "holdout",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "1fe8ce44be66ae23aab26ad5b22aa1d2cec19612e3b25d7e00ae3b6a40935051",
+            "dataset_sha256": {
+              "authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+              "follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+              "has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+              "posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+              "tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+              "users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+            },
+            "error": "relocatable slotted page cannot fit replacement value",
+            "stderr": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/control-preparation-stderr.txt",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio"
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 63.755700000000004,
+          "min_process_p50_ms": 63.6832,
+          "max_process_p50_ms": 73.3063,
+          "processes": {
+            "round-1": {
+              "p50_ms": 63.6832,
+              "p95_ms": 66.51725,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/current/retrieval/20261016T162516913558Z-holdout-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 63.755700000000004,
+              "p95_ms": 69.894435,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/current/retrieval/20261016T163438321217Z-holdout-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 73.3063,
+              "p95_ms": 81.588505,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/current/retrieval/20261016T164357493468Z-holdout-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.22960800561122596,
+          "min_process_p50_ms": 0.22613300825469196,
+          "max_process_p50_ms": 0.2677340089576319,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.2677340089576319,
+              "p95_ms": 0.48739970661699766,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/kuzu/retrieval/20261016T162531666831Z-holdout-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.22960800561122596,
+              "p95_ms": 0.32692384702386323,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/kuzu/retrieval/20261016T163453334125Z-holdout-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.22613300825469196,
+              "p95_ms": 0.29009558929828927,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/kuzu/retrieval/20261016T164353516997Z-holdout-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 277.67193844256303,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "holdout",
+      "profile": "scan",
+      "workload": "aggregation_count_by_group",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "holdout",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "1fe8ce44be66ae23aab26ad5b22aa1d2cec19612e3b25d7e00ae3b6a40935051",
+            "dataset_sha256": {
+              "authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+              "follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+              "has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+              "posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+              "tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+              "users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+            },
+            "error": "relocatable slotted page cannot fit replacement value",
+            "stderr": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/control-preparation-stderr.txt",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio"
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 2316.49,
+          "min_process_p50_ms": 2269.32,
+          "max_process_p50_ms": 2375.34,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2269.32,
+              "p95_ms": 2346.1784999999995,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/current/scan/20261016T162329581417Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2375.34,
+              "p95_ms": 2561.9384999999997,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/current/scan/20261016T163249913817Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2316.49,
+              "p95_ms": 2390.0789999999997,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/current/scan/20261016T164211179451Z-holdout-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 2.62224099424202,
+          "min_process_p50_ms": 2.5822625029832125,
+          "max_process_p50_ms": 2.698819007491693,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2.698819007491693,
+              "p95_ms": 3.2084219114040025,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/kuzu/scan/20261016T162512333711Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2.5822625029832125,
+              "p95_ms": 2.8490947908721864,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/kuzu/scan/20261016T163433851490Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2.62224099424202,
+              "p95_ms": 2.806408600008581,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/kuzu/scan/20261016T164206954361Z-holdout-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 883.4008792809678,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "holdout",
+      "profile": "scan",
+      "workload": "label_scan_filter",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "holdout",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "1fe8ce44be66ae23aab26ad5b22aa1d2cec19612e3b25d7e00ae3b6a40935051",
+            "dataset_sha256": {
+              "authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+              "follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+              "has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+              "posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+              "tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+              "users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+            },
+            "error": "relocatable slotted page cannot fit replacement value",
+            "stderr": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/control-preparation-stderr.txt",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio"
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 2210.2349999999997,
+          "min_process_p50_ms": 2198.49,
+          "max_process_p50_ms": 2238.575,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2210.2349999999997,
+              "p95_ms": 2390.067,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/current/scan/20261016T162329581417Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2198.49,
+              "p95_ms": 2370.028,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/current/scan/20261016T163249913817Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2238.575,
+              "p95_ms": 2304.288,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/current/scan/20261016T164211179451Z-holdout-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 1.667992997681722,
+          "min_process_p50_ms": 1.5765685093356296,
+          "max_process_p50_ms": 1.7060885002138093,
+          "processes": {
+            "round-1": {
+              "p50_ms": 1.667992997681722,
+              "p95_ms": 1.9059366357396352,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/kuzu/scan/20261016T162512333711Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 1.5765685093356296,
+              "p95_ms": 1.7539421518449672,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/kuzu/scan/20261016T163433851490Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 1.7060885002138093,
+              "p95_ms": 1.9231924452469684,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/kuzu/scan/20261016T164206954361Z-holdout-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 1325.0864980080362,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "holdout",
+      "profile": "scan",
+      "workload": "topk_property_sort",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "holdout",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "1fe8ce44be66ae23aab26ad5b22aa1d2cec19612e3b25d7e00ae3b6a40935051",
+            "dataset_sha256": {
+              "authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+              "follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+              "has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+              "posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+              "tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+              "users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+            },
+            "error": "relocatable slotted page cannot fit replacement value",
+            "stderr": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/control-preparation-stderr.txt",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio"
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 2383.02,
+          "min_process_p50_ms": 2356.0299999999997,
+          "max_process_p50_ms": 2388.54,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2388.54,
+              "p95_ms": 2675.2789999999995,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/current/scan/20261016T162329581417Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2383.02,
+              "p95_ms": 2521.181,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/current/scan/20261016T163249913817Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2356.0299999999997,
+              "p95_ms": 2509.242,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/current/scan/20261016T164211179451Z-holdout-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 3.3135530102299526,
+          "min_process_p50_ms": 3.2270349911414087,
+          "max_process_p50_ms": 3.350256505655125,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3.350256505655125,
+              "p95_ms": 4.933670652098953,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/kuzu/scan/20261016T162512333711Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3.2270349911414087,
+              "p95_ms": 3.748944400285836,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/kuzu/scan/20261016T163433851490Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3.3135530102299526,
+              "p95_ms": 3.619618897209875,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/kuzu/scan/20261016T164206954361Z-holdout-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 719.1736461263446,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "holdout",
+      "profile": "scan",
+      "workload": "two_hop_expand",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "holdout",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "1fe8ce44be66ae23aab26ad5b22aa1d2cec19612e3b25d7e00ae3b6a40935051",
+            "dataset_sha256": {
+              "authored.csv": "bde5160a675b7da25a28bb2f8606dda1cba1f85cc86b85b8ca40afa4e07adc8e",
+              "follows.csv": "8116ac5d8ebd3296678e9a870a43f0634b8f9244b3ad83ada2ddc901e4e6f999",
+              "has_tag.csv": "d6b95bd701f14a48824ff3bc3934c8f1de2b9cc6304723c6262f63641b6694a9",
+              "posts.csv": "40c16f8c6b5727e79510804d632aaf35dab92a9accd2ef48ebe3d8b892ea4b19",
+              "tags.csv": "a532b1faec4d3d35174673c453d20c42b5de1de8b85ee1bfab88fd8180828b0b",
+              "users.csv": "b9ddc85266b433766bab0d5ead8bdd369350ecae275b7a454b73e6c5882e7e41"
+            },
+            "error": "relocatable slotted page cannot fit replacement value",
+            "stderr": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/control-preparation-stderr.txt",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio"
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 32.91315,
+          "min_process_p50_ms": 32.89405,
+          "max_process_p50_ms": 33.3233,
+          "processes": {
+            "round-1": {
+              "p50_ms": 32.91315,
+              "p95_ms": 37.982049999999994,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/current/scan/20261016T162329581417Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 33.3233,
+              "p95_ms": 34.47453,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/current/scan/20261016T163249913817Z-holdout-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 32.89405,
+              "p95_ms": 34.380635,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/current/scan/20261016T164211179451Z-holdout-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.8256539877038449,
+          "min_process_p50_ms": 0.8187940111383796,
+          "max_process_p50_ms": 0.8392589952563867,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.8392589952563867,
+              "p95_ms": 0.933348000398837,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-1/kuzu/scan/20261016T162512333711Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.8187940111383796,
+              "p95_ms": 0.9503028413746505,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-2/kuzu/scan/20261016T163433851490Z-holdout-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.8256539877038449,
+              "p95_ms": 0.925432948861271,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/holdout/round-3/kuzu/scan/20261016T164206954361Z-holdout-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 39.86312727869446,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "indexed",
+      "workload": "point_lookup_indexed",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed_query_timeout",
+              "original_error": "Query exceeded timeout of 30000ms",
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-current.log",
+              "rule": "Retain original engine timeout; no raised limits and no accepted latency ratio for this profile."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        },
+        "kuzu": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed",
+              "returncode": 1,
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-kuzu.log",
+              "rule": "Preserve exact process output and original engine failure. No successful profile process or latency ratio inferred; continue independent scenarios."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": null,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "indexed",
+      "workload": "property_equality_indexed",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed_query_timeout",
+              "original_error": "Query exceeded timeout of 30000ms",
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-current.log",
+              "rule": "Retain original engine timeout; no raised limits and no accepted latency ratio for this profile."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        },
+        "kuzu": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed",
+              "returncode": 1,
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-kuzu.log",
+              "rule": "Preserve exact process output and original engine failure. No successful profile process or latency ratio inferred; continue independent scenarios."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": null,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "indexed",
+      "workload": "property_range_indexed",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed_query_timeout",
+              "original_error": "Query exceeded timeout of 30000ms",
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-current.log",
+              "rule": "Retain original engine timeout; no raised limits and no accepted latency ratio for this profile."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        },
+        "kuzu": {
+          "status": "failed_or_inconclusive",
+          "cases": [
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            },
+            {
+              "status": "failed",
+              "returncode": 1,
+              "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-kuzu.log",
+              "rule": "Preserve exact process output and original engine failure. No successful profile process or latency ratio inferred; continue independent scenarios."
+            },
+            {
+              "status": "unmeasurable_previous_failure",
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/indexed/campaign-case-failed.json",
+              "rule": "Same frozen binary and deterministic profile; no successful process or latency ratio inferred."
+            }
+          ]
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": null,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "retrieval",
+      "workload": "batch_node_fetch_100",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 41.79185,
+          "min_process_p50_ms": 36.7238,
+          "max_process_p50_ms": 42.46615,
+          "processes": {
+            "round-1": {
+              "p50_ms": 36.7238,
+              "p95_ms": 37.213875,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/retrieval/20261016T162305784816Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 41.79185,
+              "p95_ms": 44.12337,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/retrieval/20261016T163224613072Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 42.46615,
+              "p95_ms": 46.26723,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/retrieval/20261016T164146522939Z-medium-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.48467799206264317,
+          "min_process_p50_ms": 0.4829605022678152,
+          "max_process_p50_ms": 0.5003654950996861,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.5003654950996861,
+              "p95_ms": 0.5883638936211355,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/retrieval/20261016T164413025465Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.48467799206264317,
+              "p95_ms": 0.6614476500544695,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/retrieval/20261016T163245192173Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.4829605022678152,
+              "p95_ms": 0.7317039897316131,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 86.22601125779717,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "retrieval",
+      "workload": "one_hop_fetch_neighbor_ids",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 36.68495,
+          "min_process_p50_ms": 33.570499999999996,
+          "max_process_p50_ms": 37.284850000000006,
+          "processes": {
+            "round-1": {
+              "p50_ms": 33.570499999999996,
+              "p95_ms": 33.765445,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/retrieval/20261016T162305784816Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 37.284850000000006,
+              "p95_ms": 44.665634999999995,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/retrieval/20261016T163224613072Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 36.68495,
+              "p95_ms": 38.572610000000005,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/retrieval/20261016T164146522939Z-medium-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.6208484992384911,
+          "min_process_p50_ms": 0.5419520020950586,
+          "max_process_p50_ms": 0.6825135060353205,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.6208484992384911,
+              "p95_ms": 0.8110797469271346,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/retrieval/20261016T164413025465Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.6825135060353205,
+              "p95_ms": 0.977776743820868,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/retrieval/20261016T163245192173Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.5419520020950586,
+              "p95_ms": 0.5675917986081913,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 59.088408919400386,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "retrieval",
+      "workload": "one_hop_fetch_neighbor_records",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 57.733,
+          "min_process_p50_ms": 56.78005,
+          "max_process_p50_ms": 60.185,
+          "processes": {
+            "round-1": {
+              "p50_ms": 56.78005,
+              "p95_ms": 59.396365,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/retrieval/20261016T162305784816Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 60.185,
+              "p95_ms": 67.35003999999999,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/retrieval/20261016T163224613072Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 57.733,
+              "p95_ms": 65.42739,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/retrieval/20261016T164146522939Z-medium-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.7527770067099482,
+          "min_process_p50_ms": 0.693594483891502,
+          "max_process_p50_ms": 0.763762989663519,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.7527770067099482,
+              "p95_ms": 0.8495536458212882,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/retrieval/20261016T164413025465Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.693594483891502,
+              "p95_ms": 0.8240944123826921,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/retrieval/20261016T163245192173Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.763762989663519,
+              "p95_ms": 0.8462836412945762,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 76.6933626896033,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "retrieval",
+      "workload": "point_edge_fetch_by_endpoints",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 42.8444,
+          "min_process_p50_ms": 40.89655,
+          "max_process_p50_ms": 44.037400000000005,
+          "processes": {
+            "round-1": {
+              "p50_ms": 40.89655,
+              "p95_ms": 45.276999999999994,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/retrieval/20261016T162305784816Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 42.8444,
+              "p95_ms": 48.454845,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/retrieval/20261016T163224613072Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 44.037400000000005,
+              "p95_ms": 51.97515,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/retrieval/20261016T164146522939Z-medium-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.4494960157899186,
+          "min_process_p50_ms": 0.4121810052311048,
+          "max_process_p50_ms": 0.45247549132909626,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.45247549132909626,
+              "p95_ms": 0.6037978033418767,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/retrieval/20261016T164413025465Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.4121810052311048,
+              "p95_ms": 0.44832340645371,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/retrieval/20261016T163245192173Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.4494960157899186,
+              "p95_ms": 0.6070855422876773,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 95.31652894566307,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "retrieval",
+      "workload": "point_node_fetch_by_id",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 65.21025,
+          "min_process_p50_ms": 64.25745,
+          "max_process_p50_ms": 68.61805,
+          "processes": {
+            "round-1": {
+              "p50_ms": 64.25745,
+              "p95_ms": 76.253485,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/retrieval/20261016T162305784816Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 68.61805,
+              "p95_ms": 74.34369,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/retrieval/20261016T163224613072Z-medium-retrieval-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 65.21025,
+              "p95_ms": 72.081815,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/retrieval/20261016T164146522939Z-medium-retrieval-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.24490550276823342,
+          "min_process_p50_ms": 0.2230130194220692,
+          "max_process_p50_ms": 0.24907650367822498,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.24907650367822498,
+              "p95_ms": 0.30287624103948474,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/retrieval/20261016T164413025465Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.2230130194220692,
+              "p95_ms": 0.24625424266560003,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/retrieval/20261016T163245192173Z-medium-retrieval-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.24490550276823342,
+              "p95_ms": 0.5758250961662266,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 266.2669856859517,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "aggregation_count_by_group",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 3203.31,
+          "min_process_p50_ms": 3141.455,
+          "max_process_p50_ms": 3236.865,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3203.31,
+              "p95_ms": 3307.844,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3236.865,
+              "p95_ms": 3330.7765,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3141.455,
+              "p95_ms": 3270.4915,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 3.6294614983489737,
+          "min_process_p50_ms": 3.4160229988629,
+          "max_process_p50_ms": 3.650058002676815,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3.4160229988629,
+              "p95_ms": 3.59670405741781,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3.6294614983489737,
+              "p95_ms": 4.992967200814745,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3.650058002676815,
+              "p95_ms": 3.980101234628819,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 882.5854748582323,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "aggregation_group_by",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 3216.99,
+          "min_process_p50_ms": 3214.6499999999996,
+          "max_process_p50_ms": 3237.625,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3214.6499999999996,
+              "p95_ms": 3344.796,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3237.625,
+              "p95_ms": 3318.54,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3216.99,
+              "p95_ms": 3280.3585,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 3.3439520047977567,
+          "min_process_p50_ms": 3.113993996521458,
+          "max_process_p50_ms": 3.4386820043437183,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3.113993996521458,
+              "p95_ms": 3.3402249959181063,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3.3439520047977567,
+              "p95_ms": 3.930366646090988,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3.4386820043437183,
+              "p95_ms": 8.55710969772189,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 962.0323483663649,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "all_nodes_property_filter",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 5961.120000000001,
+          "min_process_p50_ms": 5932.645,
+          "max_process_p50_ms": 6000.695,
+          "processes": {
+            "round-1": {
+              "p50_ms": 5961.120000000001,
+              "p95_ms": 6165.8005,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 6000.695,
+              "p95_ms": 6282.946,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 5932.645,
+              "p95_ms": 6132.771000000001,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.8997980039566755,
+          "min_process_p50_ms": 0.8850565063767135,
+          "max_process_p50_ms": 0.9042995079653338,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.9042995079653338,
+              "p95_ms": 1.0909300021012314,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.8850565063767135,
+              "p95_ms": 1.1989940583589485,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.8997980039566755,
+              "p95_ms": 1.0150710862944834,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 6624.953571565184,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "label_multi_property_filter",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 3106.3500000000004,
+          "min_process_p50_ms": 3065.975,
+          "max_process_p50_ms": 3147.255,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3106.3500000000004,
+              "p95_ms": 3289.6295,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3147.255,
+              "p95_ms": 3231.4519999999998,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3065.975,
+              "p95_ms": 3162.0785,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 2.354591997573152,
+          "min_process_p50_ms": 2.222086986876093,
+          "max_process_p50_ms": 2.3763649951433763,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2.222086986876093,
+              "p95_ms": 2.3811632141587324,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2.354591997573152,
+              "p95_ms": 2.6470741475350223,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2.3763649951433763,
+              "p95_ms": 2.648625386063941,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 1319.2731493191498,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "label_scan_filter",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 3055.525,
+          "min_process_p50_ms": 2994.215,
+          "max_process_p50_ms": 3073.81,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3073.81,
+              "p95_ms": 3228.8174999999997,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3055.525,
+              "p95_ms": 3141.881,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2994.215,
+              "p95_ms": 3127.811,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 2.1421494893729687,
+          "min_process_p50_ms": 2.035247496678494,
+          "max_process_p50_ms": 2.2992659942246974,
+          "processes": {
+            "round-1": {
+              "p50_ms": 2.035247496678494,
+              "p95_ms": 2.0522280014120042,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 2.2992659942246974,
+              "p95_ms": 3.553014887438621,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 2.1421494893729687,
+              "p95_ms": 2.39397803961765,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 1426.3827128583762,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "one_hop_expand",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 21.1361,
+          "min_process_p50_ms": 21.0226,
+          "max_process_p50_ms": 22.08905,
+          "processes": {
+            "round-1": {
+              "p50_ms": 22.08905,
+              "p95_ms": 25.072174999999998,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 21.1361,
+              "p95_ms": 22.132414999999998,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 21.0226,
+              "p95_ms": 22.680635,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.389121996704489,
+          "min_process_p50_ms": 0.36899250699207187,
+          "max_process_p50_ms": 0.4372830007923767,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.389121996704489,
+              "p95_ms": 0.45812376338290045,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.36899250699207187,
+              "p95_ms": 0.4236333043081686,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.4372830007923767,
+              "p95_ms": 0.5653517000610008,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 54.31741247989995,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "relationship_property_filter",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 7039.8099999999995,
+          "min_process_p50_ms": 7034.645,
+          "max_process_p50_ms": 7069.4349999999995,
+          "processes": {
+            "round-1": {
+              "p50_ms": 7039.8099999999995,
+              "p95_ms": 7219.3285,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 7069.4349999999995,
+              "p95_ms": 7341.4039999999995,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 7034.645,
+              "p95_ms": 7604.9265,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 11.240968990023248,
+          "min_process_p50_ms": 10.576131491689011,
+          "max_process_p50_ms": 11.51269450201653,
+          "processes": {
+            "round-1": {
+              "p50_ms": 11.240968990023248,
+              "p95_ms": 12.02523696119897,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 10.576131491689011,
+              "p95_ms": 12.551355591858735,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 11.51269450201653,
+              "p95_ms": 13.410728899179958,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 626.263626049327,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "relationship_type_scan",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 659.0595000000001,
+          "min_process_p50_ms": 649.0174999999999,
+          "max_process_p50_ms": 661.3025,
+          "processes": {
+            "round-1": {
+              "p50_ms": 661.3025,
+              "p95_ms": 733.8147499999999,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 659.0595000000001,
+              "p95_ms": 681.3999,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 649.0174999999999,
+              "p95_ms": 767.3948,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 6.24937898828648,
+          "min_process_p50_ms": 6.06867900933139,
+          "max_process_p50_ms": 6.311971999821253,
+          "processes": {
+            "round-1": {
+              "p50_ms": 6.06867900933139,
+              "p95_ms": 6.553820600674953,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 6.24937898828648,
+              "p95_ms": 7.335610155132599,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 6.311971999821253,
+              "p95_ms": 6.497745563683566,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 105.45999870312039,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "topk_property_sort",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 3303.2200000000003,
+          "min_process_p50_ms": 3267.41,
+          "max_process_p50_ms": 3328.27,
+          "processes": {
+            "round-1": {
+              "p50_ms": 3267.41,
+              "p95_ms": 3379.5025,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 3328.27,
+              "p95_ms": 3445.9805,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 3303.2200000000003,
+              "p95_ms": 3502.9559999999997,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 4.015780490590259,
+          "min_process_p50_ms": 4.002800502348691,
+          "max_process_p50_ms": 4.265096504241228,
+          "processes": {
+            "round-1": {
+              "p50_ms": 4.002800502348691,
+              "p95_ms": 4.497015387460123,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 4.265096504241228,
+              "p95_ms": 4.953373447642661,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 4.015780490590259,
+              "p95_ms": 4.747093592595775,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 822.559900308315,
+      "primary": true,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    },
+    {
+      "scale": "medium",
+      "profile": "scan",
+      "workload": "two_hop_expand",
+      "engines": {
+        "control": {
+          "status": "preparation_failed",
+          "failure": {
+            "status": "preparation_failed",
+            "engine": "control",
+            "scale": "medium",
+            "consumer_binary_sha256": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+            "database_sha256": "6f0ad9c31e0ede21beddc6cbbae58540cab39d0b52c703a3bc7cbdeee93d69c1",
+            "dataset_sha256": {
+              "tags.csv": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf",
+              "authored.csv": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716",
+              "posts.csv": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46",
+              "follows.csv": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747",
+              "users.csv": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67",
+              "has_tag.csv": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+            },
+            "error": "Input preparation exceeded its independently declared 7200-second untimed timeout; no performance samples accepted.",
+            "stderr": "/tmp/zyx-control-medium-input-retry.log",
+            "formal_timing_samples_accepted": 0,
+            "comparison_rule": "failed frozen control import; report failure, never substitute current engine or infer a latency ratio",
+            "seed": 42,
+            "untimed_preparation_timeout_seconds": 7200
+          }
+        },
+        "current": {
+          "median_process_p50_ms": 27.739449999999998,
+          "min_process_p50_ms": 26.89745,
+          "max_process_p50_ms": 31.17035,
+          "processes": {
+            "round-1": {
+              "p50_ms": 26.89745,
+              "p95_ms": 30.545549999999995,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/current/scan/20261016T161320605561Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 31.17035,
+              "p95_ms": 37.59759999999999,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/current/scan/20261016T162536006394Z-medium-scan-zyx/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 27.739449999999998,
+              "p95_ms": 37.98752999999999,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/current/scan/20261016T163502638861Z-medium-scan-zyx/raw.jsonl"
+            }
+          }
+        },
+        "kuzu": {
+          "median_process_p50_ms": 0.873785000294447,
+          "min_process_p50_ms": 0.8120995189528912,
+          "max_process_p50_ms": 0.8917264931369573,
+          "processes": {
+            "round-1": {
+              "p50_ms": 0.8120995189528912,
+              "p95_ms": 0.8425527514191344,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-1/kuzu/scan/20261016T161959764862Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-2": {
+              "p50_ms": 0.873785000294447,
+              "p95_ms": 1.3281746927532359,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-2/kuzu/scan/20261016T163219028096Z-medium-scan-kuzu/raw.jsonl"
+            },
+            "round-3": {
+              "p50_ms": 0.8917264931369573,
+              "p95_ms": 1.2350511489785274,
+              "samples": 10,
+              "source": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/scan/20261016T163457258480Z-medium-scan-kuzu/raw.jsonl"
+            }
+          }
+        }
+      },
+      "current_p50_reduction_vs_control": null,
+      "control_p50_range_fraction": null,
+      "current_over_kuzu_p50": 31.746310580580342,
+      "primary": false,
+      "requires_preregistered_targeted_sampling": false,
+      "p95": "ten-sample descriptive only; no tail protection acceptance"
+    }
+  ]
+}

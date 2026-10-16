@@ -1,0 +1,10 @@
+{
+  "workload": "two_hop_expand",
+  "sampled_cpu_seconds": 0.063,
+  "child_user_seconds": 5.716994,
+  "child_system_seconds": 1.0930010000000001,
+  "wall_seconds": 7.337200907000806,
+  "sampled_over_child_total": 0.00925110811388261,
+  "validated_results": 100,
+  "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+}

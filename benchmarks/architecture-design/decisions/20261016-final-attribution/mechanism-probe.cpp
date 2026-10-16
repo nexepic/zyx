@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
   std::ranges::sort(expected,[&](size_t a,size_t b){return (a*7919)%count<(b*7919)%count;});
   const PropertyValue lower(int64_t{1000}),upper(int64_t{3000});
   const std::array<mechanism::ColumnPredicate,2> conditions{{{0,mechanism::ColumnPredicateOp::CPO_GREATER_EQUAL,&lower},{0,mechanism::ColumnPredicateOp::CPO_LESS,&upper}}};
-  LogicalPlanReadRuntimeBounds bounds;bounds.maximum_node_page_records=256;bounds.maximum_metadata_pages_per_node_page=256;bounds.maximum_property_entries=64;bounds.maximum_node_records=count+1;bounds.maximum_rows=count+1;bounds.maximum_materialized_bytes=64U*1024U*1024U;
+  LogicalPlanReadRuntimeBounds bounds;bounds.maximum_edges_per_node=1;bounds.maximum_edge_records=1;bounds.maximum_adjacency_page_records=1;bounds.maximum_distinct_rows=count+1;bounds.maximum_candidate_bytes=4U*1024U*1024U;bounds.maximum_node_page_records=256;bounds.maximum_metadata_pages_per_node_page=256;bounds.maximum_property_entries=64;bounds.maximum_node_records=count+1;bounds.maximum_rows=count+1;bounds.maximum_materialized_bytes=64U*1024U*1024U;
   LogicalPlanReadRuntime runtime(*backend);
   const auto plan=[&](bool topk) -> std::unique_ptr<logical::LogicalOperator> {
    auto rank=std::make_shared<expressions::VariableReferenceExpression>("n","rank");

@@ -1,0 +1,7 @@
+{
+  "workload": "topk_property_sort",
+  "mode": "counters",
+  "validated_results": 1,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-topk_property_sort/counters",
+  "formal_timing_samples_accepted": 0
+}

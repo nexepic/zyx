@@ -1,0 +1,7 @@
+{
+  "workload": "point_node_fetch_by_id",
+  "mode": "heap",
+  "validated_results": 3,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-point_node_fetch_by_id/heap",
+  "formal_timing_samples_accepted": 0
+}

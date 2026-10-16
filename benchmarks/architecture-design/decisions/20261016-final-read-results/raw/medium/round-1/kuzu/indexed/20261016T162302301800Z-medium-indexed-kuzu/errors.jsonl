@@ -1,0 +1,1 @@
+{"database": "kuzu", "equivalent_mode": "cypher", "error": "Buffer manager exception: Mmap for size 8796093022208 failed.", "event": "error", "scale": "medium", "status": "failed", "workload": "run_all"}

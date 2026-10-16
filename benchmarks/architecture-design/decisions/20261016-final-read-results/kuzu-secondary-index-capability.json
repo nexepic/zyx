@@ -1,0 +1,12 @@
+{
+  "engine": "kuzu",
+  "version": "0.11.3",
+  "secondary_property_index_supported": false,
+  "primary_key_lookup": "supported, separate from scalar secondary indexes",
+  "limits": {
+    "buffer_pool_bytes": 67108864,
+    "max_database_mapping_bytes": 2147483648,
+    "threads": 1
+  },
+  "formal_timing_samples": 0
+}

@@ -1,0 +1,7 @@
+{
+  "workload": "label_scan_filter",
+  "mode": "cpu",
+  "validated_results": 3,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-label_scan_filter/cpu",
+  "formal_timing_samples_accepted": 0
+}

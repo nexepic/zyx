@@ -1,0 +1,7 @@
+{
+  "workload": "two_hop_expand",
+  "mode": "cpu",
+  "validated_results": 100,
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-two_hop_expand/cpu",
+  "formal_timing_samples_accepted": 0
+}

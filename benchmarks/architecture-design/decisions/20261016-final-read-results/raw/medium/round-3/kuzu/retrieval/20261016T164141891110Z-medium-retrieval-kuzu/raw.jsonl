@@ -1,0 +1,102 @@
+{"benchmark_schema_version": 1, "created_at": "2026-10-16T16:41:43.865976+00:00", "databases": ["kuzu"], "dataset_manifest": {"counts": {"authored": 120000, "follows": 500000, "has_tag": 240000, "posts": 120000, "tags": 5000, "users": 100000}, "files": {"authored.csv": {"bytes": 3240016, "sha256": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716"}, "follows.csv": {"bytes": 13500016, "sha256": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747"}, "has_tag.csv": {"bytes": 6240016, "sha256": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"}, "posts.csv": {"bytes": 4054761, "sha256": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46"}, "tags.csv": {"bytes": 83899, "sha256": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf"}, "users.csv": {"bytes": 2977829, "sha256": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67"}}, "scale": "medium", "schema": {"Post": {"created_at": "int64", "id": "string", "score": "double"}, "Tag": {"id": "string", "rank": "int64"}, "User": {"age": "int64", "country": "string", "id": "string", "score": "double"}, "relationships": {"AUTHORED": "weight:int64", "FOLLOWS": "weight:int64", "HAS_TAG": "weight:int64"}}, "seed": 42, "topology": "directed ring; each outgoing hop is a distinct edge; self-loops/multiplicity retained"}, "event": "environment", "execution_mode": "warm", "git_branch": "work", "git_commit": "773618012e760ee430369fda5208f20516c31813", "git_dirty": false, "iterations": 10, "keep_db_artifacts": false, "machine": "x86_64", "measurement_semantics": {"execution_contract": "Measure operations on one loaded/open database handle after the configured query warmup. This is a steady-state latency view.", "execution_mode": "warm", "profile": "retrieval", "profile_contract": {"durability_contract": "not_applicable", "latency_contract": "materialized_row_projection_latency", "phase_contract": "Retrieval workloads return and materialize projected scalar fields instead of replacing data access with count-only aggregation."}, "workload_isolation": {"cold-ish": "fresh loaded adapter/database per measured non-load workload sample", "load_nodes_edges": "fresh adapter/database per warmup and measured load sample", "mutating_warm_opened": "fresh loaded adapter/database per mutating warmup and measured sample, excluding load/open from measured latency"}}, "mutating_workloads": [], "platform": "Linux-6.18.44-x86_64-with-glibc2.41", "profile": "retrieval", "python": "3.12.14", "required_workloads": ["point_node_fetch_by_id", "point_edge_fetch_by_endpoints", "batch_node_fetch_100", "one_hop_fetch_neighbor_ids", "one_hop_fetch_neighbor_records"], "result_observation": "full_rows_retained_inside_timing_serialized_afterward", "scale": "medium", "seed": 42, "system": "Linux", "thread_contract": "fixed 1 execution thread(s)", "threads": 1, "warmup": 3, "zyx_compare_bench": "/workspace/zyx/buildDir_perf_control/zyx-compare-bench", "zyx_emit_profile": false}
+{"database": "kuzu", "event": "result", "iteration": 0, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 1, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 2, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 3, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 4, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 5, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 6, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 7, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 8, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 9, "value": 1, "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "event": "result", "iteration": 0, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 1, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 2, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 3, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 4, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 5, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 6, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 7, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 8, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 9, "value": 1, "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "event": "result", "iteration": 0, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 1, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 2, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 3, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 4, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 5, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 6, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 7, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 8, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 9, "value": 100, "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "event": "result", "iteration": 0, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 1, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 2, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 3, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 4, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 5, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 6, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 7, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 8, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 9, "value": 5, "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "event": "result", "iteration": 0, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 1, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 2, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 3, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 4, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 5, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 6, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 7, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 8, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "result", "iteration": 9, "value": 5, "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "event": "artifact_cleanup", "removed": ["/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/reads/medium/round-3/kuzu/retrieval/20261016T164141891110Z-medium-retrieval-kuzu/kuzu.db"], "scale": "medium"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 0, "latency_ms": 0.7418399909511209, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 1, "latency_ms": 0.37291800254024565, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 2, "latency_ms": 0.22965800599195063, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 3, "latency_ms": 0.2173690008930862, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 4, "latency_ms": 0.2601529995445162, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 5, "latency_ms": 0.2270539989694953, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 6, "latency_ms": 0.21753000328317285, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 7, "latency_ms": 0.29287999495863914, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 8, "latency_ms": 0.2820549998432398, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 9, "latency_ms": 0.22154598264023662, "scale": "medium", "status": "ok", "workload": "point_node_fetch_by_id"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 0, "latency_ms": 0.4811380058526993, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 1, "latency_ms": 0.4604470159392804, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 2, "latency_ms": 0.6809309998061508, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 3, "latency_ms": 0.4385450156405568, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 4, "latency_ms": 0.4728160274680704, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 5, "latency_ms": 0.4382439947221428, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 6, "latency_ms": 0.3958730085287243, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 7, "latency_ms": 0.41743399924598634, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 8, "latency_ms": 0.3907450009137392, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 9, "latency_ms": 0.5168299830984324, "scale": "medium", "status": "ok", "workload": "point_edge_fetch_by_endpoints"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 0, "latency_ms": 0.47959599760361016, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 1, "latency_ms": 0.4970110021531582, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 2, "latency_ms": 0.4863250069320202, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 3, "latency_ms": 0.45039301039651036, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 4, "latency_ms": 0.9032079833559692, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 5, "latency_ms": 0.5220879975240678, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 6, "latency_ms": 0.46357198152691126, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 7, "latency_ms": 0.4766309866681695, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 8, "latency_ms": 0.4488999838940799, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 9, "latency_ms": 0.4965499974787235, "scale": "medium", "status": "ok", "workload": "batch_node_fetch_100"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 0, "latency_ms": 0.5333440203685313, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 1, "latency_ms": 0.5470440082717687, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 2, "latency_ms": 0.5756359896622598, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 3, "latency_ms": 0.5573089874815196, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 4, "latency_ms": 0.5193440010771155, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 5, "latency_ms": 0.5577600095421076, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 6, "latency_ms": 0.548787007573992, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 7, "latency_ms": 0.5200750019866973, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 8, "latency_ms": 0.5368599959183484, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 9, "latency_ms": 0.525092997122556, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_ids"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 0, "latency_ms": 0.8194649999495596, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 1, "latency_ms": 0.6984669889789075, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 2, "latency_ms": 0.6776670052204281, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 3, "latency_ms": 0.7644939760211855, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 4, "latency_ms": 0.6936599966138601, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 5, "latency_ms": 0.8373720047529787, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 6, "latency_ms": 0.6861090078018606, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 7, "latency_ms": 0.853574980283156, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 8, "latency_ms": 0.8339869964402169, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
+{"database": "kuzu", "equivalent_mode": "cypher", "event": "sample", "iteration": 9, "latency_ms": 0.7630320033058524, "scale": "medium", "status": "ok", "workload": "one_hop_fetch_neighbor_records"}
