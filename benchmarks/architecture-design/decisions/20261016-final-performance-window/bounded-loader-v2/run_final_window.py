@@ -78,14 +78,20 @@ if __name__=='__main__':
   fixtures={}
   for scale in ['medium','holdout']:
    for engine in ['control','current']:
-    path=PREPARED/scale/f'{engine}.zyx';manifest=json.loads(Path(str(path)+'.json').read_text())
+    path=PREPARED/scale/f'{engine}.zyx'
     binary=CONTROL/'zyx-compare-bench-bounded' if engine=='control' else CURRENT/'zyx-compare-bench'
+    failure=PREPARED/scale/f'{engine}-preparation-failure.json'
+    if failure.exists():
+     assert engine=='control', 'current preparation must succeed before final timing'
+     manifest=json.loads(failure.read_text());assert manifest['status']=='preparation_failed' and manifest['formal_timing_samples_accepted']==0
+    else:manifest=json.loads(Path(str(path)+'.json').read_text())
     assert manifest['consumer_binary_sha256']==digest(binary) and manifest['database_sha256']==digest(path)
     fixtures[str(path)]=manifest
   OUT.mkdir(exist_ok=False)
   binaries=[CONTROL/'zyx-compare-bench-bounded',CONTROL/'zyx-workload-contract-worker',CURRENT/'zyx-compare-bench',CURRENT/'zyx-workload-contract-worker']
   payload={'window':'20261016-final-bounded-loader-v2','continuation_reason':'v1 stopped at dataset preparation; prior samples excluded after matched bounded-loader and production correctness fixes','preparation_transaction_rows':1000,'native_read_process_scope':'one dataset preparation per independent profile process, exact selected query list; each query retains three warmups and ten owning-output samples','status':'registered_before_measurement','orders':[['control','current','kuzu'],['current','kuzu','control'],['kuzu','control','current']],'rounds':3,'warmups':3,'samples':10,'tail_sensitive_samples_per_process':1000,'primary_gate_p50_reduction':0.10,'protection_regression_limit':0.05,'stop_minutes_per_case':30,'extended_sampling':'at most two independent 100-sample processes when preregistered uncertainty rule applies','resources':{'affinity':'one allowed CPU','address_space_bytes':6*1024**3,'per_file_bytes':2*1024**3,'kuzu_pool_bytes':64*1024**2,'kuzu_mapping_bytes':2*1024**3,'threads_per_query':1,'native_query_materialization_bytes':64*1024**2,'durability':'default sync and acknowledgements; never disabled','os_cache':'warm; no cold-cache claim'},'resource_notes':['Per-file and Kuzu virtual database mapping caps are stricter than the production 1TiB maximum; the identical 2GiB OS per-file cap applies to every engine.','6GiB address-space cap implies a physical resident cap but is not a container/RSS accounting equivalence. Native charged class budgets remain separately reported.'],'binaries':{str(v):digest(v) for v in binaries},'contract_sha256':digest(ROOT/'benchmarks/architecture-design/decisions/20261014-s0-workload-contract/contract.json'),'source_proof':'benchmarks/architecture-design/decisions/20261016-s61-final-source-acceptance/proof.json','script_sha256':digest(__file__)}
   payload['prepared_inputs']=fixtures
+  payload['frozen_control_failure_policy']='A reproduced frozen-control import failure is retained with exact error and input/binary hashes, omitted from latency measurements and ratios, and never silently treated as success. Current/Kuzu supported cases continue.'
   payload['prepared_read_protocol']='immutable input from each corresponding engine; exact binary/CSV/database hashes checked before every independent process; private writable clone; missing requested indexes only; no import/write timing from prepared input'
   payload['hardware']={'platform':__import__('platform').platform(),'machine':__import__('platform').machine(),'cpu_count':os.cpu_count(),'allowed_cpus_before_restriction':sorted(os.sched_getaffinity(0)),'cpu_model':next((v.split(':',1)[1].strip() for v in Path('/proc/cpuinfo').read_text().splitlines() if v.startswith('model name')),None),'cgroup_memory_max':Path('/sys/fs/cgroup/memory.max').read_text().strip() if Path('/sys/fs/cgroup/memory.max').exists() else None,'cgroup_cpu_max':Path('/sys/fs/cgroup/cpu.max').read_text().strip() if Path('/sys/fs/cgroup/cpu.max').exists() else None}
   (OUT/'registration.json').write_text(json.dumps(payload,indent=2)+'\n');print('Registered final window',flush=True)
