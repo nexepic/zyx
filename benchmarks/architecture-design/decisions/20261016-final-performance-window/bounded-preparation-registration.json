@@ -1,0 +1,22 @@
+{
+  "status": "correctness_verified_medium_validation_pending",
+  "preparation_batch_rows": 1000,
+  "same_preparation_for": [
+    "control",
+    "current"
+  ],
+  "query_and_timer_semantics": "unchanged",
+  "production_limits": "unchanged; private write ownership revalidated separately",
+  "tests": {
+    "benchmark_modules": 37,
+    "latest_combined_affected": 2036,
+    "python_final_campaign_options_and_oracles": 12
+  },
+  "initial_campaign": "stopped after medium current preparation admission failure; original-loader control samples retained but excluded from bounded-loader matched comparisons",
+  "source_sha256": {
+    "apps/compare_benchmark/main.cpp": "c5a2ab8120eb74d04074c46d35ea9ca929a1d2509acf9d1d3b614135100c29da",
+    "tests/src/apps/test_CompareBenchmark.cpp": "5a58545063a2dcb6b192872708b723ab91b5ca90f2d15acde92b41635e126685",
+    "benchmarks/graphdb-comparison/runner/adapters/zyx.py": "bbc7f18fa31dfd0e9052a8eecdaf247bdc18d463edadcebb9df417c200d5c68a",
+    "benchmarks/graphdb-comparison/tests/test_final_campaign_counts.py": "0ce4dcda33547c9d638aea7ea280f05265ed5aba42b2833143d86492d2334b45"
+  }
+}
