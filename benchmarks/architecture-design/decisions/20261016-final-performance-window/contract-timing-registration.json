@@ -1,0 +1,8 @@
+{
+  "script_sha256": "59905dd33bbc4b9185e8825fad220ea13872b1a03eb94dbe97a0b8f0680f584a",
+  "status": "registered_before_contract_timing",
+  "scope": "Native IPC including result observation; Kuzu execute/drain/observe/close. Database close/open and native maintenance/reopen remain explicit operations and count toward maintenance-window throughput.",
+  "repetitions": 3,
+  "warmup": "Use setup and the first maintenance windows as declared warmup; never mix them into stable-window gate",
+  "tail_policy": "at least 1000 observations/process before tail-sensitive gates; otherwise inconclusive"
+}

@@ -80,19 +80,24 @@ class KuzuAdapter(BenchmarkAdapter):
 
     def _open_database(self, kuzu_module: Any) -> Any:
         # Explicit formal-campaign limits must never silently fall back to defaults.
-        configured = os.environ.get("KUZU_BENCH_BUFFER_POOL_BYTES")
+        configured = {key: os.environ[name] for name, key in (
+            ("KUZU_BENCH_BUFFER_POOL_BYTES", "buffer_pool_size"),
+            ("KUZU_BENCH_MAX_DB_BYTES", "max_db_size"),
+        ) if name in os.environ}
         options: dict[str, int] = {}
-        if configured is not None:
-            size = int(configured)
+        for key, text in configured.items():
+            size = int(text)
             if size <= 0:
-                raise ValueError("Kuzu benchmark buffer pool must be positive")
-            options["buffer_pool_size"] = size
+                raise ValueError("Kuzu benchmark resource limits must be positive")
+            options[key] = size
         if self.threads is not None:
             options["max_num_threads"] = self.threads
+        if not options:
+            return kuzu_module.Database(str(self.db_path))
         try:
             return kuzu_module.Database(str(self.db_path), **options)
         except TypeError:
-            if configured is not None:
+            if configured:
                 raise
             return kuzu_module.Database(str(self.db_path))
 

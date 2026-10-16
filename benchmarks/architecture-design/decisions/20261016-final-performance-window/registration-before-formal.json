@@ -1,0 +1,75 @@
+{
+  "window": "20261016-final",
+  "status": "formal_measurement_ready",
+  "orders": [
+    [
+      "control",
+      "current",
+      "kuzu"
+    ],
+    [
+      "current",
+      "kuzu",
+      "control"
+    ],
+    [
+      "kuzu",
+      "control",
+      "current"
+    ]
+  ],
+  "rounds": 3,
+  "warmups": 3,
+  "samples": 10,
+  "tail_sensitive_samples_per_process": 1000,
+  "primary_gate_p50_reduction": 0.1,
+  "protection_regression_limit": 0.05,
+  "stop_minutes_per_case": 30,
+  "extended_sampling": "at most two independent 100-sample processes when preregistered uncertainty rule applies",
+  "resources": {
+    "affinity": "one allowed CPU",
+    "address_space_bytes": 6442450944,
+    "per_file_bytes": 2147483648,
+    "kuzu_pool_bytes": 67108864,
+    "kuzu_mapping_bytes": 2147483648,
+    "threads_per_query": 1,
+    "native_query_materialization_bytes": 67108864,
+    "durability": "default sync and acknowledgements; never disabled",
+    "os_cache": "warm; no cold-cache claim"
+  },
+  "resource_notes": [
+    "Per-file and Kuzu virtual database mapping caps are stricter than the production 1TiB maximum; the identical 2GiB OS per-file cap applies to every engine.",
+    "6GiB address-space cap implies a physical resident cap but is not a container/RSS accounting equivalence. Native charged class budgets remain separately reported."
+  ],
+  "binaries": {
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench": "85493f42460693ca22b637e5a8117a6478aed21b88e3d553a3045a298f23958f",
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-workload-contract-worker": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+    "/workspace/zyx/buildDir_perf_control/zyx-compare-bench": "d378f89d4bf15e348b49eb2bffabc92f8524946309c0586c2e05ed0858356e0e",
+    "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker": "ef2382ac8436ef16880571042d973926f577e3f1073b8135ac90df51915612d8"
+  },
+  "contract_sha256": "6de35bce8841e58b2190e463b200a2e1aa9db328b8f0db95ee8c4b336a1f7d0e",
+  "source_proof": "benchmarks/architecture-design/decisions/20261016-s61-final-source-acceptance/proof.json",
+  "script_sha256": "b3398996114b175a493d4396ba0e741b3fc1bf87e11a2384ba6ac173e6aec418",
+  "pre_measurement_harness_corrections": [
+    "Native quota preflight recognizes the exact coordinated ResourceAdmissionDenied message as the defined expected quota failure; unrelated errors/success remain rejected by three unit tests.",
+    "Kuzu preflight profile and seed are passed by keyword; no production code changed."
+  ],
+  "preflight": {
+    "control": {
+      "profile": "smoke",
+      "operations": 916,
+      "full_results_checked": true
+    },
+    "current": {
+      "profile": "smoke",
+      "operations": 916,
+      "full_results_checked": true
+    },
+    "kuzu": {
+      "profile": "smoke",
+      "operations": 603,
+      "version": "0.11.3",
+      "full_results_checked": true
+    }
+  }
+}
