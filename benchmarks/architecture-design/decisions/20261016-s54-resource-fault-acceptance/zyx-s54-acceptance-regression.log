@@ -1,0 +1,654 @@
+[0/2] Re-checking globbed directories...
+[1/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_BudgetMemoryResource.cpp.o
+[2/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_LogicalPlanDistinctAllocator.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalPlanDistinctAllocator.cpp:6:
+In file included from /workspace/zyx/tests/include/query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp:15:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[3/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp:11:
+In file included from /workspace/zyx/tests/include/query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp:15:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[4/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_ExternalQuerySort.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_ExternalQuerySort.cpp:4:
+In file included from /workspace/zyx/src/query/execution/ExternalQuerySort.hpp:12:
+In file included from /workspace/zyx/src/query/execution/QuerySpillRowCodec.hpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[5/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_ResourceCoordinator.cpp.o
+[6/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_QuerySpillRowCodec.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_QuerySpillRowCodec.cpp:5:
+In file included from /workspace/zyx/src/query/execution/QuerySpillRowCodec.hpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[7/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:16:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   16 |         EXPECT_THROW(second->read(handle),std::invalid_argument);
+      |                      ^~~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:19:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   19 |         EXPECT_THROW(first->read(handle),std::invalid_argument);
+      |                      ^~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:23:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   23 |         EXPECT_THROW(first->write(bytes),std::logic_error);
+      |                      ^~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:30:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   30 |         EXPECT_THROW(scratch->write(bytes),std::runtime_error);
+      |                      ^~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:85:16: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   85 |                 EXPECT_THROW(scratch->write(bytes),std::logic_error);
+      |                              ^~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:86:16: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   86 |                 EXPECT_THROW(scratch->read(handle),std::logic_error);
+      |                              ^~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:142:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  142 |         EXPECT_THROW(process->open("a",80,60),std::runtime_error);
+      |                      ^~~~~~~~~~~~~ ~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:143:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  143 |         EXPECT_THROW(process->open("a",70,60),std::invalid_argument);
+      |                      ^~~~~~~~~~~~~ ~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:148:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  148 |         EXPECT_THROW(process->open("a",101,60),std::invalid_argument);
+      |                      ^~~~~~~~~~~~~ ~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:151:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  151 |         EXPECT_THROW(process->open("overflow",80,60),std::runtime_error);
+      |                      ^~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:162:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  162 |         EXPECT_THROW(second->write(bytes),std::runtime_error);
+      |                      ^~~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:205:17: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  205 |                         EXPECT_THROW(scratch->write(bytes),std::exception);
+      |                                      ^~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp:266:15: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  266 |         EXPECT_THROW(scratch->read(handle),FormatException);
+      |                      ^~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+19 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 170 tests from 12 test suites.
+[----------] Global test environment set-up.
+[----------] 69 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose
+[       OK ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose (135 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting
+[       OK ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting (125 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge
+[       OK ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains
+[       OK ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains (57 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback
+[       OK ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases
+[       OK ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners
+[       OK ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners (1100 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry
+[       OK ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry (202 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+[       OK ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose (197 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions
+[       OK ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions (55 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge
+[       OK ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge
+[       OK ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement
+[       OK ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement (92 ms)
+[ RUN      ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction
+[       OK ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry
+[       OK ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner
+[       OK ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession
+[       OK ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession (104 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext
+[       OK ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext (194 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback (97 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit
+[       OK ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit (155 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes
+[       OK ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback (75 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction (111 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement (139 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry (128 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant (56 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan (147 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot (160 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (152 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit (463 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection (106 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease
+[       OK ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease (1907 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites
+[       OK ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites (94 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication (237 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund
+[       OK ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund (208 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain (71 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile
+[       OK ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed
+[       OK ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult
+[       OK ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult (70 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope
+[       OK ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose
+[       OK ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose (111 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace
+[       OK ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace (93 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames
+[       OK ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames (91 ms)
+[ RUN      ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry
+[       OK ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry (3492 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins
+[       OK ] RelocatableStorageBackendTest.QueryScratchOwnsPrivateHandlesAndReleasesDespiteLongGraphPins (271 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchEnforcesDiskFragmentsAndPhysicalReadOnlyPermissions
+[       OK ] RelocatableStorageBackendTest.QueryScratchEnforcesDiskFragmentsAndPhysicalReadOnlyPermissions (109 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection
+[       OK ] RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection (41965 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchInternalPolicyCanDenyPermissionWithoutWritingTheFile
+[       OK ] RelocatableStorageBackendTest.QueryScratchInternalPolicyCanDenyPermissionWithoutWritingTheFile (67 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites (427 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchDatabaseQuotaIsSharedAcrossSessionsAndRefundedAfterCleanup
+[       OK ] RelocatableStorageBackendTest.QueryScratchDatabaseQuotaIsSharedAcrossSessionsAndRefundedAfterCleanup (181 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchPublicationFaultsPreserveGraphAndRecoverOrphanQuota
+[       OK ] RelocatableStorageBackendTest.QueryScratchPublicationFaultsPreserveGraphAndRecoverOrphanQuota (912 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy (126 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchAllocatorPublicationInterleavesWithGraphWritesWithoutLosingRoots
+[       OK ] RelocatableStorageBackendTest.QueryScratchAllocatorPublicationInterleavesWithGraphWritesWithoutLosingRoots (877 ms)
+[ RUN      ] RelocatableStorageBackendTest.CorruptScratchReadAndOrphanRecoveryNeverReclaimUserPagesOrRefundQuota
+[       OK ] RelocatableStorageBackendTest.CorruptScratchReadAndOrphanRecoveryNeverReclaimUserPagesOrRefundQuota (222 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchHandleGrantIsSharedAndRetainedUntilObjectDestruction
+[       OK ] RelocatableStorageBackendTest.QueryScratchHandleGrantIsSharedAndRetainedUntilObjectDestruction (115 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease
+[       OK ] RelocatableStorageBackendTest.QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease (112 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld
+[       OK ] RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld (234 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder
+[       OK ] RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder (865 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchHandleGrantUsesTheCallingQueryAllowanceAndRefundsAfterDestruction
+[       OK ] RelocatableStorageBackendTest.QueryScratchHandleGrantUsesTheCallingQueryAllowanceAndRefundsAfterDestruction (116 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder
+[       OK ] RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder (79 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery
+[       OK ] RelocatableStorageBackendTest.NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery (595 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted (152 ms)
+[ RUN      ] RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle
+[       OK ] RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle (142 ms)
+[----------] 69 tests from RelocatableStorageBackendTest (59299 ms total)
+
+[----------] 3 tests from QueryScratchDiskBudgetTest
+[ RUN      ] QueryScratchDiskBudgetTest.ThreeLevelsRefundOnlyReclaimedExtentsAndRetainOrphans
+[       OK ] QueryScratchDiskBudgetTest.ThreeLevelsRefundOnlyReclaimedExtentsAndRetainOrphans (0 ms)
+[ RUN      ] QueryScratchDiskBudgetTest.ConcurrentDomainsCannotOverAdmitProcessQuota
+[       OK ] QueryScratchDiskBudgetTest.ConcurrentDomainsCannotOverAdmitProcessQuota (0 ms)
+[ RUN      ] QueryScratchDiskBudgetTest.SlotsMovesAndInvalidConfigurationPreserveOwnership
+[       OK ] QueryScratchDiskBudgetTest.SlotsMovesAndInvalidConfigurationPreserveOwnership (0 ms)
+[----------] 3 tests from QueryScratchDiskBudgetTest (0 ms total)
+
+[----------] 8 tests from ExternalQuerySortTest
+[ RUN      ] ExternalQuerySortTest.MemoryPathPreservesStableNullOrderWithoutOpeningScratch
+[       OK ] ExternalQuerySortTest.MemoryPathPreservesStableNullOrderWithoutOpeningScratch (0 ms)
+[ RUN      ] ExternalQuerySortTest.MultipleRunsMergeCompleteValuesStableTiesAndRefundOwnership
+[       OK ] ExternalQuerySortTest.MultipleRunsMergeCompleteValuesStableTiesAndRefundOwnership (1216 ms)
+[ RUN      ] ExternalQuerySortTest.CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults
+[       OK ] ExternalQuerySortTest.CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults (167 ms)
+[ RUN      ] ExternalQuerySortTest.CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner
+[       OK ] ExternalQuerySortTest.CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner (765 ms)
+[ RUN      ] ExternalQuerySortTest.WriteReadAndReleaseFailuresPreserveOriginalErrorAndRefundMemory
+[       OK ] ExternalQuerySortTest.WriteReadAndReleaseFailuresPreserveOriginalErrorAndRefundMemory (373 ms)
+[ RUN      ] ExternalQuerySortTest.PublicationCancellationDoesNotAcquireScratchPermission
+[       OK ] ExternalQuerySortTest.PublicationCancellationDoesNotAcquireScratchPermission (3 ms)
+[ RUN      ] ExternalQuerySortTest.UnavailableWorkspaceFailsBeforeAcquiringFilePermission
+[       OK ] ExternalQuerySortTest.UnavailableWorkspaceFailsBeforeAcquiringFilePermission (3 ms)
+[ RUN      ] ExternalQuerySortTest.UnsupportedOrderingAfterSealedRunsFailsWithoutReplayingInput
+[       OK ] ExternalQuerySortTest.UnsupportedOrderingAfterSealedRunsFailsWithoutReplayingInput (159 ms)
+[----------] 8 tests from ExternalQuerySortTest (2690 ms total)
+
+[----------] 3 tests from QuerySpillRowCodecTest
+[ RUN      ] QuerySpillRowCodecTest.PreservesCanonicalTypesNestedValuesReferencesKeysAndOwningLifetime
+[       OK ] QuerySpillRowCodecTest.PreservesCanonicalTypesNestedValuesReferencesKeysAndOwningLifetime (0 ms)
+[ RUN      ] QuerySpillRowCodecTest.PreservesNaNBitsWithoutUsingEqualityAsAnOracle
+[       OK ] QuerySpillRowCodecTest.PreservesNaNBitsWithoutUsingEqualityAsAnOracle (0 ms)
+[ RUN      ] QuerySpillRowCodecTest.RejectsShortFramesOversizedCountsTrailingBytesAndUnsupportedOwners
+[       OK ] QuerySpillRowCodecTest.RejectsShortFramesOversizedCountsTrailingBytesAndUnsupportedOwners (0 ms)
+[----------] 3 tests from QuerySpillRowCodecTest (0 ms total)
+
+[----------] 4 tests from LogicalPlanDistinctAllocatorTest
+[ RUN      ] LogicalPlanDistinctAllocatorTest.ProjectAndUnionOwnChargedKeysAndReleaseThemBeforeResultsEscape
+[       OK ] LogicalPlanDistinctAllocatorTest.ProjectAndUnionOwnChargedKeysAndReleaseThemBeforeResultsEscape (1 ms)
+[ RUN      ] LogicalPlanDistinctAllocatorTest.AggregateGroupsAndDistinctKeysReleaseTheirChargedAllocations
+[       OK ] LogicalPlanDistinctAllocatorTest.AggregateGroupsAndDistinctKeysReleaseTheirChargedAllocations (5 ms)
+[ RUN      ] LogicalPlanDistinctAllocatorTest.PercentileRuntimeArraysUseChargedStorageAndUnwindAllocationFailure
+[       OK ] LogicalPlanDistinctAllocatorTest.PercentileRuntimeArraysUseChargedStorageAndUnwindAllocationFailure (0 ms)
+[ RUN      ] LogicalPlanDistinctAllocatorTest.NestedGroupPayloadPreservesDuplicateGroupingAndRetryAfterBudgetFailure
+[       OK ] LogicalPlanDistinctAllocatorTest.NestedGroupPayloadPreservesDuplicateGroupingAndRetryAfterBudgetFailure (1 ms)
+[----------] 4 tests from LogicalPlanDistinctAllocatorTest (9 ms total)
+
+[----------] 1 test from LogicalPlanSortGrowthTest
+[ RUN      ] LogicalPlanSortGrowthTest.PreservesStableNullOrderingAndOwnedPayloadsAcrossCapacityGrowth
+[       OK ] LogicalPlanSortGrowthTest.PreservesStableNullOrderingAndOwnedPayloadsAcrossCapacityGrowth (106 ms)
+[----------] 1 test from LogicalPlanSortGrowthTest (106 ms total)
+
+[----------] 11 tests from ResourceCoordinatorTest
+[ RUN      ] ResourceCoordinatorTest.ProcessDatabaseAndSharedAccountLimitsAreAtomicAndRefundable
+[       OK ] ResourceCoordinatorTest.ProcessDatabaseAndSharedAccountLimitsAreAtomicAndRefundable (0 ms)
+[ RUN      ] ResourceCoordinatorTest.CategoriesAreSingleAttributedAndRespectGlobalCapsAcrossDatabases
+[       OK ] ResourceCoordinatorTest.CategoriesAreSingleAttributedAndRespectGlobalCapsAcrossDatabases (0 ms)
+[ RUN      ] ResourceCoordinatorTest.DatabaseCategoryCapsAndOwnerTransfersCannotMultiplyQuota
+[       OK ] ResourceCoordinatorTest.DatabaseCategoryCapsAndOwnerTransfersCannotMultiplyQuota (0 ms)
+[ RUN      ] ResourceCoordinatorTest.MoveAssignmentRefundsPreviousAccountAndTransfersExactlyOnce
+[       OK ] ResourceCoordinatorTest.MoveAssignmentRefundsPreviousAccountAndTransfersExactlyOnce (0 ms)
+[ RUN      ] ResourceCoordinatorTest.AllocatorAdmitsBeforeUpstreamRefundsBadAllocAndChargesGrowthOverlap
+[       OK ] ResourceCoordinatorTest.AllocatorAdmitsBeforeUpstreamRefundsBadAllocAndChargesGrowthOverlap (0 ms)
+[ RUN      ] ResourceCoordinatorTest.ConcurrentAccountsAcrossDatabasesCannotOverbookProcessTotal
+[       OK ] ResourceCoordinatorTest.ConcurrentAccountsAcrossDatabasesCannotOverbookProcessTotal (0 ms)
+[ RUN      ] ResourceCoordinatorTest.CheckedLimitsAndMaximumSizeAdmissionNeverWrap
+[       OK ] ResourceCoordinatorTest.CheckedLimitsAndMaximumSizeAdmissionNeverWrap (0 ms)
+[ RUN      ] ResourceCoordinatorTest.OwnedLeaseKeepsHierarchyAliveAfterDatabaseOwnerIsReleased
+[       OK ] ResourceCoordinatorTest.OwnedLeaseKeepsHierarchyAliveAfterDatabaseOwnerIsReleased (0 ms)
+[ RUN      ] ResourceCoordinatorTest.OwnedHierarchyRejectsNullOwners
+[       OK ] ResourceCoordinatorTest.OwnedHierarchyRejectsNullOwners (0 ms)
+[ RUN      ] ResourceCoordinatorTest.QueryPressureCannotConsumeProtectedMaintenanceFloor
+[       OK ] ResourceCoordinatorTest.QueryPressureCannotConsumeProtectedMaintenanceFloor (0 ms)
+[ RUN      ] ResourceCoordinatorTest.DatabaseAndQuerySlotsRemainHeldBySharedAccountLeases
+[       OK ] ResourceCoordinatorTest.DatabaseAndQuerySlotsRemainHeldBySharedAccountLeases (0 ms)
+[----------] 11 tests from ResourceCoordinatorTest (0 ms total)
+
+[----------] 15 tests from ProcessResourceDomainsTest
+[ RUN      ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance
+[       OK ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit
+[       OK ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied
+[       OK ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot
+[       OK ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected
+[       OK ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner
+[       OK ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance
+[       OK ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime
+[       OK ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass
+[       OK ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains
+[       OK ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases
+[       OK ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity
+[       OK ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling
+[       OK ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase
+[       OK ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase (0 ms)
+[----------] 15 tests from ProcessResourceDomainsTest (0 ms total)
+
+[----------] 16 tests from PrepaidMemoryResourceTest
+[ RUN      ] PrepaidMemoryResourceTest.UnusedGrantStaysChargedAndContainersChargeActualCapacity
+[       OK ] PrepaidMemoryResourceTest.UnusedGrantStaysChargedAndContainersChargeActualCapacity (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer
+[       OK ] PrepaidMemoryResourceTest.VectorGrowthOverlapIsAdmittedBeforeReplacingTheOldBuffer (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.UpstreamFailureRefundsLocalUsageWithoutReleasingTheSharedGrant
+[       OK ] PrepaidMemoryResourceTest.UpstreamFailureRefundsLocalUsageWithoutReleasingTheSharedGrant (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ConcurrentConsumersCannotSpendTheSameGrantTwice
+[       OK ] PrepaidMemoryResourceTest.ConcurrentConsumersCannotSpendTheSameGrantTwice (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ParentLifetimeExtendsUntilEveryGrantedContainerIsDestroyed
+[       OK ] PrepaidMemoryResourceTest.ParentLifetimeExtendsUntilEveryGrantedContainerIsDestroyed (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.InvalidGrantCannotConsumeOrHideParentQuota
+[       OK ] PrepaidMemoryResourceTest.InvalidGrantCannotConsumeOrHideParentQuota (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.CachedGrantAndQueriesShareTheSameProcessCapacity
+[       OK ] PrepaidMemoryResourceTest.CachedGrantAndQueriesShareTheSameProcessCapacity (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.OwningAllocatorRetainsTheGrantThroughTheLastSharedControlBlock
+[       OK ] PrepaidMemoryResourceTest.OwningAllocatorRetainsTheGrantThroughTheLastSharedControlBlock (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership
+[       OK ] PrepaidMemoryResourceTest.OwningAllocatorCopiesAndAssignmentsPreserveActualAllocationOwnership (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner
+[       OK ] PrepaidMemoryResourceTest.ScopedConstructionAndCopyRebindingRestoreThePreviousOwner (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction
+[       OK ] PrepaidMemoryResourceTest.MovedFromOwningVectorKeepsAReusableAllocatorAfterDestinationDestruction (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.AllocationScopeIsThreadLocalAcrossIndependentDomains
+[       OK ] PrepaidMemoryResourceTest.AllocationScopeIsThreadLocalAcrossIndependentDomains (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.BorrowedDefaultAllocatorKeepsItsCapturedUpstreamAfterTheDefaultChanges
+[       OK ] PrepaidMemoryResourceTest.BorrowedDefaultAllocatorKeepsItsCapturedUpstreamAfterTheDefaultChanges (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalBuffersShareTheGrantWithoutAllocatingDuplicateStorage
+[       OK ] PrepaidMemoryResourceTest.ExternalBuffersShareTheGrantWithoutAllocatingDuplicateStorage (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalBufferReservationKeepsItsGrantAliveUntilReleased
+[       OK ] PrepaidMemoryResourceTest.ExternalBufferReservationKeepsItsGrantAliveUntilReleased (0 ms)
+[ RUN      ] PrepaidMemoryResourceTest.ExternalResizeRejectsBeforeChangingCreditAndSupportsRetry
+[       OK ] PrepaidMemoryResourceTest.ExternalResizeRejectsBeforeChangingCreditAndSupportsRetry (0 ms)
+[----------] 16 tests from PrepaidMemoryResourceTest (0 ms total)
+
+[----------] 7 tests from BudgetMemoryResourceTest
+[ RUN      ] BudgetMemoryResourceTest.ChargesLiveAllocationsAndRejectsBeforeUpstream
+[       OK ] BudgetMemoryResourceTest.ChargesLiveAllocationsAndRejectsBeforeUpstream (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.UpstreamFailureRollsBackAndContainersReleaseBucketsAndNodes
+[       OK ] BudgetMemoryResourceTest.UpstreamFailureRollsBackAndContainersReleaseBucketsAndNodes (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.VectorGrowthChargesOverlapAndKeepsOldElementsAfterRejection
+[       OK ] BudgetMemoryResourceTest.VectorGrowthChargesOverlapAndKeepsOldElementsAfterRejection (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.HashRehashRejectsOverlapEvenWhenFinalBucketsFit
+[       OK ] BudgetMemoryResourceTest.HashRehashRejectsOverlapEvenWhenFinalBucketsFit (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.NestedHashMatchListsInheritBudgetAndPreserveEntriesOnRejection
+[       OK ] BudgetMemoryResourceTest.NestedHashMatchListsInheritBudgetAndPreserveEntriesOnRejection (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.HashOwningKeysAndTransientEncodingShareTheBudget
+[       OK ] BudgetMemoryResourceTest.HashOwningKeysAndTransientEncodingShareTheBudget (0 ms)
+[ RUN      ] BudgetMemoryResourceTest.DistinctSetChargesOwningKeysRehashOverlapAndRollsBackRejection
+[       OK ] BudgetMemoryResourceTest.DistinctSetChargesOwningKeysRehashOverlapAndRollsBackRejection (0 ms)
+[----------] 7 tests from BudgetMemoryResourceTest (0 ms total)
+
+[----------] 19 tests from RelocatableMaintenanceServiceTest
+[ RUN      ] RelocatableMaintenanceServiceTest.ExecutesTypedPropertyCompactionAndReleasesTheSource
+[       OK ] RelocatableMaintenanceServiceTest.ExecutesTypedPropertyCompactionAndReleasesTheSource (28 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance
+[       OK ] RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance (865 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.ExecutesTypedBTreeVectorAndManifestPageCompactions
+[       OK ] RelocatableMaintenanceServiceTest.ExecutesTypedBTreeVectorAndManifestPageCompactions (77 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.DefersPageTasksForSnapshotAndRetiredGenerationPressure
+[       OK ] RelocatableMaintenanceServiceTest.DefersPageTasksForSnapshotAndRetiredGenerationPressure (16 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.CompactsLargeValueDataAndManifestPoolsAfterSnapshotsDrain
+[       OK ] RelocatableMaintenanceServiceTest.CompactsLargeValueDataAndManifestPoolsAfterSnapshotsDrain (66 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.DefersPageCompactionWhenTheTypedDestinationPoolIsFull
+[       OK ] RelocatableMaintenanceServiceTest.DefersPageCompactionWhenTheTypedDestinationPoolIsFull (154 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.ExecutesEntityPageAndExtentRelocationsThroughTypedTasks
+[       OK ] RelocatableMaintenanceServiceTest.ExecutesEntityPageAndExtentRelocationsThroughTypedTasks (40 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.RetriesTypedRelocationSourceReleaseUntilSnapshotsDrain
+[       OK ] RelocatableMaintenanceServiceTest.RetriesTypedRelocationSourceReleaseUntilSnapshotsDrain (47 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.DefersEntityPageTasksForAdmissionAndDestinationPressure
+[       OK ] RelocatableMaintenanceServiceTest.DefersEntityPageTasksForAdmissionAndDestinationPressure (112 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.FaultsClosedWhenCheckpointLsnCannotAdvance
+[       OK ] RelocatableMaintenanceServiceTest.FaultsClosedWhenCheckpointLsnCannotAdvance (10 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.RejectsInvalidRequestsAndFaultsClosedWhenWritesAreForbidden
+[       OK ] RelocatableMaintenanceServiceTest.RejectsInvalidRequestsAndFaultsClosedWhenWritesAreForbidden (9 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.CompletesEmptyLargeValueReclamationAndValidatesAdmissionBounds
+[       OK ] RelocatableMaintenanceServiceTest.CompletesEmptyLargeValueReclamationAndValidatesAdmissionBounds (6 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.EnqueuesTypedVectorBaseRebuildAfterAdmission
+[       OK ] RelocatableMaintenanceServiceTest.EnqueuesTypedVectorBaseRebuildAfterAdmission (5 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.DeduplicatesAndReleasesVectorRebuildAdmission
+[       OK ] RelocatableMaintenanceServiceTest.DeduplicatesAndReleasesVectorRebuildAdmission (5 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied
+[       OK ] RelocatableMaintenanceServiceTest.RecoversVectorDebtWhileTheOnlyQueueSlotIsOccupied (5 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.ResumesVectorRebuildDebtScanningAcrossEmptyMetadataBatches
+[       OK ] RelocatableMaintenanceServiceTest.ResumesVectorRebuildDebtScanningAcrossEmptyMetadataBatches (7 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.RejectsInvalidVectorRebuildContractsAndDefersBlockedRecovery
+[       OK ] RelocatableMaintenanceServiceTest.RejectsInvalidVectorRebuildContractsAndDefersBlockedRecovery (17 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.RejectsEveryNonmonotonicVectorDebtCursorContract
+[       OK ] RelocatableMaintenanceServiceTest.RejectsEveryNonmonotonicVectorDebtCursorContract (15 ms)
+[ RUN      ] RelocatableMaintenanceServiceTest.WorkspaceAdmissionDefersBeforePublicationAndScopesOwnedBuffers
+[       OK ] RelocatableMaintenanceServiceTest.WorkspaceAdmissionDefersBeforePublicationAndScopesOwnedBuffers (7 ms)
+[----------] 19 tests from RelocatableMaintenanceServiceTest (1500 ms total)
+
+[----------] 14 tests from QueryResultResourcesTest
+[ RUN      ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment
+[       OK ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment (0 ms)
+[ RUN      ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction
+[       OK ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction (0 ms)
+[ RUN      ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission
+[       OK ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce
+[       OK ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce (0 ms)
+[ RUN      ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination
+[       OK ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy
+[       OK ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy (0 ms)
+[ RUN      ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased
+[       OK ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased (0 ms)
+[ RUN      ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers
+[       OK ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers (0 ms)
+[ RUN      ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission
+[       OK ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel
+[       OK ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel (0 ms)
+[ RUN      ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease
+[       OK ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease (0 ms)
+[ RUN      ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput
+[       OK ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput (0 ms)
+[ RUN      ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows
+[       OK ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveUnderFullAccountEitherTransfersOrRejectsBeforeChangingTheSource
+[       OK ] QueryResultResourcesTest.MoveUnderFullAccountEitherTransfersOrRejectsBeforeChangingTheSource (0 ms)
+[----------] 14 tests from QueryResultResourcesTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 170 tests from 12 test suites ran. (63608 ms total)
+[  PASSED  ] 170 tests.
+{"tests": 170, "failures": 0, "disabled": 0, "suites": 12, "sources": ["tests/src/storage/relocatable/backend/test_RelocatableQueryScratch.cpp", "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp", "tests/src/query/execution/test_ExternalQuerySort.cpp", "tests/src/query/execution/test_QuerySpillRowCodec.cpp", "tests/src/query/execution/test_LogicalPlanDistinctAllocator.cpp", "tests/src/query/execution/test_LogicalPlanSortGrowth.cpp", "tests/src/query/execution/test_ResourceCoordinator.cpp", "tests/src/query/execution/test_ProcessResourceDomains.cpp", "tests/src/query/execution/test_PrepaidMemoryResource.cpp", "tests/src/query/execution/test_BudgetMemoryResource.cpp", "tests/src/storage/relocatable/maintenance/test_RelocatableMaintenanceService.cpp", "tests/src/query/api/test_QueryResultResources.cpp"], "full_suite": false, "head": "05cba31b046cafc26775ecb1cec6dd80367b112f"}
