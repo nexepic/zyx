@@ -1,0 +1,73 @@
+In file included from /tmp/zyx-procedure-buffer-control.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:18:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /tmp/zyx-procedure-buffer-control.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/tmp/zyx-procedure-buffer-control.cpp:88:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   88 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/tmp/zyx-procedure-buffer-control.cpp:1296:83: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1296 |                                         auto nodes = snapshot.readNodesShapedSorted(batchIds, {.include_labels = true});
+      |                                                                                                                      ^
+8 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from LogicalVectorPropertyBatchTest
+[ RUN      ] LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1513: Failure
+Expected: static_cast<void>(execute(project)) throws an exception of type execution::MaterializedByteLimitExceeded.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1515: Failure
+Expected equality of these values:
+  backend->state->property_column_reads
+    Which is: 1
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1516: Failure
+Expected equality of these values:
+  backend->state->admitted_property_copies
+    Which is: 3
+  0U
+    Which is: 0
+
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520: Failure
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520: Failure
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+
+/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520: Failure
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+
+[  FAILED  ] LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds (0 ms)
+[----------] 1 test from LogicalVectorPropertyBatchTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] LogicalVectorPropertyBatchTest.ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds
+
+ 1 FAILED TEST

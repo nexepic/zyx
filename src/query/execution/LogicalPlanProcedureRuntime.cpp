@@ -551,7 +551,7 @@ namespace graph::query::execution {
 						// the distinct endpoint set once per topology page so a high-degree
 						// frontier node does not repeat the same Entity Directory descent for
 						// parallel edges or repeated targets.
-						std::vector<uint64_t> endpointIds;
+						utils::OwnedStdVector<uint64_t> endpointIds;
 						if (snapshot.supportsNodeExistenceProbes()) {
 							const size_t plannedEndpointBytes = checkedStateMul(page.edges.size(), sizeof(uint64_t));
 							const size_t plannedPresenceBytes = checkedStateMul(page.edges.size(), sizeof(uint64_t));
@@ -900,6 +900,10 @@ namespace graph::query::execution {
 			LogicalPlanReadRow row;
 			NodePropertyMaps node_properties;
 		};
+        // Only the vector backing is admitted here. Nested row/cache payloads
+        // retain their separate materialization admission and lifetime rules.
+        using ProcedureRows = std::vector<BufferedProcedureRow, utils::OwnedPmrAllocator<BufferedProcedureRow>>;
+
 
 		template<typename Container>
 		void releaseProcedureContainer(Container &container) {
@@ -923,7 +927,7 @@ namespace graph::query::execution {
 			return std::min({MAXIMUM_PROCEDURE_NODE_BATCH_ROWS, bounds.maximum_rows, byteCapacity});
 		}
 
-		[[nodiscard]] size_t reserveBoundedProcedureRows(std::vector<BufferedProcedureRow> &rows,
+		[[nodiscard]] size_t reserveBoundedProcedureRows(ProcedureRows &rows,
 											  const size_t requestedRows,
 											  const LogicalPlanReadRuntimeBounds &bounds,
 											  const size_t retainedSourceBytes = 0U) {
@@ -1091,7 +1095,7 @@ namespace graph::query::execution {
 			reservation.set(bytes);
 		}
 
-		void validateBufferedProcedureBytes(const std::vector<BufferedProcedureRow> &rows, const size_t maximumBytes) {
+		void validateBufferedProcedureBytes(const ProcedureRows &rows, const size_t maximumBytes) {
 			if (maximumBytes == 0U) {
 				throw std::invalid_argument("logical procedure runtime requires a positive materialization byte bound");
 			}
@@ -1105,7 +1109,7 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] size_t bufferedProcedureRowsBytes(const std::vector<BufferedProcedureRow> &rows,
+		[[nodiscard]] size_t bufferedProcedureRowsBytes(const ProcedureRows &rows,
 				size_t firstIndex = 0U) {
 			size_t bytes = 0U;
 			for (size_t index = firstIndex; index < rows.size(); ++index) {
@@ -1185,7 +1189,7 @@ namespace graph::query::execution {
 			return bytes;
 		}
 
-		void appendProcedureResultRow(QueryResult &result, std::vector<BufferedProcedureRow> &rows,
+		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
 				size_t rowIndex, QueryResult::Row output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {
 			const size_t pendingRowsBytes = bufferedProcedureRowsBytes(rows, rowIndex);
@@ -1237,7 +1241,7 @@ namespace graph::query::execution {
 			}
 		}
 
-		void prefetchProcedureNodeMetadata(std::vector<BufferedProcedureRow> &rows,
+		void prefetchProcedureNodeMetadata(ProcedureRows &rows,
 				const std::vector<const expressions::Expression *> &expressions,
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context) {
@@ -1263,7 +1267,7 @@ namespace graph::query::execution {
 					if (reference != nullptr) referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 				}
 				idBytes.set(checkedProcedureSizeMul(referenceCount, sizeof(uint64_t)));
-				std::vector<uint64_t> ids;
+				utils::OwnedStdVector<uint64_t> ids;
 				ids.reserve(referenceCount);
 				idBytes.set(checkedProcedureSizeMul(ids.capacity(), sizeof(uint64_t)));
 				for (const auto &row: rows) {
@@ -1283,7 +1287,7 @@ namespace graph::query::execution {
 					const size_t countBytes = checkedProcedureSizeMul(count, sizeof(size_t));
 					if (consumerBytes.wouldExceed(countBytes)) throw MetadataColumnPressure{};
 					consumerBytes.set(countBytes);
-					std::vector<size_t> consumers(count, 0U);
+					utils::OwnedStdVector<size_t> consumers(count, 0U);
 					const auto rowIndex = [&](const BufferedProcedureRow &row) -> std::optional<size_t> {
 						const auto *reference = uncachedReference(row);
 						if (reference == nullptr) return std::nullopt;
@@ -1367,7 +1371,7 @@ namespace graph::query::execution {
 			}
 		}
 
-		void prefetchProcedureCompleteNodes(std::vector<BufferedProcedureRow> &rows,
+		void prefetchProcedureCompleteNodes(ProcedureRows &rows,
 				const std::vector<const expressions::Expression *> &expressions,
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context) {
@@ -1388,7 +1392,7 @@ namespace graph::query::execution {
 					referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 				}
 				idBytes.set(checkedProcedureSizeMul(referenceCount, sizeof(uint64_t)));
-				std::vector<uint64_t> ids;
+				utils::OwnedStdVector<uint64_t> ids;
 				ids.reserve(referenceCount);
 				idBytes.set(checkedProcedureSizeMul(ids.capacity(), sizeof(uint64_t)));
 				for (const BufferedProcedureRow &buffered: rows) {
@@ -1413,7 +1417,7 @@ namespace graph::query::execution {
 					const size_t countBytes = checkedProcedureSizeMul(count, sizeof(size_t));
 					if (consumerBytes.wouldExceed(countBytes)) throw CompleteColumnPressure{};
 					consumerBytes.set(countBytes);
-					std::vector<size_t> consumers(count, 0U);
+					utils::OwnedStdVector<size_t> consumers(count, 0U);
 					const auto rowIndex = [&](const BufferedProcedureRow &row) -> std::optional<size_t> {
 						const auto found = row.row.values.find(variable);
 						if (found == row.row.values.end() || row.row.complete_entity_property_cache.contains(variable)) return std::nullopt;
@@ -1551,7 +1555,7 @@ namespace graph::query::execution {
 		// Buffered procedures already allow read-ahead (notably ORDER BY). Use
 		// the logical runtime's expression collector and selected-column contract
 		// before evaluating each layer; unsupported expressions keep their fallback.
-		void prefetchProcedureProperties(std::vector<BufferedProcedureRow> &rows,
+		void prefetchProcedureProperties(ProcedureRows &rows,
 				const std::vector<const expressions::Expression *> &expressions,
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context,
@@ -1634,7 +1638,7 @@ namespace graph::query::execution {
 						if (uncachedId(buffered).has_value()) referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 					}
 					admitProcedureBytes(idBytes, checkedProcedureSizeMul(referenceCount, sizeof(uint64_t)));
-					std::vector<uint64_t> ids;
+					utils::OwnedStdVector<uint64_t> ids;
 					ids.reserve(referenceCount);
 					admitProcedureBytes(idBytes, checkedProcedureSizeMul(ids.capacity(), sizeof(uint64_t)));
 					for (const auto &buffered: rows) {
@@ -1655,7 +1659,7 @@ namespace graph::query::execution {
 						const size_t consumerSize = checkedProcedureSizeMul(count, sizeof(size_t));
 						if (consumerBytes.wouldExceed(consumerSize)) throw ProcedureColumnBytePressure{};
 						consumerBytes.set(consumerSize);
-						std::vector<size_t> consumers(count, 0U);
+						utils::OwnedStdVector<size_t> consumers(count, 0U);
 						const auto rowIndex = [&](const BufferedProcedureRow &buffered) -> std::optional<size_t> {
 							const auto found = buffered.row.values.find(group.variable);
 							if (found == buffered.row.values.end() || buffered.row.complete_entity_property_cache.contains(group.variable)) return std::nullopt;
@@ -1740,7 +1744,7 @@ namespace graph::query::execution {
 
 		}
 
-		void appendBoundedProcedureRow(std::vector<BufferedProcedureRow> &rows, BufferedProcedureRow row,
+		void appendBoundedProcedureRow(ProcedureRows &rows, BufferedProcedureRow row,
 									  const size_t maximumRows, const std::string_view procedureName,
 									  size_t *retainedBytes = nullptr,
 									  const size_t maximumBytes = std::numeric_limits<size_t>::max()) {
@@ -1841,7 +1845,7 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		[[nodiscard]] QueryResult makeProcedureResult(std::vector<BufferedProcedureRow> rows,
+		[[nodiscard]] QueryResult makeProcedureResult(ProcedureRows rows,
 															  const std::vector<std::string> &columns,
 															  const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context) {
 			if (rows.size() > readBounds.maximum_rows) {
@@ -1869,18 +1873,18 @@ namespace graph::query::execution {
 				appendProcedureResultRow(result, rows, rowIndex, std::move(row),
 						readBounds.maximum_materialized_bytes);
 			}
-			std::vector<BufferedProcedureRow>().swap(rows);
+			ProcedureRows().swap(rows);
 			validateProcedureResultBudget(result, 0U, readBounds.maximum_materialized_bytes);
 			return result;
 		}
 
-		[[nodiscard]] std::vector<BufferedProcedureRow>
+		[[nodiscard]] ProcedureRows
 		makeBufferedShortestPathRows(const std::vector<uint64_t> &path,
 									 const LogicalPlanReadRuntimeBounds &bounds) {
 			if (path.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
 				throw std::overflow_error("logical shortest-path procedure result cannot represent its row count");
 			}
-			std::vector<BufferedProcedureRow> rows;
+			ProcedureRows rows;
 		const size_t retainedPathBytes = checkedProcedureSizeAdd(sizeof(path),
 				checkedProcedureSizeMul(path.capacity(), sizeof(uint64_t)));
 		const size_t outputByteAllowance = reserveBoundedProcedureRows(rows, path.size(), bounds, retainedPathBytes);
@@ -1936,7 +1940,7 @@ namespace graph::query::execution {
 		// Keep procedure rows as logical references until a declared output column
 		// actually needs a complete Node. This avoids opening Property roots for
 		// scalar-only projections while preserving one sorted batch for bare Nodes.
-		void materializeProcedureNodeOutputs(std::vector<BufferedProcedureRow> &rows,
+		void materializeProcedureNodeOutputs(ProcedureRows &rows,
 											 const std::vector<std::string> &columns,
 											 storage::LogicalGraphReadSnapshot &snapshot,
 											 const LogicalPlanReadRuntimeBounds &readBounds,
@@ -1965,7 +1969,7 @@ namespace graph::query::execution {
 				referenceCount = checkedProcedureSizeAdd(referenceCount, 1U);
 			});
 			referenceBytes.set(checkedProcedureSizeMul(referenceCount, sizeof(ProcedureNodeOutputReference)));
-			std::vector<ProcedureNodeOutputReference> references;
+			std::vector<ProcedureNodeOutputReference, utils::OwnedPmrAllocator<ProcedureNodeOutputReference>> references;
 			references.reserve(referenceCount);
 			referenceBytes.set(checkedProcedureSizeMul(references.capacity(), sizeof(ProcedureNodeOutputReference)));
 			visitOutputReferences([&](const ProcedureNodeOutputReference &reference) {
@@ -1985,7 +1989,7 @@ namespace graph::query::execution {
 				}
 			}
 			idBytes.set(checkedProcedureSizeMul(uniqueIdCount, sizeof(uint64_t)));
-			std::vector<uint64_t> sortedIds;
+			utils::OwnedStdVector<uint64_t> sortedIds;
 			sortedIds.reserve(uniqueIdCount);
 			idBytes.set(checkedProcedureSizeMul(sortedIds.capacity(), sizeof(uint64_t)));
 			for (const auto &reference: references) {
@@ -2081,10 +2085,10 @@ namespace graph::query::execution {
 			for (size_t offset = 0U; offset < sortedIds.size(); offset += capacity) processRange(offset, std::min(capacity, sortedIds.size() - offset));
 		}
 
-		[[nodiscard]] std::vector<BufferedProcedureRow>
+		[[nodiscard]] ProcedureRows
 		makeBufferedVectorProcedureRows(const std::span<const storage::LogicalGraphVectorSearchHit> hits,
 										const QueryContext &context) {
-			std::vector<BufferedProcedureRow> rows;
+			ProcedureRows rows;
 			rows.reserve(hits.size());
 			for (const auto &hit: hits) {
 				context.checkGuard();
@@ -2097,7 +2101,7 @@ namespace graph::query::execution {
 			return rows;
 		}
 
-		[[nodiscard]] bool appendBufferedProcedureRows(std::vector<BufferedProcedureRow> rows, storage::LogicalGraphReadSnapshot &snapshot,
+		[[nodiscard]] bool appendBufferedProcedureRows(ProcedureRows rows, storage::LogicalGraphReadSnapshot &snapshot,
 								 const std::vector<const logical::LogicalOperator *> &operations,
 								 const LogicalPlanReadRuntimeBounds &readBounds,
 								 const QueryContext &context, QueryResult &result,
@@ -2116,7 +2120,7 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical procedure exceeded its configured result-row bound");
 			}
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
-			std::vector<uint64_t> localOperatorRowCounts(operations.size(), 0U);
+			utils::OwnedStdVector<uint64_t> localOperatorRowCounts(operations.size(), 0U);
 			if (operatorRowCounts == nullptr) {
 				operatorRowCounts = &localOperatorRowCounts;
 			} else if (operatorRowCounts->size() != operations.size()) {
@@ -2133,7 +2137,7 @@ namespace graph::query::execution {
 				switch (operation->getType()) {
 					case logical::LogicalOpType::LOP_PROJECT: {
 						const auto &projection = dynamic_cast<const logical::LogicalProject &>(*operation);
-						std::vector<const expressions::Expression *> propertyExpressions;
+						utils::OwnedStdVector<const expressions::Expression *> propertyExpressions;
 						for (const auto &item: projection.getItems()) {
 							propertyExpressions.push_back(item.expression.get());
 						}
@@ -2240,7 +2244,7 @@ namespace graph::query::execution {
 						if (items.empty()) {
 							throw std::invalid_argument("logical Vector procedure Sort has no sort items");
 						}
-						std::vector<const expressions::Expression *> propertyExpressions;
+						utils::OwnedStdVector<const expressions::Expression *> propertyExpressions;
 						for (const auto &item: items) {
 							propertyExpressions.push_back(item.expression.get());
 						}
@@ -2261,7 +2265,7 @@ namespace graph::query::execution {
 						retainedKeys.set(checkedProcedureSizeMul(rows.size(), checkedProcedureSizeAdd(
 							sizeof(DecoratedRow),
 							checkedProcedureSizeMul(items.size(), sizeof(PropertyValue)))));
-						std::vector<DecoratedRow> decoratedRows;
+						std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> decoratedRows;
 						decoratedRows.reserve(rows.size());
 						retainedKeys.set(checkedProcedureSizeAdd(retainedKeys.bytes(),
 							checkedProcedureSizeMul(decoratedRows.capacity() - rows.size(), sizeof(DecoratedRow))));
@@ -2362,7 +2366,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] QueryResult
-		executeBufferedProcedure(std::vector<BufferedProcedureRow> rows, storage::LogicalGraphReadSnapshot &snapshot,
+		executeBufferedProcedure(ProcedureRows rows, storage::LogicalGraphReadSnapshot &snapshot,
 				const std::vector<const logical::LogicalOperator *> &operations,
 				const logical::LogicalOperator &root, const LogicalPlanReadRuntimeBounds &readBounds,
 				const QueryContext &context, const size_t retainedSourceBytes = 0U,
@@ -2643,7 +2647,7 @@ namespace graph::query::execution {
 			if (items.empty()) {
 				throw std::invalid_argument("logical Vector procedure Sort has no sort items");
 			}
-			std::vector<const expressions::Expression *> expressions;
+			utils::OwnedStdVector<const expressions::Expression *> expressions;
 			expressions.reserve(items.size());
 			for (const logical::LogicalSortItem &item: items) {
 				if (!item.expression) {
@@ -2716,7 +2720,7 @@ namespace graph::query::execution {
 				size_t storage_bytes = 0U;
 			};
 			std::map<size_t, RetainedDistinctInfo> retainedDistinctRows;
-			std::vector<DecoratedRow> retained;
+			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> retained;
 			size_t retainedBytes = 0U;
 			const auto decoratedBytes = [](const DecoratedRow &row) {
 				size_t bytes = checkedProcedureSizeAdd(sizeof(DecoratedRow) - sizeof(BufferedProcedureRow), bufferedProcedureRowBytes(row.row));
@@ -2768,7 +2772,7 @@ namespace graph::query::execution {
 				// temporary columns unwind, rather than double-reserving phases.
 				sourceBounds.maximum_materialized_bytes = topKBudget.available();
 				size_t count = std::min({capacity, procedureNodeBatchCapacity(sourceBounds), hits.size() - offset});
-				std::vector<BufferedProcedureRow> rows;
+				ProcedureRows rows;
 				for (;;) {
 					try {
 						auto prepared = makeBufferedVectorProcedureRows(std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(offset, count), context);
@@ -2927,7 +2931,7 @@ namespace graph::query::execution {
 			const size_t requestedOutputRowBytes =
 					checkedProcedureSizeMul(retained.size(), sizeof(BufferedProcedureRow));
 			outputRowSlots.set(requestedOutputRowBytes);
-			std::vector<BufferedProcedureRow> rows;
+			ProcedureRows rows;
 			rows.reserve(retained.size());
 			outputRowSlots.set(checkedProcedureSizeMul(rows.capacity(), sizeof(BufferedProcedureRow)));
 			const size_t outputRowSlackBytes = checkedProcedureSizeMul(rows.capacity() - retained.size(),
@@ -2939,7 +2943,7 @@ namespace graph::query::execution {
 			retainedDistinctKeys.clear();
 			retainedDistinctRows.clear();
 			heapBytes.reset();
-			std::vector<DecoratedRow>().swap(retained);
+			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>>().swap(retained);
 			heapSlotSlackBytes.reset();
 			outputRowSlots.reset();
 			const size_t suffixOffset = earlyProjection != nullptr ? projectIndex + 2U
@@ -3085,7 +3089,7 @@ namespace graph::query::execution {
 				}
 				return std::get<std::string>(value.getVariant());
 			};
-			std::vector<BufferedProcedureRow> rows;
+			ProcedureRows rows;
 			utils::OwnedStringVector defaultColumns;
 			std::optional<std::pair<std::string, PropertyValue>> deferredConfigurationUpdate;
 			bool deferredStatisticsReset = false;
@@ -3257,7 +3261,7 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical projection procedure backend could not open a read snapshot");
 			}
 
-			std::vector<BufferedProcedureRow> rows;
+			ProcedureRows rows;
 			utils::OwnedStringVector defaultColumns;
 			size_t retainedProcedureSourceBytes = 0U;
 			std::unique_ptr<gds::PreparedLogicalProjectionCatalogMutation> deferredCatalogMutation;
@@ -3592,7 +3596,7 @@ namespace graph::query::execution {
 						}
 						MaterializedByteReservation probeIds(&validationBudget);
 						probeIds.set(checkedProcedureSizeMul(std::min(path.node_ids.size(), maximumProbeRecords), sizeof(uint64_t)));
-						std::vector<uint64_t> pathIds;
+						utils::OwnedStdVector<uint64_t> pathIds;
 						pathIds.reserve(std::min(path.node_ids.size(), maximumProbeRecords));
 						probeIds.set(checkedProcedureSizeMul(pathIds.capacity(), sizeof(uint64_t)));
 						for (size_t offset = 0U; offset < path.node_ids.size();) {
@@ -3737,7 +3741,7 @@ namespace graph::query::execution {
 			QueryResult result = makeAdmittedProcedureResult(context);
 			if (operations.empty()) {
 				result.setColumns({"status"});
-				std::vector<BufferedProcedureRow> rows(1U);
+				ProcedureRows rows(1U);
 				rows.front().row.values.emplace("status", status());
 				QueryResult::Row row;
 				row.emplace("status", status());
@@ -3755,7 +3759,7 @@ namespace graph::query::execution {
 				}
 				BufferedProcedureRow source;
 				source.row.values.emplace("status", status());
-				std::vector<BufferedProcedureRow> rows;
+				ProcedureRows rows;
 				rows.push_back(std::move(source));
 				result = executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
 						0U, nullptr, true);
@@ -3912,7 +3916,7 @@ namespace graph::query::execution {
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
-			std::vector<uint64_t> operatorRowCounts(operations.size(), 0U);
+			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
 			for (size_t offset = 0U; offset < hitPrefix.size(); offset += capacity) {
 				context.checkGuard();
 				const auto batch = hitPrefix.subspan(offset, std::min(capacity, hitPrefix.size() - offset));
@@ -3937,7 +3941,7 @@ namespace graph::query::execution {
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
 			std::vector<std::unordered_set<std::string>> distinctRowsByOperation(operations.size());
-			std::vector<uint64_t> operatorRowCounts(operations.size(), 0U);
+			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
 			for (size_t offset = 0U; offset < hits.size(); offset += capacity) {
 				context.checkGuard();
 				const auto batch = std::span<const storage::LogicalGraphVectorSearchHit>(hits).subspan(
