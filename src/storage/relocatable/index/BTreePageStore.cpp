@@ -1117,7 +1117,11 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] BTreePage materializePreview(const OverlayMutationNode &node) const {
-			std::vector<PageId> virtualIds(virtual_nodes_.size(), PageId(1U));
+			// Internal child IDs use varints. Metadata assigns virtual IDs only
+			// during publication, so a one-byte placeholder can understate the
+			// final payload and admit a page that cannot be materialized. Reserve
+			// the largest legal width, as the initial-tree planner already does.
+			std::vector<PageId> virtualIds(virtual_nodes_.size(), PageId(std::numeric_limits<uint64_t>::max()));
 			return materialize(node, node.header.page_id, node.header.generation, LogSequenceNumber(1U), virtualIds);
 		}
 

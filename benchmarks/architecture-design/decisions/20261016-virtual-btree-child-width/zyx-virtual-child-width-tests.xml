@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="4" failures="0" disabled="0" errors="0" time="1.072" timestamp="2026-10-16T11:59:43.689" name="AllTests">
+  <testsuite name="RelocatableBTreePageStoreTest" tests="4" failures="0" disabled="0" skipped="0" errors="0" time="1.072" timestamp="2026-10-16T11:59:43.689">
+    <testcase name="CachedAppendSizePreservesMixedWritesAndOldSnapshots" file="/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp" line="13" status="run" result="completed" time="0.12" timestamp="2026-10-16T11:59:43.689" classname="RelocatableBTreePageStoreTest" />
+    <testcase name="OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers" file="/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp" line="73" status="run" result="completed" time="0.057" timestamp="2026-10-16T11:59:43.810" classname="RelocatableBTreePageStoreTest" />
+    <testcase name="ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay" file="/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp" line="124" status="run" result="completed" time="0.849" timestamp="2026-10-16T11:59:43.867" classname="RelocatableBTreePageStoreTest" />
+    <testcase name="VirtualInternalChildrenReserveTheirPersistedVarintWidth" file="/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp" line="189" status="run" result="completed" time="0.043" timestamp="2026-10-16T11:59:44.717" classname="RelocatableBTreePageStoreTest" />
+  </testsuite>
+</testsuites>

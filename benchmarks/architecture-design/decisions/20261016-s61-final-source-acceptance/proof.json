@@ -1,6 +1,6 @@
 {
   "stage": "S6.1",
-  "status": "accepted_revalidated",
+  "status": "source_fix_verified_renewed_freeze_pending",
   "source_commit": "8b685d5a3f268cfe1c5c6a5e405d9eaaa12a60f6",
   "frozen_directory": "/workspace/zyx-optimization-final-revalidated-20261016",
   "freeze_manifest_sha256": "9a73b32cbcf886c0b4550657fa35905f020cf2138143569e7fc5c074a36e02e8",
@@ -49,5 +49,6 @@
   "doc_links": "passed",
   "performance": "not started; complete prepared fixtures required before registration",
   "invalidation_rule": "Any production source change invalidates this freeze and requires affected regression before final acceptance.",
-  "medium_preparation": "pending untimed fixture preparation, not included in final source/affected-module regression acceptance"
+  "medium_preparation": "pending untimed fixture preparation, not included in final source/affected-module regression acceptance",
+  "revalidation_evidence": "../20261016-virtual-btree-child-width/proof.json"
 }

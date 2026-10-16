@@ -1,0 +1,21 @@
+{
+  "status": "100_affected_modules_verified_real_preparation_continuing",
+  "failure": "full holdout import, FOLLOWS batch starting after 352000 committed edges; same slotted-page replacement failure in frozen control and current",
+  "root_cause": "transaction-overlay materialization preview uses one-byte virtual child Page IDs; final metadata-assigned varints may be wider, overflowing packed internal page",
+  "fix": "preflight virtual children using maximum legal uint64 varint width, consistent with initial-tree planner; no storage format or resource limit change",
+  "negative_tests": 1,
+  "negative_failures": 1,
+  "focused_positive_tests": 4,
+  "focused_positive_failures": 0,
+  "full_suite": false,
+  "performance_samples": 0,
+  "affected_regression": {
+    "modules": 100,
+    "suites": 140,
+    "tests": 2064,
+    "failures": 0,
+    "full_suite": false
+  },
+  "production_source_sha256": "8040036e6318d8926ef1c4912c0ff6cb0e40e79a6f6ee58b9b9c2590974ea754",
+  "tests_source_sha256": "e9f57ab757f256411925a97752d667997e90813d9f3cd6f93a9a7d0b4946d8b5"
+}
