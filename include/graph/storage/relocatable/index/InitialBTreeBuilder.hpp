@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <deque>
 #include <span>
+#include <optional>
+#include "graph/utils/OwnedFunction.hpp"
 #include <vector>
 
 #include "graph/storage/relocatable/index/BTreePage.hpp"
@@ -29,7 +31,7 @@ namespace graph::storage {
 		BTreeLeafValueLayout leaf_value_layout = BTreeLeafValueLayout::BLVL_U64;
 		// Append without relocating owned leaf payloads. Their portable moves may
 		// require iterator-proxy credit, so vector growth otherwise deep-copies.
-		std::deque<InitialBTreePlanNode> nodes;
+		std::deque<InitialBTreePlanNode, utils::OwnedPmrAllocator<InitialBTreePlanNode>> nodes;
 		size_t leaf_count = 0U;
 		size_t root_ordinal = 0U;
 	};
@@ -43,6 +45,12 @@ namespace graph::storage {
 		[[nodiscard]] static InitialBTreePlan
 		plan(uint64_t indexId, std::span<const BTreePageEntry> entries,
 			 BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+        // Consumes one ordered private entry at a time; no complete input vector
+        // overlaps the immutable output plan. A failing source publishes nothing.
+        [[nodiscard]] static InitialBTreePlan planFromCursor(uint64_t indexId,
+            const utils::OwnedFunction<std::optional<BTreePageEntry>()> &next,
+            BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+
 		[[nodiscard]] static std::vector<BTreePage> materialize(uint64_t indexId, const InitialBTreePlan &plan,
 																std::span<const PageId> pageIds,
 																std::span<const Generation> generations,

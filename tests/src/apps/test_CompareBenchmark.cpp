@@ -817,3 +817,73 @@ TEST_F(CompareBenchmarkTest, BoundedPreparationRejectsInvalidColumnsBeforePublis
     EXPECT_THROW(static_cast<void>(loadGraph(db, writeSmallDataset(), 1U)), std::runtime_error);
     transaction.rollback(); db.close();
 }
+
+TEST_F(CompareBenchmarkTest, SelectedQueryListPreparesOnceAndMeasuresOnlyRequestedQueries) {
+    Options options; options.dataset=writeSmallDataset();options.dbPath=tempRoot/"profile-once.db";
+    options.scale="smoke";options.warmup=0;options.iterations=1;options.loadBatchRows=2;
+    options.selectedWorkloads={"label_scan_filter","aggregation_count_by_group"};
+    options.emitResultRows=true;
+    std::ostringstream captured;
+    struct Restore {std::streambuf *previous;~Restore(){std::cout.rdbuf(previous);}} restore{std::cout.rdbuf(captured.rdbuf())};
+    EXPECT_EQ(run(options),0);
+    const auto output=captured.str();
+    EXPECT_EQ(std::count(output.begin(),output.end(),'\n'),4);
+    EXPECT_NE(output.find("label_scan_filter"),std::string::npos);
+    EXPECT_NE(output.find("aggregation_count_by_group"),std::string::npos);
+    EXPECT_EQ(output.find("load_nodes_edges"),std::string::npos);
+    EXPECT_EQ(output.find("topk_property_sort"),std::string::npos);
+}
+
+TEST_F(CompareBenchmarkTest, QueryListRejectsAmbiguousUnknownAndImportSelections) {
+    for(const std::string names:{"",",label_scan_filter","label_scan_filter,","label_scan_filter,label_scan_filter","unknown","load_nodes_edges"}) {
+        std::vector<std::string> args={"bench","--dataset","data","--db-path","db","--scale","smoke","--workloads",names};
+        std::vector<char *> argv;for(auto &arg:args)argv.push_back(arg.data());
+        EXPECT_THROW(static_cast<void>(parseArgs(argv.size(),argv.data())),std::invalid_argument)<<names;
+    }
+    std::vector<std::string> args={"bench","--dataset","data","--db-path","db","--scale","smoke","--workloads","label_scan_filter","--workload","label_scan_filter"};
+    std::vector<char *> argv;for(auto &arg:args)argv.push_back(arg.data());
+    EXPECT_THROW(static_cast<void>(parseArgs(argv.size(),argv.data())),std::invalid_argument);
+}
+
+TEST_F(CompareBenchmarkTest, PreparedReadClonesPreserveTheSourceAndBuildRequestedIndexesPrivately) {
+    const auto dataset=writeSmallDataset();
+    const auto source=tempRoot/"prepared-source.db";
+    Options original;original.dataset=dataset;original.scale="smoke";original.loadBatchRows=2;
+    static_cast<void>(loadDatabase(original,source));
+    const auto bytes=[](const std::filesystem::path &path) {
+        std::ifstream input(path,std::ios::binary);
+        return std::vector<char>(std::istreambuf_iterator<char>(input),std::istreambuf_iterator<char>());
+    };
+    struct RestorePermissions {
+        std::filesystem::path path;
+        std::filesystem::perms mode;
+        ~RestorePermissions(){std::error_code error;std::filesystem::permissions(path,mode,error);}
+    } restorePermissions{source,std::filesystem::status(source).permissions()};
+    std::filesystem::permissions(source,std::filesystem::perms::owner_read,std::filesystem::perm_options::replace);
+    const auto unchanged=bytes(source);
+    for(const std::string profile:{"scan","indexed"}) {
+        Options options;options.dataset=dataset;options.scale="smoke";options.profile=profile;
+        options.dbPath=tempRoot/(profile+"-private.db");options.preparedDbPath=source;
+        options.selectedWorkloads={profile=="scan"?"label_scan_filter":"point_lookup_indexed"};
+        options.warmup=0;options.iterations=1;
+        std::ostringstream captured;
+        struct Restore {std::streambuf *previous;~Restore(){std::cout.rdbuf(previous);}} restore{std::cout.rdbuf(captured.rdbuf())};
+        EXPECT_EQ(run(options),0);
+        EXPECT_NE(captured.str().find(profile=="scan"?"\"value\":2":"\"value\":1"),std::string::npos);
+        EXPECT_EQ(bytes(source),unchanged);
+        EXPECT_THROW(static_cast<void>(loadDatabase(options,source)),std::invalid_argument);
+        EXPECT_EQ(bytes(source),unchanged);
+    }
+}
+
+TEST_F(CompareBenchmarkTest, PreparedInputRejectsImportAndMutationMeasurements) {
+    for(const auto &selection:std::vector<std::pair<std::string,std::string>>{
+        {"scan","load_nodes_edges"},{"write","point_create_node"},{"write_durable","point_create_node_durable"}}) {
+        std::vector<std::string> args={"bench","--dataset","data","--db-path","db","--scale","smoke",
+            "--profile",selection.first,"--workload",selection.second,"--prepared-db","source"};
+        std::vector<char *> argv;for(auto &arg:args)argv.push_back(arg.data());
+        EXPECT_THROW(static_cast<void>(parseArgs(argv.size(),argv.data())),std::invalid_argument);
+    }
+    Options options;options.preparedDbPath="source";
+    EXPECT_THROW(validatePreparedInput(options),std::invalid_argument);
+}

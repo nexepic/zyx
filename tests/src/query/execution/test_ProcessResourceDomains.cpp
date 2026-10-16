@@ -6,6 +6,22 @@
 
 namespace graph::query::execution::detail {
 namespace {
+TEST(ProcessResourceDomainsTest, NativeWriteGateSharesFileIdentityAndSeparatesDifferentDomains) {
+ ProcessResourceDomains registry(ResourceLimits::uniform(200U),ResourceLimits::uniform(100U));
+ auto first=registry.domain("first"),alias=registry.domain("first"),other=registry.domain("other");
+ auto firstGate=registry.lockWriteWorkspace(first);
+ const auto *identity=firstGate.mutex();
+ auto otherGate=registry.lockWriteWorkspace(other);
+ EXPECT_NE(identity,otherGate.mutex());
+ firstGate.unlock();
+ auto aliasGate=registry.lockWriteWorkspace(alias);
+ EXPECT_EQ(identity,aliasGate.mutex());
+ ProcessResourceDomains foreign(ResourceLimits::uniform(200U),ResourceLimits::uniform(100U));
+ auto outsider=foreign.domain("first");
+ EXPECT_THROW(static_cast<void>(registry.lockWriteWorkspace(outsider)),std::invalid_argument);
+ EXPECT_EQ(first->usage().total,0U);
+}
+
 TEST(ProcessResourceDomainsTest, RepeatedIdentityReusesTheDomainAndItsAllowance) {
 	ProcessResourceDomains registry(ResourceLimits::uniform(120U), ResourceLimits::uniform(100U));
 	auto first = registry.domain("opened-file:database-id"), alias = registry.domain("opened-file:database-id");

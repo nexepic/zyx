@@ -1,5 +1,5 @@
 {
-  "status": "dense_leaf_transfer_module_verified_combined_and_medium_pending",
+  "status": "final_2060_affected_tests_verified_complete_preparation_pending",
   "effective_accepted_progress": "24/34 (70.6%)",
   "negative_control": {
     "tests": 1,
@@ -14,28 +14,35 @@
     "full_suite": false
   },
   "policy": {
-    "COW_write_workspace_maximum_bytes": 33554432,
+    "COW_write_workspace_maximum_bytes": "existing WRITE class maximum, reduced by staged/concurrent usage and all root/database/protected-maintenance checks",
     "capability_metadata_headroom_bytes": 4096,
     "admission": "before publication/ID leasing locks, within existing WRITE/database/process caps",
-    "metadata": "explicit caller owns private decoded/copy/cursor buffers; cache publication retains CACHE ownership; private caller denial preserves shared entries"
+    "metadata": "explicit caller owns private decoded/copy/cursor buffers; cache publication retains CACHE ownership; private caller denial preserves shared entries",
+    "default_WRITE_class_maximum_bytes": 134217728,
+    "superseded_local_subset_bytes": 33554432,
+    "default_private_workspace_ceiling_bytes": 100663296,
+    "concurrent_staging_headroom_bytes": 33554432,
+    "workspace_coordination": "same-file fixed registry gate acquired before any resource reservation or metadata publication; waiting writers retain no private COW grant"
   },
   "remaining": "Release rebuild, bounded medium preparation validation, renewed source freeze, then final performance window",
   "production_source_sha256": {
     "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "4b09b58836f1a1d3ce6186ae2d20610230f8dc3d1a06d327218b6bdd2cc63410",
-    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "cc46588dcd534e02724c6f618e98c2bcef70245d197a4933283fafe4ee970862",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "ed81271cc58eb72caf9c9f3c3cf0e72b484479d2625ac7a5343533a57cd79e57",
     "src/storage/relocatable/metadata/LocationDirectory.cpp": "fed962a0c74b175a7c0cf496e601bb30d592d381d3d1a1fdb6d211ad1b2a6e18",
     "src/storage/relocatable/metadata/MetadataPageFile.cpp": "a2fc9f580039b81f5ccadc0853b7d14c13b6501ba8e15885ccfe7d56ae95f5cb",
     "src/storage/LogicalGraphTransactionOverlay.cpp": "9207922cc444a5d9ce61282cd2f8c789439e00ca21ec76e74f35c4d18bd703ec",
-    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "54825fe849da803cbcca1f99c43bb48d4d4c2174c6f7d7e551a948bd598aba22",
-    "include/graph/storage/relocatable/index/InitialBTreeBuilder.hpp": "497ba9cfb60c429b7af55740d6be7cb29f16d5b58a4e4243f0fca08bd3854745"
+    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "f7eb4479d8a2585600fcba96e9c455ddb8d32c14bfbe960bb17c2ce7b06f5f00",
+    "include/graph/storage/relocatable/index/InitialBTreeBuilder.hpp": "25d65ebf7c555459e68c2eefceb985a7d67f59278ac88b230640cb80d73062ce",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "17d8bd92436f5320cb642c016d6692c906e49a9abf5ded0edb9f837599d83b55",
+    "src/storage/relocatable/index/InitialBTreeBuilder.cpp": "23eb187f5d762fa28b59423eb52a51efaadb5b04d5fcc1a5f3b4c40424f44ef3",
+    "src/query/execution/ProcessResourceDomains.hpp": "5543c8b9d7e471d10e1647ad8f7713db461b5ae87a8aa7e7d2a70055610ff4db"
   },
   "combined_positive": {
     "modules": 99,
     "suites": 140,
-    "tests": 2048,
+    "tests": 2060,
     "failures": 0,
-    "full_suite": false,
-    "checkpoint": "before dense leaf transfer; requires final rerun"
+    "full_suite": false
   },
   "optional_cache": {
     "negative_tests": 2,
@@ -63,5 +70,119 @@
     "source_input_released_before_replacement": true,
     "leaf_backing_transferred": true,
     "old_snapshot_and_all_500_keys_verified": true
+  },
+  "documented_write_allowance": {
+    "negative_tests": 1,
+    "negative_failures": 1,
+    "positive_module_tests": 56,
+    "positive_failures": 0,
+    "no_changed_process_database_query_or_WRITE_class_limit": true
+  },
+  "streamed_rebuild": {
+    "focused_modules": 4,
+    "tests": 98,
+    "failures": 0,
+    "source_entries": 20000,
+    "validates_each_key_and_value": true,
+    "input_overlap_control_denied": true,
+    "optional_densification": "declines cold full-tree retention or private admission rejection without changing the current overlay",
+    "forced_fresh_rebuild": "consume and release one private source leaf at a time; compact exact leaf capacity; preserve cycle/level/ordering/value validation"
+  },
+  "native_optional_cache_admission": {
+    "actual_late_failure": "NativeReadSession.putNamedToken during later relationship-type preparation",
+    "negative_tests": 1,
+    "negative_failures": 1,
+    "positive_module_tests": 28,
+    "positive_failures": 0,
+    "scope": "native entity/labels/property/presence/named-token/token-name/pool/schema cache insertion; only ResourceAdmissionDenied bypasses optional retention",
+    "preserved": "bad_alloc, invalid argument, cancellation and required read/copy/cursor failures still propagate"
+  },
+  "final_smoke": {
+    "engine": "zyx-native",
+    "profile": "smoke",
+    "seed": 42,
+    "families": [
+      "point",
+      "scan",
+      "traversal",
+      "aggregate",
+      "sort",
+      "parameters",
+      "dynamic",
+      "wide_large",
+      "write",
+      "mixed",
+      "snapshot",
+      "maintenance",
+      "budget"
+    ],
+    "operations": 916,
+    "full_results_checked": true,
+    "performance_timing": false,
+    "maintenance_windows": [
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 520257536,
+        "write_bytes": 2798784
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133033984,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133033984,
+        "write_bytes": 762176
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133033984,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133033984,
+        "write_bytes": 762176
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133246976,
+        "write_bytes": 787072
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133369856,
+        "write_bytes": 778688
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133365760,
+        "write_bytes": 778752
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133369856,
+        "write_bytes": 778816
+      },
+      {
+        "file_bytes": 8126464,
+        "rss_bytes": 45318144,
+        "read_bytes": 133365760,
+        "write_bytes": 778752
+      }
+    ],
+    "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+    "binary_sha256": "f752a31c87ffea713026ed4b572750d3a5be75dcf0a60df7f8e5a99e4138ab82",
+    "trace_sha256": "ecb548771c399e2a5e626b31cf89d9e1e14692c423580243554061307cec8de3"
   }
 }

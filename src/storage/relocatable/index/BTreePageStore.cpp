@@ -784,11 +784,14 @@ namespace graph::storage {
 
 	private:
 		[[nodiscard]] bool rebuildDenseTree(bool requireReduction) {
-			utils::OwnedStdVector<BTreePageEntry> entries;
-			std::set<uint64_t> visitedExisting;
-			std::set<size_t> visitedVirtual;
-			collectEntries(root_, nodeFor(root_).header.level, entries, visitedExisting, visitedVirtual);
-			if (entries.empty()) {
+            utils::OwnedStdVector<OverlayPageReference> leaves;
+            std::set<uint64_t> visitedExisting;
+            std::set<size_t> visitedVirtual;
+            collectRebuildLeaves(root_, nodeFor(root_).header.level, leaves, visitedExisting, visitedVirtual);
+            if (requireReduction && std::ranges::any_of(leaves, [this](const auto &leaf) {
+                    return !leaf.is_virtual && !existing_nodes_.contains(leaf.existing_page_id.value());
+                })) return false; // Optional densification must not retain an entire cold tree.
+            if (leaves.size() == 1U && leaves.front() == root_ && nodeFor(root_).leaf_entries.empty()) {
 				// An empty root leaf is a valid scalar-index state. When a source pool
 				// cannot COW the final erase, retire the old reachable tree and publish
 				// one fresh empty root instead of rejecting the logical deletion.
@@ -811,10 +814,46 @@ namespace graph::storage {
 				nodeFor(root_).dirty = true;
 				return true;
 			}
-			InitialBTreePlan plan = InitialBTreeBuilder::plan(index_id_, entries, leaf_value_layout_);
-			// The immutable plan now owns the gathered keys. Release the input
-			// before constructing replacement nodes under the same WRITE grant.
-			entries = {};
+            InitialBTreePlan plan;
+            if (requireReduction) {
+                // Keep the optional path non-destructive until reduction is proven.
+                utils::OwnedStdVector<BTreePageEntry> entries;
+                std::set<uint64_t> existing;
+                std::set<size_t> virtuals;
+                try {
+                    collectEntries(root_, nodeFor(root_).header.level, entries, existing, virtuals);
+                    plan = InitialBTreeBuilder::plan(index_id_, entries, leaf_value_layout_);
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    return false;
+                }
+            } else {
+                size_t leafOrdinal = 0U, entryOrdinal = 0U;
+                std::span<const std::byte> previousKey;
+                plan = InitialBTreeBuilder::planFromCursor(index_id_, [&]() -> std::optional<BTreePageEntry> {
+                    while (leafOrdinal < leaves.size()) {
+                        const auto reference = leaves[leafOrdinal];
+                        auto &leaf = loadNode(reference, 0U);
+                        if (leaf.header.kind != BTreeNodeKind::BPN_LEAF || leaf.leaf_entries.empty())
+                            throw FormatException(FormatError::FERR_INVALID_STATE,
+                                "relocatable transaction-local B+Tree rebuild found an empty non-root leaf");
+                        BTreePageEntry entry = std::move(leaf.leaf_entries[entryOrdinal++]);
+                        const bool invalidValue = leaf_value_layout_ == BTreeLeafValueLayout::BLVL_U64
+                            ? entry.value_or_child == 0U : entry.value_or_child != 0U;
+                        if (entry.key.empty() || invalidValue || (!previousKey.empty() && !lessKey(previousKey, entry.key)))
+                            throw FormatException(FormatError::FERR_INVALID_STATE,
+                                "relocatable transaction-local B+Tree rebuild found unordered leaf entries");
+                        // Key backing transfers into the immutable plan and stays
+                        // alive across leaf growth/compaction until this cursor ends.
+                        previousKey = std::span<const std::byte>(entry.key.data(), entry.key.size());
+                        if (entryOrdinal == leaf.leaf_entries.size()) {
+                            leaf.leaf_entries = {};
+                            ++leafOrdinal; entryOrdinal = 0U;
+                        }
+                        return entry;
+                    }
+                    return std::nullopt;
+                }, leaf_value_layout_);
+            }
 			const size_t liveVirtualCount = static_cast<size_t>(std::ranges::count_if(
 					virtual_nodes_, [](const OverlayMutationNode &node) { return !node.retired; }));
 			if (requireReduction && plan.nodes.size() >= liveVirtualCount) {
@@ -866,6 +905,22 @@ namespace graph::storage {
 			root_ = rebuilt[plan.root_ordinal];
 			return true;
 		}
+
+        void collectRebuildLeaves(const OverlayPageReference &reference, uint16_t level,
+                utils::OwnedStdVector<OverlayPageReference> &leaves,
+                std::set<uint64_t> &existing, std::set<size_t> &virtuals) {
+            const bool first = reference.is_virtual ? virtuals.insert(reference.virtual_ordinal).second
+                : existing.insert(reference.existing_page_id.value()).second;
+            if (!first) throw FormatException(FormatError::FERR_INVALID_STATE,
+                "relocatable transaction-local B+Tree rebuild found a cycle or shared child page");
+            if (level == 0U) { leaves.push_back(reference); return; }
+            auto &node = loadNode(reference, level);
+            if (node.header.kind != BTreeNodeKind::BPN_INTERNAL)
+                throw FormatException(FormatError::FERR_INVALID_STATE,
+                    "relocatable transaction-local B+Tree rebuild found an invalid internal level");
+            for (size_t child = 0U; child <= node.internal_entries.size(); ++child)
+                collectRebuildLeaves(childAt(node, child), static_cast<uint16_t>(level - 1U), leaves, existing, virtuals);
+        }
 
 		void collectEntries(const OverlayPageReference &reference, uint16_t expectedLevel,
 							utils::OwnedStdVector<BTreePageEntry> &entries, std::set<uint64_t> &visitedExisting,

@@ -1,0 +1,79 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmission*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from NativeReadSessionTokenBudgetTest
+[ RUN      ] NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+/workspace/zyx/tests/src/storage/relocatable/entity/test_NativeReadSessionTokenBudget.cpp:655: Failure
+Expected: put(name,id) doesn't throw an exception.
+  Actual: it throws graph::query::execution::detail::ResourceAdmissionDenied with description "hierarchical resource admission denied".
+
+[  FAILED  ] NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries (2 ms)
+[----------] 1 test from NativeReadSessionTokenBudgetTest (2 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (2 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] NativeReadSessionTokenBudgetTest.OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

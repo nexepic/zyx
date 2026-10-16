@@ -1,0 +1,88 @@
+{
+  "engine": "zyx-native",
+  "profile": "smoke",
+  "seed": 42,
+  "families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "operations": 916,
+  "full_results_checked": true,
+  "performance_timing": false,
+  "maintenance_windows": [
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 520257536,
+      "write_bytes": 2798784
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133033984,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133033984,
+      "write_bytes": 762176
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133033984,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133033984,
+      "write_bytes": 762176
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133246976,
+      "write_bytes": 787072
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133369856,
+      "write_bytes": 778688
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133365760,
+      "write_bytes": 778752
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133369856,
+      "write_bytes": 778816
+    },
+    {
+      "file_bytes": 8126464,
+      "rss_bytes": 45318144,
+      "read_bytes": 133365760,
+      "write_bytes": 778752
+    }
+  ],
+  "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+  "binary_sha256": "f752a31c87ffea713026ed4b572750d3a5be75dcf0a60df7f8e5a99e4138ab82",
+  "trace_sha256": "ecb548771c399e2a5e626b31cf89d9e1e14692c423580243554061307cec8de3"
+}

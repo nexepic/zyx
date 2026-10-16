@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+  File "/tmp/zyx-final-window.py", line 42, in preflight
+    else:report=f.run_native((CONTROL if engine=='control' else CURRENT)/'zyx-workload-contract-worker',destination,profile=profile,seed=seed)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 276, in run_native
+    worker.call("MIXED_THREADS", threaded_operations)
+  File "/tmp/zyx-final-window.py", line 36, in call
+    try:return original(self,*args,**kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 108, in call
+    raise RuntimeError(response.get("error", "worker failure"))
+RuntimeError: hierarchical resource admission denied

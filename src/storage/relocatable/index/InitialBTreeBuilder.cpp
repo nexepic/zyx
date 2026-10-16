@@ -86,7 +86,17 @@ namespace graph::storage {
 			size_t bytes_ = RSS_BTREE_PACKED_HEADER_BYTES;
 		};
 
-		void appendNode(InitialBTreePlan &plan, InitialBTreePlanNode node) { plan.nodes.push_back(std::move(node)); }
+		void appendNode(InitialBTreePlan &plan, InitialBTreePlanNode node) {
+            // Finish a leaf with exact backing rather than retaining geometric
+            // spare capacity for every page in a large replacement tree.
+            if (node.leaf_entries.size() != node.leaf_entries.capacity()) {
+                utils::OwnedStdVector<BTreePageEntry> exact;
+                exact.reserve(node.leaf_entries.size());
+                for (auto &entry : node.leaf_entries) exact.push_back(std::move(entry));
+                node.leaf_entries.swap(exact);
+            }
+            plan.nodes.push_back(std::move(node));
+        }
 
 		void validateMaterializationPlan(uint64_t indexId, const InitialBTreePlan &plan,
 										 std::span<const PageId> pageIds, std::span<const Generation> generations,
@@ -148,13 +158,27 @@ namespace graph::storage {
 		if (indexId == 0U || entries.empty() || !isLeafValueLayout(leafValueLayout)) {
 			fail(FormatError::FERR_INVALID_HEADER, "relocatable initial B+Tree plan requires an Index and entries");
 		}
+        size_t ordinal = 0U;
+        return planFromCursor(indexId, [&]() -> std::optional<BTreePageEntry> {
+            if (ordinal == entries.size()) return std::nullopt;
+            return entries[ordinal++];
+        }, leafValueLayout);
+    }
+
+    InitialBTreePlan InitialBTreeBuilder::planFromCursor(uint64_t indexId,
+            const utils::OwnedFunction<std::optional<BTreePageEntry>()> &next,
+            BTreeLeafValueLayout leafValueLayout) {
+        if (indexId == 0U || !next || !isLeafValueLayout(leafValueLayout))
+            fail(FormatError::FERR_INVALID_HEADER, "relocatable initial B+Tree plan requires an Index and entries");
+
 		InitialBTreePlan result;
 		result.leaf_value_layout = leafValueLayout;
 		static_cast<void>(measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0U, leafValueLayout));
 		InitialBTreePlanNode node;
 		AppendSizer leafSizer;
 		std::vector<size_t> levelNodes;
-		for (const BTreePageEntry &entry: entries) {
+		for (auto input = next(); input; input = next()) {
+            BTreePageEntry &entry = *input;
 			const bool invalidValue = leafValueLayout == BTreeLeafValueLayout::BLVL_U64 ? entry.value_or_child == 0U
 																						: entry.value_or_child != 0U;
 			if (entry.key.empty() || invalidValue ||
@@ -162,9 +186,10 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable initial B+Tree entries have an invalid leaf value, key, or order");
 			}
-			node.leaf_entries.push_back(entry);
+			node.leaf_entries.push_back(std::move(entry));
 			if (!leafSizer.appendFits(BTreeNodeKind::BPN_LEAF, node.leaf_entries, leafValueLayout)) {
-				node.leaf_entries.pop_back();
+				BTreePageEntry overflow = std::move(node.leaf_entries.back());
+                node.leaf_entries.pop_back();
 				if (node.leaf_entries.empty()) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable initial B+Tree entry cannot fit in an empty leaf");
@@ -174,13 +199,15 @@ namespace graph::storage {
 				levelNodes.push_back(result.nodes.size() - 1U);
 				node = {};
 				leafSizer.reset();
-				node.leaf_entries.push_back(entry);
+				node.leaf_entries.push_back(std::move(overflow));
 				if (!leafSizer.appendFits(BTreeNodeKind::BPN_LEAF, node.leaf_entries, leafValueLayout)) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable initial B+Tree entry cannot fit in an empty leaf");
 				}
 			}
 		}
+        if (node.leaf_entries.empty())
+            fail(FormatError::FERR_INVALID_HEADER, "relocatable initial B+Tree plan requires an Index and entries");
 		node.first_key = node.leaf_entries.front().key;
 		appendNode(result, std::move(node));
 		levelNodes.push_back(result.nodes.size() - 1U);

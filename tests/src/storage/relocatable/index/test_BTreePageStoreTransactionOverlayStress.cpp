@@ -31,6 +31,8 @@ namespace {
   ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2)).has_value());
   const IndexRootLocation root{17U, request.page_id, request.generation};
   static_cast<void>(store.publishRoots(std::span(&root, 1), {}, LogSequenceNumber(3)));
+  for (uint16_t ordinal=0U;ordinal<24U;++ordinal)
+   static_cast<void>(store.upsert(17U,wideKey(ordinal),1000U+ordinal,LogSequenceNumber(4U+ordinal)));
   auto before = metadata->openSnapshot();
   constexpr size_t maximum = 32U * 1024U * 1024U;
   auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
@@ -46,7 +48,12 @@ namespace {
   }
   EXPECT_EQ(memory->used(), 0U);
   BTreeIndex index(17U, store, *metadata);
-  EXPECT_TRUE(index.scan(before, std::nullopt, 501U).empty());
+  const auto oldRows=index.scan(before,std::nullopt,25U);
+  ASSERT_EQ(oldRows.size(),24U);
+  for(uint16_t ordinal=0U;ordinal<24U;++ordinal) {
+   EXPECT_EQ(oldRows[ordinal].key,wideKey(ordinal));
+   EXPECT_EQ(oldRows[ordinal].value_or_child,1000U+ordinal);
+  }
   auto current = metadata->openSnapshot();
   const auto rows = index.scan(current, std::nullopt, 501U);
   ASSERT_EQ(rows.size(), 500U);

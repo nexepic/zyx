@@ -1,0 +1,15 @@
+{
+  "stage": "S0.4",
+  "status": "registered_not_measured",
+  "formal_timing": false,
+  "scope": "Separate CPU/heap/I/O sampling processes for scan, aggregate, sort, point and traversal; instrumentation excluded from formal ratios",
+  "sampling_boundary": "Collector paused during import/warmup; resume after first query result",
+  "mechanism_inputs": "4096 native owners, rank=(ordinal*7919)%4096, one selected integer field, 64-row creation chunks, 64MiB query bound",
+  "falsification": [
+    "Native selected-property storage read versus full native sort shows the remaining execution/output cost, not a causal layout speedup",
+    "Production typed filter including conversion versus production generic predicate over the identical materialized native source, comparing every selected ordinal",
+    "Native full sort versus bounded Top-K with identical unique ordering; full sort consumes 4096 outputs while Top-K consumes 128; output/cardinality difference is disclosed",
+    "No authenticated adjacency check bypass; layout model evidence cannot replace production consistency checks"
+  ],
+  "acceptance": "Report negative or inconclusive mechanisms honestly. Never add nested timer totals or infer an end-to-end win from a microprobe."
+}

@@ -158,7 +158,7 @@ namespace graph::storage {
 			if (found == node_label_cache_.end()) return std::nullopt;
 			return std::span<const uint64_t>(found->second);
 		}
-		void putNodeLabels(uint64_t id, const std::vector<uint64_t> &labels) const {
+		void putNodeLabels(uint64_t id, const std::vector<uint64_t> &labels) const try {
 			const auto discardPrevious = [&]() {
 				if (const auto found = node_label_cache_.find(id); found != node_label_cache_.end()) {
 					node_label_cache_bytes_ -= found->second.capacity() * sizeof(uint64_t);
@@ -205,7 +205,9 @@ namespace graph::storage {
 				node_label_cache_bytes_ += bytes;
 			}
 			while (node_label_cache_bytes_ > MAXIMUM_CACHED_NODE_LABEL_BYTES) evictOldest();
-		}
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
+        }
 		void putNode(uint64_t id, const NodeEntityRecord &value) const {
 			put(node_cache_, node_order_, id, value);
 		}
@@ -273,7 +275,7 @@ namespace graph::storage {
 			const auto found = property_presence_cache_.find(PropertyCacheKey{isEdge, entityId, token});
 			return found == property_presence_cache_.end() ? std::nullopt : std::optional<bool>(found->second);
 		}
-		void putPropertyPresence(bool isEdge, uint64_t entityId, uint32_t token, bool present) const {
+		void putPropertyPresence(bool isEdge, uint64_t entityId, uint32_t token, bool present) const try {
 			if (entityId == 0U || token == 0U) {
 				throw std::invalid_argument("native read session Property presence cache requires nonzero identifiers");
 			}
@@ -289,7 +291,9 @@ namespace graph::storage {
 			property_presence_order_.push_back(key);
 			try { property_presence_cache_.emplace(key, present); }
 			catch (...) { property_presence_order_.pop_back(); throw; }
-		}
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
+        }
 
 		[[nodiscard]] std::optional<std::string> tokenName(TokenNameKind kind, uint64_t tokenId,
 				const std::function<void(size_t)> &copyAdmission = {}) const {
@@ -353,7 +357,7 @@ namespace graph::storage {
 			}
 			putNamedToken(relationship_type_token_cache_, relationship_type_token_order_, relationship_type_token_bytes_, name, token.value_or(0U));
 		}
-		void putTokenName(TokenNameKind kind, uint64_t tokenId, std::string_view name) const {
+		void putTokenName(TokenNameKind kind, uint64_t tokenId, std::string_view name) const try {
 			if (tokenId == 0U || name.empty()) {
 				throw std::invalid_argument("native read session token names require nonzero IDs and values");
 			}
@@ -391,7 +395,9 @@ namespace graph::storage {
 				throw;
 			}
 			token_name_bytes_ += name.size();
-		}
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
+        }
 
 		// Schema lists are immutable for a bound metadata generation. Cache only a
 		// bounded validated copy, so repeated index candidates do not repeatedly
@@ -439,12 +445,14 @@ namespace graph::storage {
 		[[nodiscard]] const std::pmr::vector<CatalogEntry> *entityPagePools() const noexcept {
 			return entity_page_pools_.has_value() ? &*entity_page_pools_ : nullptr;
 		}
-		void putEntityPagePools(const std::vector<CatalogEntry> &pools) const {
+		void putEntityPagePools(const std::vector<CatalogEntry> &pools) const try {
 			if (pools.size() <= MAXIMUM_CACHED_ENTITY_PAGE_POOLS) {
 				std::pmr::vector<CatalogEntry> replacement(pools.begin(), pools.end(), memoryResource());
 				entity_page_pools_ = std::move(replacement);
 			}
-		}
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
+        }
 
 		// Selected Property reads share one snapshot-bound cursor. It retains at
 		// most one decoded Property page and falls back to an authenticated point
@@ -467,7 +475,7 @@ namespace graph::storage {
 		}
 		template <typename Cache>
 		static void putNamedToken(Cache &cache, std::pmr::deque<std::pmr::string> &order, size_t &bytes,
-				std::string_view name, typename Cache::mapped_type token) {
+				std::string_view name, typename Cache::mapped_type token) try {
 			if (const auto found = cache.find(name); found != cache.end()) {
 				found->second = token;
 				return;
@@ -490,10 +498,12 @@ namespace graph::storage {
 				throw;
 			}
 			bytes += nameBytes;
-		}
+		} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
+        }
 
         template<class Value>
-        void putOwnedProperty(bool isEdge, uint64_t entityId, uint32_t token, const Value &input) const {
+        void putOwnedProperty(bool isEdge, uint64_t entityId, uint32_t token, const Value &input) const try {
             const PropertyValue *value = [&]() -> const PropertyValue * {
                 if constexpr (std::is_same_v<std::remove_cvref_t<Value>, PropertyValue>) return &input;
                 else return input ? &*input : nullptr;
@@ -539,6 +549,8 @@ namespace graph::storage {
                    property_cache_bytes_ > MAXIMUM_CACHED_PROPERTY_BYTES) {
                 eraseEntry(property_order_.front()); property_order_.pop_front();
             }
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // Optional retention must not invalidate an authenticated read.
         }
 
 		template <typename Value>

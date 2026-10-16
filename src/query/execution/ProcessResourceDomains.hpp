@@ -63,6 +63,19 @@ public:
         }
         throw std::invalid_argument("cache domain does not belong to this registry");
     }
+    // Serialize native workspace ownership before metadata publication, without
+    // holding registry/resource locks while waiting. Fixed slots keep the gate
+    // stable; the caller's domain owner prevents slot reuse during a write.
+    std::unique_lock<std::mutex> lockWriteWorkspace(const std::shared_ptr<DatabaseResourceBudget> &domain) {
+        std::unique_lock registry(mutex_);
+        for (size_t i = 0U; i < maximum_domains_; ++i) {
+            if (!domain || slots_[i].domain.lock() != domain) continue;
+            auto *gate = &slots_[i].write_workspace;
+            registry.unlock();
+            return std::unique_lock<std::mutex>(*gate);
+        }
+        throw std::invalid_argument("write workspace domain does not belong to this registry");
+    }
     // Snapshot registration/control memory must not compete with decoded cache
     // payload. Prepay before publication so pin/reclamation paths use local
     // accounting only. This does not cover all maintenance workspaces.
@@ -125,7 +138,7 @@ public:
 		return owner;
 	}
 private:
-	struct Slot { std::string identity; std::weak_ptr<DatabaseResourceBudget> domain; std::weak_ptr<PrepaidMemoryResource> cache; std::weak_ptr<PrepaidMemoryResource> control; std::weak_ptr<PrepaidMemoryResource> logical_ids; std::weak_ptr<const uint64_t> file_limit; };
+	struct Slot { std::string identity; std::weak_ptr<DatabaseResourceBudget> domain; std::weak_ptr<PrepaidMemoryResource> cache; std::weak_ptr<PrepaidMemoryResource> control; std::weak_ptr<PrepaidMemoryResource> logical_ids; std::weak_ptr<const uint64_t> file_limit; std::mutex write_workspace; };
 	std::shared_ptr<ProcessResourceBudget> process_;
 	ResourceLimits database_limits_;
 	size_t maximum_domains_, maximum_queries_;

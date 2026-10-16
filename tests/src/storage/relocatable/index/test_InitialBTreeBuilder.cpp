@@ -290,7 +290,9 @@ TEST(InitialBTreeBuilderTest, GrowingPlanNodesPreservesLeafBackingUnderTightWrit
   const auto retained = memory->used();
   ASSERT_GT(retained, 65536U);
   PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - retained - 65536U);
+  const auto beforeGrowth = memory->used();
   EXPECT_NO_THROW({for (size_t ordinal = 0U; ordinal < 128U; ++ordinal) plan.nodes.emplace_back();});
+  EXPECT_GE(memory->used() - beforeGrowth, 64U * sizeof(InitialBTreePlanNode));
   ASSERT_EQ(plan.nodes.size(), 129U);
   EXPECT_EQ(plan.nodes.front().leaf_entries.data(), backing);
   ASSERT_EQ(plan.nodes.front().leaf_entries.size(), 2048U);
@@ -300,4 +302,70 @@ TEST(InitialBTreeBuilderTest, GrowingPlanNodesPreservesLeafBackingUnderTightWrit
   }
  }
  EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST(InitialBTreeBuilderTest, StreamingPlanAvoidsCompleteInputOverlapAndCompactsEveryLeaf) {
+ using namespace graph::query::execution::detail;
+ constexpr size_t count = 20000U;
+ const size_t maximum = count * (sizeof(BTreePageEntry) + sizeof(uint64_t) +
+     graph::utils::detail::standardContainerProxyBytes()) + 512U * 1024U;
+ auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+ auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+ auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_WRITE, maximum);
+ auto memory = std::make_shared<PrepaidMemoryResource>(account, maximum);
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  {
+   graph::utils::OwnedStdVector<BTreePageEntry> gathered;
+   gathered.reserve(count);
+   for (size_t index=0U;index<count;++index) gathered.push_back({keyFor(index+1U),index+1U});
+   const auto retained=memory->used();
+   EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::plan(71U,gathered)),ResourceAdmissionDenied);
+   EXPECT_EQ(memory->used(),retained);
+  }
+  size_t ordinal=0U;
+  const auto plan=InitialBTreeBuilder::planFromCursor(71U,[&]() -> std::optional<BTreePageEntry> {
+   if(ordinal==count)return std::nullopt;
+   ++ordinal;return BTreePageEntry{keyFor(ordinal),ordinal};
+  });
+  ASSERT_EQ(ordinal,count);
+  size_t seen=0U;
+  for(size_t leaf=0U;leaf<plan.leaf_count;++leaf) {
+   EXPECT_EQ(plan.nodes[leaf].leaf_entries.capacity(),plan.nodes[leaf].leaf_entries.size());
+   for(const auto &entry:plan.nodes[leaf].leaf_entries) {
+    ++seen;EXPECT_EQ(entry.key,keyFor(seen));EXPECT_EQ(entry.value_or_child,seen);
+   }
+  }
+  EXPECT_EQ(seen,count);
+  EXPECT_LT(memory->used(),maximum);
+ }
+ EXPECT_EQ(memory->used(),0U);
+}
+
+TEST(InitialBTreeBuilderTest, StreamingSourceFailureAndInvalidInputsReleaseAllPrivatePlanBytes) {
+ using namespace graph::query::execution::detail;
+ constexpr size_t maximum=1024U*1024U;
+ auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+ auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(maximum));
+ auto account=std::make_shared<ResourceAccount>(database,ResourceClass::RCK_WRITE,maximum);
+ auto memory=std::make_shared<PrepaidMemoryResource>(account,maximum);
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  size_t calls=0U;
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(0U,[&]() -> std::optional<BTreePageEntry>{++calls;return std::nullopt;})),FormatException);
+  EXPECT_EQ(calls,0U);
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(71U,[]() -> std::optional<BTreePageEntry>{return std::nullopt;})),FormatException);
+  EXPECT_EQ(memory->used(),0U);
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(71U,[&]() -> std::optional<BTreePageEntry> {
+   if(++calls==1000U)throw std::runtime_error("source rejected");
+   return BTreePageEntry{keyFor(calls),calls};
+  })),std::runtime_error);
+  EXPECT_EQ(memory->used(),0U);
+  calls=0U;
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(71U,[&]() -> std::optional<BTreePageEntry> {
+   if(calls++==2U)return std::nullopt;
+   return BTreePageEntry{keyFor(2U-calls),1U};
+  })),FormatException);
+ }
+ EXPECT_EQ(memory->used(),0U);
 }
