@@ -1,0 +1,121 @@
+[0/2] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_core.dir/src/query/gds/LogicalGraphAlgorithms.cpp.o
+In file included from /workspace/zyx/src/query/gds/LogicalGraphAlgorithms.cpp:9:
+In file included from /workspace/zyx/include/graph/query/gds/LogicalGraphAlgorithms.hpp:17:
+In file included from /workspace/zyx/include/graph/query/gds/LogicalGraphProjection.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/src/query/gds/LogicalGraphAlgorithms.cpp:105:45: warning: missing field 'node_to_index' initializer [-Wmissing-designated-field-initializers]
+  105 |                         ValidatedCsr result{.csr = std::move(csr)};
+      |                                                                  ^
+6 warnings generated.
+[2/4] Building CXX object CMakeFiles/zyx_core.dir/src/query/execution/LogicalPlanProcedureRuntime.cpp.o
+In file included from /workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:18:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:11:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:88:81: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   88 |                         return {.include_labels = true, .include_type = false, .all_properties = true};
+      |                                                                                                      ^
+/workspace/zyx/src/query/execution/LogicalPlanProcedureRuntime.cpp:1289:83: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1289 |                                         auto nodes = snapshot.readNodesShapedSorted(batchIds, {.include_labels = true});
+      |                                                                                                                      ^
+8 warnings generated.
+[3/4] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = LogicalGdsResourceOwnershipTest.*:LogicalGdsProceduresTest.*
+[==========] Running 26 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from LogicalGdsResourceOwnershipTest
+[ RUN      ] LogicalGdsResourceOwnershipTest.ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction
+[       OK ] LogicalGdsResourceOwnershipTest.ProjectionRejectsBeforeScanningAndRefundsItsPartialConstruction (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.EscapedLazyCsrUsesTheOriginatingAuthorityAndOutlivesTheProjection
+[       OK ] LogicalGdsResourceOwnershipTest.EscapedLazyCsrUsesTheOriginatingAuthorityAndOutlivesTheProjection (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries
+[       OK ] LogicalGdsResourceOwnershipTest.DeniedLazyCsrPublishesNothingAndRefundsBeforeTheSameProjectionRetries (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency
+[       OK ] LogicalGdsResourceOwnershipTest.DeniedProjectionCopyPreservesTheSourceAndItsCompleteAdjacency (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.LegacyProjectionDoesNotBorrowAnUnrelatedDefaultPmrResource
+[       OK ] LogicalGdsResourceOwnershipTest.LegacyProjectionDoesNotBorrowAnUnrelatedDefaultPmrResource (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.CatalogCommitAndLazyCsrKeepTheirCacheOwnerUnderAForeignCaller
+[       OK ] LogicalGdsResourceOwnershipTest.CatalogCommitAndLazyCsrKeepTheirCacheOwnerUnderAForeignCaller (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.AbandonedCatalogPreparationRefundsCandidateMetadataAndRevisionState
+[       OK ] LogicalGdsResourceOwnershipTest.AbandonedCatalogPreparationRefundsCandidateMetadataAndRevisionState (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry
+[       OK ] LogicalGdsResourceOwnershipTest.EveryPreparationAdmissionFailureRestoresTheEmptyCatalogAndRefundsBeforeRetry (1 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache
+[       OK ] LogicalGdsResourceOwnershipTest.EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays
+[       OK ] LogicalGdsResourceOwnershipTest.OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays (0 ms)
+[ RUN      ] LogicalGdsResourceOwnershipTest.AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable
+[       OK ] LogicalGdsResourceOwnershipTest.AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable (5 ms)
+[----------] 11 tests from LogicalGdsResourceOwnershipTest (7 ms total)
+
+[----------] 15 tests from LogicalGdsProceduresTest
+[ RUN      ] LogicalGdsProceduresTest.ProjectsListsDescribesAndDropsAGraphFromOnePinnedLogicalSnapshot
+[       OK ] LogicalGdsProceduresTest.ProjectsListsDescribesAndDropsAGraphFromOnePinnedLogicalSnapshot (232 ms)
+[ RUN      ] LogicalGdsProceduresTest.ListsProjectionDescriptorsInStableNameOrderWithoutMaterializingCsr
+[       OK ] LogicalGdsProceduresTest.ListsProjectionDescriptorsInStableNameOrderWithoutMaterializingCsr (76 ms)
+[ RUN      ] LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes
+[       OK ] LogicalGdsProceduresTest.PreservesCatalogProcedureResultColumnOrderAndLogicalValueTypes (80 ms)
+[ RUN      ] LogicalGdsProceduresTest.PreservesAlgorithmProcedureResultColumnOrderAndLogicalValueTypes
+[       OK ] LogicalGdsProceduresTest.PreservesAlgorithmProcedureResultColumnOrderAndLogicalValueTypes (151 ms)
+[ RUN      ] LogicalGdsProceduresTest.DescribesConstantWeightProjectionWithLegacyWeightKindFields
+[       OK ] LogicalGdsProceduresTest.DescribesConstantWeightProjectionWithLegacyWeightKindFields (151 ms)
+[ RUN      ] LogicalGdsProceduresTest.DescribesAndExecutesReversePropertyWeightedProjection
+[       OK ] LogicalGdsProceduresTest.DescribesAndExecutesReversePropertyWeightedProjection (182 ms)
+[ RUN      ] LogicalGdsProceduresTest.ValidatesCatalogProcedureArgumentsAndSupportsBoundedDropAll
+[       OK ] LogicalGdsProceduresTest.ValidatesCatalogProcedureArgumentsAndSupportsBoundedDropAll (77 ms)
+[ RUN      ] LogicalGdsProceduresTest.PreservesLegacyCatalogErrorsAndProjectionSignatureVariants
+[       OK ] LogicalGdsProceduresTest.PreservesLegacyCatalogErrorsAndProjectionSignatureVariants (221 ms)
+[ RUN      ] LogicalGdsProceduresTest.ReturnsEmptyStreamsForAnEmptyProjection
+[       OK ] LogicalGdsProceduresTest.ReturnsEmptyStreamsForAnEmptyProjection (70 ms)
+[ RUN      ] LogicalGdsProceduresTest.ProjectsMultipleLabelsRelationshipTypesAndConstantWeightsFromAConfigMap
+[       OK ] LogicalGdsProceduresTest.ProjectsMultipleLabelsRelationshipTypesAndConstantWeightsFromAConfigMap (264 ms)
+[ RUN      ] LogicalGdsProceduresTest.KeepsProjectionCatalogsIsolatedBetweenDatabaseInstances
+[       OK ] LogicalGdsProceduresTest.KeepsProjectionCatalogsIsolatedBetweenDatabaseInstances (131 ms)
+[ RUN      ] LogicalGdsProceduresTest.KeepsProjectionCatalogProcessLocalAcrossDatabaseReopen
+[       OK ] LogicalGdsProceduresTest.KeepsProjectionCatalogProcessLocalAcrossDatabaseReopen (137 ms)
+[ RUN      ] LogicalGdsProceduresTest.RunsNativePageRankWccAndWeightedDijkstraWithStableResultContracts
+[       OK ] LogicalGdsProceduresTest.RunsNativePageRankWccAndWeightedDijkstraWithStableResultContracts (321 ms)
+[ RUN      ] LogicalGdsProceduresTest.RunsNativeLeidenWithValidatedOptionsAndStableCommunityIds
+[       OK ] LogicalGdsProceduresTest.RunsNativeLeidenWithValidatedOptionsAndStableCommunityIds (462 ms)
+[ RUN      ] LogicalGdsProceduresTest.ScalarPathProcedureOutputsDoNotDecodeNodeProperties
+[       OK ] LogicalGdsProceduresTest.ScalarPathProcedureOutputsDoNotDecodeNodeProperties (234 ms)
+[----------] 15 tests from LogicalGdsProceduresTest (2796 ms total)
+
+[----------] Global test environment tear-down
+[==========] 26 tests from 2 test suites ran. (2804 ms total)
+[  PASSED  ] 26 tests.

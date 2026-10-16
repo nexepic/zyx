@@ -3376,8 +3376,8 @@ namespace graph::query::execution {
 								requireGdsFiniteNumber(arguments[2], "gds.pageRank.stream dampingFactor");
 					}
 					const std::string name = requireProjectionName(arguments, "gds.pageRank.stream", arguments.size());
-					const std::vector<gds::LogicalGdsNodeScore> scores =
-							gds::LogicalGraphAlgorithms::pageRank(*projection_catalog_->get(name), options,
+					const auto scores =
+							gds::LogicalGraphAlgorithms::pageRankOwned(*projection_catalog_->get(name), options,
 								   {.maximum_nodes = readBounds.maximum_node_records,
 									.maximum_edges = maximumGdsAlgorithmEdges,
 									.maximum_iterations = maximumGdsAlgorithmIterations,
@@ -3400,8 +3400,8 @@ namespace graph::query::execution {
 				}
 				case NativeProcedureKind::NPK_GDS_WCC: {
 					const std::string name = requireProjectionName(arguments, "gds.wcc.stream", 1U);
-					const std::vector<gds::LogicalGdsNodeComponent> components =
-							gds::LogicalGraphAlgorithms::weaklyConnectedComponents(
+					const auto components =
+							gds::LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(
 									*projection_catalog_->get(name),
 								{.maximum_nodes = readBounds.maximum_node_records,
 								 .maximum_edges = maximumGdsAlgorithmEdges,
@@ -3435,8 +3435,8 @@ namespace graph::query::execution {
 					}
 					const std::string name =
 							requireProjectionName(arguments, "gds.betweenness.stream", arguments.size());
-					const std::vector<gds::LogicalGdsNodeScore> scores =
-							gds::LogicalGraphAlgorithms::betweennessCentrality(
+					const auto scores =
+							gds::LogicalGraphAlgorithms::betweennessCentralityOwned(
 									*projection_catalog_->get(name), options,
 									{.maximum_nodes = readBounds.maximum_node_records,
 									 .maximum_edges = maximumGdsAlgorithmEdges,
@@ -3461,8 +3461,8 @@ namespace graph::query::execution {
 				}
 				case NativeProcedureKind::NPK_GDS_CLOSENESS: {
 					const std::string name = requireProjectionName(arguments, "gds.closeness.stream", 1U);
-					const std::vector<gds::LogicalGdsNodeScore> scores =
-							gds::LogicalGraphAlgorithms::closenessCentrality(
+					const auto scores =
+							gds::LogicalGraphAlgorithms::closenessCentralityOwned(
 									*projection_catalog_->get(name),
 									{.maximum_nodes = readBounds.maximum_node_records,
 									 .maximum_edges = maximumGdsAlgorithmEdges,
@@ -3521,7 +3521,7 @@ namespace graph::query::execution {
 						}
 					}
 					const std::string name = requireProjectionName(arguments, "gds.leiden.stream", arguments.size());
-					const std::vector<gds::LogicalGdsNodeCommunity> communities = gds::LogicalGraphAlgorithms::leiden(
+					const auto communities = gds::LogicalGraphAlgorithms::leidenOwned(
 							*projection_catalog_->get(name), options,
 										{.maximum_nodes = readBounds.maximum_node_records,
 										 .maximum_edges = maximumGdsAlgorithmEdges,

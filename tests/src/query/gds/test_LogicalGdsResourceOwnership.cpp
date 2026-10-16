@@ -8,6 +8,8 @@
 #include "query/api/LogicalProcedureTestFixture.hpp"
 #include "graph/query/gds/LogicalGraphProjection.hpp"
 #include "graph/query/gds/LogicalProjectionCatalog.hpp"
+#include "graph/query/gds/LogicalGraphAlgorithms.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 
 namespace graph::query::gds {
@@ -221,6 +223,107 @@ TEST_F(LogicalGdsResourceOwnershipTest, EveryPreparationAdmissionFailureRestores
     }
     EXPECT_EQ(observed->memory->used(), 0U);
     RecordProperty("catalog_preparation_admission_points", std::to_string(requests));
+}
+TEST_F(LogicalGdsResourceOwnershipTest, EveryAlgorithmWorkspaceRejectsQueryPressureWithoutChargingTheProjectionCache) {
+    auto cache = std::make_shared<MaterializedByteBudget>(1024U * 1024U);
+    std::optional<LogicalGraphProjection> projection;
+    {
+        utils::OwnedAllocationScope scope(cache);
+        projection.emplace(build()); static_cast<void>(projection->csr());
+    }
+    const auto before = cache->used();
+    const LogicalGraphAlgorithmBounds limits{.maximum_nodes = 16U, .maximum_edges = 32U,
+        .maximum_iterations = 64U, .maximum_work_units = 100000U, .maximum_materialized_bytes = 1024U * 1024U};
+    auto query = std::make_shared<MaterializedByteBudget>(1U);
+    {
+        utils::OwnedAllocationScope scope(query);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::pageRankOwned(*projection, {}, limits)), MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(*projection, limits)), MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::betweennessCentralityOwned(*projection, {}, limits)), MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::closenessCentralityOwned(*projection, limits)), MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::leidenOwned(*projection, {}, limits)), MaterializedByteLimitExceeded);
+        EXPECT_THROW(static_cast<void>(LogicalGraphAlgorithms::dijkstra(*projection, 1U, 3U, limits)), MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(query->used(), 0U); EXPECT_EQ(cache->used(), before);
+}
+TEST_F(LogicalGdsResourceOwnershipTest, OwnedAlgorithmResultsRetainOnlyTheirEscapedQueryArrays) {
+    auto projection = build(); static_cast<void>(projection.csr());
+    const LogicalGraphAlgorithmBounds limits{.maximum_nodes = 16U, .maximum_edges = 32U,
+        .maximum_iterations = 64U, .maximum_work_units = 100000U, .maximum_materialized_bytes = 1024U * 1024U};
+    const auto check = [&](auto produce) {
+        auto query = std::make_shared<MaterializedByteBudget>(1024U * 1024U);
+        {
+            utils::OwnedAllocationScope scope(query);
+            const auto result = produce();
+            EXPECT_EQ(result.size(), 4U);
+            EXPECT_EQ(query->used(), result.retainedBackingRequestBytes());
+        }
+        EXPECT_EQ(query->used(), 0U);
+    };
+    check([&] { return LogicalGraphAlgorithms::pageRankOwned(projection, {}, limits); });
+    check([&] { return LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(projection, limits); });
+    check([&] { return LogicalGraphAlgorithms::betweennessCentralityOwned(projection, {}, limits); });
+    check([&] { return LogicalGraphAlgorithms::closenessCentralityOwned(projection, limits); });
+    check([&] { return LogicalGraphAlgorithms::leidenOwned(projection, {}, limits); });
+    auto query = std::make_shared<MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = query;
+    std::optional<LogicalGdsWeightedPath> path;
+    {
+        utils::OwnedAllocationScope scope(query);
+        path.emplace(LogicalGraphAlgorithms::dijkstra(projection, 1U, 3U, limits));
+        EXPECT_EQ(path->node_ids, std::vector<uint64_t>({1U, 2U, 3U}));
+        EXPECT_EQ(query->used(), path->node_ids.retainedBackingRequestBytes() + path->step_weights.retainedBackingRequestBytes());
+    }
+    query.reset(); EXPECT_FALSE(authority.expired());
+    path.reset(); EXPECT_TRUE(authority.expired());
+}
+TEST_F(LogicalGdsResourceOwnershipTest, AllAlgorithmAdmissionPointsRefundBeforeRetryAndLeaveTheCsrReusable) {
+    class FaultBudget final : public utils::UnmanagedAllocationResource {
+    public:
+        std::shared_ptr<MaterializedByteBudget> memory = std::make_shared<MaterializedByteBudget>(1024U * 1024U);
+        size_t requests = 0U, fault = (std::numeric_limits<size_t>::max)();
+        bool triggered = false;
+        void reserveUnmanaged(size_t bytes) override { attempt(); memory->reserveUnmanaged(bytes); }
+        void releaseUnmanaged(size_t bytes) noexcept override { memory->releaseUnmanaged(bytes); }
+    private:
+        void attempt() { if (requests++ == fault) { triggered = true; throw MaterializedByteLimitExceeded(); } }
+        void *do_allocate(size_t bytes, size_t alignment) override { attempt(); return memory->allocate(bytes, alignment); }
+        void do_deallocate(void *pointer, size_t bytes, size_t alignment) override { memory->deallocate(pointer, bytes, alignment); }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+    };
+    auto projection = build(); const auto csr = projection.csr();
+    const LogicalGraphAlgorithmBounds limits{.maximum_nodes = 16U, .maximum_edges = 32U,
+        .maximum_iterations = 64U, .maximum_work_units = 100000U, .maximum_materialized_bytes = 1024U * 1024U};
+    concurrent::ThreadPool pool(2U);
+    const auto exercise = [&](int mode) {
+        switch (mode) {
+            case 0: static_cast<void>(LogicalGraphAlgorithms::pageRankOwned(projection, {}, limits)); break;
+            case 1: static_cast<void>(LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(projection, limits)); break;
+            case 2: static_cast<void>(LogicalGraphAlgorithms::betweennessCentralityOwned(projection, {}, limits)); break;
+            case 3: static_cast<void>(LogicalGraphAlgorithms::closenessCentralityOwned(projection, limits)); break;
+            case 4: static_cast<void>(LogicalGraphAlgorithms::leidenOwned(projection, {}, limits, {}, &pool)); break;
+            case 5: static_cast<void>(LogicalGraphAlgorithms::dijkstra(projection, 1U, 3U, limits)); break;
+        }
+    };
+    size_t total = 0U;
+    for (int mode = 0; mode < 6; ++mode) {
+        SCOPED_TRACE(mode);
+        auto observed = std::make_shared<FaultBudget>();
+        { utils::OwnedAllocationScope scope(observed); exercise(mode); }
+        ASSERT_EQ(observed->memory->used(), 0U);
+        const auto requests = observed->requests;
+        ASSERT_GT(requests, 0U); total += requests;
+        for (size_t fault = 0U; fault < requests; ++fault) {
+            SCOPED_TRACE(fault);
+            auto denied = std::make_shared<FaultBudget>(); denied->fault = fault;
+            { utils::OwnedAllocationScope scope(denied); EXPECT_THROW(exercise(mode), MaterializedByteLimitExceeded); }
+            EXPECT_TRUE(denied->triggered); EXPECT_EQ(denied->memory->used(), 0U);
+            EXPECT_EQ(projection.csr(), csr);
+        }
+        { utils::OwnedAllocationScope scope(observed); exercise(mode); }
+        EXPECT_EQ(observed->memory->used(), 0U);
+    }
+    RecordProperty("algorithm_admission_points", std::to_string(total));
 }
 } // namespace
 } // namespace graph::query::gds

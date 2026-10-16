@@ -187,7 +187,8 @@
       "20261016-owned-btree-stream-callbacks",
       "20261016-owned-shortest-path-state",
       "20261016-s63-resource-recovery-soak",
-      "20261016-owned-gds-projection-catalog-and-procedure-results"
+      "20261016-owned-gds-projection-catalog-and-procedure-results",
+      "20261016-owned-gds-algorithm-workspaces"
     ]
   },
   "S5.4": "accepted_resource_fault_matrix",

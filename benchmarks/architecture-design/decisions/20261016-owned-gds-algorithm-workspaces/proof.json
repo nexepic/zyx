@@ -1,0 +1,17 @@
+{
+  "status": "component_not_stage_acceptance",
+  "selected_tests": 26,
+  "passed": 26,
+  "algorithm_admission_points": 191,
+  "accepted": 24,
+  "total": 34,
+  "percent": 70.6,
+  "full_suite": false,
+  "performance_campaign": false,
+  "source_sha256": {
+    "include/graph/query/gds/LogicalGraphAlgorithms.hpp": "e77a9ef1057e76ad578b596be2c93ef9af1c2b0001b228719ecd7c1d6d6a089e",
+    "src/query/gds/LogicalGraphAlgorithms.cpp": "e5dbfbf2d6a2cd38dad15b12d9583b4d61ec169e59d12af27b53fcfeef4c1184",
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "6ad61ce0422dad0fd9b93a68e5a38afec9b5d56cf121be1bd3a65a8e0ba1556e",
+    "tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp": "af44c1b247ab57d85254355947d3deb3acd9c78fe687573516b1bf5102d12193"
+  }
+}
