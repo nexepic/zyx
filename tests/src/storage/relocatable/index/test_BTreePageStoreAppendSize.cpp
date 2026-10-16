@@ -186,4 +186,47 @@ TEST_F(RelocatableBTreePageStoreTest, ReclaimsOnlyInvisibleVersionsBeforeRebuild
  durable.release();
 }
 
+TEST_F(RelocatableBTreePageStoreTest, VirtualInternalChildrenReserveTheirPersistedVarintWidth) {
+ auto initial = superblock();
+ initial.next_logical_page_id = uint64_t{1} << 63U;
+ auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
+ SlottedPagePool pages(io, *metadata);
+ NativeBTreeWriteContext writes(io, *metadata, pages);
+ BTreePageStore store(pages, *metadata);
+ const auto request = allocationRequest();
+ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+  LogSequenceNumber(2)).has_value());
+ const IndexRootLocation root{17U, request.page_id, request.generation};
+ static_cast<void>(store.publishRoots(std::span(&root, 1), {}, LogSequenceNumber(3)));
+ auto before = metadata->openSnapshot();
+ std::vector<std::vector<std::byte>> keys;
+ for (uint8_t ordinal = 0U; ordinal < 6U; ++ordinal)
+  keys.emplace_back(1908U, static_cast<std::byte>('a' + ordinal));
+ auto transaction = writes.beginTransaction();
+ for (size_t ordinal = 0U; ordinal < keys.size(); ++ordinal)
+  transaction.stageScalarIndexUpsert(store, 17U, keys[ordinal], ordinal + 1U);
+ bool committed = false;
+ ASSERT_NO_THROW(committed = transaction.commit().committed());
+ ASSERT_TRUE(committed);
+ BTreeIndex index(17U, store, *metadata);
+ EXPECT_TRUE(index.scan(before, {}, keys.size() + 1U).empty());
+ auto after = metadata->openSnapshot();
+ const auto rows = index.scan(after, {}, keys.size() + 1U);
+ ASSERT_EQ(rows.size(), keys.size());
+ for (size_t ordinal = 0U; ordinal < keys.size(); ++ordinal) {
+  EXPECT_EQ(rows[ordinal].key, keys[ordinal]);
+  EXPECT_EQ(rows[ordinal].value_or_child, ordinal + 1U);
+ }
+ const auto newRoot = metadata->findIndexRoot(after, 17U);
+ EXPECT_GE(newRoot.root_page_id.value(), uint64_t{1} << 63U);
+ after.release(); before.release();
+ auto reopened = RelocatableMetadataStore::open(io);
+ SlottedPagePool durablePages(io, *reopened);
+ BTreePageStore durableStore(durablePages, *reopened);
+ BTreeIndex durableIndex(17U, durableStore, *reopened);
+ auto durable = reopened->openSnapshot();
+ EXPECT_EQ(durableIndex.scan(durable, {}, keys.size() + 1U), rows);
+ durable.release();
+}
+
 } // namespace

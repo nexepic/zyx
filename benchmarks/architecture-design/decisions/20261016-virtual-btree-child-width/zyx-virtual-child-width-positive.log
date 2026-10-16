@@ -1,0 +1,20 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[2/3] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 4 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 4 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.CachedAppendSizePreservesMixedWritesAndOldSnapshots
+[       OK ] RelocatableBTreePageStoreTest.CachedAppendSizePreservesMixedWritesAndOldSnapshots (120 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers
+[       OK ] RelocatableBTreePageStoreTest.OrderedUpsertRunsPreserveDuplicateStatementsAndEraseBarriers (57 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay
+[       OK ] RelocatableBTreePageStoreTest.ReclaimsOnlyInvisibleVersionsBeforeRebuildingAnExhaustedOverlay (849 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth
+[       OK ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth (43 ms)
+[----------] 4 tests from RelocatableBTreePageStoreTest (1072 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test suite ran. (1072 ms total)
+[  PASSED  ] 4 tests.

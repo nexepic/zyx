@@ -1,0 +1,23 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = *.VirtualInternalChildrenReserveTheirPersistedVarintWidth
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePageStoreAppendSize.cpp:209: Failure
+Expected: committed = transaction.commit().committed() doesn't throw an exception.
+  Actual: it throws graph::storage::FormatException with description "relocatable slotted page cannot fit replacement value".
+
+[  FAILED  ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth (12 ms)
+[----------] 1 test from RelocatableBTreePageStoreTest (12 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (12 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableBTreePageStoreTest.VirtualInternalChildrenReserveTheirPersistedVarintWidth
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1
