@@ -21,11 +21,12 @@
     "S4.2",
     "S4.3",
     "S5.2",
-    "S5.1"
+    "S5.1",
+    "S5.4"
   ],
-  "accepted": 22,
+  "accepted": 23,
   "total": 34,
-  "percent": 64.7,
+  "percent": 67.6,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -53,9 +54,9 @@
       "percent": 75.0
     },
     "S5": {
-      "accepted": 2,
+      "accepted": 3,
       "total": 5,
-      "percent": 40
+      "percent": 60
     },
     "S6": {
       "accepted": 0,
@@ -64,7 +65,7 @@
     }
   },
   "S3.1": "accepted",
-  "commit_push": "resource_checkpoint_pushed_055a085f",
+  "commit_push": "required_for_every_accepted_progress_increase",
   "S1.1": "accepted_design",
   "S1.6": "accepted_design",
   "S1.5": "accepted_design",
@@ -120,7 +121,8 @@
     "baseline_accepted": 21,
     "target_accepted": 34,
     "completed_ids": [
-      "S5.1"
+      "S5.1",
+      "S5.4"
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
@@ -137,7 +139,9 @@
       "S6.1",
       "S6.3"
     ],
-    "completed_ids": [],
+    "completed_ids": [
+      "S5.4"
+    ],
     "status": "in_progress",
     "overall_goal_accepted_target": 34,
     "component_evidence": [
@@ -175,7 +179,9 @@
       "20261016-pre-admitted-string-result-rows",
       "20261016-owned-schema-query-results",
       "20261016-ddl-write-workspaces-and-result-lifetimes",
-      "20261016-owned-catalog-keys-and-schema-encoding"
+      "20261016-owned-catalog-keys-and-schema-encoding",
+      "20261016-s54-resource-fault-acceptance"
     ]
-  }
+  },
+  "S5.4": "accepted_resource_fault_matrix"
 }

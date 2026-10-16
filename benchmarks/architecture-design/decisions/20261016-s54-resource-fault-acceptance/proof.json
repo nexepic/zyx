@@ -1,0 +1,35 @@
+{
+  "stage": "S5.4",
+  "status": "accepted",
+  "source_commit": "05cba31b046cafc26775ecb1cec6dd80367b112f",
+  "selected_tests": 170,
+  "selected_suites": 12,
+  "required_cases": 19,
+  "failures": 0,
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "fault_evidence": "../20261016-owned-catalog-keys-and-schema-encoding/zyx-owned-catalog-keys-all-faults.json",
+  "allocation_paths": 19,
+  "isolated_cases": 1275,
+  "long_paths_sampled": true,
+  "fresh_crash_readonly_recovery_cycles": 32,
+  "worker_sha256": "ea3b2d0842ab070aa8dc66e09a6d75d92eaad9f7c179ca4381182851b95f8007",
+  "recovery_file_bytes": [
+    1572864
+  ],
+  "runtime_platform": "Linux x86_64, Clang19/libstdc++14",
+  "not_accepted_here": [
+    "S5.3",
+    "S5.5",
+    "S6.1",
+    "S6.3"
+  ],
+  "evidence_sha256": {
+    "source-sha256.json": "e1f77e70f2698579846a7dd3aa941bffe19b1463c97aa7053a70fc59fdcfb84d",
+    "required-cases.json": "ee29dbd24275c693c3dfc65f6365a8fa3e4004ede6aefe02737d5c18170e1547",
+    "zyx-s54-acceptance-regression.log": "fc9f5dde3ab33cef2881b1ebd27e34153fc7e466c17b52b80c507a3b466e647c",
+    "zyx-s54-crash-recovery.json": "2ba11a42b1666c20e8002ef8c34740d6d7343e3558940cfc15ed4104132559c5",
+    "zyx-s54-acceptance-tests.xml": "545372a37721d010bcb330150017fb2ef9b3228b755840c4a135fb5484aab093",
+    "run_selected_tests.py": "f13b5d6e77d628ccf37d1ceaa21d42f0b0d2761b264e9605872e94e089c4c043"
+  }
+}

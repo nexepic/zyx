@@ -1,0 +1,35 @@
+{
+  "low_memory_and_refund": [
+    "RelocatableStorageBackendTest.QueryScratchMemoryDenialPrecedesPublicationAndDoesNotLeakDiskOrFileLease",
+    "RelocatableStorageBackendTest.NativeDistinctOutputBudgetDenialCleansSpillAndRefundsTheCallingQuery",
+    "RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle"
+  ],
+  "cancellation_and_early_stop": [
+    "ExternalQuerySortTest.CancellationAfterSealingRunsAndOutputEarlyStopReleaseEveryOwner",
+    "ExternalQuerySortTest.PublicationCancellationDoesNotAcquireScratchPermission",
+    "RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry"
+  ],
+  "disk_full_and_indeterminate_io": [
+    "RelocatableStorageBackendTest.QueryScratchPublicationFaultsPreserveGraphAndRecoverOrphanQuota",
+    "RelocatableStorageBackendTest.QueryScratchCleanupIoFailureImmediatelyFencesFurtherWrites",
+    "RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld"
+  ],
+  "logical_and_physical_readonly": [
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection",
+    "RelocatableStorageBackendTest.QueryScratchEnforcesDiskFragmentsAndPhysicalReadOnlyPermissions",
+    "RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy"
+  ],
+  "concurrent_total_budget_and_ownership": [
+    "QueryScratchDiskBudgetTest.ConcurrentDomainsCannotOverAdmitProcessQuota",
+    "RelocatableStorageBackendTest.QueryScratchDatabaseQuotaIsSharedAcrossSessionsAndRefundedAfterCleanup",
+    "RelocatableStorageBackendTest.QueryScratchAllocatorPublicationInterleavesWithGraphWritesWithoutLosingRoots"
+  ],
+  "corruption_preserves_user_data": [
+    "RelocatableStorageBackendTest.CorruptScratchReadAndOrphanRecoveryNeverReclaimUserPagesOrRefundQuota",
+    "ExternalQuerySortTest.CorruptCountsAndPhysicalReadonlyFailWithoutPartialSuccessfulResults"
+  ],
+  "partitioned_hash_results": [
+    "RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder",
+    "RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder"
+  ]
+}
