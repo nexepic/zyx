@@ -1,45 +1,46 @@
 {
   "stage": "S6.1",
   "status": "accepted_revalidated",
-  "source_commit": "17246f8bc73f98a20703b9d820f1f6fd68203128",
-  "frozen_directory": "/workspace/zyx-optimization-final-recovery-revalidated-20261016",
-  "freeze_manifest_sha256": "6a420a0f33a01d64fec6e26886f0fcfa61a2a25404faaa6d9bd2d9d213e21939",
-  "frozen_source_files": 2637,
+  "source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "frozen_directory": "/workspace/zyx-optimization-final-topk-revalidated-20261016",
+  "freeze_manifest_sha256": "fc2a7a8385a2839c2e416b33c55e9bbbf2a4c2345cde04111214efd695073588",
+  "frozen_source_files": 2673,
   "binaries": [
     {
-      "original": "/tmp/zyx-current-final-affected-tests",
-      "copy": "binaries/0/zyx-current-final-affected-tests",
-      "sha256": "48c74df5040763fc7977f74b983ea1bddd67ddd98a82f7bffcda120791f58965"
+      "original": "/tmp/zyx-topk-final-affected-tests",
+      "copy": "binaries/0/zyx-topk-final-affected-tests",
+      "sha256": "7505107ac72acde9cafe25ba93d7ce7efbf5209b9869af6bdf64a9c8fb231dbf"
     },
     {
       "original": "/workspace/zyx/buildDir_perf_control/zyx-compare-bench",
       "copy": "binaries/1/zyx-compare-bench",
-      "sha256": "a0f55b0a36f2b56c9274707d85ac9f1f1abd4344124cd27addb567d6b6fbdfbc"
+      "sha256": "cc3251b02a2f2a5d87384ac1f11aae29314294a62a2b98ecb78b3ffc6b61d674"
     },
     {
       "original": "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker",
       "copy": "binaries/2/zyx-workload-contract-worker",
-      "sha256": "6f62b53e39d0d1678ae297fc76eb175f7051d84cb181b3cccad1d8b9dff10287"
+      "sha256": "a4f84fa69acec1aaaa3b54e11544f1661710d3e1bbf2e02ad4c416a3dbadbf38"
     },
     {
       "original": "/tmp/zyx-mechanism-probe",
       "copy": "binaries/3/zyx-mechanism-probe",
-      "sha256": "1cb6adfbae4ff022aa8ec2ac8d87f3bfdf0f6645c62b9d13b41f3ac88cbdcb1d"
+      "sha256": "8cfe5fbbf6cb3f295de142a0ee045d3eef3405f19475c2ec32f1baa55b3ac2c0"
     }
   ],
   "production_and_test_hashes": "../20261016-control-record-cache-and-endpoint-owner/source-sha256.json",
   "affected_regression": {
-    "modules": 121,
-    "suites": 160,
-    "tests": 2614,
+    "modules": 124,
+    "suites": 163,
+    "tests": 2628,
     "failures": 0,
     "full_suite": false,
-    "evidence": "../20261016-recovery-and-optional-read-admission/affected-tests.xml"
+    "evidence": "../20261016-bounded-topk-default-read/affected-tests.xml"
   },
   "benchmark_configuration_tests": {
     "cpp": 41,
-    "campaign_python": 28,
-    "kuzu_resources": 6
+    "campaign_python": 29,
+    "kuzu_resources": 6,
+    "native_adapter": 25
   },
   "native_correctness_smoke": {
     "families": 13,
@@ -51,6 +52,6 @@
   "performance": "final window registered separately after this source freeze",
   "invalidation_rule": "Any production source change invalidates this freeze and requires affected regression before final acceptance.",
   "medium_preparation": "complete validated input, consumer and lineage manifest retained",
-  "revalidation_evidence": "../20261016-recovery-and-optional-read-admission/proof.json",
+  "revalidation_evidence": "../20261016-bounded-topk-default-read/proof.json",
   "benchmark_harness_updates_after_engine_freeze": "Actual isolated-family runner and sampling policy included in this freeze; no production changes permitted during final campaign."
 }
