@@ -1,0 +1,12 @@
+{
+  "reason": "Capability-only database bypassed explicit campaign pool/mapping limits and failed trying to mmap 8TiB. Native measured path and normal Kuzu database limits are unchanged.",
+  "fix": "Capability probe reuses the measured adapter database/connection factories with explicit limits.",
+  "affected_case": "medium round-1 Kuzu retrieval; failed setup, zero valid samples; preserve attempt-1 and retry this case after remaining scheduled processes finish.",
+  "indexed": "Version capability is assessed under declared limits; unsupported secondary indexes remain N/A, never substituted by scans.",
+  "unchanged": "All production C++ binaries, resource caps, CSV inputs, valid scan/retrieval timing samples.",
+  "tests": {
+    "kuzu_adapter": 23,
+    "campaign": 30
+  },
+  "adapter_sha256": "085c23a7b8c85152e598331a386e76a159d6269f1e8c431d766a50b05f3dec20"
+}

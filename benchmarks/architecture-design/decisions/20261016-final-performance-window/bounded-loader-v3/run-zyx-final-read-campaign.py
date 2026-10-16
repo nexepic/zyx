@@ -15,7 +15,15 @@ for index,(number,scale,profile,engine) in enumerate(cases,1):
   (root/'preparation-failure.json').write_text(failure.read_text())
   print(json.dumps({'phase':'read-unmeasurable-frozen-control','case':index,'scale':scale,'profile':profile,'engine':engine,'failure':str(failure)}),flush=True)
   continue
- if list(root.glob('*/correctness.json')):
+ prior=next((v for v in (out/'reads'/scale).glob(f'round-*/{engine}/{profile}/campaign-case-failed.json')),None)
+ if prior:
+  root.mkdir(parents=True,exist_ok=True)
+  target=root/'campaign-case-failed.json'
+  if not target.exists():target.write_text(json.dumps({'status':'unmeasurable_previous_failure','source':str(prior),'rule':'Same frozen binary and deterministic profile; no successful process or latency ratio inferred.'})+'\n')
+  print(json.dumps({'phase':'read-unmeasurable-previous-failure','case':index,'source':str(prior)}),flush=True);continue
+ verified=list(root.glob('*/correctness.json'))
+ if verified and all(json.loads((v.parent/'run_status.json').read_text())=={'failure_count':0,'quality_failure_count':0} for v in verified):
+
   print(json.dumps({'phase':'read-already-verified','case':index,'total':len(cases),'root':str(root)}),flush=True)
   continue
  print(json.dumps({'phase':'read-start','case':index,'total':len(cases),'round':number,'scale':scale,'profile':profile,'engine':engine}),flush=True)
@@ -28,6 +36,9 @@ for index,(number,scale,profile,engine) in enumerate(cases,1):
    except ProcessLookupError:pass
    result.wait(timeout=5)
    raise
- if result.returncode:raise RuntimeError(f'formal read case failed: {log}')
+ if result.returncode:
+  root.mkdir(parents=True,exist_ok=True)
+  (root/'campaign-case-failed.json').write_text(json.dumps({'status':'failed','returncode':result.returncode,'log':str(log),'rule':'Preserve exact process output and original engine failure. No successful profile process or latency ratio inferred; continue independent scenarios.'},indent=2)+'\n')
+  print(json.dumps({'phase':'read-failed','case':index,'engine':engine,'profile':profile,'log':str(log)}),flush=True);continue
  print(json.dumps({'phase':'read','completed':index,'total':len(cases),'round':number,'scale':scale,'profile':profile,'engine':engine}),flush=True)
 (out/'read-campaign-completed.json').write_text(json.dumps({'cases':len(cases),'rounds':3,'status':'completed'})+'\n')
