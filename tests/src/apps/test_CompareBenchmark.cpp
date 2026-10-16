@@ -785,3 +785,35 @@ TEST_F(CompareBenchmarkTest, MainAttributesSelectedWorkloadFailure) {
 	const std::string output = errorStream.str();
 	EXPECT_NE(output.find("\"workload\":\"label_scan_filter\""), std::string::npos);
 }
+
+TEST_F(CompareBenchmarkTest, BoundedPreparationPreservesEveryNodeEdgeAndExternalIdAcrossCommits) {
+    const auto dataset = writeSmallDataset();
+    for (size_t batch : {1U, 2U}) {
+        SCOPED_TRACE(batch);
+        zyx::Database db((tempRoot / ("bounded-" + std::to_string(batch) + ".db")).string()); db.open();
+        const auto loaded = loadGraph(db, dataset, batch);
+        EXPECT_EQ(loaded.loadedRows, 9);
+        EXPECT_EQ(loaded.usersByExternalId.size(), 3U);
+        EXPECT_EQ(loaded.postsByExternalId.size(), 1U);
+        EXPECT_EQ(loaded.tagsByExternalId.size(), 1U);
+        EXPECT_FALSE(db.hasActiveTransaction());
+        EXPECT_EQ(scalarInt(db.execute("MATCH (n:User) RETURN count(n)")), 3);
+        EXPECT_EQ(scalarInt(db.execute("MATCH ()-[r:FOLLOWS]->() RETURN count(r)")), 2);
+        EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id:'user-000001'})-[:AUTHORED]->(:Post)-[:HAS_TAG]->(:Tag) RETURN count(*)")), 1);
+        db.close(); db.open();
+        EXPECT_EQ(scalarInt(db.execute("MATCH (n:User) WHERE n.country = 'CN' RETURN count(n)")), 2);
+        db.close();
+    }
+}
+
+TEST_F(CompareBenchmarkTest, BoundedPreparationRejectsInvalidColumnsBeforePublishingAChunk) {
+    zyx::Database db((tempRoot / "invalid-bounded.db").string()); db.open();
+    BoundedDatasetWriter writer(db, 1U);
+    EXPECT_THROW(static_cast<void>(BoundedDatasetWriter(db, 0U)), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(writer.createNodesColumnar("User", 2U, {{"id", {int64_t{1}}}})), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(writer.createEdgesColumnar("FOLLOWS", {1,2}, {1}, {})), std::invalid_argument);
+    EXPECT_EQ(scalarInt(db.execute("MATCH (n) RETURN count(n)")), 0);
+    auto transaction = db.beginTransaction();
+    EXPECT_THROW(static_cast<void>(loadGraph(db, writeSmallDataset(), 1U)), std::runtime_error);
+    transaction.rollback(); db.close();
+}

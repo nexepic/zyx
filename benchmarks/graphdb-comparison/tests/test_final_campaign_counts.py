@@ -25,5 +25,27 @@ class FinalCampaignCountsTest(unittest.TestCase):
             self.assertTrue(verify_counts(root, ["label_scan_filter"], 1, ["zyx"])["failures"])
 
 
+class FinalCampaignPreparationOptionsTest(unittest.TestCase):
+    def invoke(self, environment):
+        from runner.adapters.zyx import ZyxAdapter
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        import os
+        adapter = ZyxAdapter("zyx", Path("/tmp/dataset"), "smoke", threads=1)
+        with patch.dict(os.environ, environment, clear=True), patch("runner.adapters.zyx.subprocess.run", return_value=SimpleNamespace(returncode=1, stdout="", stderr="test probe")) as run:
+            adapter._run_workload("label_scan_filter", warmup=3, iterations=10, execution_mode="warm")
+            return run.call_args.args[0]
+
+    def test_bounded_preparation_is_an_explicit_option(self):
+        args = self.invoke({"ZYX_COMPARE_LOAD_BATCH_ROWS": "1000"})
+        self.assertEqual(args[args.index("--load-batch-rows") + 1], "1000")
+        self.assertNotIn("--load-batch-rows", self.invoke({}))
+
+    def test_invalid_batch_is_rejected_before_launch(self):
+        for value in ("0", "-1", "invalid"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.invoke({"ZYX_COMPARE_LOAD_BATCH_ROWS": value})
+
+
 if __name__ == "__main__":
     unittest.main()

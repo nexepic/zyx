@@ -61,6 +61,7 @@ namespace {
 		std::optional<size_t> threads;
 		int warmup = 0;
 		int iterations = 1;
+        size_t loadBatchRows = 0U;
 	};
 
 	struct LoadedGraph {
@@ -582,7 +583,8 @@ namespace {
 		}
 	}
 
-	LoadedGraph loadGraph(zyx::Transaction &writer, const std::filesystem::path &dataset) {
+	template<class Writer>
+    LoadedGraph loadGraphRows(Writer &writer, const std::filesystem::path &dataset) {
 		if (!writer.isActive()) {
 			throw std::runtime_error("loadGraph requires an active write transaction");
 		}
@@ -804,16 +806,74 @@ namespace {
 		return graph;
 	}
 
-	LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
-		if (db.hasActiveTransaction()) {
-			throw std::runtime_error("loadGraph requires an explicit transaction when one is already active");
-		}
+    LoadedGraph loadGraph(zyx::Transaction &writer, const std::filesystem::path &dataset) {
+        return loadGraphRows(writer, dataset);
+    }
 
-		auto transaction = db.beginBulkTransaction();
-		LoadedGraph graph = loadGraph(transaction, dataset);
-		tracePhase("load.commit", [&]() { transaction.commit(); });
-		return graph;
-	}
+    // Preparation-only adapter. Each chunk is committed before staging the next
+    // one, so a medium input cannot multiply retained WRITE workspace beyond the
+    // same production quota. Query operations and their timing are unchanged.
+    class BoundedDatasetWriter final {
+    public:
+        BoundedDatasetWriter(zyx::Database &database, size_t rows) : database_(database), rows_(rows) {
+            if (!rows) throw std::invalid_argument("bounded dataset load requires positive rows");
+        }
+        bool isActive() const { return true; }
+        bool isReadOnly() const { return false; }
+        std::vector<int64_t> createNodesColumnar(const std::string &label, size_t count,
+                const std::vector<zyx::PropertyColumn> &columns) {
+            validateColumns(columns, count);
+            std::vector<int64_t> result; result.reserve(count);
+            for (size_t offset = 0U; offset < count;) {
+                const size_t amount = (std::min)(rows_, count - offset);
+                auto part = sliceColumns(columns, offset, amount);
+                auto transaction = database_.beginBulkTransaction();
+                auto ids = transaction.createNodesColumnar(label, amount, part);
+                transaction.commit(); result.insert(result.end(), ids.begin(), ids.end()); offset += amount;
+            }
+            return result;
+        }
+        std::vector<int64_t> createEdgesColumnar(const std::string &type,
+                const std::vector<int64_t> &sources, const std::vector<int64_t> &targets,
+                const std::vector<zyx::PropertyColumn> &columns) {
+            if (sources.size() != targets.size()) throw std::invalid_argument("bounded edge load changed endpoint cardinality");
+            validateColumns(columns, sources.size());
+            std::vector<int64_t> result; result.reserve(sources.size());
+            for (size_t offset = 0U; offset < sources.size();) {
+                const size_t amount = (std::min)(rows_, sources.size() - offset);
+                auto part = sliceColumns(columns, offset, amount);
+                std::vector<int64_t> source(sources.begin() + offset, sources.begin() + offset + amount);
+                std::vector<int64_t> target(targets.begin() + offset, targets.begin() + offset + amount);
+                auto transaction = database_.beginBulkTransaction();
+                auto ids = transaction.createEdgesColumnar(type, source, target, part);
+                transaction.commit(); result.insert(result.end(), ids.begin(), ids.end()); offset += amount;
+            }
+            return result;
+        }
+    private:
+        static void validateColumns(const std::vector<zyx::PropertyColumn> &columns, size_t count) {
+            for (const auto &column : columns)
+                if (column.values.size() != count) throw std::invalid_argument("bounded load changed column cardinality");
+        }
+        static std::vector<zyx::PropertyColumn> sliceColumns(const std::vector<zyx::PropertyColumn> &columns,
+                size_t offset, size_t count) {
+            std::vector<zyx::PropertyColumn> result; result.reserve(columns.size());
+            for (const auto &column : columns) result.push_back({column.name,
+                {column.values.begin() + offset, column.values.begin() + offset + count}});
+            return result;
+        }
+        zyx::Database &database_;
+        size_t rows_;
+    };
+
+    LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset, size_t batchRows = 0U) {
+        if (db.hasActiveTransaction()) throw std::runtime_error("loadGraph requires an explicit transaction when one is already active");
+        if (batchRows) { BoundedDatasetWriter writer(db, batchRows); return loadGraphRows(writer, dataset); }
+        auto transaction = db.beginBulkTransaction();
+        LoadedGraph graph = loadGraph(transaction, dataset);
+        tracePhase("load.commit", [&]() { transaction.commit(); });
+        return graph;
+    }
 
 	void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
 		std::vector<std::string> userIndexes{"id"};
@@ -860,7 +920,7 @@ namespace {
 		zyx::Database db(dbPath.string());
 		configureThreadPool(db, options);
 		tracePhase("load.db_open", [&]() { db.open(); });
-		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset); });
+		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset, options.loadBatchRows); });
 		tracePhase("load.indexes", [&]() { createBenchmarkIndexes(db, options); });
 		tracePhase("load.db_close", [&]() { db.close(); });
 		return loaded;
@@ -1251,7 +1311,15 @@ namespace {
 				options.warmup = std::stoi(requireValue(arg));
 			} else if (arg == "--iterations") {
 				options.iterations = std::stoi(requireValue(arg));
-			} else if (arg == "--threads") {
+			} else if (arg == "--load-batch-rows") {
+                const auto text = requireValue(arg);
+                if (text.empty() || text.front() == '-') throw std::invalid_argument("load batch rows must be positive");
+                size_t parsed = 0U;
+                const auto count = std::stoull(text, &parsed);
+                if (!count || parsed != text.size() || count > (std::numeric_limits<size_t>::max)())
+                    throw std::invalid_argument("load batch rows must be a positive size");
+                options.loadBatchRows = static_cast<size_t>(count);
+            } else if (arg == "--threads") {
 				options.threads = parseThreadCount(requireValue(arg));
 			} else {
 				throw std::invalid_argument("unknown argument: " + arg);

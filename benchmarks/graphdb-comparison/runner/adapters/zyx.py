@@ -89,6 +89,12 @@ class ZyxAdapter(BenchmarkAdapter):
         ]
         if self.threads is not None:
             command.extend(["--threads", str(self.threads)])
+        configured_batch = os.environ.get("ZYX_COMPARE_LOAD_BATCH_ROWS")
+        if configured_batch is not None:
+            batch_rows = int(configured_batch)
+            if batch_rows <= 0:
+                raise ValueError("benchmark preparation batch rows must be positive")
+            command.extend(["--load-batch-rows", str(batch_rows)])
         if self.emit_profile:
             command.append("--emit-profile")
         if self.emit_result_rows:
