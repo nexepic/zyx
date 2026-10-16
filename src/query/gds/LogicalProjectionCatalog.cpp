@@ -7,6 +7,8 @@
  */
 
 #include "graph/query/gds/LogicalProjectionCatalog.hpp"
+#include "graph/utils/OwnedFunction.hpp"
+#include "graph/utils/OwnedPmrObject.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -21,10 +23,10 @@ namespace graph::query::gds {
 
 	namespace {
 
-		class PreparedProjectionCatalogMutation final : public PreparedLogicalProjectionCatalogMutation {
+		class PreparedProjectionCatalogMutation final : public PreparedLogicalProjectionCatalogMutation, public utils::OwnedPmrObject {
 		public:
-			PreparedProjectionCatalogMutation(std::unique_lock<std::shared_mutex> lock, std::function<void()> commit,
-										  std::function<void()> abort) :
+			PreparedProjectionCatalogMutation(std::unique_lock<std::shared_mutex> lock, utils::OwnedFunction<void()> commit,
+										  utils::OwnedFunction<void()> abort) :
 				lock_(std::move(lock)), commit_(std::move(commit)), abort_(std::move(abort)) {}
 
 			~PreparedProjectionCatalogMutation() override {
@@ -43,8 +45,8 @@ namespace graph::query::gds {
 
 		private:
 			std::unique_lock<std::shared_mutex> lock_;
-			std::function<void()> commit_;
-			std::function<void()> abort_;
+			utils::OwnedFunction<void()> commit_;
+			utils::OwnedFunction<void()> abort_;
 			bool finished_ = false;
 		};
 
@@ -134,6 +136,7 @@ namespace graph::query::gds {
 		}
 		if (found->second.source_references == 1U) {
 			source_revision_tokens_.erase(found);
+            if (source_revision_tokens_.empty()) source_revision_tokens_.clear();
 			return;
 		}
 		--found->second.source_references;
@@ -170,7 +173,7 @@ namespace graph::query::gds {
 			}
 		};
 		const auto buildStart = std::chrono::steady_clock::now();
-		std::shared_ptr<const LogicalGraphProjection> projection = std::make_shared<LogicalGraphProjection>(
+		std::shared_ptr<const LogicalGraphProjection> projection = utils::makeSharedOwned<LogicalGraphProjection>(
 				LogicalGraphProjection::build(snapshot, spec, bounds, checkpoint));
 		const int64_t buildMillis = static_cast<int64_t>(
 				std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - buildStart)
@@ -185,24 +188,37 @@ namespace graph::query::gds {
 		if (entries_.contains(spec.name)) {
 			throw std::invalid_argument("logical projection catalog already contains this name");
 		}
-		const uint64_t revisionToken = retainSourceRevisionLocked(revision);
-		auto entry = std::make_shared<Entry>(Entry{.projection = std::move(projection),
-																 .spec = spec,
-																 .revision = revision,
-																 .source_revision = revisionToken,
-																 .created_at_epoch_millis = createdAtEpochMillis,
-																 .build_millis = buildMillis});
-		LogicalProjectionCatalogCreatePreparation preparation;
-		preparation.descriptor = makeDescriptor(spec.name, *entry, revision, revisionToken);
-		preparation.mutation = std::make_unique<PreparedProjectionCatalogMutation>(
-				std::move(lock),
-				[this, name = spec.name, entry] {
-					// The prepared mutation retains the write lock from the duplicate-name
-					// check through this publication, so a second lookup cannot race here.
-					static_cast<void>(entries_.emplace(name, std::move(*entry)));
-				},
-				[this, revision] { releaseSourceRevisionLocked(revision); });
-		return preparation;
+        bool retainedRevision = false;
+        bool transferred = false;
+        try {
+            // Bind cold structural storage to this CACHE preparation, so commit
+            // cannot select its caller's QUERY account for persistent metadata.
+            entries_.reserve(entries_.size() + 1U);
+            const uint64_t revisionToken = retainSourceRevisionLocked(revision);
+            retainedRevision = true;
+            auto entry = utils::makeSharedOwned<Entry>(Entry{.projection = std::move(projection), .spec = spec,
+                .revision = revision, .source_revision = revisionToken,
+                .created_at_epoch_millis = createdAtEpochMillis, .build_millis = buildMillis});
+            LogicalProjectionCatalogCreatePreparation preparation;
+            preparation.descriptor = makeDescriptor(spec.name, *entry, revision, revisionToken);
+            preparation.mutation = std::unique_ptr<PreparedLogicalProjectionCatalogMutation>(
+                new (utils::sharedAllocationOwner()) PreparedProjectionCatalogMutation(std::move(lock),
+                    [this, name = spec.name, entry] { static_cast<void>(entries_.emplace(name, std::move(*entry))); },
+                    [this, revision] {
+                        releaseSourceRevisionLocked(revision);
+                        if (entries_.empty()) entries_.clear();
+                    }));
+            transferred = true;
+            return preparation;
+        } catch (...) {
+            // A throwing callable/constructor argument can already have moved
+            // and released the lock. Reacquire before restoring revision state.
+            if (!lock.owns_lock()) lock = std::unique_lock(mutex_);
+            if (retainedRevision && !transferred) releaseSourceRevisionLocked(revision);
+            if (entries_.empty()) entries_.clear();
+            if (source_revision_tokens_.empty()) source_revision_tokens_.clear();
+            throw;
+        }
 	}
 
 	LogicalProjectionDescriptor LogicalProjectionCatalog::create(const LogicalGraphProjectionSpec &spec,
@@ -223,15 +239,16 @@ namespace graph::query::gds {
 		if (found == entries_.end()) {
 			return nullptr;
 		}
-		return std::make_unique<PreparedProjectionCatalogMutation>(
+		return std::unique_ptr<PreparedLogicalProjectionCatalogMutation>(new (utils::sharedAllocationOwner()) PreparedProjectionCatalogMutation(
 				std::move(lock),
-				[this, name, revision = found->second.revision] {
+				[this, name = utils::OwnedStdString(name), revision = found->second.revision] {
 					// The prepared mutation owns the write lock, so the entry observed
 					// above remains the exact entry being removed at publication.
 					releaseSourceRevisionLocked(revision);
-					entries_.erase(name);
+					entries_.erase(entries_.find(name));
+                    if (entries_.empty()) entries_.clear();
 				},
-				[] {});
+				[] {}));
 	}
 
 	bool LogicalProjectionCatalog::drop(const std::string &name) {
@@ -247,13 +264,13 @@ namespace graph::query::gds {
 		std::unique_lock lock(mutex_);
 		LogicalProjectionCatalogDropAllPreparation preparation;
 		preparation.dropped_count = entries_.size();
-		preparation.mutation = std::make_unique<PreparedProjectionCatalogMutation>(
+		preparation.mutation = std::unique_ptr<PreparedLogicalProjectionCatalogMutation>(new (utils::sharedAllocationOwner()) PreparedProjectionCatalogMutation(
 				std::move(lock),
 				[this] {
 					entries_.clear();
 					source_revision_tokens_.clear();
 				},
-				[] {});
+				[] {}));
 		return preparation;
 	}
 
@@ -308,8 +325,8 @@ namespace graph::query::gds {
 		return makeDescriptor(found->first, found->second, revision, revisionToken);
 	}
 
-	std::vector<LogicalProjectionDescriptor>
-	LogicalProjectionCatalog::list(const storage::LogicalGraphReadSnapshot &snapshot, const size_t maximumEntries,
+	utils::OwnedStdVector<LogicalProjectionDescriptor>
+	LogicalProjectionCatalog::listOwned(const storage::LogicalGraphReadSnapshot &snapshot, const size_t maximumEntries,
 								   const LogicalProjectionCatalogCheckpoint &checkpoint) const {
 		if (maximumEntries == 0U) {
 			throw std::invalid_argument("logical projection catalog list requires a positive entry bound");
@@ -320,7 +337,7 @@ namespace graph::query::gds {
 			std::unique_lock lock(mutex_);
 			revisionToken = currentRevisionTokenLocked(revision);
 		}
-		std::vector<LogicalProjectionDescriptor> result;
+		utils::OwnedStdVector<LogicalProjectionDescriptor> result;
 		{
 			std::shared_lock lock(mutex_);
 			if (entries_.size() > maximumEntries) {
@@ -337,5 +354,14 @@ namespace graph::query::gds {
 		std::ranges::sort(result, {}, &LogicalProjectionDescriptor::name);
 		return result;
 	}
+
+    std::vector<LogicalProjectionDescriptor> LogicalProjectionCatalog::list(
+            const storage::LogicalGraphReadSnapshot &snapshot, size_t maximumEntries,
+            const LogicalProjectionCatalogCheckpoint &checkpoint) const {
+        auto owned = listOwned(snapshot, maximumEntries, checkpoint);
+        // Compatibility output belongs to the legacy caller. Native procedures
+        // use listOwned to preserve the array's allocation authority.
+        return std::move(static_cast<std::vector<LogicalProjectionDescriptor> &>(owned));
+    }
 
 } // namespace graph::query::gds

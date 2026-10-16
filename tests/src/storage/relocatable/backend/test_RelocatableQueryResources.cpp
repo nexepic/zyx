@@ -1316,3 +1316,45 @@ TEST_F(RelocatableStorageBackendTest, EverySchemaDdlCheckpointCancellationRollsB
     EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
     EXPECT_TRUE(backend.listLogicalConstraints(8U).empty());
 }
+
+TEST_F(RelocatableStorageBackendTest, GdsProjectionsAndLazyCsrKeepCacheOwnershipWithoutRetainingTheirCreatingQuery) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    static_cast<void>(backend->createLogicalNodes({{{"GdsOwner"}, {}}, {{"GdsOwner"}, {}}, {{"GdsOwner"}, {}}}));
+    auto domain = backend->queryResourceDomain();
+    graph::query::QueryEngine engine(backend);
+    const auto queryClass = static_cast<size_t>(ResourceClass::RCK_QUERY);
+    {
+        const auto result = engine.execute("CALL gds.graph.project('owned', {})");
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_GT(result.retainedResourceBytes(), 0U);
+        EXPECT_EQ(domain->usage().classes[queryClass], result.retainedResourceBytes());
+    }
+    EXPECT_EQ(domain->usage().classes[queryClass], 0U);
+    {
+        const auto result = engine.execute("CALL gds.pageRank.stream('owned')");
+        EXPECT_EQ(result.rowCount(), 3U);
+        EXPECT_GT(result.retainedResourceBytes(), 0U);
+        EXPECT_EQ(domain->usage().classes[queryClass], result.retainedResourceBytes());
+    }
+    EXPECT_EQ(domain->usage().classes[queryClass], 0U);
+    engine.resetEphemeralState(); backend->close();
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_CACHE)], 0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, ProcedureResultKeepsItsQueryCreditAfterBackendCloseAndRefundsOnDestruction) {
+    using namespace graph::query::execution::detail;
+    materializeNativeDatabase();
+    auto backend = std::make_shared<RelocatableStorageBackend>(backendOptions()); backend->open();
+    graph::query::QueryEngine engine(backend);
+    auto domain = backend->queryResourceDomain();
+    auto result = engine.execute("CALL gds.graph.exists('missing')");
+    ASSERT_EQ(result.rowCount(), 1U); ASSERT_GT(result.retainedResourceBytes(), 0U);
+    backend->close(); engine.resetEphemeralState();
+    EXPECT_EQ(result.getRows().front().at("exists").asPrimitive(), PropertyValue(false));
+    EXPECT_EQ(domain->usage().total, result.retainedResourceBytes());
+    result = graph::query::QueryResult{};
+    EXPECT_EQ(domain->usage().total, 0U);
+}

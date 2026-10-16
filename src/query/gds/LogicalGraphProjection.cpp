@@ -64,7 +64,8 @@ namespace graph::query::gds {
 			return weight;
 		}
 
-		void sortAdjacency(std::unordered_map<uint64_t, std::vector<LogicalProjectionEdge>> &adjacency) {
+		template<class AdjacencyMap>
+        void sortAdjacency(AdjacencyMap &adjacency) {
 			for (auto &[_, edges]: adjacency) {
 				std::ranges::sort(edges, [](const LogicalProjectionEdge &left, const LogicalProjectionEdge &right) {
 					return std::tie(left.target_node_id, left.relationship_id, left.synthetic_reverse) <
@@ -96,7 +97,7 @@ namespace graph::query::gds {
 		++projection.edge_count_;
 	}
 
-	void LogicalGraphProjection::addRelationship(LogicalGraphProjection &projection, const storage::LogicalGraphEdge &edge,
+	void LogicalGraphProjection::addRelationship(LogicalGraphProjection &projection, const storage::LogicalGraphEdgeTopology &edge,
 			const LogicalRelationshipProjection &relationship, const double weight) {
 		switch (relationship.orientation) {
 		case LogicalProjectionOrientation::LPO_NATURAL:
@@ -238,7 +239,7 @@ namespace graph::query::gds {
 		// never need to materialize an Edge; weighted projections fetch each named
 		// weight column once after all adjacency pages have been collected.
 		struct PendingRelationship {
-			storage::LogicalGraphEdgeTopology topology;
+			const storage::LogicalGraphEdgeTopology *topology = nullptr;
 			const LogicalRelationshipProjection *relationship = nullptr;
 			double weight = 1.0;
 		};
@@ -265,7 +266,7 @@ namespace graph::query::gds {
 							(page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))) {
 					throw std::runtime_error("logical projection returned an invalid adjacency continuation");
 				}
-				std::vector<PendingRelationship> pending;
+				utils::OwnedStdVector<PendingRelationship> pending;
 				pending.reserve(page.edges.size());
 				std::map<std::string, std::vector<size_t>> weightColumns;
 				for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
@@ -285,7 +286,7 @@ namespace graph::query::gds {
 					continue;
 				}
 				const size_t pendingIndex = pending.size();
-				pending.push_back({edge, relationship, 1.0});
+				pending.push_back({&edge, relationship, 1.0});
 				if (relationship->weight.kind == LogicalProjectionWeightKind::LPWK_PROPERTY) {
 					if (relationship->weight.property_name.empty()) {
 						throw std::invalid_argument("logical projection weight property name must not be empty");
@@ -301,7 +302,7 @@ namespace graph::query::gds {
 			}
 				for (auto &[key, indexes]: weightColumns) {
 					std::ranges::sort(indexes, [&pending](const size_t left, const size_t right) {
-						return pending[left].topology.edge_id < pending[right].topology.edge_id;
+						return pending[left].topology->edge_id < pending[right].topology->edge_id;
 					});
 					size_t &columnBytes = weightColumnBytes[key];
 					for (size_t offset = 0U; offset < indexes.size(); offset += MAXIMUM_WEIGHT_COLUMN_BATCH) {
@@ -310,7 +311,7 @@ namespace graph::query::gds {
 						std::vector<uint64_t> edgeIds;
 						edgeIds.reserve(count);
 						for (size_t position = 0U; position < count; ++position) {
-							edgeIds.push_back(pending[indexes[offset + position]].topology.edge_id);
+							edgeIds.push_back(pending[indexes[offset + position]].topology->edge_id);
 						}
 						std::vector<std::vector<PropertyValue>> columns;
 						if (snapshot.supportsPropertyReadAdmission()) {
@@ -353,9 +354,8 @@ namespace graph::query::gds {
 					}
 				}
 				for (const PendingRelationship &relationship: pending) {
-					const auto &edge = relationship.topology;
-					storage::LogicalGraphEdge logicalEdge{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type};
-					LogicalGraphProjection::addRelationship(projection, logicalEdge, *relationship.relationship,
+					const auto &edge = *relationship.topology;
+                    LogicalGraphProjection::addRelationship(projection, edge, *relationship.relationship,
 							relationship.weight);
 				}
 				scannedEdges += page.edges.size();
@@ -379,22 +379,24 @@ namespace graph::query::gds {
 
 	const std::vector<LogicalProjectionEdge> &LogicalGraphProjection::outgoing(const uint64_t nodeId) const noexcept {
 		const auto found = outgoing_.find(nodeId);
-		return found == outgoing_.end() ? EMPTY_EDGES : found->second;
+		if (found == outgoing_.end()) return EMPTY_EDGES;
+        return found->second;
 	}
 
 	const std::vector<LogicalProjectionEdge> &LogicalGraphProjection::incoming(const uint64_t nodeId) const noexcept {
 		const auto found = incoming_.find(nodeId);
-		return found == incoming_.end() ? EMPTY_EDGES : found->second;
+		if (found == incoming_.end()) return EMPTY_EDGES;
+        return found->second;
 	}
 
 	size_t LogicalGraphProjection::estimatedMemoryBytes() const noexcept {
 		size_t bytes = sizeof(*this) + node_ids_.capacity() * sizeof(uint64_t);
 		for (const auto &[_, edges]: outgoing_) {
-			bytes += sizeof(std::pair<const uint64_t, std::vector<LogicalProjectionEdge>>) +
+			bytes += sizeof(AdjacencyEntry) +
 					edges.capacity() * sizeof(LogicalProjectionEdge);
 		}
 		for (const auto &[_, edges]: incoming_) {
-			bytes += sizeof(std::pair<const uint64_t, std::vector<LogicalProjectionEdge>>) +
+			bytes += sizeof(AdjacencyEntry) +
 					edges.capacity() * sizeof(LogicalProjectionEdge);
 		}
 		return bytes;
@@ -407,11 +409,12 @@ namespace graph::query::gds {
 	}
 
 	std::shared_ptr<const LogicalProjectionCsr> LogicalGraphProjection::csr() const {
+        utils::OwnedAllocationScope allocation(allocation_owner_);
 		std::lock_guard lock(*csr_mutex_);
 		if (csr_cache_) {
 			return csr_cache_;
 		}
-		auto result = std::make_shared<LogicalProjectionCsr>();
+		auto result = utils::makeSharedOwned<LogicalProjectionCsr>();
 		result->node_ids = node_ids_;
 		result->offsets.reserve(node_ids_.size() + 1U);
 		result->target_node_ids.reserve(edge_count_);

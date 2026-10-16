@@ -104,3 +104,46 @@ TEST(OwnedStdStringMutationTest, SuccessfulGrowthAndCountReplacementKeepOnlyThei
     }
     EXPECT_EQ(memory->used(), 0U);
 }
+
+TEST(OwnedStdStringMutationTest, RejectedAppendKeepsTheOriginalBufferAndRefundsItsCandidate) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    const std::string original(4096U, 'a'), suffix(4096U, 'b');
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        graph::utils::OwnedStdString value(original);
+        const auto retained = memory->used();
+        graph::query::execution::MaterializedByteReservation pressure(memory.get());
+        pressure.set(memory->available() - 1U);
+        const auto exhausted = memory->used();
+        EXPECT_THROW(value += suffix, graph::query::execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(static_cast<const std::string &>(value), original);
+        EXPECT_EQ(memory->used(), exhausted);
+        pressure.reset(); EXPECT_EQ(memory->used(), retained);
+        value += suffix;
+        EXPECT_EQ(static_cast<const std::string &>(value), original + suffix);
+        EXPECT_EQ(memory->used(), value.retainedHeapRequestBytes());
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}
+TEST(OwnedStdStringMutationTest, AliasedAppendSurvivesGrowthAndUsesFundedSpareCapacityWithoutAdmission) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::string original(4096U, 'a');
+    for (size_t i = 0U; i < original.size(); ++i) original[i] = static_cast<char>('a' + i % 26U);
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        graph::utils::OwnedStdString value(original);
+        value += std::string_view(value).substr(1234U, 1234U);
+        const auto expected = original + original.substr(1234U, 1234U);
+        EXPECT_EQ(static_cast<const std::string &>(value), expected);
+        value.reserve(value.size() + 4096U);
+        graph::query::execution::MaterializedByteReservation pressure(memory.get());
+        pressure.set(memory->available());
+        const auto exhausted = memory->used();
+        EXPECT_NO_THROW(value += std::string_view(value).substr(7U, 16U));
+        EXPECT_NO_THROW(value += '!');
+        EXPECT_EQ(static_cast<const std::string &>(value), expected + expected.substr(7U, 16U) + '!');
+        EXPECT_EQ(memory->used(), exhausted);
+        EXPECT_NO_THROW(value.append({}));
+    }
+    EXPECT_EQ(memory->used(), 0U);
+}

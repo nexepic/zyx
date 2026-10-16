@@ -1,0 +1,54 @@
+{
+  "status": "component_in_progress_not_stage_acceptance",
+  "source_parent": "882e7971",
+  "selected_tests": 239,
+  "passed": 230,
+  "failures": 9,
+  "failure_names": [
+    "LogicalVectorPropertyBatchTest.CompleteEntityGatherAndRowsShareBudgetAcrossBoundedBatches",
+    "LogicalVectorPropertyBatchTest.CountsRetainedQueryResultRowsAcrossProcedureBatches",
+    "LogicalVectorPropertyBatchTest.MetadataJointRetentionRejectsLowBudgetAndCanRetry",
+    "LogicalVectorPropertyBatchTest.ScalarHeapProjectionSharesRetainedResultBudget",
+    "LogicalVectorPropertyBatchTest.TopKFilterReadsProjectedEntityAliasAfterItsBinding",
+    "LogicalVectorPropertyBatchTest.TopKPrefetchesFilterPropertyThroughProjectedEntityAlias",
+    "LogicalVectorPropertyBatchTest.TopKPreservesFiltersOnBothSidesOfEntityProjection",
+    "LogicalVectorPropertyBatchTest.UsesBoundedTopKForSortSkipLimitPipeline",
+    "LogicalVectorPropertyBatchTest.UsesBoundedTopKWhenFilterPrecedesSkipAndLimitAfterSort"
+  ],
+  "old_procedure_source_control": {
+    "source_commit": "882e7971",
+    "tests": 75,
+    "failures": 9,
+    "comparison": "exactly the same failing test IDs",
+    "scope": "old procedure translation unit linked before current core; current headers and remaining dependencies; not a full old-source rebuild"
+  },
+  "catalog_preparation_admission_points": 32,
+  "new_tests_passed": 16,
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "GDS algorithm temporary and returned-array ownership",
+    "remaining procedure temporary rows, payloads and prefetched caches",
+    "compiler/CSV/binding boundaries",
+    "nine unchanged vector budget regressions before S6.1 final acceptance",
+    "S5.3, S5.5 and S6.1 are not accepted"
+  ],
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "b70db0f52d9a77b21a76dd045704f1138959a487864c9d6e06741fe718bebf3a",
+    "include/graph/query/execution/LogicalPlanProcedureRuntime.hpp": "6494cd0f1423e4bd807c15634f538870492d596f757ba1416352d4a0b6a22c9b",
+    "include/graph/query/gds/LogicalGraphProjection.hpp": "e4e44a8308b2ff8dc8dbb0a628f136ebf3beca4364d1a6d50d001f48112610b8",
+    "include/graph/query/gds/LogicalProjectionCatalog.hpp": "be22099bd61bcee6ef6663b813a87210bb404b5b76b416b17739f41b5406a6b9",
+    "include/graph/utils/OwnedStdString.hpp": "6e95544fbd4c29d4a09ac9d9b2ce48056bce26f3af7435d261e83ee4a81611f6",
+    "src/query/api/QueryEngine.cpp": "5d59e68bafe6b1f46224d17c6a4d3465fa909bc64be206334d631015494032f4",
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "7093cb8a558f3f80d5c8fc3f8b5d9bbc936abfdc50991c2c2dc82c818584a333",
+    "src/query/gds/LogicalGraphProjection.cpp": "5d260a2012b5770e107994239f3e2530872509420acd7ae0a9c4129e348a0815",
+    "src/query/gds/LogicalProjectionCatalog.cpp": "4a87dcb60e5bafba5b98ee9f2d6073f0d89dde57b0cfa9488b130ed2fd2da42f",
+    "src/query/gds/LogicalProjectionSpecCodec.cpp": "a61d0e39312255fe4c25d6add47832937acf7e893946924ca2e8dfddaf28641e",
+    "tests/src/query/execution/test_OwnedStdString.cpp": "ccfce23bb50c32c671640d630fcb4e3f78f53bf0a74b14d5cd3cae5408394a8a",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "89edd4d7a84dfea029c2710bcb0ee01ebf5ac95c92ce4d55aa340d90d356ef6b",
+    "include/graph/utils/OwnedLazyUnorderedMap.hpp": "d878a9dcdcf9ab339226cce7bd742e063cd6a894457b8e480ffafa1233dde50a",
+    "tests/src/query/execution/test_OwnedLazyUnorderedMap.cpp": "4aa56da682ec9e048328caba2aa10526f64e8e46930f6b5f27e26240c8ba1319",
+    "tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp": "e5dc7154e9ab69a9a1460cd84bebff9802bcf14835ff8538b5e7a86329e29125"
+  },
+  "evidence_archive_sha256": "00f256831c3c3eb872b43ce13afbc872aea8e3843f96065184d6aa986f434805"
+}

@@ -64,6 +64,27 @@ public:
         Credit::set(proxy); // reserve freed the former character buffer.
         next.set(retained - proxy); Credit::absorb(next);
     }
+    OwnedStdString &append(std::string_view suffix) {
+        if (suffix.empty()) return *this;
+        if (suffix.size() > String::max_size() - String::size())
+            throw std::length_error("owned string append overflowed");
+        const auto total = String::size() + suffix.size();
+        if (total <= String::capacity()) {
+            // Audited STLs do not allocate within retained capacity; standard
+            // append also preserves overlapping views into this string.
+            String::append(suffix.data(), suffix.size());
+            return *this;
+        }
+        // The old buffer stays alive while reading an aliased suffix. Admit a
+        // complete candidate before any character copy or observable mutation.
+        OwnedStdString next(Credit::owner(), total, '\0');
+        String::copy(next.String::data(), String::size());
+        std::char_traits<char>::copy(next.String::data() + String::size(), suffix.data(), suffix.size());
+        swap(next);
+        return *this;
+    }
+    OwnedStdString &operator+=(std::string_view suffix) { return append(suffix); }
+    OwnedStdString &operator+=(char suffix) { return append(std::string_view(&suffix, 1U)); }
     void swap(OwnedStdString &other) noexcept {
         String::swap(other);
         Credit::swap(other);
@@ -90,10 +111,8 @@ private:
         return OwnedAllocationScope::active() ? OwnedAllocationScope::owner() : fallback;
     }
     // Heap-changing operations must go through admitted replacement above.
-    using String::append;
     using String::erase;
     using String::insert;
-    using String::operator+=;
     using String::pop_back;
     using String::push_back;
     using String::replace;
