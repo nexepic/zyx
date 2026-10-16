@@ -8,6 +8,7 @@
  */
 
 #include "graph/query/execution/StringBufferBytes.hpp"
+#include "query/execution/ProcedurePayloadAdmission.hpp"
 #include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
 
 #include <algorithm>
@@ -56,6 +57,17 @@ namespace graph::query::execution {
             const auto columns = root.getOwnedOutputVariables();
             result.setColumns(static_cast<const std::vector<std::string> &>(columns));
         }
+
+        [[nodiscard]] PropertyValue makeProcedurePropertyValue() { return PropertyValue(); }
+        template<class T> [[nodiscard]] PropertyValue makeProcedurePropertyValue(T &&source) {
+            if (detail::ProcedurePayloadAdmissionScope::active())
+                detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(source));
+            return PropertyValue(std::forward<T>(source));
+        }
+        using ProcedureDistinctRows = std::unordered_set<utils::OwnedStdString,
+            std::hash<std::string_view>, std::equal_to<>, utils::OwnedPmrAllocator<utils::OwnedStdString>>;
+        using ProcedureOrderedDistinctRows = std::set<utils::OwnedStdString, std::less<>,
+            utils::OwnedPmrAllocator<utils::OwnedStdString>>;
 
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 		[[nodiscard]] size_t checkedProcedureSizeAdd(size_t left, size_t right);
@@ -107,11 +119,12 @@ namespace graph::query::execution {
 					if (entry.key.empty() || !keys.insert(entry.key).second) throw std::runtime_error("logical Vector procedure read an invalid Node Property entry set");
 				}
 			}
+            detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<PropertyMap>());
 			PropertyMap properties;
-			properties.reserve(node.properties.size());
+			detail::procedureMapReserve(properties, node.properties.size());
 			for (auto &entry: node.properties) {
 				context.checkGuard();
-				properties.emplace(std::move(entry.key), std::move(entry.value));
+				detail::procedureMapEmplace(properties, std::move(entry.key), std::move(entry.value));
 			}
 			std::vector<storage::LogicalGraphPropertyEntry>().swap(node.properties);
 			return properties;
@@ -133,29 +146,30 @@ namespace graph::query::execution {
 				if (!std::ranges::any_of(output.values, [&](const auto &binding) {
 					return procedureNodeIdentity(binding.second) == nodeId;
 				})) continue;
-				const auto [cached, inserted] = nodeProperties.try_emplace(*nodeId);
+				const auto [cached, inserted] = detail::procedureMapTryEmplace(nodeProperties, *nodeId);
 				static_cast<void>(inserted);
 				if (row.complete_entity_property_cache.contains(alias)) {
 					// Selected reads represent missing fields with NULL. A complete map
 					// must drop those sentinels instead of promoting them to real keys.
 					for (const auto &[key, value]: cached->second.values) {
 						const auto found = properties.find(key);
-						if (found == properties.end() ? value != PropertyValue() : found->second != value) {
+						if (found == properties.end() ? value != makeProcedurePropertyValue() : found->second != value) {
 							throw std::runtime_error("logical Vector procedure observed inconsistent complete Node Properties");
 						}
 					}
-					cached->second = CachedNodeProperties{properties, true};
+					detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(properties));
+                    cached->second = CachedNodeProperties{properties, true};
 					continue;
 				}
 				for (const auto &[key, value]: properties) {
 					if (cached->second.complete) {
 						const auto found = cached->second.values.find(key);
-						if (found == cached->second.values.end() ? value != PropertyValue() : found->second != value) {
+						if (found == cached->second.values.end() ? value != makeProcedurePropertyValue() : found->second != value) {
 							throw std::runtime_error("logical Vector procedure observed inconsistent selected Node Properties");
 						}
 						continue;
 					}
-					const auto [existing, valueInserted] = cached->second.values.emplace(key, value);
+					const auto [existing, valueInserted] = detail::procedureMapEmplace(cached->second.values, key, value);
 					if (!valueInserted && existing->second != value) { // ZYX_COV_EXCL_LINE: one snapshot cannot diverge.
 						throw std::runtime_error("logical Vector procedure observed inconsistent Node Properties");
 					}
@@ -170,9 +184,9 @@ namespace graph::query::execution {
 					continue;
 				}
 				if (const auto properties = nodeProperties.find(*nodeId); properties != nodeProperties.end()) {
-					row.property_cache.insert_or_assign(alias, properties->second.values);
+					detail::procedureMapInsertOrAssign(row.property_cache, alias, properties->second.values);
 					if (properties->second.complete) {
-						row.complete_entity_property_cache.insert(alias);
+						detail::procedureSetInsert(row.complete_entity_property_cache, alias);
 					}
 				}
 			}
@@ -183,7 +197,7 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical Vector procedure backend returned an invalid Node");
 			}
 			std::unordered_set<std::string_view> labels;
-			labels.reserve(node.labels.size());
+			detail::procedureMapReserve(labels, node.labels.size());
 			for (const std::string &label: node.labels) {
 				if (label.empty() || !labels.insert(label).second) {
 					throw std::runtime_error("logical Vector procedure backend returned an invalid Node label set");
@@ -703,7 +717,7 @@ namespace graph::query::execution {
 		applyProjection(const logical::LogicalProject &projection, storage::LogicalGraphReadSnapshot &snapshot,
 						const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context,
 						LogicalPlanReadRow &source, NodePropertyMaps &nodeProperties,
-						std::unordered_set<std::string> *distinctRows, const size_t retainedOtherBytes = 0U,
+						ProcedureDistinctRows *distinctRows, const size_t retainedOtherBytes = 0U,
 						const bool accountRetainedProjectionBytes = false, const bool deferDistinct = false) {
 			if ((projection.isDistinct() && distinctRows == nullptr && !deferDistinct) ||
 				(!projection.isDistinct() && distinctRows != nullptr) || (deferDistinct && distinctRows != nullptr)) {
@@ -713,9 +727,15 @@ namespace graph::query::execution {
 				throw std::invalid_argument("logical Vector procedure Project has no items");
 			}
 
-			LogicalPlanReadRow result;
-			result.values.reserve(projection.getItems().size());
-			result.property_cache.reserve(projection.getItems().size());
+			detail::ProcedurePayloadAdmissionScope::admit(
+                detail::procedureEmptyMapHeapUpper<decltype(LogicalPlanReadRow::values)>() +
+                detail::procedureEmptyMapHeapUpper<decltype(LogicalPlanReadRow::property_cache)>() +
+                detail::procedureEmptyMapHeapUpper<decltype(LogicalPlanReadRow::entity_metadata_cache)>() +
+                detail::procedureEmptyMapHeapUpper<decltype(LogicalPlanReadRow::complete_entity_property_cache)>() +
+                detail::procedureEmptyMapHeapUpper<decltype(LogicalPlanReadRow::path_cache)>());
+            LogicalPlanReadRow result;
+			detail::procedureMapReserve(result.values, projection.getItems().size());
+			detail::procedureMapReserve(result.property_cache, projection.getItems().size());
 			const auto addBytes = [](const size_t left, const size_t right) {
 				if (right > std::numeric_limits<size_t>::max() - left) {
 					throw std::overflow_error("logical procedure Project materialization size overflowed");
@@ -797,7 +817,7 @@ namespace graph::query::execution {
 				expressionBounds.maximum_materialized_bytes -= retainedBytes;
 				LogicalPlanReadValue value = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
 					snapshot, *item.expression, source, expressionBounds, context);
-				if (!result.values.emplace(item.alias, std::move(value)).second) {
+				if (!detail::procedureMapEmplace(result.values, item.alias, std::move(value)).second) {
 					throw std::logic_error("logical Vector procedure projection has duplicate output aliases");
 				}
 				if (retainedProjectionBytes() > readBounds.maximum_materialized_bytes) {
@@ -826,22 +846,22 @@ namespace graph::query::execution {
 					if (procedureNodeIdentity(sourceValue) != identity) continue;
 					const auto metadata = source.entity_metadata_cache.find(sourceAlias);
 					if (metadata != source.entity_metadata_cache.end()) {
-						result.entity_metadata_cache.insert_or_assign(alias, metadata->second);
+						detail::procedureMapInsertOrAssign(result.entity_metadata_cache, alias, metadata->second);
 						break;
 					}
 				}
 			}
 
 			if (distinctRows != nullptr) {
-				const std::string key =
-						LogicalPlanReadRuntime::makeDistinctRowKey(result, projection.getOutputVariables());
+				auto key =
+						detail::makeOwnedProcedureDistinctRowKey(result, projection.getOutputVariables());
 				if (distinctRows->contains(key)) {
 					return std::nullopt;
 				}
 				if (distinctRows->size() == readBounds.maximum_distinct_rows) {
 					throw std::runtime_error("logical Vector procedure DISTINCT exceeded its row bound");
 				}
-				static_cast<void>(distinctRows->insert(key));
+				static_cast<void>(distinctRows->insert(std::move(key)));
 			}
 			return result;
 		}
@@ -897,9 +917,68 @@ namespace graph::query::execution {
 		}
 
 		struct BufferedProcedureRow {
+            detail::ProcedurePayloadCredit allocation_credit;
 			LogicalPlanReadRow row;
 			NodePropertyMaps node_properties;
+            static size_t emptyHeapUpper() {
+                using detail::procedureEmptyMapHeapUpper;
+                return procedureEmptyMapHeapUpper<decltype(row.values)>() +
+                    procedureEmptyMapHeapUpper<decltype(row.property_cache)>() +
+                    procedureEmptyMapHeapUpper<decltype(row.entity_metadata_cache)>() +
+                    procedureEmptyMapHeapUpper<decltype(row.complete_entity_property_cache)>() +
+                    procedureEmptyMapHeapUpper<decltype(row.path_cache)>() +
+                    procedureEmptyMapHeapUpper<NodePropertyMaps>();
+            }
+            BufferedProcedureRow() : allocation_credit(emptyHeapUpper()) {}
+            BufferedProcedureRow(const BufferedProcedureRow &source)
+                : allocation_credit(source.allocation_credit.resource(), utils::detail::addStandardHeapBytes(
+                    detail::procedurePayloadHeapUpper<true>(source.row),
+                    detail::procedurePayloadHeapUpper<true>(source.node_properties))),
+                  row(source.row), node_properties(source.node_properties) {}
+#if defined(_MSVC_STL_VERSION)
+            static constexpr bool MOVE_WITHOUT_HEAP = false;
+#else
+            static constexpr bool MOVE_WITHOUT_HEAP = std::is_nothrow_move_constructible_v<LogicalPlanReadRow> &&
+                std::is_nothrow_move_constructible_v<NodePropertyMaps>;
+#endif
+            BufferedProcedureRow(BufferedProcedureRow &&source) noexcept(MOVE_WITHOUT_HEAP)
+                : allocation_credit(source.allocation_credit.resource(), emptyHeapUpper()),
+                  row(std::move(source.row)), node_properties(std::move(source.node_properties)) {
+                allocation_credit.swap(source.allocation_credit);
+            }
+            void reconcilePayloadCredit() {
+                allocation_credit.set(utils::detail::addStandardHeapBytes(
+                    detail::procedurePayloadHeapUpper<false>(row),
+                    detail::procedurePayloadHeapUpper<false>(node_properties)));
+            }
+            void swap(BufferedProcedureRow &other) noexcept {
+                row.values.swap(other.row.values); row.property_cache.swap(other.row.property_cache);
+                row.entity_metadata_cache.swap(other.row.entity_metadata_cache);
+                row.complete_entity_property_cache.swap(other.row.complete_entity_property_cache);
+                row.path_cache.swap(other.row.path_cache); node_properties.swap(other.node_properties);
+                allocation_credit.swap(other.allocation_credit);
+            }
+            friend void swap(BufferedProcedureRow &a, BufferedProcedureRow &b) noexcept { a.swap(b); }
+            BufferedProcedureRow &operator=(const BufferedProcedureRow &source) {
+                if (this != &source) { BufferedProcedureRow copy(source); swap(copy); } return *this;
+            }
+            BufferedProcedureRow &operator=(BufferedProcedureRow &&source) noexcept(MOVE_WITHOUT_HEAP) {
+                if (this != &source) { BufferedProcedureRow moved(std::move(source)); swap(moved); } return *this;
+            }
 		};
+        // Declared before raw output maps: refund unused row grants only after
+        // their moved-from MSVC bucket/proxy storage has actually been freed.
+        struct ProcedurePayloadReconcileGuard final {
+            BufferedProcedureRow &row;
+            ~ProcedurePayloadReconcileGuard() noexcept {
+                try {
+                    const size_t retained = utils::detail::addStandardHeapBytes(
+                        detail::procedurePayloadHeapUpper<false>(row.row),
+                        detail::procedurePayloadHeapUpper<false>(row.node_properties));
+                    if (retained < row.allocation_credit.bytes()) row.allocation_credit.set(retained);
+                } catch (...) { /* Keeping a conservative grant is safe during unwinding. */ }
+            }
+        };
         // Only the vector backing is admitted here. Nested row/cache payloads
         // retain their separate materialization admission and lifetime rules.
         using ProcedureRows = std::vector<BufferedProcedureRow, utils::OwnedPmrAllocator<BufferedProcedureRow>>;
@@ -1190,7 +1269,7 @@ namespace graph::query::execution {
 		}
 
 		void appendProcedureResultRow(QueryResult &result, ProcedureRows &rows,
-				size_t rowIndex, QueryResult::Row output, size_t maximumBytes,
+				size_t rowIndex, QueryResult::Row &&output, size_t maximumBytes,
 				const size_t retainedSourceBytes = 0U) {
 			const size_t pendingRowsBytes = bufferedProcedureRowsBytes(rows, rowIndex);
 			const size_t pendingResultBytes = checkedProcedureSizeAdd(procedureQueryResultBytes(result),
@@ -1226,8 +1305,9 @@ namespace graph::query::execution {
 				throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
 			}
 
-			result.addRow(std::move(output));
+			detail::ProcedureResultHandoff::append(result, std::move(output), rows[rowIndex].allocation_credit);
 			BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 			releaseProcedureContainer(buffered.row.values);
 			releaseProcedureContainer(buffered.row.property_cache);
 			releaseProcedureContainer(buffered.row.entity_metadata_cache);
@@ -1245,6 +1325,9 @@ namespace graph::query::execution {
 				const std::vector<const expressions::Expression *> &expressions,
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context) {
+            detail::ProcedurePayloadCredit sourcePayloadCredit;
+            detail::ProcedurePayloadAdmissionScope sourcePayloadScope(sourcePayloadCredit);
+
 			for (const auto &request: LogicalPlanReadRuntime::collectBatchedMetadataRequests(expressions)) {
 				if (request.function != "labels") continue;
 				MaterializedByteBudget budget(bounds.maximum_materialized_bytes);
@@ -1338,6 +1421,7 @@ namespace graph::query::execution {
 					std::fill(consumers.begin(), consumers.end(), 0U);
 					for (const auto &row: rows) if (const auto index = rowIndex(row)) ++consumers[*index];
 					for (auto &row: rows) {
+                detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
 						context.checkGuard();
 						const auto index = rowIndex(row);
 						if (!index) continue;
@@ -1347,12 +1431,13 @@ namespace graph::query::execution {
 						if (last) sourceBytes.set(sourceBytes.bytes() - payload);
 						admitProcedureBytes(rowBytes, checkedProcedureSizeAdd(rowBytes.bytes(), cacheBytes(row, node, payload)));
 						std::vector<PropertyValue> labels;
-						labels.reserve(node.labels.size());
+						detail::procedureVectorReserve(labels, node.labels.size());
 						for (auto &label: node.labels) {
-							if (last) labels.emplace_back(std::move(label));
-							else labels.emplace_back(label);
+							detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(label.size()));
+                            if (last) labels.emplace_back(std::move(label));
+                            else labels.emplace_back(label);
 						}
-						row.row.entity_metadata_cache[request.variable].insert_or_assign("labels", PropertyValue(std::move(labels)));
+						row.row.entity_metadata_cache[request.variable].insert_or_assign("labels", makeProcedurePropertyValue(std::move(labels)));
 					}
 					validateBufferedProcedureBytes(rows, bounds.maximum_materialized_bytes);
 				};
@@ -1375,6 +1460,9 @@ namespace graph::query::execution {
 				const std::vector<const expressions::Expression *> &expressions,
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context) {
+            detail::ProcedurePayloadCredit sourcePayloadCredit;
+            detail::ProcedurePayloadAdmissionScope sourcePayloadScope(sourcePayloadCredit);
+
 			const auto variables = LogicalPlanReadRuntime::collectBatchedCompleteEntityVariables(expressions);
 			for (const std::string &variable: variables) {
 				MaterializedByteBudget budget(bounds.maximum_materialized_bytes);
@@ -1496,6 +1584,7 @@ namespace graph::query::execution {
 					std::fill(consumers.begin(), consumers.end(), 0U);
 					for (const auto &row: rows) if (const auto index = rowIndex(row)) ++consumers[*index];
 					for (auto &buffered: rows) {
+                detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 						context.checkGuard();
 						const auto index = rowIndex(buffered);
 						if (!index) continue;
@@ -1520,20 +1609,24 @@ namespace graph::query::execution {
 						next = checkedProcedureSizeAdd(next, checkedProcedureSizeAdd(sizeof(uint32_t),
 							checkedProcedureSizeAdd(labelPayload, checkedProcedureSizeMul(node.labels.size(), sizeof(size_t)))));
 						admitProcedureBytes(rowBytes, next);
+                        detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<PropertyMap>());
 						PropertyMap complete;
 						for (auto &entry: node.properties) {
-							if (last) complete.emplace(std::move(entry.key), std::move(entry.value));
-							else complete.emplace(entry.key, entry.value);
+							if (last) detail::procedureMapEmplace(complete, std::move(entry.key), std::move(entry.value));
+							else detail::procedureMapEmplace(complete, entry.key, entry.value);
 						}
-						buffered.row.property_cache.insert_or_assign(variable, std::move(complete));
-						buffered.row.complete_entity_property_cache.insert(variable);
+						detail::procedureMapInsertOrAssign(buffered.row.property_cache, variable, std::move(complete));
+						detail::procedureSetInsert(buffered.row.complete_entity_property_cache, variable);
 						std::vector<PropertyValue> labels;
-						labels.reserve(node.labels.size());
+						detail::procedureVectorReserve(labels, node.labels.size());
 						for (auto &label: node.labels) {
-							if (last) labels.emplace_back(std::move(label));
-							else labels.emplace_back(label);
+							detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(label.size()));
+                            if (last) labels.emplace_back(std::move(label));
+                            else labels.emplace_back(label);
 						}
-						buffered.row.entity_metadata_cache[variable].insert_or_assign("labels", PropertyValue(std::move(labels)));
+						auto [metadataOwner, metadataInserted] = detail::procedureMapTryEmplace(buffered.row.entity_metadata_cache, variable);
+                        static_cast<void>(metadataInserted);
+                        detail::procedureMapInsertOrAssign(metadataOwner->second, "labels", makeProcedurePropertyValue(std::move(labels)));
 					}
 					validateBufferedProcedureBytes(rows, bounds.maximum_materialized_bytes);
 				};
@@ -1560,6 +1653,8 @@ namespace graph::query::execution {
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context,
 				const std::vector<LogicalPlanBatchedPropertyRequest> &additionalRequests = {}) {
+            detail::ProcedurePayloadCredit sourcePayloadCredit;
+            detail::ProcedurePayloadAdmissionScope sourcePayloadScope(sourcePayloadCredit);
 			prefetchProcedureCompleteNodes(rows, expressions, snapshot, bounds, context);
 			prefetchProcedureNodeMetadata(rows, expressions, snapshot, bounds, context);
 			std::vector<LogicalPlanBatchedPropertyRequest> requests;
@@ -1587,7 +1682,7 @@ namespace graph::query::execution {
 				}
 				for (const bool isEdge: {false, true}) {
 					std::vector<std::string_view> keys;
-					keys.reserve(group.keys.size());
+					detail::procedureVectorReserve(keys, group.keys.size());
 					for (const std::string_view key: group.keys) {
 						bool foundConsumer = false;
 						bool cachedByEveryConsumer = true;
@@ -1697,6 +1792,7 @@ namespace graph::query::execution {
 						if (columnBytes.wouldExceed(retainedBytes)) throw ProcedureColumnBytePressure{};
 						columnBytes.set(retainedBytes);
 						for (BufferedProcedureRow &buffered: rows) {
+                detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 							context.checkGuard();
 							const auto index = rowIndex(buffered);
 							if (!index) continue;
@@ -1716,9 +1812,13 @@ namespace graph::query::execution {
 								}
 								if (lastConsumer) columnBytes.set(columnBytes.bytes() - payload);
 								admitProcedureBytes(rowBytes, checkedProcedureSizeAdd(next, payload));
-								auto &target = buffered.row.property_cache[group.variable][std::string(keys[column])];
-								if (lastConsumer) target = std::move(value);
-								else target = value;
+								auto [cacheOwner, cacheInserted] = detail::procedureMapTryEmplace(buffered.row.property_cache, group.variable);
+                                static_cast<void>(cacheInserted);
+                                detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(keys[column].size()));
+                                const std::string cacheKey(keys[column]);
+                                if (lastConsumer) detail::procedureMapInsertOrAssign(cacheOwner->second, cacheKey, std::move(value));
+                                else detail::procedureMapInsertOrAssign(cacheOwner->second, cacheKey, value);
+
 							}
 						}
 						validateBufferedProcedureBytes(rows, bounds.maximum_materialized_bytes);
@@ -1767,29 +1867,30 @@ namespace graph::query::execution {
 
 		[[nodiscard]] PropertyValue toStringListValue(const std::vector<std::string> &values) {
 			std::vector<PropertyValue> result;
-			result.reserve(values.size());
+			detail::procedureVectorReserve(result, values.size());
 			for (const std::string &value: values) {
-				result.emplace_back(value);
+				result.emplace_back(makeProcedurePropertyValue(value));
 			}
-			return PropertyValue(std::move(result));
+			return makeProcedurePropertyValue(std::move(result));
 		}
 
 		[[nodiscard]] PropertyValue
 		toRelationshipListValue(const std::vector<gds::LogicalRelationshipProjection> &relationships) {
 			std::vector<PropertyValue> result;
-			result.reserve(relationships.size());
+			detail::procedureVectorReserve(result, relationships.size());
 			for (const gds::LogicalRelationshipProjection &relationship: relationships) {
-				PropertyValue::MapType entry;
-				entry.emplace("type", PropertyValue(relationship.type));
+				detail::ProcedurePayloadAdmissionScope::admit(detail::procedureEmptyMapHeapUpper<PropertyValue::MapType>());
+                PropertyValue::MapType entry;
+				detail::procedureMapEmplace(entry, "type", makeProcedurePropertyValue(relationship.type));
 				switch (relationship.orientation) {
 					case gds::LogicalProjectionOrientation::LPO_NATURAL:
-						entry.emplace("orientation", PropertyValue("NATURAL"));
+						detail::procedureMapEmplace(entry, "orientation", makeProcedurePropertyValue("NATURAL"));
 						break;
 					case gds::LogicalProjectionOrientation::LPO_REVERSE:
-						entry.emplace("orientation", PropertyValue("REVERSE"));
+						detail::procedureMapEmplace(entry, "orientation", makeProcedurePropertyValue("REVERSE"));
 						break;
 					case gds::LogicalProjectionOrientation::LPO_UNDIRECTED:
-						entry.emplace("orientation", PropertyValue("UNDIRECTED"));
+						detail::procedureMapEmplace(entry, "orientation", makeProcedurePropertyValue("UNDIRECTED"));
 						break;
 				}
 				// Relationship descriptors are public catalog data. Keep one canonical
@@ -1797,21 +1898,21 @@ namespace graph::query::execution {
 				// field's existence from weightKind.
 				switch (relationship.weight.kind) {
 					case gds::LogicalProjectionWeightKind::LPWK_NONE:
-						entry.emplace("weightKind", PropertyValue("NONE"));
+						detail::procedureMapEmplace(entry, "weightKind", makeProcedurePropertyValue("NONE"));
 						break;
 					case gds::LogicalProjectionWeightKind::LPWK_CONSTANT:
-						entry.emplace("weightKind", PropertyValue("CONSTANT"));
+						detail::procedureMapEmplace(entry, "weightKind", makeProcedurePropertyValue("CONSTANT"));
 						break;
 					case gds::LogicalProjectionWeightKind::LPWK_PROPERTY:
-						entry.emplace("weightKind", PropertyValue("PROPERTY"));
+						detail::procedureMapEmplace(entry, "weightKind", makeProcedurePropertyValue("PROPERTY"));
 						break;
 				}
-				entry.emplace("weightProperty", PropertyValue(relationship.weight.property_name));
-				entry.emplace("constantWeight", PropertyValue(relationship.weight.constant_weight));
-				entry.emplace("defaultWeight", PropertyValue(relationship.weight.default_weight));
-				result.emplace_back(PropertyValue(std::move(entry)));
+				detail::procedureMapEmplace(entry, "weightProperty", makeProcedurePropertyValue(relationship.weight.property_name));
+				detail::procedureMapEmplace(entry, "constantWeight", makeProcedurePropertyValue(relationship.weight.constant_weight));
+				detail::procedureMapEmplace(entry, "defaultWeight", makeProcedurePropertyValue(relationship.weight.default_weight));
+				result.emplace_back(makeProcedurePropertyValue(std::move(entry)));
 			}
-			return PropertyValue(std::move(result));
+			return makeProcedurePropertyValue(std::move(result));
 		}
 
 		[[nodiscard]] BufferedProcedureRow
@@ -1824,24 +1925,25 @@ namespace graph::query::execution {
 				throw std::overflow_error("logical projection descriptor cannot represent an output count");
 			}
 			BufferedProcedureRow result;
-			result.row.values.emplace("name", PropertyValue(descriptor.name));
-			result.row.values.emplace("nodeCount", PropertyValue(static_cast<int64_t>(descriptor.node_count)));
-			result.row.values.emplace("edgeCount", PropertyValue(static_cast<int64_t>(descriptor.edge_count)));
-			result.row.values.emplace("isWeighted", PropertyValue(descriptor.weighted));
-			result.row.values.emplace("createdAtMillis", PropertyValue(descriptor.created_at_epoch_millis));
-			result.row.values.emplace("buildMillis", PropertyValue(descriptor.build_millis));
-			result.row.values.emplace("memoryBytes",
-									  PropertyValue(static_cast<int64_t>(descriptor.estimated_memory_bytes)));
-			result.row.values.emplace("hasCsr", PropertyValue(descriptor.has_csr));
-			result.row.values.emplace("csrMemoryBytes",
-									  PropertyValue(static_cast<int64_t>(descriptor.csr_memory_bytes)));
-			result.row.values.emplace("stale", PropertyValue(descriptor.stale));
-			result.row.values.emplace("sourceRevision",
-									  PropertyValue(static_cast<int64_t>(descriptor.source_revision)));
-			result.row.values.emplace("currentRevision",
-									  PropertyValue(static_cast<int64_t>(descriptor.current_revision)));
-			result.row.values.emplace("nodeLabels", toStringListValue(descriptor.node_labels));
-			result.row.values.emplace("relationships", toRelationshipListValue(descriptor.relationships));
+            detail::ProcedurePayloadAdmissionScope resultPayloadScope(result.allocation_credit);
+			detail::procedureMapEmplace(result.row.values, "name", makeProcedurePropertyValue(descriptor.name));
+			detail::procedureMapEmplace(result.row.values, "nodeCount", makeProcedurePropertyValue(static_cast<int64_t>(descriptor.node_count)));
+			detail::procedureMapEmplace(result.row.values, "edgeCount", makeProcedurePropertyValue(static_cast<int64_t>(descriptor.edge_count)));
+			detail::procedureMapEmplace(result.row.values, "isWeighted", makeProcedurePropertyValue(descriptor.weighted));
+			detail::procedureMapEmplace(result.row.values, "createdAtMillis", makeProcedurePropertyValue(descriptor.created_at_epoch_millis));
+			detail::procedureMapEmplace(result.row.values, "buildMillis", makeProcedurePropertyValue(descriptor.build_millis));
+			detail::procedureMapEmplace(result.row.values, "memoryBytes",
+									  makeProcedurePropertyValue(static_cast<int64_t>(descriptor.estimated_memory_bytes)));
+			detail::procedureMapEmplace(result.row.values, "hasCsr", makeProcedurePropertyValue(descriptor.has_csr));
+			detail::procedureMapEmplace(result.row.values, "csrMemoryBytes",
+									  makeProcedurePropertyValue(static_cast<int64_t>(descriptor.csr_memory_bytes)));
+			detail::procedureMapEmplace(result.row.values, "stale", makeProcedurePropertyValue(descriptor.stale));
+			detail::procedureMapEmplace(result.row.values, "sourceRevision",
+									  makeProcedurePropertyValue(static_cast<int64_t>(descriptor.source_revision)));
+			detail::procedureMapEmplace(result.row.values, "currentRevision",
+									  makeProcedurePropertyValue(static_cast<int64_t>(descriptor.current_revision)));
+			detail::procedureMapEmplace(result.row.values, "nodeLabels", toStringListValue(descriptor.node_labels));
+			detail::procedureMapEmplace(result.row.values, "relationships", toRelationshipListValue(descriptor.relationships));
 			return result;
 		}
 
@@ -1856,9 +1958,12 @@ namespace graph::query::execution {
 			result.setColumns(columns);
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 				context.checkGuard();
-				QueryResult::Row row;
-				row.reserve(columns.size());
+				const ProcedurePayloadReconcileGuard reconcile{buffered};
+                detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
+                QueryResult::Row row;
+                detail::procedureMapReserve(row, columns.size());
 				for (const std::string &column: columns) {
 					const auto found = buffered.row.values.find(column);
 					if (found == buffered.row.values.end()) {
@@ -1868,7 +1973,8 @@ namespace graph::query::execution {
 					if (scalar == nullptr) {
 						throw std::logic_error("logical projection procedure emitted a non-scalar catalog value");
 					}
-					row.emplace(column, std::move(*scalar));
+					detail::procedureAdmitMapNode(row, column);
+                    row.emplace(column, std::move(*scalar));
 				}
 				appendProcedureResultRow(result, rows, rowIndex, std::move(row),
 						readBounds.maximum_materialized_bytes);
@@ -1891,10 +1997,11 @@ namespace graph::query::execution {
 			size_t retainedBytes = 0U;
 			for (size_t step = 0U; step < path.size(); ++step) {
 				BufferedProcedureRow row;
-				row.node_properties.reserve(1U);
-				row.row.values.emplace("step", PropertyValue(static_cast<int64_t>(step)));
-				row.row.values.emplace("node", storage::EntityRef{path[step], false, 0U, 0U, 0U});
-				row.row.values.emplace("path_length", PropertyValue(static_cast<int64_t>(path.size())));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+				detail::procedureMapReserve(row.node_properties, 1U);
+				detail::procedureMapEmplace(row.row.values, "step", makeProcedurePropertyValue(static_cast<int64_t>(step)));
+				detail::procedureMapEmplace(row.row.values, "node", storage::EntityRef{path[step], false, 0U, 0U, 0U});
+				detail::procedureMapEmplace(row.row.values, "path_length", makeProcedurePropertyValue(static_cast<int64_t>(path.size())));
 				appendBoundedProcedureRow(rows, std::move(row), bounds.maximum_rows, "algo.shortestPath",
 						&retainedBytes, outputByteAllowance);
 			}
@@ -2093,9 +2200,10 @@ namespace graph::query::execution {
 			for (const auto &hit: hits) {
 				context.checkGuard();
 				BufferedProcedureRow buffered;
-				buffered.node_properties.reserve(1U);
-				buffered.row.values.emplace("node", storage::EntityRef{hit.node_id, false, 0U, 0U, 0U});
-				buffered.row.values.emplace("score", PropertyValue(static_cast<double>(hit.score)));
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
+				detail::procedureMapReserve(buffered.node_properties, 1U);
+				detail::procedureMapEmplace(buffered.row.values, "node", storage::EntityRef{hit.node_id, false, 0U, 0U, 0U});
+				detail::procedureMapEmplace(buffered.row.values, "score", makeProcedurePropertyValue(static_cast<double>(hit.score)));
 				rows.push_back(std::move(buffered));
 			}
 			return rows;
@@ -2105,7 +2213,7 @@ namespace graph::query::execution {
 								 const std::vector<const logical::LogicalOperator *> &operations,
 								 const LogicalPlanReadRuntimeBounds &readBounds,
 								 const QueryContext &context, QueryResult &result,
-								 std::vector<std::unordered_set<std::string>> *distinctRowsByOperation = nullptr,
+								 std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> *distinctRowsByOperation = nullptr,
 								 std::vector<uint64_t> *operatorRowCounts = nullptr,
 								 const size_t retainedSourceBytes = 0U,
 								 const bool accountOutputTransition = false) {
@@ -2142,8 +2250,9 @@ namespace graph::query::execution {
 							propertyExpressions.push_back(item.expression.get());
 						}
 						prefetchProcedureProperties(rows, propertyExpressions, snapshot, batchBounds, context);
-						std::unordered_set<std::string> localDistinctRows;
-						std::unordered_set<std::string> *distinctRows = nullptr;
+                        for (auto &row : rows) row.reconcilePayloadCredit();
+						ProcedureDistinctRows localDistinctRows;
+						ProcedureDistinctRows *distinctRows = nullptr;
 						if (projection.isDistinct()) {
 							if (distinctRowsByOperation != nullptr) {
 								if (distinctRowsByOperation->size() != operations.size()) {
@@ -2163,6 +2272,7 @@ namespace graph::query::execution {
 						size_t retainedOutputBytes = 0U;
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 							BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 							const size_t currentSourceBytes = bufferedProcedureRowBytes(buffered);
 							if (currentSourceBytes > pendingSourceBytes) {
 								throw std::logic_error("logical procedure pending source-byte accounting underflowed");
@@ -2197,6 +2307,7 @@ namespace graph::query::execution {
 						for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 							context.checkGuard();
 							BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 							if (applyFilter(filter, snapshot, batchBounds, context, buffered.row,
 											buffered.node_properties)) {
 								if (outputCount != rowIndex) rows[outputCount] = std::move(buffered);
@@ -2249,6 +2360,7 @@ namespace graph::query::execution {
 							propertyExpressions.push_back(item.expression.get());
 						}
 						prefetchProcedureProperties(rows, propertyExpressions, snapshot, batchBounds, context);
+                        for (auto &row : rows) row.reconcilePayloadCredit();
 						struct DecoratedRow {
 							std::vector<PropertyValue> keys;
 							size_t sequence = 0U;
@@ -2270,8 +2382,9 @@ namespace graph::query::execution {
 						retainedKeys.set(checkedProcedureSizeAdd(retainedKeys.bytes(),
 							checkedProcedureSizeMul(decoratedRows.capacity() - rows.size(), sizeof(DecoratedRow))));
 						for (BufferedProcedureRow &buffered: rows) {
+                detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 							DecoratedRow decorated{{}, decoratedRows.size()};
-							decorated.keys.reserve(items.size());
+							detail::procedureVectorReserve(decorated.keys, items.size());
 							retainedKeys.set(checkedProcedureSizeAdd(retainedKeys.bytes(),
 								checkedProcedureSizeMul(decorated.keys.capacity() - items.size(), sizeof(PropertyValue))));
 							for (const logical::LogicalSortItem &item: items) {
@@ -2337,15 +2450,20 @@ namespace graph::query::execution {
 				}
 			}
 			materializeProcedureNodeOutputs(rows, result.getColumns(), snapshot, batchBounds, context);
+            for (auto &row : rows) row.reconcilePayloadCredit();
 			validateBufferedProcedureBytes(rows, batchBounds.maximum_materialized_bytes);
 
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				BufferedProcedureRow &buffered = rows[rowIndex];
+            detail::ProcedurePayloadAdmissionScope bufferedPayloadScope(buffered.allocation_credit);
 				context.checkGuard();
-				QueryResult::Row output;
-				output.reserve(buffered.row.values.size());
+				const ProcedurePayloadReconcileGuard reconcile{buffered};
+                detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
+                QueryResult::Row output;
+                detail::procedureMapReserve(output, buffered.row.values.size());
 				for (const std::string &column: result.getColumns()) {
 					const auto value = buffered.row.values.find(column);
+                    detail::procedureAdmitMapNode(output, column);
 					if (value == buffered.row.values.end() || // ZYX_COV_EXCL_LINE: output variables are derived from
 															  // the row-producing operators.
 						!output.emplace(column, materializeResultValue(value->second, snapshot, batchBounds, context,
@@ -2359,7 +2477,7 @@ namespace graph::query::execution {
 					appendProcedureResultRow(result, rows, rowIndex, std::move(output),
 							readBounds.maximum_materialized_bytes, retainedSourceBytes);
 				} else {
-					result.addRow(std::move(output));
+                    detail::ProcedureResultHandoff::append(result, std::move(output), buffered.allocation_credit);
 				}
 			}
 			return continueInput;
@@ -2622,7 +2740,7 @@ namespace graph::query::execution {
 					const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context,
 					const size_t retainedRequestBytes) {
 			const logical::LogicalProject *distinctProjection = vectorProcedureDistinctTopKProject(operations);
-			std::vector<std::string> distinctOutputVariables;
+			utils::OwnedStringVector distinctOutputVariables;
 			size_t distinctOutputStorageBytes = 0U;
 			if (distinctProjection != nullptr) {
 				distinctOutputVariables = distinctProjection->getOutputVariables();
@@ -2714,12 +2832,12 @@ namespace graph::query::execution {
 			MaterializedByteBudget topKBudget(workingBounds.maximum_materialized_bytes);
 			MaterializedByteReservation heapBytes(&topKBudget);
 			MaterializedByteReservation heapSlotSlackBytes(&topKBudget);
-			std::set<std::string> retainedDistinctKeys;
+			ProcedureOrderedDistinctRows retainedDistinctKeys;
 			struct RetainedDistinctInfo {
-				std::set<std::string>::iterator key;
+				ProcedureOrderedDistinctRows::iterator key;
 				size_t storage_bytes = 0U;
 			};
-			std::map<size_t, RetainedDistinctInfo> retainedDistinctRows;
+			std::map<size_t, RetainedDistinctInfo, std::less<>, utils::OwnedPmrAllocator<std::pair<const size_t, RetainedDistinctInfo>>> retainedDistinctRows;
 			std::vector<DecoratedRow, utils::OwnedPmrAllocator<DecoratedRow>> retained;
 			size_t retainedBytes = 0U;
 			const auto decoratedBytes = [](const DecoratedRow &row) {
@@ -2810,9 +2928,10 @@ namespace graph::query::execution {
 					};
 					admitCandidate(checkedProcedureSizeAdd(inputBytes, keyStructure));
 					DecoratedRow decorated{std::move(rows[rowIndex]), {}, offset + rowIndex};
-					std::string candidateDistinctKey;
+                    detail::ProcedurePayloadAdmissionScope candidatePayloadScope(decorated.row.allocation_credit);
+					utils::OwnedStdString candidateDistinctKey;
 					size_t candidateDistinctStorageBytes = 0U;
-					decorated.keys.reserve(items.size());
+					detail::procedureVectorReserve(decorated.keys, items.size());
 					for (const logical::LogicalSortItem &item: items) {
 						LogicalPlanReadValue value = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
 													snapshot, *item.expression, decorated.row.row, workingBounds, context);
@@ -2832,7 +2951,7 @@ namespace graph::query::execution {
 							throw std::logic_error("logical Vector procedure deferred DISTINCT Project dropped a row");
 						}
 						decorated.row.row = std::move(*projected);
-						candidateDistinctKey = LogicalPlanReadRuntime::makeDistinctRowKey(
+						candidateDistinctKey = detail::makeOwnedProcedureDistinctRowKey(
 								decorated.row.row, distinctOutputVariables);
 						const size_t setNodeBytes = checkedProcedureSizeAdd(
 								checkedProcedureSizeAdd(sizeof(std::string), 4U * sizeof(void *)),
@@ -2948,7 +3067,7 @@ namespace graph::query::execution {
 			outputRowSlots.reset();
 			const size_t suffixOffset = earlyProjection != nullptr ? projectIndex + 2U
 				: (distinctProjection != nullptr ? 2U : (sourceFilter == nullptr ? 1U : 2U));
-			std::vector<const logical::LogicalOperator *> suffix(operations.begin() +
+			utils::OwnedStdVector<const logical::LogicalOperator *> suffix(operations.begin() +
 													 static_cast<std::ptrdiff_t>(suffixOffset), operations.end());
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
@@ -3002,6 +3121,7 @@ namespace graph::query::execution {
 			const size_t maximumGdsAlgorithmIterations, const size_t maximumGdsAlgorithmWorkUnits,
 			const QueryContext &context, const LogicalProcedureExecutionScope scope) const {
         context.checkGuardNow();
+        detail::ProcedureQueryCheckpointScope procedureCheckpoints(context);
         std::optional<utils::OwnedAllocationScope> allocation;
         if (context.resource_account) {
             const auto domain = read_backend_.queryResourceDomain();
@@ -3102,8 +3222,9 @@ namespace graph::query::execution {
 					for (const storage::LogicalGraphConfiguration &configuration: configuration_service_->list()) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("key", PropertyValue(configuration.key));
-						row.row.values.emplace("value", configuration.value);
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "key", makeProcedurePropertyValue(configuration.key));
+						detail::procedureMapEmplace(row.row.values, "value", configuration.value);
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "dbms.listConfig");
 					}
 					defaultColumns = {"key", "value"};
@@ -3116,8 +3237,9 @@ namespace graph::query::execution {
 					const std::string key = requireConfigurationKey(arguments.front(), "dbms.getConfig");
 					const storage::LogicalGraphConfiguration configuration = configuration_service_->get(key);
 					BufferedProcedureRow row;
-					row.row.values.emplace("key", PropertyValue(configuration.key));
-					row.row.values.emplace("value", configuration.value);
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "key", makeProcedurePropertyValue(configuration.key));
+					detail::procedureMapEmplace(row.row.values, "value", configuration.value);
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "dbms.getConfig");
 					defaultColumns = {"key", "value"};
 					break;
@@ -3129,9 +3251,10 @@ namespace graph::query::execution {
 					const std::string key = requireConfigurationKey(arguments.front(), "dbms.setConfig");
 					deferredConfigurationUpdate.emplace(key, arguments[1]);
 					BufferedProcedureRow row;
-					row.row.values.emplace("key", PropertyValue(key));
-					row.row.values.emplace("value", arguments[1]);
-					row.row.values.emplace("status", PropertyValue("OK"));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "key", makeProcedurePropertyValue(key));
+					detail::procedureMapEmplace(row.row.values, "value", arguments[1]);
+					detail::procedureMapEmplace(row.row.values, "status", makeProcedurePropertyValue("OK"));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "dbms.setConfig");
 					defaultColumns = {"key", "value", "status"};
 					break;
@@ -3143,9 +3266,10 @@ namespace graph::query::execution {
 					for (const storage::LogicalGraphRuntimeStatistic &statistic: configuration_service_->statistics()) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("category", PropertyValue(statistic.category));
-						row.row.values.emplace("metric", PropertyValue(statistic.metric));
-						row.row.values.emplace("value", statistic.value);
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "category", makeProcedurePropertyValue(statistic.category));
+						detail::procedureMapEmplace(row.row.values, "metric", makeProcedurePropertyValue(statistic.metric));
+						detail::procedureMapEmplace(row.row.values, "value", statistic.value);
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "dbms.showStats");
 					}
 					defaultColumns = {"category", "metric", "value"};
@@ -3156,7 +3280,8 @@ namespace graph::query::execution {
 					}
 					deferredStatisticsReset = true;
 					BufferedProcedureRow row;
-					row.row.values.emplace("result", PropertyValue("Statistics reset"));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "result", makeProcedurePropertyValue("Statistics reset"));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "dbms.resetStats");
 					defaultColumns = {"result"};
 					break;
@@ -3172,10 +3297,11 @@ namespace graph::query::execution {
 							throw std::runtime_error("native slow-query recorder returned an unrepresentable value");
 						}
 						BufferedProcedureRow row;
-						row.row.values.emplace("sequence", PropertyValue(static_cast<int64_t>(record.sequence)));
-						row.row.values.emplace("logicalPlan", PropertyValue(record.logical_plan_type));
-						row.row.values.emplace("elapsedMs", PropertyValue(static_cast<int64_t>(record.elapsed_ms)));
-						row.row.values.emplace("succeeded", PropertyValue(record.succeeded));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "sequence", makeProcedurePropertyValue(static_cast<int64_t>(record.sequence)));
+						detail::procedureMapEmplace(row.row.values, "logicalPlan", makeProcedurePropertyValue(record.logical_plan_type));
+						detail::procedureMapEmplace(row.row.values, "elapsedMs", makeProcedurePropertyValue(static_cast<int64_t>(record.elapsed_ms)));
+						detail::procedureMapEmplace(row.row.values, "succeeded", makeProcedurePropertyValue(record.succeeded));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
 													  "dbms.listSlowQueries");
 					}
@@ -3187,7 +3313,8 @@ namespace graph::query::execution {
 					}
 					deferredSlowQueryClear = true;
 					BufferedProcedureRow row;
-					row.row.values.emplace("result", PropertyValue("Slow query records cleared"));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "result", makeProcedurePropertyValue("Slow query records cleared"));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
 													  "dbms.clearSlowQueries");
 					defaultColumns = {"result"};
@@ -3267,7 +3394,7 @@ namespace graph::query::execution {
 			std::unique_ptr<gds::PreparedLogicalProjectionCatalogMutation> deferredCatalogMutation;
 			switch (procedure->kind) {
 				case NativeProcedureKind::NPK_GDS_GRAPH_PROJECT: {
-					std::vector<std::reference_wrapper<const PropertyValue>> projectionArguments;
+					utils::OwnedStdVector<std::reference_wrapper<const PropertyValue>> projectionArguments;
 					projectionArguments.reserve(arguments.size());
 					for (size_t index = 0U; index < arguments.size(); ++index) {
 						projectionArguments.emplace_back(arguments[index]);
@@ -3302,7 +3429,8 @@ namespace graph::query::execution {
 						throw std::out_of_range("logical projection catalog does not contain this name");
 					}
 					BufferedProcedureRow row;
-					row.row.values.emplace("name", PropertyValue(name));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "name", makeProcedurePropertyValue(name));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.graph.drop");
 					defaultColumns = {"name"};
 					break;
@@ -3320,7 +3448,8 @@ namespace graph::query::execution {
 						throw std::overflow_error("logical projection catalog drop count cannot be represented");
 					}
 					BufferedProcedureRow row;
-					row.row.values.emplace("droppedCount", PropertyValue(static_cast<int64_t>(dropped)));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "droppedCount", makeProcedurePropertyValue(static_cast<int64_t>(dropped)));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.graph.dropAll");
 					deferredCatalogMutation = std::move(preparation.mutation);
 					defaultColumns = {"droppedCount"};
@@ -3329,8 +3458,9 @@ namespace graph::query::execution {
 				case NativeProcedureKind::NPK_GDS_GRAPH_EXISTS: {
 					const auto name = requireProjectionName(arguments, "gds.graph.exists", 1U);
 					BufferedProcedureRow row;
-					row.row.values.emplace("name", PropertyValue(name));
-					row.row.values.emplace("exists", PropertyValue(projection_catalog_->exists(name)));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+					detail::procedureMapEmplace(row.row.values, "name", makeProcedurePropertyValue(name));
+					detail::procedureMapEmplace(row.row.values, "exists", makeProcedurePropertyValue(projection_catalog_->exists(name)));
 					appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.graph.exists");
 					defaultColumns = {"name", "exists"};
 					break;
@@ -3401,8 +3531,9 @@ namespace graph::query::execution {
 					for (const gds::LogicalGdsNodeScore &score: scores) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(score.node_id)));
-						row.row.values.emplace("score", PropertyValue(score.score));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(score.node_id)));
+						detail::procedureMapEmplace(row.row.values, "score", makeProcedurePropertyValue(score.score));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.pageRank.stream",
 								&retainedBytes, outputByteAllowance);
 					}
@@ -3426,9 +3557,10 @@ namespace graph::query::execution {
 					for (const gds::LogicalGdsNodeComponent &component: components) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(component.node_id)));
-						row.row.values.emplace("componentId",
-											   PropertyValue(checkedOutputNodeId(component.component_id)));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(component.node_id)));
+						detail::procedureMapEmplace(row.row.values, "componentId",
+											   makeProcedurePropertyValue(checkedOutputNodeId(component.component_id)));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.wcc.stream",
 								&retainedBytes, outputByteAllowance);
 					}
@@ -3461,8 +3593,9 @@ namespace graph::query::execution {
 					for (const gds::LogicalGdsNodeScore &score: scores) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(score.node_id)));
-						row.row.values.emplace("score", PropertyValue(score.score));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(score.node_id)));
+						detail::procedureMapEmplace(row.row.values, "score", makeProcedurePropertyValue(score.score));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
 													  "gds.betweenness.stream", &retainedBytes,
 													  outputByteAllowance);
@@ -3487,8 +3620,9 @@ namespace graph::query::execution {
 					for (const gds::LogicalGdsNodeScore &score: scores) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(score.node_id)));
-						row.row.values.emplace("score", PropertyValue(score.score));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(score.node_id)));
+						detail::procedureMapEmplace(row.row.values, "score", makeProcedurePropertyValue(score.score));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
 													  "gds.closeness.stream", &retainedBytes,
 													  outputByteAllowance);
@@ -3546,9 +3680,10 @@ namespace graph::query::execution {
 					for (const gds::LogicalGdsNodeCommunity &community: communities) {
 						context.checkGuard();
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(community.node_id)));
-						row.row.values.emplace("communityId",
-											   PropertyValue(checkedOutputNodeId(community.community_id)));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(community.node_id)));
+						detail::procedureMapEmplace(row.row.values, "communityId",
+											   makeProcedurePropertyValue(checkedOutputNodeId(community.community_id)));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows, "gds.leiden.stream",
 								&retainedBytes, outputByteAllowance);
 					}
@@ -3637,10 +3772,11 @@ namespace graph::query::execution {
 							accumulatedCost += path.step_weights[index];
 						}
 						BufferedProcedureRow row;
-						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(path.node_ids[index])));
-						row.row.values.emplace("node", storage::EntityRef{path.node_ids[index], false, 0U, 0U, 0U});
-						row.row.values.emplace("cost", PropertyValue(accumulatedCost));
-						row.row.values.emplace("totalCost", PropertyValue(path.total_weight));
+            detail::ProcedurePayloadAdmissionScope rowPayloadScope(row.allocation_credit);
+						detail::procedureMapEmplace(row.row.values, "nodeId", makeProcedurePropertyValue(checkedOutputNodeId(path.node_ids[index])));
+						detail::procedureMapEmplace(row.row.values, "node", storage::EntityRef{path.node_ids[index], false, 0U, 0U, 0U});
+						detail::procedureMapEmplace(row.row.values, "cost", makeProcedurePropertyValue(accumulatedCost));
+						detail::procedureMapEmplace(row.row.values, "totalCost", makeProcedurePropertyValue(path.total_weight));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
 													  "gds.shortestPath.dijkstra.stream", &retainedBytes,
 													  outputByteAllowance);
@@ -3735,7 +3871,7 @@ namespace graph::query::execution {
 			}
 			const storage::LogicalGraphVectorTrainingPreview preview = prepared->preview();
 			const auto status = [&preview] {
-				return PropertyValue(preview.will_train ? "Success" : "Skipped (Empty Data)");
+				return makeProcedurePropertyValue(preview.will_train ? "Success" : "Skipped (Empty Data)");
 			};
 			// Result materialization remains entirely before commit(). A failure in
 			// YIELD/WHERE/RETURN destroys the prepared operation and cannot publish a
@@ -3744,8 +3880,11 @@ namespace graph::query::execution {
 			if (operations.empty()) {
 				result.setColumns({"status"});
 				ProcedureRows rows(1U);
-				rows.front().row.values.emplace("status", status());
-				QueryResult::Row row;
+                detail::ProcedurePayloadAdmissionScope singlePayloadScope(rows.front().allocation_credit);
+				detail::procedureMapEmplace(rows.front().row.values, "status", status());
+				detail::ProcedurePayloadAdmissionScope::admit(2U * detail::procedureEmptyMapHeapUpper<QueryResult::Row>());
+                QueryResult::Row row;
+                detail::procedureAdmitMapNode(row, "status");
 				row.emplace("status", status());
 				appendProcedureResultRow(result, rows, 0U, std::move(row), readBounds.maximum_materialized_bytes);
 			} else {
@@ -3760,7 +3899,8 @@ namespace graph::query::execution {
 					throw std::runtime_error("logical Vector procedure backend could not open a search snapshot");
 				}
 				BufferedProcedureRow source;
-				source.row.values.emplace("status", status());
+            detail::ProcedurePayloadAdmissionScope sourcePayloadScope(source.allocation_credit);
+				detail::procedureMapEmplace(source.row.values, "status", status());
 				ProcedureRows rows;
 				rows.push_back(std::move(source));
 				result = executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
@@ -3951,7 +4091,7 @@ namespace graph::query::execution {
 			QueryResult result = makeAdmittedProcedureResult(context);
 			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
-			std::vector<std::unordered_set<std::string>> distinctRowsByOperation(operations.size());
+			std::vector<ProcedureDistinctRows, utils::OwnedPmrAllocator<ProcedureDistinctRows>> distinctRowsByOperation(operations.size());
 			utils::OwnedStdVector<uint64_t> operatorRowCounts(operations.size(), 0U);
 			for (size_t offset = 0U; offset < hits.size(); offset += capacity) {
 				context.checkGuard();

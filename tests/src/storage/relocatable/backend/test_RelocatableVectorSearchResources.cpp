@@ -4,6 +4,7 @@
  */
 #include "storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/query/api/QueryEngine.hpp"
 
 namespace {
 using graph::query::execution::MaterializedByteBudget;
@@ -95,4 +96,50 @@ TEST_F(RelocatableStorageBackendSchemaTest, NativeExactVectorSearchRefundsEveryA
     EXPECT_FALSE(authority.expired());
     ASSERT_EQ(escaped->hits.size(), 2U); EXPECT_EQ(escaped->hits[0].node_id, nodes[0]);
     escaped.reset(); EXPECT_TRUE(authority.expired());
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ProcedurePayloadsPublishExactOwnershipAndRefundQuotaFailures) {
+    using namespace graph::query::execution::detail;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options()); backend->open();
+    const auto vector = [](double x, double y) {
+        return graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(x), graph::PropertyValue(y)});
+    };
+    static_cast<void>(backend->createLogicalNodes({
+        {{"Person"}, {{"embedding", vector(1.0, -2.0)}, {"payload", graph::PropertyValue(std::string(2000U, 'a'))}}},
+        {{"Person"}, {{"embedding", vector(-3.0, 4.0)}, {"payload", graph::PropertyValue(std::string(2000U, 'b'))}}}}));
+    static_cast<void>(backend->createLogicalNodeVectorIndex({"owned_vector", "Person", "embedding", 2U, "inner_product"}));
+    graph::query::QueryEngine engine(backend, backend);
+    const std::string prefix = "CALL db.index.vector.queryNodes('owned_vector', 2, [1.0, -2.0]) YIELD node, score ";
+    const std::vector<std::pair<std::string, size_t>> cases{
+        {"RETURN node.payload AS value", 2U},
+        {"WITH node AS bound RETURN bound AS value", 2U},
+        {"RETURN DISTINCT node.payload AS value", 2U},
+        {"WITH node, score ORDER BY score DESC LIMIT 1 RETURN node.payload AS value", 1U},
+        {"RETURN labels(node) AS value", 2U},
+        {"RETURN properties(node) AS value", 2U},
+        {"WITH node.payload AS value RETURN value", 2U}};
+    const auto domain = backend->queryResourceDomain();
+    for (const auto &[suffix, count] : cases) {
+        SCOPED_TRACE(suffix);
+        graph::query::QueryContext context;
+        auto denied = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 1024U);
+        context.resource_account = denied;
+        EXPECT_THROW(static_cast<void>(engine.execute(prefix + suffix, context)), ResourceAdmissionDenied);
+        EXPECT_EQ(denied->used(), 0U);
+        auto admitted = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 256U * 1024U);
+        context.resource_account = admitted;
+        {
+            auto result = engine.execute(prefix + suffix, context);
+            ASSERT_EQ(result.rowCount(), count);
+            EXPECT_EQ(admitted->used(), result.retainedResourceBytes());
+            ASSERT_TRUE(result.getRows().front().contains("value"));
+            if (suffix == "RETURN node.payload AS value" || suffix == "WITH node.payload AS value RETURN value")
+                EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), graph::PropertyValue(std::string(2000U, 'a')));
+            if (suffix == "WITH node AS bound RETURN bound AS value")
+                EXPECT_EQ(result.getRows().front().at("value").asLogicalNode().properties.at("payload"), graph::PropertyValue(std::string(2000U, 'a')));
+        }
+        EXPECT_EQ(admitted->used(), 0U);
+    }
+    engine.resetEphemeralState(); backend->close();
+    EXPECT_EQ(domain->usage().total, 0U);
 }

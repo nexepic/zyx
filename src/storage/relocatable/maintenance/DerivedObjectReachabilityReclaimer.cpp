@@ -68,8 +68,8 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable derived-object reclamation found an invalid or oversized Vector delta root");
 			}
-			const std::vector<VectorDeltaEntry> entries =
-					VectorDeltaMapping::scan(snapshot, trees, metadata, manifest.delta_mapping_index_id, maximumEntries);
+			const auto entries =
+					VectorDeltaMapping::scanOwned(snapshot, trees, metadata, manifest.delta_mapping_index_id, maximumEntries);
 			if (entries.size() != manifest.delta_entry_count) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable derived-object reclamation found a Vector delta count mismatch");

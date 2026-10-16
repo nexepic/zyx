@@ -189,6 +189,8 @@ public:
 		return *this;
 	}
 	[[nodiscard]] size_t bytes() const noexcept { return bytes_; }
+	[[nodiscard]] bool sameAccount(const ResourceLease &other) const noexcept { return account_ && account_ == other.account_; }
+	[[nodiscard]] size_t accountMaximum() const noexcept { return account_ ? account_->maximum() : 0U; }
 	[[nodiscard]] size_t available() const { return account_ ? account_->available() : 0U; }
 	// A deep copy retains a separate allocation. Admit its complete charge
 	// before copying any payload; sharing the original lease would undercount.

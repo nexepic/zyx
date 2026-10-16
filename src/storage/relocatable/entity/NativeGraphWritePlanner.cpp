@@ -1179,7 +1179,7 @@ namespace graph::storage {
 					 "native graph Vector delta exceeds its configured durable overlay bound");
 			}
 			const size_t scanLimit = std::max(options.rebuild_threshold, sourceDeltaEntries);
-			const std::vector<VectorDeltaEntry> sourceEntries = VectorDeltaMapping::scan(
+			const auto sourceEntries = VectorDeltaMapping::scanOwned(
 					snapshot_, mappingTrees, *context_->metadata, sourceManifest.delta_mapping_index_id, scanLimit);
 			if (sourceEntries.size() != sourceManifest.delta_entry_count) {
 				fail(FormatError::FERR_INVALID_STATE,

@@ -149,13 +149,13 @@ namespace graph::storage {
 		return header;
 	}
 
-	VectorPage::VectorPage(std::vector<std::byte> bytes, VectorPageHeader header) :
+	VectorPage::VectorPage(PageBytes bytes, VectorPageHeader header) :
 		bytes_(std::move(bytes)), header_(std::move(header)) {}
 
-	VectorPage::VectorPage(VectorPage &&other) noexcept :
+	VectorPage::VectorPage(VectorPage &&other) noexcept(std::is_nothrow_move_constructible_v<PageBytes>) :
 		bytes_(std::move(other.bytes_)), header_(std::move(other.header_)) {}
 
-	VectorPage &VectorPage::operator=(VectorPage &&other) noexcept {
+	VectorPage &VectorPage::operator=(VectorPage &&other) noexcept(std::is_nothrow_move_assignable_v<PageBytes>) {
 		if (this != &other) {
 			bytes_ = std::move(other.bytes_);
 			header_ = std::move(other.header_);
@@ -166,7 +166,7 @@ namespace graph::storage {
 	VectorPage VectorPage::create(const PageOwnerHeader &owner, const VectorPageHeader &header) {
 		validateHeader(header);
 		validateOwner(owner, header, false);
-		VectorPage page(std::vector<std::byte>(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES), header);
+		VectorPage page(PageBytes(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES), header);
 		const VectorPageHeaderCodec::Bytes encodedHeader = VectorPageHeaderCodec::encode(header);
 		std::copy(encodedHeader.begin(), encodedHeader.end(), page.bytes_.begin());
 		page.refreshChecksums();
@@ -179,7 +179,7 @@ namespace graph::storage {
 																				   : FormatError::FERR_INVALID_HEADER,
 								 "relocatable vector page payload has an invalid length");
 		}
-		std::vector<std::byte> copied(bytes.begin(), bytes.end());
+		PageBytes copied(bytes.begin(), bytes.end());
 		std::array<std::byte, RSS_VECTOR_PAGE_HEADER_BYTES> encodedHeader{};
 		std::copy_n(copied.begin(), encodedHeader.size(), encodedHeader.begin());
 		const uint32_t expectedHeaderCrc = LittleEndianCodec::readU32(encodedHeader, HEADER_CRC_OFFSET);
@@ -235,20 +235,21 @@ namespace graph::storage {
 		throwVectorPageError(FormatError::FERR_INVALID_STATE, "relocatable vector page has no free fixed-record slot");
 	}
 
-	std::vector<std::byte> VectorPage::read(uint16_t slot) const {
-		validateLayout();
-		validateSlot(slot);
-		const size_t offset = recordOffset(slot);
-		return {bytes_.begin() + offset, bytes_.begin() + offset + header_.record_bytes};
-	}
 
-	std::vector<std::byte> VectorPage::read(uint16_t slot, uint32_t expectedSlotGeneration) const {
-		validateLayout();
-		validateSlot(slot);
-		validateSlotGeneration(slot, expectedSlotGeneration);
-		const size_t offset = recordOffset(slot);
-		return {bytes_.begin() + offset, bytes_.begin() + offset + header_.record_bytes};
-	}
+    std::span<const std::byte> VectorPage::readBorrowed(uint16_t slot) const {
+        validateLayout(); validateSlot(slot);
+        return std::span<const std::byte>(bytes_).subspan(recordOffset(slot), header_.record_bytes);
+    }
+    std::span<const std::byte> VectorPage::readBorrowed(uint16_t slot, uint32_t generation) const {
+        validateLayout(); validateSlot(slot); validateSlotGeneration(slot, generation);
+        return std::span<const std::byte>(bytes_).subspan(recordOffset(slot), header_.record_bytes);
+    }
+    std::vector<std::byte> VectorPage::read(uint16_t slot) const {
+        const auto record = readBorrowed(slot); return {record.begin(), record.end()};
+    }
+    std::vector<std::byte> VectorPage::read(uint16_t slot, uint32_t generation) const {
+        const auto record = readBorrowed(slot, generation); return {record.begin(), record.end()};
+    }
 
 	uint32_t VectorPage::slotGeneration(uint16_t slot) const {
 		validateLayout();
@@ -316,7 +317,7 @@ namespace graph::storage {
 
 	std::vector<std::byte> VectorPage::serialize() const {
 		validateLayout();
-		return bytes_;
+		return {bytes_.begin(), bytes_.end()};
 	}
 
 	void VectorPage::validateLayout() const {

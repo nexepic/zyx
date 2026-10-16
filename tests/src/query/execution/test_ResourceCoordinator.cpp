@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "query/execution/ResourceCoordinator.hpp"
+#include "query/execution/ProcedurePayloadAdmission.hpp"
 
 namespace graph::query::execution::detail {
 namespace {
@@ -225,4 +226,114 @@ TEST(ResourceCoordinatorTest, DatabaseAndQuerySlotsRemainHeldBySharedAccountLeas
 	EXPECT_NO_THROW(DatabaseResourceBudget replacement(process,ResourceLimits::uniform(100U)));
 }
 } // namespace
+} // namespace graph::query::execution::detail
+
+namespace graph::query::execution::detail {
+TEST(ProcedurePayloadHandoffTest, ReturnedReservationStaysChargedButFreedPmrBackingRefunds) {
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(4096U));
+    auto database = std::make_shared<DatabaseResourceBudget>(*process, ResourceLimits::uniform(4096U));
+    auto account = std::make_shared<ResourceAccount>(*database, ResourceClass::RCK_QUERY, 4096U);
+    auto target = std::make_shared<MaterializedByteBudget>(4096U, account);
+    utils::OwnedAllocationScope owner(target);
+    {
+        ProcedurePayloadCredit credit;
+        ProcedurePayloadAdmissionScope scope(credit);
+        {
+            MaterializedByteBudget source(4096U, account);
+            ProcedureBudgetHandoff handoff(source);
+            MaterializedByteReservation returned(&source);
+            returned.set(2048U);
+            void *scratch = source.allocate(1024U);
+            EXPECT_EQ(account->used(), 3072U);
+            source.deallocate(scratch, 1024U);
+            EXPECT_EQ(account->used(), 2048U);
+            EXPECT_EQ(credit.bytes(), 0U);
+            returned.reset();
+            EXPECT_EQ(account->used(), 2048U);
+            EXPECT_EQ(source.used(), 0U);
+            EXPECT_EQ(target->used(), 2048U);
+            EXPECT_EQ(credit.bytes(), 2048U);
+            EXPECT_THROW(target->reserveUnmanaged(2049U), MaterializedByteLimitExceeded);
+            EXPECT_EQ(account->used(), 2048U);
+        }
+        EXPECT_EQ(account->used(), 2048U);
+    }
+    EXPECT_EQ(account->used(), 0U);
+    EXPECT_EQ(target->used(), 0U);
+}
+
+TEST(ProcedurePayloadHandoffTest, ForeignAndUnparentedBudgetsKeepNormalRefundBehavior) {
+    ProcessResourceBudget process(ResourceLimits::uniform(8192U));
+    DatabaseResourceBudget database(process, ResourceLimits::uniform(8192U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+    auto foreign = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+    auto target = std::make_shared<MaterializedByteBudget>(4096U, account);
+    utils::OwnedAllocationScope owner(target);
+    ProcedurePayloadCredit credit;
+    ProcedurePayloadAdmissionScope scope(credit);
+    for (bool parented : {false, true}) {
+        auto source = parented ? std::make_unique<MaterializedByteBudget>(4096U, foreign)
+                               : std::make_unique<MaterializedByteBudget>(4096U);
+        ProcedureBudgetHandoff handoff(*source);
+        EXPECT_FALSE(source->transfersReservations());
+        MaterializedByteReservation temporary(source.get()); temporary.set(1024U);
+        temporary.reset(); EXPECT_EQ(source->used(), 0U);
+        EXPECT_EQ(credit.bytes(), 0U); EXPECT_EQ(target->used(), 0U);
+    }
+}
+} // namespace graph::query::execution::detail
+
+namespace graph::query::execution::detail {
+TEST(ProcedurePayloadHandoffTest, PublishedRowTransfersItsChargeAndOutlivesTheProcedureScope) {
+    ProcessResourceBudget process(ResourceLimits::uniform(32768U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(32768U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 32768U);
+    auto memory = std::make_shared<MaterializedByteBudget>(32768U, account);
+    QueryResult result{ResourceLease(account)};
+    result.reserveRows(1U);
+    const size_t emptyResult = result.retainedResourceBytes();
+    {
+        utils::OwnedAllocationScope owner(memory);
+        ProcedurePayloadCredit credit;
+        ProcedurePayloadAdmissionScope payload(credit);
+        credit.add(16384U); // Granted before constructing the public raw row.
+        QueryResult::Row row;
+        row.emplace("payload", PropertyValue(std::string(2000U, 'x')));
+        const auto rowFee = graph::query::detail::resultRowHeapBytes(row);
+        ProcedureResultHandoff::append(result, std::move(row), credit);
+        EXPECT_EQ(result.retainedResourceBytes(), emptyResult + rowFee);
+        EXPECT_EQ(credit.bytes(), 16384U - rowFee);
+        EXPECT_EQ(account->used(), emptyResult + 16384U);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(account->used(), result.retainedResourceBytes());
+    EXPECT_EQ(result.getRows().front().at("payload").asPrimitive(), PropertyValue(std::string(2000U, 'x')));
+    result = QueryResult{}; EXPECT_EQ(account->used(), 0U);
+}
+
+TEST(ProcedurePayloadHandoffTest, DistinctKeyRetainsIndependentCreditAcrossRowRelease) {
+    auto memory = std::make_shared<MaterializedByteBudget>(32768U);
+    std::weak_ptr<std::pmr::memory_resource> weak = memory;
+    std::optional<utils::OwnedStdString> escaped;
+    {
+        utils::OwnedAllocationScope owner(memory);
+        {
+            ProcedurePayloadCredit credit;
+            ProcedurePayloadAdmissionScope payload(credit);
+            credit.add(8192U);
+            LogicalPlanReadRow row;
+            row.values.emplace("payload", PropertyValue(std::string(1000U, 'v')));
+            escaped.emplace(makeOwnedProcedureDistinctRowKey(row, {"payload"}));
+            EXPECT_EQ(*escaped, LogicalPlanReadRuntime::makeDistinctRowKey(row, {"payload"}));
+            EXPECT_GT(memory->used(), credit.bytes());
+        }
+        EXPECT_GT(memory->used(), 1000U);
+        auto denied = std::make_shared<MaterializedByteBudget>(1U);
+        utils::OwnedAllocationScope low(denied);
+        EXPECT_THROW(static_cast<void>(utils::OwnedStdString(*escaped)), MaterializedByteLimitExceeded);
+        EXPECT_EQ(denied->used(), 0U);
+    }
+    memory.reset(); EXPECT_FALSE(weak.expired());
+    escaped.reset(); EXPECT_TRUE(weak.expired());
+}
 } // namespace graph::query::execution::detail

@@ -175,7 +175,15 @@ namespace graph::storage {
 		return std::nullopt;
 	}
 
-	std::vector<VectorDeltaEntry> VectorDeltaMapping::scan(const MetadataSnapshotPin &snapshot, BTreePageStore &pages,
+    std::vector<VectorDeltaEntry> VectorDeltaMapping::scan(const MetadataSnapshotPin &snapshot, BTreePageStore &pages,
+            RelocatableMetadataStore &metadata, uint64_t mappingIndexId, size_t maximumEntries,
+            const CancellationCheckpoint *cancellation) {
+        auto owned = scanOwned(snapshot, pages, metadata, mappingIndexId, maximumEntries, cancellation);
+        // Legacy owning API: the caller assumes responsibility at this boundary.
+        return std::move(static_cast<std::vector<VectorDeltaEntry> &>(owned));
+    }
+
+	utils::OwnedStdVector<VectorDeltaEntry> VectorDeltaMapping::scanOwned(const MetadataSnapshotPin &snapshot, BTreePageStore &pages,
 																   RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
 																   size_t maximumEntries, const CancellationCheckpoint *cancellation) {
 		validateMappingIndexId(mappingIndexId);
@@ -190,7 +198,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable Vector delta mapping exceeds its configured bounded scan cardinality");
 		}
-		std::vector<VectorDeltaEntry> result;
+		utils::OwnedStdVector<VectorDeltaEntry> result;
 		result.reserve(entries.size());
 		uint64_t previousVectorId = 0U;
 		for (const BTreePageEntry &entry: entries) {

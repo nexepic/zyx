@@ -19,6 +19,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 
@@ -64,13 +65,14 @@ namespace graph::storage {
 	// resolving a stale Vector Location. The page-local generation changes only
 	// when an erased slot is reused, so overwrites preserve logical identity.
 	class VectorPage final {
+        using PageBytes = std::vector<std::byte, utils::OwnedPmrAllocator<std::byte>>;
 	public:
 		[[nodiscard]] static VectorPage create(const PageOwnerHeader &owner, const VectorPageHeader &header);
 		[[nodiscard]] static VectorPage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
 		VectorPage(const VectorPage &) = delete;
 		VectorPage &operator=(const VectorPage &) = delete;
-		VectorPage(VectorPage &&other) noexcept;
-		VectorPage &operator=(VectorPage &&other) noexcept;
+		VectorPage(VectorPage &&other) noexcept(std::is_nothrow_move_constructible_v<PageBytes>);
+		VectorPage &operator=(VectorPage &&other) noexcept(std::is_nothrow_move_assignable_v<PageBytes>);
 
 		[[nodiscard]] VectorPageHeader header() const;
 		// Rebinds only the physical owner generation and publication LSN. The
@@ -79,6 +81,8 @@ namespace graph::storage {
 		[[nodiscard]] VectorPage rebindOwner(const PageOwnerHeader &owner) const;
 		[[nodiscard]] uint16_t insert(std::span<const std::byte> record);
 		[[nodiscard]] std::vector<std::byte> read(uint16_t slot) const;
+        [[nodiscard]] std::span<const std::byte> readBorrowed(uint16_t slot) const;
+        [[nodiscard]] std::span<const std::byte> readBorrowed(uint16_t slot, uint32_t expectedSlotGeneration) const;
 		[[nodiscard]] std::vector<std::byte> read(uint16_t slot, uint32_t expectedSlotGeneration) const;
 		[[nodiscard]] uint32_t slotGeneration(uint16_t slot) const;
 		// Derived PQ mappings resolve a page first, then prove the Vector ID by
@@ -92,7 +96,7 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<std::byte> serialize() const;
 
 	private:
-		explicit VectorPage(std::vector<std::byte> bytes, VectorPageHeader header);
+		explicit VectorPage(PageBytes bytes, VectorPageHeader header);
 		void validateLayout() const;
 		void validateSlot(uint16_t slot) const;
 		void validateSlotGeneration(uint16_t slot, uint32_t expectedSlotGeneration) const;
@@ -104,7 +108,7 @@ namespace graph::storage {
 		void setSlotGeneration(uint16_t slot, uint32_t generation);
 		void refreshChecksums();
 
-		std::vector<std::byte> bytes_;
+		PageBytes bytes_;
 		VectorPageHeader header_;
 	};
 
