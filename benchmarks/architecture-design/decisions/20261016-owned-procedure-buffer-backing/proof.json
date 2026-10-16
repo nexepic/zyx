@@ -1,0 +1,12 @@
+{
+  "selected_tests": 243,
+  "passed": 243,
+  "negative_control_source": "ce2b467a",
+  "negative_control_expected_failure": true,
+  "source_sha256": {
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "86e2d4d2c8a5fa98db7d451434b3249eb85835b7fd399884be7e33ea79710884",
+    "tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp": "ae5fad57d5c79577fb3ce463bc6ed7bfe4256a9e29e2cd5c4cb44d8a72ef1a1c"
+  },
+  "full_suite": false,
+  "performance_campaign": false
+}

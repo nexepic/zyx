@@ -3,6 +3,7 @@
  * Copyright (c) 2026 Nexepic. Licensed under the Apache License, Version 2.0.
  */
 #include "query/api/LogicalVectorProcedureBatchFixture.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 namespace graph::query {
 	TEST_F(LogicalVectorPropertyBatchTest, ProjectExpressionsShareRetainedProcedureOutputBudget) {
 		backend->state->search_result.hits = {{1U, 0.0F}};
@@ -1500,4 +1501,32 @@ namespace graph::query {
 
 
 
+
+    TEST_F(LogicalVectorPropertyBatchTest, ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds) {
+        auto memory = std::make_shared<execution::MaterializedByteBudget>(
+            3U * sizeof(execution::LogicalPlanReadRow) - 1U);
+        backend->state->enable_property_admission = true;
+        logical::LogicalProject project(search(), {{
+            std::make_shared<expressions::VariableReferenceExpression>("node", "rank"), "rank"}});
+        {
+            utils::OwnedAllocationScope scope(memory);
+            EXPECT_THROW(static_cast<void>(execute(project)), execution::MaterializedByteLimitExceeded);
+        }
+        EXPECT_EQ(backend->state->property_column_reads, 0U);
+        EXPECT_EQ(backend->state->admitted_property_copies, 0U);
+        EXPECT_EQ(memory->used(), 0U);
+        auto funded = std::make_shared<execution::MaterializedByteBudget>(64U * 1024U);
+        backend->state->before_property_admission = [&] {
+            EXPECT_GE(funded->used(), 3U * sizeof(execution::LogicalPlanReadRow));
+        };
+        {
+            utils::OwnedAllocationScope scope(funded);
+            const auto result = execute(project);
+            ASSERT_EQ(result.rowCount(), 3U);
+            EXPECT_EQ(result.getRows()[0].at("rank").asPrimitive(), PropertyValue(30));
+            EXPECT_EQ(result.getRows()[1].at("rank").asPrimitive(), PropertyValue(10));
+            EXPECT_EQ(result.getRows()[2].at("rank").asPrimitive(), PropertyValue(20));
+        }
+        EXPECT_EQ(funded->used(), 0U);
+    }
 } // namespace graph::query

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="1" disabled="0" errors="0" time="0.001" timestamp="2026-10-16T05:49:56.154" name="AllTests">
+  <testsuite name="LogicalVectorPropertyBatchTest" tests="1" failures="1" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-10-16T05:49:56.155">
+    <testcase name="ProcedureRowBackingRejectsQuotaBeforePropertyCopiesAndRefunds" file="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp" line="1505" status="run" result="completed" time="0." timestamp="2026-10-16T05:49:56.155" classname="LogicalVectorPropertyBatchTest">
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1513&#x0A;Expected: static_cast&lt;void&gt;(execute(project)) throws an exception of type execution::MaterializedByteLimitExceeded.&#x0A;  Actual: it throws nothing.&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1513
+Expected: static_cast<void>(execute(project)) throws an exception of type execution::MaterializedByteLimitExceeded.
+  Actual: it throws nothing.
+]]></failure>
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1515&#x0A;Expected equality of these values:&#x0A;  backend-&gt;state-&gt;property_column_reads&#x0A;    Which is: 1&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1515
+Expected equality of these values:
+  backend->state->property_column_reads
+    Which is: 1
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1516&#x0A;Expected equality of these values:&#x0A;  backend-&gt;state-&gt;admitted_property_copies&#x0A;    Which is: 3&#x0A;  0U&#x0A;    Which is: 0&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1516
+Expected equality of these values:
+  backend->state->admitted_property_copies
+    Which is: 3
+  0U
+    Which is: 0
+]]></failure>
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520&#x0A;Expected: (funded-&gt;used()) &gt;= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+]]></failure>
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520&#x0A;Expected: (funded-&gt;used()) &gt;= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+]]></failure>
+      <failure message="/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520&#x0A;Expected: (funded-&gt;used()) &gt;= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840&#x0A;" type=""><![CDATA[/workspace/zyx/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp:1520
+Expected: (funded->used()) >= (3U * sizeof(execution::LogicalPlanReadRow)), actual: 8 vs 840
+]]></failure>
+    </testcase>
+  </testsuite>
+</testsuites>

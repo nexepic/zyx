@@ -1,0 +1,5 @@
+# Native procedure buffer backing
+
+Private procedure row arrays and both sorting heaps use an owner-retaining allocator. Gather IDs, consumer counts and temporary expression-pointer arrays admit their backing before allocation. Legacy const-vector arguments stay borrowed; no public API or container representation changes. Nested row and cache payloads have separate accounting and are not claimed to be admitted by the outer vector allocator.
+
+243 affected tests pass. A new tiny-budget case rejects before any property read/copy, refunds to zero and succeeds with three exact values after restoring credit; the property-admission callback observes the live row backing. The previous procedure source from ce2b467a linked before the current core fails this same test: it makes one property-column read, copies three values and exposes only eight charged bytes against at least 840 required row-frame bytes. This is a procedure-translation-unit control against current dependencies, not a full old-source rebuild. No full suite or performance campaign. S5.3 remains in progress pending nested payload integration and its acceptance review.
