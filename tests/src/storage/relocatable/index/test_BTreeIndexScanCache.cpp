@@ -423,3 +423,53 @@ TEST_F(BTreeIndexScanCacheTest, OwnedExactBatchRejectsItsResultBeforeRootIoAndKe
     EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
     EXPECT_EQ(io_->bufferPoolStats().hits, before.hits);
 }
+
+TEST_F(BTreeIndexScanCacheTest, OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo) {
+    auto original = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    OrderedBTreeEntrySource source;
+    {
+        graph::utils::OwnedAllocationScope scope(original);
+        source = index_->orderedSource(snapshot_, 8U);
+    }
+    const auto sourceBytes = original->used();
+    auto copy = source;
+    EXPECT_GT(original->used(), sourceBytes);
+    copy = nullptr;
+    EXPECT_EQ(original->used(), sourceBytes);
+    auto denied = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    const auto before = io_->bufferPoolStats();
+    {
+        graph::utils::OwnedAllocationScope scope(denied);
+        EXPECT_THROW({ OrderedBTreeEntrySource rejected(source); },
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(denied->used(), 0U);
+    EXPECT_EQ(original->used(), sourceBytes);
+    EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+    EXPECT_EQ(io_->bufferPoolStats().hits, before.hits);
+    auto cursor = source();
+    ASSERT_TRUE(cursor());
+}
+
+TEST_F(BTreeIndexScanCacheTest, EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    OrderedBTreeEntrySource source;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        source = index_->orderedSource(snapshot_, 8U);
+    }
+    memory.reset();
+    ASSERT_FALSE(authority.expired());
+    auto cursor = source();
+    source = nullptr;
+    ASSERT_FALSE(authority.expired());
+    size_t emitted = 0U;
+    while (auto entry = cursor()) {
+        EXPECT_EQ(entry->key.size(), 1U);
+        ++emitted;
+    }
+    EXPECT_EQ(emitted, 4U);
+    cursor = nullptr;
+    EXPECT_TRUE(authority.expired());
+}

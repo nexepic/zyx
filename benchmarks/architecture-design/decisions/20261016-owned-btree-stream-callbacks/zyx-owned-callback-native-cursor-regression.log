@@ -1,0 +1,63 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreeIndexScanCache.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = OwnedFunctionTest.*:BTreeIndexScanCacheTest.*
+[==========] Running 24 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 8 tests from OwnedFunctionTest
+[ RUN      ] OwnedFunctionTest.EmptyAndNullTargetsDoNotAcquireHeapStorage
+[       OK ] OwnedFunctionTest.EmptyAndNullTargetsDoNotAcquireHeapStorage (0 ms)
+[ RUN      ] OwnedFunctionTest.SmallTrivialMutableCopiesStayIndependentWithoutAdmission
+[       OK ] OwnedFunctionTest.SmallTrivialMutableCopiesStayIndependentWithoutAdmission (0 ms)
+[ RUN      ] OwnedFunctionTest.InvocationSupportsVoidDiscardReferencesAndBorrowedTargets
+[       OK ] OwnedFunctionTest.InvocationSupportsVoidDiscardReferencesAndBorrowedTargets (0 ms)
+[ RUN      ] OwnedFunctionTest.HeapCopiesOwnIndependentStateAndMovesTransferOneAdmission
+[       OK ] OwnedFunctionTest.HeapCopiesOwnIndependentStateAndMovesTransferOneAdmission (0 ms)
+[ RUN      ] OwnedFunctionTest.CopyDenialKeepsBothSourceAndAssignmentDestination
+[       OK ] OwnedFunctionTest.CopyDenialKeepsBothSourceAndAssignmentDestination (0 ms)
+[ RUN      ] OwnedFunctionTest.ActiveCopyOwnerRebindsOwnedCapturesAndEscapedBoxesKeepTheirAuthority
+[       OK ] OwnedFunctionTest.ActiveCopyOwnerRebindsOwnedCapturesAndEscapedBoxesKeepTheirAuthority (0 ms)
+[ RUN      ] OwnedFunctionTest.PartialCaptureCloneFailureRefundsTheNewBoxAndPreservesTheOriginal
+[       OK ] OwnedFunctionTest.PartialCaptureCloneFailureRefundsTheNewBoxAndPreservesTheOriginal (0 ms)
+[ RUN      ] OwnedFunctionTest.TargetInspectionAndCopyReplacementHandleInlineAndHeapTargets
+[       OK ] OwnedFunctionTest.TargetInspectionAndCopyReplacementHandleInlineAndHeapTargets (0 ms)
+[----------] 8 tests from OwnedFunctionTest (0 ms total)
+
+[----------] 16 tests from BTreeIndexScanCacheTest
+[ RUN      ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently
+[       OK ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently (52 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute (56 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot (32 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves
+[       OK ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves (56 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage
+[       OK ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage (30 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease
+[       OK ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease (32 ms)
+[ RUN      ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees
+[       OK ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees (53 ms)
+[ RUN      ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries
+[       OK ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries (36 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys (76 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots (36 ms)
+[ RUN      ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt
+[       OK ] BTreeIndexScanCacheTest.CursorStateDenialPrecedesRootIoAndRefundsItsAttempt (52 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves
+[       OK ] BTreeIndexScanCacheTest.EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves (27 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchKeepsItsResultAuthorityAfterTheCallerScopeEnds (28 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact
+[       OK ] BTreeIndexScanCacheTest.OwnedExactBatchRejectsItsResultBeforeRootIoAndKeepsBorrowedKeysIntact (45 ms)
+[ RUN      ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo
+[       OK ] BTreeIndexScanCacheTest.OrderedSourceCopiesAdmitTheirClosureBeforeAnyRootIo (29 ms)
+[ RUN      ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies
+[       OK ] BTreeIndexScanCacheTest.EscapedOrderedSourceRetainsItsAuthorityUntilTheLastCursorDies (48 ms)
+[----------] 16 tests from BTreeIndexScanCacheTest (695 ms total)
+
+[----------] Global test environment tear-down
+[==========] 24 tests from 2 test suites ran. (696 ms total)
+[  PASSED  ] 24 tests.

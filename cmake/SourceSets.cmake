@@ -407,6 +407,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_PrepaidMemoryResource.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedHeapReservation.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedStdString.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedFunction.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedSharedPtr.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedPropertyValue.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedStdVector.cpp"
