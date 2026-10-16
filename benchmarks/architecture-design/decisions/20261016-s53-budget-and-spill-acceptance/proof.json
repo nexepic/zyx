@@ -1,0 +1,26 @@
+{
+  "stage": "S5.3",
+  "status": "accepted",
+  "tests": 1979,
+  "test_suites": 136,
+  "explicit_affected_modules": 95,
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "native_vector_failures_injected": 217,
+  "platform_runtime": "Linux x86_64, Clang19/libstdc++14",
+  "implementation_scope": [
+    "Shared process/database QUERY/CACHE/WRITE/MAINT ownership and previously accepted single-file scratch lifecycle",
+    "Sort run/merge and partitioned DISTINCT/UNION spill; unsupported aggregate/join spill fails explicitly",
+    "Procedure row/cache/output payload pre-admission, guarded copies and allocation-free same-account result handoff",
+    "Independent cross-batch DISTINCT ownership; admitted vector-page backing and borrowed immutable records; owned native delta scans"
+  ],
+  "unsupported_or_external": [
+    "Legacy raw owning storage API callers assume output-buffer responsibility at the public boundary",
+    "Unsupported group/hash-join spilling is an explicit quota error, not a hidden external scratch file",
+    "Runtime Windows/macOS verification remains unavailable; allocator layout policies and Windows move/proxy lifetimes retained",
+    "RSS and external runtime allocations are reported separately from charged allocation limits"
+  ],
+  "prior_spill_fault_evidence": "20261016-s54-resource-fault-acceptance/proof.json",
+  "prior_soak_evidence": "20261016-s63-resource-recovery-soak/proof.json",
+  "performance_acceptance": "S5.5 remains pending; this is implementation/resource correctness acceptance"
+}

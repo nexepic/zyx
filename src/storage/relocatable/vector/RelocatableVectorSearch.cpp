@@ -178,7 +178,7 @@ namespace graph::storage {
 				throw std::runtime_error(
 						"relocatable logical Vector search delta overlay exceeds its caller-supplied mapping bound");
 			}
-			const std::vector<VectorDeltaEntry> entries = VectorDeltaMapping::scan(
+			const auto entries = VectorDeltaMapping::scanOwned(
 					snapshot, trees, metadata, manifest.delta_mapping_index_id, manifest.delta_entry_count, request.cancellation);
 			if (entries.size() != manifest.delta_entry_count) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -312,7 +312,7 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable logical Vector search resolved an invalid raw Vector page");
 			}
-			const std::vector<std::byte> raw = page.read(location.slot_id, location.slot_generation);
+			const auto raw = page.readBorrowed(location.slot_id, location.slot_generation);
 			++stats.raw_vector_reads;
 			if (raw.size() != expectedBytes || LittleEndianCodec::readU64(raw, 0U) != vectorId) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -691,7 +691,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable logical Vector search resolved an incompatible PQ page");
 				}
-				const ApproximateCandidate candidate{vectorId, table.score(page.read(*slot))};
+				const ApproximateCandidate candidate{vectorId, table.score(page.readBorrowed(*slot))};
 				++stats.pq_record_reads;
 				frontier.push(candidate);
 				++stats.candidate_discoveries;

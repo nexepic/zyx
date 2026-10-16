@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -144,6 +145,19 @@ TEST_F(RelocatableVectorDeltaMappingTest, BuildsScansAndPinsTypedOverlayEntries)
 			  std::optional(VectorDeltaOperation::VDO_INSERT));
 	EXPECT_FALSE(VectorDeltaMapping::findOperation(oldSnapshot, trees, *metadata, mappingIndexId, 2U).has_value());
 	EXPECT_EQ(VectorDeltaMapping::scan(oldSnapshot, trees, *metadata, mappingIndexId, expected.size()), expected);
+    {
+        using graph::query::execution::MaterializedByteBudget;
+        auto memory = std::make_shared<MaterializedByteBudget>(1024U * 1024U);
+        graph::utils::OwnedAllocationScope scope(memory);
+        {
+            const auto owned = VectorDeltaMapping::scanOwned(oldSnapshot, trees, *metadata, mappingIndexId, expected.size());
+            EXPECT_EQ(owned, expected);
+            EXPECT_EQ(memory->used(), owned.retainedBackingRequestBytes());
+            EXPECT_GE(memory->used(), expected.size() * sizeof(VectorDeltaEntry));
+        }
+        EXPECT_EQ(memory->used(), 0U);
+    }
+
 
 	static_cast<void>(trees.erase(mappingIndexId, VectorDeltaMapping::key(1U, VectorDeltaOperation::VDO_ERASE),
 								  LogSequenceNumber(3U)));

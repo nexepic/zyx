@@ -55,6 +55,24 @@ namespace graph::query::execution {
             replace(bytes, 0U);
         }
 
+        [[nodiscard]] detail::ResourceLease detachCharged(size_t bytes) { return detach(bytes); }
+
+        // A synchronous borrowed-row evaluator may return a payload whose local
+        // reservation must pass to its caller without a refund/admission gap.
+        using ReservationReleaseSink = void (*)(void *, detail::ResourceLease &&) noexcept;
+        void setReservationReleaseSink(void *context, ReservationReleaseSink sink) noexcept {
+            release_context_ = context; release_sink_ = sink;
+        }
+        [[nodiscard]] bool canTransferTo(const MaterializedByteBudget &target) const noexcept {
+            return parent_ && target.parent_ && parent_->sameAccount(*target.parent_) &&
+                parent_->accountMaximum() <= target.maximum_bytes_;
+        }
+        [[nodiscard]] bool transfersReservations() const noexcept { return release_sink_ != nullptr; }
+        void adoptCharged(detail::ResourceLease &&lease) noexcept {
+            if (!parent_ || !parent_->sameAccount(lease) || lease.bytes() > available()) std::terminate();
+            const size_t bytes = lease.bytes(); parent_->absorb(std::move(lease)); used_bytes_ += bytes;
+        }
+
 	private:
 		friend class MaterializedByteReservation;
 		[[nodiscard]] detail::ResourceLease detach(size_t bytes) {
@@ -64,11 +82,17 @@ namespace graph::query::execution {
 			used_bytes_ -= bytes;
 			return result;
 		}
-		void replace(size_t previousBytes, size_t nextBytes) {
+		void replace(size_t previousBytes, size_t nextBytes, bool transferReservation = false) {
 			if (nextBytes > previousBytes && nextBytes - previousBytes > available()) {
 				throw MaterializedByteLimitExceeded();
 			}
 			const size_t total = used_bytes_ - previousBytes + nextBytes;
+            if (parent_ && release_sink_ && transferReservation && previousBytes > nextBytes) {
+                auto released = parent_->splitOff(previousBytes - nextBytes);
+                used_bytes_ = total;
+                release_sink_(release_context_, std::move(released));
+                return;
+            }
 			if (parent_) parent_->set(total);
 			used_bytes_ = total;
 		}
@@ -84,6 +108,8 @@ namespace graph::query::execution {
 		bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override {return this==&other;}
 		// Destroy the lease after the allocator state; outstanding reservations
 		// and PMR allocations still require this budget to outlive them.
+		void *release_context_ = nullptr;
+		ReservationReleaseSink release_sink_ = nullptr;
 		std::optional<detail::ResourceLease> parent_;
 		size_t maximum_bytes_;
 		size_t used_bytes_ = 0U;
@@ -157,12 +183,12 @@ namespace graph::query::execution {
 		// Keep the public size while charging that parent's storage exactly once.
 		void setAccounting(size_t bytes,size_t embedded) {
 			if(embedded>bytes)throw std::logic_error("embedded materialization exceeds logical size");
-			if(budget_)budget_->replace(bytes_-embedded_bytes_,bytes-embedded);
+			if(budget_)budget_->replace(bytes_-embedded_bytes_,bytes-embedded,true);
 			bytes_=bytes;embedded_bytes_=embedded;
 		}
 
 		void reset() noexcept {
-			if (budget_ != nullptr) budget_->replace(bytes_-embedded_bytes_, 0U);
+			if (budget_ != nullptr) budget_->replace(bytes_-embedded_bytes_, 0U,true);
 			bytes_ = 0U;embedded_bytes_=0U;
 		}
 		[[nodiscard]] bool wouldExceed(size_t nextBytes) const noexcept {

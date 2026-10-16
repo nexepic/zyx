@@ -568,7 +568,7 @@ namespace graph::storage {
 		std::optional<BTreeTreeRetirementPlan> deltaRetirementPlan;
 		if (currentDeltaRoot.has_value()) {
 			VectorDeltaMapping::validateMappingIndexId(base.delta_mapping_index_id);
-			const std::vector<VectorDeltaEntry> deltaEntries = VectorDeltaMapping::scan(
+			const auto deltaEntries = VectorDeltaMapping::scanOwned(
 					source, trees, metadata, base.delta_mapping_index_id, options.maximum_delta_overlay_entries + 1U,
 					cancellation);
 			if (deltaEntries.size() != base.delta_entry_count ||

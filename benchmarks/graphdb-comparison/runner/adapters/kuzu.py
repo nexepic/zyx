@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -78,11 +79,21 @@ class KuzuAdapter(BenchmarkAdapter):
         return remove_artifact_family(self.db_path)
 
     def _open_database(self, kuzu_module: Any) -> Any:
-        if self.threads is None:
-            return kuzu_module.Database(str(self.db_path))
+        # Explicit formal-campaign limits must never silently fall back to defaults.
+        configured = os.environ.get("KUZU_BENCH_BUFFER_POOL_BYTES")
+        options: dict[str, int] = {}
+        if configured is not None:
+            size = int(configured)
+            if size <= 0:
+                raise ValueError("Kuzu benchmark buffer pool must be positive")
+            options["buffer_pool_size"] = size
+        if self.threads is not None:
+            options["max_num_threads"] = self.threads
         try:
-            return kuzu_module.Database(str(self.db_path), max_num_threads=self.threads)
+            return kuzu_module.Database(str(self.db_path), **options)
         except TypeError:
+            if configured is not None:
+                raise
             return kuzu_module.Database(str(self.db_path))
 
     def _open_connection(self, kuzu_module: Any) -> Any:

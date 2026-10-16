@@ -24,6 +24,7 @@
 #include "graph/storage/relocatable/vector/VectorPage.hpp"
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 using namespace graph::storage;
 
@@ -441,4 +442,35 @@ TEST(RelocatableVectorPageTest, MaterializesAndReopensARawVectorPageThroughOneSh
 	std::error_code error;
 	file->close();
 	std::filesystem::remove(path, error);
+}
+
+TEST(RelocatableVectorPageTest, OwnedPageRejectsBeforeBackingAndBorrowedReadsRetainThePageAuthority) {
+    using graph::query::execution::MaterializedByteBudget;
+    using graph::query::execution::MaterializedByteLimitExceeded;
+    const auto shape = header(); const auto identity = owner(shape);
+    auto denied = std::make_shared<MaterializedByteBudget>(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - 1U);
+    {
+        graph::utils::OwnedAllocationScope scope(denied);
+        EXPECT_THROW(static_cast<void>(VectorPage::create(identity, shape)), MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(denied->used(), 0U);
+    auto memory = std::make_shared<MaterializedByteBudget>(32768U);
+    std::weak_ptr<std::pmr::memory_resource> weak = memory;
+    std::optional<VectorPage> escaped;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        escaped.emplace(VectorPage::create(identity, shape));
+        const auto slot = escaped->insert(record(std::byte{0x3A}));
+        const auto before = memory->used();
+        EXPECT_GE(before, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+        const auto first = escaped->readBorrowed(slot);
+        const auto second = escaped->readBorrowed(slot, escaped->slotGeneration(slot));
+        EXPECT_EQ(first.data(), second.data());
+        EXPECT_TRUE(std::ranges::equal(first, record(std::byte{0x3A})));
+        EXPECT_EQ(memory->used(), before);
+        EXPECT_THROW(static_cast<void>(escaped->readBorrowed(slot, escaped->slotGeneration(slot) + 1U)), FormatException);
+        EXPECT_EQ(memory->used(), before);
+    }
+    memory.reset(); EXPECT_FALSE(weak.expired());
+    escaped.reset(); EXPECT_TRUE(weak.expired());
 }

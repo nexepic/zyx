@@ -114,6 +114,9 @@ namespace graph::storage {
 		[[nodiscard]] static std::vector<VectorDeltaEntry>
 		scan(const MetadataSnapshotPin &snapshot, BTreePageStore &pages, RelocatableMetadataStore &metadata,
 			 uint64_t mappingIndexId, size_t maximumEntries, const CancellationCheckpoint *cancellation = nullptr);
+		[[nodiscard]] static utils::OwnedStdVector<VectorDeltaEntry>
+		scanOwned(const MetadataSnapshotPin &snapshot, BTreePageStore &pages, RelocatableMetadataStore &metadata,
+			 uint64_t mappingIndexId, size_t maximumEntries, const CancellationCheckpoint *cancellation = nullptr);
 		// Current Raw locations describe the post-mutation semantic state. Inserts
 		// must resolve there, while erase tombstones name records retained only by
 		// an older derived base and therefore must no longer have a Raw location.

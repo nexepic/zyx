@@ -1,4 +1,5 @@
 #include "query/execution/OrderByComparison.hpp"
+#include "query/execution/ProcedurePayloadAdmission.hpp"
 /**
  * @file LogicalPlanReadRuntime.cpp
  * @brief Streaming logical-plan runtime over the format-independent graph reader.
@@ -157,6 +158,7 @@ namespace graph::query::execution {
 			MaterializedByteBudget materialized_budget = context && context->resource_account
 				? MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes, context->resource_account)
 				: MaterializedByteBudget(bounds.maximum_materialized_bytes - resident_output_batch_bytes);
+			detail::ProcedureBudgetHandoff procedure_handoff{materialized_budget};
 			MaterializedByteReservation materialized_cache_reservation{&materialized_budget};
 			MaterializedByteReservation final_result_reservation{&materialized_budget};
 			size_t final_result_bytes = 0U;
@@ -549,7 +551,9 @@ namespace graph::query::execution {
 			constexpr const char *message = "logical-plan copied Property payload size overflowed";
 			reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(source, checkpoint), message));
 			try {
-				PropertyValue copy = detail::copyPropertyValueGuarded(source, checkpoint);
+				PropertyValue copy = state.shared.materialized_budget.transfersReservations()
+                    ? graph::property_copy::copyPropertyValueGuarded(source, checkpoint)
+                    : detail::copyPropertyValueGuarded(source, checkpoint);
 				reservation.set(checkedSizeAdd(previous, detail::retainedPropertyValueBytes(copy, checkpoint), message));
 				return copy;
 			} catch (...) {
@@ -593,6 +597,7 @@ namespace graph::query::execution {
 		template<typename Record, typename Cache>
 		void cacheEntityRecord(ExecutionState &state, Cache &cache, uint64_t id, Record &&record, size_t bytes,
 							   size_t maximumRecords) {
+			if (detail::ProcedurePayloadAdmissionScope::active()) return;
 			if (cache.contains(id) || cache.size() >= maximumRecords ||
 				bytes > MAXIMUM_MATERIALIZED_CACHE_BYTES -
 								std::min(state.shared.materialized_cache_bytes, MAXIMUM_MATERIALIZED_CACHE_BYTES)) {
@@ -1027,7 +1032,7 @@ namespace graph::query::execution {
 			}
 			detail::BudgetMemoryResource labelMemory(state.shared.materialized_budget);
 			std::pmr::unordered_set<std::string_view> labels(&labelMemory);
-			labels.reserve(node.labels.size());
+			detail::procedureVectorReserve(labels, node.labels.size());
 			size_t labelsUntilGuard = 256U;
 			for (const std::string &label: node.labels) {
 				if (--labelsUntilGuard == 0U) {
@@ -1918,14 +1923,14 @@ namespace graph::query::execution {
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&binding)) {
 				auto [cached, inserted] =
-						row.property_cache.emplace(variable, readNodeProperties(snapshot, *node, state));
+						detail::procedureMapEmplace(row.property_cache, variable, readNodeProperties(snapshot, *node, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
 				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&binding)) {
 				auto [cached, inserted] =
-						row.property_cache.emplace(variable, readEdgeProperties(snapshot, *edge, state));
+						detail::procedureMapEmplace(row.property_cache, variable, readEdgeProperties(snapshot, *edge, state));
 				static_cast<void>(inserted);
 				const auto found = cached->second.find(key);
 				return found == cached->second.end() ? PropertyValue() : copyResult(found->second);
@@ -1939,7 +1944,9 @@ namespace graph::query::execution {
 				snapshot, reference.entity_id, reference.is_edge, key, state);
 			// The selected value is already owned. Transfer it into the row cache;
 			// only the independent expression result needs a payload copy.
-			const auto [cached, inserted] = row.property_cache[variable].insert_or_assign(key, std::move(value));
+			auto [cacheOwner, cacheInserted] = detail::procedureMapTryEmplace(row.property_cache, variable);
+            static_cast<void>(cacheInserted);
+            const auto [cached, inserted] = detail::procedureMapInsertOrAssign(cacheOwner->second, key, std::move(value));
 			static_cast<void>(inserted);
 			return copyResult(cached->second);
 		}
@@ -2026,24 +2033,24 @@ namespace graph::query::execution {
 					throw std::runtime_error(
 							"logical-plan entity Property function requires a node, relationship, or Map");
 				}
-				return row.property_cache.emplace(variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
+				return detail::procedureMapEmplace(row.property_cache, variable, detail::copyPropertyMapGuarded(value->getMap(), [&] {
 					if (state.shared.context != nullptr) state.shared.context->checkGuardNow();
 				})).first->second;
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&binding)) {
-				return row.property_cache.emplace(variable, readNodeProperties(snapshot, *node, state)).first->second;
+				return detail::procedureMapEmplace(row.property_cache, variable, readNodeProperties(snapshot, *node, state)).first->second;
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&binding)) {
-				return row.property_cache.emplace(variable, readEdgeProperties(snapshot, *edge, state)).first->second;
+				return detail::procedureMapEmplace(row.property_cache, variable, readEdgeProperties(snapshot, *edge, state)).first->second;
 			}
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(binding);
 			validateEntityRef(reference);
 			PropertyMap complete = reference.is_edge
 										   ? readEdgeProperties(snapshot, materializeEdgeValue(state, binding), state)
 										   : readNodeProperties(snapshot, materializeNodeValue(state, binding), state);
-			auto [cached, inserted] = row.property_cache.insert_or_assign(variable, std::move(complete));
+			auto [cached, inserted] = detail::procedureMapInsertOrAssign(row.property_cache, variable, std::move(complete));
 			static_cast<void>(inserted);
-			row.complete_entity_property_cache.insert(variable);
+			detail::procedureSetInsert(row.complete_entity_property_cache, variable);
 			return cached->second;
 		}
 
@@ -3102,8 +3109,10 @@ namespace graph::query::execution {
 						return PropertyValue(literal.getDoubleValue());
 					}
 					if (literal.isPropertyValue()) {
+						detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(literal.getPropertyValue()));
 						return literal.getPropertyValue();
 					}
+					detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(literal.getStringValue().size()));
 					return PropertyValue(literal.getStringValue());
 				}
 				case ExpressionType::VARIABLE_REFERENCE:
@@ -3113,7 +3122,8 @@ namespace graph::query::execution {
 						const auto *instruction = state.task.bound_inputs->instruction(expression);
 						const auto *value = instruction ? state.task.bound_inputs->value(*instruction) : nullptr;
 						if (value && instruction->kind == detail::BoundInputKind::BIK_VALUE) {
-							debug::PerfTrace::addValue("logical_plan.bound_expression.slot_reads", 1); return *value;
+							debug::PerfTrace::addValue("logical_plan.bound_expression.slot_reads", 1);
+                            detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(*value)); return *value;
 						}
 						if (value && instruction->kind == detail::BoundInputKind::BIK_PROPERTY) {
 							const auto property = state.task.bound_inputs->property(*instruction, state.shared.snapshot);
@@ -3130,12 +3140,15 @@ namespace graph::query::execution {
 						// access on a variable that is no longer in scope.
 						if (const auto projected = row.values.find(reference.toString());
 							projected != row.values.end()) {
+							detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(projected->second));
 							return projected->second;
 						}
 						return readProperty(state.shared.snapshot, row, reference.getVariableName(),
 											reference.getPropertyName(), state);
 					}
-					return requireBinding(row, reference.getVariableName());
+					const auto &binding = requireBinding(row, reference.getVariableName());
+                    detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(binding));
+                    return binding;
 				}
 				case ExpressionType::PARAMETER: {
 					if (state.shared.context == nullptr) {
@@ -3572,6 +3585,7 @@ namespace graph::query::execution {
 				if (const auto metadata = row.entity_metadata_cache.find(reference->getVariableName());
 					metadata != row.entity_metadata_cache.end()) {
 					if (const auto cached = metadata->second.find(name); cached != metadata->second.end()) {
+						detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(cached->second));
 						return cached->second;
 					}
 				}
@@ -3591,16 +3605,20 @@ namespace graph::query::execution {
 				std::vector<PropertyValue> labels;
 				labels.reserve(node.labels.size());
 				for (const std::string &label: node.labels) {
-					labels.emplace_back(label);
+					detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(label.size()));
+                    labels.emplace_back(label);
 				}
 				PropertyValue result(std::move(labels));
-				row.entity_metadata_cache[reference->getVariableName()].insert_or_assign(name, result);
+				auto [metadataOwner, metadataInserted] = detail::procedureMapTryEmplace(row.entity_metadata_cache, reference->getVariableName());
+                static_cast<void>(metadataInserted);
+                detail::procedureMapInsertOrAssign(metadataOwner->second, name, result);
 				return result;
 			}
 			if (name == "type") {
 				if (const auto metadata = row.entity_metadata_cache.find(reference->getVariableName());
 					metadata != row.entity_metadata_cache.end()) {
 					if (const auto cached = metadata->second.find(name); cached != metadata->second.end()) {
+						detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(cached->second));
 						return cached->second;
 					}
 				}
@@ -3610,11 +3628,15 @@ namespace graph::query::execution {
 					validateEdgeRef(*referenceValue, "logical-plan type() requires a valid relationship variable");
 					PropertyValue result(
 							state.shared.snapshot.readEdgeShaped(referenceValue->entity_id, {.include_type = true}).type);
-					row.entity_metadata_cache[reference->getVariableName()].insert_or_assign(name, result);
+					auto [metadataOwner, metadataInserted] = detail::procedureMapTryEmplace(row.entity_metadata_cache, reference->getVariableName());
+                static_cast<void>(metadataInserted);
+                detail::procedureMapInsertOrAssign(metadataOwner->second, name, result);
 					return result;
 				}
 				PropertyValue result(materializeEdgeValue(state, binding).type);
-				row.entity_metadata_cache[reference->getVariableName()].insert_or_assign(name, result);
+				auto [metadataOwner, metadataInserted] = detail::procedureMapTryEmplace(row.entity_metadata_cache, reference->getVariableName());
+                static_cast<void>(metadataInserted);
+                detail::procedureMapInsertOrAssign(metadataOwner->second, name, result);
 				return result;
 			}
 			if (name != "keys" && name != "properties") {
@@ -3631,22 +3653,25 @@ namespace graph::query::execution {
 			const PropertyMap &properties =
 					readBindingProperties(state.shared.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
+                detail::ProcedurePayloadAdmissionScope::admit(detail::procedurePayloadHeapUpper<true>(properties));
 				return PropertyValue(properties);
 			}
 			if (properties.size() > state.shared.bounds.maximum_rows) {
 				throw std::runtime_error("logical-plan keys() exceeded the configured List bound");
 			}
 			std::vector<std::string> orderedKeys;
-			orderedKeys.reserve(properties.size());
+			detail::procedureVectorReserve(orderedKeys, properties.size());
 			for (const auto &[key, value]: properties) {
 				static_cast<void>(value);
-				orderedKeys.push_back(key);
+				detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(key.size()));
+                orderedKeys.push_back(key);
 			}
 			std::ranges::sort(orderedKeys);
 			std::vector<PropertyValue> keys;
-			keys.reserve(orderedKeys.size());
+			detail::procedureVectorReserve(keys, orderedKeys.size());
 			for (const std::string &key: orderedKeys) {
-				keys.emplace_back(key);
+				detail::ProcedurePayloadAdmissionScope::admit(utils::detail::standardFreshStringHeapUpper(key.size()));
+                keys.emplace_back(key);
 			}
 			return PropertyValue(std::move(keys));
 		}
@@ -5450,7 +5475,7 @@ namespace graph::query::execution {
 		template<typename String>
 		void appendDistinctUint64(String &output, uint64_t value) {
 			for (size_t byte = 0U; byte < sizeof(value); ++byte) {
-				output.push_back(static_cast<char>(value & 0xFFU));
+				output += static_cast<char>(value & 0xFFU);
 				value >>= 8U;
 			}
 		}
@@ -5464,7 +5489,7 @@ namespace graph::query::execution {
 		template<typename String>
 		void appendDistinctPropertyValue(String &output, const PropertyValue &value) {
 			const auto appendType = [&output](PropertyType type) {
-				output.push_back(static_cast<char>(static_cast<uint8_t>(type)));
+				output += static_cast<char>(static_cast<uint8_t>(type));
 			};
 			switch (value.getType()) {
 				case PropertyType::NULL_TYPE:
@@ -5472,7 +5497,7 @@ namespace graph::query::execution {
 					return;
 				case PropertyType::BOOLEAN:
 					appendType(PropertyType::BOOLEAN);
-					output.push_back(std::get<bool>(value.getVariant()) ? '\x01' : '\x00');
+					output += std::get<bool>(value.getVariant()) ? '\x01' : '\x00';
 					return;
 				case PropertyType::INTEGER:
 					appendType(PropertyType::INTEGER);
@@ -5506,7 +5531,10 @@ namespace graph::query::execution {
 					const auto &map = value.getMap();
 					const auto scratchResource = [&]() -> std::pmr::memory_resource * {
 						if constexpr (std::is_same_v<String, std::pmr::string>) return output.get_allocator().resource();
-						else return std::pmr::new_delete_resource();
+						else if constexpr (std::is_same_v<String, utils::OwnedStdString>) {
+                            const auto owner = utils::OwnedAllocationScope::owner();
+                            return owner ? owner.get() : std::pmr::new_delete_resource();
+                        } else return std::pmr::new_delete_resource();
 					};
 					std::pmr::vector<const PropertyValue::MapType::value_type *> entries{scratchResource()};
 					entries.reserve(map.size());
@@ -5533,7 +5561,7 @@ namespace graph::query::execution {
 					const auto &bytes = value.getBytes();
 					appendDistinctUint64(output, bytes.size());
 					for (const std::byte byte: bytes) {
-						output.push_back(static_cast<char>(std::to_integer<uint8_t>(byte)));
+						output += static_cast<char>(std::to_integer<uint8_t>(byte));
 					}
 					return;
 				}
@@ -5550,23 +5578,23 @@ namespace graph::query::execution {
 		template<typename String>
 		void appendDistinctValueKey(String &output, const LogicalPlanReadValue &value) {
 			if (const PropertyValue *property = std::get_if<PropertyValue>(&value)) {
-				output.push_back('P');
+				output += 'P';
 				appendDistinctPropertyValue(output, *property);
 				return;
 			}
 			if (const storage::LogicalGraphNode *node = std::get_if<storage::LogicalGraphNode>(&value)) {
-				output.push_back('N');
+				output += 'N';
 				appendDistinctUint64(output, node->node_id);
 				return;
 			}
 			if (const storage::LogicalGraphEdge *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
-				output.push_back('E');
+				output += 'E';
 				appendDistinctUint64(output, edge->edge_id);
 				return;
 			}
 			const storage::EntityRef &reference = std::get<storage::EntityRef>(value);
 			validateEntityRef(reference);
-			output.push_back(reference.is_edge ? 'E' : 'N');
+			output += reference.is_edge ? 'E' : 'N';
 			appendDistinctUint64(output, reference.entity_id);
 		}
 
@@ -17124,6 +17152,12 @@ namespace graph::query::execution {
 		}
 		return distinctUnionRowKey(row, columns);
 	}
+
+    utils::OwnedStdString detail::makeOwnedProcedureDistinctRowKey(const LogicalPlanReadRow &row,
+            const std::vector<std::string> &columns) {
+        if (columns.empty()) throw std::invalid_argument("procedure DISTINCT requires output columns");
+        return distinctUnionRowKey<utils::OwnedStdString>(row, columns);
+    }
 
 	QueryResult LogicalPlanReadRuntime::executeToQueryResult(const logical::LogicalOperator &root,
 															 const LogicalPlanReadRuntimeBounds &bounds) const {
