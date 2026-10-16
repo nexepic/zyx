@@ -230,3 +230,97 @@ TEST(LogicalProcedureIdentityTest, ShortestPathRejectsMalformedEndpointPresenceB
 	}
 }
 } // namespace graph::query
+
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+namespace graph::query {
+TEST(LogicalProcedureIdentityTest, ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry) {
+    test::RecordingVectorProcedureBackend backend;
+    backend.state->nodes = {{1U, {1U, {}}}, {2U, {2U, {}}}, {3U, {3U, {}}}};
+    backend.state->edges = {{11U, 3U, 1U, "LINK"}, {12U, 1U, 2U, "LINK"}};
+    LogicalReadExecutionOptions options;
+    execution::LogicalPlanProcedureRuntime runtime(backend, &backend, &backend);
+    logical::LogicalProject project(std::make_unique<logical::LogicalCallProcedure>("algo.shortestPath",
+        std::vector<PropertyValue>{PropertyValue(3), PropertyValue(2), PropertyValue(2)}),
+        {{std::make_shared<expressions::VariableReferenceExpression>("step"), "step"}});
+    const auto run = [&] {
+        return runtime.execute(project, options.bounds, options.maximum_vector_mapping_entries,
+            options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
+            options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
+            options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
+            options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+    };
+    auto denied = std::make_shared<execution::MaterializedByteBudget>(1U);
+    {
+        graph::utils::OwnedAllocationScope scope(denied);
+        EXPECT_THROW(static_cast<void>(run()), execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(backend.state->topology_scans, 0U);
+    EXPECT_EQ(backend.state->full_adjacency_scans, 0U);
+    EXPECT_EQ(denied->used(), 0U);
+    auto admitted = std::make_shared<execution::MaterializedByteBudget>(65536U);
+    {
+        graph::utils::OwnedAllocationScope scope(admitted);
+        const auto result = run();
+        ASSERT_EQ(result.rowCount(), 3U);
+        for (size_t i = 0U; i < result.rowCount(); ++i)
+            EXPECT_EQ(result.getRows()[i].at("step").asPrimitive(), PropertyValue(static_cast<int64_t>(i)));
+    }
+    EXPECT_GT(backend.state->topology_scans, 0U);
+    EXPECT_EQ(admitted->used(), 0U);
+}
+} // namespace graph::query
+
+namespace graph::query {
+TEST(LogicalProcedureIdentityTest, ShortestPathHashGrowthDenialReleasesPartialStateBeforeRetry) {
+    test::RecordingVectorProcedureBackend backend;
+    for (uint64_t id = 1U; id <= 129U; ++id) {
+        backend.state->nodes.emplace(id, storage::LogicalGraphNode{id, {}});
+        if (id > 1U && id < 129U) backend.state->edges.push_back({id, 1U, id, "LINK"});
+    }
+    LogicalReadExecutionOptions options;
+    execution::LogicalPlanProcedureRuntime runtime(backend, &backend, &backend);
+    logical::LogicalProject project(std::make_unique<logical::LogicalCallProcedure>("algo.shortestPath",
+        std::vector<PropertyValue>{PropertyValue(1), PropertyValue(129), PropertyValue(2)}),
+        {{std::make_shared<expressions::VariableReferenceExpression>("step"), "step"}});
+    const auto run = [&] {
+        return runtime.execute(project, options.bounds, options.maximum_vector_mapping_entries,
+            options.maximum_raw_vector_reads, options.vector_candidate_search_budget,
+            options.vector_candidate_refinement_budget, options.maximum_vector_training_records,
+            options.maximum_vector_training_pages, options.maximum_gds_algorithm_edges,
+            options.maximum_gds_algorithm_iterations, options.maximum_gds_algorithm_work_units, QueryContext{});
+    };
+    // Deque block sizes differ across standard libraries. Reject the first
+    // allocation after reading topology instead of assuming a 2 KiB threshold.
+    class DenyAfterTopology final : public std::pmr::memory_resource {
+    public:
+        DenyAfterTopology(const size_t &reads, std::shared_ptr<execution::MaterializedByteBudget> budget)
+            : reads_(reads), budget_(std::move(budget)) {}
+    private:
+        void *do_allocate(size_t bytes, size_t alignment) override {
+            if (reads_ != 0U) throw execution::MaterializedByteLimitExceeded();
+            return budget_->allocate(bytes, alignment);
+        }
+        void do_deallocate(void *pointer, size_t bytes, size_t alignment) override {
+            budget_->deallocate(pointer, bytes, alignment);
+        }
+        bool do_is_equal(const std::pmr::memory_resource &other) const noexcept override { return this == &other; }
+        const size_t &reads_;
+        std::shared_ptr<execution::MaterializedByteBudget> budget_;
+    };
+    auto denied = std::make_shared<execution::MaterializedByteBudget>(65536U);
+    auto fault = std::make_shared<DenyAfterTopology>(backend.state->topology_scans, denied);
+    {
+        graph::utils::OwnedAllocationScope scope(fault);
+        EXPECT_THROW(static_cast<void>(run()), execution::MaterializedByteLimitExceeded);
+        EXPECT_EQ(denied->used(), 0U);
+    }
+    EXPECT_GT(backend.state->topology_scans, 0U);
+    auto admitted = std::make_shared<execution::MaterializedByteBudget>(65536U);
+    {
+        graph::utils::OwnedAllocationScope scope(admitted);
+        EXPECT_TRUE(run().isEmpty());
+        EXPECT_EQ(admitted->used(), 0U);
+    }
+}
+} // namespace graph::query

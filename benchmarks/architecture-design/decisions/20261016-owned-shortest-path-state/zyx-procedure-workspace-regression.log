@@ -1,0 +1,101 @@
+[0/2] Re-checking globbed directories...
+[1/3] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/parser/cypher/test_CypherAlgo.cpp.o
+In file included from /workspace/zyx/tests/src/query/parser/cypher/test_CypherAlgo.cpp:21:
+In file included from /workspace/zyx/tests/include/QueryTestFixture.hpp:28:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/query/parser/cypher/test_CypherAlgo.cpp:21:
+In file included from /workspace/zyx/tests/include/QueryTestFixture.hpp:28:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[2/3] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_LogicalProcedureIdentity.cpp.o
+In file included from /workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:6:
+In file included from /workspace/zyx/tests/include/query/api/LogicalProcedureTestFixture.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:19:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:6:
+In file included from /workspace/zyx/tests/include/query/api/LogicalProcedureTestFixture.hpp:17:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 16 tests from 2 test suites.
+[----------] Global test environment set-up.
+[----------] 6 tests from LogicalProcedureIdentityTest
+[ RUN      ] LogicalProcedureIdentityTest.UnresolvedTraversalPredicatesUseNamedColumnsAndPreserveNullableFallback
+[       OK ] LogicalProcedureIdentityTest.UnresolvedTraversalPredicatesUseNamedColumnsAndPreserveNullableFallback (3 ms)
+[ RUN      ] LogicalProcedureIdentityTest.VariableTraversalWithoutExistenceProbeAuthenticatesOnlyIdentity
+[       OK ] LogicalProcedureIdentityTest.VariableTraversalWithoutExistenceProbeAuthenticatesOnlyIdentity (0 ms)
+[ RUN      ] LogicalProcedureIdentityTest.ShortestPathWithoutExistenceProbeRequestsOnlyIdentity
+[       OK ] LogicalProcedureIdentityTest.ShortestPathWithoutExistenceProbeRequestsOnlyIdentity (0 ms)
+[ RUN      ] LogicalProcedureIdentityTest.ShortestPathRejectsMalformedEndpointPresenceBatchesAndRetries
+[       OK ] LogicalProcedureIdentityTest.ShortestPathRejectsMalformedEndpointPresenceBatchesAndRetries (0 ms)
+[ RUN      ] LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry
+[       OK ] LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry (0 ms)
+[ RUN      ] LogicalProcedureIdentityTest.ShortestPathHashGrowthDenialReleasesPartialStateBeforeRetry
+[       OK ] LogicalProcedureIdentityTest.ShortestPathHashGrowthDenialReleasesPartialStateBeforeRetry (1 ms)
+[----------] 6 tests from LogicalProcedureIdentityTest (7 ms total)
+
+[----------] 10 tests from CypherAlgoTest
+[ RUN      ] CypherAlgoTest.AlgoShortestPath
+[       OK ] CypherAlgoTest.AlgoShortestPath (222 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathNoPath
+[       OK ] CypherAlgoTest.AlgoShortestPathNoPath (182 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathRespectsMaxDepth
+[       OK ] CypherAlgoTest.AlgoShortestPathRespectsMaxDepth (265 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathRejectsNonPositiveMaxDepth
+[       OK ] CypherAlgoTest.AlgoShortestPathRejectsNonPositiveMaxDepth (151 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathAcceptsCanonicalStringIdsAndRejectsMalformedStrings
+[       OK ] CypherAlgoTest.AlgoShortestPathAcceptsCanonicalStringIdsAndRejectsMalformedStrings (170 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathRejectsPartialOverflowAndNonNumericIdentifierForms
+[       OK ] CypherAlgoTest.AlgoShortestPathRejectsPartialOverflowAndNonNumericIdentifierForms (185 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathUsesTheStandardProcedureResultPipeline
+[       OK ] CypherAlgoTest.AlgoShortestPathUsesTheStandardProcedureResultPipeline (199 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathDirectConnection
+[       OK ] CypherAlgoTest.AlgoShortestPathDirectConnection (149 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathMultiplePaths
+[       OK ] CypherAlgoTest.AlgoShortestPathMultiplePaths (286 ms)
+[ RUN      ] CypherAlgoTest.AlgoShortestPathComplex
+[       OK ] CypherAlgoTest.AlgoShortestPathComplex (348 ms)
+[----------] 10 tests from CypherAlgoTest (2161 ms total)
+
+[----------] Global test environment tear-down
+[==========] 16 tests from 2 test suites ran. (2168 ms total)
+[  PASSED  ] 16 tests.

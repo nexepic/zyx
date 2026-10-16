@@ -30,6 +30,8 @@
 
 #include "graph/core/Types.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 #include "graph/query/NativeProcedureManifest.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/gds/LogicalGraphAlgorithms.hpp"
@@ -367,7 +369,7 @@ namespace graph::query::execution {
 			return node;
 		}
 
-		[[nodiscard]] std::vector<uint64_t>
+		[[nodiscard]] utils::OwnedStdVector<uint64_t>
 		findShortestPath(storage::LogicalGraphReadSnapshot &snapshot, uint64_t startNodeId, uint64_t endNodeId,
 						 size_t maximumDepth, const LogicalPlanReadRuntimeBounds &bounds, const QueryContext &context) {
 			if (bounds.maximum_node_records == 0U || bounds.maximum_edges_per_node == 0U ||
@@ -375,13 +377,12 @@ namespace graph::query::execution {
 				bounds.maximum_rows == 0U || bounds.maximum_materialized_bytes == 0U) {
 				throw std::invalid_argument("logical shortest-path procedure requires positive graph read bounds");
 			}
-			std::vector<uint64_t> endpointIds{startNodeId, endNodeId};
+			std::array<uint64_t, 2U> endpointIds{startNodeId, endNodeId};
 			std::ranges::sort(endpointIds);
-			const auto uniqueEnd = std::ranges::unique(endpointIds);
-			endpointIds.erase(uniqueEnd.begin(), endpointIds.end());
+			const std::span<const uint64_t> endpoints(endpointIds.data(), startNodeId == endNodeId ? 1U : 2U);
 			if (snapshot.supportsNodeExistenceProbes()) {
-				const std::vector<bool> present = snapshot.containsNodesSorted(endpointIds);
-				if (present.size() != endpointIds.size()) {
+				const std::vector<bool> present = snapshot.containsNodesSorted(endpoints);
+				if (present.size() != endpoints.size()) {
 					throw std::runtime_error("logical procedure backend changed shortest-path endpoint batch cardinality");
 				}
 				if (std::ranges::any_of(present, [](const bool value) { return !value; })) {
@@ -431,9 +432,15 @@ namespace graph::query::execution {
 						sizeof(uint64_t) + 2U * sizeof(void *));
 				return checkedStateAdd(checkedStateAdd(depthBytes, parentBytes), frontierBytes);
 			};
-			std::deque<uint64_t> frontier;
-			std::unordered_map<uint64_t, size_t> depths;
-			std::unordered_map<uint64_t, Parent> parents;
+			// Charge allocator requests (including bucket arrays and deque blocks)
+            // independently of the conservative local algorithm work limit.
+            std::deque<uint64_t, utils::OwnedPmrAllocator<uint64_t>> frontier;
+            using DepthEntry = std::pair<const uint64_t, size_t>;
+            using ParentEntry = std::pair<const uint64_t, Parent>;
+            std::unordered_map<uint64_t, size_t, std::hash<uint64_t>, std::equal_to<uint64_t>,
+                utils::OwnedPmrAllocator<DepthEntry>> depths;
+            std::unordered_map<uint64_t, Parent, std::hash<uint64_t>, std::equal_to<uint64_t>,
+                utils::OwnedPmrAllocator<ParentEntry>> parents;
 			MaterializedByteBudget procedureBudget(bounds.maximum_materialized_bytes);
 			MaterializedByteReservation retainedStateBytes(&procedureBudget);
 			size_t frontierHighWater = 1U;
@@ -657,7 +664,7 @@ namespace graph::query::execution {
 				return {};
 			}
 
-			std::vector<uint64_t> reversed;
+			utils::OwnedStdVector<uint64_t> reversed;
 			MaterializedByteReservation resultPathBytes(&procedureBudget);
 			resultPathBytes.set(sizeof(uint64_t));
 			reversed.reserve(1U);
@@ -3649,7 +3656,7 @@ namespace graph::query::execution {
 			if (!snapshot) {
 				throw std::runtime_error("logical shortest-path procedure backend could not open a read snapshot");
 			}
-			const std::vector<uint64_t> path = findShortestPath(*snapshot, startNodeId, endNodeId, maximumDepth, readBounds, context);
+			const utils::OwnedStdVector<uint64_t> path = findShortestPath(*snapshot, startNodeId, endNodeId, maximumDepth, readBounds, context);
 			auto rows = makeBufferedShortestPathRows(path, readBounds);
 			const size_t retainedPathBytes = checkedProcedureSizeAdd(sizeof(path),
 					checkedProcedureSizeMul(path.capacity(), sizeof(uint64_t)));

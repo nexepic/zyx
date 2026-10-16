@@ -1,0 +1,54 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_LogicalProcedureIdentity.cpp.o
+In file included from /workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:6:
+In file included from /workspace/zyx/tests/include/query/api/LogicalProcedureTestFixture.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:19:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:6:
+In file included from /workspace/zyx/tests/include/query/api/LogicalProcedureTestFixture.hpp:17:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from LogicalProcedureIdentityTest
+[ RUN      ] LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry
+/workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:256: Failure
+Expected: static_cast<void>(run()) throws an exception of type execution::MaterializedByteLimitExceeded.
+  Actual: it throws nothing.
+
+/workspace/zyx/tests/src/query/api/test_LogicalProcedureIdentity.cpp:258: Failure
+Expected equality of these values:
+  backend.state->topology_scans
+    Which is: 3
+  0U
+    Which is: 0
+
+[  FAILED  ] LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry (0 ms)
+[----------] 1 test from LogicalProcedureIdentityTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] LogicalProcedureIdentityTest.ShortestPathWorkspaceAdmissionPrecedesAdjacencyAndRefundsBeforeRetry
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

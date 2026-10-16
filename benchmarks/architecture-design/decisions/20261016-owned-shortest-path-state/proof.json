@@ -1,0 +1,19 @@
+{
+  "status": "component_not_stage_acceptance",
+  "tests": 16,
+  "suites": 2,
+  "failures": 0,
+  "negative_control": "old source made 3 topology reads under 1-byte caller budget before failing",
+  "new_contract": "reject before topology; partial post-read allocation denial refunds before retry",
+  "full_suite": false,
+  "performance_benchmark": false,
+  "source_sha256": {
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "54c64f471f19d290b362247fd5046b08836bb73f00b14643ede54f6660c4e969",
+    "tests/src/query/api/test_LogicalProcedureIdentity.cpp": "22831c306c4465796dd337ad5ccc74cac5937faf4a1bfc273078294b95593c14"
+  },
+  "evidence_sha256": {
+    "regression.xml": "a6bc9fd632679efad768acb9ac7fc82d7956b074eea7d5e49410a601aaabbf5b",
+    "zyx-procedure-workspace-negative-control.log": "525fbcb2e548e8c516e442efc998020d6b11610d964f6cf09509a88b5450e50f",
+    "zyx-procedure-workspace-regression.log": "f5c91989e53a4a0af3793e309c56906a55928514bea09598c21f54ecd59ee188"
+  }
+}
