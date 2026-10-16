@@ -510,6 +510,8 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineLogicalBackend.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineCacheIdentity.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalVectorProcedureBatch.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalVectorProcedureBatch_TopK.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalVectorProcedureBatch_Materialization.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalProcedureIdentity.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_LogicalVectorBufferedSort.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEnginePublicContracts.cpp"

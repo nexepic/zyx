@@ -1196,9 +1196,16 @@ namespace graph::query::execution {
 			if (result.getRows().capacity() == result.getRows().size()) {
 				const size_t currentCapacity = result.getRows().capacity();
 				const size_t minimumCapacity = checkedProcedureSizeAdd(result.getRows().size(), 1U);
-				const size_t requestedCapacity = currentCapacity == 0U
+				const size_t preferredCapacity = currentCapacity == 0U
 						? minimumCapacity
 						: std::max(minimumCapacity, checkedProcedureSizeMul(currentCapacity, 2U));
+                // Admit old/new backing overlap without rejecting a smaller
+                // growth that fits the same materialization ceiling.
+                const size_t affordableCapacity = pendingBytes > maximumBytes ? 0U :
+                    (maximumBytes - pendingBytes) / sizeof(QueryResult::Row);
+                if (affordableCapacity < minimumCapacity)
+                    throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
+                const size_t requestedCapacity = std::min(preferredCapacity, affordableCapacity);
 				const size_t requestedGrowthBytes = checkedProcedureSizeMul(requestedCapacity, sizeof(QueryResult::Row));
 				if (checkedProcedureSizeAdd(pendingBytes, requestedGrowthBytes) > maximumBytes) {
 					throw ProcedureByteBoundExceeded("logical procedure source and retained result exceeded their byte bound");
