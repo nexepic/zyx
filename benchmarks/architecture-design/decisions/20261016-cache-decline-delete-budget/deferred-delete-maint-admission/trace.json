@@ -1,0 +1,14 @@
+[
+  {
+    "command": [
+      "STATS"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "64cf7caf27909a31b3c5b981a5b0f5b0e204f4d8612f313e4466b49c2d5e8765",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  }
+]

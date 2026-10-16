@@ -1,0 +1,6 @@
+{
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-preparation/deferred-delete-10000-loader-failure/private.zyx",
+  "bytes": 232259584,
+  "sha256": "e637ac6c512745760fdb11dc0a74e511f021b472b1681b5019df3305d2de7cb9",
+  "reason": "Owned correctness clone after trace/proof retention; immutable source input retained elsewhere."
+}

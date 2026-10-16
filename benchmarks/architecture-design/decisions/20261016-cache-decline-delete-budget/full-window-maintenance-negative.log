@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/tmp/zyx-deferred-delete-10000-correctness.py", line 16, in <module>
+    worker.call('MAINTAIN');worker.call('REOPEN');worker.call('INTEGRITY')
+    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 169, in call
+    raise RuntimeError(response.get("error", "worker failure"))
+RuntimeError: hierarchical resource admission denied

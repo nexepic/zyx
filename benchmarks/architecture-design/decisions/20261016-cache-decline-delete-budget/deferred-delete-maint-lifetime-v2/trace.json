@@ -1,0 +1,96 @@
+[
+  {
+    "command": [
+      "STATS"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "b6c19c45ad966917e1131fdb13924d3e48845302db99400a9e373e782bba1a6e",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "MAINTAIN"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "cbbae306bf394502b2672532beca1e9833ed53c4ee89de24854035338019ab1d",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "REOPEN"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "INTEGRITY"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "e5f1eb4d806641698a35efe20e098efd20d7d57a9b90ee69079d5bb650920726",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:Churn) RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        0
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "09c0e2046624a789a2f8f569d11365d7e4363c5f9218e2a4607df956e0c0e8b8",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:User) RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        10000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "62b784d0acd27d69bba9a451f60ee327c586ab44225c44d10126ef6265941c8b",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "STATS"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "5d6aa6926eb7974f6035b0784f720d6400c84a5d88ab4cbd18cffef81a1647cd",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  }
+]

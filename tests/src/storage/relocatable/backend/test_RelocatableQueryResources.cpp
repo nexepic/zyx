@@ -1592,3 +1592,114 @@ TEST_F(RelocatableStorageBackendTest, WritableReopenUsesProtectedMaintenanceScra
     }
     backend->close();
 }
+
+TEST_F(RelocatableStorageBackendTest, PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills) {
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
+    std::vector<uint64_t> expected;
+    const std::string body(8192U,'c');
+    for(size_t begin=0;begin<700U;begin+=100U) {
+        std::vector<LogicalGraphNodeCreateRequest> requests;
+        for(size_t i=begin;i<begin+100U;++i)requests.push_back({{"CacheChurn"},{{"id",PropertyValue(int64_t(i))},{"body",PropertyValue(body)}}});
+        auto ids=backend->createLogicalNodes(requests);expected.insert(expected.end(),ids.begin(),ids.end());
+    }
+    execution::LogicalPlanReadRuntime reader(*backend);
+    query::logical::LogicalNodeScan scan("n",std::vector<std::string>{"CacheChurn"});
+    execution::LogicalPlanReadRuntimeBounds limits;
+    limits.maximum_node_records=1000;limits.maximum_node_page_records=128;limits.maximum_metadata_pages_per_node_page=256;
+    limits.maximum_edges_per_node=1000;limits.maximum_edge_records=1000;limits.maximum_adjacency_page_records=128;
+    limits.maximum_property_entries=16;limits.maximum_rows=1000;limits.maximum_distinct_rows=1000;
+    auto account=std::make_shared<execution::detail::ResourceAccount>(backend->queryResourceDomain(),execution::detail::ResourceClass::RCK_QUERY,64U*1024U*1024U);
+    query::QueryContext context;context.resource_account=account;
+    std::vector<uint64_t> observed;
+    EXPECT_NO_THROW((void)reader.execute(scan,limits,[&](const execution::LogicalPlanReadRow &row) {
+        const auto &node=std::get<LogicalGraphNode>(row.values.at("n"));observed.push_back(node.node_id);
+        const auto field=std::ranges::find(node.properties,"body",&LogicalGraphPropertyEntry::key);
+        EXPECT_NE(field,node.properties.end());if(field!=node.properties.end())EXPECT_EQ(field->value,PropertyValue(body));
+        return true;
+    },context));
+    EXPECT_EQ(observed,expected);EXPECT_EQ(account->used(),0U);
+    query::QueryEngine engine(backend,backend);
+    EXPECT_NO_THROW((void)engine.execute("MATCH (n:CacheChurn) DELETE n"));
+    auto remaining=engine.execute("MATCH (n:CacheChurn) RETURN count(*) AS count");
+    EXPECT_EQ(remaining.getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+    backend->close();backend->open();
+    EXPECT_EQ(engine.execute("MATCH (n:CacheChurn) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+}
+
+TEST_F(RelocatableStorageBackendTest, EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills) {
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
+    const auto nodes=backend->createLogicalNodes({{{"Anchor"},{}},{{"Anchor"},{}}});
+    const std::string body(8192U,'e');
+    for(size_t begin=0;begin<700U;begin+=100U) {
+        std::vector<LogicalGraphEdgeCreateRequest> requests;
+        for(size_t i=begin;i<begin+100U;++i)requests.push_back({nodes[0],nodes[1],"CacheChurn",{{"id",PropertyValue(int64_t(i))},{"body",PropertyValue(body)}}});
+        (void)backend->createLogicalEdges(requests);
+    }
+    query::QueryEngine engine(backend,backend);
+    EXPECT_NO_THROW((void)engine.execute("MATCH ()-[r:CacheChurn]->() DELETE r"));
+    auto remaining=engine.execute("MATCH ()-[r:CacheChurn]->() RETURN count(*) AS count");
+    EXPECT_EQ(remaining.getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+    backend->close();backend->open();
+    EXPECT_EQ(engine.execute("MATCH ()-[r:CacheChurn]->() RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+}
+
+TEST_F(RelocatableStorageBackendTest, LiteralDeleteUsesIdentitiesAndRetainsOnlyItsBoundedScalarResult) {
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
+    for(size_t begin=0;begin<700U;begin+=100U) {
+        std::vector<LogicalGraphNodeCreateRequest> requests;
+        for(size_t i=begin;i<begin+100U;++i)requests.push_back({{"LiteralDelete"},{{"body",PropertyValue(std::string(8192U,'d'))}}});
+        (void)backend->createLogicalNodes(requests);
+    }
+    query::LogicalReadExecutionOptions limits;limits.bounds.maximum_materialized_bytes=2U*1024U*1024U;
+    query::QueryEngine engine(backend,backend,limits);
+    auto result=engine.execute("MATCH (n:LiteralDelete) DELETE n RETURN 1 AS deleted");
+    ASSERT_EQ(result.rowCount(),700U);
+    for(const auto &row:result.getRows())EXPECT_EQ(row.at("deleted").asPrimitive(),PropertyValue(int64_t{1}));
+    EXPECT_GT(result.retainedResourceBytes(),0U);
+    const auto domain=backend->queryResourceDomain();
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(execution::detail::ResourceClass::RCK_QUERY)],result.retainedResourceBytes());
+    result=query::QueryResult{};
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(execution::detail::ResourceClass::RCK_QUERY)],0U);
+    backend->close();backend->open();
+    EXPECT_EQ(engine.execute("MATCH (n:LiteralDelete) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+}
+
+TEST_F(RelocatableStorageBackendTest, OversizedDeleteBeforeImageIsRejectedWithoutPublishingAnyDeletes) {
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
+    for(size_t begin=0;begin<300U;begin+=100U) {
+        std::vector<LogicalGraphNodeCreateRequest> requests;
+        for(size_t i=begin;i<begin+100U;++i)requests.push_back({{"LargeBeforeDelete"},{{"body",PropertyValue(std::string(8192U,'b'))}}});
+        (void)backend->createLogicalNodes(requests);
+    }
+    query::LogicalReadExecutionOptions limits;limits.bounds.maximum_materialized_bytes=1024U*1024U;
+    query::QueryEngine engine(backend,backend,limits);
+    EXPECT_THROW((void)engine.execute("MATCH (n:LargeBeforeDelete) DELETE n RETURN n"),std::runtime_error);
+    EXPECT_EQ(engine.execute("MATCH (n:LargeBeforeDelete) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{300}));
+    EXPECT_EQ(backend->queryResourceDomain()->usage().classes[static_cast<size_t>(execution::detail::ResourceClass::RCK_QUERY)],0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, LiteralDeletePrivateReaderDoesNotBorrowExhaustedCacheCredit) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options=backendOptions();options.open_mode=OpenMode::OPEN_EXISTING_FILE;
+    auto backend=std::make_shared<RelocatableStorageBackend>(options);backend->open();
+    (void)backend->createLogicalNodes({{{"CacheLiteralDelete"},{{"value",PropertyValue(1)}}}});
+    query::QueryEngine engine(backend,backend);
+    auto cache=ProcessResourceDomains::defaultOwner()->cacheGrant(backend->queryResourceDomain());
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache,cache->capacity()-cache->used());
+        auto result=engine.execute("MATCH (n:CacheLiteralDelete) DELETE n RETURN 1 AS deleted");
+        ASSERT_EQ(result.rowCount(),1U);
+        EXPECT_EQ(result.getRows()[0].at("deleted").asPrimitive(),PropertyValue(int64_t{1}));
+    }
+    backend->close();backend->open();
+    EXPECT_EQ(engine.execute("MATCH (n:CacheLiteralDelete) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
+}

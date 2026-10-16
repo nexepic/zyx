@@ -1,0 +1,7 @@
+{
+  "purpose": "Untimed correctness: one atomic delete of 10000 8KiB nodes, owning 10000 scalar results, unchanged query/resource/deadline caps.",
+  "binary_sha256": "3b1fce2dbfc7428b043b66d6957b9cd495f8dae9345cb53aed739f109293a925",
+  "source_database_sha256": "e637ac6c512745760fdb11dc0a74e511f021b472b1681b5019df3305d2de7cb9",
+  "query_cap_bytes": 67108864,
+  "formal_timing_samples_accepted": 0
+}

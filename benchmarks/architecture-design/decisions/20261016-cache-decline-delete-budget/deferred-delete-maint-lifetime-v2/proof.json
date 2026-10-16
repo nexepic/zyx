@@ -1,0 +1,18 @@
+{
+  "status": "maintenance_reopen_integrity_passed",
+  "stats": {
+    "ok": true,
+    "read_bytes": 173031440,
+    "write_bytes": 0,
+    "file_bytes": 232259584,
+    "cache_hits": 0,
+    "rss_bytes": 30543872,
+    "charged_class_0": 0,
+    "charged_class_1": 67108864,
+    "charged_class_2": 262144,
+    "charged_class_3": 1048576,
+    "charged_class_4": 0,
+    "cache_grant_used": 1426073
+  },
+  "formal_timing_samples_accepted": 0
+}

@@ -1,4 +1,5 @@
 #include "query/execution/OrderByComparison.hpp"
+#include "query/execution/DeferredReferenceRowVisitor.hpp"
 #include "query/execution/ProcedurePayloadAdmission.hpp"
 /**
  * @file LogicalPlanReadRuntime.cpp
@@ -6516,29 +6517,51 @@ namespace graph::query::execution {
 			static_cast<void>(materializeEdgeReferences(edgeReferences, state, false));
 		}
 
-		void materializeEntityRefsInRows(std::span<LogicalPlanReadRow> rows, ExecutionState &state) {
+		void materializeEntityRefsInRows(std::span<LogicalPlanReadRow> rows, ExecutionState &state,
+			MaterializedByteReservation &outputBytes) {
 			prefetchEntityRefsInRows(rows, state);
 			for (LogicalPlanReadRow &row: rows) {
 				for (auto &[variable, value]: row.values) {
-					const auto *reference = std::get_if<storage::EntityRef>(&value);
-					if (reference == nullptr) {
-						continue;
-					}
-					if (reference->is_edge) {
-						const auto edge = state.shared.edge_cache.find(reference->entity_id);
-						if (edge == state.shared.edge_cache.end()) {
-							throw std::runtime_error("logical-plan batched Edge materialization lost a relationship");
+					const auto *referenceValue = std::get_if<storage::EntityRef>(&value);
+					if (referenceValue == nullptr) continue;
+					const storage::EntityRef reference = *referenceValue;
+					// A declined optional cache entry is not an absent entity. Keep
+					// fallback source ownership live, and admit the independently
+					// owned output payload before copying it into the buffered row.
+					const auto copyRecord = [&](const auto &record) {
+						using Record = std::decay_t<decltype(record)>;
+						const size_t bytes = [&] {
+							if constexpr (std::is_same_v<Record, storage::LogicalGraphNode>)
+								return logicalNodeCacheBytes(record, state.shared.context);
+							else return logicalEdgeCacheBytes(record, state.shared.context);
+						}();
+						const size_t previous = logicalReadValueBytes(value, state.shared.context);
+						if (previous > outputBytes.bytes())
+							throw std::logic_error("logical-plan output reference charge is incomplete");
+						outputBytes.set(checkedSizeAdd(outputBytes.bytes() - previous, bytes,
+							"logical-plan owned output entity size overflowed"));
+						value = detail::copyLogicalEntityGuarded(record, [&] { checkGuardNow(state); });
+					};
+					if (reference.is_edge) {
+						const auto edge = state.shared.edge_cache.find(reference.entity_id);
+						if (edge != state.shared.edge_cache.end()) {
+							validateEdgeReferenceRecord(reference, edge->second, state,
+								"logical graph batched Entity reference");
+							copyRecord(edge->second);
+						} else {
+							MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
+							const std::array<storage::EntityRef, 1U> references{reference};
+							auto records = materializeEdgeReferences(references, state, true, &sourceBytes);
+							validateEdgeReferenceRecord(reference, records.front(), state,
+								"logical graph uncached batched Entity reference");
+							copyRecord(records.front());
 						}
-						validateEdgeReferenceRecord(*reference, edge->second, state,
-													"logical graph batched Entity reference");
-						value = edge->second;
 					} else {
-						const auto node = state.shared.node_cache.find(reference->entity_id);
-						if (node == state.shared.node_cache.end()) {
-							throw std::runtime_error("logical-plan batched Node materialization lost a Node");
-						}
-						validateNode(node->second, state);
-						value = node->second;
+						MaterializedByteReservation sourceBytes(&state.shared.materialized_budget);
+						std::optional<storage::LogicalGraphNode> uncached;
+						const auto &node = readNodeCachedBorrowed(state, reference.entity_id, uncached, sourceBytes);
+						validateNode(node, state);
+						copyRecord(node);
 					}
 					row.property_cache.erase(variable);
 					row.complete_entity_property_cache.erase(variable);
@@ -6625,7 +6648,7 @@ namespace graph::query::execution {
 					return !stoppedByVisitor;
 				}
 				if (replaceDeferredEntityRefs) {
-					materializeEntityRefsInRows(rows, state);
+					materializeEntityRefsInRows(rows, state, bufferedReservation);
 				} else {
 					prefetchEntityRefsInRows(rows, state);
 				}
@@ -17363,5 +17386,21 @@ namespace graph::query::execution {
 				false, false, &context));
 		return result;
 	}
+
+namespace detail {
+LogicalPlanReadRuntimeStats visitDeferredReferenceRows(storage::LogicalGraphReadSnapshot &snapshot,
+    const logical::LogicalOperator &root, const LogicalPlanReadRuntimeBounds &bounds,
+    const LogicalPlanReadRuntime::RowVisitor &visitor, const QueryContext &context) {
+    validateBounds(bounds, static_cast<bool>(visitor));
+    return executeOnSnapshot(snapshot, root, bounds,
+        [&](LogicalPlanReadRow &row, ExecutionState &state) {
+            enforceMaterializedRowBound(row, state);
+            return invokeOutputVisitorChecked(state, [&] { return visitor(row); });
+        }, &context, true, nullptr, false);
+}
+size_t retainedLogicalReadRowBytes(const LogicalPlanReadRow &row, const QueryContext &context) {
+    return logicalReadRowBytes(row, &context);
+}
+}
 
 } // namespace graph::query::execution

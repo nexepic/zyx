@@ -1,0 +1,108 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:444:82: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  444 |     const EntityReadShape topology{.include_labels = true, .all_properties = true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:446:107: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  446 |     const auto originalEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true});
+      |                                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:456:116: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  456 |         EXPECT_NO_THROW(repeatedEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true}));
+      |                                                                                                                    ^
+9 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills:RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1621: Failure
+Expected: (void)reader.execute(scan,limits,[&](const execution::LogicalPlanReadRow &row) { const auto &node=std::get<LogicalGraphNode>(row.values.at("n"));observed.push_back(node.node_id); const auto field=std::ranges::find(node.properties,"body",&LogicalGraphPropertyEntry::key); switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::CmpHelperNE("field", "node.properties.end()", field, node.properties.end()))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp", 1619, gtest_ar.failure_message()) = ::testing::Message();if(field!=node.properties.end())switch (0) case 0: default: if (const ::testing::AssertionResult gtest_ar = (::testing::internal::EqHelper::Compare("field->value", "PropertyValue(body)", field->value, PropertyValue(body)))) ; else ::testing::internal::AssertHelper(::testing::TestPartResult::kNonFatalFailure, "/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp", 1619, gtest_ar.failure_message()) = ::testing::Message(); return true; },context) doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "logical-plan batched Node materialization lost a Node".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1622: Failure
+Expected equality of these values:
+  observed
+    Which is: { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, ... }
+  expected
+    Which is: { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, ... }
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1624: Failure
+Expected: (void)engine.execute("MATCH (n:CacheChurn) DELETE n") doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "logical-plan batched Node materialization lost a Node".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1626: Failure
+Expected equality of these values:
+  remaining.getRows()[0].at("count").asPrimitive()
+    Which is: 64-byte object <BC-02 00-00 00-00 00-00 70-70 6C-69 63-61 74-69 6F-6E 2F-76 6E-64 2E-7A 79-78 2E-65 6E-74 69-74 79-2D 70-72 6F-70 65-72 74-79 2D-72 6F-6F 74-00 00-00 00-00 00-02 0E-BB 02-0D 50-1E 56-F1 FF-EA>
+  PropertyValue(int64_t{0})
+    Which is: 64-byte object <00-00 00-00 00-00 00-00 08-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 06-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 04-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1628: Failure
+Expected equality of these values:
+  engine.execute("MATCH (n:CacheChurn) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive()
+    Which is: 64-byte object <BC-02 00-00 00-00 00-00 80-A5 4B-C3 5C-55 00-00 00-00 00-00 00-00 00-00 01-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+  PropertyValue(int64_t{0})
+    Which is: 64-byte object <00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+
+[  FAILED  ] RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills (4717 ms)
+[ RUN      ] RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1643: Failure
+Expected: (void)engine.execute("MATCH ()-[r:CacheChurn]->() DELETE r") doesn't throw an exception.
+  Actual: it throws std::runtime_error with description "logical-plan batched Edge materialization lost a relationship".
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1645: Failure
+Expected equality of these values:
+  remaining.getRows()[0].at("count").asPrimitive()
+    Which is: 64-byte object <BC-02 00-00 00-00 00-00 70-70 6C-69 63-61 74-69 6F-6E 2F-76 6E-64 2E-7A 79-78 2E-65 6E-74 69-74 79-2D 70-72 6F-70 65-72 74-79 2D-72 6F-6F 74-00 00-00 00-00 00-00 6B-CE 02-0D 50-1F C3-89 A3-B0>
+  PropertyValue(int64_t{0})
+    Which is: 64-byte object <00-00 00-00 00-00 00-00 0B-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 70-30 5E-C3 5C-55 00-00 0D-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1647: Failure
+Expected equality of these values:
+  engine.execute("MATCH ()-[r:CacheChurn]->() RETURN count(*) AS count").getRows()[0].at("count").asPrimitive()
+    Which is: 64-byte object <BC-02 00-00 00-00 00-00 40-B3 CA-C2 5C-55 00-00 00-00 00-00 00-00 00-00 01-0C 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 00-00 02-00 00-00 00-00 00-00>
+  PropertyValue(int64_t{0})
+    Which is: 64-byte object <00-00 00-00 00-00 00-00 B0-20 22-C2 5C-55 00-00 F8-20 22-C2 5C-55 00-00 B0-20 22-C2 5C-55 00-00 08-21 22-C2 5C-55 00-00 B0-20 22-C2 5C-55 00-00 E8-20 22-C2 5C-55 00-00 02-20 22-C2 5C-55 00-00>
+
+[  FAILED  ] RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills (4670 ms)
+[----------] 2 tests from RelocatableStorageBackendTest (9388 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (9388 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 2 tests, listed below:
+[  FAILED  ] RelocatableStorageBackendTest.PublicNodeBatchesRemainCompleteAfterTheOptionalEntityCacheFills
+[  FAILED  ] RelocatableStorageBackendTest.EdgeDeletionRemainsCompleteAfterTheOptionalEntityCacheFills
+
+ 2 FAILED TESTS
+Selected verification failed, exit: 1

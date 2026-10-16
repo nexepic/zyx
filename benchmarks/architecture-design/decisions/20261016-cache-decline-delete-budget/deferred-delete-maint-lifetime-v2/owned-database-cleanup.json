@@ -1,0 +1,6 @@
+{
+  "path": "/workspace/zyx-optimization-final-window-20261016/bounded-preparation/deferred-delete-maint-lifetime-v2/private.zyx",
+  "bytes": 232259584,
+  "sha256": "a7cea5073e3b745e12dafc8cdaeb9cb090d4a41a1bc1a7effb0fe1801fe66354",
+  "reason": "Owned correctness clone after trace/proof retention; immutable source input retained elsewhere."
+}
