@@ -94,17 +94,27 @@ namespace graph::storage {
 			}
 		}
 
+        MetadataPagePoolAllocator openMetadataPoolWithControlScratch(
+                const std::shared_ptr<StorageIO> &io, const Superblock &current, bool readOnly,
+                const std::shared_ptr<std::pmr::memory_resource> &controlOwner) {
+            std::optional<utils::OwnedAllocationScope> scratch;
+            if (controlOwner) scratch.emplace(controlOwner);
+            // Guaranteed copy elision constructs the nonmovable allocator in
+            // its final member; constructor recovery/discovery uses MAINT.
+            return MetadataPagePoolAllocator(io, current, readOnly
+                ? MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY
+                : MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+        }
+
 	} // namespace
 
 	RelocatableMetadataStore::RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current,
 													   bool readOnly, std::shared_ptr<std::pmr::memory_resource> memoryOwner, std::shared_ptr<std::pmr::memory_resource> controlOwner, std::shared_ptr<std::pmr::memory_resource> leaseMemoryOwner) :
 		io_(std::move(io)), bootstrap_(io_), pages_(io_, current),
-		metadata_page_pool_(io_, current,
-							readOnly ? MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY
-									 : MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER),
+		metadata_page_pool_(openMetadataPoolWithControlScratch(io_, current, readOnly, controlOwner)),
 		catalog_(pages_, metadata_page_pool_), locations_(pages_, metadata_page_pool_),
 		allocator_(pages_, metadata_page_pool_), pool_ownership_(catalog_, allocator_, metadata_page_pool_, readOnly),
-		snapshots_(bootstrap_, {}, std::move(memoryOwner), std::move(controlOwner)), retirement_(catalog_, locations_, snapshots_),
+		snapshots_(bootstrap_, {}, std::move(memoryOwner), controlOwner), retirement_(catalog_, locations_, snapshots_),
 		reservation_coordinator_(catalog_, allocator_, locations_),
 		segment_retirement_coordinator_(catalog_, allocator_, locations_, retirement_),
 		segment_relocation_coordinator_(catalog_, allocator_, locations_, retirement_),
@@ -113,6 +123,8 @@ namespace graph::storage {
         outstanding_node_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
         outstanding_edge_id_leases_(lease_memory_owner_ ? lease_memory_owner_.get() : std::pmr::new_delete_resource()),
         read_only_(readOnly) {
+        std::optional<utils::OwnedAllocationScope> scratch;
+        if (controlOwner) scratch.emplace(controlOwner);
 		pool_ownership_.restoreCatalogOwnership(current);
 		pool_ownership_.verifyAfterOpen(current);
 	}

@@ -1572,3 +1572,23 @@ TEST_F(RelocatableStorageBackendTest, FullNativeReadKeepsPrivateSnapshotAndMetad
     EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)], 0U);
     engine.resetEphemeralState(); backend->close();
 }
+
+TEST_F(RelocatableStorageBackendTest, WritableReopenUsesProtectedMaintenanceScratchUnderExhaustedCache) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    (void)backend->createLogicalNodes({{{"RecoveryPressure"}, {{"value", PropertyValue(7)}}}});
+    auto domain = backend->queryResourceDomain();
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    backend->close();
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        backend->open();
+        query::QueryEngine engine(backend);
+        auto result = engine.execute("MATCH (n:RecoveryPressure) RETURN n.value AS value");
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(7));
+    }
+    backend->close();
+}

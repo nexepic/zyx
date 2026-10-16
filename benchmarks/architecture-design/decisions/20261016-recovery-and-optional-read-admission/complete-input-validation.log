@@ -1,0 +1,18 @@
+holdout MATCH (n:User) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 73000]]]}
+holdout MATCH (n:Post) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 87000]]]}
+holdout MATCH (n:Tag) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 3000]]]}
+holdout MATCH ()-[r:FOLLOWS]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 511000]]]}
+holdout MATCH ()-[r:AUTHORED]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 87000]]]}
+holdout MATCH ()-[r:HAS_TAG]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 174000]]]}
+holdout indexes {'ok': True, 'columns': ['name', 'type', 'label', 'properties'], 'rows': [[['string', 'index_node_4_User_2_id'], ['string', 'property'], ['string', 'User'], ['string', 'id']]]}
+holdout filter {'ok': True, 'columns': ['count'], 'rows': [[['integer', 9125]]]}
+holdout stats {'ok': True, 'read_bytes': 5080338448, 'write_bytes': 0, 'file_bytes': 1490157568, 'cache_hits': 0, 'rss_bytes': 91439104, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 66754157}
+medium MATCH (n:User) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 100000]]]}
+medium MATCH (n:Post) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 120000]]]}
+medium MATCH (n:Tag) RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 5000]]]}
+medium MATCH ()-[r:FOLLOWS]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 500000]]]}
+medium MATCH ()-[r:AUTHORED]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 120000]]]}
+medium MATCH ()-[r:HAS_TAG]->() RETURN count(*) AS count {'ok': True, 'columns': ['count'], 'rows': [[['integer', 240000]]]}
+medium indexes {'ok': True, 'columns': ['name', 'type', 'label', 'properties'], 'rows': [[['string', 'index_node_4_User_2_id'], ['string', 'property'], ['string', 'User'], ['string', 'id']]]}
+medium filter {'ok': True, 'columns': ['count'], 'rows': [[['integer', 12500]]]}
+medium stats {'ok': True, 'read_bytes': 6508027920, 'write_bytes': 320, 'file_bytes': 1667235840, 'cache_hits': 0, 'rss_bytes': 95916032, 'charged_class_0': 0, 'charged_class_1': 67108864, 'charged_class_2': 262144, 'charged_class_3': 1048576, 'charged_class_4': 0, 'cache_grant_used': 66737261}

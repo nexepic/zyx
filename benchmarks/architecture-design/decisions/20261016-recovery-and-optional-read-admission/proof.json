@@ -1,0 +1,20 @@
+{
+  "status": "affected_correctness_passed",
+  "score_change": 0,
+  "accepted_total": 26,
+  "modules": 121,
+  "tests": 2614,
+  "suites": 160,
+  "failures": 0,
+  "full_suite": false,
+  "campaign_python_tests": 28,
+  "native_smoke_families": 13,
+  "native_smoke_operations": 886,
+  "supplemental_four_client_operations": 4000,
+  "supplemental_four_client_precondition": "restore User 0 after snapshot deletion, before mixed test",
+  "budgets_raised": false,
+  "format_changed": false,
+  "formal_timing_samples_accepted": 0,
+  "scope": "Startup recovery/discovery and configuration scalar scratch use the existing MAINT control grant. Ordinary copy reads fall back to uncached validated I/O only for cache resource admission denial; explicit pins remain strict. Optional allocator pin reads may use owned copy fallback. No decoder/authentication failures swallowed.",
+  "prepared_inputs": "Both completed CSV datasets fully counted by node/edge type and filtered scalar; final benchmark consumer revalidated on private clones. Source bytes unchanged. Continuation lineage is retained; not a fresh final-version import."
+}
