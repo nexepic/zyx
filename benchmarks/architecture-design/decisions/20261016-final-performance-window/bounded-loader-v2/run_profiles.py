@@ -5,6 +5,9 @@ root=w.OUT/'attribution';root.mkdir(parents=True,exist_ok=False)
 data=Path('/workspace/zyx-optimization-final-window-20261016/bounded-preparation/dataset')
 (root/'registration.json').write_text(json.dumps({'scope':'Separate instrumented processes, excluded from formal timing. Signal-based observation starts after first measured result and attempts to pause after the final result. Import/warmups are excluded; final cleanup may be included if exit wins the pause race, recorded per case. Signal delivery is approximate, not a query barrier; heap leak totals are not a database leak verdict. Timer nesting is not additive.','cases':['label_scan_filter','aggregation_count_by_group','topk_property_sort','point_node_fetch_by_id','two_hop_expand'],'engines':['control','current'],'iterations':{'scan_aggregate_sort':10,'point_traversal':1000},'iteration_policy':'Collector-only repetitions for short operations; excluded from formal end-to-end timing.','mechanism_probe':'native selected-property read; typed including conversion versus generic over identical native source; full sort versus Top-K output counts disclosed'},indent=2)+'\n')
 for engine in ['control','current']:
+ failure=w.PREPARED/'medium'/f'{engine}-preparation-failure.json'
+ if failure.exists():
+  assert engine=='control';(root/'control-unmeasurable.json').write_text(failure.read_text());continue
  binary=w.CONTROL/'zyx-compare-bench-bounded' if engine=='control' else w.CURRENT/'zyx-compare-bench'
  for workload in ['label_scan_filter','aggregation_count_by_group','topk_property_sort','point_node_fetch_by_id','two_hop_expand']:
   profile='retrieval' if workload=='point_node_fetch_by_id' else 'scan';folder=root/f'{engine}-{workload}';folder.mkdir();database=folder/'private.zyx'
