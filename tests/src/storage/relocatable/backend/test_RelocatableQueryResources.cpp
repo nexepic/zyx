@@ -1496,3 +1496,31 @@ TEST_F(RelocatableStorageBackendTest, ConcurrentNativeWritesDoNotReserveCreditWh
     EXPECT_EQ(domain->usage().classes[kind],baseline);
     backend.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, OverlayEndpointValidationDoesNotBorrowExhaustedCacheCredit) {
+ using namespace execution::detail;
+ materializeNativeDatabase();
+ auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+ RelocatableStorageBackend backend(options); backend.open();
+ const auto nodes = backend.createLogicalNodes({{{"Endpoints"}, {}}, {{"Endpoints"}, {}}});
+ ASSERT_EQ(nodes.size(), 2U);
+ const auto domain = backend.queryResourceDomain();
+ auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+ {
+  auto transaction = backend.beginLogicalGraphTransaction(false);
+  LogicalGraphTransactionOverlay overlay(*transaction);
+  auto snapshot = overlay.openLogicalGraphReadSnapshot();
+  const auto baseline = domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_WRITE)];
+  PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+  ASSERT_EQ(cache->used(), cache->capacity());
+  ASSERT_NO_THROW(EXPECT_TRUE(snapshot->containsNode(nodes.front())));
+  ASSERT_NO_THROW(EXPECT_FALSE(snapshot->containsNode(nodes.back() + 100U)));
+  const std::array<uint64_t, 3U> probes{nodes.front(), nodes.back(), nodes.back() + 100U};
+  std::vector<bool> observed;
+  ASSERT_NO_THROW(observed = snapshot->containsNodesSorted(probes));
+  EXPECT_EQ(observed, (std::vector<bool>{true, true, false}));
+  EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_WRITE)], baseline);
+  EXPECT_LE(cache->used(), cache->capacity());
+ }
+ backend.close();
+}

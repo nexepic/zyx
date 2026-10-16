@@ -1,0 +1,32 @@
+graph::query::execution::detail::PrepaidMemoryResource::do_allocate(unsigned long, unsigned long)
+??:?
+graph::storage::LocationLeafPageCodec::decode(std::span<std::byte const, 18446744073709551615ul>)
+??:?
+graph::storage::MetadataPageFile::readLocationLeaf(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:?
+graph::storage::MetadataPageFile::readLocationLeafView(graph::storage::PhysicalPageRef, graph::storage::BufferPoolReadHint) const
+??:?
+graph::storage::LocationDirectory::findOptional(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, unsigned long) const
+??:?
+graph::storage::LocationDirectory::findNodePageLocationOptional(graph::storage::Superblock const&, unsigned long) const
+??:?
+graph::storage::RelocatableMetadataStore::findNodePageLocationOptional(graph::storage::MetadataSnapshotPin const&, unsigned long) const
+??:?
+graph::storage::RelocatableStorageBackend::containsLogicalNode(graph::storage::RelocatableReadSnapshot const&, unsigned long, graph::storage::NativeReadSession*) const
+??:?
+zyx::validateLogicalColumnarEdgeEndpoints(graph::storage::LogicalGraphReadBackend&, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > const&)
+??:?
+zyx::Transaction::createEdgesColumnar(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > const&, std::vector<zyx::PropertyColumn, std::allocator<zyx::PropertyColumn> > const&) const
+??:?
+(anonymous namespace)::BoundedDatasetWriter::createEdgesColumnar(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > const&, std::vector<zyx::PropertyColumn, std::allocator<zyx::PropertyColumn> > const&)
+zyx-slot-repro.cpp:?
+(anonymous namespace)::LoadedGraph (anonymous namespace)::loadGraphRows<(anonymous namespace)::BoundedDatasetWriter>((anonymous namespace)::BoundedDatasetWriter&, std::filesystem::__cxx11::path const&)
+zyx-slot-repro.cpp:?
+(anonymous namespace)::loadDatabase((anonymous namespace)::Options const&, std::filesystem::__cxx11::path const&)
+zyx-slot-repro.cpp:?
+(anonymous namespace)::run((anonymous namespace)::Options const&)
+zyx-slot-repro.cpp:?
+main
+??:?
+_start
+??:?

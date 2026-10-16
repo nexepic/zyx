@@ -15,6 +15,8 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <future>
+#include <chrono>
 #include <gtest/gtest.h>
 #include <limits>
 #include <mutex>
@@ -956,6 +958,50 @@ TEST_F(StorageIOTest, ControlRecordWriteInvalidatesTheGenerationTaggedCacheEntry
 	EXPECT_EQ(reread[63U], std::byte{0U});
 	EXPECT_EQ(reread[80U], std::byte{0U});
 }
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(StorageIOTest, ConcurrentControlRecordReaderCannotRetainThePreWriteImage) {
+ auto io = createIO(true);
+ const BufferPoolPageKey key{0U, 7U};
+ std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> initial{};
+ const std::array<std::byte, 16U> replacement{std::byte{0x5A}};
+ io->enableBufferPool(2U * RSS_BUFFER_POOL_PAGE_BYTES);
+ io->writeAt(key, initial.data(), initial.size());
+ io->sync();
+ std::promise<void> writeEntered, readFinished;
+ auto entered = writeEntered.get_future();
+ auto finished = readFinished.get_future();
+ std::exception_ptr readerFailure;
+ std::thread reader([&] {
+  entered.wait();
+  try {
+   std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+   if (io->readAt(key, observed.data(), observed.size()) != observed.size())
+    throw std::runtime_error("concurrent control read was incomplete");
+  } catch (...) { readerFailure = std::current_exception(); }
+  readFinished.set_value();
+ });
+ {
+  StorageIO::ScopedNativeWriteHookForTesting pauseBeforeWrite(
+   [&](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+    writeEntered.set_value();
+    // Give an unlocked miss an opportunity to refill the old image. Correct
+    // implementations may block the reader until the exact-record write ends.
+    static_cast<void>(finished.wait_for(std::chrono::milliseconds(100)));
+    return portable_pwrite(fd, bytes, count, offset);
+   });
+  io->writeControlRecord(key, 64U, replacement);
+ }
+ reader.join();
+ ASSERT_EQ(readerFailure, nullptr);
+ std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+ ASSERT_EQ(io->readAt(key, observed.data(), observed.size()), observed.size());
+ EXPECT_TRUE(std::equal(replacement.begin(), replacement.end(), observed.begin() + 64U));
+ EXPECT_EQ(observed[63U], std::byte{});
+ EXPECT_EQ(observed[80U], std::byte{});
+}
+
+#endif
 
 TEST_F(StorageIOTest, ControlRecordWriteRejectsInvalidTypedPageRanges) {
 	auto io = createIO(true);

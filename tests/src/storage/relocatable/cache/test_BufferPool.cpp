@@ -984,3 +984,45 @@ TEST_F(BufferPoolTest, ScopedSequentialStorageReadsRestoreNormalAdmissionAndStay
     EXPECT_THROW(static_cast<void>(io_->readAt(missing, image.data(), image.size())), std::runtime_error);
     pin.reset(); io_->disableBufferPool();
 }
+
+TEST_F(BufferPoolTest, ControlRecordWritesValidateRangesAndProtectPinnedImages) {
+ open(2U); pool_ = createPool(2U);
+ const BufferPoolPageKey key{0U, 1U};
+ const std::array<std::byte, 1U> replacement{std::byte{0x5A}};
+ EXPECT_THROW(pool_->writeControlRecord({0U, 0U}, 0U, replacement), std::invalid_argument);
+ EXPECT_THROW(pool_->writeControlRecord({1U, 1U}, 0U, replacement), std::invalid_argument);
+ EXPECT_THROW(pool_->writeControlRecord(key, RSS_BUFFER_POOL_PAGE_BYTES, replacement), std::invalid_argument);
+ EXPECT_THROW(pool_->writeControlRecord(key, 0U, {}), std::invalid_argument);
+ {
+  auto pinned = pool_->pin(key);
+  EXPECT_THROW(pool_->writeControlRecord(key, 64U, replacement), std::logic_error);
+  EXPECT_EQ(pinned.bytes()[64U], std::byte{1U});
+ }
+ pool_->writeControlRecord(key, 64U, replacement);
+ EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+ EXPECT_EQ(diskByte(64U), replacement.front());
+ EXPECT_EQ(diskByte(63U), std::byte{1U});
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(BufferPoolTest, FailedControlRecordWriteLeavesNoDirtyCachedImageToOverwriteTheSurvivor) {
+ open(2U); pool_ = createPool(2U);
+ const BufferPoolPageKey key{0U, 1U};
+ BufferPool::PageBytes dirty{}; dirty.fill(std::byte{0x11});
+ pool_->writePage(key, dirty);
+ std::array<std::byte, 16U> replacement{}; replacement.fill(std::byte{0x5A});
+ {
+  StorageIO::ScopedNativeWriteHookForTesting shortWrite(
+   [](file_handle_t fd, const void *bytes, size_t count, pwrite_off_t offset) -> pwrite_ssize_t {
+    return portable_pwrite(fd, bytes, count == 16U ? 8U : count, offset);
+   });
+  EXPECT_THROW(pool_->writeControlRecord(key, 64U, replacement), std::system_error);
+ }
+ EXPECT_EQ(pool_->stats().resident_bytes, 0U);
+ pool_->flush();
+ BufferPool::PageBytes observed{};
+ ASSERT_EQ(pool_->readPage(key, observed), observed.size());
+ for (size_t index = 0U; index < observed.size(); ++index)
+  EXPECT_EQ(observed[index], index >= 64U && index < 72U ? std::byte{0x5A} : std::byte{0x11});
+}
+#endif

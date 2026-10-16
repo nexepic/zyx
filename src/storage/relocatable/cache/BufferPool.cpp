@@ -372,6 +372,29 @@ namespace graph::storage {
 		disk_write_bytes_ += input.size();
 	}
 
+ void BufferPool::writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> input) {
+  if (!isAligned(key) || key.generation == 0U || input.empty() ||
+      byteOffset > RSS_BUFFER_POOL_PAGE_BYTES || input.size() > RSS_BUFFER_POOL_PAGE_BYTES - byteOffset)
+   throw std::invalid_argument("buffer pool control record requires a valid typed-page range");
+  const uint64_t offset = checkedEnd(key.page_offset, byteOffset, "control-record offset");
+  io_.requireWritableRange(offset, input.size(), "BufferPool::writeControlRecord");
+  std::lock_guard lock(mutex_);
+  for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+   const auto cachedKey = iterator->first;
+   Entry &entry = *iterator->second;
+   if (cachedKey.page_offset != key.page_offset) { ++iterator; continue; }
+   if (entry.pin_count != 0U)
+    throw std::logic_error("buffer pool refuses to invalidate a pinned page");
+   if (entry.dirty) flushEntryLocked(entry, cachedKey.page_offset);
+   eraseLocked(cachedKey, entry);
+   iterator = entries_.erase(iterator);
+  }
+  // A short/failed native write leaves no retained image that could overwrite
+  // a surviving A/B record. Readers may refill only after this lock releases.
+  io_.writeAtUncached(offset, input.data(), input.size());
+  disk_write_bytes_ += input.size();
+ }
+
 	size_t BufferPool::read(uint64_t offset, std::span<std::byte> output, BufferPoolReadHint hint) {
 		if (output.empty()) {
 			return 0U;

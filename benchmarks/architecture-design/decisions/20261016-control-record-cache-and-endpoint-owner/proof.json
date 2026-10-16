@@ -1,0 +1,31 @@
+{
+  "status": "final_2182_affected_tests_passed_bounded_frame_replay_in_progress",
+  "control_record": {
+    "cause": "reader refills an old control page after pre-write invalidation and before exact-record pwrite; subsequent publication authentication sees allocated=0",
+    "negative_tests": 1,
+    "negative_failures": 1,
+    "positive_tests": 117,
+    "positive_failures": 0,
+    "fix": "hold one buffer-pool mutex across overlapping-image flush/removal and exact native record write; failures leave no dirty retained image; preserve A/B control record semantics"
+  },
+  "endpoint": {
+    "cause": "raw columnar ingest endpoint probes have no explicit allocation scope, so private location-leaf decode uses exhausted CACHE",
+    "negative_tests": 1,
+    "negative_failures": 1,
+    "positive_tests": 58,
+    "positive_failures": 0,
+    "fix": "default raw transaction snapshot existence probes to transaction WRITE owner while preserving an explicit query owner"
+  },
+  "format_changed": false,
+  "resource_limits_raised": false,
+  "full_suite": false,
+  "performance_samples": 0,
+  "affected_regression": {
+    "modules": 102,
+    "suites": 142,
+    "tests": 2182,
+    "failures": 0,
+    "full_suite": false
+  },
+  "remaining": "finish eight preregistered bounded frame replay rounds; final smoke; renew clean source freeze; fresh full inputs remain performance prerequisites"
+}
