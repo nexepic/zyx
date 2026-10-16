@@ -568,8 +568,13 @@ def supports_secondary_property_indexes() -> bool:
     import kuzu
 
     with tempfile.TemporaryDirectory(prefix="zyx-kuzu-index-probe-") as tmp:
-        database = kuzu.Database(str(Path(tmp) / "probe.db"))
-        connection = kuzu.Connection(database)
+        # Capability detection must obey the same explicit mapping/pool limits
+        # as the measured adapter; defaults reserve an 8 TiB mapping on Kuzu.
+        probe = KuzuAdapter("kuzu", Path(tmp) / "dataset", "smoke", threads=1)
+        probe.db_path = Path(tmp) / "probe.db"
+        database = probe._open_database(kuzu)
+        probe._database = database
+        connection = probe._open_connection(kuzu)
         try:
             _drain_probe_result(
                 connection.execute(

@@ -1,0 +1,11 @@
+{
+  "reason": "First indexed native profile failed at default engine 30000ms query timeout. Keep the registered 1800s process ceiling and all query defaults unchanged. Continue independent deterministic profiles.",
+  "accepted_success_rule": "Three successful independent profile processes with exact full oracles; a failed profile never becomes a latency success.",
+  "same_failure_repetitions": "Record later unchanged profile rounds as unmeasurable from the original failure, without rerunning the failed deterministic profile.",
+  "binary_or_resource_changes": false,
+  "preserved_successful_case": "round-1 medium scan, current and Kuzu, ten workloads each",
+  "script_sha256": {
+    "run-zyx-final-read-campaign.py": "24fc4961c2fbdcf2379bddc5e7bfca4ece4d0d231deedb4e6252c2760684916a",
+    "report-zyx-final-reads.py": "137054cf1bb7b4287fd0facad529e4cf49347d8bbe034ea683a113494edebd20"
+  }
+}
