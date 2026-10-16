@@ -40,7 +40,7 @@ namespace graph::storage {
 		RelocatableLogicalGraphReadSnapshot(const RelocatableStorageBackend &backend,
 																											const PageBackedLogicalGraphReadAdapter &nativeReads,
 			std::shared_ptr<std::pmr::memory_resource> memory) :
-			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory)) {}
+			backend_(backend), native_reads_(nativeReads), snapshot_(backend.openSnapshot()), read_session_(std::move(memory), utils::OwnedAllocationScope::owner()) {}
 
 		[[nodiscard]] bool queryScratchEnabled() const override {return backend_.nativeQueryScratchEnabled();}
 		[[nodiscard]] std::unique_ptr<LogicalQueryScratchSession> openQueryScratchSession(size_t bytes,size_t fragments) const override {
@@ -540,7 +540,8 @@ namespace graph::storage {
 			throw std::logic_error("relocatable backend has no native logical graph reader");
 		}
 		return std::unique_ptr<RelocatableLogicalGraphReadSnapshot>(
-			new (native_cache_memory_) RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
+			new (utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : native_cache_memory_)
+                RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
 	}
 
 	std::unique_ptr<LogicalGraphVectorSearchSnapshot>
@@ -550,7 +551,8 @@ namespace graph::storage {
 			throw std::logic_error("relocatable backend has no native logical graph reader");
 		}
 		return std::unique_ptr<RelocatableLogicalGraphReadSnapshot>(
-			new (native_cache_memory_) RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
+			new (utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner() : native_cache_memory_)
+                RelocatableLogicalGraphReadSnapshot(*this, *native_logical_graph_reads_, native_cache_memory_));
 	}
 
 } // namespace graph::storage

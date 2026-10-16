@@ -1,0 +1,106 @@
+{
+  "status": "correctness_revalidated_source_freeze_pending",
+  "new_progress_credit": 0,
+  "affected_regression": {
+    "modules": 111,
+    "suites": 153,
+    "tests": 2332,
+    "failures": 0,
+    "full_suite": false
+  },
+  "supplemental_cache_full_node_edge_and_32k_tests": 2,
+  "native_smoke": {
+    "engine": "zyx-native",
+    "profile": "smoke",
+    "seed": 42,
+    "families": [
+      "point",
+      "scan",
+      "traversal",
+      "aggregate",
+      "sort",
+      "parameters",
+      "dynamic",
+      "wide_large",
+      "write",
+      "mixed",
+      "snapshot",
+      "maintenance",
+      "budget"
+    ],
+    "operations": 886,
+    "full_results_checked": true,
+    "performance_timing": false,
+    "unsupported_variants": [],
+    "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+    "maintenance_windows": [
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39567360,
+        "read_bytes": 519819264,
+        "write_bytes": 2798912
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133005312,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133005312,
+        "write_bytes": 762304
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133005312,
+        "write_bytes": 762240
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133005312,
+        "write_bytes": 762304
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133218304,
+        "write_bytes": 787072
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133349376,
+        "write_bytes": 778752
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133345280,
+        "write_bytes": 778752
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133349376,
+        "write_bytes": 778816
+      },
+      {
+        "file_bytes": 8519680,
+        "rss_bytes": 39571456,
+        "read_bytes": 133345280,
+        "write_bytes": 778752
+      }
+    ],
+    "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+    "binary_sha256": "8e645e4183a98712866d9edaca8888db85ec1555c13ff0ebd05abb15758441a8",
+    "trace_sha256": "9b4432c3929a0e523271e1702c05e1dd616ac43048f6a3746ed6da71976cb716"
+  },
+  "campaign_python_tests": 23,
+  "ceilings": "Unchanged QUERY64MiB/CACHE64MiB/WRITE128MiB, bounded private WRITE workspace96MiB, database256MiB, process512MiB; benchmark AS6GiB/per-file2GiB/thread1 unchanged.",
+  "full_contract": "In progress; 100000-group owning output is explicitly unsupported at fixed QUERY budget, retains its exact denial and bounded typed partition oracle, and is never a successful latency observation.",
+  "performance_samples_accepted": 0
+}

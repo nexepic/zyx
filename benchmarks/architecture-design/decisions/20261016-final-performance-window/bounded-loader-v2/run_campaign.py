@@ -2,7 +2,7 @@ from pathlib import Path
 import subprocess,json,hashlib
 root=Path('/workspace/zyx-optimization-final-window-20261016/bounded-loader-v2')
 python='/workspace/zyx-benchmark-venv/bin/python'
-proof=Path('/workspace/zyx-optimization-final-window-20261016/bounded-preparation/current-final-full-indexed-correctness/report.json')
+proof=Path('/workspace/zyx-optimization-final-window-20261016/bounded-preparation/current-final-indexed-full-contract/report.json')
 report=json.loads(proof.read_text());assert report['full_results_checked'] and len(report['families'])==13
 assert report['binary_sha256']==hashlib.sha256(Path('/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker').read_bytes()).hexdigest()
 steps=[('register',['/tmp/zyx-final-window.py','register']),('reads',['/tmp/run-zyx-final-read-campaign.py']),('read-report',['/tmp/report-zyx-final-reads.py']),('contracts',['/tmp/run-zyx-final-contract-campaign.py']),('steady-state-report',['/tmp/report-zyx-final-steady-state.py']),('attribution',['/tmp/zyx-final-profile.py']),('mechanisms',['/tmp/run-zyx-final-mechanism-campaign.py'])]

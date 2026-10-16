@@ -16705,6 +16705,12 @@ namespace graph::query::execution {
 						  const ExecutionFinalizer *finalizer = nullptr, const bool allowCrossRowEntityBatches = false,
 						  const size_t residentOutputBatchBytes = 0U) {
 			validateBounds(bounds, static_cast<bool>(visitor));
+            // Private metadata resolution, cursor storage and scalar binding are
+            // QUERY work. Shared cache publication selects CACHE explicitly.
+            std::optional<utils::OwnedAllocationScope> queryAllocation;
+            if (context && context->resource_account)
+                queryAllocation.emplace(std::make_shared<MaterializedByteBudget>(
+                    bounds.maximum_materialized_bytes, context->resource_account, std::pmr::new_delete_resource()));
 			ExecutionSharedState shared{snapshot, bounds, context, allowDeferredEntityRefs,
 				allowCrossRowEntityBatches, residentOutputBatchBytes};
 			ExecutionState state{shared, {}};
@@ -16739,6 +16745,10 @@ namespace graph::query::execution {
 						const QueryContext *context, const bool allowDeferredEntityRefs = false,
 						const ExecutionFinalizer *finalizer = nullptr, const bool allowCrossRowEntityBatches = false,
 						const size_t residentOutputBatchBytes = 0U) {
+            std::optional<utils::OwnedAllocationScope> queryAllocation;
+            if (context && context->resource_account)
+                queryAllocation.emplace(std::make_shared<MaterializedByteBudget>(
+                    bounds.maximum_materialized_bytes, context->resource_account, std::pmr::new_delete_resource()));
 			std::unique_ptr<storage::LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
 			if (!snapshot) {
 				throw std::runtime_error("logical graph backend returned no read snapshot");

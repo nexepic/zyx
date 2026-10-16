@@ -1548,3 +1548,27 @@ TEST_F(RelocatableStorageBackendTest, BoundPropertyTokenResolutionDoesNotBorrowE
     EXPECT_EQ(account->used(), 0U);
     snapshot.reset(); backend->close();
 }
+
+TEST_F(RelocatableStorageBackendTest, FullNativeReadKeepsPrivateSnapshotAndMetadataOutOfExhaustedCache) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    (void)backend->createLogicalNodes({{{"CacheFullAggregate"}, {{"group", PropertyValue(7)}}},
+                                      {{"CacheFullAggregate"}, {{"group", PropertyValue(7)}}}});
+    auto domain = backend->queryResourceDomain();
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    query::QueryEngine engine(backend);
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        auto result = engine.execute("MATCH (n:CacheFullAggregate) RETURN n.group AS group,count(*) AS count");
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows().front().at("group").asPrimitive(), PropertyValue(7));
+        EXPECT_EQ(result.getRows().front().at("count").asPrimitive(), PropertyValue(2));
+        auto absent = engine.execute("MATCH ()-[r:MissingReadType]->() RETURN count(*) AS count");
+        ASSERT_EQ(absent.rowCount(), 1U);
+        EXPECT_EQ(absent.getRows().front().at("count").asPrimitive(), PropertyValue(0));
+    }
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_QUERY)], 0U);
+    engine.resetEphemeralState(); backend->close();
+}

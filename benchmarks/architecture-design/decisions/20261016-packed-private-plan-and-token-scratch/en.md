@@ -5,3 +5,5 @@ Forced COW reconstruction after roughly 522,000 edges retained unpacked global-a
 A separate full correctness failure resolved to transient metadata decoding during property-token binding using CACHE. Scalar token resolution now charges its scratch to the existing query budget; optional cache publication retains its explicit CACHE scope. Native binding with exhausted CACHE and the existing 32 KiB query pass.
 
 103 targeted tests pass. Final affected-module regression, source freeze and input validation remain pending. This record adds no progress credit or performance claim. The full unit suite was not run.
+
+All 2,202 tests from 104 selected modules and 144 suites passed. The exact full-contract setup still rejects skewed aggregation and its stack is being reproduced. A separate diagnostic passes skewed aggregation but rejects the owning output of 100,000 distinct groups in QUERY admission. Neither failure is performance acceptance.

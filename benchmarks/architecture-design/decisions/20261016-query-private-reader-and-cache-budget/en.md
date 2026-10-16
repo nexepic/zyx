@@ -1,0 +1,7 @@
+# Final private-reader and optional-cache budget revalidation
+
+The exact skew-aggregation failure resolved to label-token/directory scratch borrowing CACHE. Execution and private snapshots now inherit QUERY explicitly. Reader-local lookup/FIFO bookkeeping uses QUERY while independently retained cache payloads keep CACHE admission. A distinct-allocator replacement test exposed the label-vector swap mismatch; the corrected path refunds both owners completely.
+
+Range cursors reserve only the authenticated root height and requested child-reference prefix, preserving authentication, traversal order and persisted bytes. An extra page-image cache after successful decoding declines only known admission/byte-limit failures; other errors propagate. The existing 32 KiB success test keeps its original ceiling. Full CACHE pressure permits node aggregation and counting an absent relationship type.
+
+All 2,332 tests across 111 selected modules and 153 suites pass, plus two supplemental full-CACHE/32 KiB checks, the final Release 13-family/886-operation exact-result smoke, and 23 Python campaign tests. No full unit suite or accepted performance samples. The full contract continues. The 100,000-group owning-output denial remains unsupported N/A, with every typed group/count separately checked in bounded partitions. This is no performance success or additional progress credit; S6.1 source freezing is updated separately.

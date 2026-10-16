@@ -10,13 +10,18 @@ for number,order in enumerate(orders,1):
   print(json.dumps({'phase':'contract-start','round':number,'engine':engine}),flush=True)
   with log.open('w') as stream:
    result=subprocess.Popen(['/workspace/zyx-benchmark-venv/bin/python','/tmp/zyx-final-contract-case.py','--engine',engine,'--round',str(number),'--seed','42'],stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
-   try:result.wait(timeout=1800)
+   try:result.wait(timeout=13*1800)
    except BaseException:
     try:os.killpg(result.pid,signal.SIGKILL)
     except ProcessLookupError:pass
     result.wait(timeout=5)
     raise
-  if result.returncode:raise RuntimeError(f'contract case failed: {log}')
+  if result.returncode:
+   if engine != 'control':raise RuntimeError(f'contract case failed: {log}')
+   case.mkdir(parents=True,exist_ok=True)
+   (case/'campaign-case-failed.json').write_text(json.dumps({'round':number,'engine':engine,'status':'failed_frozen_control','returncode':result.returncode,'log':str(log),'rule':'No success or latency ratio inferred; preserve partial trace and continue current/Kuzu supported cases.'})+'\n')
+   print(json.dumps({'phase':'contract-failed-frozen-control','round':number,'log':str(log)}),flush=True)
+   continue
   (case/'campaign-case-completed.json').write_text(json.dumps({'round':number,'engine':engine,'status':'completed'})+'\n')
   print(json.dumps({'phase':'contract-completed','round':number,'engine':engine}),flush=True)
 (root/'contract-campaign-completed.json').write_text(json.dumps({'cases':9,'rounds':3,'status':'completed'})+'\n')

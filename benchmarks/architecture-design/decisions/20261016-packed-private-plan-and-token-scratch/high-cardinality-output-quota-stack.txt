@@ -1,0 +1,24 @@
+graph::query::execution::MaterializedByteBudget::replace(unsigned long, unsigned long, bool)
+??:?
+std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&), graph::query::execution::(anonymous namespace)::executeWithBatchedOutputMaterialization<graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1>(graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_0&&, graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const::$_1&&, bool, bool, graph::query::QueryContext const*)::{lambda(graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)#1}>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)
+LogicalPlanReadRuntime.cpp:?
+std::_Function_handler<bool (graph::query::execution::LogicalPlanReadRow), graph::query::execution::(anonymous namespace)::executeOnSnapshot(graph::storage::LogicalGraphReadSnapshot&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)::$_1>::_M_invoke(std::_Any_data const&, graph::query::execution::LogicalPlanReadRow&&)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::visitOperator(graph::query::logical::LogicalOperator const&, graph::query::execution::(anonymous namespace)::ExecutionState&, std::function<bool (graph::query::execution::LogicalPlanReadRow)> const&, std::function<bool (graph::query::execution::LogicalPlanReadRow, graph::query::execution::MaterializedByteReservation)> const*, graph::query::execution::(anonymous namespace)::NodeColumnReceiver const*)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::executeOnSnapshot(graph::storage::LogicalGraphReadSnapshot&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::(anonymous namespace)::executeInternal(graph::storage::LogicalGraphReadBackend const&, graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, std::function<bool (graph::query::execution::LogicalPlanReadRow&, graph::query::execution::(anonymous namespace)::ExecutionState&)> const&, graph::query::QueryContext const*, bool, std::function<void (graph::query::execution::(anonymous namespace)::ExecutionState&, bool)> const*, bool, unsigned long)
+LogicalPlanReadRuntime.cpp:?
+graph::query::execution::LogicalPlanReadRuntime::executeToQueryResult(graph::query::logical::LogicalOperator const&, graph::query::execution::LogicalPlanReadRuntimeBounds const&, graph::query::QueryContext const&) const
+??:?
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)::$_0::operator()() const::{lambda()#1}::operator()() const
+QueryEngine.cpp:?
+graph::query::QueryEngine::executePlanWithAccount(graph::query::QueryPlan, graph::query::QueryContext const&, std::shared_ptr<graph::query::execution::detail::ResourceAccount>)
+??:?
+graph::query::QueryEngine::execute(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, graph::query::QueryContext const&, graph::query::Language)
+??:?
+main
+??:?
+_start
+??:?

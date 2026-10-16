@@ -1,0 +1,7 @@
+...........{"event": "family_correctness", "family": "point", "wall_seconds": 1.1697004083544016e-05, "completed": 1, "total": 2}
+.{"event": "family_correctness", "family": "point", "wall_seconds": 1799.0, "completed": 1, "total": 2}
+...........
+----------------------------------------------------------------------
+Ran 23 tests in 0.176s
+
+OK
