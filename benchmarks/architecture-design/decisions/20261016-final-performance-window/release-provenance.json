@@ -1,0 +1,12 @@
+{
+  "build": "Release",
+  "compiler": "Clang19",
+  "coverage": false,
+  "production_source": "ff1da3a0; unchanged after S6.1 freeze",
+  "build_log_sha256": "7cd4aef3f41a9f667a449af0463c26a228c90cc77e38b8a4befe6fd7adfed523",
+  "binaries": {
+    "/workspace/zyx-optimization-final-20261016/binaries/release/zyx-compare-bench": "d378f89d4bf15e348b49eb2bffabc92f8524946309c0586c2e05ed0858356e0e",
+    "/workspace/zyx-optimization-final-20261016/binaries/release/zyx-workload-contract-worker": "ef2382ac8436ef16880571042d973926f577e3f1073b8135ac90df51915612d8"
+  },
+  "CMakeCache_sha256": "8f3b1f5f236a68bd9c5e048c92c7877ce3e3128670eb08f5474c2a5a6e74de7c"
+}

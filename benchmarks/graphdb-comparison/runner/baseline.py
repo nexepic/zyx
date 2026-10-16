@@ -30,7 +30,7 @@ BASELINE_WORKLOADS = {
 }
 
 
-def verify_counts(result: Path, workloads: list[str], iterations: int) -> dict:
+def verify_counts(result: Path, workloads: list[str], iterations: int, databases=("zyx", "kuzu")) -> dict:
     """Check scalar/count observations independently of engine execution."""
     dataset = result / "dataset"
     with (dataset / "users.csv").open() as stream:
@@ -65,7 +65,7 @@ def verify_counts(result: Path, workloads: list[str], iterations: int) -> dict:
     unsupported = {(event["database"], event["workload"]) for event in events
                    if event.get("status") == "unsupported"}
     failures = []
-    for database in ("zyx", "kuzu"):
+    for database in databases:
         for workload in workloads:
             if (database, workload) in unsupported:
                 continue

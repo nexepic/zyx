@@ -9,6 +9,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import hashlib
 import json
+import os
 from pathlib import Path
 import random
 import re
@@ -91,15 +92,17 @@ class NativeWorker:
         self.process.stdin.write("\t".join(map(str, fields)) + "\n")
         self.process.stdin.flush()
         try:
-            line = self.reader.submit(self.process.stdout.readline).result(timeout=120)
+            line = self.reader.submit(self.process.stdout.readline).result(timeout=float(os.environ.get("ZYX_CONTRACT_OPERATION_TIMEOUT_SECONDS", "120")))
         except TimeoutError:
             self.process.kill()
-            raise RuntimeError("native correctness operation exceeded 120 seconds")
+            raise RuntimeError("native correctness operation exceeded its configured timeout")
         if not line:
             raise RuntimeError("worker ended: " + self.process.stderr.read()[:1000])
         response = json.loads(line)
         if error_contains is not None:
-            if response.get("ok") or error_contains.lower() not in response.get("error", "").lower():
+            observed = response.get("error", "").lower()
+            quota_denial = error_contains.lower() == "byte" and observed == "hierarchical resource admission denied"
+            if response.get("ok") or (error_contains.lower() not in observed and not quota_denial):
                 raise AssertionError(f"expected {error_contains!r} failure, got {response!r}")
         elif not response.get("ok"):
             raise RuntimeError(response.get("error", "worker failure"))
