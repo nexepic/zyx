@@ -51,6 +51,9 @@ class FamilyIsolationTest(unittest.TestCase):
         self.assertEqual(len(report['maintenance_windows']), 10)
         commands = [row['command'] for row in trace]
         self.assertEqual(sum(row[0] == 'MAINTAIN' for row in commands), 10)
+        deletes = [row for row in trace if row['command'][:2] == ['QUERY', 'MATCH (n:Churn) DELETE n RETURN 1 AS deleted']]
+        self.assertEqual(len(deletes), 10)
+        self.assertTrue(all(row['expected'] == [[1]] for row in deletes))
         text = json.dumps(commands)
         for foreign in (':Aggregate', ':Dynamic', ':Wide', 'MIXED_THREADS'):
             self.assertNotIn(foreign, text)

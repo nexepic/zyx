@@ -400,3 +400,5 @@ A1：表达式类型/NULL/溢出、重复行、ORDER BY、optional/路径、子�
 2026-10-16 124 个指定模块的 2628 项测试通过。包含同一 8MiB 配额下完整排序拒绝、Top-K 成功以及两条路径的父账户完全退款。medium/holdout 两套完整 CSV 的 100 个结果 ID 和分数顺序均通过 oracle。旧性能窗口全部排除，不提高预算。进度保持 26/34（76.5%），本轮 2/5；最终性能仍待验收。 Evidence: `benchmarks/architecture-design/decisions/20261016-bounded-topk-default-read/`.
 
 2026-10-16 **S0.4 已验收：27/34（79.4%），本轮 3/5**。五类真实查询完成独立 CPU／有界堆／完整计数调查；三进程 150 个机制样本逐值检查。转换型 typed filter 在该输入上慢于 generic，完整排序与 Top-K 输出量不同；未宣称提速。CPU 时钟偏差及堆窗口限制完整披露。Kuzu 目标尚未达到，S0.3 完整矩阵与 S5.5 仍待完成。 Evidence: `benchmarks/architecture-design/decisions/20261016-s04-hotspot-and-falsification/`.
+
+2026-10-16 验收准备修复（不新增计分）：完整 O6 输入暴露的可选实体缓存拒绝、DELETE 私有读取/结果额度及回收临时证据重叠已经修复。保持公共隐式完整结果语义、64 MiB QUERY 与 8 MiB 维护额度；10,000 个 8 KiB 节点原子删除及 10,000 个大值回收、重开和完整性核对通过。后续两端维护比较统一返回并验证 10,000 个标量，旧基线与新修复窗口分版本保留。总进度保持 **27/34（79.4%），本轮 3/5**。证据：`benchmarks/architecture-design/decisions/20261016-cache-decline-delete-budget/`。

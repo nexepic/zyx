@@ -406,7 +406,7 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42, family=None
                     for start in range(0, churn_count, 100):
                         identifiers = [window * churn_count + ordinal for ordinal in range(start, min(start + 100, churn_count))]
                         worker.call("PARAM", "CREATE " + ",".join(f"(:Churn {{id:{identifier},body:$body}})" for identifier in identifiers), "body", "string", "y" * 8192)
-                    worker.call("QUERY", "MATCH (n:Churn) DELETE n")
+                    worker.call("QUERY", "MATCH (n:Churn) DELETE n RETURN 1 AS deleted", expected=[[1]] * churn_count)
                     worker.call("MAINTAIN")
                     after_window = worker.call("STATS")
                     if window >= warmup_windows:
@@ -414,6 +414,7 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42, family=None
                                         "read_bytes": after_window["read_bytes"] - before_window["read_bytes"],
                                         "write_bytes": after_window["write_bytes"] - before_window["write_bytes"]})
                     worker.call("REOPEN"); worker.call("INTEGRITY")
+                    print(json.dumps({"event": "maintenance_window", "engine": "zyx-native", "window": window + 1, "phase": families.sampling_phase, "file_bytes": after_window["file_bytes"]}), flush=True)
                 worker.call("QUERY", "MATCH (n:Churn) RETURN n.id AS id", expected=[])
                 families.append("maintenance")
             if family is None or family == 'budget':
@@ -664,13 +665,14 @@ def run_kuzu(output: Path, seed=42, profile="smoke", family=None):
                     for start in range(0, churn_count, 100):
                         identifiers = [window * churn_count + ordinal for ordinal in range(start, min(start + 100, churn_count))]
                         execute("CREATE " + ",".join(f"(:Churn {{id:{identifier},body:$body}})" for identifier in identifiers), parameters={"body": "y" * 8192})
-                    execute("MATCH (n:Churn) DELETE n")
+                    execute("MATCH (n:Churn) DELETE n RETURN 1 AS deleted", [[1]] * churn_count)
                     connection.close(); db.close()
                     if window >= warmup_windows:
                         maintenance_windows.append({"file_bytes": sum(path.stat().st_size for path in Path(directory).rglob("*") if path.is_file())})
                     db = kuzu.Database(str(Path(directory) / "database"), buffer_pool_size=64 * 1024 * 1024, max_num_threads=1)
                     connection = kuzu.Connection(db, num_threads=1)
                     execute("MATCH (n:Churn) RETURN count(*)", [[0]])
+                    print(json.dumps({"event": "maintenance_window", "engine": "kuzu", "window": window + 1, "phase": families.sampling_phase}), flush=True)
                 families.append("maintenance")
             report = {"engine": "kuzu", "version": kuzu.__version__, "seed": seed,
                       "profile": profile, "operations": len(trace), "performance_timing": False,

@@ -447,6 +447,7 @@ namespace graph::storage {
 				reachableValues.insert(valueId.value());
 			}
 
+			observedPages.clear();
 			for (const auto &[valueId, scanned]: reclaimableValues) {
 				if (reachableValues.contains(valueId)) {
 					continue;
@@ -514,11 +515,17 @@ namespace graph::storage {
 			throw;
 		}
 
+		// Pool validation has consumed these temporary indexes. Release them
+		// before assembling the publication batch under the same finite grant.
+		observedPages.clear();
+		retiredPageIdsBySegment.clear();
 		utils::OwnedVector<LargeValueId> erasedValueIds;
 		utils::OwnedVector<PageRetirement> retirements;
-		for (const auto &[valueId, scanned]: reclaimableValues) {
+		for (auto entry = reclaimableValues.begin(); entry != reclaimableValues.end();) {
+			const auto &[valueId, scanned] = *entry;
 			if (reachableValues.contains(valueId)) {
 				++report.reachable_values;
+				entry = reclaimableValues.erase(entry);
 				continue;
 			}
 			if (scanned.retirements.size() > options.maximum_retirements - retirements.size()) {
@@ -530,6 +537,9 @@ namespace graph::storage {
 			++report.retired_values;
 			report.retired_manifest_pages += scanned.manifest_page_count;
 			report.retired_data_pages += scanned.retirements.size() - scanned.manifest_page_count;
+			// Transfer evidence ownership incrementally instead of retaining a
+			// second complete retirement list beside the publication vector.
+			entry = reclaimableValues.erase(entry);
 		}
 		utils::OwnedVector<CatalogEntry> sealedPools;
 		sealedPools.reserve(sealedPoolCandidates.size());
@@ -690,6 +700,7 @@ namespace graph::storage {
 			// Track every planned retirement by physical pool. A shared data pool can
 			// be retired only when the Page Directory proves that every current route
 			// in that pool belongs to this complete retirement plan.
+			observedPages.clear();
 			for (const auto &[valueId, scanned]: reclaimableValues) {
 				if (reachableValues.contains(valueId)) {
 					continue;
@@ -759,11 +770,17 @@ namespace graph::storage {
 			throw;
 		}
 
+		// Pool validation has consumed these temporary indexes. Release them
+		// before assembling the publication batch under the same finite grant.
+		observedPages.clear();
+		retiredPageIdsBySegment.clear();
 		utils::OwnedVector<LargeValueId> erasedValueIds;
 		utils::OwnedVector<PageRetirement> retirements;
-		for (const auto &[valueId, scanned]: reclaimableValues) {
+		for (auto entry = reclaimableValues.begin(); entry != reclaimableValues.end();) {
+			const auto &[valueId, scanned] = *entry;
 			if (reachableValues.contains(valueId)) {
 				++report.reachable_values;
+				entry = reclaimableValues.erase(entry);
 				continue;
 			}
 			// Every preceding iteration proves this subtraction is safe: the
@@ -777,6 +794,9 @@ namespace graph::storage {
 			++report.retired_values;
 			report.retired_manifest_pages += scanned.manifest_page_count;
 			report.retired_data_pages += scanned.retirements.size() - scanned.manifest_page_count;
+			// Transfer evidence ownership incrementally instead of retaining a
+			// second complete retirement list beside the publication vector.
+			entry = reclaimableValues.erase(entry);
 		}
 		utils::OwnedVector<CatalogEntry> sealedPools;
 		sealedPools.reserve(sealedPoolCandidates.size());

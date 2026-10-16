@@ -1,0 +1,37 @@
+{
+  "status": "affected_correctness_revalidated",
+  "score_change": 0,
+  "accepted_total": 27,
+  "modules": 130,
+  "suites": 166,
+  "tests": 2882,
+  "failures": 0,
+  "full_suite": false,
+  "campaign_module_tests": 30,
+  "native_smoke_families": 13,
+  "native_smoke_operations": 886,
+  "four_client_operations": 4000,
+  "new_tests": 5,
+  "budgets_raised": false,
+  "format_change": false,
+  "full_window_delete": {
+    "nodes": 10000,
+    "body_bytes": 8192,
+    "scalar_results_fully_checked": 10000,
+    "unrelated_users_retained": 10000,
+    "atomic": true
+  },
+  "maintenance": {
+    "retired_values": 10000,
+    "workspace_cap_bytes": 8388608,
+    "reopen_integrity_and_live_counts": "passed",
+    "peak_rss_bytes_after_reopen": 30543872,
+    "rss_is_not_charged_allocation_peak": true
+  },
+  "formal_timing_samples_accepted": 0,
+  "remaining": [
+    "S0.3 same-condition complete baseline",
+    "S5.5 full steady-state acceptance"
+  ],
+  "source_hashes": "source-sha256.json"
+}

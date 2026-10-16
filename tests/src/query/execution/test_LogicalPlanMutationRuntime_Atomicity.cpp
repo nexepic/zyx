@@ -1695,7 +1695,7 @@ TEST(LogicalPlanMutationRuntimeTest, MatchCreateThenSetPublishesPersistedAndCrea
 		std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> duplicateExpression;
 		duplicateExpression.emplace("name", std::make_shared<expressions::LiteralExpression>(PropertyValue("Grace")));
 		logical::LogicalCreateNode duplicateProperty(
-				"person", std::vector<std::string>{"Person"}, {{"name", PropertyValue("Ada")}},
+				"person", std::vector<std::string>{"Person"}, PropertyMap{{"name", PropertyValue("Ada")}},
 				std::move(duplicateExpression), std::make_unique<logical::LogicalSingleRow>());
 		EXPECT_THROW(static_cast<void>(runtime.execute(duplicateProperty, nativeMutationBounds(), QueryContext{})),
 					 std::logic_error);

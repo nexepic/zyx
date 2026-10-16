@@ -1066,7 +1066,7 @@ namespace graph::query {
 		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
 		const auto sameValue = std::make_shared<expressions::LiteralExpression>(PropertyValue(1));
 		logical::LogicalMergeNode unchanged(
-				"node", {"Seed"}, {{"value", PropertyValue(1)}}, {}, {{"node", "value", sameValue}},
+				"node", {"Seed"}, PropertyMap{{"value", PropertyValue(1)}}, {}, {{"node", "value", sameValue}},
 				std::make_unique<logical::LogicalSingleRow>());
 
 		static_cast<void>(runtime.execute(unchanged, nativeMutationBounds(), QueryContext{}));
@@ -1075,7 +1075,7 @@ namespace graph::query {
 
 		const auto nullValue = std::make_shared<expressions::LiteralExpression>(PropertyValue{});
 		logical::LogicalMergeNode removesValue(
-				"node", {"Seed"}, {{"value", PropertyValue(1)}}, {}, {{"node", "value", nullValue}},
+				"node", {"Seed"}, PropertyMap{{"value", PropertyValue(1)}}, {}, {{"node", "value", nullValue}},
 				std::make_unique<logical::LogicalSingleRow>());
 		static_cast<void>(runtime.execute(removesValue, nativeMutationBounds(), QueryContext{}));
 

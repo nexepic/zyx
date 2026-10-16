@@ -8,6 +8,11 @@
 
 #include "graph/query/execution/LogicalPlanMutationRuntime.hpp"
 #include "BudgetMemoryResource.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "DeferredReferenceRowVisitor.hpp"
+#include "graph/query/execution/BoundedBatch.hpp"
+#include "graph/query/execution/GuardedRowCopy.hpp"
+#include "graph/query/execution/StringBufferBytes.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -901,11 +906,11 @@ namespace graph::query::execution {
 			return columns;
 		}
 
-		template<typename Row, typename Resolver>
+		template<typename Rows, typename Resolver>
 		[[nodiscard]] QueryResult buildImplicitMutationResult(const std::vector<std::string> &columns,
-															  const std::vector<Row> &rows, const QueryContext &context,
+															  const Rows &rows, const QueryContext &context,
 															  Resolver &&resolveBinding) {
-			QueryResult result;
+			QueryResult result = context.resource_account ? QueryResult(detail::ResourceLease(context.resource_account)) : QueryResult{};
 			result.setColumns(columns);
 			// Mutation aggregates consume pipeline rows even when this statement has
 			// no client-visible columns (for example, an anonymous CREATE).
@@ -913,7 +918,7 @@ namespace graph::query::execution {
 			if (columns.empty()) {
 				return result;
 			}
-			for (const Row &source: rows) {
+			for (const auto &source: rows) {
 				QueryResult::Row output;
 				output.reserve(columns.size());
 				for (const std::string &column: columns) {
@@ -2252,13 +2257,13 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] QueryResult
-		buildMutationProjection(const logical::LogicalProject &projection, const std::vector<LogicalPlanReadRow> &rows,
+		buildMutationProjection(const logical::LogicalProject &projection, std::span<const LogicalPlanReadRow> rows,
 								storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 								const QueryContext &context, const MutationProjectionResolver &resolveBinding) {
 			if (!resolveBinding) {
 				throw std::logic_error("logical mutation RETURN requires a binding resolver");
 			}
-			QueryResult result;
+			QueryResult result = context.resource_account ? QueryResult(detail::ResourceLease(context.resource_account)) : QueryResult{};
 			result.setColumns(projection.getOutputVariables());
 			result.setPipelineRowCount(rows.size());
 			for (const LogicalPlanReadRow &source: rows) {
@@ -3683,6 +3688,13 @@ namespace graph::query::execution {
 	QueryResult LogicalPlanMutationRuntime::execute(const logical::LogicalOperator &root,
 													const LogicalPlanReadRuntimeBounds &bounds,
 													const QueryContext &context) const {
+        // Match the read runtime: private snapshot/planning allocations belong
+        // to this QUERY, while storage publication selects WRITE/CACHE itself.
+        std::optional<utils::OwnedAllocationScope> queryAllocation;
+        if (context.resource_account)
+            queryAllocation.emplace(std::make_shared<MaterializedByteBudget>(
+                bounds.maximum_materialized_bytes, context.resource_account, std::pmr::new_delete_resource()));
+
 		if (bounds.maximum_rows == 0U) {
 			throw std::invalid_argument("logical mutation runtime requires a positive mutation bound");
 		}
@@ -3996,32 +4008,51 @@ namespace graph::query::execution {
 					throw std::logic_error("logical DELETE requires a backend that exposes an optimistic read fence");
 				}
 
-				std::set<uint64_t> nodeIds;
-				std::set<uint64_t> edgeIds;
-				std::vector<LogicalPlanReadRow> projectionRows;
+				// Literal RETURN needs only row multiplicity and delete identities.
+				// Keep full before-delete values for every other projection/implicit
+				// result, and charge both retained input rows and output results.
+				const bool literalProjection = readMutationProjection != nullptr &&
+					std::ranges::all_of(readMutationProjection->getItems(), [](const auto &item) {
+						return dynamic_cast<const expressions::LiteralExpression *>(item.expression.get()) != nullptr;
+					});
+				MaterializedByteBudget planningBudget = context.resource_account
+					? MaterializedByteBudget(bounds.maximum_materialized_bytes, context.resource_account)
+					: MaterializedByteBudget(bounds.maximum_materialized_bytes);
+				detail::BudgetMemoryResource planningMemory(planningBudget);
+				std::pmr::set<uint64_t> nodeIds(&planningMemory), edgeIds(&planningMemory);
+				BoundedBatch<LogicalPlanReadRow> projectionRows(bounds.maximum_rows,
+					bounds.maximum_materialized_bytes,
+					[&](const auto &row) { return detail::retainedLogicalReadRowBytes(row, context); },
+					&planningBudget, true, sizeof(LogicalPlanReadRow));
 				LogicalPlanReadRuntime reader(read_backend_);
-				const LogicalPlanReadRuntimeStats stats = reader.executeWithSnapshot(
-						*snapshot, *child, bounds,
-						[&](const LogicalPlanReadRow &row) {
-							context.checkGuard();
-							projectionRows.push_back(row);
-							for (const std::string &variable: deleteOperator->getVariables()) {
-								const auto found = row.values.find(variable);
-								if (found == row.values.end()) {
-									throw std::logic_error(
-											"logical DELETE could not resolve a requested entity variable");
-								}
-								if (const auto *node = std::get_if<storage::LogicalGraphNode>(&found->second)) {
-									nodeIds.insert(node->node_id);
-								} else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&found->second)) {
-									edgeIds.insert(edge->edge_id);
-								} else {
-									throw std::logic_error("logical DELETE requires Node or Edge bindings");
-								}
-							}
-							return true;
-						},
-						context);
+				const auto consumeRow = [&](const LogicalPlanReadRow &row) {
+					context.checkGuard();
+					if (literalProjection) projectionRows.append({});
+					else {
+						MaterializedByteReservation copyBytes(&planningBudget);
+						copyBytes.set(detail::retainedLogicalReadRowBytes(row, context));
+						auto copy = detail::copyLogicalReadRowGuarded(row, [&] { context.checkGuardNow(); });
+						projectionRows.appendCharged(std::move(copy), std::move(copyBytes));
+					}
+					for (const std::string &variable: deleteOperator->getVariables()) {
+						const auto found = row.values.find(variable);
+						if (found == row.values.end())
+							throw std::logic_error("logical DELETE could not resolve a requested entity variable");
+						if (const auto *node = std::get_if<storage::LogicalGraphNode>(&found->second))
+							nodeIds.insert(node->node_id);
+						else if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&found->second))
+							edgeIds.insert(edge->edge_id);
+						else if (const auto *reference = std::get_if<storage::EntityRef>(&found->second)) {
+							if (!reference->entity_id) throw std::logic_error("logical DELETE received a zero identity");
+							if (reference->is_edge) edgeIds.insert(reference->entity_id);
+							else nodeIds.insert(reference->entity_id);
+						} else throw std::logic_error("logical DELETE requires Node or Edge bindings");
+					}
+					return true;
+				};
+				const auto stats = literalProjection
+					? detail::visitDeferredReferenceRows(*snapshot, *child, bounds, consumeRow, context)
+					: reader.executeWithSnapshot(*snapshot, *child, bounds, consumeRow, context);
 				// A limited read cannot safely become a write: without a proof that
 				// the producer was exhausted, deleting the prefix would be silent data
 				// loss relative to the declarative Cypher statement.
@@ -4031,10 +4062,10 @@ namespace graph::query::execution {
 						return materializeReadBinding(*snapshot, row, variable, bounds);
 					};
 					if (readMutationProjection != nullptr) {
-						return buildMutationProjection(*readMutationProjection, projectionRows, *snapshot, bounds,
+						return buildMutationProjection(*readMutationProjection, projectionRows.values(), *snapshot, bounds,
 													   context, resolve);
 					}
-					return buildImplicitMutationResult(visibleMutationOutputColumns(*readMutationRoot), projectionRows,
+					return buildImplicitMutationResult(visibleMutationOutputColumns(*readMutationRoot), projectionRows.values(),
 													   context, resolve);
 				};
 				if (nodeIds.empty() && edgeIds.empty()) {
@@ -4045,7 +4076,11 @@ namespace graph::query::execution {
 				// publishing that visibility change.
 				QueryResult deleteResult = buildDeleteResult();
 
-				storage::LogicalGraphMutationBatch batch;
+				MaterializedByteReservation requestBytes(&planningBudget);
+                requestBytes.set(detail::addPropertyBufferBytes(
+                    detail::multiplyPropertyBufferBytes(edgeIds.size(), sizeof(storage::LogicalGraphEdgeDeleteRequest)),
+                    detail::multiplyPropertyBufferBytes(nodeIds.size(), sizeof(storage::LogicalGraphNodeDeleteRequest))));
+                storage::LogicalGraphMutationBatch batch;
 				batch.edge_deletes.reserve(edgeIds.size());
 				for (const uint64_t edgeId: edgeIds) {
 					batch.edge_deletes.push_back({edgeId});

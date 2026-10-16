@@ -1,0 +1,6 @@
+{
+  "binary": "/tmp/zyx-resource-diagnostic-worker",
+  "sha256": "f8b7a6674bc75feb45670590c8e7b71e870c794610c3e3cdb5bb89dacf388842",
+  "limits": "Unchanged; existing-file diagnostic worker only. Source will be frozen with final core.",
+  "formal_samples": 0
+}
