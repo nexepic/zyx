@@ -228,10 +228,11 @@
   "last_certified_checkpoint": {
     "accepted": 27,
     "percent": 79.4,
-    "production_source": "6a735df86a678556aa71877b6aa66fe968292df7",
+    "production_source": "03436b7a75d0ace5830570b13840d9f55910de58",
     "latest_delivery": "S0.4",
     "evidence": "20261016-s04-hotspot-and-falsification/proof.json",
-    "performance_acceptance": false
+    "performance_acceptance": false,
+    "source_revalidation_evidence": "20261016-cache-decline-delete-budget/proof.json"
   },
   "S0.4": "accepted_diagnostic_report_with_explicit_limits"
 }

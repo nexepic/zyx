@@ -27,14 +27,14 @@
   "medium_preparation": "both control/current untimed preparation timed out after 1800 seconds; no measured samples or full-medium correctness acceptance; S0.3 and S5.5 remain pending",
   "additional_revalidation": "../20261016-control-record-cache-and-endpoint-owner/proof.json",
   "latest_final_source_revalidation": {
-    "evidence": "../20261016-bounded-topk-default-read/proof.json",
-    "modules": 124,
-    "tests": 2628,
+    "evidence": "../20261016-cache-decline-delete-budget/proof.json",
+    "modules": 130,
+    "tests": 2882,
     "failures": 0,
     "full_suite": false,
     "budget_changes": false,
     "native_smoke_families": 13,
-    "topk_full_medium_and_holdout_oracles": "passed",
+    "complete_10000_node_delete_and_reclaim": "passed",
     "remaining_performance": "S5.5 pending"
   }
 }
