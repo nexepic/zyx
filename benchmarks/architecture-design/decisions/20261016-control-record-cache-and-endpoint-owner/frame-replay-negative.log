@@ -1,0 +1,1 @@
+{"case": 1, "passed": false, "error": "relocatable publication authentication found an invalid or duplicate assigned frame (page=6, frame=10, allocated=0, duplicate_page=0, duplicate_frame=0, pool=9, actual_pool=9, generation=1, actual_generation=1)"}

@@ -470,6 +470,12 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<bool> containsNodesSorted(std::span<const uint64_t> nodeIds) const override {
 			requireActive();
+            // Raw columnar ingest validates endpoints before staging a mutation.
+            // Preserve an explicit query owner; otherwise these private probes
+            // use the transaction's WRITE credit rather than optional CACHE.
+            std::optional<utils::OwnedAllocationScope> allocation;
+            if (!utils::OwnedAllocationScope::active() && overlay_.memory_owner_)
+                allocation.emplace(overlay_.memory_owner_);
 			std::vector<uint64_t> baseIds;
 			baseIds.reserve(nodeIds.size());
 			uint64_t previous = 0U;
@@ -497,6 +503,12 @@ namespace graph::storage {
 
 		[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
 			requireActive();
+            // Raw columnar ingest validates endpoints before staging a mutation.
+            // Preserve an explicit query owner; otherwise these private probes
+            // use the transaction's WRITE credit rather than optional CACHE.
+            std::optional<utils::OwnedAllocationScope> allocation;
+            if (!utils::OwnedAllocationScope::active() && overlay_.memory_owner_)
+                allocation.emplace(overlay_.memory_owner_);
 			if (const auto state = overlay_.nodes_.find(nodeId); state != overlay_.nodes_.end()) {
 				return !state->second.deleted;
 			}

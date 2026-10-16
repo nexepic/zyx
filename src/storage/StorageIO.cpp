@@ -349,7 +349,9 @@ namespace graph::storage {
 			// Invalidation also flushes an earlier complete page image before the
 			// exact-record write.  On failure no stale cache entry remains that could
 			// overwrite the surviving control record during a later flush.
-			pool->invalidateRange(key.page_offset, RSS_BUFFER_POOL_PAGE_BYTES);
+			pool->writeControlRecord(key, byteOffset, bytes);
+            recordWrite(bytes.size());
+            return;
 		}
 		writeAtUncached(offset, bytes.data(), bytes.size());
 		recordWrite(bytes.size());

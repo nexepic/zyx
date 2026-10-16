@@ -79,6 +79,9 @@ namespace graph::storage {
 		// write it once without retaining scan-only scratch bytes in the cache.
 		// Overlapping cache views are flushed and removed before the direct write.
 		void writePagesThrough(BufferPoolPageKey firstKey, std::span<const std::byte> input);
+		// Keep invalidation and the exact-record write under one cache lock so
+		// a concurrent miss cannot retain a pre-write control-page image.
+		void writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> input);
 		[[nodiscard]] size_t read(uint64_t offset, std::span<std::byte> output,
 								  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
 		void write(uint64_t offset, std::span<const std::byte> input);
