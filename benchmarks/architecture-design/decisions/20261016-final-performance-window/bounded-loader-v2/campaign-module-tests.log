@@ -1,19 +1,5 @@
-test_independent_process_only_checks_its_registered_engine (test_final_campaign_counts.FinalCampaignCountsTest.test_independent_process_only_checks_its_registered_engine) ... ok
-test_bounded_preparation_is_an_explicit_option (test_final_campaign_counts.FinalCampaignPreparationOptionsTest.test_bounded_preparation_is_an_explicit_option) ... ok
-test_invalid_batch_is_rejected_before_launch (test_final_campaign_counts.FinalCampaignPreparationOptionsTest.test_invalid_batch_is_rejected_before_launch) ... ok
-test_coordinated_resource_denial_is_the_same_defined_quota_outcome (test_final_campaign_errors.FinalCampaignQuotaErrorsTest.test_coordinated_resource_denial_is_the_same_defined_quota_outcome) ... ok
-test_existing_materialized_byte_error_remains_accepted (test_final_campaign_errors.FinalCampaignQuotaErrorsTest.test_existing_materialized_byte_error_remains_accepted) ... ok
-test_unrelated_failures_and_success_are_never_treated_as_quota_denial (test_final_campaign_errors.FinalCampaignQuotaErrorsTest.test_unrelated_failures_and_success_are_never_treated_as_quota_denial) ... ok
-test_exact_frozen_fixture_is_forwarded_with_provenance (test_final_campaign_prepared_input.FinalCampaignPreparedInputTest.test_exact_frozen_fixture_is_forwarded_with_provenance) ... ok
-test_import_cannot_use_a_prepared_fixture (test_final_campaign_prepared_input.FinalCampaignPreparedInputTest.test_import_cannot_use_a_prepared_fixture) ... ok
-test_mismatched_binary_dataset_database_and_scale_fail_before_launch (test_final_campaign_prepared_input.FinalCampaignPreparedInputTest.test_mismatched_binary_dataset_database_and_scale_fail_before_launch) ... ok
-test_mutation_profile_cannot_use_a_prepared_fixture (test_final_campaign_prepared_input.FinalCampaignPreparedInputTest.test_mutation_profile_cannot_use_a_prepared_fixture) ... ok
-test_ambiguous_mode_is_rejected (test_final_campaign_profile_process.FinalCampaignProfileProcessTest.test_ambiguous_mode_is_rejected) ... ok
-test_later_workload_error_is_not_hidden (test_final_campaign_profile_process.FinalCampaignProfileProcessTest.test_later_workload_error_is_not_hidden) ... ok
-test_one_preparation_keeps_every_workload_sample_and_observation (test_final_campaign_profile_process.FinalCampaignProfileProcessTest.test_one_preparation_keeps_every_workload_sample_and_observation) ... ok
-test_unregistered_events_are_rejected (test_final_campaign_profile_process.FinalCampaignProfileProcessTest.test_unregistered_events_are_rejected) ... ok
-
+..............
 ----------------------------------------------------------------------
-Ran 14 tests in 0.018s
+Ran 14 tests in 0.012s
 
 OK

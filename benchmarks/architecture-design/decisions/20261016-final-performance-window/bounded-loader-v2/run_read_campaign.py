@@ -9,6 +9,12 @@ for number,order in enumerate(orders,1):
    for engine in order:cases.append((number,scale,profile,engine))
 for index,(number,scale,profile,engine) in enumerate(cases,1):
  root=out/'reads'/scale/f'round-{number}'/engine/profile
+ failure=Path('/workspace/zyx-optimization-final-window-20261016/prepared-inputs')/scale/f'{engine}-preparation-failure.json'
+ if failure.exists():
+  assert engine=='control';root.mkdir(parents=True,exist_ok=True)
+  (root/'preparation-failure.json').write_text(failure.read_text())
+  print(json.dumps({'phase':'read-unmeasurable-frozen-control','case':index,'scale':scale,'profile':profile,'engine':engine,'failure':str(failure)}),flush=True)
+  continue
  if list(root.glob('*/correctness.json')):
   print(json.dumps({'phase':'read-already-verified','case':index,'total':len(cases),'root':str(root)}),flush=True)
   continue
