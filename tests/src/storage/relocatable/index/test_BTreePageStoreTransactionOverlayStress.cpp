@@ -7,12 +7,55 @@
  **/
 
 #include <map>
+#include "graph/query/execution/PrepaidMemoryResource.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 #include "RelocatableBTreePageStoreTestUtils.hpp"
 
 namespace {
 
 	using namespace relocatable_btree_test;
+
+ TEST_F(RelocatableBTreePageStoreTest, DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant) {
+  using namespace graph::query::execution::detail;
+  auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+  SlottedPagePool pages(io, *metadata);
+  BTreePageStore store(pages, *metadata);
+  EntityPageStore entities(io, *metadata);
+  EntityLabelSetStore labels(io, *metadata, pages);
+  PropertyCollectionRootStore properties(pages, *metadata);
+  auto plannerOptions = nativeBTreeWriteOptions();
+  plannerOptions.last_slot = PhysicalSlotId(64U);
+  NativeGraphWritePlanner writes(*metadata, entities, labels, properties, store, plannerOptions);
+  const auto request = allocationRequest();
+  ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2)).has_value());
+  const IndexRootLocation root{17U, request.page_id, request.generation};
+  static_cast<void>(store.publishRoots(std::span(&root, 1), {}, LogSequenceNumber(3)));
+  auto before = metadata->openSnapshot();
+  constexpr size_t maximum = 32U * 1024U * 1024U;
+  auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+  auto domain = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+  auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, maximum);
+  auto memory = std::make_shared<PrepaidMemoryResource>(account, maximum);
+  {
+   graph::utils::OwnedAllocationScope scope(memory);
+   auto transaction = writes.beginTransaction();
+   for (uint16_t ordinal = 0U; ordinal < 500U; ++ordinal)
+    transaction.stageScalarIndexUpsert(store, 17U, wideKey(ordinal), uint64_t{ordinal} + 1U);
+   ASSERT_TRUE(transaction.commit().committed());
+  }
+  EXPECT_EQ(memory->used(), 0U);
+  BTreeIndex index(17U, store, *metadata);
+  EXPECT_TRUE(index.scan(before, std::nullopt, 501U).empty());
+  auto current = metadata->openSnapshot();
+  const auto rows = index.scan(current, std::nullopt, 501U);
+  ASSERT_EQ(rows.size(), 500U);
+  for (uint16_t ordinal = 0U; ordinal < 500U; ++ordinal) {
+   EXPECT_EQ(rows[ordinal].key, wideKey(ordinal));
+   EXPECT_EQ(rows[ordinal].value_or_child, uint64_t{ordinal} + 1U);
+  }
+  current.release(); before.release();
+ }
 
 	TEST_F(RelocatableBTreePageStoreTest, AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());

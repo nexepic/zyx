@@ -1,5 +1,5 @@
 {
-  "status": "combined_verified_medium_preparation_pending",
+  "status": "dense_leaf_transfer_module_verified_combined_and_medium_pending",
   "effective_accepted_progress": "24/34 (70.6%)",
   "negative_control": {
     "tests": 1,
@@ -26,14 +26,16 @@
     "src/storage/relocatable/metadata/LocationDirectory.cpp": "fed962a0c74b175a7c0cf496e601bb30d592d381d3d1a1fdb6d211ad1b2a6e18",
     "src/storage/relocatable/metadata/MetadataPageFile.cpp": "a2fc9f580039b81f5ccadc0853b7d14c13b6501ba8e15885ccfe7d56ae95f5cb",
     "src/storage/LogicalGraphTransactionOverlay.cpp": "9207922cc444a5d9ce61282cd2f8c789439e00ca21ec76e74f35c4d18bd703ec",
-    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "54825fe849da803cbcca1f99c43bb48d4d4c2174c6f7d7e551a948bd598aba22"
+    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "54825fe849da803cbcca1f99c43bb48d4d4c2174c6f7d7e551a948bd598aba22",
+    "include/graph/storage/relocatable/index/InitialBTreeBuilder.hpp": "497ba9cfb60c429b7af55740d6be7cb29f16d5b58a4e4243f0fca08bd3854745"
   },
   "combined_positive": {
-    "modules": 98,
-    "suites": 139,
-    "tests": 2039,
+    "modules": 99,
+    "suites": 140,
+    "tests": 2048,
     "failures": 0,
-    "full_suite": false
+    "full_suite": false,
+    "checkpoint": "before dense leaf transfer; requires final rerun"
   },
   "optional_cache": {
     "negative_tests": 2,
@@ -47,5 +49,19 @@
   "edge_overlay": {
     "negative_failures": 1,
     "fix": "install WRITE owner before relationship type resolution in executeStagedBatch"
+  },
+  "initial_tree_growth": {
+    "negative_tests": 1,
+    "negative_failures": 1,
+    "positive_tests": 9,
+    "positive_failures": 0,
+    "preserves_existing_leaf_backing": true
+  },
+  "dense_leaf_transfer": {
+    "tests": 14,
+    "failures": 0,
+    "source_input_released_before_replacement": true,
+    "leaf_backing_transferred": true,
+    "old_snapshot_and_all_500_keys_verified": true
   }
 }
