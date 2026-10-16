@@ -1,5 +1,5 @@
 from pathlib import Path
-import subprocess,os,time,json
+import subprocess,os,time,json,signal
 out=Path('/workspace/zyx-optimization-final-window-20261016/bounded-loader-v2');python='/workspace/zyx-benchmark-venv/bin/python';script='/tmp/zyx-final-window.py'
 orders=[['control','current','kuzu'],['current','kuzu','control'],['kuzu','control','current']]
 cases=[]
@@ -21,7 +21,13 @@ for index,(number,scale,profile,engine) in enumerate(cases,1):
  print(json.dumps({'phase':'read-start','case':index,'total':len(cases),'round':number,'scale':scale,'profile':profile,'engine':engine}),flush=True)
  log=out/'logs'/f'read-{number}-{scale}-{profile}-{engine}.log';log.parent.mkdir(exist_ok=True)
  with log.open('w') as stream:
-  result=subprocess.run([python,script,'read','--engine',engine,'--round',str(number),'--scale',scale,'--profile',profile],stdout=stream,stderr=subprocess.STDOUT,timeout=1800)
+  result=subprocess.Popen([python,script,'read','--engine',engine,'--round',str(number),'--scale',scale,'--profile',profile],stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
+  try:result.wait(timeout=1800)
+  except BaseException:
+   try:os.killpg(result.pid,signal.SIGKILL)
+   except ProcessLookupError:pass
+   result.wait(timeout=5)
+   raise
  if result.returncode:raise RuntimeError(f'formal read case failed: {log}')
  print(json.dumps({'phase':'read','completed':index,'total':len(cases),'round':number,'scale':scale,'profile':profile,'engine':engine}),flush=True)
 (out/'read-campaign-completed.json').write_text(json.dumps({'cases':len(cases),'rounds':3,'status':'completed'})+'\n')
