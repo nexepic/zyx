@@ -1,0 +1,29 @@
+{
+  "status": "cancelled_for_requested_five_delivery_scope",
+  "time_utc": "2026-10-16T18:22:56.502951+00:00",
+  "accepted_measured_samples": 0,
+  "completed_warmup_windows": [
+    {
+      "event": "maintenance_window",
+      "engine": "zyx-native",
+      "window": 1,
+      "phase": "warmup",
+      "file_bytes": 232390656
+    },
+    {
+      "event": "maintenance_window",
+      "engine": "zyx-native",
+      "window": 2,
+      "phase": "warmup",
+      "file_bytes": 287965184
+    }
+  ],
+  "current_outcome": "external cancellation, not an engine failure or steady-state acceptance",
+  "control_outcome": "actual aligned-query optional entity-cache failure retained",
+  "unstarted_cases": "not executed, not successful and not unsupported",
+  "reason": "Request selects S0.3 and explicit S6.4 decision/documentation, rather than unlimited S5.5 tuning. Keep S5.5 mandatory and pending. Resume only the original frozen-source baseline now.",
+  "pids_stopped": [
+    161438,
+    161467
+  ]
+}
