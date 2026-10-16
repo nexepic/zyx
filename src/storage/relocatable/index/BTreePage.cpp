@@ -197,9 +197,9 @@ namespace graph::storage {
 			return header;
 		}
 
-		[[nodiscard]] std::vector<uint32_t> restartOffsets(std::span<const std::byte> bytes,
+		[[nodiscard]] utils::OwnedStdVector<uint32_t> restartOffsets(std::span<const std::byte> bytes,
 														   const PackedHeader &header) {
-			std::vector<uint32_t> offsets;
+			utils::OwnedStdVector<uint32_t> offsets;
 			offsets.reserve(header.restart_count);
 			for (uint32_t index = 0U; index < header.restart_count; ++index) {
 				const size_t offset = RSS_BTREE_PACKED_HEADER_BYTES + static_cast<size_t>(index) * sizeof(uint32_t);
@@ -223,7 +223,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::optional<BTreePageEntry> decodeOne(std::span<const std::byte> stream, size_t &offset,
-															  std::vector<std::byte> &previous, bool restart,
+															  utils::OwnedStdVector<std::byte> &previous, bool restart,
 															  bool includesValue) {
 			if (offset == stream.size()) {
 				return std::nullopt;
@@ -241,11 +241,11 @@ namespace graph::storage {
 			}
 			// Reserve the complete reconstructed key once. Growing a shared-prefix
 			// vector during suffix insertion otherwise retains nearly double capacity.
-			std::vector<std::byte> key;
-			key.reserve(static_cast<size_t>(shared + suffixBytes));
-			key.insert(key.end(), previous.begin(), previous.begin() + static_cast<size_t>(shared));
-			key.insert(key.end(), stream.begin() + static_cast<std::ptrdiff_t>(offset),
-					   stream.begin() + static_cast<std::ptrdiff_t>(offset + suffixBytes));
+			utils::OwnedStdVector<std::byte> key;
+            key.resize(static_cast<size_t>(shared + suffixBytes));
+            std::copy_n(previous.begin(), static_cast<size_t>(shared), key.begin());
+            std::copy_n(stream.begin() + static_cast<std::ptrdiff_t>(offset), static_cast<size_t>(suffixBytes),
+                key.begin() + static_cast<std::ptrdiff_t>(shared));
 			offset += static_cast<size_t>(suffixBytes);
 			const uint64_t value = includesValue ? readVarint(stream, offset) : 0U;
 			previous = key;
@@ -358,7 +358,7 @@ namespace graph::storage {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable B+Tree entry length disagrees with its encoded key");
 		}
-		return {std::vector<std::byte>(bytes.begin() + RSS_BTREE_ENTRY_HEADER_BYTES, bytes.end()),
+		return {utils::OwnedStdVector<std::byte>(bytes.begin() + RSS_BTREE_ENTRY_HEADER_BYTES, bytes.end()),
 				LittleEndianCodec::readU64(bytes, ENTRY_VALUE_OFFSET)};
 	}
 
@@ -406,8 +406,8 @@ namespace graph::storage {
 		BTreeNodeKind kind, std::span<const BTreePageEntry> entries, BTreeLeafValueLayout leafValueLayout) {
 		// Authenticate order, values and layout before deriving any boundary.
 		static_cast<void>(encodedSize(kind, entries, leafValueLayout));
-		BoundarySizes result{std::vector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES),
-			std::vector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES)};
+		BoundarySizes result{utils::OwnedStdVector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES),
+			utils::OwnedStdVector<size_t>(entries.size() + 1U, RSS_BTREE_PACKED_HEADER_BYTES)};
 		const bool includesValue = storesValue(kind, leafValueLayout);
 		const auto varintBytes = [](uint64_t value) {
 			uint64_t bytes = 1U;
@@ -464,9 +464,9 @@ namespace graph::storage {
 								: static_cast<uint32_t>((entries.size() + RSS_BTREE_PACKED_RESTART_INTERVAL - 1U) /
 														RSS_BTREE_PACKED_RESTART_INTERVAL);
 		std::vector<std::byte> stream;
-		std::vector<uint32_t> offsets;
+		utils::OwnedStdVector<uint32_t> offsets;
 		offsets.reserve(restartCount);
-		std::vector<std::byte> previous;
+		utils::OwnedStdVector<std::byte> previous;
 		for (size_t index = 0U; index < entries.size(); ++index) {
 			const BTreePageEntry &entry = entries[index];
 			if (index != 0U && !lessKey(entries[index - 1U].key, entry.key)) {
@@ -521,16 +521,16 @@ namespace graph::storage {
 		return bytes;
 	}
 
-	std::vector<BTreePageEntry> PackedBTreePageCodec::decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
+	utils::OwnedStdVector<BTreePageEntry> PackedBTreePageCodec::decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 															 BTreeLeafValueLayout leafValueLayout) {
 		debug::PerfTrace::addValue("native_btree.read.packed_page_decodes", 1);
 		validateValueLayout(kind, leafValueLayout);
 		const bool includesValue = storesValue(kind, leafValueLayout);
 		const PackedHeader header = decodePackedHeader(bytes);
-		const std::vector<uint32_t> offsets = restartOffsets(bytes, header);
-		std::vector<BTreePageEntry> entries;
+		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
+		utils::OwnedStdVector<BTreePageEntry> entries;
 		entries.reserve(header.entry_count);
-		std::vector<std::byte> previous;
+		utils::OwnedStdVector<std::byte> previous;
 		const std::span<const std::byte> stream = bytes.subspan(header.stream_offset, header.stream_bytes);
 		size_t offset = 0U;
 		for (uint32_t index = 0U; index < header.entry_count; ++index) {
@@ -573,7 +573,7 @@ namespace graph::storage {
 		validateValueLayout(kind, leafValueLayout);
 		const bool includesValue = storesValue(kind, leafValueLayout);
 		const PackedHeader header = decodePackedHeader(bytes);
-		const std::vector<uint32_t> offsets = restartOffsets(bytes, header);
+		const utils::OwnedStdVector<uint32_t> offsets = restartOffsets(bytes, header);
 		if (header.entry_count == 0U) {
 			return std::nullopt;
 		}
@@ -581,7 +581,7 @@ namespace graph::storage {
 		// Binary-search restart keys, then decode only the selected restart group.
 		const auto restartKeyAt = [&stream, &offsets, includesValue](size_t candidate) {
 			size_t offset = offsets[candidate];
-			std::vector<std::byte> previous;
+			utils::OwnedStdVector<std::byte> previous;
 			const auto entry = decodeOne(stream, offset, previous, true, includesValue);
 			// restartOffsets() proved this offset lies inside the stream; decodeOne()
 			// consequently either returns the restart entry or throws a codec error.
@@ -599,7 +599,7 @@ namespace graph::storage {
 		}
 		const size_t group = firstGreater == 0U ? 0U : firstGreater - 1U;
 		size_t offset = offsets[group];
-		std::vector<std::byte> previous;
+		utils::OwnedStdVector<std::byte> previous;
 		const size_t first = group * header.restart_interval;
 		for (size_t index = first; index < std::min<size_t>(header.entry_count, first + header.restart_interval);
 			 ++index) {
@@ -654,7 +654,7 @@ namespace graph::storage {
 		validateNewPage(owner, header);
 		SlottedPage page = SlottedPage::create(owner);
 		static_cast<void>(page.insert(BTreePageHeaderCodec::encode(header)));
-		const std::vector<BTreePageEntry> emptyEntries;
+		const utils::OwnedStdVector<BTreePageEntry> emptyEntries;
 		static_cast<void>(
 				page.insert(PackedBTreePageCodec::encode(header.kind, emptyEntries, header.leaf_value_layout)));
 		return BTreePage(std::move(page));
@@ -683,6 +683,31 @@ namespace graph::storage {
 		page.validateLayout();
 		return page;
 	}
+
+    BTreePage BTreePage::open(SlottedPage source) {
+        BTreePage page(std::move(source));
+        page.validateLayout();
+        return page;
+    }
+
+    BTreePage BTreePage::openDecoded(SlottedPage source, utils::OwnedStdVector<BTreePageEntry> &decodedEntries) {
+        BTreePage page(std::move(source));
+        auto validated = page.packedEntries();
+        decodedEntries = std::move(validated);
+        return page;
+    }
+
+    BTreePage BTreePage::openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+            utils::OwnedStdVector<BTreePageEntry> &decodedEntries) {
+        return openDecoded(SlottedPage::open(owner, bytes), decodedEntries);
+    }
+
+    BTreePage BTreePage::openDecoded(SlottedPage source, std::vector<BTreePageEntry> &decodedEntries) {
+        BTreePage page(std::move(source));
+        auto validated = page.packedEntries();
+        decodedEntries = std::move(validated);
+        return page;
+    }
 
 	BTreePage BTreePage::openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
 			std::vector<BTreePageEntry> &decodedEntries) {
@@ -729,7 +754,7 @@ namespace graph::storage {
 		return slots[1];
 	}
 
-	std::vector<BTreePageEntry> BTreePage::packedEntries() const {
+	utils::OwnedStdVector<BTreePageEntry> BTreePage::packedEntries() const {
 		const SlottedSlotReference payload = validatePackedEnvelope();
 		const BTreePageHeader current = header();
 		return PackedBTreePageCodec::decode(current.kind, page_.read(payload), current.leaf_value_layout);
@@ -751,7 +776,7 @@ namespace graph::storage {
 		static_cast<void>(packedEntries());
 	}
 
-	std::vector<BTreePageEntry> BTreePage::entries() const {
+	utils::OwnedStdVector<BTreePageEntry> BTreePage::entries() const {
 		// packedEntries performs the same complete validation as validateLayout.
 		// Return that validated decode instead of decoding once more.
 		return packedEntries();
@@ -791,7 +816,7 @@ namespace graph::storage {
 	void BTreePage::insert(BTreePageEntry entry) {
 		// packedEntries authenticates the entire source, including ordering.
 		// Reuse that decode for duplicate detection and the mutation itself.
-		std::vector<BTreePageEntry> entries = packedEntries();
+		utils::OwnedStdVector<BTreePageEntry> entries = packedEntries();
 		const auto insertion = std::lower_bound(entries.begin(), entries.end(), entry.key,
 				[](const BTreePageEntry &candidate, const std::vector<std::byte> &key) {
 					return lessKey(candidate.key, key);
@@ -812,7 +837,7 @@ namespace graph::storage {
 	}
 
 	void BTreePage::erase(std::span<const std::byte> key) {
-		std::vector<BTreePageEntry> entries = packedEntries();
+		utils::OwnedStdVector<BTreePageEntry> entries = packedEntries();
 		const auto iterator =
 				std::lower_bound(entries.begin(), entries.end(), key,
 								 [](const BTreePageEntry &candidate, std::span<const std::byte> candidateKey) {

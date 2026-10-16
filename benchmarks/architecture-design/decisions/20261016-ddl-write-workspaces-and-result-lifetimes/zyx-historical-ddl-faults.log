@@ -1,0 +1,4 @@
+schema-ddl PASS
+schema-vector PASS
+schema-constraint PASS
+schema-drop PASS

@@ -64,7 +64,7 @@
     }
   },
   "S3.1": "accepted",
-  "commit_push": "verified_resource_component_checkpoint_pending_push",
+  "commit_push": "resource_checkpoint_pushed_5e45ca3e",
   "S1.1": "accepted_design",
   "S1.6": "accepted_design",
   "S1.5": "accepted_design",
@@ -169,7 +169,12 @@
       "20261015-owned-index-schema-and-atomic-retirement",
       "20261015-streamed-schema-direction-batches",
       "20261015-query-parameter-copy-and-codebook-deferral",
-      "20261015-owned-constraint-and-schema-list-backing"
+      "20261015-owned-constraint-and-schema-list-backing",
+      "20261015-owned-btree-keys-and-page-adoption",
+      "20261015-owned-btree-arrays-and-cursors",
+      "20261016-pre-admitted-string-result-rows",
+      "20261016-owned-schema-query-results",
+      "20261016-ddl-write-workspaces-and-result-lifetimes"
     ]
   }
 }

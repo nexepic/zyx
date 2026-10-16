@@ -21,6 +21,7 @@
 
 #include "graph/storage/relocatable/index/InitialBTreeBuilder.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 
 namespace graph::storage {
 
@@ -91,7 +92,7 @@ namespace graph::storage {
 			BTreePageHeader header;
 			PageLocation location;
 			LogSequenceNumber owner_lsn{};
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			size_t child_ordinal = 0;
 		};
 
@@ -144,7 +145,7 @@ namespace graph::storage {
 			PlannedPageReference left_sibling;
 			PlannedPageReference right_sibling;
 			PlannedPageReference leftmost_child;
-			std::vector<BTreePageEntry> leaf_entries;
+			utils::OwnedStdVector<BTreePageEntry> leaf_entries;
 			std::vector<PlannedInternalEntry> internal_entries;
 		};
 
@@ -157,9 +158,9 @@ namespace graph::storage {
 			return planned;
 		}
 
-		[[nodiscard]] std::vector<BTreePageEntry>
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry>
 		previewInternalEntries(std::span<const PlannedInternalEntry> entries) {
-			std::vector<BTreePageEntry> preview;
+			utils::OwnedStdVector<BTreePageEntry> preview;
 			preview.reserve(entries.size());
 			for (const PlannedInternalEntry &entry: entries) {
 				preview.push_back({entry.key, entry.right_child.preview().value()});
@@ -190,7 +191,7 @@ namespace graph::storage {
 									planned.right_sibling.resolve(appendedPageIds), planned.leaf_entries);
 			}
 			header.leftmost_child = planned.leftmost_child.resolve(appendedPageIds);
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			entries.reserve(planned.internal_entries.size());
 			for (const PlannedInternalEntry &entry: planned.internal_entries) {
 				entries.push_back({entry.key, entry.right_child.resolve(appendedPageIds).value()});
@@ -304,7 +305,7 @@ namespace graph::storage {
 			BTreePageHeader header;
 			PageLocation location;
 			LogSequenceNumber owner_lsn{};
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			bool dirty = false;
 			bool retired = false;
 		};
@@ -362,7 +363,7 @@ namespace graph::storage {
 		std::optional<OverlayPageReference> left_sibling;
 		std::optional<OverlayPageReference> right_sibling;
 		std::optional<OverlayPageReference> leftmost_child;
-		std::vector<BTreePageEntry> leaf_entries;
+		utils::OwnedStdVector<BTreePageEntry> leaf_entries;
 		std::vector<OverlayInternalEntry> internal_entries;
 		bool dirty = false;
 		bool retired = false;
@@ -783,7 +784,7 @@ namespace graph::storage {
 
 	private:
 		[[nodiscard]] bool rebuildDenseTree(bool requireReduction) {
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			std::set<uint64_t> visitedExisting;
 			std::set<size_t> visitedVirtual;
 			collectEntries(root_, nodeFor(root_).header.level, entries, visitedExisting, visitedVirtual);
@@ -862,7 +863,7 @@ namespace graph::storage {
 		}
 
 		void collectEntries(const OverlayPageReference &reference, uint16_t expectedLevel,
-							std::vector<BTreePageEntry> &entries, std::set<uint64_t> &visitedExisting,
+							utils::OwnedStdVector<BTreePageEntry> &entries, std::set<uint64_t> &visitedExisting,
 							std::set<size_t> &visitedVirtual) {
 			const bool firstVisit = reference.is_virtual
 											? visitedVirtual.insert(reference.virtual_ordinal).second
@@ -1047,7 +1048,7 @@ namespace graph::storage {
 			}
 			BTreePageHeader header = node.header;
 			header.leftmost_child = resolve(*node.leftmost_child, virtualIds);
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			entries.reserve(node.internal_entries.size());
 			for (const OverlayInternalEntry &entry: node.internal_entries) {
 				entries.push_back({entry.key, resolve(entry.right_child, virtualIds).value()});
@@ -1178,7 +1179,7 @@ namespace graph::storage {
 		void splitLeaf(std::vector<OverlayPageReference> &path) {
 			const OverlayPageReference leftRef = path.back();
 			OverlayMutationNode &left = nodeFor(leftRef);
-			std::vector<BTreePageEntry> entries = left.leaf_entries;
+			utils::OwnedStdVector<BTreePageEntry> entries = left.leaf_entries;
 			const std::optional<size_t> split = findBalancedLeafSplitIndex(
 					left.header, index_id_, LogSequenceNumber(1U), LogSequenceNumber(1U),
 					left.left_sibling.has_value() ? preview(*left.left_sibling) : PageId{},
@@ -1392,7 +1393,7 @@ namespace graph::storage {
 						FormatError::FERR_INVALID_STATE,
 						"relocatable transaction-local B+Tree overlay found leaf siblings with broken links");
 			}
-			std::vector<BTreePageEntry> combined = left.leaf_entries;
+			utils::OwnedStdVector<BTreePageEntry> combined = left.leaf_entries;
 			combined.insert(combined.end(), right.leaf_entries.begin(), right.leaf_entries.end());
 			std::optional<size_t> redistribution;
 			uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
@@ -1707,35 +1708,30 @@ namespace graph::storage {
 		return pages_.appendPage(request, page.slottedPage(), checkpointLsn, options);
 	}
 
-	BTreePage BTreePageStore::read(const MetadataSnapshotPin &snapshot, PageId pageId, BufferPoolReadHint hint) const {
-		const SlottedPage raw = pages_.read(snapshot, pageId, hint);
-		PageOwnerHeader owner;
-		owner.page_id = raw.pageId();
-		owner.owner_id = raw.ownerId();
-		owner.kind = raw.ownerKind();
-		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
-		owner.generation = raw.pageGeneration();
-		owner.committed_lsn = raw.ownerCommittedLsn();
-		return BTreePage::open(owner, raw.serialize());
-	}
+    BTreePage BTreePageStore::read(const MetadataSnapshotPin &snapshot, PageId pageId, BufferPoolReadHint hint) const {
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+        return BTreePage::open(pages_.read(snapshot, pageId, hint));
+    }
 
-	BTreePage BTreePageStore::readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
-			std::vector<BTreePageEntry> &decodedEntries, BufferPoolReadHint hint) const {
-		const SlottedPage raw = pages_.read(snapshot, pageId, hint);
-		PageOwnerHeader owner;
-		owner.page_id = raw.pageId();
-		owner.owner_id = raw.ownerId();
-		owner.kind = raw.ownerKind();
-		owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
-		owner.generation = raw.pageGeneration();
-		owner.committed_lsn = raw.ownerCommittedLsn();
-		return BTreePage::openDecoded(owner, raw.serialize(), decodedEntries);
-	}
+    BTreePage BTreePageStore::readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
+            utils::OwnedStdVector<BTreePageEntry> &decodedEntries, BufferPoolReadHint hint) const {
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+        return BTreePage::openDecoded(pages_.read(snapshot, pageId, hint), decodedEntries);
+    }
+
+    BTreePage BTreePageStore::readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
+            std::vector<BTreePageEntry> &decodedEntries, BufferPoolReadHint hint) const {
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+        return BTreePage::openDecoded(pages_.read(snapshot, pageId, hint), decodedEntries);
+    }
 
 	BTreeRootLeafMutationPlan BTreePageStore::planRootLeafUpsert(const MetadataSnapshotPin &snapshot, uint64_t indexId,
 																 std::span<const std::byte> key, uint64_t value) const {
 		RootLeafMutationSource source = loadRootLeafMutationSource(*this, metadata_, snapshot, indexId);
-		std::vector<BTreePageEntry> entries = source.page.entries();
+		utils::OwnedStdVector<BTreePageEntry> entries = source.page.entries();
 		bool replaced = false;
 		for (BTreePageEntry &entry: entries) {
 			if (std::ranges::equal(entry.key, key)) {
@@ -1754,7 +1750,7 @@ namespace graph::storage {
 	BTreeRootLeafMutationPlan BTreePageStore::planRootLeafErase(const MetadataSnapshotPin &snapshot, uint64_t indexId,
 																std::span<const std::byte> key) const {
 		RootLeafMutationSource source = loadRootLeafMutationSource(*this, metadata_, snapshot, indexId);
-		std::vector<BTreePageEntry> entries = source.page.entries();
+		utils::OwnedStdVector<BTreePageEntry> entries = source.page.entries();
 		const auto erased = std::ranges::find_if(
 				entries, [&](const BTreePageEntry &entry) { return std::ranges::equal(entry.key, key); });
 		if (erased == entries.end()) {
@@ -2356,7 +2352,7 @@ namespace graph::storage {
 				}
 				// ZYX_COV_EXCL_STOP
 				const BTreePathNode &leaf = path.back();
-				std::vector<BTreePageEntry> entries = leaf.entries;
+				utils::OwnedStdVector<BTreePageEntry> entries = leaf.entries;
 				bool replaced = false;
 				for (BTreePageEntry &entry: entries) {
 					if (std::ranges::equal(entry.key, key)) {
@@ -2406,8 +2402,8 @@ namespace graph::storage {
 					// Page Directory and shared-pool owner. The publication coordinator
 					// revalidates these immutable locations under its writer guard.
 
-					std::vector<BTreePageEntry> leftEntries(entries.begin(), entries.begin() + *splitIndex);
-					std::vector<BTreePageEntry> rightEntries(entries.begin() + *splitIndex, entries.end());
+					utils::OwnedStdVector<BTreePageEntry> leftEntries(entries.begin(), entries.begin() + *splitIndex);
+					utils::OwnedStdVector<BTreePageEntry> rightEntries(entries.begin() + *splitIndex, entries.end());
 					std::vector<PageLocation> expectedReplacements;
 					std::vector<PlannedBTreePage> replacementPlans;
 					std::vector<PlannedBTreePage> appendedPlans;
@@ -2492,7 +2488,7 @@ namespace graph::storage {
 						parentEntries.insert(parentEntries.begin() + parent.child_ordinal,
 											 {promotedKey, promotedRightChild});
 						const BTreePageHeader previewHeader = previewInternalHeader(parent.header, parentLeftmost);
-						const std::vector<BTreePageEntry> previewEntries = previewInternalEntries(parentEntries);
+						const utils::OwnedStdVector<BTreePageEntry> previewEntries = previewInternalEntries(parentEntries);
 						try {
 							static_cast<void>(makeInternalPage(
 									previewHeader,
@@ -3036,7 +3032,7 @@ namespace graph::storage {
 			stagedEntryBytes += RSS_BTREE_ENTRY_HEADER_BYTES + entry.key.size();
 		}
 
-		const std::vector<BTreePageEntry> sourceEntries(entries.begin(), entries.end());
+		const utils::OwnedStdVector<BTreePageEntry> sourceEntries(entries.begin(), entries.end());
 		const bool keyOnlyTree = leafValueLayout == BTreeLeafValueLayout::BLVL_EMPTY;
 		if ((keyOnlyTree && (valueBinder || std::ranges::any_of(sourceEntries, [](const BTreePageEntry &entry) {
 				 return entry.value_or_child != 0U;
@@ -3047,7 +3043,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable initial B+Tree leaf values disagree with its selected layout");
 		}
-		std::vector<BTreePageEntry> planningEntries = sourceEntries;
+		utils::OwnedStdVector<BTreePageEntry> planningEntries = sourceEntries;
 		if (valueBinder) {
 			for (BTreePageEntry &entry: planningEntries) {
 				// B+Tree values have a fixed encoded width, so a nonzero probe value
@@ -3105,7 +3101,7 @@ namespace graph::storage {
 			}
 			// Each batch above is checked against its immutable requested count, so the
 			// concatenated metadata identities exactly cover the precomputed page plan.
-			std::vector<BTreePageEntry> resolvedEntries = sourceEntries;
+			utils::OwnedStdVector<BTreePageEntry> resolvedEntries = sourceEntries;
 			if (valueBinder) {
 				const BTreeInitialTreeValueBindingContext context{batches, pageIds, generations};
 				valueBinder(resolvedEntries, context);
@@ -3313,7 +3309,7 @@ namespace graph::storage {
 							FormatError::FERR_INVALID_STATE,
 							"relocatable B+Tree erase cannot merge leaf siblings with overlapping key ranges");
 				}
-				std::vector<BTreePageEntry> combined = left.entries;
+				utils::OwnedStdVector<BTreePageEntry> combined = left.entries;
 				combined.insert(combined.end(), right.entries.begin(), right.entries.end());
 				std::optional<size_t> redistribution;
 				uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
@@ -3427,7 +3423,7 @@ namespace graph::storage {
 			const BTreePageEntry parentSeparator = parent.entries[leftOrdinal];
 			BTreePageEntry bridge = parentSeparator;
 			bridge.value_or_child = right.header.leftmost_child.value();
-			std::vector<BTreePageEntry> combined = left.entries;
+			utils::OwnedStdVector<BTreePageEntry> combined = left.entries;
 			combined.push_back(bridge);
 			combined.insert(combined.end(), right.entries.begin(), right.entries.end());
 			std::optional<size_t> redistribution;
@@ -3683,7 +3679,7 @@ namespace graph::storage {
 		}
 		const PageLocation expectedRootLocation = metadata_.findPageLocation(snapshot, root.root_page_id);
 		const LogSequenceNumber expectedOwnerLsn = current.slottedPage().ownerCommittedLsn();
-		std::vector<BTreePageEntry> entries = current.entries();
+		utils::OwnedStdVector<BTreePageEntry> entries = current.entries();
 		bool replaced = false;
 		for (BTreePageEntry &entry: entries) {
 			if (std::ranges::equal(entry.key, key)) {

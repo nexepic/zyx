@@ -28,12 +28,15 @@ def main():
     parser.add_argument("--owned-property-heap-accounting", action="store_true")
     parser.add_argument("--owned-index-definition-heap-accounting", action="store_true")
     parser.add_argument("--owned-constraint-definition-heap-accounting", action="store_true")
+    parser.add_argument("--owned-btree-key-heap-accounting", action="store_true")
+    parser.add_argument("--string-result-admission", action="store_true")
+    parser.add_argument("--owned-logical-schema-heap-accounting", action="store_true")
     parser.add_argument("--result-column-copy-admission", action="store_true")
     parser.add_argument("--query-context-account-validation", action="store_true")
     parser.add_argument("--owned-plan-heap-accounting", action="store_true")
     parser.add_argument("--owned-string-containers-heap-accounting", action="store_true")
     parser.add_argument("--crash-cycles", type=int, default=1, help="repeat crash/readonly/recovery on the same file")
-    parser.add_argument("--allocation-sweep", choices=("none", "stage", "commit", "both", "overlay", "creation", "overlay-creation", "lease-reserve", "lease-cached", "lease-fresh", "leases", "mixed", "scratch-write", "distinct", "source-materialization", "normalized-patch", "plan-cache", "schema-cache", "all"), default="none")
+    parser.add_argument("--allocation-sweep", choices=("none", "stage", "commit", "both", "overlay", "creation", "overlay-creation", "lease-reserve", "lease-cached", "lease-fresh", "leases", "mixed", "scratch-write", "distinct", "source-materialization", "normalized-patch", "plan-cache", "schema-cache", "schema-ddl", "schema-vector", "schema-constraint", "schema-drop", "all"), default="none")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--progress-every", type=int, default=0)
     parser.add_argument("--max-sweep-points", type=int, default=0,
@@ -76,6 +79,12 @@ def main():
             results.append(run("codec-inspection-allocation-free"))
         if args.codec_admitted_heap_accounting:
             results.append(run("codec-admitted-heap-accounting"))
+        if args.owned_logical_schema_heap_accounting:
+            results.append(run("owned-logical-schema-heap-accounting"))
+        if args.string_result_admission:
+            results.append(run("string-result-admission"))
+        if args.owned_btree_key_heap_accounting:
+            results.append(run("owned-btree-key-heap-accounting"))
         if args.owned_constraint_definition_heap_accounting:
             results.append(run("owned-constraint-definition-heap-accounting"))
         if args.owned_index_definition_heap_accounting:
@@ -122,7 +131,7 @@ def main():
                 if args.progress_every and len(cycles) % args.progress_every == 0:
                     print(f"scratch crash recovery: {len(cycles)}/{args.crash_cycles} cycles passed", file=sys.stderr, flush=True)
             crash_recovery = {**cycles[-1], "cycles": cycles, "completed_cycles": len(cycles), "passed": True}
-        for phase in ("stage", "commit", "overlay", "creation", "overlay-creation", "lease-reserve", "lease-cached", "lease-fresh", "mixed", "scratch-write", "distinct", "source-materialization", "normalized-patch", "plan-cache", "schema-cache"):
+        for phase in ("stage", "commit", "overlay", "creation", "overlay-creation", "lease-reserve", "lease-cached", "lease-fresh", "mixed", "scratch-write", "distinct", "source-materialization", "normalized-patch", "plan-cache", "schema-cache", "schema-ddl", "schema-vector", "schema-constraint", "schema-drop"):
             if args.allocation_sweep not in (phase, "all") and not (
                     args.allocation_sweep == "both" and phase in ("stage", "commit")) and not (
                     args.allocation_sweep == "leases" and phase.startswith("lease-")):

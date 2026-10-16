@@ -21,6 +21,7 @@
 
 #include "graph/storage/StorageIO.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 
 using namespace graph::storage;
@@ -361,4 +362,33 @@ TEST_F(BTreeIndexScanCacheTest, SortedExactBatchRejectsOrderBeforeIoAndHandlesEm
  BTreeIndex missing(18, *pages_, *metadata_);
  const auto absent = missing.findSorted(snapshot_, keys);
  ASSERT_EQ(absent.size(), 2U); EXPECT_FALSE(absent[0]); EXPECT_FALSE(absent[1]);
+}
+
+TEST_F(BTreeIndexScanCacheTest, CursorStateDenialPrecedesRootIoAndRefundsItsAttempt) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1U);
+    const auto before = io_->bufferPoolStats();
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        EXPECT_THROW(static_cast<void>(index_->openRangeCursor(snapshot_, std::nullopt, 8U)),
+            graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, before.disk_read_bytes);
+    EXPECT_EQ(io_->bufferPoolStats().hits, before.hits);
+}
+
+TEST_F(BTreeIndexScanCacheTest, EscapedCursorUsesItsCapturedAuthorityForFollowingLeaves) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    std::optional<BTreeIndex::RangeCursor> cursor;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        cursor.emplace(index_->openRangeCursor(snapshot_, std::nullopt, 8U));
+    }
+    memory.reset();
+    ASSERT_FALSE(authority.expired());
+    size_t emitted = 0U;
+    while (const auto entry = cursor->next()) ++emitted;
+    EXPECT_EQ(emitted, 4U);
+    cursor.reset(); EXPECT_TRUE(authority.expired());
 }

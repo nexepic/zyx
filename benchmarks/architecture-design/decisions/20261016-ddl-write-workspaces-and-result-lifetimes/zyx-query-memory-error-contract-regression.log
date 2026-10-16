@@ -1,0 +1,262 @@
+[0/2] Re-checking globbed directories...
+[1/10] Building CXX object CMakeFiles/zyx_core.dir/src/query/QueryGuard.cpp.o
+[2/10] Building CXX object CMakeFiles/zyx_core.dir/src/query/QueryContext.cpp.o
+[3/10] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/test_QueryGuard.cpp.o
+[4/10] Building CXX object CMakeFiles/zyx_core.dir/src/query/api/QueryEngine.cpp.o
+In file included from /workspace/zyx/src/query/api/QueryEngine.cpp:21:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/query/api/QueryEngine.cpp:21:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[5/10] Linking CXX static library libzyx_core.a
+[6/10] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_LogicalPlanSchemaRuntime.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalPlanSchemaRuntime.cpp:22:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalPlanSchemaRuntime.cpp:22:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[7/10] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_LogicalGraphReadExecutor_RuntimeContracts.cpp.o
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalGraphReadExecutor_RuntimeContracts.cpp:9:
+In file included from /workspace/zyx/tests/include/query/execution/LogicalGraphReadExecutorTestFixture.hpp:32:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/query/execution/test_LogicalGraphReadExecutor_RuntimeContracts.cpp:9:
+In file included from /workspace/zyx/tests/include/query/execution/LogicalGraphReadExecutorTestFixture.hpp:32:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[8/10] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_Vector.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_Vector.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_Vector.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[9/10] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = QueryGuardTest.*:RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard:LogicalPlanSchemaRuntimeTest.*:QueryResultResourcesTest.*:RelocatableStorageBackendTest.*Schema*
+[==========] Running 47 tests from 5 test suites.
+[----------] Global test environment set-up.
+[----------] 12 tests from QueryGuardTest
+[ RUN      ] QueryGuardTest.NoTimeout_CheckDoesNotThrow
+[       OK ] QueryGuardTest.NoTimeout_CheckDoesNotThrow (0 ms)
+[ RUN      ] QueryGuardTest.Timeout_ThrowsAfterDeadline
+[       OK ] QueryGuardTest.Timeout_ThrowsAfterDeadline (2 ms)
+[ RUN      ] QueryGuardTest.CheckNowObservesAnExpiredDeadlineWithoutWaitingForThePeriodicSample
+[       OK ] QueryGuardTest.CheckNowObservesAnExpiredDeadlineWithoutWaitingForThePeriodicSample (2 ms)
+[ RUN      ] QueryGuardTest.NoMemoryLimit_CheckDoesNotThrow
+[       OK ] QueryGuardTest.NoMemoryLimit_CheckDoesNotThrow (0 ms)
+[ RUN      ] QueryGuardTest.MemoryLimit_ThrowsWhenExceeded
+[       OK ] QueryGuardTest.MemoryLimit_ThrowsWhenExceeded (0 ms)
+[ RUN      ] QueryGuardTest.MemoryLimit_AllowsPreexistingProcessMemoryAndCanBeDisabledByLaterQuery
+[       OK ] QueryGuardTest.MemoryLimit_AllowsPreexistingProcessMemoryAndCanBeDisabledByLaterQuery (0 ms)
+[ RUN      ] QueryGuardTest.CheckIntervalSkipsMostChecks
+[       OK ] QueryGuardTest.CheckIntervalSkipsMostChecks (0 ms)
+[ RUN      ] QueryGuardTest.BothLimits_TimeoutFirst
+[       OK ] QueryGuardTest.BothLimits_TimeoutFirst (2 ms)
+[ RUN      ] QueryGuardTest.BothLimits_MemoryFirst
+[       OK ] QueryGuardTest.BothLimits_MemoryFirst (0 ms)
+[ RUN      ] QueryGuardTest.GetCurrentRSSBytes_ReturnsNonZero
+[       OK ] QueryGuardTest.GetCurrentRSSBytes_ReturnsNonZero (0 ms)
+[ RUN      ] QueryGuardTest.ExceptionMessages_ContainUsefulInfo
+[       OK ] QueryGuardTest.ExceptionMessages_ContainUsefulInfo (2 ms)
+[ RUN      ] QueryGuardTest.ManagedAdmissionMessageDoesNotPresentBudgetBytesAsResidentMemory
+[       OK ] QueryGuardTest.ManagedAdmissionMessageDoesNotPresentBudgetBytesAsResidentMemory (0 ms)
+[----------] 12 tests from QueryGuardTest (9 ms total)
+
+[----------] 1 test from RelocatableStorageBackendSchemaTest
+[ RUN      ] RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard
+[       OK ] RelocatableStorageBackendSchemaTest.AppliesDurableQueryMemoryPolicyToTheEngineDefaultGuard (1296 ms)
+[----------] 1 test from RelocatableStorageBackendSchemaTest (1296 ms total)
+
+[----------] 15 tests from LogicalPlanSchemaRuntimeTest
+[ RUN      ] LogicalPlanSchemaRuntimeTest.CreationForwardsGuardIntoBackendConstructionBeforePublication
+[       OK ] LogicalPlanSchemaRuntimeTest.CreationForwardsGuardIntoBackendConstructionBeforePublication (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.EntryChecksExpiredAndMemoryGuardsBeforeEverySchemaBackendOperation
+[       OK ] LogicalPlanSchemaRuntimeTest.EntryChecksExpiredAndMemoryGuardsBeforeEverySchemaBackendOperation (24 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.CreatesIndexesAndReturnsTheLegacyCompatibleStatusRow
+[       OK ] LogicalPlanSchemaRuntimeTest.CreatesIndexesAndReturnsTheLegacyCompatibleStatusRow (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.CreatesVectorIndexesThroughTheDedicatedSchemaBoundary
+[       OK ] LogicalPlanSchemaRuntimeTest.CreatesVectorIndexesThroughTheDedicatedSchemaBoundary (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.AllowsBackendGeneratedVectorIndexNames
+[       OK ] LogicalPlanSchemaRuntimeTest.AllowsBackendGeneratedVectorIndexNames (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.DropsByNameOrSchemaAndPreservesNoOpDropBehavior
+[       OK ] LogicalPlanSchemaRuntimeTest.DropsByNameOrSchemaAndPreservesNoOpDropBehavior (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.ShowsTypedDefinitionsAndRejectsUnsupportedOperators
+[       OK ] LogicalPlanSchemaRuntimeTest.ShowsTypedDefinitionsAndRejectsUnsupportedOperators (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.QueryEngineUsesTheSchemaCapabilityWithoutLegacyFallback
+[       OK ] LogicalPlanSchemaRuntimeTest.QueryEngineUsesTheSchemaCapabilityWithoutLegacyFallback (1 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.RejectsIncompleteSchemasAndInvalidBackendDefinitions
+[       OK ] LogicalPlanSchemaRuntimeTest.RejectsIncompleteSchemasAndInvalidBackendDefinitions (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.RejectsUnknownIndexKindsAndNoOpSchemaDrops
+[       OK ] LogicalPlanSchemaRuntimeTest.RejectsUnknownIndexKindsAndNoOpSchemaDrops (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.CreatesTypedNodeAndEdgeConstraintsThroughTheSchemaBoundary
+[       OK ] LogicalPlanSchemaRuntimeTest.CreatesTypedNodeAndEdgeConstraintsThroughTheSchemaBoundary (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.ListsAndDropsConstraintsWithExplicitNotFoundSemantics
+[       OK ] LogicalPlanSchemaRuntimeTest.ListsAndDropsConstraintsWithExplicitNotFoundSemantics (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.RejectsMalformedAndCorruptConstraintDefinitions
+[       OK ] LogicalPlanSchemaRuntimeTest.RejectsMalformedAndCorruptConstraintDefinitions (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.ConfirmationQuotaDenialPrecedesEveryWritingBackendBoundary
+[       OK ] LogicalPlanSchemaRuntimeTest.ConfirmationQuotaDenialPrecedesEveryWritingBackendBoundary (0 ms)
+[ RUN      ] LogicalPlanSchemaRuntimeTest.RawSchemaRequestCopiesAreAdmittedBeforeCallingTheBackend
+[       OK ] LogicalPlanSchemaRuntimeTest.RawSchemaRequestCopiesAreAdmittedBeforeCallingTheBackend (0 ms)
+[----------] 15 tests from LogicalPlanSchemaRuntimeTest (27 ms total)
+
+[----------] 14 tests from QueryResultResourcesTest
+[ RUN      ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment
+[       OK ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment (0 ms)
+[ RUN      ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction
+[       OK ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction (0 ms)
+[ RUN      ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission
+[       OK ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce
+[       OK ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce (0 ms)
+[ RUN      ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination
+[       OK ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy
+[       OK ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy (0 ms)
+[ RUN      ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased
+[       OK ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased (0 ms)
+[ RUN      ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers
+[       OK ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers (0 ms)
+[ RUN      ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission
+[       OK ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel
+[       OK ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel (0 ms)
+[ RUN      ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease
+[       OK ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease (0 ms)
+[ RUN      ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput
+[       OK ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput (0 ms)
+[ RUN      ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows
+[       OK ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveUnderFullAccountEitherTransfersOrRejectsBeforeChangingTheSource
+[       OK ] QueryResultResourcesTest.MoveUnderFullAccountEitherTransfersOrRejectsBeforeChangingTheSource (0 ms)
+[----------] 14 tests from QueryResultResourcesTest (0 ms total)
+
+[----------] 5 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope
+[       OK ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope (90 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose
+[       OK ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose (105 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace
+[       OK ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace (88 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames
+[       OK ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames (92 ms)
+[ RUN      ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry
+[       OK ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry (1357 ms)
+[----------] 5 tests from RelocatableStorageBackendTest (1734 ms total)
+
+[----------] Global test environment tear-down
+[==========] 47 tests from 5 test suites ran. (3068 ms total)
+[  PASSED  ] 47 tests.

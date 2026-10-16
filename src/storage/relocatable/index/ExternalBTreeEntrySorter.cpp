@@ -177,7 +177,7 @@ namespace graph::storage {
 		explicit ExternalBTreeEntrySorterState(ExternalBTreeEntrySorterOptions options) : options(std::move(options)) {}
 
 		ExternalBTreeEntrySorterOptions options;
-		std::vector<BTreePageEntry> pending;
+		utils::OwnedStdVector<BTreePageEntry> pending;
 		size_t pending_bytes = 0;
 		uint64_t entry_count = 0;
 		std::vector<std::unique_ptr<TemporaryRun>> runs;

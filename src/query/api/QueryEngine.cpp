@@ -41,6 +41,16 @@
 namespace graph::query {
 
 	namespace {
+        template<class Action>
+        decltype(auto) withQueryMemoryPolicy(const NativeQueryResourcePolicy &policy, Action &&action) {
+            try { return std::forward<Action>(action)(); }
+            catch (const execution::detail::ResourceAdmissionDenied &) {
+                if (policy.maximum_memory_mb > 0)
+                    throw QueryMemoryExceededException::forResourceAdmission(policy.maximum_memory_mb);
+                throw;
+            }
+        }
+
 		std::shared_ptr<execution::detail::ResourceAccount> validatedQueryResourceAccount(
             const std::shared_ptr<execution::detail::ResourceAccount> &account, const storage::LogicalGraphReadBackend &backend,
 			size_t maximumBytes, const NativeQueryResourcePolicy &policy) {
@@ -532,13 +542,14 @@ namespace graph::query {
 	}
 
 	QueryPlan QueryEngine::buildPlan(const std::string &query, const Language lang) {
-        QueryContext context;
-        if (logicalBackend_) {
-            const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
-                : NativeQueryResourcePolicy{};
-            context.resource_account = validatedQueryResourceAccount(context.resource_account, *logicalBackend_, logicalReadOptions_.bounds.maximum_materialized_bytes, policy);
-        }
-        return buildPlanWithAccount(query, lang, std::move(context.resource_account));
+        const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
+            : NativeQueryResourcePolicy{};
+        return withQueryMemoryPolicy(policy, [&] {
+            QueryContext context;
+            if (logicalBackend_) context.resource_account = validatedQueryResourceAccount(context.resource_account,
+                *logicalBackend_, logicalReadOptions_.bounds.maximum_materialized_bytes, policy);
+            return buildPlanWithAccount(query, lang, std::move(context.resource_account));
+        });
     }
 
     QueryPlan QueryEngine::buildPlanWithAccount(const std::string &query, Language lang,
@@ -644,6 +655,7 @@ namespace graph::query {
 			const NativeQueryResourcePolicy resourcePolicy = nativeConfigurationService_
 					? nativeConfigurationService_->queryResourcePolicy()
 					: NativeQueryResourcePolicy{};
+            return withQueryMemoryPolicy(resourcePolicy, [&]() -> QueryResult {
 			QueryGuard defaultGuard(resourcePolicy.timeout_ms, resourcePolicy.maximum_memory_mb);
 			auto account = validatedQueryResourceAccount(suppliedAccount, *logicalBackend_,
 					logicalReadOptions_.bounds.maximum_materialized_bytes, resourcePolicy);
@@ -711,6 +723,7 @@ namespace graph::query {
 			}
 			const auto started = std::chrono::steady_clock::now();
 			return addLogicalProfileSummary(executeLogicalRoot(), started, logicalContext);
+            });
 		}
 
 		throw std::logic_error("native query engine has no logical storage backend");
@@ -741,6 +754,7 @@ namespace graph::query {
 		const NativeQueryResourcePolicy resourcePolicy = nativeConfigurationService_
 				? nativeConfigurationService_->queryResourcePolicy()
 				: NativeQueryResourcePolicy{};
+        return withQueryMemoryPolicy(resourcePolicy, [&]() -> QueryResult {
 		QueryGuard defaultGuard(resourcePolicy.timeout_ms, resourcePolicy.maximum_memory_mb);
 		auto account = validatedQueryResourceAccount(ctx.resource_account, *logicalBackend_,
 				logicalReadOptions_.bounds.maximum_materialized_bytes, resourcePolicy);
@@ -797,6 +811,7 @@ namespace graph::query {
 		}
 		const auto started = std::chrono::steady_clock::now();
 		return addLogicalProfileSummary(executeOverlayRoot(), started, logicalContext);
+        });
 	}
 
 	bool QueryEngine::usesLogicalReadBackend(const storage::LogicalGraphReadBackend &backend) const noexcept {
@@ -804,25 +819,19 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::execute(const std::string &query, const QueryContext &ctx, const Language lang) {
-		using Clock = std::chrono::steady_clock;
-
-		auto parseStart = Clock::now();
-
-        auto account = ctx.resource_account;
-        if (logicalBackend_) {
-            const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
-                : NativeQueryResourcePolicy{};
-            account = validatedQueryResourceAccount(ctx.resource_account, *logicalBackend_,
+        using Clock = std::chrono::steady_clock;
+        const auto parseStart = Clock::now();
+        const auto policy = nativeConfigurationService_ ? nativeConfigurationService_->queryResourcePolicy()
+            : NativeQueryResourcePolicy{};
+        return withQueryMemoryPolicy(policy, [&] {
+            auto account = ctx.resource_account;
+            if (logicalBackend_) account = validatedQueryResourceAccount(ctx.resource_account, *logicalBackend_,
                 logicalReadOptions_.bounds.maximum_materialized_bytes, policy);
-        }
-        auto plan = buildPlanWithAccount(query, lang, account);
-
-		debug::PerfTrace::addDuration(
-				"parse",
-				static_cast<uint64_t>(
-						std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - parseStart).count()));
-
-		return executePlanWithAccount(std::move(plan), ctx, std::move(account));
-	}
+            auto plan = buildPlanWithAccount(query, lang, account);
+            debug::PerfTrace::addDuration("parse", static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - parseStart).count()));
+            return executePlanWithAccount(std::move(plan), ctx, std::move(account));
+        });
+    }
 
 } // namespace graph::query

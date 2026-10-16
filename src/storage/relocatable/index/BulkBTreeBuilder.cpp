@@ -445,7 +445,7 @@ namespace graph::storage {
 								 "relocatable native bulk B+Tree internal page has no leftmost child");
 					}
 					header.leftmost_child = assignedPageIds[node.children.front()];
-					std::vector<BTreePageEntry> entries;
+					utils::OwnedStdVector<BTreePageEntry> entries;
 					entries.reserve(node.children.size() - 1U);
 					for (size_t child = 1U; child < node.children.size(); ++child) {
 						const size_t childOrdinal = node.children[child];
@@ -465,7 +465,7 @@ namespace graph::storage {
 				header.left_sibling = ordinal == 0U ? PageId{} : assignedPageIds[ordinal - 1U];
 				header.right_sibling = ordinal + 1U == leafCount ? PageId{} : assignedPageIds[ordinal + 1U];
 				header.leaf_value_layout = leafValueLayout;
-				std::vector<BTreePageEntry> entries;
+				utils::OwnedStdVector<BTreePageEntry> entries;
 				entries.reserve(node.leaf_entry_count);
 				for (size_t entryOrdinal = 0U; entryOrdinal < node.leaf_entry_count; ++entryOrdinal) {
 					const std::optional<BTreePageEntry> next = secondCursor();
@@ -574,7 +574,7 @@ namespace graph::storage {
 								 "relocatable bulk B+Tree internal plan has no leftmost child");
 						}
 						header.leftmost_child = (*assignedPageIds)[node.children.front()];
-						std::vector<BTreePageEntry> entries;
+						utils::OwnedStdVector<BTreePageEntry> entries;
 						entries.reserve(node.children.size() - 1U);
 						for (size_t childIndex = 1; childIndex < node.children.size(); ++childIndex) {
 							const size_t childOrdinal = node.children[childIndex];
@@ -596,7 +596,7 @@ namespace graph::storage {
 					header.left_sibling = ordinal == 0U ? PageId{} : (*assignedPageIds)[ordinal - 1U];
 					header.right_sibling = ordinal + 1U == leafCount ? PageId{} : (*assignedPageIds)[ordinal + 1U];
 					header.leaf_value_layout = leafValueLayout;
-					std::vector<BTreePageEntry> entries;
+					utils::OwnedStdVector<BTreePageEntry> entries;
 					const size_t expectedEntries = nodes[ordinal].leaf_entry_count;
 					entries.reserve(expectedEntries);
 					for (size_t entryIndex = 0; entryIndex < expectedEntries; ++entryIndex) {

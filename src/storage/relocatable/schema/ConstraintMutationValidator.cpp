@@ -361,7 +361,7 @@ namespace graph::storage {
 				for (const auto &[reference, transition]: transitions) {
 					if (!transition.new_key.has_value() || transition.old_key == transition.new_key)
 						continue;
-					const std::vector<BTreePageEntry> candidates = adapter_.scan_support_tree(
+					const utils::OwnedStdVector<BTreePageEntry> candidates = adapter_.scan_support_tree(
 							definition.constraint_id, ConstraintSupportTree::lowerBound(*transition.new_key),
 							options_.maximum_support_collisions + 1U);
 					size_t collisionCount = 0U;

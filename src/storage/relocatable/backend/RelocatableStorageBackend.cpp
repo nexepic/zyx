@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -71,6 +72,7 @@
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/index/ExternalBTreeEntrySorter.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/index/NativeBulkRun.hpp"
 #include "graph/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.hpp"
@@ -2510,57 +2512,82 @@ namespace graph::storage {
 							  propertyNames.begin());
 		}
 
-		[[nodiscard]] std::string defaultNodeIndexName(std::string_view label,
-													   std::span<const std::string> propertyNames) {
-			if (label.empty() || propertyNames.empty()) { // both callers validate a nonempty label and Property-key sequence before deriving a default name.
-				throw std::invalid_argument("logical node Index requires a label and at least one Property key");
-			}
-			std::string result = "index_node_" + std::to_string(label.size()) + "_" + std::string(label);
-			for (const std::string &property: propertyNames) {
-				result += "_" + std::to_string(property.size()) + "_" + property;
-			}
-			if (result.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES) {
-				throw std::invalid_argument("logical node Index default name exceeds the durable name bound; supply a "
-											"shorter explicit name");
-			}
-			return result;
-		}
+        [[nodiscard]] std::shared_ptr<query::execution::MaterializedByteBudget> ddlWriteWorkspace(
+                const std::shared_ptr<query::execution::detail::DatabaseResourceBudget> &domain) {
+            const auto maximum = domain->classMaximum(query::execution::detail::ResourceClass::RCK_WRITE);
+            if (maximum == 0U) throw query::execution::detail::ResourceAdmissionDenied();
+            auto account = std::make_shared<query::execution::detail::ResourceAccount>(
+                domain, query::execution::detail::ResourceClass::RCK_WRITE, maximum);
+            // Charge actual requests rather than monopolizing the whole WRITE class.
+            return std::make_shared<query::execution::MaterializedByteBudget>(maximum,
+                std::move(account), std::pmr::new_delete_resource());
+        }
 
-		[[nodiscard]] std::string normalizeVectorMetric(std::string_view metric) {
-			if (metric.empty() || metric.size() > RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES) {
-				throw std::invalid_argument("logical Vector Index requires a bounded nonempty distance metric");
-			}
-			std::string normalized;
-			normalized.reserve(metric.size());
-			for (const char character: metric) {
-				const unsigned char byte = static_cast<unsigned char>(character);
-				if (byte >= static_cast<unsigned char>('A') && byte <= static_cast<unsigned char>('Z')) {
-					normalized.push_back(static_cast<char>(byte - static_cast<unsigned char>('A') +
-														   static_cast<unsigned char>('a')));
-				} else {
-					normalized.push_back(character);
-				}
-			}
-			if (normalized == "inner_product" || normalized == "innerproduct") {
-				normalized = "ip";
-			}
-			if (normalized != "l2" && normalized != "ip" && normalized != "cosine") {
-				throw std::invalid_argument("logical Vector Index requires metric l2, ip, or cosine");
-			}
-			return normalized;
-		}
+        // A stack-only sizing pass rejects oversized names before any string heap
+        // request. The filling pass writes into one pre-admitted exact-size value.
+        struct DecimalNamePart {
+            std::array<char, std::numeric_limits<size_t>::digits10 + 1U> bytes{};
+            size_t size;
+            explicit DecimalNamePart(size_t value) {
+                const auto result = std::to_chars(bytes.data(), bytes.data() + bytes.size(), value);
+                if (result.ec != std::errc{}) throw std::length_error("index name decimal overflow");
+                size = static_cast<size_t>(result.ptr - bytes.data());
+            }
+            [[nodiscard]] std::string_view view() const { return {bytes.data(), size}; }
+        };
 
-		[[nodiscard]] std::string defaultNodeVectorIndexName(std::string_view label, std::string_view property,
-																 uint32_t dimensions, std::string_view metric) {
-			std::string result = "index_vector_node_" + std::to_string(label.size()) + "_" + std::string(label) + "_" +
-									 std::to_string(property.size()) + "_" + std::string(property) + "_" +
-									 std::to_string(dimensions) + "_" + std::string(metric);
-			if (result.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES) {
-				throw std::invalid_argument("logical Vector Index default name exceeds the durable name bound; supply "
-											"a shorter explicit name");
-			}
-			return result;
-		}
+        template<class Parts>
+        [[nodiscard]] utils::OwnedStdString boundedIndexName(Parts parts) {
+            size_t bytes = 0U;
+            parts([&](std::string_view part) {
+                if (part.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES - bytes)
+                    throw std::invalid_argument("logical Index default name exceeds the durable name bound; supply a shorter explicit name");
+                bytes += part.size();
+            });
+            utils::OwnedStdString result;
+            result.assign(bytes, '\0');
+            size_t offset = 0U;
+            parts([&](std::string_view part) {
+                std::copy(part.begin(), part.end(), result.data() + offset);
+                offset += part.size();
+            });
+            return result;
+        }
+
+        [[nodiscard]] utils::OwnedStdString defaultNodeIndexName(std::string_view label,
+                std::span<const std::string> propertyNames) {
+            if (label.empty() || propertyNames.empty())
+                throw std::invalid_argument("logical node Index requires a label and at least one Property key");
+            return boundedIndexName([&](auto emit) {
+                emit("index_node_"); emit(DecimalNamePart(label.size()).view()); emit("_"); emit(label);
+                for (const auto &property : propertyNames) {
+                    emit("_"); emit(DecimalNamePart(property.size()).view()); emit("_"); emit(property);
+                }
+            });
+        }
+
+        [[nodiscard]] utils::OwnedStdString normalizeVectorMetric(std::string_view metric) {
+            if (metric.empty() || metric.size() > RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES)
+                throw std::invalid_argument("logical Vector Index requires a bounded nonempty distance metric");
+            utils::OwnedStdString normalized;
+            normalized.assign(metric.size(), '\0');
+            std::transform(metric.begin(), metric.end(), normalized.begin(), [](unsigned char byte) {
+                return static_cast<char>(byte >= 'A' && byte <= 'Z' ? byte - 'A' + 'a' : byte);
+            });
+            if (normalized == "inner_product" || normalized == "innerproduct") normalized = "ip";
+            if (normalized != "l2" && normalized != "ip" && normalized != "cosine")
+                throw std::invalid_argument("logical Vector Index requires metric l2, ip, or cosine");
+            return normalized;
+        }
+
+        [[nodiscard]] utils::OwnedStdString defaultNodeVectorIndexName(std::string_view label,
+                std::string_view property, uint32_t dimensions, std::string_view metric) {
+            return boundedIndexName([&](auto emit) {
+                emit("index_vector_node_"); emit(DecimalNamePart(label.size()).view()); emit("_"); emit(label);
+                emit("_"); emit(DecimalNamePart(property.size()).view()); emit("_"); emit(property);
+                emit("_"); emit(DecimalNamePart(dimensions).view()); emit("_"); emit(metric);
+            });
+        }
 
 		[[nodiscard]] LogicalGraphIndexKind logicalIndexKind(IndexDefinitionKind kind) {
 			switch (kind) {
@@ -2625,7 +2652,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] LogicalGraphConstraintDefinition
-		logicalConstraintDefinition(const ConstraintDefinition &definition, std::string label) {
+		logicalConstraintDefinition(const ConstraintDefinition &definition, std::string_view label) {
 			const auto entityKind = definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE
 											? LogicalGraphConstraintEntityKind::LGCEK_NODE
 											: LogicalGraphConstraintEntityKind::LGCEK_EDGE;
@@ -4355,7 +4382,7 @@ namespace graph::storage {
 						"relocatable native exact Node lookup found a unique constraint without a support tree");
 			}
 			const BTreeIndex support(definition.constraint_id, *btree_pages_, *metadata_);
-			const std::vector<BTreePageEntry> candidates =
+			const utils::OwnedStdVector<BTreePageEntry> candidates =
 					support.scan(snapshot, ConstraintSupportTree::lowerBound(requestedKey),
 								 checkedBoundPlusOne(options_.maximum_constraint_support_collisions,
 										"relocatable native exact Node lookup collision bound overflowed"));
@@ -4533,7 +4560,7 @@ namespace graph::storage {
 				auto cursor = index.openRangeCursor(snapshot, std::optional(std::span<const std::byte>(*entryKey)),
 						options_.maximum_online_index_entries, BufferPoolReadHint::BPRH_SEQUENTIAL);
 				debug::PerfTrace::addValue("native_graph.read.index_candidate_root_descent", 1);
-				std::vector<BTreePageEntry> pending;
+				utils::OwnedStdVector<BTreePageEntry> pending;
 				pending.reserve(batchCapacity);
 				size_t totalCandidates = 0U;
 				const auto emit = [&]() -> bool {
@@ -4610,7 +4637,7 @@ namespace graph::storage {
 			// The stream path deliberately performs no unbounded result collection.
 			return IndexCandidateBatch{};
 		}
-			const std::vector<BTreePageEntry> candidates = index.scan(snapshot, *entryKey,
+			const utils::OwnedStdVector<BTreePageEntry> candidates = index.scan(snapshot, *entryKey,
 						checkedBoundPlusOne(maximumNodes, "relocatable native exact Node lookup result bound overflowed"));
 			IndexCandidateBatch result;
 			result.snapshot_generation = snapshot.superblock().generation.value();
@@ -4883,7 +4910,7 @@ namespace graph::storage {
 		// conservative per-row estimate keeps temporary staging bounded; the final
 		// authenticated batch byte check remains authoritative for variable values.
 		const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
-		std::vector<BTreePageEntry> pending;
+		utils::OwnedStdVector<BTreePageEntry> pending;
 		if (visitor != nullptr) {
 			pending.reserve(batchCapacity);
 		}
@@ -5403,7 +5430,7 @@ namespace graph::storage {
 			std::pmr::unordered_set<uint64_t> seen(&dedupMemory);
 			std::vector<LogicalGraphNode> result;
 			std::vector<uint64_t> resultNodeIds;
-			std::vector<BTreePageEntry> pending;
+			utils::OwnedStdVector<BTreePageEntry> pending;
 			const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
 			if (visitor != nullptr) {
 			pending.reserve(batchCapacity);
@@ -6123,7 +6150,7 @@ namespace graph::storage {
 		}
 		bool willTrain = false;
 		if (metadata_->findVectorManifestOptional(sourceSnapshot, definition->index_id).has_value()) {
-			const std::vector<BTreePageEntry> firstRecord =
+			const utils::OwnedStdVector<BTreePageEntry> firstRecord =
 					BTreeIndex(definition->index_id, *btree_pages_, *metadata_)
 							.scan(sourceSnapshot, std::nullopt, 1U, BufferPoolReadHint::BPRH_SEQUENTIAL,
 								  request.cancellation);
@@ -6236,7 +6263,7 @@ namespace graph::storage {
 			const size_t maximumPqManifestPages =
 					std::min(maximumPages, static_cast<size_t>(RSS_VECTOR_MANIFEST_MAX_ENTRIES) - nonPqManifestEntries);
 
-			const std::vector<BTreePageEntry> forward =
+			const utils::OwnedStdVector<BTreePageEntry> forward =
 					BTreeIndex(definition->index_id, *btree_pages_, *metadata_)
 							.scan(sourceSnapshot, std::nullopt, checkedBoundPlusOne(maximumRecords,
 									"relocatable logical Vector training record bound overflowed"),
@@ -6290,7 +6317,7 @@ namespace graph::storage {
 				failVectorTraining(FormatError::FERR_INVALID_STATE,
 								   "relocatable logical Vector training found duplicate semantic Vector IDs");
 			}
-			const std::vector<BTreePageEntry> reverse =
+			const utils::OwnedStdVector<BTreePageEntry> reverse =
 					BTreeIndex(manifest.vector_node_mapping_index_id, *btree_pages_, *metadata_)
 							.scan(sourceSnapshot, std::nullopt, checkedBoundPlusOne(maximumRecords,
 									"relocatable logical Vector training mapping bound overflowed"),
@@ -6753,12 +6780,12 @@ namespace graph::storage {
 
 	LogicalGraphIndexDefinition
 	RelocatableStorageBackend::createLogicalNodeIndex(const LogicalGraphNodeIndexCreateRequest &request) {
-		const std::vector<LogicalGraphIndexDefinition> created =
+		std::vector<LogicalGraphIndexDefinition> created =
 				createLogicalNodeIndexes(std::span<const LogicalGraphNodeIndexCreateRequest>(&request, 1U));
 		if (created.size() != 1U) {
 			throw std::logic_error("relocatable logical node Index creation did not return exactly one definition");
 		}
-		return created.front();
+		return std::move(created.front());
 	}
 
 	void RelocatableStorageBackend::rebuildLogicalTokenCardinalityStatistics(const std::function<void()> &checkpoint) {
@@ -7019,6 +7046,8 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Index");
 		}
 		requireNoIndeterminateWrite();
+        auto writeWorkspace = ddlWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope writeAllocation(writeWorkspace);
 		if (requests.empty() || requests.size() > options_.maximum_index_definitions ||
 			options_.maximum_online_index_entries == 0U || options_.maximum_online_index_scan_nodes == 0U ||
 			options_.maximum_online_index_pages == 0U || options_.online_index_sort_run_bytes == 0U ||
@@ -7029,30 +7058,42 @@ namespace graph::storage {
 
 		// Validate the complete request set before allocating labels or physical
 		// trees, so invalid batches cannot leave a logical schema side effect.
-		std::set<std::string, std::less<>> requestedNames;
-		std::set<std::pair<std::string, std::vector<std::string>>> requestedSchemas;
-		for (const LogicalGraphNodeIndexCreateRequest &request: requests) {
-			if (request.label.empty() || request.label.size() > RSS_TOKEN_DEFINITION_MAX_NAME_BYTES ||
-				request.property_keys.empty() || request.property_keys.size() > RSS_INDEX_DEFINITION_MAX_PROPERTIES) {
-				throw std::invalid_argument(
-						"relocatable logical node Index has an invalid label or Property-key sequence");
-			}
-			std::set<std::string, std::less<>> requestedProperties;
-			for (const std::string &property: request.property_keys) {
-				if (property.empty() || property.size() > RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES ||
-					!requestedProperties.insert(property).second) {
-					throw std::invalid_argument("relocatable logical node Index has an invalid Property-key sequence");
-				}
-			}
-			const std::string name =
-					request.name.empty() ? defaultNodeIndexName(request.label, request.property_keys) : request.name;
-			if (name.empty() || name.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES ||
-				!requestedNames.insert(name).second ||
-				!requestedSchemas.insert({request.label, request.property_keys}).second) {
-				throw std::invalid_argument(
-						"relocatable logical node Index batch contains a duplicate or invalid schema");
-			}
-		}
+        utils::OwnedStdVector<utils::OwnedStdString> requestedNames;
+        requestedNames.reserve(requests.size());
+        utils::OwnedStdVector<size_t> ordinals;
+        ordinals.reserve(requests.size());
+        for (const auto &request : requests) {
+            if (request.name.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES ||
+                request.label.empty() || request.label.size() > RSS_TOKEN_DEFINITION_MAX_NAME_BYTES ||
+                request.property_keys.empty() || request.property_keys.size() > RSS_INDEX_DEFINITION_MAX_PROPERTIES)
+                throw std::invalid_argument("relocatable logical node Index has an invalid label or Property-key sequence");
+            for (size_t i = 0; i < request.property_keys.size(); ++i) {
+                const auto &property = request.property_keys[i];
+                if (property.empty() || property.size() > RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES ||
+                    std::find(request.property_keys.begin(), request.property_keys.begin() + i, property) !=
+                        request.property_keys.begin() + i)
+                    throw std::invalid_argument("relocatable logical node Index has an invalid Property-key sequence");
+            }
+            requestedNames.push_back(request.name.empty() ? defaultNodeIndexName(request.label, request.property_keys)
+                                                         : utils::OwnedStdString(request.name));
+            if (requestedNames.back().empty() || requestedNames.back().size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES)
+                throw std::invalid_argument("relocatable logical node Index batch contains an invalid name");
+            ordinals.push_back(ordinals.size());
+        }
+        // Sort borrowed schema/name ordinals instead of copying request strings
+        // into unaccounted tree nodes. Per-request property count is format-bounded.
+        std::sort(ordinals.begin(), ordinals.end(), [&](size_t a, size_t b) { return requestedNames[a] < requestedNames[b]; });
+        for (size_t i = 1; i < ordinals.size(); ++i)
+            if (requestedNames[ordinals[i-1]] == requestedNames[ordinals[i]])
+                throw std::invalid_argument("relocatable logical node Index batch contains a duplicate name");
+        std::sort(ordinals.begin(), ordinals.end(), [&](size_t a, size_t b) {
+            return std::tie(requests[a].label, requests[a].property_keys) < std::tie(requests[b].label, requests[b].property_keys);
+        });
+        for (size_t i = 1; i < ordinals.size(); ++i) {
+            const auto &a = requests[ordinals[i-1]], &b = requests[ordinals[i]];
+            if (a.label == b.label && a.property_keys == b.property_keys)
+                throw std::invalid_argument("relocatable logical node Index batch contains a duplicate schema");
+        }
 
 		std::vector<LogicalGraphIndexDefinition> result;
 		result.reserve(requests.size());
@@ -7074,8 +7115,7 @@ namespace graph::storage {
 		for (size_t requestIndex = 0U; requestIndex < requests.size(); ++requestIndex) {
 			const LogicalGraphNodeIndexCreateRequest &request = requests[requestIndex];
 			IndexDefinition definition;
-			definition.name =
-					request.name.empty() ? defaultNodeIndexName(request.label, request.property_keys) : request.name;
+			definition.name = requestedNames[requestIndex];
 			definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
 			definition.kind = request.property_keys.size() == 1U ? IndexDefinitionKind::IDK_PROPERTY
 																 : IndexDefinitionKind::IDK_COMPOSITE;
@@ -7312,6 +7352,10 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Vector Index");
 		}
 		requireNoIndeterminateWrite();
+        auto writeWorkspace = ddlWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope writeAllocation(writeWorkspace);
+        if (request.label.size() > RSS_TOKEN_DEFINITION_MAX_NAME_BYTES || request.name.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "logical schema name exceeds its durable byte bound");
 		if (request.label.empty() || request.property_key.empty() ||
 			request.property_key.size() > RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES || request.dimensions == 0U ||
 			request.dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS || options_.maximum_online_index_entries == 0U ||
@@ -7319,7 +7363,7 @@ namespace graph::storage {
 			throw std::invalid_argument(
 					"relocatable logical Vector Index creation requires bounded nonempty node schema and dimensions");
 		}
-		const std::string metric = normalizeVectorMetric(request.metric);
+		const utils::OwnedStdString metric = normalizeVectorMetric(request.metric);
 
 
 		std::lock_guard<std::mutex> lock(native_publication_mutex_);
@@ -7328,7 +7372,7 @@ namespace graph::storage {
 		IndexDefinition definition;
 		definition.name = request.name.empty() ? defaultNodeVectorIndexName(request.label, request.property_key,
 																			request.dimensions, metric)
-											   : request.name;
+											   : utils::OwnedStdString(request.name);
 		definition.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
 		definition.kind = IndexDefinitionKind::IDK_VECTOR;
 		definition.label_token_id =
@@ -7434,14 +7478,15 @@ namespace graph::storage {
 		if (checkpoint) checkpoint();
 		catalogSession.finish();
 		if (checkpoint) checkpoint();
+        LogicalGraphIndexDefinition result{definition.index_id,	 definition.name,			LogicalGraphIndexKind::LGIK_VECTOR,
+				request.label,			 definition.property_names, definition.vector_dimensions,
+				definition.vector_metric};
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
 		if (!committed.committed()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical Vector Index lost its native publication fence");
 		}
-		return {definition.index_id,	 definition.name,			LogicalGraphIndexKind::LGIK_VECTOR,
-				request.label,			 definition.property_names, definition.vector_dimensions,
-				definition.vector_metric};
+		return result;
 	}
 
 	bool RelocatableStorageBackend::dropLogicalIndexByName(std::string_view name) {
@@ -7453,6 +7498,8 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable logical Index drop requires a nonempty name");
 		}
 		requireNoIndeterminateWrite();
+        auto writeWorkspace = ddlWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope writeAllocation(writeWorkspace);
 		bool dropped = false;
 		std::lock_guard<std::mutex> publicationLock(native_publication_mutex_);
 		{
@@ -7513,16 +7560,23 @@ namespace graph::storage {
 		return dropLogicalIndexByName(name);
 	}
 
-	std::vector<LogicalGraphIndexDefinition>
-	RelocatableStorageBackend::listLogicalIndexes(size_t maximumIndexes) const {
+    std::vector<LogicalGraphIndexDefinition>
+    RelocatableStorageBackend::listLogicalIndexes(size_t maximumIndexes) const {
+        return listOwnedLogicalIndexes(maximumIndexes);
+    }
+
+    utils::OwnedStdVector<LogicalGraphIndexDefinition>
+    RelocatableStorageBackend::listOwnedLogicalIndexes(size_t maximumIndexes) const {
 		requireOpen();
 		if (maximumIndexes == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 					"relocatable logical Index list requires a positive result bound");
 		}
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		const utils::OwnedStdVector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
-		std::vector<LogicalGraphIndexDefinition> result;
+		utils::OwnedStdVector<LogicalGraphIndexDefinition> result;
 		result.reserve(definitions.size());
 		for (const IndexDefinition &definition: definitions) {
 			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
@@ -7543,7 +7597,7 @@ namespace graph::storage {
 								  definition.vector_metric});
 				continue;
 			}
-			const std::optional<SystemCatalogSchemaToken> label = system_catalog_->findSchemaToken(
+			const auto label = system_catalog_->findOwnedSchemaToken(
 					snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, definition.label_token_id);
 			if (!label.has_value()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -7569,6 +7623,10 @@ namespace graph::storage {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical constraint");
 		}
 		requireNoIndeterminateWrite();
+        auto writeWorkspace = ddlWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope writeAllocation(writeWorkspace);
+        if (request.label.size() > RSS_TOKEN_DEFINITION_MAX_NAME_BYTES)
+            throw FormatException(FormatError::FERR_INVALID_HEADER, "logical schema name exceeds its durable byte bound");
 		if (request.name.empty() || request.name.size() > RSS_CONSTRAINT_DEFINITION_MAX_NAME_BYTES ||
 			request.label.empty() || request.property_keys.empty() ||
 			request.property_keys.size() > RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES ||
@@ -7595,7 +7653,7 @@ namespace graph::storage {
 						? SystemCatalogSchemaTokenKind::SCSTK_LABEL
 						: SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE;
 		definition.schema_token_id = catalogSession.ensureSchemaToken(schemaKind, request.label);
-		std::map<std::string, uint32_t, std::less<>> requestedPropertyTokens;
+		utils::OwnedMap<utils::OwnedStdString, uint32_t, std::less<>> requestedPropertyTokens;
 		for (const std::string &property: definition.property_names) {
 			requestedPropertyTokens.emplace(property, catalogSession.ensurePropertyToken(property));
 		}
@@ -7666,12 +7724,13 @@ namespace graph::storage {
 		if (checkpoint) checkpoint();
 		catalogSession.finish();
 		if (checkpoint) checkpoint();
+        auto result = logicalConstraintDefinition(definition, request.label);
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
 		if (!committed.committed()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical constraint lost its native publication fence");
 		}
-		return logicalConstraintDefinition(definition, request.label);
+		return result;
 	}
 
 	bool RelocatableStorageBackend::dropLogicalConstraintByName(std::string_view name) {
@@ -7683,6 +7742,8 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable logical constraint drop requires a nonempty name");
 		}
 		requireNoIndeterminateWrite();
+        auto writeWorkspace = ddlWriteWorkspace(resource_domain_);
+        utils::OwnedAllocationScope writeAllocation(writeWorkspace);
 		std::lock_guard<std::mutex> lock(native_publication_mutex_);
 		NativeGraphWriteTransaction transaction = native_graph_write_planner_->beginTransaction();
 		const std::optional<ConstraintDefinition> canonical =
@@ -7703,21 +7764,28 @@ namespace graph::storage {
 		return false;
 	}
 
-	std::vector<LogicalGraphConstraintDefinition>
-	RelocatableStorageBackend::listLogicalConstraints(size_t maximumConstraints) const {
+    std::vector<LogicalGraphConstraintDefinition>
+    RelocatableStorageBackend::listLogicalConstraints(size_t maximumConstraints) const {
+        return listOwnedLogicalConstraints(maximumConstraints);
+    }
+
+    utils::OwnedStdVector<LogicalGraphConstraintDefinition>
+    RelocatableStorageBackend::listOwnedLogicalConstraints(size_t maximumConstraints) const {
 		requireOpen();
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+        utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
+            : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		const utils::OwnedStdVector<ConstraintDefinition> definitions =
 				readAllConstraintDefinitions(snapshot, maximumConstraints);
-		std::vector<LogicalGraphConstraintDefinition> result;
+		utils::OwnedStdVector<LogicalGraphConstraintDefinition> result;
 		result.reserve(definitions.size());
 		for (const ConstraintDefinition &definition: definitions) {
 			const SystemCatalogSchemaTokenKind schemaKind =
 					definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE
 							? SystemCatalogSchemaTokenKind::SCSTK_LABEL
 							: SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE;
-			const std::optional<SystemCatalogSchemaToken> schema =
-					system_catalog_->findSchemaToken(snapshot, schemaKind, definition.schema_token_id);
+			const auto schema =
+					system_catalog_->findOwnedSchemaToken(snapshot, schemaKind, definition.schema_token_id);
 			if (!schema.has_value() || schema->name.empty()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable logical constraint list found an unknown native schema Token");
@@ -8069,7 +8137,7 @@ namespace graph::storage {
 						FormatError::FERR_INVALID_STATE,
 						"relocatable integrity verification found a Node KEY whose Property-key Token is absent");
 			}
-			const std::vector<BTreePageEntry> actual =
+			const utils::OwnedStdVector<BTreePageEntry> actual =
 					BTreeIndex(definition.constraint_id, *btree_pages_, *metadata_)
 							.scan(snapshot, std::nullopt, checkedBoundPlusOne(options_.maximum_online_index_entries,
 									"relocatable integrity verification index bound overflowed"));

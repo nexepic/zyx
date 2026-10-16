@@ -214,7 +214,7 @@ namespace graph::storage {
 									const VectorManifest &manifest, uint64_t indexId,
 									std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries,
 									bool requireExactCodes, const CancellationCheckpoint *cancellation) {
-			const std::vector<BTreePageEntry> mapping =
+			const utils::OwnedStdVector<BTreePageEntry> mapping =
 					BTreeIndex(manifest.pq_mapping_index_id, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U,
 							BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 			if (requireExactCodes && mapping.size() != expected.size()) {
@@ -285,7 +285,7 @@ namespace graph::storage {
 									 std::span<const VectorAdjacencyMaterializationRecord> expected,
 									 size_t maximumEntries, bool requireExactRecords,
 									 const CancellationCheckpoint *cancellation) {
-			const std::vector<BTreePageEntry> mapping = BTreeIndex(manifest.adjacency_mapping_index_id, trees, metadata)
+			const utils::OwnedStdVector<BTreePageEntry> mapping = BTreeIndex(manifest.adjacency_mapping_index_id, trees, metadata)
 					.scan(snapshot, std::nullopt, maximumEntries + 1U, BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 			if (requireExactRecords && mapping.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -581,7 +581,7 @@ namespace graph::storage {
 					trees.planTreeRetirement(source, base.delta_mapping_index_id, options.maximum_delta_mapping_pages);
 		}
 
-		std::vector<BTreePageEntry> pqEntries;
+		utils::OwnedStdVector<BTreePageEntry> pqEntries;
 		pqEntries.reserve(pqRecords.size());
 		for (const PqVectorMaterializationRecord &record: pqRecords) {
 			checkCancellation(cancellation);
@@ -600,7 +600,7 @@ namespace graph::storage {
 					? trees.planReplacementTreeMutation(source, options.pq.mapping_index_id, pqEntries, pqBinder)
 					: trees.planInitialTreeMutation(source, options.pq.mapping_index_id, pqEntries, pqBinder);
 
-		std::vector<BTreePageEntry> adjacencyEntries;
+		utils::OwnedStdVector<BTreePageEntry> adjacencyEntries;
 		adjacencyEntries.reserve(adjacencyGraph.records.size());
 		for (const VectorAdjacencyMaterializationRecord &record: adjacencyGraph.records) {
 			checkCancellation(cancellation);

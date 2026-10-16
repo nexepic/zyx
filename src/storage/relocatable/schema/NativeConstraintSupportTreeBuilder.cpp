@@ -104,7 +104,7 @@ namespace graph::storage {
 			bool hasDigest = false;
 			std::vector<std::vector<std::byte>> canonicalGroup;
 			for (;;) {
-				std::vector<BTreePageEntry> entries;
+				utils::OwnedStdVector<BTreePageEntry> entries;
 				entries.reserve(batchEntries);
 				while (entries.size() < batchEntries) {
 					const std::optional<BTreePageEntry> next = cursor();

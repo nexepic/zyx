@@ -1,0 +1,27 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1628,
+  "selected_suites": 113,
+  "logical_schema_heap_probe": {
+    "mode": "owned-logical-schema-heap-accounting",
+    "shape_cases": 4,
+    "maximum_uncovered_private_bytes": 0,
+    "passed": true
+  },
+  "pre_backend_quota_cases": 6,
+  "query_result_retains_after_close_test": true,
+  "worker_sha256": "c01c91fa7ab0f364138077484d0f70990a14f29d3fc64885e20b0cef63acced0",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "DDL WRITE workspace and raw request/validation temporaries",
+    "token-definition string ownership",
+    "result debug-STL move bookkeeping",
+    "manual ReadRuntime result relocation",
+    "closures/CSV/bindings/AST/builtin/GDS workspaces",
+    "remaining S5/S6 contracts"
+  ]
+}

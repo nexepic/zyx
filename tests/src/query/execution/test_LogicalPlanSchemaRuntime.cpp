@@ -1,3 +1,4 @@
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 /**
  * @file test_LogicalPlanSchemaRuntime.cpp
  * @brief Tests for the fail-closed logical schema runtime.
@@ -7,6 +8,7 @@
  */
 
 #include <memory>
+#include <array>
 #include <chrono>
 #include <thread>
 #include <optional>
@@ -592,5 +594,54 @@ namespace graph::query::execution {
 										   storage::LogicalGraphConstraintPropertyType::LGCPT_NONE}};
 		EXPECT_THROW(static_cast<void>(runtime.execute(show, 8U, QueryContext{})), std::runtime_error);
 	}
+
+
+    TEST(LogicalPlanSchemaRuntimeTest, ConfirmationQuotaDenialPrecedesEveryWritingBackendBoundary) {
+        logical::LogicalCreateIndex scalar("name", "Person", "name");
+        logical::LogicalCreateVectorIndex vector("embedding", "Person", "embedding", 3, "l2");
+        logical::LogicalCreateConstraint constraint("required", "node", "not_null", "Person", {"name"}, "");
+        logical::LogicalDropIndex dropName("name", "", "");
+        logical::LogicalDropIndex dropSchema("", "Person", "name");
+        logical::LogicalDropConstraint dropConstraint("required", false);
+        for (const auto *operation : std::array<const logical::LogicalOperator *, 6U>{
+                &scalar, &vector, &constraint, &dropName, &dropSchema, &dropConstraint}) {
+            SchemaBackend backend;
+            LogicalPlanSchemaRuntime runtime(backend);
+            auto process = std::make_shared<detail::ProcessResourceBudget>(detail::ResourceLimits::uniform(1024U));
+            auto database = std::make_shared<detail::DatabaseResourceBudget>(process, detail::ResourceLimits::uniform(1024U));
+            QueryContext context;
+            context.resource_account = std::make_shared<detail::ResourceAccount>(database, detail::ResourceClass::RCK_QUERY, 1U);
+            EXPECT_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)), detail::ResourceAdmissionDenied);
+            EXPECT_EQ(backend.calls, 0U);
+            EXPECT_TRUE(backend.definitions.empty()); EXPECT_TRUE(backend.constraint_definitions.empty());
+            EXPECT_EQ(context.resource_account->used(), 0U);
+        }
+    }
+
+    TEST(LogicalPlanSchemaRuntimeTest, RawSchemaRequestCopiesAreAdmittedBeforeCallingTheBackend) {
+        const std::string name(4096U, 'n'), label(4096U, 'l');
+        const logical::LogicalCreateIndex scalar(name, label, "value");
+        const logical::LogicalCreateVectorIndex vector(name, label, "embedding", 2, "l2");
+        const logical::LogicalCreateConstraint constraint(name, "node", "unique", label, {"value"}, "");
+        for (const auto *operation : std::array<const logical::LogicalOperator *, 3U>{&scalar, &vector, &constraint}) {
+            SchemaBackend backend;
+            LogicalPlanSchemaRuntime runtime(backend);
+            auto process = std::make_shared<detail::ProcessResourceBudget>(detail::ResourceLimits::uniform(4096U));
+            auto database = std::make_shared<detail::DatabaseResourceBudget>(process, detail::ResourceLimits::uniform(4096U));
+            QueryContext context;
+            context.resource_account = std::make_shared<detail::ResourceAccount>(database, detail::ResourceClass::RCK_QUERY, 4096U);
+            // This budget admits a normal confirmation and request, so the
+            // long request is not hidden behind the confirmation's own limit.
+            {
+                const logical::LogicalCreateIndex small("small", "User", "age");
+                auto result = runtime.execute(small, 8U, context);
+                EXPECT_EQ(result.rowCount(), 1U);
+            }
+            backend.calls = 0U; backend.definitions.clear();
+            EXPECT_THROW(static_cast<void>(runtime.execute(*operation, 8U, context)), MaterializedByteLimitExceeded);
+            EXPECT_EQ(backend.calls, 0U);
+            EXPECT_EQ(context.resource_account->used(), 0U);
+        }
+    }
 
 } // namespace graph::query::execution

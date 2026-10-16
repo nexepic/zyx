@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "graph/utils/OwnedStdVector.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -71,12 +72,13 @@ namespace graph::storage {
 	};
 
 	struct BTreePageEntry {
-		std::vector<std::byte> key;
+        using OwnedHeapElement = void;
+		utils::OwnedStdVector<std::byte> key;
 		// Leaf pages interpret this as an index payload; internal pages interpret
 		// it as the PageId of the child to the right of the separator.
 		uint64_t value_or_child = 0;
 
-		constexpr bool operator==(const BTreePageEntry &) const = default;
+		bool operator==(const BTreePageEntry &) const = default;
 	};
 
 	class BTreePageHeaderCodec final {
@@ -103,14 +105,14 @@ namespace graph::storage {
 			BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		// Exact sizes of entries.first(i) and entries.subspan(i), including
 		// independently aligned restart tables. Validates all entries once.
-		struct BoundarySizes { std::vector<size_t> prefixes; std::vector<size_t> suffixes; };
+		struct BoundarySizes { utils::OwnedStdVector<size_t> prefixes; utils::OwnedStdVector<size_t> suffixes; };
 		[[nodiscard]] static BoundarySizes encodedBoundarySizes(BTreeNodeKind kind,
 			std::span<const BTreePageEntry> entries,
 			BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		[[nodiscard]] static std::vector<std::byte>
 		encode(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
-		[[nodiscard]] static std::vector<BTreePageEntry>
+		[[nodiscard]] static utils::OwnedStdVector<BTreePageEntry>
 		decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		// Checks only the fixed payload envelope and restart table. Page-local point
@@ -134,6 +136,12 @@ namespace graph::storage {
 		[[nodiscard]] static BTreePage createWithEntries(const PageOwnerHeader &owner, BTreePageHeader header,
 														 std::span<const BTreePageEntry> entries);
 		[[nodiscard]] static BTreePage open(const PageOwnerHeader &owner, std::span<const std::byte> bytes);
+        // Adopt an already authenticated slotted page without serializing a second image.
+        [[nodiscard]] static BTreePage open(SlottedPage page);
+        [[nodiscard]] static BTreePage openDecoded(SlottedPage page, utils::OwnedStdVector<BTreePageEntry> &decodedEntries);
+        [[nodiscard]] static BTreePage openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
+            utils::OwnedStdVector<BTreePageEntry> &decodedEntries);
+        [[nodiscard]] static BTreePage openDecoded(SlottedPage page, std::vector<BTreePageEntry> &decodedEntries);
 		// Returns the same complete canonical validation to an owning read cursor.
 		[[nodiscard]] static BTreePage openDecoded(const PageOwnerHeader &owner, std::span<const std::byte> bytes,
 			std::vector<BTreePageEntry> &decodedEntries);
@@ -143,7 +151,7 @@ namespace graph::storage {
 		BTreePage &operator=(BTreePage &&other) noexcept;
 
 		[[nodiscard]] BTreePageHeader header() const;
-		[[nodiscard]] std::vector<BTreePageEntry> entries() const;
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> entries() const;
 		[[nodiscard]] std::optional<BTreePageEntry> find(std::span<const std::byte> key) const;
 		// Rebuilds the typed page under a new physical-page owner while retaining
 		// the stable Page ID, tree links, and entries. B+Tree slot IDs are page-
@@ -156,7 +164,7 @@ namespace graph::storage {
 
 	private:
 		explicit BTreePage(SlottedPage page);
-		[[nodiscard]] std::vector<BTreePageEntry> packedEntries() const;
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> packedEntries() const;
 		[[nodiscard]] SlottedSlotReference validatePackedEnvelope() const;
 		void writePackedEntries(std::span<const BTreePageEntry> entries);
 		void validateLayout() const;

@@ -480,6 +480,8 @@ namespace graph::storage {
 		createLogicalNodeVectorIndex(const LogicalGraphNodeVectorIndexCreateRequest &request) override;
 		[[nodiscard]] bool dropLogicalIndexByName(std::string_view name) override;
 		[[nodiscard]] bool dropLogicalNodeIndexBySchema(std::string_view label, std::string_view propertyKey) override;
+        [[nodiscard]] utils::OwnedStdVector<LogicalGraphIndexDefinition> listOwnedLogicalIndexes(size_t maximumIndexes) const override;
+        [[nodiscard]] utils::OwnedStdVector<LogicalGraphConstraintDefinition> listOwnedLogicalConstraints(size_t maximumConstraints) const override;
 		[[nodiscard]] std::vector<LogicalGraphIndexDefinition> listLogicalIndexes(size_t maximumIndexes) const override;
 		[[nodiscard]] LogicalGraphConstraintDefinition
 		createLogicalConstraint(const LogicalGraphConstraintCreateRequest &request) override;

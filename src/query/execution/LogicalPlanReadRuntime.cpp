@@ -493,8 +493,10 @@ namespace graph::query::execution {
 				const size_t requestedGrowthBytes = detail::standardAllocatorRequestBytes(
 					checkedSizeMul(requestedCapacity, sizeof(QueryResult::Row),
 						"logical-plan result row capacity overflowed"), alignof(QueryResult::Row));
-				const size_t transientBytes =
-						checkedSizeAdd(nextBytes, requestedGrowthBytes, "logical-plan result growth peak overflowed");
+                const size_t relocationBytes = graph::query::detail::resultRowsRelocationHeapUpper(result.getRows());
+				const size_t transientBytes = checkedSizeAdd(nextBytes,
+                    checkedSizeAdd(requestedGrowthBytes, relocationBytes, "logical-plan result relocation peak overflowed"),
+                    "logical-plan result growth peak overflowed");
 				state.shared.final_result_reservation.set(transientBytes);
 				try {
 					result.reserveRows(requestedCapacity);

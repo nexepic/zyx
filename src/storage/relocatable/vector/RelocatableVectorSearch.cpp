@@ -470,7 +470,7 @@ namespace graph::storage {
 		searchExact(const MetadataSnapshotPin &snapshot, const IndexDefinition &definition,
 					const VectorManifest &manifest, const LogicalGraphVectorSearchRequest &request,
 					BTreePageStore &trees, VectorPageStore &vectors, RelocatableMetadataStore &metadata) {
-			const std::vector<BTreePageEntry> mappings =
+			const utils::OwnedStdVector<BTreePageEntry> mappings =
 					BTreeIndex(definition.index_id, trees, metadata)
 							.scan(snapshot, std::nullopt, request.maximum_mapping_entries + 1U,
 								  BufferPoolReadHint::BPRH_SEQUENTIAL, request.cancellation);

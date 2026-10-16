@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <array>
 #include "graph/query/api/QueryResult.hpp"
 
 namespace graph::query {
@@ -69,8 +70,10 @@ TEST(QueryResultResourcesTest, DeepCopyHasAnIndependentChargeAndMoveTransfersItO
 		EXPECT_EQ(original.rowCount(), 1U); EXPECT_EQ(copy.rowCount(), 2U);
 		const auto combined = account->used();
 		QueryResult moved(std::move(copy));
-		EXPECT_EQ(account->used(), combined); EXPECT_EQ(moved.rowCount(), 2U);
-		EXPECT_EQ(copy.retainedResourceBytes(), 0U);
+		EXPECT_EQ(account->used(), combined + 3U * utils::detail::standardContainerProxyBytes());
+        EXPECT_EQ(moved.rowCount(), 2U);
+        EXPECT_TRUE(copy.getRows().empty());
+        EXPECT_EQ(copy.retainedResourceBytes(), 3U * utils::detail::standardContainerProxyBytes());
 	}
 	EXPECT_EQ(account->used(), originalBytes);
 }
@@ -155,5 +158,71 @@ TEST(QueryResultResourcesTest, NewEmptyResultRejectsAnAlreadyChargedLease) {
 	EXPECT_THROW((void)QueryResult(std::move(lease)), std::invalid_argument);
 	EXPECT_EQ(account->used(), 0U);
 }
+TEST(QueryResultResourcesTest, StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput) {
+    auto account = resultAccount(8192U);
+    const std::string wide(16384U, 'w');
+    const std::array<std::string_view, 1U> columns{"value"};
+    const std::array<StringResultField, 1U> original{{{"value", "old"}}};
+    const std::array<StringResultField, 1U> denied{{{"value", wide}}};
+    {
+        QueryResult result{ResourceLease(account)};
+        result.setColumnViews(columns); result.addStringRow(original);
+        const auto retained = account->used();
+        EXPECT_THROW(result.addStringRow(denied), ResourceAdmissionDenied);
+        const std::array<std::string_view, 1U> deniedColumns{wide};
+        EXPECT_THROW(result.setColumnViews(deniedColumns), ResourceAdmissionDenied);
+        EXPECT_EQ(account->used(), retained);
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(std::get<std::string>(result.getRows()[0].at("value").asPrimitive().getVariant()), "old");
+        EXPECT_EQ(result.getColumns().front(), "value");
+        const std::vector<std::string> pieces{"left", "right"};
+        const std::array<StringResultField, 1U> joined{StringResultField::joined("value", pieces, ":")};
+        result.addStringRow(joined);
+        EXPECT_EQ(std::get<std::string>(result.getRows()[1].at("value").asPrimitive().getVariant()), "left:right");
+    }
+    EXPECT_EQ(account->used(), 0U);
+}
+
+TEST(QueryResultResourcesTest, DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows) {
+    auto account = resultAccount();
+    QueryResult result{ResourceLease(account)};
+    const std::array<StringResultField, 1U> initial{{{"value", "old"}}};
+    result.addStringRow(initial);
+    const auto retained = account->used();
+    const std::array<StringResultField, 2U> repeated{{{"value", "first"}, {"value", "second"}}};
+    EXPECT_THROW(result.addStringRow(repeated), std::invalid_argument);
+    EXPECT_EQ(account->used(), retained);
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(std::get<std::string>(result.getRows()[0].at("value").asPrimitive().getVariant()), "old");
+}
+
+TEST(QueryResultResourcesTest, MoveUnderFullAccountEitherTransfersOrRejectsBeforeChangingTheSource) {
+    auto account = resultAccount();
+    {
+        QueryResult source{ResourceLease(account)};
+        source.addStringRow(std::array<StringResultField, 1U>{{{"value", "kept"}}});
+        const auto original = source.retainedResourceBytes();
+        ResourceLease pressure(account); pressure.set(account->available());
+        const auto full = account->used();
+        if constexpr (utils::detail::standardContainerProxyBytes() != 0U) {
+            EXPECT_THROW((void)QueryResult(std::move(source)), ResourceAdmissionDenied);
+            EXPECT_EQ(source.rowCount(), 1U);
+            EXPECT_EQ(source.retainedResourceBytes(), original);
+            EXPECT_EQ(account->used(), full);
+            pressure.reset();
+            QueryResult moved(std::move(source));
+            EXPECT_EQ(moved.rowCount(), 1U);
+            EXPECT_EQ(account->used(), moved.retainedResourceBytes() + source.retainedResourceBytes());
+        } else {
+            QueryResult moved(std::move(source));
+            EXPECT_EQ(moved.rowCount(), 1U);
+            EXPECT_TRUE(source.getRows().empty());
+            EXPECT_EQ(account->used(), full);
+            EXPECT_EQ(moved.retainedResourceBytes(), original);
+        }
+    }
+    EXPECT_EQ(account->used(), 0U);
+}
+
 } // namespace
 } // namespace graph::query

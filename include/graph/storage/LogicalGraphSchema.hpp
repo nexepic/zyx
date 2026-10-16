@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -27,13 +31,14 @@ namespace graph::storage {
 	};
 
 	struct LogicalGraphIndexDefinition {
+        using OwnedHeapElement = void;
 		uint64_t index_id = 0U;
-		std::string name;
+		utils::OwnedStdString name;
 		LogicalGraphIndexKind kind = LogicalGraphIndexKind::LGIK_PROPERTY;
-		std::string label;
-		std::vector<std::string> property_keys;
+		utils::OwnedStdString label;
+		utils::OwnedStringVector property_keys;
 		uint32_t vector_dimensions = 0U;
-		std::string vector_metric;
+		utils::OwnedStdString vector_metric;
 
 		bool operator==(const LogicalGraphIndexDefinition &) const = default;
 	};
@@ -85,12 +90,13 @@ namespace graph::storage {
 	};
 
 	struct LogicalGraphConstraintDefinition {
+        using OwnedHeapElement = void;
 		uint64_t constraint_id = 0U;
-		std::string name;
+		utils::OwnedStdString name;
 		LogicalGraphConstraintEntityKind entity_kind = LogicalGraphConstraintEntityKind::LGCEK_NODE;
 		LogicalGraphConstraintKind kind = LogicalGraphConstraintKind::LGCK_UNIQUE;
-		std::string label;
-		std::vector<std::string> property_keys;
+		utils::OwnedStdString label;
+		utils::OwnedStringVector property_keys;
 		LogicalGraphConstraintPropertyType property_type = LogicalGraphConstraintPropertyType::LGCPT_NONE;
 
 		bool operator==(const LogicalGraphConstraintDefinition &) const = default;
@@ -162,6 +168,12 @@ namespace graph::storage {
 		[[nodiscard]] virtual bool dropLogicalConstraintByName(std::string_view name) = 0;
 		[[nodiscard]] virtual std::vector<LogicalGraphConstraintDefinition>
 		listLogicalConstraints(size_t maximumConstraints) const = 0;
+        // Legacy arrays remain caller-owned; native implementations admit backing before allocation.
+        [[nodiscard]] virtual utils::OwnedStdVector<LogicalGraphIndexDefinition>
+        listOwnedLogicalIndexes(size_t maximumIndexes) const { return listLogicalIndexes(maximumIndexes); }
+        [[nodiscard]] virtual utils::OwnedStdVector<LogicalGraphConstraintDefinition>
+        listOwnedLogicalConstraints(size_t maximumConstraints) const { return listLogicalConstraints(maximumConstraints); }
+
 	};
 
 } // namespace graph::storage

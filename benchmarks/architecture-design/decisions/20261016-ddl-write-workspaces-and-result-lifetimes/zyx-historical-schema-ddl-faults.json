@@ -1,0 +1,813 @@
+{
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    }
+  ],
+  "allocation_sweeps": {
+    "schema-ddl": {
+      "probe": {
+        "mode": "schema-ddl-allocation-fault",
+        "selected_fault": 18446744073709551615,
+        "fault_triggered": false,
+        "allocation_attempts": 5898,
+        "published": true,
+        "passed": true
+      },
+      "baseline_allocations": 5898,
+      "tested_allocations": 96,
+      "exhaustive": false,
+      "cases": [
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 0,
+          "fault_triggered": true,
+          "allocation_attempts": 1,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 62,
+          "fault_triggered": true,
+          "allocation_attempts": 63,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 124,
+          "fault_triggered": true,
+          "allocation_attempts": 125,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 186,
+          "fault_triggered": true,
+          "allocation_attempts": 187,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 248,
+          "fault_triggered": true,
+          "allocation_attempts": 249,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 310,
+          "fault_triggered": true,
+          "allocation_attempts": 311,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 372,
+          "fault_triggered": true,
+          "allocation_attempts": 373,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 434,
+          "fault_triggered": true,
+          "allocation_attempts": 435,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 496,
+          "fault_triggered": true,
+          "allocation_attempts": 497,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 558,
+          "fault_triggered": true,
+          "allocation_attempts": 559,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 620,
+          "fault_triggered": true,
+          "allocation_attempts": 621,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 682,
+          "fault_triggered": true,
+          "allocation_attempts": 683,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 744,
+          "fault_triggered": true,
+          "allocation_attempts": 745,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 806,
+          "fault_triggered": true,
+          "allocation_attempts": 807,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 869,
+          "fault_triggered": true,
+          "allocation_attempts": 870,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 931,
+          "fault_triggered": true,
+          "allocation_attempts": 932,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 993,
+          "fault_triggered": true,
+          "allocation_attempts": 994,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1055,
+          "fault_triggered": true,
+          "allocation_attempts": 1056,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1117,
+          "fault_triggered": true,
+          "allocation_attempts": 1118,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1179,
+          "fault_triggered": true,
+          "allocation_attempts": 1180,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1241,
+          "fault_triggered": true,
+          "allocation_attempts": 1242,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1303,
+          "fault_triggered": true,
+          "allocation_attempts": 1304,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1365,
+          "fault_triggered": true,
+          "allocation_attempts": 1366,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1427,
+          "fault_triggered": true,
+          "allocation_attempts": 1428,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1489,
+          "fault_triggered": true,
+          "allocation_attempts": 1490,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1551,
+          "fault_triggered": true,
+          "allocation_attempts": 1552,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1613,
+          "fault_triggered": true,
+          "allocation_attempts": 1614,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1675,
+          "fault_triggered": true,
+          "allocation_attempts": 1676,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1738,
+          "fault_triggered": true,
+          "allocation_attempts": 1739,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1800,
+          "fault_triggered": true,
+          "allocation_attempts": 1801,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1862,
+          "fault_triggered": true,
+          "allocation_attempts": 1863,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1924,
+          "fault_triggered": true,
+          "allocation_attempts": 1925,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 1986,
+          "fault_triggered": true,
+          "allocation_attempts": 1987,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2048,
+          "fault_triggered": true,
+          "allocation_attempts": 2049,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2110,
+          "fault_triggered": true,
+          "allocation_attempts": 2111,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2172,
+          "fault_triggered": true,
+          "allocation_attempts": 2173,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2234,
+          "fault_triggered": true,
+          "allocation_attempts": 2235,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2296,
+          "fault_triggered": true,
+          "allocation_attempts": 2297,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2358,
+          "fault_triggered": true,
+          "allocation_attempts": 2359,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2420,
+          "fault_triggered": true,
+          "allocation_attempts": 2421,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2482,
+          "fault_triggered": true,
+          "allocation_attempts": 2483,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2545,
+          "fault_triggered": true,
+          "allocation_attempts": 2546,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2607,
+          "fault_triggered": true,
+          "allocation_attempts": 2608,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2669,
+          "fault_triggered": true,
+          "allocation_attempts": 2670,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2731,
+          "fault_triggered": true,
+          "allocation_attempts": 2732,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2793,
+          "fault_triggered": true,
+          "allocation_attempts": 2794,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2855,
+          "fault_triggered": true,
+          "allocation_attempts": 2856,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2917,
+          "fault_triggered": true,
+          "allocation_attempts": 2918,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 2979,
+          "fault_triggered": true,
+          "allocation_attempts": 2982,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3041,
+          "fault_triggered": true,
+          "allocation_attempts": 3044,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3103,
+          "fault_triggered": true,
+          "allocation_attempts": 3106,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3165,
+          "fault_triggered": true,
+          "allocation_attempts": 3168,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3227,
+          "fault_triggered": true,
+          "allocation_attempts": 3230,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3289,
+          "fault_triggered": true,
+          "allocation_attempts": 3292,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3351,
+          "fault_triggered": true,
+          "allocation_attempts": 3354,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3414,
+          "fault_triggered": true,
+          "allocation_attempts": 3417,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3476,
+          "fault_triggered": true,
+          "allocation_attempts": 3479,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3538,
+          "fault_triggered": true,
+          "allocation_attempts": 3680,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3600,
+          "fault_triggered": true,
+          "allocation_attempts": 3742,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3662,
+          "fault_triggered": true,
+          "allocation_attempts": 3807,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3724,
+          "fault_triggered": true,
+          "allocation_attempts": 3878,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3786,
+          "fault_triggered": true,
+          "allocation_attempts": 3946,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3848,
+          "fault_triggered": true,
+          "allocation_attempts": 4008,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3910,
+          "fault_triggered": true,
+          "allocation_attempts": 4070,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 3972,
+          "fault_triggered": true,
+          "allocation_attempts": 4132,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4034,
+          "fault_triggered": true,
+          "allocation_attempts": 4194,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4096,
+          "fault_triggered": true,
+          "allocation_attempts": 4256,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4158,
+          "fault_triggered": true,
+          "allocation_attempts": 4318,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4221,
+          "fault_triggered": true,
+          "allocation_attempts": 4381,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4283,
+          "fault_triggered": true,
+          "allocation_attempts": 4443,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4345,
+          "fault_triggered": true,
+          "allocation_attempts": 4523,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4407,
+          "fault_triggered": true,
+          "allocation_attempts": 4588,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4469,
+          "fault_triggered": true,
+          "allocation_attempts": 4650,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4531,
+          "fault_triggered": true,
+          "allocation_attempts": 4724,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4593,
+          "fault_triggered": true,
+          "allocation_attempts": 4825,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4655,
+          "fault_triggered": true,
+          "allocation_attempts": 4887,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4717,
+          "fault_triggered": true,
+          "allocation_attempts": 4955,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4779,
+          "fault_triggered": true,
+          "allocation_attempts": 5044,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4841,
+          "fault_triggered": true,
+          "allocation_attempts": 5124,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4903,
+          "fault_triggered": true,
+          "allocation_attempts": 5186,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 4965,
+          "fault_triggered": true,
+          "allocation_attempts": 5260,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5027,
+          "fault_triggered": true,
+          "allocation_attempts": 5325,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5090,
+          "fault_triggered": true,
+          "allocation_attempts": 5388,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5152,
+          "fault_triggered": true,
+          "allocation_attempts": 5450,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5214,
+          "fault_triggered": true,
+          "allocation_attempts": 5512,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5276,
+          "fault_triggered": true,
+          "allocation_attempts": 5574,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5338,
+          "fault_triggered": true,
+          "allocation_attempts": 5642,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5400,
+          "fault_triggered": true,
+          "allocation_attempts": 5704,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5462,
+          "fault_triggered": true,
+          "allocation_attempts": 5671,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5524,
+          "fault_triggered": true,
+          "allocation_attempts": 5733,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5586,
+          "fault_triggered": true,
+          "allocation_attempts": 5795,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5648,
+          "fault_triggered": true,
+          "allocation_attempts": 5857,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5710,
+          "fault_triggered": true,
+          "allocation_attempts": 5919,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5772,
+          "fault_triggered": true,
+          "allocation_attempts": 5981,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5834,
+          "fault_triggered": true,
+          "allocation_attempts": 6043,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-ddl-allocation-fault",
+          "selected_fault": 5897,
+          "fault_triggered": true,
+          "allocation_attempts": 5898,
+          "published": true,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "crash_recovery": null,
+  "passed": 100,
+  "failures": 0,
+  "full_suite": false
+}

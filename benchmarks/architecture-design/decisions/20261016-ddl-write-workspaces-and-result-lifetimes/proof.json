@@ -1,0 +1,30 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "affected_tests": 1727,
+  "affected_suites": 114,
+  "post_fixture_schema_tests": 5,
+  "isolated_cases": 1274,
+  "allocation_paths": 19,
+  "crash_readonly_recovery_cycles": 32,
+  "historical_ddl_sampled_faults": 384,
+  "historical_graph_nodes": 8,
+  "cancellation_fixture_graph_nodes": 4,
+  "worker_sha256": {
+    "zyx-final-ddl-resource-worker": "f9168fa51ca30e38c66c9fee231e9d7d87355495f47525e90a985d6ce1e2b561",
+    "zyx-historical-ddl-resource-worker": "937c0e9a59f883d7eb3a2d6c64e0845a3cd43ba551e0ec8f3262550a7e90fcc0"
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "platform_runtime": "Linux clang19/libstdc++14",
+  "other_stls": "source audit and platform-conditional tests; not executed here",
+  "open_boundaries": [
+    "raw catalog key producer temporaries",
+    "compiler AST and remaining runtime/procedure workspaces",
+    "opaque callback closure storage and CSV/binding boundaries",
+    "debug-STL publication-tail bookkeeping beyond result move ownership",
+    "S5/S6 complete pressure, steady-state and long resource contracts"
+  ]
+}

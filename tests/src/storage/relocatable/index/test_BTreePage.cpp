@@ -16,6 +16,7 @@
 
 #include "graph/storage/relocatable/index/BTreePage.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 
 using namespace graph::storage;
 
@@ -930,5 +931,36 @@ TEST(RelocatableBTreePageCodecTest, TransfersFullyValidatedEntriesWithIndependen
   EXPECT_EQ(decoded,expected);
   EXPECT_THROW(static_cast<void>(BTreePage::openDecoded(owner,std::span(original).first(original.size()-1),decoded)),FormatException);
   EXPECT_EQ(decoded,expected);
+  const auto adopted=BTreePage::open(SlottedPage::open(owner,original));
+  EXPECT_EQ(adopted.serialize(),original); EXPECT_EQ(adopted.entries(),expected);
+  const auto adoptedDecoded=BTreePage::openDecoded(SlottedPage::open(owner,original),decoded);
+  EXPECT_EQ(adoptedDecoded.serialize(),original); EXPECT_EQ(decoded,expected);
+  EXPECT_THROW(static_cast<void>(BTreePage::open(SlottedPage::open(owner,malformed.serialize()))),FormatException);
+  EXPECT_THROW(static_cast<void>(BTreePage::openDecoded(SlottedPage::open(owner,malformed.serialize()),decoded)),FormatException);
+  EXPECT_EQ(decoded,expected);
  }
+}
+
+TEST(RelocatableBTreePageCodecTest, AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction) {
+    PageOwnerHeader owner;
+    owner.page_id = PageId(61); owner.owner_id = 17; owner.kind = PageOwnerKind::POK_INDEX;
+    owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+    owner.generation = Generation(2); owner.committed_lsn = LogSequenceNumber(9);
+    BTreePageHeader header;
+    header.index_id = owner.owner_id; header.page_id = owner.page_id; header.generation = owner.generation;
+    const std::vector<BTreePageEntry> entries{{{std::byte{'a'}}, 11U}};
+    const auto encoded = BTreePage::createWithEntries(owner, header, entries).serialize();
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536U);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    std::optional<SlottedPage> source;
+    std::optional<BTreePage> adopted;
+    source.emplace(SlottedPage::open(owner, encoded, memory));
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        adopted.emplace(BTreePage::open(std::move(*source)));
+    }
+    source.reset(); memory.reset();
+    ASSERT_FALSE(authority.expired());
+    EXPECT_EQ(adopted->serialize(), encoded); EXPECT_EQ(adopted->entries(), entries);
+    adopted.reset(); EXPECT_TRUE(authority.expired());
 }

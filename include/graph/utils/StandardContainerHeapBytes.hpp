@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <algorithm>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -75,6 +76,38 @@ template<class T>
         throw std::overflow_error("standard vector heap size overflowed");
     return addStandardHeapBytes(standardContainerProxyBytes(),
         standardAllocatorRequestBytes(values.capacity() * sizeof(T), alignof(T)));
+}
+
+// Fresh default map followed by reserve(count), before any insertion. Supported
+// STLs use prime/power-of-two buckets below 2*count+1 (MSVC minimum eight).
+// This is a bound for the visible fresh table, not an opaque adopted capacity.
+template<class Key, class Value>
+[[nodiscard]] inline size_t standardFreshUnorderedMapHeapUpper(size_t count) {
+    // Keep default-load-factor arithmetic exact even in float-based STLs.
+    if (count > (size_t{1U} << 24U)) throw std::length_error("fresh map admission exceeds its element bound");
+    using Entry = std::pair<const Key, Value>;
+    constexpr size_t nodeBytes = sizeof(Entry) + 2U * sizeof(void *) + alignof(Entry) - 1U;
+    const auto bucketCount = (std::max)(size_t{8U}, addStandardHeapBytes(addStandardHeapBytes(count, count), 1U));
+#if defined(_MSVC_STL_VERSION)
+    const auto nodes = addStandardHeapBytes(count, 1U);
+    constexpr size_t bucketWidth = 2U * sizeof(void *);
+    constexpr size_t proxies = 2U * standardContainerProxyBytes();
+#elif defined(__GLIBCXX__) || defined(_LIBCPP_VERSION)
+    const auto nodes = count;
+    constexpr size_t bucketWidth = sizeof(void *);
+    constexpr size_t proxies = 0U;
+#else
+    throw std::logic_error("fresh map admission requires a supported standard container ABI");
+    const auto nodes = count;
+    constexpr size_t bucketWidth = sizeof(void *), proxies = 0U;
+#endif
+    const auto nodeRequest = standardAllocatorRequestBytes(nodeBytes, alignof(Entry));
+    if (nodes > (std::numeric_limits<size_t>::max)() / nodeRequest ||
+        bucketCount > (std::numeric_limits<size_t>::max)() / bucketWidth)
+        throw std::overflow_error("fresh map request overflowed");
+    return addStandardHeapBytes(proxies, addStandardHeapBytes(
+        nodes * nodeRequest,
+        standardAllocatorRequestBytes(bucketCount * bucketWidth, alignof(void *))));
 }
 
 // Structural storage only; callers account key/value heap payloads separately.

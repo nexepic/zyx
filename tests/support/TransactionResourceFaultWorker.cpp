@@ -1,6 +1,7 @@
 #include "graph/core/GuardedPropertyCopy.hpp"
 #include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
+#include "graph/storage/relocatable/index/BTreePage.hpp"
 #include "graph/query/execution/PrepaidMemoryResource.hpp"
 #include "graph/utils/OwnedStdString.hpp"
 #include "graph/core/OwnedPropertyValue.hpp"
@@ -58,12 +59,13 @@ std::atomic<bool> faultTriggered{false};
 std::atomic<bool> captureBodyAllocation{false};
 std::atomic<size_t> bodyAllocationRequest{0U}, bodyAllocationMatches{0U}, prototypeBodyRequest{0U};
 thread_local graph::query::execution::MaterializedByteBudget *observedWriteBudget = nullptr;
+thread_local graph::query::execution::detail::ResourceAccount *observedResultAccount = nullptr;
 thread_local graph::query::execution::detail::PrepaidMemoryResource *observedPrepaidBudget = nullptr;
 thread_local size_t observedInitialLive = 0U, observedInitialCharge = 0U, maximumUncoveredWriteBytes = 0U;
 void observeWriteOwnership(size_t live) noexcept {
-    if (!observedWriteBudget && !observedPrepaidBudget) return;
+    if (!observedWriteBudget && !observedPrepaidBudget && !observedResultAccount) return;
     const auto allocated = static_cast<std::ptrdiff_t>(live) - static_cast<std::ptrdiff_t>(observedInitialLive);
-    const auto charged = static_cast<std::ptrdiff_t>(observedWriteBudget ? observedWriteBudget->used() : observedPrepaidBudget->used()) - static_cast<std::ptrdiff_t>(observedInitialCharge);
+    const auto charged = static_cast<std::ptrdiff_t>(observedWriteBudget ? observedWriteBudget->used() : (observedPrepaidBudget ? observedPrepaidBudget->used() : observedResultAccount->used())) - static_cast<std::ptrdiff_t>(observedInitialCharge);
     if (allocated > charged) maximumUncoveredWriteBytes = (std::max)(maximumUncoveredWriteBytes,
         static_cast<size_t>(allocated - charged));
 }
@@ -650,6 +652,8 @@ void sourceMaterializationCopyCase(const std::string &mode, const char *path) {
         << ",\"passed\":true}\n";
 }
 
+#include "SchemaDdlResourceFaultCases.inc"
+
 void schemaCacheAllocationFaultCase(const std::string &mode, size_t fault) {
     using namespace graph::query::execution::detail;
     constexpr size_t capacity = 4U * 1024U * 1024U;
@@ -764,6 +768,118 @@ void ownedSchemaDefinitionHeapAccountingCase(const std::string &mode) {
     }
     std::cout << "{\"mode\":\"" << mode << "\",\"shape_cases\":" << cases
         << ",\"maximum_uncovered_private_bytes\":0,\"passed\":true}\n";
+}
+
+void ownedBTreeKeyHeapAccountingCase(const std::string &mode) {
+    size_t cases = 0U;
+    for (const size_t count : {0U, 1U, 31U, 1024U, 4096U, 65536U}) {
+        BTreePageEntry input{std::vector<std::byte>(count, std::byte{0x42}), 17U};
+        const auto bytes = BTreePageEntryCodec::encode(input);
+        const auto packed = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, std::span(&input, 1U));
+        auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1048576U);
+        const auto baseline = liveBytes.load(std::memory_order_relaxed);
+        observedInitialLive = baseline; observedInitialCharge = 0U;
+        maximumUncoveredWriteBytes = 0U; observedWriteBudget = memory.get();
+        try {
+            graph::utils::OwnedAllocationScope scope(memory);
+            auto decoded = BTreePageEntryCodec::decode(bytes);
+            const auto packedEntries = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, packed);
+            if (packedEntries.size() != 1U || packedEntries.front() != input)
+                throw std::runtime_error("owned packed BTree array changed decoded content");
+            if (decoded != input) throw std::runtime_error("owned BTree key changed decoded content");
+            graph::utils::OwnedStdVector<BTreePageEntry> entries;
+            entries.push_back(decoded); entries.reserve(8U);
+            graph::utils::OwnedStdVector<BTreePageEntry> copied(entries);
+            observeWriteOwnership(liveBytes.load(std::memory_order_relaxed));
+        } catch (...) { observedWriteBudget = nullptr; throw; }
+        observedWriteBudget = nullptr;
+        if (maximumUncoveredWriteBytes != 0U)
+            throw std::runtime_error("owned BTree key underestimated requests: " + std::to_string(maximumUncoveredWriteBytes));
+        if (memory->used() != 0U || liveBytes.load(std::memory_order_relaxed) != baseline)
+            throw std::runtime_error("owned BTree key retained allocation or credit");
+        ++cases;
+    }
+    std::cout << "{\"mode\":\"" << mode << "\",\"shape_cases\":" << cases
+        << ",\"maximum_uncovered_private_bytes\":0,\"passed\":true}\n";
+}
+
+void ownedLogicalSchemaHeapAccountingCase(const std::string &mode) {
+    size_t cases = 0U;
+    const auto verify = [&]<class Definition>() {
+        for (const size_t length : {16U, 4096U}) {
+            Definition source;
+            source.name = std::string(length, 'n'); source.label = std::string(length, 'l');
+            for (size_t index = 0U; index < (length == 4096U ? 64U : 1U); ++index)
+                source.property_keys.emplace_back(std::string(1000U, 'p') + std::to_string(index));
+            auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(1048576U);
+            const auto baseline = liveBytes.load(std::memory_order_relaxed);
+            observedInitialLive = baseline; observedInitialCharge = 0U; maximumUncoveredWriteBytes = 0U;
+            observedWriteBudget = memory.get();
+            try {
+                graph::utils::OwnedAllocationScope scope(memory);
+                graph::utils::OwnedStdVector<Definition> values;
+                values.push_back(source); values.reserve(8U);
+                graph::utils::OwnedStdVector<Definition> copied(values);
+                if (copied.front() != source) throw std::runtime_error("owned logical schema copy changed content");
+                observeWriteOwnership(liveBytes.load(std::memory_order_relaxed));
+            } catch (...) { observedWriteBudget = nullptr; throw; }
+            observedWriteBudget = nullptr;
+            if (maximumUncoveredWriteBytes != 0U || memory->used() != 0U || liveBytes.load(std::memory_order_relaxed) != baseline)
+                throw std::runtime_error("logical schema copy lost allocation ownership: " + std::to_string(maximumUncoveredWriteBytes));
+            ++cases;
+        }
+    };
+    verify.template operator()<LogicalGraphIndexDefinition>();
+    verify.template operator()<LogicalGraphConstraintDefinition>();
+    std::cout << "{\"mode\":\"" << mode << "\",\"shape_cases\":" << cases
+        << ",\"maximum_uncovered_private_bytes\":0,\"passed\":true}\n";
+}
+
+void stringResultAdmissionCase(const std::string &mode) {
+    using namespace graph::query;
+    using namespace graph::query::execution::detail;
+    const std::string body(65536U, 's');
+    const std::vector<std::string> pieces{std::string(32768U, 'a'), std::string(32768U, 'b')};
+    const auto expectedJoined = pieces[0] + ", " + pieces[1];
+    const std::array<std::string_view, 1U> columns{"value"};
+    const std::array<StringResultField, 1U> fields{{{"value", body}}};
+    const std::array<StringResultField, 1U> joined{StringResultField::joined("value", pieces)};
+    auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(1048576U));
+    auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(1048576U));
+    auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 1048576U);
+    const auto baseline = liveBytes.load(std::memory_order_relaxed);
+    observedInitialLive = baseline; observedInitialCharge = 0U; maximumUncoveredWriteBytes = 0U;
+    observedResultAccount = account.get();
+    try {
+        QueryResult result{ResourceLease(account)};
+        result.setColumnViews(columns); result.addStringRow(fields); result.addStringRow(joined); result.reserveRows(8U);
+        if (result.rowCount() != 2U || std::get<std::string>(result.getRows()[0].at("value").asPrimitive().getVariant()) != body ||
+            std::get<std::string>(result.getRows()[1].at("value").asPrimitive().getVariant()) != expectedJoined)
+            throw std::runtime_error("admitted string rows changed their values");
+        observeWriteOwnership(liveBytes.load(std::memory_order_relaxed));
+    } catch (...) { observedResultAccount = nullptr; throw; }
+    observedResultAccount = nullptr;
+    if (maximumUncoveredWriteBytes != 0U || account->used() != 0U || liveBytes.load(std::memory_order_relaxed) != baseline)
+        throw std::runtime_error("string result construction lost allocation ownership: " + std::to_string(maximumUncoveredWriteBytes));
+    bodyAllocationRequest.store(0U); prototypeBodyRequest.store(0U); captureBodyAllocation.store(true);
+    { const std::string prototype(body); }
+    captureBodyAllocation.store(false);
+    const auto request = prototypeBodyRequest.load();
+    if (request == 0U) throw std::runtime_error("string row prototype did not allocate its payload");
+    auto small = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, 4096U);
+    {
+        QueryResult result{ResourceLease(small)}; result.setColumnViews(columns);
+        const auto previous = small->used(); bool rejected = false;
+        bodyAllocationRequest.store(request); bodyAllocationMatches.store(0U); captureBodyAllocation.store(true);
+        try { result.addStringRow(fields); } catch (const ResourceAdmissionDenied &) { rejected = true; }
+        catch (...) { captureBodyAllocation.store(false); throw; }
+        captureBodyAllocation.store(false);
+        if (!rejected || bodyAllocationMatches.load() != 0U || result.rowCount() != 0U || small->used() != previous)
+            throw std::runtime_error("string row quota rejection allocated payload or changed output");
+    }
+    if (small->used() != 0U) throw std::runtime_error("rejected string row retained credit");
+    std::cout << "{\"mode\":\"" << mode << "\",\"shape_cases\":4,\"maximum_uncovered_private_bytes\":0,"
+        << "\"rejected_payload_allocations\":0,\"passed\":true}\n";
 }
 
 void resultColumnCopyAdmissionCase(const std::string &mode) {
@@ -1732,10 +1848,18 @@ int main(int argc, char **argv) {
         if (mode == "source-materialization-copy-accounting") {
             sourceMaterializationCopyCase(mode, argv[2]); return 0;
         }
+        if (mode == "schema-ddl-allocation-fault" || mode == "schema-vector-allocation-fault" ||
+            mode == "schema-constraint-allocation-fault" || mode == "schema-drop-allocation-fault") {
+            const size_t fault = argc == 4 ? static_cast<size_t>(std::stoull(argv[3])) : (std::numeric_limits<size_t>::max)();
+            schemaDdlAllocationFaultCase(mode, argv[2], fault); return 0;
+        }
         if (mode == "schema-cache-allocation-fault") {
             const size_t fault = argc == 4 ? static_cast<size_t>(std::stoull(argv[3])) : (std::numeric_limits<size_t>::max)();
             schemaCacheAllocationFaultCase(mode, fault); return 0;
         }
+        if (mode == "owned-logical-schema-heap-accounting") { ownedLogicalSchemaHeapAccountingCase(mode); return 0; }
+        if (mode == "string-result-admission") { stringResultAdmissionCase(mode); return 0; }
+        if (mode == "owned-btree-key-heap-accounting") { ownedBTreeKeyHeapAccountingCase(mode); return 0; }
         if (mode == "owned-constraint-definition-heap-accounting") { ownedSchemaDefinitionHeapAccountingCase<ConstraintDefinition, ConstraintDefinitionCodec>(mode); return 0; }
         if (mode == "owned-index-definition-heap-accounting") { ownedSchemaDefinitionHeapAccountingCase<IndexDefinition, IndexDefinitionCodec>(mode); return 0; }
         if (mode == "query-context-account-validation") { queryContextAccountValidationCase(mode, argv[2]); return 0; }

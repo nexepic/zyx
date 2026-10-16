@@ -78,7 +78,7 @@ namespace graph::storage {
 			if (!metadata.findIndexRootOptional(snapshot, indexId).has_value()) {
 				return {};
 			}
-			const std::vector<BTreePageEntry> actual =
+			const utils::OwnedStdVector<BTreePageEntry> actual =
 					BTreeIndex(indexId, pages, metadata)
 							.scan(snapshot, std::nullopt, verificationLimit(maximumEntries));
 			OrderedBTreeEntryCursor cursor = expected();
