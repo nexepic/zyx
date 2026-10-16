@@ -1,0 +1,71 @@
+{
+  "stage": "S6.3",
+  "status": "accepted",
+  "current_source_commit": "1714cd1e43b72fb3faf900e039d470e06a3276e3",
+  "isolated": {
+    "passed": true,
+    "full_suite": false,
+    "performance_benchmark": false,
+    "completed_rounds": 256,
+    "contracts_per_round": 6,
+    "contract_executions": 1536,
+    "native_reopen_cycles": 16384,
+    "concurrent_write_iterations": 16384,
+    "crash_recovery": {
+      "cycles": 512,
+      "fixed_file_bytes": 1572864
+    },
+    "elapsed_seconds": 1187.928847674004,
+    "binary_sha256": {
+      "/workspace/zyx-optimization-artifacts/frozen-workers/zyx-resource-acceptance-tests": "cb97a368c1630fe057c4a1403298bfea69cb9f0ccc967010805fd81be4abf1d9",
+      "/workspace/zyx-optimization-artifacts/frozen-workers/zyx-owned-catalog-keys-worker": "ea3b2d0842ab070aa8dc66e09a6d75d92eaad9f7c179ca4381182851b95f8007"
+    },
+    "cases": [
+      "RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners",
+      "RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease",
+      "RelocatableStorageBackendTest.QueryScratchFilePressureReleasesHandlesAndCanReuseQuotaWithGraphPinStillHeld",
+      "RelocatableStorageBackendTest.QueryScratchCleanupUsesProtectedMaintenanceWhenCacheCreditIsExhausted",
+      "RelocatableStorageBackendTest.QueryScratchCleanupAdmissionDenialPrecedesPublicationAndCanRetryTheSameHandle",
+      "RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance"
+    ]
+  },
+  "same_process_after_callback_change": {
+    "passed": true,
+    "same_process": true,
+    "rounds": 16,
+    "contracts_per_round": 6,
+    "contract_executions": 96,
+    "native_reopen_cycles": 1024,
+    "concurrent_write_iterations": 1024,
+    "shuffle_seed": 42,
+    "elapsed_seconds": 66.6931385150092,
+    "peak_rss_bytes": 30584832,
+    "binary_sha256": "93d22bfa3f616c1477e926386e7d2e4d5bd49604ce2ba9523ea0ab20c4b6ef2d",
+    "full_suite": false,
+    "performance_benchmark": false
+  },
+  "postvalidated_all_rounds_with_current_gate": true,
+  "gate_unit_tests": 10,
+  "full_suite": false,
+  "performance_campaign": false,
+  "platform_runtime": "Linux x86_64, Clang19/libstdc++14",
+  "source_mapping": {
+    "isolated_binary": "05cba31b046cafc26775ecb1cec6dd80367b112f; S5.4 resource selection",
+    "same_process_binary": "e9d18095 callback implementation; 170 resource regressions",
+    "later_change": "1714cd1e only shortest-path private workspaces; 16 affected procedure tests pass; the six soak contracts do not invoke shortest-path procedures"
+  },
+  "rss_measurement": "fresh supervisor; bounded streaming binary hash; single selected child; Linux RUSAGE_CHILDREN peak KiB converted to bytes; quota accounting is separate",
+  "not_accepted_here": [
+    "S5.3",
+    "S5.5",
+    "S6.1",
+    "S6.2",
+    "S6.4"
+  ],
+  "source_sha256": {
+    "scripts/test_resource_recovery_soak.py": "b4a1c6b5913f6f788e1c5ef6e7c450ca1c205a79f9482ca8055e8332749c1d2f",
+    "scripts/test_resource_recovery_process_soak.py": "a46f039f11f86004ffa73e19eae50f969bb93d5b57a312cecebfaec79b2f0655",
+    "scripts/test_resource_recovery_soak_validation.py": "e223c51b1deb316c70e6e5cd58d42d08a879347197aca0c8fe59efe5d73133aa"
+  },
+  "archive_sha256": "6588a44a93956e658b02e2be48473d6997a68bdf966f8a735d7f8f662cc68475"
+}
