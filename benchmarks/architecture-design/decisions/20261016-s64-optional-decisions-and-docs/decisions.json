@@ -1,0 +1,39 @@
+{
+  "stage": "S6.4",
+  "production_source": "03436b7a75d0ace5830570b13840d9f55910de58",
+  "decisions": [
+    {
+      "work": "O7 SIMD",
+      "decision": "not_adopted",
+      "basis": "No isolated portable SIMD production candidate with equal-resource end-to-end evidence; conversion-inclusive typed filter is 1.587x slower on its tested input. This does not falsify all SIMD designs.",
+      "reopen_when": "A selected kernel remains significant after storage/validation costs; portable scalar fallback and mixed-type/NULL semantics pass; whole-query gain and protection gates pass."
+    },
+    {
+      "work": "O7 parallel scan/aggregate",
+      "decision": "not_adopted",
+      "basis": "The registered baseline is single CPU and single query thread. Four-client conflict correctness is not parallel operator evidence; adding threads is not an equal-resource speedup.",
+      "reopen_when": "Separate scheduling design with bounded task-local state, shared account, cancellation, deterministic merge/output and equal CPU/thread controls."
+    },
+    {
+      "work": "O7 additional compression",
+      "decision": "not_adopted",
+      "basis": "Existing LZ4/Zstd build support is unchanged. No additional codec/layout candidate has a complete decode, update, point-read, memory and space comparison.",
+      "reopen_when": "Measured representative and holdout tradeoffs, explicit file-version/lifecycle protocol and regression protection."
+    },
+    {
+      "work": "O7 LTO/PGO",
+      "decision": "not_adopted",
+      "basis": "Current Release compile entry uses -O3 -DNDEBUG without LTO or profile-use flags. No separately trained profile and untuned holdout comparison justifies changing the toolchain.",
+      "reopen_when": "Freeze training/holdout manifests, compiler/linker identity, startup/code size and whole-query/resource comparisons before adoption."
+    },
+    {
+      "work": "O8 LLVM expression/pipeline JIT",
+      "decision": "not_adopted",
+      "basis": "CPU collector clocks disagree with OS time; no precise expression CPU share is established. No demonstrated benefit covers compile/first-run/cache-hit/code-memory costs. LLVM is not added.",
+      "reopen_when": "First establish expression share and non-JIT baseline, then bounded code-cache ownership, invalidation by plan/schema/type identity, cancellation/failure fallback and portable non-JIT/WASM execution."
+    }
+  ],
+  "scope": "Explicit optional non-adoption plus final implementation/limitation snapshot. No mandatory delivery is removed or waived.",
+  "performance_acceptance": false,
+  "new_production_change": false
+}
