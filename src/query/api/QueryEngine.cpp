@@ -696,7 +696,7 @@ namespace graph::query {
 					execution::LogicalPlanProcedureRuntime runtime(*logicalBackend_, logicalVectorSearchBackend_.get(),
 														logicalVectorMaintenanceBackend_.get(),
 														nativeConfigurationService_.get(),
-														logicalProjectionCatalog_.get(), threadPool_);
+														logicalProjectionCatalog_.get(), threadPool_, logicalBackend_->logicalPlanCacheMemoryOwner());
 					return runtime.execute(executionRoot, logicalReadOptions_.bounds,
 										   logicalReadOptions_.maximum_vector_mapping_entries,
 										   logicalReadOptions_.maximum_raw_vector_reads,
@@ -784,7 +784,7 @@ namespace graph::query {
 						readBackend, dynamic_cast<const storage::LogicalGraphVectorSearchBackend *>(&readBackend),
 						dynamic_cast<storage::LogicalGraphVectorMaintenanceBackend *>(&writeBackend),
 						nativeConfigurationService_.get(),
-						transactionProjectionCatalog, threadPool_);
+						transactionProjectionCatalog, threadPool_, logicalBackend_->logicalPlanCacheMemoryOwner());
 				return runtime.execute(executionRoot, logicalReadOptions_.bounds,
 									   logicalReadOptions_.maximum_vector_mapping_entries,
 									   logicalReadOptions_.maximum_raw_vector_reads,

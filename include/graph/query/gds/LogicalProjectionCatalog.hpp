@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "graph/query/gds/LogicalGraphProjection.hpp"
+#include "graph/utils/OwnedLazyUnorderedMap.hpp"
 
 namespace graph::query::gds {
 
@@ -26,7 +27,8 @@ namespace graph::query::gds {
 	using LogicalProjectionCatalogCheckpoint = std::function<void()>;
 
 	struct LogicalProjectionDescriptor {
-		std::string name;
+        using OwnedHeapElement = void;
+        utils::OwnedStdString name;
 		size_t node_count = 0U;
 		size_t edge_count = 0U;
 		// Projection catalog entries are process-local. These values describe the
@@ -43,8 +45,8 @@ namespace graph::query::gds {
 		// Segment generations from the native storage format.
 		uint64_t source_revision = 0U;
 		uint64_t current_revision = 0U;
-		std::vector<std::string> node_labels;
-		std::vector<LogicalRelationshipProjection> relationships;
+		utils::OwnedStringVector node_labels;
+		utils::OwnedStdVector<LogicalRelationshipProjection> relationships;
 
 		bool operator==(const LogicalProjectionDescriptor &) const = default;
 	};
@@ -90,10 +92,15 @@ namespace graph::query::gds {
 		list(const storage::LogicalGraphReadSnapshot &snapshot, size_t maximumEntries,
 			 const LogicalProjectionCatalogCheckpoint &checkpoint = {}) const;
 
+        [[nodiscard]] utils::OwnedStdVector<LogicalProjectionDescriptor>
+        listOwned(const storage::LogicalGraphReadSnapshot &snapshot, size_t maximumEntries,
+            const LogicalProjectionCatalogCheckpoint &checkpoint = {}) const;
+
 	private:
 		friend class LogicalProjectionCatalogTestAccess;
 
 		struct Entry {
+            using OwnedHeapElement = void;
 			std::shared_ptr<const LogicalGraphProjection> projection;
 			LogicalGraphProjectionSpec spec;
 			storage::LogicalGraphMutationFence revision;
@@ -122,11 +129,19 @@ namespace graph::query::gds {
 		[[nodiscard]] uint64_t currentRevisionTokenLocked(const storage::LogicalGraphMutationFence &revision) const;
 
 		mutable std::shared_mutex mutex_;
-		std::unordered_map<std::string, Entry> entries_;
+		struct NameHash {
+            using is_transparent = void;
+            size_t operator()(std::string_view name) const noexcept { return std::hash<std::string_view>{}(name); }
+        };
+        struct NameEqual {
+            using is_transparent = void;
+            bool operator()(std::string_view left, std::string_view right) const noexcept { return left == right; }
+        };
+        utils::OwnedLazyUnorderedMap<utils::OwnedStdString, Entry, NameHash, NameEqual> entries_;
 		// Source revisions are retained only while a live projection refers to
 		// them. The one-entry current-revision cache avoids growing memory when a
 		// long-lived catalog observes many graph generations between projections.
-		mutable std::unordered_map<storage::LogicalGraphMutationFence, RevisionToken, MutationFenceHash>
+		mutable utils::OwnedLazyUnorderedMap<storage::LogicalGraphMutationFence, RevisionToken, MutationFenceHash>
 				source_revision_tokens_;
 		mutable std::optional<storage::LogicalGraphMutationFence> last_observed_revision_;
 		mutable uint64_t last_observed_revision_token_ = 0U;

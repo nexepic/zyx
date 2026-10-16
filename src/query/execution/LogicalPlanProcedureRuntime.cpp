@@ -48,6 +48,15 @@ namespace graph::query::execution {
 
 	namespace {
 
+        [[nodiscard]] QueryResult makeAdmittedProcedureResult(const QueryContext &context) {
+            if (context.resource_account) return QueryResult(detail::ResourceLease(context.resource_account));
+            return QueryResult{};
+        }
+        void setOwnedProcedureColumns(QueryResult &result, const logical::LogicalOperator &root) {
+            const auto columns = root.getOwnedOutputVariables();
+            result.setColumns(static_cast<const std::vector<std::string> &>(columns));
+        }
+
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 		[[nodiscard]] size_t checkedProcedureSizeAdd(size_t left, size_t right);
 		[[nodiscard]] size_t checkedProcedureSizeMul(size_t left, size_t right);
@@ -1832,7 +1841,7 @@ namespace graph::query::execution {
 				throw std::runtime_error("logical procedure exceeded its configured result-row bound");
 			}
 			validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
-			QueryResult result;
+			QueryResult result = makeAdmittedProcedureResult(context);
 			result.setColumns(columns);
 			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
 				BufferedProcedureRow &buffered = rows[rowIndex];
@@ -2352,7 +2361,7 @@ namespace graph::query::execution {
 				const QueryContext &context, const size_t retainedSourceBytes = 0U,
 			const std::vector<std::string> *outputColumns = nullptr,
 			const bool accountOutputTransition = false) {
-			QueryResult result;
+			QueryResult result = makeAdmittedProcedureResult(context);
 			result.setColumns(outputColumns == nullptr ? root.getOutputVariables() : *outputColumns);
 			static_cast<void>(appendBufferedProcedureRows(
 					std::move(rows), snapshot, operations, readBounds, context, result, nullptr, nullptr, retainedSourceBytes,
@@ -2930,8 +2939,8 @@ namespace graph::query::execution {
 				: (distinctProjection != nullptr ? 2U : (sourceFilter == nullptr ? 1U : 2U));
 			std::vector<const logical::LogicalOperator *> suffix(operations.begin() +
 													 static_cast<std::ptrdiff_t>(suffixOffset), operations.end());
-			QueryResult result;
-			result.setColumns(root.getOutputVariables());
+			QueryResult result = makeAdmittedProcedureResult(context);
+			setOwnedProcedureColumns(result, root);
 			static_cast<void>(appendBufferedProcedureRows(
 					std::move(rows), snapshot, suffix, workingBounds, context, result, nullptr, nullptr,
 					outputRowSlackBytes, true));
@@ -2981,8 +2990,18 @@ namespace graph::query::execution {
 			size_t maximumVectorTrainingPages, const size_t maximumGdsAlgorithmEdges,
 			const size_t maximumGdsAlgorithmIterations, const size_t maximumGdsAlgorithmWorkUnits,
 			const QueryContext &context, const LogicalProcedureExecutionScope scope) const {
-		const logical::LogicalOperator *current = &root;
-		std::vector<const logical::LogicalOperator *> operations;
+        context.checkGuardNow();
+        std::optional<utils::OwnedAllocationScope> allocation;
+        if (context.resource_account) {
+            const auto domain = read_backend_.queryResourceDomain();
+            if (context.resource_account->resourceClass() != detail::ResourceClass::RCK_QUERY ||
+                (domain && !context.resource_account->belongsTo(*domain)))
+                throw std::invalid_argument("procedure execution requires QUERY ownership within its database");
+            allocation.emplace(std::make_shared<MaterializedByteBudget>(readBounds.maximum_materialized_bytes,
+                context.resource_account, std::pmr::new_delete_resource()));
+        }
+        const logical::LogicalOperator *current = &root;
+        utils::OwnedStdVector<const logical::LogicalOperator *> operations;
 		while (current->getType() == logical::LogicalOpType::LOP_PROJECT ||
 			   current->getType() == logical::LogicalOpType::LOP_FILTER ||
 			   current->getType() == logical::LogicalOpType::LOP_SKIP ||
@@ -3060,7 +3079,7 @@ namespace graph::query::execution {
 				return std::get<std::string>(value.getVariant());
 			};
 			std::vector<BufferedProcedureRow> rows;
-			std::vector<std::string> defaultColumns;
+			utils::OwnedStringVector defaultColumns;
 			std::optional<std::pair<std::string, PropertyValue>> deferredConfigurationUpdate;
 			bool deferredStatisticsReset = false;
 			bool deferredSlowQueryClear = false;
@@ -3172,7 +3191,7 @@ namespace graph::query::execution {
 				// Fully materialize the result pipeline before the administrative write.
 				// A failing YIELD/WHERE/RETURN must not leave a durable configuration or
 				// observability mutation behind after the client observes an error.
-				QueryResult result;
+				QueryResult result = makeAdmittedProcedureResult(context);
 				if (operations.empty()) {
 					result = makeProcedureResult(rows, defaultColumns, readBounds, context);
 				} else {
@@ -3232,7 +3251,7 @@ namespace graph::query::execution {
 			}
 
 			std::vector<BufferedProcedureRow> rows;
-			std::vector<std::string> defaultColumns;
+			utils::OwnedStringVector defaultColumns;
 			size_t retainedProcedureSourceBytes = 0U;
 			std::unique_ptr<gds::PreparedLogicalProjectionCatalogMutation> deferredCatalogMutation;
 			switch (procedure->kind) {
@@ -3245,13 +3264,17 @@ namespace graph::query::execution {
 					const gds::LogicalGraphProjectionSpec spec =
 							gds::LogicalProjectionSpecCodec::decodeGraphProjectArguments(
 									std::span<const std::reference_wrapper<const PropertyValue>>(projectionArguments));
-					gds::LogicalProjectionCatalogCreatePreparation preparation = projection_catalog_->prepareCreate(
+					gds::LogicalProjectionCatalogCreatePreparation preparation = [&] {
+                        utils::OwnedAllocationScope cacheAllocation(projection_memory_owner_
+                            ? projection_memory_owner_ : utils::OwnedAllocationScope::owner());
+                        return projection_catalog_->prepareCreate(
 							spec, *snapshot,
 							{.maximum_nodes = readBounds.maximum_node_records,
 							 .maximum_metadata_pages = readBounds.maximum_metadata_pages_per_node_page,
 							 .maximum_edges_per_node = readBounds.maximum_edges_per_node,
 							 .maximum_property_bytes = readBounds.maximum_materialized_bytes},
 							[&context] { context.checkGuard(); });
+                    }();
 					if (!preparation.mutation) {
 						throw std::logic_error("logical projection catalog returned no prepared creation operation");
 					}
@@ -3306,7 +3329,7 @@ namespace graph::query::execution {
 						throw std::invalid_argument("gds.graph.list accepts zero or one projection name");
 					}
 					if (arguments.empty()) {
-						for (const gds::LogicalProjectionDescriptor &descriptor: projection_catalog_->list(
+						for (const gds::LogicalProjectionDescriptor &descriptor: projection_catalog_->listOwned(
 									 *snapshot, readBounds.maximum_rows, [&context] { context.checkGuard(); })) {
 							context.checkGuard();
 							appendBoundedProcedureRow(rows, makeProjectionDescriptorRow(descriptor), readBounds.maximum_rows,
@@ -3625,7 +3648,7 @@ namespace graph::query::execution {
 				default: // NOLINTNEXTLINE(bugprone-branch-clone): this group is guarded above.
 					throw std::logic_error("logical projection procedure dispatch became inconsistent");
 			}
-			QueryResult result;
+			QueryResult result = makeAdmittedProcedureResult(context);
 			if (operations.empty() && procedure->kind != NativeProcedureKind::NPK_GDS_DIJKSTRA) {
 				result = makeProcedureResult(std::move(rows), defaultColumns, readBounds, context);
 			} else {
@@ -3664,7 +3687,7 @@ namespace graph::query::execution {
 				return executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
 						retainedPathBytes, nullptr, true);
 			}
-			const std::vector<std::string> columns{"step", "node", "path_length"};
+			const utils::OwnedStringVector columns{"step", "node", "path_length"};
 			return executeBufferedProcedure(std::move(rows), *snapshot, operations, root, readBounds, context,
 					retainedPathBytes, &columns, true);
 		}
@@ -3704,7 +3727,7 @@ namespace graph::query::execution {
 			// Result materialization remains entirely before commit(). A failure in
 			// YIELD/WHERE/RETURN destroys the prepared operation and cannot publish a
 			// derived Vector generation.
-			QueryResult result;
+			QueryResult result = makeAdmittedProcedureResult(context);
 			if (operations.empty()) {
 				result.setColumns({"status"});
 				std::vector<BufferedProcedureRow> rows(1U);
@@ -3789,7 +3812,7 @@ namespace graph::query::execution {
 			throw std::invalid_argument("db.index.vector.queryNodes topK exceeds the logical row bound");
 		}
 		if (request.top_k == 0U) {
-			QueryResult result;
+			QueryResult result = makeAdmittedProcedureResult(context);
 			result.setColumns(operations.empty() ? std::vector<std::string>{"node", "score"}
 													 : root.getOutputVariables());
 			validateProcedureResultBudget(result, retainedRequestBytes, readBounds.maximum_materialized_bytes);
@@ -3879,8 +3902,8 @@ namespace graph::query::execution {
 				prefix.has_value()) {
 			const auto hitPrefix = std::span<storage::LogicalGraphVectorSearchHit>(hits).first(*prefix);
 			validateVectorSearchHits(hitPrefix, readBounds, context);
-			QueryResult result;
-			result.setColumns(root.getOutputVariables());
+			QueryResult result = makeAdmittedProcedureResult(context);
+			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
 			std::vector<uint64_t> operatorRowCounts(operations.size(), 0U);
 			for (size_t offset = 0U; offset < hitPrefix.size(); offset += capacity) {
@@ -3903,8 +3926,8 @@ namespace graph::query::execution {
 						type == logical::LogicalOpType::LOP_SKIP || type == logical::LogicalOpType::LOP_LIMIT;
 			})) {
 			validateVectorSearchHits(hits, readBounds, context);
-			QueryResult result;
-			result.setColumns(root.getOutputVariables());
+			QueryResult result = makeAdmittedProcedureResult(context);
+			setOwnedProcedureColumns(result, root);
 			const size_t capacity = procedureNodeBatchCapacity(outputBounds);
 			std::vector<std::unordered_set<std::string>> distinctRowsByOperation(operations.size());
 			std::vector<uint64_t> operatorRowCounts(operations.size(), 0U);
@@ -3922,7 +3945,7 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		QueryResult result;
+		QueryResult result = makeAdmittedProcedureResult(context);
 		result.setColumns({"node", "score"});
 		validateVectorSearchHits(hits, readBounds, context);
 		const size_t capacity = procedureNodeBatchCapacity(outputBounds);

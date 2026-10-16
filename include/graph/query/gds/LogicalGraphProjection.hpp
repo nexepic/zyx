@@ -18,6 +18,11 @@
 #include <vector>
 
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/utils/OwnedSharedPtr.hpp"
+#include "graph/utils/OwnedStdString.hpp"
+#include "graph/utils/OwnedStringVector.hpp"
 
 namespace graph::query::gds {
 
@@ -34,25 +39,28 @@ namespace graph::query::gds {
 	};
 
 	struct LogicalProjectionWeight {
+        using OwnedHeapElement = void;
 		LogicalProjectionWeightKind kind = LogicalProjectionWeightKind::LPWK_NONE;
 		double constant_weight = 1.0;
-		std::string property_name;
+		utils::OwnedStdString property_name;
 		double default_weight = 1.0;
 	};
 
 	struct LogicalRelationshipProjection {
+        using OwnedHeapElement = void;
 		// An empty type accepts every relationship type, including untyped edges.
-		std::string type;
+		utils::OwnedStdString type;
 		LogicalProjectionOrientation orientation = LogicalProjectionOrientation::LPO_NATURAL;
 		LogicalProjectionWeight weight;
 	};
 
 	struct LogicalGraphProjectionSpec {
-		std::string name;
+        using OwnedHeapElement = void;
+		utils::OwnedStdString name;
 		// An empty label collection accepts every Node.
-		std::vector<std::string> node_labels;
+		utils::OwnedStringVector node_labels;
 		// An empty collection accepts every relationship with default_orientation.
-		std::vector<LogicalRelationshipProjection> relationships;
+		utils::OwnedStdVector<LogicalRelationshipProjection> relationships;
 		LogicalProjectionOrientation default_orientation = LogicalProjectionOrientation::LPO_NATURAL;
 	};
 
@@ -86,12 +94,12 @@ namespace graph::query::gds {
 	// The source projection remains the authority for semantic construction;
 	// this is a lazily cached derived representation, never persisted state.
 	struct LogicalProjectionCsr {
-		std::vector<uint64_t> node_ids;
-		std::vector<size_t> offsets;
-		std::vector<uint64_t> target_node_ids;
-		std::vector<double> weights;
-		std::vector<uint64_t> relationship_ids;
-		std::vector<uint8_t> synthetic_reverse;
+		utils::OwnedStdVector<uint64_t> node_ids;
+		utils::OwnedStdVector<size_t> offsets;
+		utils::OwnedStdVector<uint64_t> target_node_ids;
+		utils::OwnedStdVector<double> weights;
+		utils::OwnedStdVector<uint64_t> relationship_ids;
+		utils::OwnedStdVector<uint8_t> synthetic_reverse;
 
 		[[nodiscard]] size_t edgeCount() const noexcept { return target_node_ids.size(); }
 		[[nodiscard]] size_t estimatedMemoryBytes() const noexcept {
@@ -128,18 +136,23 @@ namespace graph::query::gds {
 	private:
 		static void addArc(LogicalGraphProjection &projection, uint64_t sourceNodeId, uint64_t targetNodeId,
 						   double weight, uint64_t relationshipId, bool syntheticReverse);
-		static void addRelationship(LogicalGraphProjection &projection, const storage::LogicalGraphEdge &edge,
+		static void addRelationship(LogicalGraphProjection &projection, const storage::LogicalGraphEdgeTopology &edge,
 								const LogicalRelationshipProjection &relationship, double weight);
 
-		std::vector<uint64_t> node_ids_;
-		std::unordered_map<uint64_t, std::vector<LogicalProjectionEdge>> outgoing_;
-		std::unordered_map<uint64_t, std::vector<LogicalProjectionEdge>> incoming_;
+		std::shared_ptr<std::pmr::memory_resource> allocation_owner_ = utils::sharedAllocationOwner();
+        using Adjacency = utils::OwnedStdVector<LogicalProjectionEdge>;
+        using AdjacencyEntry = std::pair<const uint64_t, Adjacency>;
+        using AdjacencyMap = std::unordered_map<uint64_t, Adjacency, std::hash<uint64_t>,
+            std::equal_to<uint64_t>, utils::OwnedPmrAllocator<AdjacencyEntry>>;
+        utils::OwnedStdVector<uint64_t> node_ids_;
+        AdjacencyMap outgoing_{utils::OwnedPmrAllocator<AdjacencyEntry>(allocation_owner_)};
+        AdjacencyMap incoming_{utils::OwnedPmrAllocator<AdjacencyEntry>(allocation_owner_)};
 		size_t edge_count_ = 0U;
 		bool is_weighted_ = false;
 		mutable std::shared_ptr<const LogicalProjectionCsr> csr_cache_;
 		// A shared mutex object preserves value semantics for projections while
 		// serializing first-use CSR construction across catalog readers.
-		mutable std::shared_ptr<std::mutex> csr_mutex_ = std::make_shared<std::mutex>();
+		mutable std::shared_ptr<std::mutex> csr_mutex_ = utils::makeSharedOwned<std::mutex>();
 	};
 
 } // namespace graph::query::gds

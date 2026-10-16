@@ -43,7 +43,7 @@ namespace graph::query::gds {
 			std::span<const std::reference_wrapper<const PropertyValue>> arguments_;
 		};
 
-		[[nodiscard]] std::string requireText(const PropertyValue &value, const std::string_view context,
+		[[nodiscard]] utils::OwnedStdString requireText(const PropertyValue &value, const std::string_view context,
 				const LogicalProjectionSpecCodecBounds &bounds, const bool allowEmpty = false) {
 			if (value.getType() != PropertyType::STRING) {
 				throw std::invalid_argument(std::string(context) + " must be a string");
@@ -69,11 +69,11 @@ namespace graph::query::gds {
 			}
 		}
 
-		void rejectUnknownKeys(const PropertyValue::MapType &map, const std::unordered_set<std::string_view> &allowed,
+		void rejectUnknownKeys(const PropertyValue::MapType &map, const std::initializer_list<std::string_view> allowed,
 				const std::string_view context, const LogicalProjectionSpecCodecBounds &bounds) {
 			requireMapBound(map, context, bounds);
 			for (const auto &[key, _]: map) {
-				if (key.size() > bounds.maximum_text_bytes || !allowed.contains(key)) {
+				if (key.size() > bounds.maximum_text_bytes || std::find(allowed.begin(), allowed.end(), key) == allowed.end()) {
 					throw std::invalid_argument(std::string(context) + " has unsupported option '" + key + "'");
 				}
 			}
@@ -83,7 +83,7 @@ namespace graph::query::gds {
 				const std::initializer_list<std::string_view> aliases, const std::string_view context) {
 			const PropertyValue *result = nullptr;
 			for (const std::string_view alias: aliases) {
-				const auto found = map.find(std::string(alias));
+				const auto found = std::find_if(map.begin(), map.end(), [alias](const auto &entry) { return entry.first == alias; });
 				if (found == map.end()) {
 					continue;
 				}
@@ -112,7 +112,7 @@ namespace graph::query::gds {
 
 		[[nodiscard]] bool isAllToken(const std::string_view text) noexcept { return text.empty() || text == "*"; }
 
-		[[nodiscard]] std::string uppercaseAscii(std::string text) {
+		[[nodiscard]] utils::OwnedStdString uppercaseAscii(utils::OwnedStdString text) {
 			std::ranges::transform(text, text.begin(), [](const unsigned char character) {
 				return static_cast<char>(std::toupper(character));
 			});
@@ -121,7 +121,7 @@ namespace graph::query::gds {
 
 		[[nodiscard]] LogicalProjectionOrientation decodeOrientation(const PropertyValue &value,
 				const std::string_view context, const LogicalProjectionSpecCodecBounds &bounds) {
-			const std::string text = uppercaseAscii(requireText(value, context, bounds));
+			const auto text = uppercaseAscii(requireText(value, context, bounds));
 			if (text == "NATURAL" || text == "DIRECTED") {
 				return LogicalProjectionOrientation::LPO_NATURAL;
 			}
@@ -134,19 +134,19 @@ namespace graph::query::gds {
 			throw std::invalid_argument(std::string(context) + " must be NATURAL, REVERSE, or UNDIRECTED");
 		}
 
-		void appendToken(std::vector<std::string> &tokens, std::string token) {
+		void appendToken(utils::OwnedStringVector &tokens, std::string_view token) {
 			if (isAllToken(token)) {
 				tokens.clear();
 				return;
 			}
 			if (std::ranges::find(tokens, token) == tokens.end()) {
-				tokens.push_back(std::move(token));
+				tokens.emplace_back(token);
 			}
 		}
 
-		[[nodiscard]] std::vector<std::string> decodeTokens(const PropertyValue &value, const std::string_view context,
+		[[nodiscard]] utils::OwnedStringVector decodeTokens(const PropertyValue &value, const std::string_view context,
 				const LogicalProjectionSpecCodecBounds &bounds) {
-			std::vector<std::string> result;
+			utils::OwnedStringVector result;
 			if (value.getType() == PropertyType::STRING) {
 				appendToken(result, requireText(value, context, bounds, true));
 				return result;
@@ -165,14 +165,14 @@ namespace graph::query::gds {
 			return result;
 		}
 
-		[[nodiscard]] std::vector<std::string> decodeNodeProjection(const PropertyValue &value,
+		[[nodiscard]] utils::OwnedStringVector decodeNodeProjection(const PropertyValue &value,
 				const LogicalProjectionSpecCodecBounds &bounds) {
 			if (value.getType() != PropertyType::MAP) {
 				return decodeTokens(value, "gds.graph.project node projection", bounds);
 			}
 			const PropertyValue::MapType &map = value.getMap();
 			requireMapBound(map, "gds.graph.project node projection", bounds);
-			std::vector<std::string> labels;
+			utils::OwnedStringVector labels;
 			for (const auto &[alias, config]: map) {
 				if (alias.size() > bounds.maximum_text_bytes || isAllToken(alias)) {
 					labels.clear();
@@ -286,10 +286,10 @@ namespace graph::query::gds {
 			return result;
 		}
 
-		[[nodiscard]] std::vector<LogicalRelationshipProjection> decodeRelationships(const PropertyValue &value,
+		[[nodiscard]] utils::OwnedStdVector<LogicalRelationshipProjection> decodeRelationships(const PropertyValue &value,
 				const LogicalProjectionOrientation defaultOrientation, const LogicalProjectionSpecCodecBounds &bounds) {
-			std::vector<LogicalRelationshipProjection> relationships;
-			const auto appendDefault = [&relationships, defaultOrientation](std::string type) {
+			utils::OwnedStdVector<LogicalRelationshipProjection> relationships;
+			const auto appendDefault = [&relationships, defaultOrientation](utils::OwnedStdString type) {
 				relationships.push_back({.type = isAllToken(type) ? "" : std::move(type), .orientation = defaultOrientation});
 			};
 			if (value.getType() == PropertyType::STRING) {
@@ -407,7 +407,7 @@ namespace graph::query::gds {
 			bounds.maximum_text_bytes == 0U || view.empty() || view.size() > bounds.maximum_arguments) {
 			throw std::invalid_argument("gds.graph.project codec received invalid argument bounds");
 		}
-		const std::string name = requireText(view.front(), "gds.graph.project name", bounds);
+		const auto name = requireText(view.front(), "gds.graph.project name", bounds);
 		if (view.size() == 2U && view[1].getType() == PropertyType::MAP) {
 			return decodeConfigSignature(name, view[1].getMap(), bounds);
 		}
@@ -419,9 +419,9 @@ namespace graph::query::gds {
 		result.name = name;
 		if (view[1].getType() == PropertyType::STRING && view[2].getType() == PropertyType::STRING &&
 			(view.size() == 3U || view[3].getType() == PropertyType::STRING)) {
-			const std::string nodeLabel = requireText(view[1], "gds.graph.project nodeLabel", bounds, true);
-			const std::string relationshipType = requireText(view[2], "gds.graph.project relationshipType", bounds, true);
-			result.node_labels = isAllToken(nodeLabel) ? std::vector<std::string>{} : std::vector<std::string>{nodeLabel};
+			const auto nodeLabel = requireText(view[1], "gds.graph.project nodeLabel", bounds, true);
+			const auto relationshipType = requireText(view[2], "gds.graph.project relationshipType", bounds, true);
+			if (!isAllToken(nodeLabel)) result.node_labels.emplace_back(nodeLabel);
 			LogicalRelationshipProjection relationship;
 			relationship.type = isAllToken(relationshipType) ? "" : relationshipType;
 			if (view.size() == 4U) {

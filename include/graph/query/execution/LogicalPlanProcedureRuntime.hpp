@@ -41,14 +41,14 @@ namespace graph::query::execution {
 									storage::LogicalGraphVectorMaintenanceBackend *vectorMaintenanceBackend,
 									NativeConfigurationService *configurationService = nullptr,
 									gds::LogicalProjectionCatalog *projectionCatalog = nullptr,
-									concurrent::ThreadPool *threadPool =
-											nullptr) : // ZYX_COV_EXCL_LINE ZYX_COV_EXCL_FUNCTION: header-only
+									concurrent::ThreadPool *threadPool = nullptr,
+                                    std::shared_ptr<std::pmr::memory_resource> projectionMemoryOwner = {}) : // ZYX_COV_EXCL_LINE ZYX_COV_EXCL_FUNCTION: header-only
 													   // constructor is executed through its linked definition; another
 													   // inline instantiation has no independent counter.
 			read_backend_(readBackend), vector_backend_(vectorBackend),
 			vector_maintenance_backend_(vectorMaintenanceBackend), configuration_service_(configurationService),
 			projection_catalog_(projectionCatalog),
-			thread_pool_(threadPool) {}
+			thread_pool_(threadPool), projection_memory_owner_(std::move(projectionMemoryOwner)) {}
 
 		[[nodiscard]] QueryResult
 		execute(const logical::LogicalOperator &root, const LogicalPlanReadRuntimeBounds &readBounds,
@@ -67,6 +67,7 @@ namespace graph::query::execution {
 		NativeConfigurationService *configuration_service_ = nullptr;
 		gds::LogicalProjectionCatalog *projection_catalog_ = nullptr;
 		concurrent::ThreadPool *thread_pool_ = nullptr;
+        std::shared_ptr<std::pmr::memory_resource> projection_memory_owner_;
 	};
 
 } // namespace graph::query::execution

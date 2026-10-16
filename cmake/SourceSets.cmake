@@ -523,6 +523,8 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalGraphReadExecutor_Validation.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPropertyPredicate.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/gds/test_LogicalGraphProjection.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/gds/test_LogicalGdsResourceOwnership.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_OwnedLazyUnorderedMap.cpp"
 	"${PROJECT_SOURCE_DIR}/tests/src/query/gds/test_LogicalProjectionSpecCodec.cpp"
 	"${PROJECT_SOURCE_DIR}/tests/src/query/gds/test_LogicalGdsProcedures.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalAggregateAccumulator.cpp"
