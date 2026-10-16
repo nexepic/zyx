@@ -1,0 +1,14 @@
+{
+  "selected_tests": 295,
+  "passed": 295,
+  "native_exact_admission_points": 215,
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "source_sha256": {
+    "include/graph/storage/LogicalGraphVectorSearch.hpp": "460bc5984353dad3e50c687fe5f4abeadbae298e048d6176b8cc9f75166d1537",
+    "src/query/execution/LogicalPlanProcedureRuntime.cpp": "4897e62b290d76ab987143b4b5ad0ec682946f4bc78074cd5cbba297965c3b8e",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "40971dbbd4a76bc1d0bd557462de18115ab8c36d2d28615ff0116a6b4ae3b500",
+    "src/storage/relocatable/vector/RelocatableVectorSearch.cpp": "46956ad0d99453c4a58f0cdb7b5a8a65109b1dd160928a3a2d87c6be09048ca8",
+    "tests/src/storage/relocatable/backend/test_RelocatableVectorSearchResources.cpp": "badb301a22e813ce004a58d7fb974d75748595cac33c6fa8e13e38e57e1e8e82"
+  }
+}

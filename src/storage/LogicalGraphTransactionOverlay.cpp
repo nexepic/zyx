@@ -2986,7 +2986,7 @@ namespace graph::storage {
 				throw std::runtime_error(
 						"logical transaction Vector search has no exact overlay evaluator for its pinned generation");
 			}
-			std::vector<LogicalGraphVectorSearchHit> hits;
+			utils::OwnedStdVector<LogicalGraphVectorSearchHit> hits;
 			const auto betterHit = [](const LogicalGraphVectorSearchHit &left, const LogicalGraphVectorSearchHit &right) {
 				return left.score == right.score ? left.node_id < right.node_id : left.score < right.score;
 			};

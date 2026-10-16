@@ -197,7 +197,7 @@ namespace graph::query::execution {
 			}
 		}
 
-		[[nodiscard]] std::string requireIndexName(const PropertyValue &value) {
+		[[nodiscard]] utils::OwnedStdString requireIndexName(const PropertyValue &value) {
 			if (value.getType() != PropertyType::STRING) {
 				throw std::invalid_argument("db.index.vector.queryNodes requires a String index name");
 			}
@@ -219,7 +219,7 @@ namespace graph::query::execution {
 			return static_cast<size_t>(topK);
 		}
 
-		[[nodiscard]] std::vector<float> requireQueryVector(const PropertyValue &value,
+		[[nodiscard]] utils::OwnedStdVector<float> requireQueryVector(const PropertyValue &value,
 				size_t maximumMaterializedBytes, const QueryContext &context) {
 			if (value.getType() != PropertyType::LIST) {
 				throw std::invalid_argument("db.index.vector.queryNodes queryVector argument must be a List of floats");
@@ -235,7 +235,7 @@ namespace graph::query::execution {
 				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
 			}
 			context.checkGuardNow();
-			std::vector<float> query;
+			utils::OwnedStdVector<float> query;
 			query.reserve(value.getList().size());
 			if (checkedProcedureSizeMul(query.capacity(), sizeof(float)) > maximumMaterializedBytes) {
 				throw std::runtime_error("db.index.vector.queryNodes query vector exceeded its materialized byte bound");
@@ -310,7 +310,7 @@ namespace graph::query::execution {
 			return static_cast<size_t>(parsed);
 		}
 
-		[[nodiscard]] std::string requireProjectionName(const logical::LogicalCallProcedure::ArgumentView &arguments,
+		[[nodiscard]] utils::OwnedStdString requireProjectionName(const logical::LogicalCallProcedure::ArgumentView &arguments,
 														const std::string_view procedureName,
 														const size_t expectedArguments) {
 			if (arguments.size() != expectedArguments || arguments.empty() ||
@@ -3296,7 +3296,7 @@ namespace graph::query::execution {
 					break;
 				}
 				case NativeProcedureKind::NPK_GDS_GRAPH_DROP: {
-					const std::string name = requireProjectionName(arguments, "gds.graph.drop", 1U);
+					const auto name = requireProjectionName(arguments, "gds.graph.drop", 1U);
 					deferredCatalogMutation = projection_catalog_->prepareDrop(name);
 					if (!deferredCatalogMutation) {
 						throw std::out_of_range("logical projection catalog does not contain this name");
@@ -3327,7 +3327,7 @@ namespace graph::query::execution {
 					break;
 				}
 				case NativeProcedureKind::NPK_GDS_GRAPH_EXISTS: {
-					const std::string name = requireProjectionName(arguments, "gds.graph.exists", 1U);
+					const auto name = requireProjectionName(arguments, "gds.graph.exists", 1U);
 					BufferedProcedureRow row;
 					row.row.values.emplace("name", PropertyValue(name));
 					row.row.values.emplace("exists", PropertyValue(projection_catalog_->exists(name)));
@@ -3347,7 +3347,7 @@ namespace graph::query::execution {
 													  "gds.graph.list");
 						}
 					} else {
-						const std::string name = requireProjectionName(arguments, "gds.graph.list", 1U);
+						const auto name = requireProjectionName(arguments, "gds.graph.list", 1U);
 						// Listing one name is a filtered enumeration: a missing entry is an
 						// empty result, while gds.graph.schema remains the strict lookup API.
 						try {
@@ -3366,7 +3366,7 @@ namespace graph::query::execution {
 					break;
 				}
 				case NativeProcedureKind::NPK_GDS_GRAPH_SCHEMA: {
-					const std::string name = requireProjectionName(arguments, "gds.graph.schema", 1U);
+					const auto name = requireProjectionName(arguments, "gds.graph.schema", 1U);
 					appendBoundedProcedureRow(rows, makeProjectionDescriptorRow(projection_catalog_->describe(name, *snapshot)),
 												  readBounds.maximum_rows, "gds.graph.schema");
 					defaultColumns = {"name", "nodeLabels", "relationships", "stale"};
@@ -3386,7 +3386,7 @@ namespace graph::query::execution {
 						options.damping_factor =
 								requireGdsFiniteNumber(arguments[2], "gds.pageRank.stream dampingFactor");
 					}
-					const std::string name = requireProjectionName(arguments, "gds.pageRank.stream", arguments.size());
+					const auto name = requireProjectionName(arguments, "gds.pageRank.stream", arguments.size());
 					const auto scores =
 							gds::LogicalGraphAlgorithms::pageRankOwned(*projection_catalog_->get(name), options,
 								   {.maximum_nodes = readBounds.maximum_node_records,
@@ -3410,7 +3410,7 @@ namespace graph::query::execution {
 					break;
 				}
 				case NativeProcedureKind::NPK_GDS_WCC: {
-					const std::string name = requireProjectionName(arguments, "gds.wcc.stream", 1U);
+					const auto name = requireProjectionName(arguments, "gds.wcc.stream", 1U);
 					const auto components =
 							gds::LogicalGraphAlgorithms::weaklyConnectedComponentsOwned(
 									*projection_catalog_->get(name),
@@ -3471,7 +3471,7 @@ namespace graph::query::execution {
 					break;
 				}
 				case NativeProcedureKind::NPK_GDS_CLOSENESS: {
-					const std::string name = requireProjectionName(arguments, "gds.closeness.stream", 1U);
+					const auto name = requireProjectionName(arguments, "gds.closeness.stream", 1U);
 					const auto scores =
 							gds::LogicalGraphAlgorithms::closenessCentralityOwned(
 									*projection_catalog_->get(name),
@@ -3531,7 +3531,7 @@ namespace graph::query::execution {
 							}
 						}
 					}
-					const std::string name = requireProjectionName(arguments, "gds.leiden.stream", arguments.size());
+					const auto name = requireProjectionName(arguments, "gds.leiden.stream", arguments.size());
 					const auto communities = gds::LogicalGraphAlgorithms::leidenOwned(
 							*projection_catalog_->get(name), options,
 										{.maximum_nodes = readBounds.maximum_node_records,
@@ -3560,7 +3560,7 @@ namespace graph::query::execution {
 						throw std::invalid_argument(
 								"gds.shortestPath.dijkstra.stream expects (graphName, startId, endId)");
 					}
-					const std::string name = requireProjectionName(arguments, "gds.shortestPath.dijkstra.stream", 3U);
+					const auto name = requireProjectionName(arguments, "gds.shortestPath.dijkstra.stream", 3U);
 					const uint64_t source = requireShortestPathNodeId(arguments[1], "startId");
 					const uint64_t target = requireShortestPathNodeId(arguments[2], "endId");
 					const gds::LogicalGdsWeightedPath path =
@@ -3724,6 +3724,8 @@ namespace graph::query::execution {
 
 			QueryGuardCancellationCheckpoint cancellation(context);
 			context.checkGuard();
+            utils::OwnedHeapReservation trainingRequestProxies(utils::sharedAllocationOwner(),
+                2U * utils::detail::standardContainerProxyBytes());
 			std::unique_ptr<storage::PreparedLogicalGraphVectorTraining> prepared =
 					vector_maintenance_backend_->prepareLogicalVectorTraining(
 							{requireIndexName(arguments.front()), maximumVectorTrainingRecords, maximumVectorTrainingPages,
@@ -3801,15 +3803,24 @@ namespace graph::query::execution {
 		};
 
 		QueryGuardCancellationCheckpoint cancellation(context);
+        // Loans are declared before the public request: its borrowed buffers
+        // die before these admission owners. The request is immutable in search.
+        utils::OwnedStdString requestNameLoan = requireIndexName(arguments[0]);
+        utils::OwnedStdVector<float> queryVectorLoan;
+        // Empty public containers and moved-from debug proxies overlap the
+        // already-funded loan buffers on MSVC; the reservation dies last.
+        utils::OwnedHeapReservation requestProxyLoan(utils::sharedAllocationOwner(),
+            4U * utils::detail::standardContainerProxyBytes());
 		storage::LogicalGraphVectorSearchRequest request;
-		request.index_name = requireIndexName(arguments[0]);
+		request.index_name = std::move(static_cast<std::string &>(requestNameLoan));
 		request.top_k = requireTopK(arguments[1]);
 		size_t retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");
 		}
-		request.query_vector = requireQueryVector(arguments[2],
+		queryVectorLoan = requireQueryVector(arguments[2],
 				readBounds.maximum_materialized_bytes - retainedRequestBytes, context);
+        request.query_vector = std::move(static_cast<std::vector<float> &>(queryVectorLoan));
 		retainedRequestBytes = retainedVectorRequestBytes(request);
 		if (retainedRequestBytes > readBounds.maximum_materialized_bytes) {
 			throw ProcedureByteBoundExceeded("logical Vector procedure request exceeded its materialized byte bound");

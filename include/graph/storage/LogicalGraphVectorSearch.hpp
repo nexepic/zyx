@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "graph/storage/CancellationCheckpoint.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 
 namespace graph::storage {
@@ -88,7 +89,7 @@ namespace graph::storage {
 	};
 
 	struct LogicalGraphVectorSearchResult {
-		std::vector<LogicalGraphVectorSearchHit> hits;
+		utils::OwnedStdVector<LogicalGraphVectorSearchHit> hits;
 		LogicalGraphVectorSearchStats stats;
 
 		bool operator==(const LogicalGraphVectorSearchResult &) const = default;
