@@ -1,0 +1,742 @@
+{
+  "status": "in_progress_not_S0.3_acceptance",
+  "recorded_at_utc": "2026-10-16T20:03:11.006520+00:00",
+  "source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "production_source_after_repairs": "03436b7a75d0ace5830570b13840d9f55910de58",
+  "source_versions_never_pooled": true,
+  "registered_slots": 117,
+  "recorded_slots": 73,
+  "recorded_status_counts": {
+    "failed": 3,
+    "inconclusive_timeout": 3,
+    "completed": 54,
+    "unsupported_NA": 3,
+    "unmeasurable_previous_failure": 10
+  },
+  "active_case": "round-1/current/wide_large",
+  "accepted_total": 28,
+  "percent": 82.4,
+  "current_request_completed": 4,
+  "outcomes": [
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "failed",
+      "returncode": 1,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "inconclusive_timeout",
+      "returncode": -9,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-dynamic.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "failed",
+      "returncode": 1,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-maintenance.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "wide_large",
+      "status": "inconclusive_timeout",
+      "returncode": -9,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-wide_large.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "inconclusive_timeout",
+      "returncode": -9,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-dynamic.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "failed",
+      "returncode": 1,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-maintenance.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "status": "unsupported_NA",
+      "engine": "kuzu",
+      "family": "dynamic",
+      "round": 1
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-maintenance.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-kuzu-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "aggregate",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-aggregate.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "dynamic",
+        "status": "inconclusive_timeout",
+        "returncode": -9,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-dynamic.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "maintenance",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-maintenance.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-control-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-control-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-control-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-control-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-control-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "current",
+        "family": "dynamic",
+        "status": "inconclusive_timeout",
+        "returncode": -9,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-dynamic.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "current",
+        "family": "maintenance",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-maintenance.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-current-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "status": "unsupported_NA",
+      "engine": "kuzu",
+      "family": "dynamic",
+      "round": 2
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-maintenance.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-2-kuzu-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "aggregate",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-aggregate.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "dynamic",
+        "status": "inconclusive_timeout",
+        "returncode": -9,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-dynamic.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "control",
+        "family": "maintenance",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-control-maintenance.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-control-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-control-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-control-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-control-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-control-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "current",
+        "family": "dynamic",
+        "status": "inconclusive_timeout",
+        "returncode": -9,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-dynamic.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "unmeasurable_previous_failure",
+      "source": {
+        "round": 1,
+        "engine": "current",
+        "family": "maintenance",
+        "status": "failed",
+        "returncode": 1,
+        "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-1-current-maintenance.log",
+        "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+      },
+      "rule": "Same frozen source and deterministic scenario; no successful sample or protection inferred. Do not repeat an exhausted correctness scenario."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-current-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-aggregate.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "status": "unsupported_NA",
+      "engine": "kuzu",
+      "family": "dynamic",
+      "round": 3
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-maintenance.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-parameters.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-point.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-scan.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-sort.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "returncode": 0,
+      "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/contract-3-kuzu-traversal.log",
+      "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes."
+    }
+  ],
+  "scope": "Failed/cutoff/unsupported/skipped slots are not independent successful processes. S0.3 remains pending until complete evidence review.",
+  "reporting_limits": "Only formal reads have repeated warm-query distributions. Other family timers are descriptive and disclose API/observer/deadline differences; no new end-to-end or Kuzu performance pass."
+}
