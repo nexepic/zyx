@@ -1,0 +1,14 @@
+{
+  "status": "registered_before_database_measurement",
+  "cpu": "gprofng separate instrumented processes",
+  "heap": "gprofng heap statistics and allocation callstacks",
+  "io": "gprofng I/O collector fails initialization on this host (llseek); disabled. Record Linux process I/O at result boundaries plus native page/decode/write counters. Do not substitute zeros or label process I/O as database-only I/O.",
+  "formal_timing_unchanged": true,
+  "instrumented_iterations": {
+    "scan_aggregate_sort": 10,
+    "point_traversal": 1000
+  },
+  "short_case_policy": "only diagnostic collector repetitions; no formal timing reuse",
+  "case_limit_seconds": 1800,
+  "child_cleanup": "kill only the isolated owned process group on timeout or failure"
+}

@@ -552,6 +552,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanUnionRuntime.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanUnwindRuntime.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanBoundedTopK.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanUnwindRuntime_Budget.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_LogicalPlanVarLengthRuntime.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/execution/test_Record.cpp"

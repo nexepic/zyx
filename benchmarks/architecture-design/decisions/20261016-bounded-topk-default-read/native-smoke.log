@@ -1,0 +1,16 @@
+{"event": "family_correctness", "family": "point", "wall_seconds": 0.0527307589945849, "completed": 1, "total": 13}
+{"event": "family_correctness", "family": "scan", "wall_seconds": 0.007374262990197167, "completed": 2, "total": 13}
+{"event": "family_correctness", "family": "traversal", "wall_seconds": 0.04242759899352677, "completed": 3, "total": 13}
+{"event": "family_correctness", "family": "aggregate", "wall_seconds": 0.014866901008645073, "completed": 4, "total": 13}
+{"event": "family_correctness", "family": "sort", "wall_seconds": 0.016720537008950487, "completed": 5, "total": 13}
+{"event": "family_correctness", "family": "parameters", "wall_seconds": 0.6620248059916776, "completed": 6, "total": 13}
+{"event": "family_correctness", "family": "dynamic", "wall_seconds": 0.8326012299803551, "completed": 7, "total": 13}
+{"event": "family_correctness", "family": "wide_large", "wall_seconds": 0.7765902850078419, "completed": 8, "total": 13}
+{"event": "family_correctness", "family": "write", "wall_seconds": 6.754318015999161, "completed": 9, "total": 13}
+{"event": "family_correctness", "family": "mixed", "wall_seconds": 1.886951135005802, "completed": 10, "total": 13}
+{"event": "family_correctness", "family": "snapshot", "wall_seconds": 0.849378988990793, "completed": 11, "total": 13}
+{"event": "family_correctness", "family": "maintenance", "wall_seconds": 7.078337806015043, "completed": 12, "total": 13}
+{"event": "family_correctness", "family": "budget", "wall_seconds": 0.3593195619760081, "completed": 13, "total": 13}
+{"engine": "zyx-native", "profile": "smoke", "seed": 42, "families": ["point", "scan", "traversal", "aggregate", "sort", "parameters", "dynamic", "wide_large", "write", "mixed", "snapshot", "maintenance", "budget"], "isolated_family": null, "operations": 886, "full_results_checked": true, "performance_timing": false, "unsupported_variants": [], "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios", "maintenance_windows": [{"file_bytes": 8519680, "rss_bytes": 43024384, "read_bytes": 519819264, "write_bytes": 2798912}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133005312, "write_bytes": 762240}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133005312, "write_bytes": 762304}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133005312, "write_bytes": 762240}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133005312, "write_bytes": 762304}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133218304, "write_bytes": 787072}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133349376, "write_bytes": 778752}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133345280, "write_bytes": 778752}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133349376, "write_bytes": 778816}, {"file_bytes": 8519680, "rss_bytes": 38965248, "read_bytes": 133345280, "write_bytes": 778752}], "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred", "binary_sha256": "a4f84fa69acec1aaaa3b54e11544f1661710d3e1bbf2e02ad4c416a3dbadbf38", "trace_sha256": "db20ec936eea4add28c54a35012283798af025b80a6d6a808b999560b2ad0e25"}
+{'ok': True, 'retries': 315, 'clients': 4, 'operations': 4000}
+{'ok': True}

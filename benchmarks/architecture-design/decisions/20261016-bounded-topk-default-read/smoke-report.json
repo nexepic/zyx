@@ -1,0 +1,91 @@
+{
+  "engine": "zyx-native",
+  "profile": "smoke",
+  "seed": 42,
+  "families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "isolated_family": null,
+  "operations": 886,
+  "full_results_checked": true,
+  "performance_timing": false,
+  "unsupported_variants": [],
+  "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+  "maintenance_windows": [
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 43024384,
+      "read_bytes": 519819264,
+      "write_bytes": 2798912
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133005312,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133005312,
+      "write_bytes": 762304
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133005312,
+      "write_bytes": 762240
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133005312,
+      "write_bytes": 762304
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133218304,
+      "write_bytes": 787072
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133349376,
+      "write_bytes": 778752
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133345280,
+      "write_bytes": 778752
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133349376,
+      "write_bytes": 778816
+    },
+    {
+      "file_bytes": 8519680,
+      "rss_bytes": 38965248,
+      "read_bytes": 133345280,
+      "write_bytes": 778752
+    }
+  ],
+  "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+  "binary_sha256": "a4f84fa69acec1aaaa3b54e11544f1661710d3e1bbf2e02ad4c416a3dbadbf38",
+  "trace_sha256": "db20ec936eea4add28c54a35012283798af025b80a6d6a808b999560b2ad0e25"
+}

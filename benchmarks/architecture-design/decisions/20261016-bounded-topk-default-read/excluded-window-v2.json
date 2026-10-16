@@ -1,0 +1,8 @@
+{
+  "status": "excluded_after_reproduced_correctness_failure",
+  "reason": "Top-K default execution retained complete sort input and exceeded 64MiB. Nine full-size single-pass semantic variants passed separately; Top-K failed. No partial sample is an accepted final-source comparison. Production source changed to repair bounded selection.",
+  "accepted_final_samples": 0,
+  "original_diagnostic": "/tmp/zyx-profile-sequence-correctness.stderr",
+  "stack": "/tmp/zyx-topk-materialization-resolved-stack.txt",
+  "exact_stack_binary_sha256": "b0b74d881d16e4d774f816648b3f219db002b4132bc48a2f50af8b139bc91e94"
+}

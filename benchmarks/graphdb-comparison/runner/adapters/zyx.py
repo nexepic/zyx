@@ -161,6 +161,9 @@ class ZyxAdapter(BenchmarkAdapter):
                 )
                 if profile_process:
                     self._profile_completed = completed
+                    # Preserve the exact process output before per-workload parsing.
+                    (self.dataset_dir.parent / "native-profile-stdout.jsonl").write_text(completed.stdout)
+                    (self.dataset_dir.parent / "native-profile-stderr.jsonl").write_text(completed.stderr)
         except subprocess.TimeoutExpired:
             return self._failed_result(
                 workload, f"subprocess for {workload} timed out after {self.timeout_seconds:g}s"
@@ -184,6 +187,9 @@ class ZyxAdapter(BenchmarkAdapter):
                     continue
                 if not isinstance(event, dict):
                     malformed.append(f"{stream_name}:{line_number}: JSONL event is not an object")
+                    continue
+                if profile_process and event.get("event") == "error" and event.get("workload") == "run_all":
+                    reported_errors.append(str(event.get("error", "profile subprocess reported failure")))
                     continue
                 if profile_process and event.get("workload") != workload and event.get("workload") in PROFILE_WORKLOADS[self.profile]:
                     continue
