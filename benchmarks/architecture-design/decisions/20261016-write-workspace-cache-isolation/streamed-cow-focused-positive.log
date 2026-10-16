@@ -1,0 +1,308 @@
+[0/2] Re-checking globbed directories...
+[1/8] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/InitialBTreeBuilder.cpp.o
+[2/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/execution/test_ProcessResourceDomains.cpp.o
+[3/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp.o
+[4/8] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[5/8] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:1:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp:26:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:443:82: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  443 |     const EntityReadShape topology{.include_labels = true, .all_properties = true};
+      |                                                                                  ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:445:107: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  445 |     const auto originalEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true});
+      |                                                                                                           ^
+/workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp:455:116: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  455 |         EXPECT_NO_THROW(repeatedEdge = snapshot->readEdgeShaped(edge, {.include_type = true, .all_properties = true}));
+      |                                                                                                                    ^
+9 warnings generated.
+[6/8] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableStorageBackend.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1919:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1919 |                                                         const auto edge = snapshot_->readEdgeShaped(patch.entity.value, {.include_type = false});
+      |                                                                                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1953:56: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1953 |                                         const EntityReadShape shape{.all_properties = true};
+      |                                                                                           ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:2265:96: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2265 |                                                         const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+      |                                                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4048:75: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4048 |                                 snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                       ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4055:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4055 |                                 snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                     ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4784:71: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4784 |                                 snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                   ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5226:78: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5226 |                                         snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5778:79: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5778 |                                                 snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                         ^
+14 warnings generated.
+[7/8] Linking CXX static library libzyx_core.a
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 98 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 11 tests from InitialBTreeBuilderTest
+[ RUN      ] InitialBTreeBuilderTest.PlansAndMaterializesMultiLeafTreeWithStableSiblingLinks
+[       OK ] InitialBTreeBuilderTest.PlansAndMaterializesMultiLeafTreeWithStableSiblingLinks (233 ms)
+[ RUN      ] InitialBTreeBuilderTest.MaterializesKeyOnlyLeavesWithoutEncodingLeafValues
+[       OK ] InitialBTreeBuilderTest.MaterializesKeyOnlyLeavesWithoutEncodingLeafValues (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsUnorderedOrEmptyInputBeforeMaterialization
+[       OK ] InitialBTreeBuilderTest.RejectsUnorderedOrEmptyInputBeforeMaterialization (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.PlansNarrowInternalLevelsWithoutInvalidatingChildKeys
+[       OK ] InitialBTreeBuilderTest.PlansNarrowInternalLevelsWithoutInvalidatingChildKeys (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsAValidlyOrderedEntryThatCannotFitInAnyLeaf
+[       OK ] InitialBTreeBuilderTest.RejectsAValidlyOrderedEntryThatCannotFitInAnyLeaf (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsInvalidMaterializationInputsBeforeWritingPages
+[       OK ] InitialBTreeBuilderTest.RejectsInvalidMaterializationInputsBeforeWritingPages (0 ms)
+[ RUN      ] InitialBTreeBuilderTest.RejectsEveryPubliclyConstructibleMalformedPlanNode
+[       OK ] InitialBTreeBuilderTest.RejectsEveryPubliclyConstructibleMalformedPlanNode (226 ms)
+[ RUN      ] InitialBTreeBuilderTest.SizePlanningMatchesCanonicalPackedBoundariesAndMaterializesAllValues
+[       OK ] InitialBTreeBuilderTest.SizePlanningMatchesCanonicalPackedBoundariesAndMaterializesAllValues (68 ms)
+[ RUN      ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit
+[       OK ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit (1 ms)
+[ RUN      ] InitialBTreeBuilderTest.StreamingPlanAvoidsCompleteInputOverlapAndCompactsEveryLeaf
+[       OK ] InitialBTreeBuilderTest.StreamingPlanAvoidsCompleteInputOverlapAndCompactsEveryLeaf (86 ms)
+[ RUN      ] InitialBTreeBuilderTest.StreamingSourceFailureAndInvalidInputsReleaseAllPrivatePlanBytes
+[       OK ] InitialBTreeBuilderTest.StreamingSourceFailureAndInvalidInputsReleaseAllPrivatePlanBytes (2 ms)
+[----------] 11 tests from InitialBTreeBuilderTest (621 ms total)
+
+[----------] 14 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant
+[       OK ] RelocatableBTreePageStoreTest.DenseRebuildPublishesEveryKeyAndPreservesOldSnapshotWithinWriteGrant (327 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration
+[       OK ] RelocatableBTreePageStoreTest.AppliesMixedWideKeyOverlayMutationsAsOneDurableTreeGeneration (231 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.DenselyRematerializesALargeTransactionOverlayBeforePublication (285 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedOverlayIntoFreshPoolsBeforePublication (161 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot
+[       OK ] RelocatableBTreePageStoreTest.RebuildsAnExhaustedFinalEraseIntoOneFreshEmptyRoot (153 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.RedistributesUnevenLeafPayloadsThroughTheTransactionOverlay (23 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyLeftLeafThroughTheTransactionOverlay (16 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase
+[       OK ] RelocatableBTreePageStoreTest.RejectsInternalRootSiblingLinksBeforeOverlayOrDirectErase (13 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance
+[       OK ] RelocatableBTreePageStoreTest.RejectsBrokenLeafSiblingLinksBeforeOverlayRebalance (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorOmitsItsReciprocalPredecessorLink (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor
+[       OK ] RelocatableBTreePageStoreTest.RejectsLeafWhoseSuccessorPointsToTheWrongPredecessor (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnOversizedInternalOverlayMerge (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool
+[       OK ] RelocatableBTreePageStoreTest.RejectsAnInvalidInitialPageLocationBeforePreparingANewPool (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks
+[       OK ] RelocatableBTreePageStoreTest.RejectsUnaryOverlayRootThatWouldPublishALeafWithSiblingLinks (15 ms)
+[----------] 14 tests from RelocatableBTreePageStoreTest (1277 ms total)
+
+[----------] 57 tests from RelocatableStorageBackendTest
+[ RUN      ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose
+[       OK ] RelocatableStorageBackendTest.NativeQueryOutputRetainsItsMemoryDomainAfterClose (140 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting
+[       OK ] RelocatableStorageBackendTest.NativeReadOnlyQueriesShareTheFileDomainWithoutWriting (123 ms)
+[ RUN      ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge
+[       OK ] RelocatableStorageBackendTest.ReopenReusesTheDomainWhileAnOldResultRetainsItsCharge (75 ms)
+[ RUN      ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains
+[       OK ] RelocatableStorageBackendTest.HardLinkAliasesCannotCreateIndependentMemoryDomains (56 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsForeignQueryAccountsInsteadOfBypassingTheDomain (62 ms)
+[ RUN      ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback
+[       OK ] RelocatableStorageBackendTest.TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback (72 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases
+[       OK ] RelocatableStorageBackendTest.NativeCacheGrantIsChargedOnceAcrossReadOnlyAliases (55 ms)
+[ RUN      ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners
+[       OK ] RelocatableStorageBackendTest.RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners (1172 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry
+[       OK ] RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry (226 ms)
+[ RUN      ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose
+[       OK ] RelocatableStorageBackendTest.CoordinatedPropertyPrefetchReleasesSelectedAndRejectedRowsBeforeClose (201 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions
+[       OK ] RelocatableStorageBackendTest.NativeReadFallbackInheritsTheSnapshotGrantWithoutAllocatingForExistingSessions (58 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge
+[       OK ] RelocatableStorageBackendTest.NativeTransactionWrappersRetainOnlyTheirLiveWriteClassObjectCharge (67 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge
+[       OK ] RelocatableStorageBackendTest.DeniedTransactionObjectAdmissionLeaksNoSnapshotOrWriteCharge (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement
+[       OK ] RelocatableStorageBackendTest.IssuedIdBuffersUseWriteQuotaAndDeniedStageKeepsPriorStatement (111 ms)
+[ RUN      ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction
+[       OK ] RelocatableStorageBackendTest.ClosedTransactionObjectKeepsItsWriteDomainAfterBackendDestruction (68 ms)
+[ RUN      ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry
+[       OK ] RelocatableStorageBackendTest.PreviewRangeQuotaFailureDoesNotPublishAnIncompletePreviewOrConsumeItsRetry (74 ms)
+[ RUN      ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner
+[       OK ] RelocatableStorageBackendTest.TerminalRangeCleanupDoesNotCaptureAnUnrelatedAmbientAllocationOwner (73 ms)
+[ RUN      ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession
+[       OK ] RelocatableStorageBackendTest.CachedTopologyReadDoesNotAllocateAnUnusedAmbientFallbackSession (108 ms)
+[ RUN      ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext
+[       OK ] RelocatableStorageBackendTest.FullPropertyReadRestoresTheLazyDirectoryAllocationContext (192 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedPropertyPatchSlotsUseWriteBudgetAndReleaseAtRollback (99 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit
+[       OK ] RelocatableStorageBackendTest.DeniedPropertyPatchSlotCopyPreservesPriorStatementAndCanCommit (164 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes
+[       OK ] RelocatableStorageBackendTest.DeniedCanonicalCreationWorkspaceRollsBackWithoutPublishingNodes (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback
+[       OK ] RelocatableStorageBackendTest.RetainedMutationSlotsAreChargedToWriteBeforeStagingAndFreedAtRollback (84 ms)
+[ RUN      ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.OverlayNodesKeepWriteOwnershipAfterRollbackUntilOverlayDestruction (103 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayUndoMetadataPreservesThePriorVisibleStatement (130 ms)
+[ RUN      ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry
+[       OK ] RelocatableStorageBackendTest.DeniedOverlayCreationUndoPreservesItsPreviewIdentityForRetry (117 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityGrantIsSharedAcrossWritableFileAliases (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry
+[       OK ] RelocatableStorageBackendTest.LogicalIdCapabilityQuotaRejectsBeforePublicationAndCanRetry (83 ms)
+[ RUN      ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant
+[       OK ] RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceAdmissionUsesMaintenanceAndRefundsAfterScan (144 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityWorkspaceExhaustionPreservesReadOnlySnapshot (149 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (138 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeIntegrityScanDoesNotSpendOrEvictExhaustedCacheCredit (432 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitRejectsWritableOversizeButAllowsPhysicalReadonlyInspection (95 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease
+[       OK ] RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease (1789 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap
+[       OK ] RelocatableStorageBackendTest.NativeFileLimitValidatesBeforeCreationAndCleansUpDeniedBootstrap (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites
+[       OK ] RelocatableStorageBackendTest.NativeWritableAliasesRejectConflictingFileLimitsBeforeMetadataWrites (93 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimAdmissionUsesMaintenanceBeforePublication (83 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication
+[       OK ] RelocatableStorageBackendTest.NativeLargeValueReclaimUsesProtectedWorkspaceAndRejectsExhaustionWithoutPublication (212 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund
+[       OK ] RelocatableStorageBackendTest.NativeMaintenanceWorkspacePressureDefersWithoutFencingAndResumesAfterRefund (190 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain
+[       OK ] RelocatableStorageBackendTest.NativeEngineRejectsOtherResourceClassesWithinItsOwnDomain (62 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile
+[       OK ] RelocatableStorageBackendTest.NativeWorkspaceLimitsRejectZeroBeforeCreatingAFile (0 ms)
+[ RUN      ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction
+[       OK ] RelocatableStorageBackendTest.NestedOverlayPayloadsKeepWriteCreditAfterNativeRollbackUntilOverlayDestruction (117 ms)
+[ RUN      ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed
+[       OK ] RelocatableStorageBackendTest.EscapedCompiledAndCacheHitPlansRetainQueryCreditUntilTheirNodesAreDestroyed (63 ms)
+[ RUN      ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult
+[       OK ] RelocatableStorageBackendTest.CompilationSharesTheCallersQueryAccountAndRefundsBeforeReturningItsResult (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope
+[       OK ] RelocatableStorageBackendTest.SchemaResultsUseSnapshotCacheAuthorityWithoutAnExplicitCallerScope (89 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose
+[       OK ] RelocatableStorageBackendTest.SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose (98 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace
+[       OK ] RelocatableStorageBackendTest.SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace (85 ms)
+[ RUN      ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames
+[       OK ] RelocatableStorageBackendTest.SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames (86 ms)
+[ RUN      ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry
+[       OK ] RelocatableStorageBackendTest.EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry (3082 ms)
+[ RUN      ] RelocatableStorageBackendTest.GdsProjectionsAndLazyCsrKeepCacheOwnershipWithoutRetainingTheirCreatingQuery
+[       OK ] RelocatableStorageBackendTest.GdsProjectionsAndLazyCsrKeepCacheOwnershipWithoutRetainingTheirCreatingQuery (113 ms)
+[ RUN      ] RelocatableStorageBackendTest.ProcedureResultKeepsItsQueryCreditAfterBackendCloseAndRefundsOnDestruction
+[       OK ] RelocatableStorageBackendTest.ProcedureResultKeepsItsQueryCreditAfterBackendCloseAndRefundsOnDestruction (64 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCommitDoesNotBorrowExhaustedCacheCreditForPrivateBtreeValidation
+[       OK ] RelocatableStorageBackendTest.NativeCommitDoesNotBorrowExhaustedCacheCreditForPrivateBtreeValidation (195 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCowWriteAdmissionRejectsBeforePublicationAndRefundsForRetry
+[       OK ] RelocatableStorageBackendTest.NativeCowWriteAdmissionRejectsBeforePublicationAndRefundsForRetry (128 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeEdgeOverlayResolvesAnUnseenTypeUnderExhaustedCacheCredit
+[       OK ] RelocatableStorageBackendTest.NativeEdgeOverlayResolvesAnUnseenTypeUnderExhaustedCacheCredit (230 ms)
+[ RUN      ] RelocatableStorageBackendTest.NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit
+[       OK ] RelocatableStorageBackendTest.NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit (103 ms)
+[ RUN      ] RelocatableStorageBackendTest.ConcurrentNativeWritesDoNotReserveCreditWhileWaitingForAnotherPublication
+[       OK ] RelocatableStorageBackendTest.ConcurrentNativeWritesDoNotReserveCreditWhileWaitingForAnotherPublication (212 ms)
+[----------] 57 tests from RelocatableStorageBackendTest (12186 ms total)
+
+[----------] 16 tests from ProcessResourceDomainsTest
+[ RUN      ] ProcessResourceDomainsTest.NativeWriteGateSharesFileIdentityAndSeparatesDifferentDomains
+[       OK ] ProcessResourceDomainsTest.NativeWriteGateSharesFileIdentityAndSeparatesDifferentDomains (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance
+[       OK ] ProcessResourceDomainsTest.RepeatedIdentityReusesTheDomainAndItsAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit
+[       OK ] ProcessResourceDomainsTest.DifferentDatabasesCannotIndividuallyBypassTheProcessLimit (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied
+[       OK ] ProcessResourceDomainsTest.RetainedOutputKeepsClosedDomainAndQuerySlotsOccupied (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot
+[       OK ] ProcessResourceDomainsTest.ConcurrentAliasAdmissionUsesOneFiniteDomainSlot (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected
+[       OK ] ProcessResourceDomainsTest.InvalidConfigurationAndUnboundedIdentitiesAreRejected (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner
+[       OK ] ProcessResourceDomainsTest.CacheGrantIsSharedByAliasesAndRefundedAfterTheLastOwner (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance
+[       OK ] ProcessResourceDomainsTest.FailedCacheGrantAdmissionDoesNotPublishOrLeakAnAllowance (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime
+[       OK ] ProcessResourceDomainsTest.NativeCacheGrantUsesAnUpstreamWithProcessLifetime (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass
+[       OK ] ProcessResourceDomainsTest.ProtectedControlGrantIsSharedAndUsesOnlyTheMaintenanceClass (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains
+[       OK ] ProcessResourceDomainsTest.FailedControlGrantDoesNotPublishOrRetainForeignDomains (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases
+[       OK ] ProcessResourceDomainsTest.LogicalIdRegistryGrantUsesWriteClassAndIsSharedByAliases (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity
+[       OK ] ProcessResourceDomainsTest.DeniedLogicalIdGrantCannotPublishOrLeakCapacity (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission
+[       OK ] ProcessResourceDomainsTest.DefaultDatabaseRetainsMaintenanceHeadroomUnderSaturatedForegroundAdmission (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling
+[       OK ] ProcessResourceDomainsTest.WritableAliasesCannotRaiseOrLowerAnActivePhysicalFileCeiling (0 ms)
+[ RUN      ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase
+[       OK ] ProcessResourceDomainsTest.RetainedFileLimitValueCannotBindAReusedSlotToAnotherDatabase (0 ms)
+[----------] 16 tests from ProcessResourceDomainsTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 98 tests from 4 test suites ran. (14086 ms total)
+[  PASSED  ] 98 tests.

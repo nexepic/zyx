@@ -1,0 +1,52 @@
+graph::query::execution::detail::PrepaidMemoryResource::reserveUnmanaged(unsigned long)
+??:?
+graph::utils::OwnedStdVector<std::byte>::OwnedStdVector(std::shared_ptr<std::pmr::memory_resource>, std::vector<std::byte, std::allocator<std::byte> > const&)
+??:?
+_ZN5graph5utils14OwnedStdVectorISt4byteEC2ERKS3_Qaasr3stdE23is_copy_constructible_vIT_Esr3stdE20is_copy_assignable_vIS6_E
+??:?
+graph::storage::BTreePageEntry* std::vector<graph::storage::BTreePageEntry, std::allocator<graph::storage::BTreePageEntry> >::_M_allocate_and_copy<graph::storage::BTreePageEntry const*>(unsigned long, graph::storage::BTreePageEntry const*, graph::storage::BTreePageEntry const*)
+??:?
+graph::utils::OwnedStdVector<graph::storage::BTreePageEntry>::reserve(unsigned long)
+??:?
+_ZN5graph5utils14OwnedStdVectorINS_7storage14BTreePageEntryEE9push_backERKS3_Qsr3stdE23is_copy_constructible_vIT_E
+??:?
+graph::storage::InitialBTreeBuilder::plan(unsigned long, std::span<graph::storage::BTreePageEntry const, 18446744073709551615ul>, graph::storage::BTreeLeafValueLayout)
+??:?
+graph::storage::TransactionBTreeOverlay::rebuildDenseTree(bool)
+??:?
+graph::storage::TransactionBTreeOverlay::buildPlan()::{lambda()#1}::operator()() const
+??:?
+graph::storage::TransactionBTreeOverlay::buildPlan()
+??:?
+graph::storage::BTreePageStore::planScalarIndexTransactionMutation(graph::storage::MetadataSnapshotPin const&, unsigned long, std::span<graph::storage::BTreeScalarIndexOperation const, 18446744073709551615ul>, bool, bool, graph::storage::BTreeLeafValueLayout) const
+??:?
+std::_Function_handler<void (), graph::storage::NativeGraphWriteTransaction::prepareIndexMutationPlans(graph::storage::LargeValueContentIndexPublicationPlan*, std::function<void ()> const&)::$_3>::_M_invoke(std::_Any_data const&)
+NativeGraphWritePlanner.cpp:?
+graph::storage::NativeGraphWriteTransaction::prepareIndexMutationPlans(graph::storage::LargeValueContentIndexPublicationPlan*, std::function<void ()> const&)
+??:?
+graph::storage::NativeGraphWriteTransaction::commit(graph::storage::MetadataPublishOptions const&)
+??:?
+graph::storage::NativeGraphMutationExecutor::executeImpl(graph::storage::LogicalGraphMutationBatch const&, std::span<graph::storage::LogicalGraphPropertyPatchRequest const, 18446744073709551615ul>, unsigned long, std::function<bool (graph::storage::Superblock const&)> const&, graph::storage::LogicalGraphMutationReadControl const&) const
+??:?
+graph::storage::NativeGraphMutationExecutor::execute(graph::storage::LogicalGraphMutationBatch const&, std::function<bool (graph::storage::Superblock const&)> const&, graph::storage::LogicalGraphMutationReadControl const&) const
+??:?
+graph::storage::RelocatableStorageBackend::executeNativeMutationBatch(graph::storage::LogicalGraphMutationBatch const&, std::optional<graph::storage::LogicalGraphMutationFence>, graph::storage::LogicalGraphMutationReadControl const&, std::span<graph::storage::LogicalGraphPropertyPatchRequest const, 18446744073709551615ul>, unsigned long, std::function<void (graph::storage::MetadataSnapshotPin const&)> const&)
+??:?
+graph::storage::RelocatableStorageBackend::executeLogicalGraphMutationBatch(graph::storage::LogicalGraphMutationBatch const&, std::optional<graph::storage::LogicalGraphMutationFence>)
+??:?
+graph::storage::(anonymous namespace)::RelocatableLogicalGraphTransaction::commit()
+RelocatableStorageBackend.cpp:?
+zyx::TransactionImpl::commit()
+??:?
+(anonymous namespace)::BoundedDatasetWriter::createEdgesColumnar(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > const&, std::vector<zyx::PropertyColumn, std::allocator<zyx::PropertyColumn> > const&)
+main.cpp:?
+(anonymous namespace)::LoadedGraph (anonymous namespace)::loadGraphRows<(anonymous namespace)::BoundedDatasetWriter>((anonymous namespace)::BoundedDatasetWriter&, std::filesystem::__cxx11::path const&)
+main.cpp:?
+(anonymous namespace)::loadDatabase((anonymous namespace)::Options const&, std::filesystem::__cxx11::path const&)
+main.cpp:?
+(anonymous namespace)::run((anonymous namespace)::Options const&)
+main.cpp:?
+main
+??:?
+_start
+??:?

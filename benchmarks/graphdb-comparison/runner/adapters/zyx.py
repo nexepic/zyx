@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import shutil
@@ -37,10 +38,14 @@ class ZyxAdapter(BenchmarkAdapter):
         self.emit_profile = profile_setting == "1"
         self.profile_events: list[ProfileEvent] = []
         self.result_events: list[dict[str, Any]] = []
+        self._prepared_checked = False
+        self._prepared_source: Path | None = None
 
     def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm") -> list[WorkloadResult]:
         self.profile_events = []
         self.result_events = []
+        self._prepared_checked = False
+        self._prepared_source = None
 
         if warmup < 0:
             return [self._failed_result("run_all", "warmup must be >= 0")]
@@ -49,11 +54,16 @@ class ZyxAdapter(BenchmarkAdapter):
         if execution_mode not in EXECUTION_MODES:
             return [self._failed_result("run_all", f"execution mode must be one of: {', '.join(EXECUTION_MODES)}")]
 
+        configured_profile_process = os.environ.get("ZYX_COMPARE_PROFILE_PROCESS", "0")
+        if configured_profile_process not in ("0", "1"):
+            raise ValueError("ZYX_COMPARE_PROFILE_PROCESS must be 0 or 1")
+        profile_process = configured_profile_process == "1"
+        self._profile_completed = None
         workloads = PROFILE_WORKLOADS[self.profile]
         results: list[WorkloadResult] = []
         for workload in workloads:
             result, profile_events = self._run_workload(
-                workload, warmup=warmup, iterations=iterations, execution_mode=execution_mode
+                workload, warmup=warmup, iterations=iterations, execution_mode=execution_mode, profile_process=profile_process
             )
             results.append(result)
             if result.status != "ok":
@@ -61,12 +71,48 @@ class ZyxAdapter(BenchmarkAdapter):
             self.profile_events.extend(profile_events)
         return results
 
+    @staticmethod
+    def _digest(path: Path) -> str:
+        value = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                value.update(chunk)
+        return value.hexdigest()
+
+    def prepared_database(self) -> Path | None:
+        if self._prepared_checked:
+            return self._prepared_source
+        configured = os.environ.get("ZYX_COMPARE_PREPARED_DB")
+        if configured is None:
+            self._prepared_checked = True
+            return None
+        if self.profile not in ("scan", "indexed", "retrieval"):
+            raise ValueError("prepared input is limited to read profiles")
+        if not configured:
+            raise ValueError("prepared database path must be nonempty")
+        source = Path(configured)
+        manifest = json.loads(Path(str(source) + ".json").read_text())
+        csv_hashes = {path.name: self._digest(path) for path in sorted(self.dataset_dir.glob("*.csv"))}
+        if not csv_hashes:
+            raise ValueError("prepared input requires the exact dataset CSV files")
+        expected = {"consumer_binary_sha256": self._digest(self.binary),
+                    "database_sha256": self._digest(source), "dataset_sha256": csv_hashes,
+                    "scale": self.scale}
+        if any(manifest.get(key) != value for key, value in expected.items()):
+            raise ValueError("prepared database provenance does not match binary, dataset or scale")
+        (self.dataset_dir.parent / "prepared-input.json").write_text(
+            json.dumps({"source": str(source), "manifest": manifest}, indent=2) + "\n")
+        self._prepared_source = source
+        self._prepared_checked = True
+        return source
+
     def _run_workload(
         self,
         workload: str,
         warmup: int,
         iterations: int,
         execution_mode: str,
+        profile_process: bool = False,
     ) -> tuple[WorkloadResult, list[ProfileEvent]]:
         command = [
             str(self.binary),
@@ -84,9 +130,14 @@ class ZyxAdapter(BenchmarkAdapter):
             str(iterations),
             "--execution-mode",
             execution_mode,
-            "--workload",
-            workload,
+            "--workloads" if profile_process else "--workload",
+            ",".join(PROFILE_WORKLOADS[self.profile]) if profile_process else workload,
         ]
+        prepared = self.prepared_database()
+        if prepared is not None:
+            if workload == "load_nodes_edges":
+                raise ValueError("prepared input cannot measure database import")
+            command.extend(["--prepared-db", str(prepared)])
         if self.threads is not None:
             command.extend(["--threads", str(self.threads)])
         configured_batch = os.environ.get("ZYX_COMPARE_LOAD_BATCH_ROWS")
@@ -102,9 +153,14 @@ class ZyxAdapter(BenchmarkAdapter):
 
         try:
             # COSEC: an argument vector bypasses shell parsing, so paths and workload names cannot inject commands.
-            completed = subprocess.run(
-                command, check=False, capture_output=True, text=True, timeout=self.timeout_seconds
-            )
+            if profile_process and self._profile_completed is not None:
+                completed = self._profile_completed
+            else:
+                completed = subprocess.run(
+                    command, check=False, capture_output=True, text=True, timeout=self.timeout_seconds
+                )
+                if profile_process:
+                    self._profile_completed = completed
         except subprocess.TimeoutExpired:
             return self._failed_result(
                 workload, f"subprocess for {workload} timed out after {self.timeout_seconds:g}s"
@@ -128,6 +184,8 @@ class ZyxAdapter(BenchmarkAdapter):
                     continue
                 if not isinstance(event, dict):
                     malformed.append(f"{stream_name}:{line_number}: JSONL event is not an object")
+                    continue
+                if profile_process and event.get("workload") != workload and event.get("workload") in PROFILE_WORKLOADS[self.profile]:
                     continue
                 self._consume_event(
                     event,

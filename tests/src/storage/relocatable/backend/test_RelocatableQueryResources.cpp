@@ -6,6 +6,7 @@
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <chrono>
+#include <barrier>
 #include <thread>
 
 using namespace relocatable_storage_backend_test;
@@ -1437,4 +1438,61 @@ TEST_F(RelocatableStorageBackendTest, NativeEdgeOverlayResolvesAnUnseenTypeUnder
     EXPECT_EQ(edge.source_node_id, nodes[0]); EXPECT_EQ(edge.target_node_id, nodes[1]);
     EXPECT_EQ(edge.properties.front().value, PropertyValue(7));
     snapshot.reset(); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeCowWorkspaceUsesExistingWriteAllowanceWithoutRaisingClassLimit) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto domain = backend.queryResourceDomain();
+    ASSERT_EQ(domain->classMaximum(ResourceClass::RCK_WRITE), 128U * 1024U * 1024U);
+    const auto baseline = domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_WRITE)];
+    struct RestoreTrace {
+        bool previous = debug::PerfTrace::areValuesEnabled();
+        RestoreTrace() { debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(true); }
+        ~RestoreTrace() { debug::PerfTrace::reset(); debug::PerfTrace::setValueCollectionEnabled(previous); }
+    } restore;
+    ASSERT_EQ(backend.createLogicalNodes({{{"WorkspacePolicy"}, {}}}).size(), 1U);
+    const auto trace = debug::PerfTrace::snapshotAndReset();
+    const auto grant = trace.find("native_graph.write.private_workspace_grant_bytes");
+    ASSERT_NE(grant, trace.end());
+    EXPECT_GT(grant->second.totalValue, 32U * 1024U * 1024U);
+    EXPECT_LE(grant->second.totalValue, domain->classMaximum(ResourceClass::RCK_WRITE) - 4096U);
+    const auto peak = trace.find("native_graph.write.private_workspace_peak_bytes");
+    ASSERT_NE(peak, trace.end());
+    EXPECT_LE(peak->second.totalValue, grant->second.totalValue);
+    EXPECT_EQ(domain->usage().classes[static_cast<size_t>(ResourceClass::RCK_WRITE)], baseline);
+    backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, ConcurrentNativeWritesDoNotReserveCreditWhileWaitingForAnotherPublication) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto domain = backend.queryResourceDomain();
+    const auto kind = static_cast<size_t>(ResourceClass::RCK_WRITE);
+    const auto baseline = domain->usage().classes[kind];
+    std::barrier start(4);
+    std::array<std::exception_ptr,4> errors{};
+    std::array<uint64_t,4> ids{};
+    std::vector<std::jthread> writers;
+    for (size_t index=0;index<4;++index) writers.emplace_back([&,index] {
+        start.arrive_and_wait();
+        try { ids[index] = backend.createLogicalNodes({{{"ConcurrentCredit"}, {{"value",PropertyValue(int64_t(index))}}}}).at(0); }
+        catch (...) { errors[index]=std::current_exception(); }
+    });
+    for (auto &writer:writers) writer.join();
+    for (const auto &error:errors) {
+        if (error) { try { std::rethrow_exception(error); } catch (const std::exception &failure) { ADD_FAILURE()<<failure.what(); } }
+    }
+    auto snapshot=backend.openLogicalGraphReadSnapshot();
+    for (size_t index=0;index<4;++index) {
+        ASSERT_NE(ids[index],0U);
+        EXPECT_EQ(snapshot->readNode(ids[index]).properties.front().value,PropertyValue(int64_t(index)));
+    }
+    snapshot.reset();
+    EXPECT_EQ(domain->usage().classes[kind],baseline);
+    backend.close();
 }

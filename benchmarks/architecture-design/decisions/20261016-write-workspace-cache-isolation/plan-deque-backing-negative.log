@@ -1,0 +1,22 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = InitialBTreeBuilderTest.GrowingPlanNodes*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from InitialBTreeBuilderTest
+[ RUN      ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit
+/workspace/zyx/tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp:295: Failure
+Expected: (memory->used() - beforeGrowth) >= (64U * sizeof(InitialBTreePlanNode)), actual: 0 vs 7680
+
+[  FAILED  ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit (1 ms)
+[----------] 1 test from InitialBTreeBuilderTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] InitialBTreeBuilderTest.GrowingPlanNodesPreservesLeafBackingUnderTightWriteCredit
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

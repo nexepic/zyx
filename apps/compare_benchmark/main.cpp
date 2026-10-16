@@ -49,6 +49,7 @@ namespace {
 		bool emitProfile = false;
 		bool emitCounters = false;
 		bool emitResultRows = false;
+        std::vector<std::string> selectedWorkloads;
 		// Serial benchmark execution retains only this operation's owning output.
 		// Row retention is opt-in and is a separate measurement contract.
 		mutable std::optional<std::vector<std::vector<zyx::Value>>> resultRows;
@@ -58,6 +59,7 @@ namespace {
 		std::string executionMode = std::string(kExecutionModeWarm);
 		std::optional<std::string> onlyWorkload;
 		std::filesystem::path baselineDbPath;
+        std::filesystem::path preparedDbPath;
 		std::optional<size_t> threads;
 		int warmup = 0;
 		int iterations = 1;
@@ -882,8 +884,22 @@ namespace {
 			userIndexes.push_back("country");
 			userIndexes.push_back("age");
 		}
+        if (!options.preparedDbPath.empty()) {
+            auto existing = db.execute("SHOW INDEXES");
+            if (!existing.isSuccess()) throw std::runtime_error(existing.getError());
+            while (existing.hasNext()) {
+                existing.next();
+                const auto label = existing.get("label"), kind = existing.get("type"), properties = existing.get("properties");
+                const auto *labelText = std::get_if<std::string>(&label);
+                const auto *kindText = std::get_if<std::string>(&kind);
+                const auto *propertyText = std::get_if<std::string>(&properties);
+                if (labelText && kindText && propertyText && *labelText == "User" && *kindText == "property")
+                    std::erase(userIndexes, *propertyText);
+            }
+        }
+
 		tracePhase("load.index.user_properties", [&]() {
-			if (!db.createNodePropertyIndexes("User", userIndexes)) {
+			if (!userIndexes.empty() && !db.createNodePropertyIndexes("User", userIndexes)) {
 				throw std::runtime_error("failed to create benchmark User property indexes");
 			}
 		});
@@ -915,12 +931,32 @@ namespace {
 		~ScopedArtifactCleanup() { removeDatabaseArtifacts(path); }
 	};
 
+    void validatePreparedInput(const Options &options) {
+        if (options.preparedDbPath.empty()) return;
+        if ((options.profile != kProfileScan && options.profile != kProfileIndexed && options.profile != kProfileRetrieval) ||
+            (options.onlyWorkload && *options.onlyWorkload == "load_nodes_edges") ||
+            (!options.onlyWorkload && options.selectedWorkloads.empty()))
+            throw std::invalid_argument("prepared database requires explicitly selected read queries");
+    }
+
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
-		tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
+        validatePreparedInput(options);
+        if (!options.preparedDbPath.empty()) {
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(options.preparedDbPath) ||
+                std::filesystem::equivalent(options.preparedDbPath, dbPath, error))
+                throw std::invalid_argument("prepared source must be a regular file distinct from the private database");
+            cloneDatabaseArtifact(options.preparedDbPath, dbPath);
+            std::filesystem::permissions(dbPath, std::filesystem::perms::owner_write, std::filesystem::perm_options::add);
+        } else tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
 		zyx::Database db(dbPath.string());
 		configureThreadPool(db, options);
 		tracePhase("load.db_open", [&]() { db.open(); });
-		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset, options.loadBatchRows); });
+		// External-to-native ID maps are needed by import/write workloads only.
+        // Read profiles use their unchanged SQL and receive a private file clone.
+        LoadedGraph loaded;
+        if (options.preparedDbPath.empty())
+            loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset, options.loadBatchRows); });
 		tracePhase("load.indexes", [&]() { createBenchmarkIndexes(db, options); });
 		tracePhase("load.db_close", [&]() { db.close(); });
 		return loaded;
@@ -1175,7 +1211,8 @@ namespace {
 	template<typename Fn>
 	void runQueryWorkload(const Options &options, zyx::Database &db, const LoadedGraph &loaded,
 					  const std::string &workload, Fn &&operation, bool validateResult = true) {
-		if (options.onlyWorkload.has_value() && *options.onlyWorkload != workload) {
+		if ((options.onlyWorkload.has_value() && *options.onlyWorkload != workload) ||
+            (!options.selectedWorkloads.empty() && std::ranges::find(options.selectedWorkloads, workload) == options.selectedWorkloads.end())) {
 			return;
 		}
 		if (isMutatingWorkload(workload)) {
@@ -1307,7 +1344,19 @@ namespace {
 				}
 			} else if (arg == "--workload") {
 				options.onlyWorkload = requireValue(arg);
-			} else if (arg == "--warmup") {
+			} else if (arg == "--prepared-db") {
+                options.preparedDbPath = requireValue(arg);
+                if (options.preparedDbPath.empty()) throw std::invalid_argument("prepared database path must be nonempty");
+            } else if (arg == "--workloads") {
+                const auto list = requireValue(arg);
+                if (!options.selectedWorkloads.empty() || list.empty() || list.back() == ',')
+                    throw std::invalid_argument("workload list must be supplied once with nonempty names");
+                std::stringstream names(list);
+                std::string name;
+                while (std::getline(names, name, ',')) options.selectedWorkloads.push_back(name);
+                if (options.selectedWorkloads.empty() || names.str().back() == ',')
+                    throw std::invalid_argument("workload list must contain nonempty unique query names");
+            } else if (arg == "--warmup") {
 				options.warmup = std::stoi(requireValue(arg));
 			} else if (arg == "--iterations") {
 				options.iterations = std::stoi(requireValue(arg));
@@ -1341,6 +1390,17 @@ namespace {
 			!isSupportedWorkload(options.profile, *options.onlyWorkload)) {
 			throw std::invalid_argument("--workload is not registered for the selected profile");
 		}
+        if (!options.selectedWorkloads.empty()) {
+            if (options.onlyWorkload) throw std::invalid_argument("--workloads and --workload are mutually exclusive");
+            for (size_t index = 0U; index < options.selectedWorkloads.size(); ++index) {
+                const auto &name = options.selectedWorkloads[index];
+                if (name == "load_nodes_edges" || !isSupportedWorkload(options.profile, name) ||
+                    std::find(options.selectedWorkloads.begin(), options.selectedWorkloads.begin() + index, name) != options.selectedWorkloads.begin() + index)
+                    throw std::invalid_argument("workload list must contain registered unique query names");
+            }
+        }
+
+        validatePreparedInput(options);
 		if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeOpened &&
 			options.executionMode != kExecutionModeColdish) {
 			throw std::invalid_argument("--execution-mode must be warm, opened, or cold-ish");
@@ -1357,7 +1417,8 @@ namespace {
 	int run(const Options &inputOptions) {
 		Options options = inputOptions;
 		LoadedGraph loaded;
-		if (!options.onlyWorkload.has_value() || *options.onlyWorkload == "load_nodes_edges") {
+		if ((!options.onlyWorkload.has_value() && options.selectedWorkloads.empty()) ||
+            (options.onlyWorkload.has_value() && *options.onlyWorkload == "load_nodes_edges")) {
 			loaded = measureLoadWorkload(options);
 			if (options.onlyWorkload.has_value()) {
 				return 0;

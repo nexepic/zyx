@@ -640,3 +640,86 @@ TEST(NativeReadSessionTokenBudgetTest, OptionalEntityCachePreservesNonAdmissionA
  session.putNodeExists(2U, false);
  EXPECT_EQ(session.nodeExists(2U), false);
 }
+
+TEST(NativeReadSessionTokenBudgetTest, OptionalNamedTokenAdmissionPreservesNamespacesAndFifoAcrossRetries) {
+ const auto nameFor=[](uint64_t id){return std::string(32U,'n')+std::to_string(id);};
+ for(size_t offset=0U;offset<5U;++offset) {
+  auto memory=std::make_shared<SessionCountingResource>();
+  {
+   NativeReadSession session(memory);memory->deny_admission=true;
+   const auto verify=[&](auto put,auto get) {
+    size_t declined=0U;
+    for(uint64_t id=1U;id<=4U*NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES;++id) {
+     const auto name=nameFor(id);const auto denied=memory->denied_allocations;
+     memory->fail_after=memory->allocations+offset;
+     ASSERT_NO_THROW(put(name,id));
+     const bool rejected=memory->denied_allocations!=denied;
+     memory->fail_after=(std::numeric_limits<size_t>::max)();
+     if(rejected){++declined;EXPECT_FALSE(get(name).has_value());}
+     put(name,id);
+     const auto cached=get(name);ASSERT_TRUE(cached.has_value());ASSERT_TRUE(cached->has_value());EXPECT_EQ(**cached,id);
+     if(id>NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES)
+      EXPECT_FALSE(get(nameFor(id-NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES)).has_value());
+    }
+    if(offset==0U)EXPECT_GT(declined,0U);
+   };
+   verify([&](auto name,auto id){session.putPropertyToken(name,static_cast<uint32_t>(id));},[&](auto name){return session.propertyToken(name);});
+   verify([&](auto name,auto id){session.putNodeLabelToken(name,id);},[&](auto name){return session.nodeLabelToken(name);});
+   verify([&](auto name,auto id){session.putRelationshipTypeToken(name,id);},[&](auto name){return session.relationshipTypeToken(name);});
+   memory->fail_after=(std::numeric_limits<size_t>::max)();
+  }
+  EXPECT_EQ(memory->live,0U);
+ }
+}
+
+TEST(NativeReadSessionTokenBudgetTest, OptionalPayloadPresenceAndPoolCachesDeclineOnlyHierarchicalAdmission) {
+ const std::string text(4096U,'p');
+ const std::vector<uint64_t> labels{1U,2U,3U,4U};
+ for(size_t offset=0U;offset<5U;++offset) {
+  auto memory=std::make_shared<SessionCountingResource>();
+  {
+   NativeReadSession session(memory);memory->deny_admission=true;
+   const auto verify=[&](auto put,auto present) {
+    const auto denied=memory->denied_allocations;
+    memory->fail_after=memory->allocations+offset;
+    ASSERT_NO_THROW(put());
+    const bool rejected=memory->denied_allocations!=denied;
+    memory->fail_after=(std::numeric_limits<size_t>::max)();
+    if(rejected)EXPECT_FALSE(present());
+    put();EXPECT_TRUE(present());
+   };
+   for(uint64_t id=1U;id<=64U;++id) {
+    verify([&]{session.putNodeLabels(id,labels);},[&]{return session.nodeLabelsView(id).has_value();});
+    EXPECT_EQ(session.nodeLabels(id),labels);
+    verify([&]{session.putPropertyPresence(false,id,1U,true);},[&]{return session.propertyPresence(false,id,1U).has_value();});
+    EXPECT_EQ(session.propertyPresence(false,id,1U),true);
+    verify([&]{session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY,id,text);},
+        [&]{return session.tokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY,id).has_value();});
+    EXPECT_EQ(session.tokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY,id),text);
+    graph::PropertyValue input(text);
+    verify([&]{session.putProperty(false,id,1U,std::move(input));},[&]{return session.hasProperty(false,id,1U);});
+    EXPECT_EQ(std::get<std::string>(input.getVariant()),text);
+    const auto value=session.property(false,id,1U);ASSERT_TRUE(value.has_value());ASSERT_TRUE(value->has_value());
+    EXPECT_EQ(std::get<std::string>((*value)->getVariant()),text);
+   }
+   std::vector<graph::storage::CatalogEntry> pools(1U);pools.front().segment_id=graph::storage::SegmentId(17U);
+   verify([&]{session.putEntityPagePools(pools);},[&]{return session.entityPagePools()!=nullptr;});
+   EXPECT_EQ(session.entityPagePools()->front().segment_id,graph::storage::SegmentId(17U));
+   memory->deny_admission=false;
+   const auto fails=[&](auto put) {
+    memory->fail_after=memory->allocations;
+    EXPECT_THROW(put(),std::bad_alloc);
+    memory->fail_after=(std::numeric_limits<size_t>::max)();
+   };
+   fails([&]{session.putNodeLabels(1000U,labels);});
+   fails([&]{session.putPropertyPresence(false,1000U,1U,true);});
+   fails([&]{session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY,1000U,text);});
+   fails([&]{session.putProperty(false,1000U,1U,graph::PropertyValue(text));});
+   fails([&]{session.putEntityPagePools(pools);});
+   EXPECT_THROW(session.putNodeLabels(0U,labels),std::invalid_argument);
+   EXPECT_THROW(session.putPropertyPresence(false,0U,1U,true),std::invalid_argument);
+   EXPECT_THROW(session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY,0U,text),std::invalid_argument);
+  }
+  EXPECT_EQ(memory->live,0U);
+ }
+}

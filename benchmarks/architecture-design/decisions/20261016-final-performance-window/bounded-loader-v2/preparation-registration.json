@@ -1,0 +1,12 @@
+{
+  "status": "configured_not_measured",
+  "reason": "Preserve all registered query cases while avoiding repeated import in one profile process; old v1 samples excluded",
+  "transaction_rows": 1000,
+  "process_mode": "explicit exact query list; one import per profile process; 3 warmups and 10 samples per query",
+  "scope": "Same source harness for frozen core and current core; no query timer or workload modification",
+  "C++_module_tests": 41,
+  "Python_campaign_tests": 14,
+  "resource_configuration_tests": 6,
+  "formal_samples_accepted": 0,
+  "prepared_input": "separate immutable snapshots per engine and seed; binary/CSV/database SHA-256 checked; writable private copies and required indexes only; import/write profiles cannot use a prepared snapshot"
+}

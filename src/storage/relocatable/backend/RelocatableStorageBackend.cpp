@@ -2520,10 +2520,11 @@ namespace graph::storage {
                 const std::shared_ptr<query::execution::detail::DatabaseResourceBudget> &domain) {
             using namespace query::execution::detail;
             // Private COW/B+Tree decode must not fall back to the snapshot's
-            // CACHE owner. Prepay outside the publication gate; a bounded share
-            // leaves WRITE headroom for staging and concurrent callers.
-            constexpr size_t maximumWorkspace = 32U * 1024U * 1024U;
-            const size_t maximum = (std::min)(maximumWorkspace, domain->classMaximum(ResourceClass::RCK_WRITE));
+            // CACHE owner. Prepay outside the publication gate using the existing
+            // WRITE allowance. Root admission already protects maintenance and
+            // subtracts every staged/concurrent owner; do not add an arbitrary
+            // smaller COW limit that rejects an otherwise admitted rebuild.
+            const size_t maximum = domain->classMaximum(ResourceClass::RCK_WRITE);
             if (!maximum) throw ResourceAdmissionDenied();
             auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, maximum);
             const size_t available = account->available();
@@ -2531,7 +2532,11 @@ namespace graph::storage {
             // their bounded publication metadata room before taking the gate.
             constexpr size_t capabilityHeadroom = 4096U;
             if (available <= capabilityHeadroom) throw ResourceAdmissionDenied();
-            const size_t capacity = available - capabilityHeadroom;
+            // Keep concurrent transaction staging separate from the private
+            // publication workspace (at most 96MiB of the default 128MiB class).
+            const size_t stagingHeadroom = (std::min)(size_t{32U * 1024U * 1024U}, available / 4U);
+            if (available - stagingHeadroom <= capabilityHeadroom) throw ResourceAdmissionDenied();
+            const size_t capacity = available - stagingHeadroom - capabilityHeadroom;
             return std::make_shared<PrepaidMemoryResource>(std::move(account), capacity, std::pmr::new_delete_resource());
         }
 
@@ -3376,7 +3381,8 @@ namespace graph::storage {
 					"relocatable logical creation identity reservation requires an open writable native graph backend");
 		}
 		requireNoIndeterminateWrite();
-		auto workspace = mutationWriteWorkspace(resource_domain_);
+		auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
+        auto workspace = mutationWriteWorkspace(resource_domain_);
         utils::OwnedAllocationScope allocation(workspace);
         return native_graph_write_planner_->reserveLogicalIds(nodeCount, edgeCount);
 	}
@@ -3389,7 +3395,8 @@ namespace graph::storage {
 					"relocatable streamed bulk Edge session requires bounded positive writable work");
 		}
 		requireNoIndeterminateWrite();
-		auto workspace = mutationWriteWorkspace(resource_domain_);
+		auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
+        auto workspace = mutationWriteWorkspace(resource_domain_);
         utils::OwnedAllocationScope allocation(workspace);
         const NativeGraphLogicalIdLease lease = metadata_->reserveNativeGraphLogicalIds(0U, edgeCount);
 		return {{}, {lease.edges}};
@@ -3946,7 +3953,8 @@ namespace graph::storage {
 					"relocatable logical graph mutation batch received an invalid optimistic read fence");
 		}
 
-		auto writeWorkspace = mutationWriteWorkspace(resource_domain_);
+		auto workspaceGate = query::execution::detail::ProcessResourceDomains::defaultOwner()->lockWriteWorkspace(resource_domain_);
+        auto writeWorkspace = mutationWriteWorkspace(resource_domain_);
         std::optional<utils::OwnedAllocationScope> writeAllocation;
         writeAllocation.emplace(writeWorkspace);
 
