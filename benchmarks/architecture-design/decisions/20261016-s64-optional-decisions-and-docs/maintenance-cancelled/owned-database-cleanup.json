@@ -1,0 +1,6 @@
+{
+  "path": "/tmp/zyx-contract-o331cd4t/database.zyx",
+  "bytes": 322174976,
+  "sha256": "d642e2af15f79a773f2f70b40f2d632b100f87d9d2a49016f96f999ece1be550",
+  "reason": "Canceled owned mutable benchmark DB; no performance acceptance or completed current measurement process. Immutable source binaries retained."
+}

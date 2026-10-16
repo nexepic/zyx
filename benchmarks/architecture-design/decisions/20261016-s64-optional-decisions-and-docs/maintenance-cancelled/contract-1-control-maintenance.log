@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/tmp/zyx-final-contract-case.py", line 55, in <module>
+    try:window.preflight(a.engine,'contract',location,timed=True,seed=a.seed,family=a.family)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/zyx-final-window.py", line 52, in preflight
+    report=f.run_native(binary,destination,profile=profile,seed=seed,family=family)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx-optimization-final-delete-revalidated-20261016/source/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 409, in run_native
+    worker.call("QUERY", "MATCH (n:Churn) DELETE n RETURN 1 AS deleted", expected=[[1]] * churn_count)
+  File "/tmp/zyx-final-window.py", line 37, in call
+    try:return original(self,*args,**kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/zyx-optimization-final-delete-revalidated-20261016/source/benchmarks/graphdb-comparison/runner/workload_preflight.py", line 169, in call
+    raise RuntimeError(response.get("error", "worker failure"))
+RuntimeError: logical-plan batched Node materialization lost a Node
