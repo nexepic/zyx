@@ -1,0 +1,15 @@
+{
+  "reason": "Current and control large maintenance DELETE query reports batched Node materialization lost a Node; no steady-state acceptance. Pause owned matrix to reproduce and fix current engine; preserve completed versioned observations.",
+  "stopped": [
+    [
+      156703,
+      "/tmp/run-zyx-final-contract-campaign.py",
+      "/workspace/zyx-benchmark-venv/bin/python /tmp/run-zyx-final-contract-campaign.py"
+    ],
+    [
+      156971,
+      "/tmp/zyx-final-contract-case.py",
+      "/workspace/zyx-benchmark-venv/bin/python /tmp/zyx-final-contract-case.py --engine current --round 1 --seed 42 --family aggregate"
+    ]
+  ]
+}

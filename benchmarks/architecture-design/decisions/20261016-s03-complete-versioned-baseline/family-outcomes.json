@@ -1,0 +1,359 @@
+{
+  "baseline_source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "families": [
+    {
+      "family": "aggregate",
+      "outcomes": {
+        "control": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "control",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: logical-plan Aggregate output exceeded the shared materialized byte bound"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "budget",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "kuzu": {
+          "unsupported_NA": 3
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "current",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/frozen-harness/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: hierarchical resource admission denied"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "dynamic",
+      "outcomes": {
+        "control": {
+          "inconclusive_timeout": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "current": {
+          "inconclusive_timeout": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "kuzu": {
+          "unsupported_NA": 3
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "control",
+          "round": 1,
+          "status": "inconclusive_timeout",
+          "last_lines": []
+        },
+        {
+          "engine": "current",
+          "round": 1,
+          "status": "inconclusive_timeout",
+          "last_lines": []
+        }
+      ]
+    },
+    {
+      "family": "maintenance",
+      "outcomes": {
+        "control": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "current": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "control",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: logical-plan batched Node materialization lost a Node"
+          ]
+        },
+        {
+          "engine": "current",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx/benchmarks/graphdb-comparison/runner/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: logical-plan batched Node materialization lost a Node"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "mixed",
+      "outcomes": {
+        "control": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "control",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/frozen-harness/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: relocatable publication authentication found an invalid or duplicate assigned frame"
+          ]
+        },
+        {
+          "engine": "kuzu",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-benchmark-venv/lib/python3.12/site-packages/kuzu/connection.py\", line 131, in execute",
+            "    query_result_internal = self._connection.query(query)",
+            "                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "RuntimeError: Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed!"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "parameters",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    },
+    {
+      "family": "point",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    },
+    {
+      "family": "scan",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    },
+    {
+      "family": "snapshot",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "kuzu",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-benchmark-venv/lib/python3.12/site-packages/kuzu/connection.py\", line 131, in execute",
+            "    query_result_internal = self._connection.query(query)",
+            "                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "RuntimeError: Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed!"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "sort",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    },
+    {
+      "family": "traversal",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    },
+    {
+      "family": "wide_large",
+      "outcomes": {
+        "control": {
+          "inconclusive_timeout": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "current": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        },
+        "kuzu": {
+          "failed": 1,
+          "unmeasurable_previous_failure": 2
+        }
+      },
+      "failed_messages": [
+        {
+          "engine": "control",
+          "round": 1,
+          "status": "inconclusive_timeout",
+          "last_lines": []
+        },
+        {
+          "engine": "current",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "    try:return original(self,*args,**kw)",
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/frozen-harness/workload_preflight.py\", line 169, in call",
+            "    raise RuntimeError(response.get(\"error\", \"worker failure\"))",
+            "RuntimeError: StorageIO::writeAt native write was incomplete at offset 764542976: Input/output error"
+          ]
+        },
+        {
+          "engine": "kuzu",
+          "round": 1,
+          "status": "failed",
+          "last_lines": [
+            "               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "  File \"/workspace/zyx-benchmark-venv/lib/python3.12/site-packages/kuzu/connection.py\", line 134, in execute",
+            "    query_result_internal = self._connection.execute(prepared_statement._prepared_statement, parameters)",
+            "                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+            "RuntimeError: Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed!"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "write",
+      "outcomes": {
+        "control": {
+          "completed": 3
+        },
+        "current": {
+          "completed": 3
+        },
+        "kuzu": {
+          "completed": 3
+        }
+      },
+      "failed_messages": []
+    }
+  ],
+  "status_counts": {
+    "failed": 9,
+    "completed": 75,
+    "unmeasurable_previous_failure": 24,
+    "inconclusive_timeout": 3,
+    "unsupported_NA": 6
+  },
+  "nominal_case_slots": 117,
+  "executed_independent_processes": 87,
+  "nonmaintenance_timing": "Full-size semantic/operational observations; not repeated warm-query distributions or performance gates.",
+  "formal_read_comparable_workloads": 20,
+  "formal_read_samples": 1200,
+  "formal_read_independent_profile_processes": 24,
+  "formal_read_process_workload_distributions": 120
+}

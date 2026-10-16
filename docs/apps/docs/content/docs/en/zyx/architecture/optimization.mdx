@@ -12,7 +12,7 @@ projectOrder: 1
 
 # Architecture and General Performance Implementation Plan
 
-Updated: 2026-10-16. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress on remote work is 28/34 (82.4%); see section 5 for each phase. Six deliveries remain unaccepted, and Kuzu superiority is not established. Synchronizing this document does not accept new implementation work.**
+Updated: 2026-10-16. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress on remote work is 29/34 (85.3%); see section 5 for each phase. Five deliveries remain unaccepted, and Kuzu superiority is not established. Synchronizing this document does not accept new implementation work.**
 
 The previous P0–P7 result of 40/40 closed that checklist only; it did not establish architectural completeness or Kuzu parity. The previous optimization document and storage stage ledger are outside the documentation site at `benchmarks/architecture-design/archive/20261011-completed-optimization/`, with original-file SHA-256 hashes. Earlier records are in `20261009-superseded-plans/`. These are historical evidence, not execution plans.
 
@@ -186,14 +186,14 @@ The acceptance sequence is S0 → S1 → S2 → S3 → S4 → S5 → S6; depende
 
 | Phase | Fixed deliverables | Accepted/total | Progress |
 |---|---|---:|---:|
-| S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 3/4 | 75% |
+| S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 4/4 | 100% |
 | S1 Architecture | S1.1 A1; S1.2 A2; S1.3 A3; S1.4 A4; S1.5 A5; S1.6 A6; S1.7 A7 complete decision records | 7/7 | 100% |
 | S2 Execution | S2.1 binding/batches/cache identity; S2.2 scan/filter/project/aggregate; S2.3 other operators and read/write consumers; S2.4 focused semantics tests; S2.5 O1/O2/O4 comparisons | 4/5 | 80% |
 | S3 Properties | S3.1 A2/current-layout regressions; S3.2 complete A3 prototype/admission decision; S3.3 admitted production layout/specification; S3.4 correctness/fault tests; S3.5 O3/O5 read/write/resources | 4/5 | 80% |
 | S4 Graph access | S4.1 consistency protocol/candidate comparisons; S4.2 admitted production path/format; S4.3 graph semantics/fault tests; S4.4 read/write/space acceptance | 3/4 | 75% |
 | S5 Transactions/resources | S5.1 conflict validation/safe rebase; S5.2 isolation/retry/fault tests; S5.3 single-file spill/budgets; S5.4 out-of-memory/cancel/disk-full/read-only/crash-cleanup tests; S5.5 O6 steady-state acceptance | 4/5 | 80% |
 | S6 Integration | S6.1 final source/affected-module regressions; S6.2 workload classes/Kuzu comparison; S6.3 long-run resources/recovery/cleanup; S6.4 O7/O8 adoption decisions/final docs | 3/4 | 75% |
-| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 28/34 | 82.4% |
+| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 29/34 | 85.3% |
 
 2026-10-15 progress synchronization (existing acceptance, no new credit): S0.1–S0.2, S1.1–S1.7, S2.1–S2.4, S3.1–S3.4, S4.1–S4.3 and S5.1–S5.2 are accepted: 22 deliveries. Acceptance records are in `benchmarks/architecture-design/decisions/`, indexed by `current-progress.json`. Remaining: S0.3, S0.4, S2.5, S3.5, S4.4, S5.3–S5.5 and S6.1–S6.4. Scratch/resource foundations do not complete S5.3/S5.4. The following 2026-10-11 entries describe historical status.
 
@@ -404,3 +404,5 @@ These identify owners, not instructions to rewrite entire files:
 2026-10-16 acceptance preparation repair (no additional score): the full O6 fixture exposed optional entity-cache decline, DELETE private/output ownership and overlapping reclamation evidence. These are repaired with public implicit full results, the 64 MiB QUERY cap and the 8 MiB maintenance grant preserved. Atomic deletion of 10,000 8 KiB nodes, reclamation of 10,000 large values, reopen, integrity and exact live counts pass. Both engines will return and validate 10,000 scalar results in the separately registered repaired-source maintenance window. Original baseline and repaired measurements stay version-separated. Progress remains **27/34 (79.4%), request 3/5**. Evidence: `benchmarks/architecture-design/decisions/20261016-cache-decline-delete-budget/`.
 
 2026-10-16 **S6.4 accepted: 28/34 (82.4%), request 4/5**. Section 4 permits explicit non-adoption of additional SIMD/parallelism/compression/LTO/PGO/LLVM JIT; per-option reasons and reopening gates are recorded. The final snapshot documents current implementation, development format5/31, platform validation and unmet Kuzu goals. This is a fixed decision delivery, not new production capability or a performance pass. Replace S5.5 in the requested five-item selection with this bounded delivery; S5.5 remains mandatory and unaccepted. S0.3 is the remaining requested delivery. Evidence: `benchmarks/architecture-design/decisions/20261016-s64-optional-decisions-and-docs/`.
+
+2026-10-16 **S0.3 baseline records accepted: 29/34 (85.3%), request 5/5**. This request completes S5.3, S6.1, S0.4, S6.4 and S0.3; S5.5 remains unaccepted. Frozen source6a has outcomes for 13 families and 117 registered slots, with 87 actual independent contract processes: 75 complete, 9 failed, 3 cutoffs, 6 unsupported slots and 24 slots skipped by prior failure. These are not 117 successful processes. Formal reads retain 20 comparable workloads, 24 independent profile processes and 1,200 valid samples. All 7,138 archived files pass decompressed-hash verification. Failures, resource/deadline/API timing differences and original/repaired source versions remain explicit; baseline records do not establish all-scenario or performance acceptance. **Kuzu superiority is not achieved; S2.5, S3.5, S4.4, S5.5 and S6.2 remain unaccepted.** Final repaired source passes 2,882 selected tests from 130 modules; no full unit suite was run. Evidence: `benchmarks/architecture-design/decisions/20261016-s03-complete-versioned-baseline/`.

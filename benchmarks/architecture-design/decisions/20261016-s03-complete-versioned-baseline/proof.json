@@ -1,0 +1,64 @@
+{
+  "stage": "S0.3",
+  "status": "accepted_versioned_baseline_records_with_negative_outcomes_and_explicit_limits",
+  "accepted_total": 29,
+  "percent": 85.3,
+  "current_request_completed": 5,
+  "accepted_at_utc": "2026-10-16T21:16:25.731710+00:00",
+  "acceptance_scope": "Complete registered baseline records and capability/failure observations; not all-scenario success, final-source full-matrix comparison, steady-state acceptance or overall performance admission.",
+  "baseline_source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "latest_production_source": "03436b7a75d0ace5830570b13840d9f55910de58",
+  "versions_never_pooled": true,
+  "native_worker_registrations_checked_against_original_binary_hashes": 60,
+  "formal_reads": {
+    "comparable_workloads": 20,
+    "independent_profile_processes": 24,
+    "process_workload_distributions": 120,
+    "valid_samples": 1200,
+    "warmups_per_query_process": 3,
+    "samples_per_query_process": 10,
+    "all_supported_owning_outputs_checked": true,
+    "p95": "descriptive only; no tail-protection pass"
+  },
+  "contract_families": 13,
+  "registered_case_slots": 117,
+  "executed_independent_contract_processes": 87,
+  "case_status_counts": {
+    "failed": 9,
+    "completed": 75,
+    "unmeasurable_previous_failure": 24,
+    "inconclusive_timeout": 3,
+    "unsupported_NA": 6
+  },
+  "nonmaintenance_contract_timings": "Full-size semantic/operational observations, not fabricated repeated warm-query distributions or strict protection gates.",
+  "archive": {
+    "file": "full-family-evidence.tar.gz",
+    "sha256": "5c1406bab8c3587aa325d6706fafd942b0d032fbb9b5738f4237fed0c5ec98bd",
+    "files": 7138,
+    "decompressed_file_hash_verification": "passed"
+  },
+  "new_source_or_full_unit_suite": false,
+  "final_source_hash_revalidation": {
+    "files": 1172,
+    "matches_final_2882_test_source": true
+  },
+  "performance_acceptance": false,
+  "kuzu_goal_achieved": false,
+  "gain_vs_original_control": "unmeasurable: both read-input preparations failed; no invented primary/protection pass",
+  "material_limits": [
+    "Native30second statement versus Kuzu remaining-family deadline is disclosed; no equal-deadline failure comparison.",
+    "Per-process6GiB AS and one CPU affinity are not a combined6GiB native-driver/worker cgroup or equivalent charged-memory policy.",
+    "Native IPC and Kuzu cursor/trace/API costs differ; nonmaintenance timers are descriptive.",
+    "Original Native implicit full-delete and Kuzu no-return maintenance are not comparable; aligned repaired-source O6 was canceled during warmup with0accepted measurements.",
+    "Native wide write EIO cause unresolved; Kuzu wide/mixed/snapshot pool-full, dynamic cutoffs and Native final-budget INTEGRITY admission failure remain unaccepted cases.",
+    "Older elapsed fields without rss_scope are driver RSS only; unavailable charged peaks/backlog/device IO are not zero."
+  ],
+  "remaining_unaccepted": [
+    "S2.5",
+    "S3.5",
+    "S4.4",
+    "S5.5",
+    "S6.2"
+  ],
+  "report_links": "passed"
+}
