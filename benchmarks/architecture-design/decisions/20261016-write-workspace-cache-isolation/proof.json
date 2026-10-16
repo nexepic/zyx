@@ -1,0 +1,29 @@
+{
+  "status": "focused_verified_combined_revalidation_running",
+  "effective_accepted_progress": "24/34 (70.6%)",
+  "negative_control": {
+    "tests": 1,
+    "failed": 1,
+    "reason": "CACHE exhaustion rejects private native mutation before write ownership fixes"
+  },
+  "focused_positive": {
+    "modules": 2,
+    "suites": 2,
+    "tests": 72,
+    "failures": 0,
+    "full_suite": false
+  },
+  "policy": {
+    "COW_write_workspace_maximum_bytes": 33554432,
+    "capability_metadata_headroom_bytes": 4096,
+    "admission": "before publication/ID leasing locks, within existing WRITE/database/process caps",
+    "metadata": "explicit caller owns private decoded/copy/cursor buffers; cache publication retains CACHE ownership; private caller denial preserves shared entries"
+  },
+  "remaining": "98-module regression, renewed source freeze and bounded medium preparation, then the single final performance window",
+  "production_source_sha256": {
+    "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "4b09b58836f1a1d3ce6186ae2d20610230f8dc3d1a06d327218b6bdd2cc63410",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "cc46588dcd534e02724c6f618e98c2bcef70245d197a4933283fafe4ee970862",
+    "src/storage/relocatable/metadata/LocationDirectory.cpp": "fed962a0c74b175a7c0cf496e601bb30d592d381d3d1a1fdb6d211ad1b2a6e18",
+    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "a2fc9f580039b81f5ccadc0853b7d14c13b6501ba8e15885ccfe7d56ae95f5cb"
+  }
+}

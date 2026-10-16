@@ -100,9 +100,12 @@ namespace graph::storage {
 			const auto found = cache_->entries.find(key<Page>(reference));
 			if (found == cache_->entries.end()) return std::nullopt;
 			debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
-            utils::OwnedAllocationScope allocation(memory_owner_);
+            utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active()
+                ? utils::OwnedAllocationScope::owner() : memory_owner_);
             try { return *std::static_pointer_cast<const Page>(found->second.page); }
             catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                // A private caller quota failure must not evict shared cache state.
+                if (utils::OwnedAllocationScope::owner() != memory_owner_) throw;
                 // A cache copy may need a second payload allocation. Drop this
                 // optional entry so the caller can decode one admitted copy.
                 const Key identity = found->first;

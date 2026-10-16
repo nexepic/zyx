@@ -23,13 +23,11 @@
     "S5.2",
     "S5.1",
     "S5.4",
-    "S6.3",
-    "S5.3",
-    "S6.1"
+    "S6.3"
   ],
-  "accepted": 26,
+  "accepted": 24,
   "total": 34,
-  "percent": 76.5,
+  "percent": 70.6,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -57,14 +55,14 @@
       "percent": 75.0
     },
     "S5": {
-      "accepted": 4,
+      "accepted": 3,
       "total": 5,
-      "percent": 80
+      "percent": 60
     },
     "S6": {
-      "accepted": 2,
+      "accepted": 1,
       "total": 4,
-      "percent": 50
+      "percent": 25
     }
   },
   "S3.1": "accepted",
@@ -143,13 +141,14 @@
       "S0.4",
       "S5.5"
     ],
-    "completed_ids": [
-      "S5.3",
-      "S6.1"
-    ],
+    "completed_ids": [],
     "status": "in_progress",
     "overall_goal_accepted_target": 34,
-    "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite."
+    "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
+    "pending_revalidation_ids": [
+      "S5.3",
+      "S6.1"
+    ]
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -217,6 +216,12 @@
       ]
     }
   ],
-  "S5.3": "accepted_implementation_and_resource_correctness",
-  "S6.1": "accepted_final_source_and_affected_regression"
+  "S5.3": "revalidation_in_progress_cache_pressure",
+  "S6.1": "revalidation_required_after_production_fix",
+  "last_certified_checkpoint": {
+    "accepted": 26,
+    "percent": 76.5,
+    "source": "ff1da3a0",
+    "superseded_reason": "Final medium preparation and exhausted-CACHE negative control expose mutation/metadata private workspace attribution; S5.3/S6.1 require revalidation."
+  }
 }

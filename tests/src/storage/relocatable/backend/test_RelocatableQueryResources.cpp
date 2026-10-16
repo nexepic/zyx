@@ -1358,3 +1358,51 @@ TEST_F(RelocatableStorageBackendTest, ProcedureResultKeepsItsQueryCreditAfterBac
     result = graph::query::QueryResult{};
     EXPECT_EQ(domain->usage().total, 0U);
 }
+
+TEST_F(RelocatableStorageBackendTest, NativeCommitDoesNotBorrowExhaustedCacheCreditForPrivateBtreeValidation) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(1)}}}});
+    const auto domain = backend.queryResourceDomain();
+    const auto write = static_cast<size_t>(ResourceClass::RCK_WRITE);
+    const auto baseline = domain->usage().classes[write];
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    std::vector<uint64_t> created;
+    {
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        ASSERT_EQ(cache->used(), cache->capacity());
+        created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
+        ASSERT_EQ(created.size(), 1U);
+        // Publication may invalidate old cached pages; private work must not require extra CACHE credit.
+        EXPECT_LE(cache->used(), cache->capacity());
+        EXPECT_EQ(domain->usage().classes[write], baseline);
+    }
+    auto snapshot = backend.openLogicalGraphReadSnapshot();
+    ASSERT_NE(snapshot, nullptr);
+    EXPECT_EQ(snapshot->readNode(created.front()).properties.front().value, PropertyValue(2));
+    snapshot.reset(); backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeCowWriteAdmissionRejectsBeforePublicationAndRefundsForRetry) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    (void)backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(1)}}}});
+    const auto domain = backend.queryResourceDomain();
+    const auto kind = static_cast<size_t>(ResourceClass::RCK_WRITE);
+    const auto baseline = domain->usage().classes[kind];
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE, domain->classMaximum(ResourceClass::RCK_WRITE));
+    ResourceLease pressure(account); pressure.set(account->available());
+    const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+    EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}})), ResourceAdmissionDenied);
+    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+    pressure.reset();
+    const auto created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
+    EXPECT_EQ(created.size(), 1U); EXPECT_EQ(domain->usage().classes[kind], baseline);
+    backend.close();
+}
