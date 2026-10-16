@@ -86,7 +86,12 @@ namespace graph::storage {
 			size_t bytes_ = RSS_BTREE_PACKED_HEADER_BYTES;
 		};
 
-		void appendNode(InitialBTreePlan &plan, InitialBTreePlanNode node) {
+		void appendNode(InitialBTreePlan &plan, InitialBTreePlanNode node, InitialBTreeLeafStorage storage) {
+            if (node.level == 0U && storage == InitialBTreeLeafStorage::IBLS_PACKED) {
+                node.packed_leaf_entries = PackedBTreePageCodec::encodeOwned(
+                    BTreeNodeKind::BPN_LEAF, node.leaf_entries, plan.leaf_value_layout);
+                node.leaf_entries = {};
+            }
             // Finish a leaf with exact backing rather than retaining geometric
             // spare capacity for every page in a large replacement tree.
             if (node.leaf_entries.size() != node.leaf_entries.capacity()) {
@@ -120,13 +125,21 @@ namespace graph::storage {
 						 "relocatable initial B+Tree materialization has an invalid Page identity");
 				}
 				if (ordinal < plan.leaf_count) {
-					if (node.level != 0U || node.leaf_entries.empty() ||
-						!std::ranges::equal(node.first_key, node.leaf_entries.front().key)) {
+                    std::optional<utils::OwnedStdVector<BTreePageEntry>> decoded;
+                    if (!node.packed_leaf_entries.empty()) {
+                        if (!node.leaf_entries.empty())
+                            fail(FormatError::FERR_INVALID_STATE, "initial B+Tree leaf has mixed private representations");
+                        decoded.emplace(PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF,
+                            node.packed_leaf_entries, plan.leaf_value_layout));
+                    }
+                    const auto &entries = decoded ? *decoded : node.leaf_entries;
+					if (node.level != 0U || entries.empty() ||
+						!std::ranges::equal(node.first_key, entries.front().key)) {
 						fail(FormatError::FERR_INVALID_STATE, "relocatable initial B+Tree leaf plan is malformed");
 					}
 					continue;
 				}
-				if (node.level == 0U || node.children.empty() || node.children.front() >= ordinal) {
+				if (node.level == 0U || !node.packed_leaf_entries.empty() || node.children.empty() || node.children.front() >= ordinal) {
 					fail(FormatError::FERR_INVALID_STATE, "relocatable initial B+Tree internal plan is malformed");
 				}
 				const InitialBTreePlanNode &leftmost = plan.nodes[node.children.front()];
@@ -167,8 +180,9 @@ namespace graph::storage {
 
     InitialBTreePlan InitialBTreeBuilder::planFromCursor(uint64_t indexId,
             const utils::OwnedFunction<std::optional<BTreePageEntry>()> &next,
-            BTreeLeafValueLayout leafValueLayout) {
-        if (indexId == 0U || !next || !isLeafValueLayout(leafValueLayout))
+            BTreeLeafValueLayout leafValueLayout, InitialBTreeLeafStorage leafStorage) {
+        if (indexId == 0U || !next || !isLeafValueLayout(leafValueLayout) ||
+            (leafStorage != InitialBTreeLeafStorage::IBLS_ENTRIES && leafStorage != InitialBTreeLeafStorage::IBLS_PACKED))
             fail(FormatError::FERR_INVALID_HEADER, "relocatable initial B+Tree plan requires an Index and entries");
 
 		InitialBTreePlan result;
@@ -195,7 +209,7 @@ namespace graph::storage {
 						 "relocatable initial B+Tree entry cannot fit in an empty leaf");
 				}
 				node.first_key = node.leaf_entries.front().key;
-				appendNode(result, std::move(node));
+				appendNode(result, std::move(node), leafStorage);
 				levelNodes.push_back(result.nodes.size() - 1U);
 				node = {};
 				leafSizer.reset();
@@ -209,7 +223,7 @@ namespace graph::storage {
         if (node.leaf_entries.empty())
             fail(FormatError::FERR_INVALID_HEADER, "relocatable initial B+Tree plan requires an Index and entries");
 		node.first_key = node.leaf_entries.front().key;
-		appendNode(result, std::move(node));
+		appendNode(result, std::move(node), leafStorage);
 		levelNodes.push_back(result.nodes.size() - 1U);
 		result.leaf_count = levelNodes.size();
 
@@ -234,7 +248,7 @@ namespace graph::storage {
 				// logical Page IDs are not guaranteed to fit in the one-byte test ID.
 				separators.push_back({childFirstKey, std::numeric_limits<uint64_t>::max()});
 				if (!parentSizer.appendFits(BTreeNodeKind::BPN_INTERNAL, separators, BTreeLeafValueLayout::BLVL_U64)) {
-					appendNode(result, std::move(parentNode));
+					appendNode(result, std::move(parentNode), leafStorage);
 					nextLevel.push_back(result.nodes.size() - 1U);
 					separators.clear();
 					parentSizer.reset();
@@ -246,7 +260,7 @@ namespace graph::storage {
 				}
 				parentNode.children.push_back(childOrdinal);
 			}
-			appendNode(result, std::move(parentNode));
+			appendNode(result, std::move(parentNode), leafStorage);
 			nextLevel.push_back(result.nodes.size() - 1U);
 			levelNodes = std::move(nextLevel);
 		}
@@ -272,10 +286,14 @@ namespace graph::storage {
 				header.left_sibling = ordinal == 0U ? PageId{} : pageIds[ordinal - 1U];
 				header.right_sibling = ordinal + 1U == plan.leaf_count ? PageId{} : pageIds[ordinal + 1U];
 				header.leaf_value_layout = plan.leaf_value_layout;
+                std::optional<utils::OwnedStdVector<BTreePageEntry>> decoded;
+                if (!node.packed_leaf_entries.empty()) decoded.emplace(PackedBTreePageCodec::decode(
+                    BTreeNodeKind::BPN_LEAF, node.packed_leaf_entries, plan.leaf_value_layout));
+                const auto &entries = decoded ? *decoded : node.leaf_entries;
 				pages.push_back(BTreePage::createWithEntries({header.page_id, indexId, PageOwnerKind::POK_INDEX, 0U,
 															  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, header.generation,
 															  checkpointLsn},
-															 header, node.leaf_entries));
+															 header, entries));
 				continue;
 			}
 			header.kind = BTreeNodeKind::BPN_INTERNAL;

@@ -20,11 +20,14 @@
 
 namespace graph::storage {
 
+	enum class InitialBTreeLeafStorage { IBLS_ENTRIES, IBLS_PACKED };
+
 	struct InitialBTreePlanNode {
 		uint16_t level = 0U;
 		std::vector<std::byte> first_key;
 		utils::OwnedStdVector<BTreePageEntry> leaf_entries;
 		std::vector<size_t> children;
+        utils::OwnedStdVector<std::byte> packed_leaf_entries;
 	};
 
 	struct InitialBTreePlan {
@@ -49,7 +52,8 @@ namespace graph::storage {
         // overlaps the immutable output plan. A failing source publishes nothing.
         [[nodiscard]] static InitialBTreePlan planFromCursor(uint64_t indexId,
             const utils::OwnedFunction<std::optional<BTreePageEntry>()> &next,
-            BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+            BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64,
+            InitialBTreeLeafStorage leafStorage = InitialBTreeLeafStorage::IBLS_ENTRIES);
 
 		[[nodiscard]] static std::vector<BTreePage> materialize(uint64_t indexId, const InitialBTreePlan &plan,
 																std::span<const PageId> pageIds,

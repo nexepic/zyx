@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 #include "query/execution/BoundSlotRegistry.hpp"
 
 namespace graph::query::execution::detail {
@@ -85,7 +86,14 @@ public:
 					requests_.push_back(found->second);
 					continue;
 				}
-				const auto token = token_support_ ? snapshot.findPropertyToken(request.key) : std::nullopt;
+                // Resolution returns a scalar; its metadata/key scratch is
+                // query work. Shared cache publication owns its own CACHE scope.
+                const auto token = [&]() -> std::optional<uint32_t> {
+                    if (!token_support_) return std::nullopt;
+                    auto scratch = std::make_shared<BudgetMemoryResource>(budget, upstream);
+                    utils::OwnedAllocationScope allocation(std::move(scratch));
+                    return snapshot.findPropertyToken(request.key);
+                }();
 				if (token && *token == 0U) throw std::logic_error("property binding resolver returned an invalid zero token");
 				guard();
 				const auto index = static_cast<uint32_t>(bindings_.size());

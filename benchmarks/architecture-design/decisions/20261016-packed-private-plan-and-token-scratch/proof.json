@@ -1,0 +1,17 @@
+{
+  "status": "focused_correctness_passed_final_regression_and_input_revalidation_pending",
+  "progress_credit_added": 0,
+  "focused_tests": 103,
+  "source_sha256": {
+    "include/graph/storage/relocatable/index/BTreePage.hpp": "ff5d7911a56317a20736cc212843de6a8677f2c48df43ce37698acc236d7147d",
+    "include/graph/storage/relocatable/index/InitialBTreeBuilder.hpp": "ca4cad32b5c34aa40c338b98bf40e7882c3cf91059860829f9ec6ab5e9d2a5c0",
+    "src/storage/relocatable/index/BTreePage.cpp": "628a6907411446a849c0af74704e5085ba9178b68725051348e07ed29a2e48da",
+    "src/storage/relocatable/index/BTreePageStore.cpp": "0aa6deb12fce1bd711a7d250177934fbb14727a8dd8c5e7a939bd996dbaa892a",
+    "src/storage/relocatable/index/InitialBTreeBuilder.cpp": "3f5abcf49319dac8b2c3a9cca0f8f742f43eacee621801826bdcd7ff90412a43",
+    "src/query/execution/BoundPropertyBindings.hpp": "d74026eed25f79e693f6aa291117c5b76eae176d849327f3f574cd42aff62590",
+    "tests/src/storage/relocatable/index/test_InitialBTreeBuilder.cpp": "33e82aeb082172cc6de5a7081901c0f007a35652caf26a6674da2d71df0bc3c2",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "703ffe896f5cf2f4114809f5373a9b144fb9fbd6b22a090a2229e6c74a6e3019"
+  },
+  "negative_stack_producer": "Frozen current worker 47eeea0836bc25a1336a0d63d6912ebeeace7c70c5f736ace8a0fbc294b4f010 for aggregate; /tmp/zyx-slot-repro-before-packed-plan for the dense-plan failure. Offsets resolved against exact producer executables.",
+  "budgets": "No resource ceiling increased; packed plan uses existing canonical persisted codec; token scratch is charged to the existing query budget."
+}

@@ -103,7 +103,8 @@ namespace graph::storage {
 			return std::ranges::equal(left, right);
 		}
 
-		void appendVarint(std::vector<std::byte> &bytes, uint64_t value) {
+		template<class ByteVector>
+		void appendVarint(ByteVector &bytes, uint64_t value) {
 			while (value >= 0x80U) {
 				bytes.push_back(static_cast<std::byte>((value & 0x7FU) | 0x80U));
 				value >>= 7U;
@@ -451,7 +452,8 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::vector<std::byte> PackedBTreePageCodec::encode(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
+	template<class ByteVector>
+	static ByteVector encodePackedEntries(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
 														BTreeLeafValueLayout leafValueLayout) {
 		validateValueLayout(kind, leafValueLayout);
 		const bool includesValue = storesValue(kind, leafValueLayout);
@@ -463,7 +465,7 @@ namespace graph::storage {
 				entries.empty() ? 0U
 								: static_cast<uint32_t>((entries.size() + RSS_BTREE_PACKED_RESTART_INTERVAL - 1U) /
 														RSS_BTREE_PACKED_RESTART_INTERVAL);
-		std::vector<std::byte> stream;
+		ByteVector stream;
 		utils::OwnedStdVector<uint32_t> offsets;
 		offsets.reserve(restartCount);
 		utils::OwnedStdVector<std::byte> previous;
@@ -504,7 +506,7 @@ namespace graph::storage {
 			throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								"relocatable packed B+Tree payload is too large");
 		}
-		std::vector<std::byte> bytes(static_cast<size_t>(totalBytes));
+		ByteVector bytes(static_cast<size_t>(totalBytes));
 		LittleEndianCodec::writeU32(bytes, MAGIC_OFFSET, RSS_BTREE_PACKED_MAGIC);
 		LittleEndianCodec::writeU16(bytes, PACKED_VERSION_OFFSET, RSS_BTREE_PACKED_VERSION);
 		LittleEndianCodec::writeU16(bytes, PACKED_HEADER_BYTES_OFFSET, RSS_BTREE_PACKED_HEADER_BYTES);
@@ -520,6 +522,15 @@ namespace graph::storage {
 				  bytes.begin() + RSS_BTREE_PACKED_HEADER_BYTES + offsets.size() * sizeof(uint32_t));
 		return bytes;
 	}
+
+ std::vector<std::byte> PackedBTreePageCodec::encode(BTreeNodeKind kind,
+   std::span<const BTreePageEntry> entries, BTreeLeafValueLayout layout) {
+  return encodePackedEntries<std::vector<std::byte>>(kind, entries, layout);
+ }
+ utils::OwnedStdVector<std::byte> PackedBTreePageCodec::encodeOwned(BTreeNodeKind kind,
+   std::span<const BTreePageEntry> entries, BTreeLeafValueLayout layout) {
+  return encodePackedEntries<utils::OwnedStdVector<std::byte>>(kind, entries, layout);
+ }
 
 	utils::OwnedStdVector<BTreePageEntry> PackedBTreePageCodec::decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 															 BTreeLeafValueLayout leafValueLayout) {
