@@ -3,6 +3,17 @@ from collections import defaultdict
 import json,statistics,csv,math
 root=Path('/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3')
 assert (root/'read-campaign-completed.json').exists()
+# A separate, untimed capability witness explains the failed setup without
+# relabeling primary-key lookup as unsupported or inventing latency samples.
+capability=root/'kuzu-secondary-index-capability.json'
+if not capability.exists():
+ import importlib.util
+ spec=importlib.util.spec_from_file_location('window','/tmp/zyx-final-window.py')
+ window=importlib.util.module_from_spec(spec);spec.loader.exec_module(window);window.restrict()
+ import kuzu
+ from runner.adapters.kuzu import supports_secondary_property_indexes
+ capability.write_text(json.dumps({'engine':'kuzu','version':kuzu.__version__,'secondary_property_index_supported':supports_secondary_property_indexes(),'primary_key_lookup':'supported, separate from scalar secondary indexes','limits':{'buffer_pool_bytes':64*1024**2,'max_database_mapping_bytes':2*1024**3,'threads':1},'formal_timing_samples':0},indent=2)+'\n')
+
 groups=defaultdict(dict)
 def percentile(values,p):
  values=sorted(values);index=(len(values)-1)*p;lo=math.floor(index);hi=math.ceil(index)
@@ -11,7 +22,7 @@ for path in sorted((root/'reads').glob('*/*/*/*/*/raw.jsonl')):
  scale,round_name,engine,profile=path.relative_to(root/'reads').parts[:4]
  status=json.loads((path.parent/'run_status.json').read_text())
  if status['failure_count'] or status['quality_failure_count']:continue
- oracle=json.loads((path.parent/'correctness.json').read_text());assert oracle['scalar']['failures']==0 and oracle['full_results']['failures']==0
+ oracle=json.loads((path.parent/'correctness.json').read_text());assert not oracle['scalar']['failures'] and not oracle['full_results']['failures']
  samples=defaultdict(list)
  for line in path.read_text().splitlines():
   event=json.loads(line)

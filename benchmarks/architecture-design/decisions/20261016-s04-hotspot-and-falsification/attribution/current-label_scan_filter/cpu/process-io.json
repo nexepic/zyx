@@ -1,0 +1,41 @@
+{
+  "scope": "Linux process I/O snapshots at result boundaries; not physical database I/O. Empty means unavailable.",
+  "observations": [
+    {
+      "iteration": 0,
+      "counters": {
+        "rchar": 3654081111,
+        "wchar": 3334479047,
+        "syscr": 78133,
+        "syscw": 25,
+        "read_bytes": 0,
+        "write_bytes": 3334574080,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 1,
+      "counters": {
+        "rchar": 3690306135,
+        "wchar": 3334481306,
+        "syscr": 86977,
+        "syscw": 33,
+        "read_bytes": 0,
+        "write_bytes": 3334610944,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 2,
+      "counters": {
+        "rchar": 3726498391,
+        "wchar": 3334483053,
+        "syscr": 95813,
+        "syscw": 38,
+        "read_bytes": 0,
+        "write_bytes": 3334619136,
+        "cancelled_write_bytes": 0
+      }
+    }
+  ]
+}

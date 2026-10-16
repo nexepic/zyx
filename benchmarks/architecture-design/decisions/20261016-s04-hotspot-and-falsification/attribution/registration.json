@@ -1,0 +1,14 @@
+{
+  "scope": "Separate diagnostic processes only, never formal timing. CPU collection without heap tracing or native timers; heap collection only a bounded 200ms wall window, not whole-query allocation totals; native value counters in a separate process.",
+  "reason": "Combined unbounded heap tracing reached the existing 30000ms query timeout; preserve failed experiment. No deadline or memory increase.",
+  "cpu_iterations": {
+    "scan_aggregate_sort": 3,
+    "point_traversal": 100
+  },
+  "heap_iterations": 3,
+  "warmups": 3,
+  "heap_window_wall_seconds": 0.2,
+  "caveats": "Signals are approximate boundaries; a final cleanup race is recorded. Heap-window allocations include collector/entry effects and cannot be extrapolated to whole queries. CPU samples and counter processes are distinct. Process I/O may be unavailable and is not physical database I/O.",
+  "binary_sha256": "cc3251b02a2f2a5d87384ac1f11aae29314294a62a2b98ecb78b3ffc6b61d674",
+  "formal_timing_samples_accepted": 0
+}

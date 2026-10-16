@@ -1,0 +1,18 @@
+{
+  "scope": "Process-level Linux I/O snapshots at result boundaries; includes collector/protocol writes and is not physical database I/O. Native page/decode/write counters are separately retained in raw profile events. gprofng I/O collector is unavailable on this host (llseek initialization error), so it is disabled rather than reporting false zeros.",
+  "observations": [
+    {
+      "iteration": 0,
+      "monotonic_ns": 137852886393309,
+      "counters": {
+        "rchar": 3654099828,
+        "wchar": 3334479043,
+        "syscr": 78144,
+        "syscw": 25,
+        "read_bytes": 8192,
+        "write_bytes": 3334557696,
+        "cancelled_write_bytes": 0
+      }
+    }
+  ]
+}

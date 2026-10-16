@@ -1,0 +1,10 @@
+{
+  "reason": "Probe default-initialized required edge/distinct/candidate limits to zero, failing compatibility validation before any warmup or measured sample. Set positive compatible limits; edge scan is unused and limited to one; candidate allowance 4MiB. Original 64MiB materialization cap, 4096 input rows and 128 Top-K unchanged.",
+  "previous_binary_sha256": "8cfe5fbbf6cb3f295de142a0ee045d3eef3405f19475c2ec32f1baa55b3ac2c0",
+  "old_samples_accepted": 0,
+  "production_main_worker_and_core_changes": false,
+  "corrected_binary_sha256": "961fc7813f12a23ddb19fb545b859ef3307e33ed1c03df028fb9d1703745a58e",
+  "source_sha256": "3697dc89d76e97e6c1ff67247e9e561ba6ad0296b297516c6ff587a4cdcca35d",
+  "core_archive_sha256": "8ecbf8f8f6a044d7d47e4b23fcfa4198b5013bb2661a180a7a9bf56715e8fa6d",
+  "status": "registered_before_corrected_probe_measurement"
+}

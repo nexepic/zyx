@@ -1,0 +1,14 @@
+{
+  "pid": 156534,
+  "resume_after_event": {
+    "event": "result",
+    "workload": "two_hop_expand",
+    "iteration": 0,
+    "value": 25
+  },
+  "resume_monotonic_ns": 138338878236487,
+  "pause_reason": "bounded_heap_window",
+  "pause_monotonic_ns": 138339080199417,
+  "pause_delivered": true,
+  "cleanup_may_be_included": false
+}

@@ -1,0 +1,1205 @@
+{
+  "scope": "Linux process I/O snapshots at result boundaries; not physical database I/O. Empty means unavailable.",
+  "observations": [
+    {
+      "iteration": 0,
+      "counters": {
+        "rchar": 3508509245,
+        "wchar": 3334479035,
+        "syscr": 42593,
+        "syscw": 25,
+        "read_bytes": 0,
+        "write_bytes": 3334553600,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 1,
+      "counters": {
+        "rchar": 3508640317,
+        "wchar": 3334479765,
+        "syscr": 42625,
+        "syscw": 28,
+        "read_bytes": 0,
+        "write_bytes": 3334561792,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 2,
+      "counters": {
+        "rchar": 3508787773,
+        "wchar": 3334479991,
+        "syscr": 42661,
+        "syscw": 30,
+        "read_bytes": 0,
+        "write_bytes": 3334561792,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 3,
+      "counters": {
+        "rchar": 3508902461,
+        "wchar": 3334480729,
+        "syscr": 42689,
+        "syscw": 35,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 4,
+      "counters": {
+        "rchar": 3509033533,
+        "wchar": 3334480955,
+        "syscr": 42721,
+        "syscw": 37,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 5,
+      "counters": {
+        "rchar": 3509164605,
+        "wchar": 3334481181,
+        "syscr": 42753,
+        "syscw": 39,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 6,
+      "counters": {
+        "rchar": 3509295677,
+        "wchar": 3334481407,
+        "syscr": 42785,
+        "syscw": 41,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 7,
+      "counters": {
+        "rchar": 3509426749,
+        "wchar": 3334481633,
+        "syscr": 42817,
+        "syscw": 43,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 8,
+      "counters": {
+        "rchar": 3509557821,
+        "wchar": 3334481859,
+        "syscr": 42849,
+        "syscw": 45,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 9,
+      "counters": {
+        "rchar": 3509688893,
+        "wchar": 3334482085,
+        "syscr": 42881,
+        "syscw": 47,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 10,
+      "counters": {
+        "rchar": 3509819965,
+        "wchar": 3334482313,
+        "syscr": 42913,
+        "syscw": 49,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 11,
+      "counters": {
+        "rchar": 3509951037,
+        "wchar": 3334482541,
+        "syscr": 42945,
+        "syscw": 51,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 12,
+      "counters": {
+        "rchar": 3510082109,
+        "wchar": 3334482769,
+        "syscr": 42977,
+        "syscw": 53,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 13,
+      "counters": {
+        "rchar": 3510213181,
+        "wchar": 3334482997,
+        "syscr": 43009,
+        "syscw": 55,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 14,
+      "counters": {
+        "rchar": 3510344253,
+        "wchar": 3334483225,
+        "syscr": 43041,
+        "syscw": 57,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 15,
+      "counters": {
+        "rchar": 3510475325,
+        "wchar": 3334483453,
+        "syscr": 43073,
+        "syscw": 59,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 16,
+      "counters": {
+        "rchar": 3510606397,
+        "wchar": 3334483681,
+        "syscr": 43105,
+        "syscw": 61,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 17,
+      "counters": {
+        "rchar": 3510737469,
+        "wchar": 3334483909,
+        "syscr": 43137,
+        "syscw": 63,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 18,
+      "counters": {
+        "rchar": 3510868541,
+        "wchar": 3334484137,
+        "syscr": 43169,
+        "syscw": 65,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 19,
+      "counters": {
+        "rchar": 3510999613,
+        "wchar": 3334484365,
+        "syscr": 43201,
+        "syscw": 67,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 20,
+      "counters": {
+        "rchar": 3511130685,
+        "wchar": 3334484593,
+        "syscr": 43233,
+        "syscw": 69,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 21,
+      "counters": {
+        "rchar": 3511261757,
+        "wchar": 3334484821,
+        "syscr": 43265,
+        "syscw": 71,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 22,
+      "counters": {
+        "rchar": 3511409213,
+        "wchar": 3334485049,
+        "syscr": 43301,
+        "syscw": 73,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 23,
+      "counters": {
+        "rchar": 3511523901,
+        "wchar": 3334485277,
+        "syscr": 43329,
+        "syscw": 75,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 24,
+      "counters": {
+        "rchar": 3511654973,
+        "wchar": 3334485505,
+        "syscr": 43361,
+        "syscw": 77,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 25,
+      "counters": {
+        "rchar": 3511786045,
+        "wchar": 3334485733,
+        "syscr": 43393,
+        "syscw": 79,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 26,
+      "counters": {
+        "rchar": 3511917117,
+        "wchar": 3334485961,
+        "syscr": 43425,
+        "syscw": 81,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 27,
+      "counters": {
+        "rchar": 3512048189,
+        "wchar": 3334486189,
+        "syscr": 43457,
+        "syscw": 83,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 28,
+      "counters": {
+        "rchar": 3512179261,
+        "wchar": 3334486416,
+        "syscr": 43489,
+        "syscw": 85,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 29,
+      "counters": {
+        "rchar": 3512310333,
+        "wchar": 3334486644,
+        "syscr": 43521,
+        "syscw": 87,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 30,
+      "counters": {
+        "rchar": 3512441405,
+        "wchar": 3334486872,
+        "syscr": 43553,
+        "syscw": 89,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 31,
+      "counters": {
+        "rchar": 3512572477,
+        "wchar": 3334487100,
+        "syscr": 43585,
+        "syscw": 91,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 32,
+      "counters": {
+        "rchar": 3512703549,
+        "wchar": 3334487832,
+        "syscr": 43617,
+        "syscw": 94,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 33,
+      "counters": {
+        "rchar": 3512834621,
+        "wchar": 3334488060,
+        "syscr": 43649,
+        "syscw": 96,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 34,
+      "counters": {
+        "rchar": 3512965693,
+        "wchar": 3334488288,
+        "syscr": 43681,
+        "syscw": 98,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 35,
+      "counters": {
+        "rchar": 3513113149,
+        "wchar": 3334488516,
+        "syscr": 43717,
+        "syscw": 100,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 36,
+      "counters": {
+        "rchar": 3513227837,
+        "wchar": 3334488744,
+        "syscr": 43745,
+        "syscw": 102,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 37,
+      "counters": {
+        "rchar": 3513358909,
+        "wchar": 3334488972,
+        "syscr": 43777,
+        "syscw": 104,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 38,
+      "counters": {
+        "rchar": 3513489981,
+        "wchar": 3334489200,
+        "syscr": 43809,
+        "syscw": 106,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 39,
+      "counters": {
+        "rchar": 3513621053,
+        "wchar": 3334489428,
+        "syscr": 43841,
+        "syscw": 108,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 40,
+      "counters": {
+        "rchar": 3513752125,
+        "wchar": 3334489656,
+        "syscr": 43873,
+        "syscw": 110,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 41,
+      "counters": {
+        "rchar": 3513883197,
+        "wchar": 3334489884,
+        "syscr": 43905,
+        "syscw": 112,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 42,
+      "counters": {
+        "rchar": 3514014269,
+        "wchar": 3334490112,
+        "syscr": 43937,
+        "syscw": 114,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 43,
+      "counters": {
+        "rchar": 3514145341,
+        "wchar": 3334490340,
+        "syscr": 43969,
+        "syscw": 116,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 44,
+      "counters": {
+        "rchar": 3514276413,
+        "wchar": 3334490568,
+        "syscr": 44001,
+        "syscw": 118,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 45,
+      "counters": {
+        "rchar": 3514407485,
+        "wchar": 3334490796,
+        "syscr": 44033,
+        "syscw": 120,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 46,
+      "counters": {
+        "rchar": 3514538557,
+        "wchar": 3334491024,
+        "syscr": 44065,
+        "syscw": 122,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 47,
+      "counters": {
+        "rchar": 3514669629,
+        "wchar": 3334491251,
+        "syscr": 44097,
+        "syscw": 124,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 48,
+      "counters": {
+        "rchar": 3514800701,
+        "wchar": 3334491479,
+        "syscr": 44129,
+        "syscw": 126,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 49,
+      "counters": {
+        "rchar": 3514931773,
+        "wchar": 3334491707,
+        "syscr": 44161,
+        "syscw": 128,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 50,
+      "counters": {
+        "rchar": 3515062845,
+        "wchar": 3334491935,
+        "syscr": 44193,
+        "syscw": 130,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 51,
+      "counters": {
+        "rchar": 3515193917,
+        "wchar": 3334492163,
+        "syscr": 44225,
+        "syscw": 132,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 52,
+      "counters": {
+        "rchar": 3515324989,
+        "wchar": 3334492391,
+        "syscr": 44257,
+        "syscw": 134,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 53,
+      "counters": {
+        "rchar": 3515456061,
+        "wchar": 3334492619,
+        "syscr": 44289,
+        "syscw": 136,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 54,
+      "counters": {
+        "rchar": 3515603517,
+        "wchar": 3334492847,
+        "syscr": 44325,
+        "syscw": 138,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 55,
+      "counters": {
+        "rchar": 3515718205,
+        "wchar": 3334493075,
+        "syscr": 44353,
+        "syscw": 140,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 56,
+      "counters": {
+        "rchar": 3515849277,
+        "wchar": 3334493303,
+        "syscr": 44385,
+        "syscw": 142,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 57,
+      "counters": {
+        "rchar": 3515980349,
+        "wchar": 3334493531,
+        "syscr": 44417,
+        "syscw": 144,
+        "read_bytes": 0,
+        "write_bytes": 3334578176,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 58,
+      "counters": {
+        "rchar": 3516111421,
+        "wchar": 3334493759,
+        "syscr": 44449,
+        "syscw": 146,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 59,
+      "counters": {
+        "rchar": 3516242493,
+        "wchar": 3334493987,
+        "syscr": 44481,
+        "syscw": 148,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 60,
+      "counters": {
+        "rchar": 3516373565,
+        "wchar": 3334494215,
+        "syscr": 44513,
+        "syscw": 150,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 61,
+      "counters": {
+        "rchar": 3516504637,
+        "wchar": 3334494947,
+        "syscr": 44545,
+        "syscw": 153,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 62,
+      "counters": {
+        "rchar": 3516635709,
+        "wchar": 3334495175,
+        "syscr": 44577,
+        "syscw": 155,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 63,
+      "counters": {
+        "rchar": 3516766781,
+        "wchar": 3334495403,
+        "syscr": 44609,
+        "syscw": 157,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 64,
+      "counters": {
+        "rchar": 3516897853,
+        "wchar": 3334495631,
+        "syscr": 44641,
+        "syscw": 159,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 65,
+      "counters": {
+        "rchar": 3517028925,
+        "wchar": 3334495859,
+        "syscr": 44673,
+        "syscw": 161,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 66,
+      "counters": {
+        "rchar": 3517159997,
+        "wchar": 3334496087,
+        "syscr": 44705,
+        "syscw": 163,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 67,
+      "counters": {
+        "rchar": 3517291069,
+        "wchar": 3334496315,
+        "syscr": 44737,
+        "syscw": 165,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 68,
+      "counters": {
+        "rchar": 3517422141,
+        "wchar": 3334496543,
+        "syscr": 44769,
+        "syscw": 167,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 69,
+      "counters": {
+        "rchar": 3517569597,
+        "wchar": 3334496771,
+        "syscr": 44805,
+        "syscw": 169,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 70,
+      "counters": {
+        "rchar": 3517684285,
+        "wchar": 3334496999,
+        "syscr": 44833,
+        "syscw": 171,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 71,
+      "counters": {
+        "rchar": 3517815357,
+        "wchar": 3334497226,
+        "syscr": 44865,
+        "syscw": 173,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 72,
+      "counters": {
+        "rchar": 3517946429,
+        "wchar": 3334497454,
+        "syscr": 44897,
+        "syscw": 175,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 73,
+      "counters": {
+        "rchar": 3518077501,
+        "wchar": 3334497682,
+        "syscr": 44929,
+        "syscw": 177,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 74,
+      "counters": {
+        "rchar": 3518208573,
+        "wchar": 3334497910,
+        "syscr": 44961,
+        "syscw": 179,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 75,
+      "counters": {
+        "rchar": 3518339645,
+        "wchar": 3334498138,
+        "syscr": 44993,
+        "syscw": 181,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 76,
+      "counters": {
+        "rchar": 3518470717,
+        "wchar": 3334498366,
+        "syscr": 45025,
+        "syscw": 183,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 77,
+      "counters": {
+        "rchar": 3518601789,
+        "wchar": 3334498594,
+        "syscr": 45057,
+        "syscw": 185,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 78,
+      "counters": {
+        "rchar": 3518732861,
+        "wchar": 3334498822,
+        "syscr": 45089,
+        "syscw": 187,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 79,
+      "counters": {
+        "rchar": 3518863933,
+        "wchar": 3334499050,
+        "syscr": 45121,
+        "syscw": 189,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 80,
+      "counters": {
+        "rchar": 3518995005,
+        "wchar": 3334499278,
+        "syscr": 45153,
+        "syscw": 191,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 81,
+      "counters": {
+        "rchar": 3519126077,
+        "wchar": 3334499506,
+        "syscr": 45185,
+        "syscw": 193,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 82,
+      "counters": {
+        "rchar": 3519257149,
+        "wchar": 3334499734,
+        "syscr": 45217,
+        "syscw": 195,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 83,
+      "counters": {
+        "rchar": 3519388221,
+        "wchar": 3334499962,
+        "syscr": 45249,
+        "syscw": 197,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 84,
+      "counters": {
+        "rchar": 3519519293,
+        "wchar": 3334500190,
+        "syscr": 45281,
+        "syscw": 199,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 85,
+      "counters": {
+        "rchar": 3519666749,
+        "wchar": 3334500418,
+        "syscr": 45317,
+        "syscw": 201,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 86,
+      "counters": {
+        "rchar": 3519781437,
+        "wchar": 3334500646,
+        "syscr": 45345,
+        "syscw": 203,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 87,
+      "counters": {
+        "rchar": 3519912509,
+        "wchar": 3334500874,
+        "syscr": 45377,
+        "syscw": 205,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 88,
+      "counters": {
+        "rchar": 3520043581,
+        "wchar": 3334501102,
+        "syscr": 45409,
+        "syscw": 207,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 89,
+      "counters": {
+        "rchar": 3520174653,
+        "wchar": 3334501834,
+        "syscr": 45441,
+        "syscw": 210,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 90,
+      "counters": {
+        "rchar": 3520305725,
+        "wchar": 3334502062,
+        "syscr": 45473,
+        "syscw": 212,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 91,
+      "counters": {
+        "rchar": 3520436797,
+        "wchar": 3334502290,
+        "syscr": 45505,
+        "syscw": 214,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 92,
+      "counters": {
+        "rchar": 3520567869,
+        "wchar": 3334502518,
+        "syscr": 45537,
+        "syscw": 216,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 93,
+      "counters": {
+        "rchar": 3520698941,
+        "wchar": 3334502746,
+        "syscr": 45569,
+        "syscw": 218,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 94,
+      "counters": {
+        "rchar": 3520830013,
+        "wchar": 3334502974,
+        "syscr": 45601,
+        "syscw": 220,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 95,
+      "counters": {
+        "rchar": 3520961085,
+        "wchar": 3334503202,
+        "syscr": 45633,
+        "syscw": 222,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 96,
+      "counters": {
+        "rchar": 3521092157,
+        "wchar": 3334503430,
+        "syscr": 45665,
+        "syscw": 224,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 97,
+      "counters": {
+        "rchar": 3521223229,
+        "wchar": 3334503658,
+        "syscr": 45697,
+        "syscw": 226,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 98,
+      "counters": {
+        "rchar": 3521354301,
+        "wchar": 3334503886,
+        "syscr": 45729,
+        "syscw": 228,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    },
+    {
+      "iteration": 99,
+      "counters": {
+        "rchar": 3521485373,
+        "wchar": 3334504114,
+        "syscr": 45761,
+        "syscw": 230,
+        "read_bytes": 0,
+        "write_bytes": 3334582272,
+        "cancelled_write_bytes": 0
+      }
+    }
+  ]
+}

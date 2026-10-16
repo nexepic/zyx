@@ -1,0 +1,6 @@
+{
+  "status": "failed",
+  "returncode": 1,
+  "log": "/workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/logs/read-1-medium-indexed-kuzu.log",
+  "rule": "Preserve exact process output and original engine failure. No successful profile process or latency ratio inferred; continue independent scenarios."
+}

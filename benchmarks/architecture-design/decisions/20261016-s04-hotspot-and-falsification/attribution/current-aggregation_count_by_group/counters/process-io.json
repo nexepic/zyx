@@ -1,0 +1,4 @@
+{
+  "scope": "Linux process I/O snapshots at result boundaries; not physical database I/O. Empty means unavailable.",
+  "observations": []
+}

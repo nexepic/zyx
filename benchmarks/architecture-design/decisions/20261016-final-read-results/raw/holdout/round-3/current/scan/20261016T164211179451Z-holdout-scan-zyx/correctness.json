@@ -1,0 +1,16 @@
+{
+  "scalar": {
+    "expected": {
+      "label_scan_filter": 9125,
+      "aggregation_count_by_group": 8,
+      "topk_property_sort": 100,
+      "two_hop_expand": 49
+    },
+    "failures": [],
+    "scope": "scalar values and projected row counts; projected values, types, ordering and duplicates need separate semantic tests"
+  },
+  "full_results": {
+    "failures": [],
+    "scope": "complete country/count groups and ordered Top-K IDs; finite unique-ID input dataset"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "scalar": {
+    "expected": {
+      "point_node_fetch_by_id": 1,
+      "point_edge_fetch_by_endpoints": 1,
+      "batch_node_fetch_100": 100,
+      "one_hop_fetch_neighbor_ids": 5,
+      "one_hop_fetch_neighbor_records": 5
+    },
+    "failures": [
+      "kuzu/point_node_fetch_by_id: missing or duplicate observations",
+      "kuzu/point_edge_fetch_by_endpoints: missing or duplicate observations",
+      "kuzu/batch_node_fetch_100: missing or duplicate observations",
+      "kuzu/one_hop_fetch_neighbor_ids: missing or duplicate observations",
+      "kuzu/one_hop_fetch_neighbor_records: missing or duplicate observations"
+    ],
+    "scope": "scalar values and projected row counts; projected values, types, ordering and duplicates need separate semantic tests"
+  },
+  "full_results": {
+    "failures": [],
+    "scope": "complete country/count groups and ordered Top-K IDs; finite unique-ID input dataset"
+  }
+}

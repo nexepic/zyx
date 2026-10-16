@@ -1,0 +1,46 @@
+{
+  "failure_count": 2,
+  "gates": [
+    {
+      "details": "all required environment fields are present",
+      "name": "benchmark_environment_metadata",
+      "status": "passed"
+    },
+    {
+      "details": "1 failed workload row(s) in summary",
+      "name": "no_workload_failures",
+      "status": "failed"
+    },
+    {
+      "details": "no unsupported workload rows",
+      "name": "unsupported_workloads_declared",
+      "status": "skipped"
+    },
+    {
+      "details": "kuzu/point_lookup_indexed: missing; kuzu/property_equality_indexed: missing; kuzu/property_range_indexed: missing",
+      "name": "expected_sample_counts",
+      "status": "failed"
+    },
+    {
+      "details": "ZYX is not part of this run or required workloads are not declared",
+      "name": "zyx_primary_rows_present",
+      "status": "skipped"
+    },
+    {
+      "details": "ZYX is not part of this run",
+      "name": "zyx_profile_coverage",
+      "status": "skipped"
+    },
+    {
+      "details": "no successful baseline summary rows were provided",
+      "name": "baseline_environment_provenance",
+      "status": "skipped"
+    },
+    {
+      "details": "no baseline summary rows were provided",
+      "name": "p50_regression_against_baseline",
+      "status": "skipped"
+    }
+  ],
+  "status": "failed"
+}

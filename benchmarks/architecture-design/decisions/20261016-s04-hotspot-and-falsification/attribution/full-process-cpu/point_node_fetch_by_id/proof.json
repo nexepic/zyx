@@ -1,0 +1,10 @@
+{
+  "workload": "point_node_fetch_by_id",
+  "sampled_cpu_seconds": 0.185,
+  "child_user_seconds": 17.626500999999998,
+  "child_system_seconds": 1.46792,
+  "wall_seconds": 19.644965654995758,
+  "sampled_over_child_total": 0.0096886938860309,
+  "validated_results": 100,
+  "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+}

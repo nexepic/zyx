@@ -1,0 +1,63 @@
+{
+  "status": "completed_low_coverage_observations_only",
+  "cases": [
+    {
+      "workload": "label_scan_filter",
+      "sampled_cpu_seconds": 0.272,
+      "child_user_seconds": 25.946035,
+      "child_system_seconds": 1.7254459999999998,
+      "wall_seconds": 28.132326079998165,
+      "sampled_over_child_total": 0.00982961482979534,
+      "validated_results": 3,
+      "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+    },
+    {
+      "workload": "aggregation_count_by_group",
+      "sampled_cpu_seconds": 0.285,
+      "child_user_seconds": 27.240535,
+      "child_system_seconds": 1.864255,
+      "wall_seconds": 29.609396565996576,
+      "sampled_over_child_total": 0.009792202589333231,
+      "validated_results": 3,
+      "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+    },
+    {
+      "workload": "topk_property_sort",
+      "sampled_cpu_seconds": 0.281,
+      "child_user_seconds": 26.774327,
+      "child_system_seconds": 1.8901240000000001,
+      "wall_seconds": 29.31753378501162,
+      "sampled_over_child_total": 0.009803083268540536,
+      "validated_results": 3,
+      "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+    },
+    {
+      "workload": "point_node_fetch_by_id",
+      "sampled_cpu_seconds": 0.185,
+      "child_user_seconds": 17.626500999999998,
+      "child_system_seconds": 1.46792,
+      "wall_seconds": 19.644965654995758,
+      "sampled_over_child_total": 0.0096886938860309,
+      "validated_results": 100,
+      "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+    },
+    {
+      "workload": "two_hop_expand",
+      "sampled_cpu_seconds": 0.063,
+      "child_user_seconds": 5.716994,
+      "child_system_seconds": 1.0930010000000001,
+      "wall_seconds": 7.337200907000806,
+      "sampled_over_child_total": 0.00925110811388261,
+      "validated_results": 100,
+      "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+    }
+  ],
+  "policy": {
+    "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency.",
+    "reason": "Delayed-initialization CPU reports contain only about 0.06s CPU for a multi-second active window; do not treat those fractions as complete-query evidence. Compare captured CPU with isolated child user/system usage.",
+    "formal_timing_samples_accepted": 0,
+    "budgets_or_deadlines_changed": false,
+    "quality_limit": "Observed sampler CPU total is about 1% of isolated OS CPU usage. Treat function positions as low-coverage qualitative samples only; never infer absolute CPU time, precise shares or whole-query coverage. OS user/system usage remains separately authoritative."
+  },
+  "full_cpu_coverage_passed": false
+}

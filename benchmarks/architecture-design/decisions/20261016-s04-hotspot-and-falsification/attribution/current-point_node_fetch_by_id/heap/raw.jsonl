@@ -1,0 +1,7 @@
+Creating experiment directory /workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/current-point_node_fetch_by_id/heap/samples.er (Process ID: 156494) ...
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":0,"latency_ms":67.5552,"scale":"medium","status":"ok","workload":"point_node_fetch_by_id"}
+{"event":"result","workload":"point_node_fetch_by_id","iteration":0,"value":1}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":1,"latency_ms":269.6,"scale":"medium","status":"ok","workload":"point_node_fetch_by_id"}
+{"event":"result","workload":"point_node_fetch_by_id","iteration":1,"value":1}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":2,"latency_ms":76.4424,"scale":"medium","status":"ok","workload":"point_node_fetch_by_id"}
+{"event":"result","workload":"point_node_fetch_by_id","iteration":2,"value":1}

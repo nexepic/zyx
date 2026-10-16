@@ -1,0 +1,7 @@
+Creating experiment directory /workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/full-process-cpu/aggregation_count_by_group/samples.er (Process ID: 156599) ...
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":0,"latency_ms":3386.23,"scale":"medium","status":"ok","workload":"aggregation_count_by_group"}
+{"event":"result","workload":"aggregation_count_by_group","iteration":0,"value":8,"rows":[["CN",12500],["US",12500],["DE",12500],["JP",12500],["SG",12500],["BR",12500],["IN",12500],["FR",12500]]}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":1,"latency_ms":3358.91,"scale":"medium","status":"ok","workload":"aggregation_count_by_group"}
+{"event":"result","workload":"aggregation_count_by_group","iteration":1,"value":8,"rows":[["CN",12500],["US",12500],["DE",12500],["JP",12500],["SG",12500],["BR",12500],["IN",12500],["FR",12500]]}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":2,"latency_ms":3257.98,"scale":"medium","status":"ok","workload":"aggregation_count_by_group"}
+{"event":"result","workload":"aggregation_count_by_group","iteration":2,"value":8,"rows":[["CN",12500],["US",12500],["DE",12500],["JP",12500],["SG",12500],["BR",12500],["IN",12500],["FR",12500]]}

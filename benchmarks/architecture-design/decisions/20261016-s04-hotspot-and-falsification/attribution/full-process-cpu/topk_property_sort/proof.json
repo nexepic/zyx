@@ -1,0 +1,10 @@
+{
+  "workload": "topk_property_sort",
+  "sampled_cpu_seconds": 0.281,
+  "child_user_seconds": 26.774327,
+  "child_system_seconds": 1.8901240000000001,
+  "wall_seconds": 29.31753378501162,
+  "sampled_over_child_total": 0.009803083268540536,
+  "validated_results": 3,
+  "scope": "Whole private native process, including prepared-file cloning/open, warmups, measured repetitions and close. No import. No delayed initialization or signal filtering; sample all threads from process startup. Not query-only CPU and never formal latency."
+}

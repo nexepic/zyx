@@ -1,0 +1,7 @@
+Creating experiment directory /workspace/zyx-optimization-final-window-20261016/bounded-loader-v3/attribution/full-process-cpu/label_scan_filter/samples.er (Process ID: 156543) ...
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":0,"latency_ms":3124.98,"scale":"medium","status":"ok","workload":"label_scan_filter"}
+{"event":"result","workload":"label_scan_filter","iteration":0,"value":12500}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":1,"latency_ms":3048.71,"scale":"medium","status":"ok","workload":"label_scan_filter"}
+{"event":"result","workload":"label_scan_filter","iteration":1,"value":12500}
+{"database":"zyx","equivalent_mode":"api","event":"sample","iteration":2,"latency_ms":3108.7,"scale":"medium","status":"ok","workload":"label_scan_filter"}
+{"event":"result","workload":"label_scan_filter","iteration":2,"value":12500}

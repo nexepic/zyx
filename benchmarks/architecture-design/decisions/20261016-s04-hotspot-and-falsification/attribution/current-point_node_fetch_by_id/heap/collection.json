@@ -1,0 +1,14 @@
+{
+  "pid": 156494,
+  "resume_after_event": {
+    "event": "result",
+    "workload": "point_node_fetch_by_id",
+    "iteration": 0,
+    "value": 1
+  },
+  "resume_monotonic_ns": 138316458072689,
+  "pause_reason": "bounded_heap_window",
+  "pause_monotonic_ns": 138316658465980,
+  "pause_delivered": true,
+  "cleanup_may_be_included": false
+}

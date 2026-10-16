@@ -25,16 +25,17 @@
     "S5.4",
     "S6.3",
     "S5.3",
-    "S6.1"
+    "S6.1",
+    "S0.4"
   ],
-  "accepted": 26,
+  "accepted": 27,
   "total": 34,
-  "percent": 76.5,
+  "percent": 79.4,
   "stages": {
     "S0": {
-      "accepted": 2,
+      "accepted": 3,
       "total": 4,
-      "percent": 50
+      "percent": 75
     },
     "S1": {
       "accepted": 7,
@@ -147,13 +148,14 @@
     ],
     "completed_ids": [
       "S5.3",
-      "S6.1"
+      "S6.1",
+      "S0.4"
     ],
     "status": "in_progress",
     "overall_goal_accepted_target": 34,
     "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
     "pending_revalidation_ids": [],
-    "completed": 2
+    "completed": 3
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -224,9 +226,12 @@
   "S5.3": "accepted_revalidated",
   "S6.1": "accepted_revalidated",
   "last_certified_checkpoint": {
-    "accepted": 26,
-    "percent": 76.5,
-    "source": "ff1da3a0",
-    "superseded_reason": "Final medium preparation and exhausted-CACHE negative control expose mutation/metadata private workspace attribution; S5.3/S6.1 require revalidation."
-  }
+    "accepted": 27,
+    "percent": 79.4,
+    "production_source": "6a735df86a678556aa71877b6aa66fe968292df7",
+    "latest_delivery": "S0.4",
+    "evidence": "20261016-s04-hotspot-and-falsification/proof.json",
+    "performance_acceptance": false
+  },
+  "S0.4": "accepted_diagnostic_report_with_explicit_limits"
 }
