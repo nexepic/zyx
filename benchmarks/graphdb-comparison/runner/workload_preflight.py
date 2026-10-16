@@ -136,7 +136,7 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42):
                     "worker_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                     "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     "resources": {"threads": 1, "query_materialization_bytes": 67108864,
-                                  "budget_probe_bytes": 4096},
+                                  "budget_probe_bytes": 4096 if profile == "smoke" else 4194304},
                     "four_client_mode": "four native threads, separate query engines; explicit conflict interleavings also checked"}
     (output / "registration.json").write_text(json.dumps(registration, indent=2) + "\n")
     count = 32 if profile == "smoke" else 10000
