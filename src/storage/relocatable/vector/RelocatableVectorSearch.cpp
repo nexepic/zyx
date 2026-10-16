@@ -9,6 +9,8 @@
 #include "graph/storage/relocatable/vector/RelocatableVectorSearch.hpp"
 
 #include <algorithm>
+#include "graph/utils/OwnedPmrAllocator.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -105,8 +107,8 @@ namespace graph::storage {
 		}
 
 		struct VectorDeltaOverlay {
-			std::unordered_set<uint64_t> erased;
-			std::vector<uint64_t> inserted;
+			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> erased;
+			utils::OwnedStdVector<uint64_t> inserted;
 
 			[[nodiscard]] bool suppresses(uint64_t vectorId) const { return erased.contains(vectorId); }
 			[[nodiscard]] bool empty() const { return entryCount() == 0U; }
@@ -357,9 +359,9 @@ namespace graph::storage {
 			return left.score == right.score ? left.node_id < right.node_id : left.score < right.score;
 		}
 
-		[[nodiscard]] std::vector<LogicalGraphVectorSearchHit> finishExact(std::vector<ExactCandidate> candidates,
+		[[nodiscard]] utils::OwnedStdVector<LogicalGraphVectorSearchHit> finishExact(utils::OwnedStdVector<ExactCandidate> candidates,
 																		   size_t topK) {
-			std::vector<LogicalGraphVectorSearchHit> hits;
+			utils::OwnedStdVector<LogicalGraphVectorSearchHit> hits;
 			hits.reserve(candidates.size());
 			for (const ExactCandidate &candidate: candidates) {
 				hits.push_back({candidate.node_id, candidate.score});
@@ -447,8 +449,8 @@ namespace graph::storage {
 			uint32_t subspace_count_ = 0U;
 			uint32_t centroid_count_ = 0U;
 			double query_squared_norm_ = 0.0;
-			std::vector<double> primary_scores_;
-			std::vector<double> centroid_squared_norms_;
+			utils::OwnedStdVector<double> primary_scores_;
+			utils::OwnedStdVector<double> centroid_squared_norms_;
 		};
 
 		struct ApproximateCandidate {
@@ -480,7 +482,7 @@ namespace graph::storage {
 			}
 			LogicalGraphVectorSearchStats stats;
 			stats.scanned_mapping_entries = mappings.size();
-			std::vector<ExactCandidate> candidates;
+			utils::OwnedStdVector<ExactCandidate> candidates;
 			candidates.reserve(mappings.size());
 			for (const BTreePageEntry &mapping: mappings) {
 				checkCancellation(request);
@@ -543,10 +545,10 @@ namespace graph::storage {
 						"relocatable logical Vector delta inserts exceed the caller-supplied exact-read bound");
 			}
 			const size_t maximumBaseCandidates = request.maximum_raw_vector_reads - overlay.inserted.size();
-			std::unordered_set<uint64_t> seen;
+			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> seen;
 			seen.reserve(std::min(request.maximum_mapping_entries, request.maximum_raw_vector_reads));
-			std::priority_queue<ApproximateCandidate, std::vector<ApproximateCandidate>, ApproximateLater> frontier;
-			std::vector<ExactCandidate> candidates;
+			std::priority_queue<ApproximateCandidate, utils::OwnedStdVector<ApproximateCandidate>, ApproximateLater> frontier;
+			utils::OwnedStdVector<ExactCandidate> candidates;
 			candidates.reserve(std::min(request.maximum_mapping_entries, request.maximum_raw_vector_reads));
 			LogicalGraphVectorSearchStats stats;
 			stats.used_adjacency = true;
@@ -632,7 +634,7 @@ namespace graph::storage {
 				return exact;
 			}
 			const PqDistanceTable table(*codebook, manifest, request.query_vector);
-			std::set<PageId> pqInventory;
+			std::set<PageId, std::less<PageId>, utils::OwnedPmrAllocator<PageId>> pqInventory;
 			for (const VectorManifestEntry &entry: manifest.entries) {
 				if (entry.storage_kind == VectorStorageKind::VSK_PQ) {
 					pqInventory.insert(entry.page_id);
@@ -643,13 +645,13 @@ namespace graph::storage {
 					 "relocatable logical Vector search PQ generation has no Manifest page inventory");
 			}
 
-			std::unordered_set<uint64_t> seen;
+			std::unordered_set<uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> seen;
 			const size_t initialCandidateCapacity =
 					std::min(request.maximum_mapping_entries,
 							 std::max(request.candidate_search_budget, request.candidate_refinement_budget));
 			seen.reserve(initialCandidateCapacity);
-			std::priority_queue<ApproximateCandidate, std::vector<ApproximateCandidate>, ApproximateLater> frontier;
-			std::vector<ApproximateCandidate> discovered;
+			std::priority_queue<ApproximateCandidate, utils::OwnedStdVector<ApproximateCandidate>, ApproximateLater> frontier;
+			utils::OwnedStdVector<ApproximateCandidate> discovered;
 			discovered.reserve(initialCandidateCapacity);
 			LogicalGraphVectorSearchStats stats;
 			stats.used_adjacency = true;
@@ -716,7 +718,7 @@ namespace graph::storage {
 			if (discovered.size() > baseRefinementBudget) {
 				discovered.resize(baseRefinementBudget);
 			}
-			std::vector<ExactCandidate> refined;
+			utils::OwnedStdVector<ExactCandidate> refined;
 			refined.reserve(discovered.size() + overlay.inserted.size());
 			for (const ApproximateCandidate &candidate: discovered) {
 				checkCancellation(request);
