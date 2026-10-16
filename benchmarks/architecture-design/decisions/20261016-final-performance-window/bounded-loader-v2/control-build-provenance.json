@@ -2,7 +2,7 @@
   "core_source_head": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
   "core_archive": "Frozen 2026-10-15 archive; production core not rebuilt or modified",
   "harness": "Identical bounded-load source compiled against frozen control headers/core and current headers/core; query timers and operations unchanged",
-  "harness_sha256": "e99805128b688f97753ada93876a3ad685c04ce3858649637a5a17e25e981186",
+  "harness_sha256": "44ca130c1320be713150d215c40f8825cee8c05f7d062fb1ea59f488ca389ae0",
   "compile": [
     "/workspace/zyx-sysroot/usr/bin/clang++-19",
     "-DBOOST_ATOMIC_DYN_LINK",
@@ -60,7 +60,7 @@
     "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded"
   ],
   "sha256": {
-    "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded": "b82720ff7ebc8814186c4429f152acd2dee05da78326b66c320ced72f469377e",
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
     "/workspace/zyx-optimization-control-20261015/binaries/libzyx_core.a": "a65fab30bc70b571ad64b34ed66a03e14736d1c7c7775639f1be555f4cf14fd8"
   }
 }
