@@ -1,0 +1,114 @@
+{
+  "window": "20261016-repaired-maintenance-v4",
+  "continuation_reason": "Original maintenance attempts failed optional-cache materialization before valid samples. Untimed full fixture now passes 10000 scalar-result deletes and 10000-value reclamation with unchanged budgets. This is a separate repaired source/protocol window.",
+  "preparation_transaction_rows": 1000,
+  "native_read_process_scope": "one dataset preparation per independent profile process, exact selected query list; each query retains three warmups and ten owning-output samples",
+  "status": "registered_before_measurement",
+  "orders": [
+    [
+      "control",
+      "current",
+      "kuzu"
+    ],
+    [
+      "current",
+      "kuzu",
+      "control"
+    ],
+    [
+      "kuzu",
+      "control",
+      "current"
+    ]
+  ],
+  "rounds": 3,
+  "warmups": 3,
+  "samples": 10,
+  "tail_sensitive_samples_per_process": 1000,
+  "primary_gate_p50_reduction": 0.1,
+  "protection_regression_limit": 0.05,
+  "stop_minutes_per_case": 30,
+  "contract_case_unit": "one isolated workload family in a private process, at most 30 minutes including setup; failed/inconclusive families retained independently",
+  "extended_sampling": "at most two independent 100-sample processes when preregistered uncertainty rule applies",
+  "resources": {
+    "affinity": "one allowed CPU",
+    "address_space_bytes": 6442450944,
+    "per_file_bytes": 2147483648,
+    "kuzu_pool_bytes": 67108864,
+    "kuzu_mapping_bytes": 2147483648,
+    "threads_per_query": 1,
+    "native_query_materialization_bytes": 67108864,
+    "durability": "default sync and acknowledgements; never disabled",
+    "os_cache": "warm; no cold-cache claim"
+  },
+  "resource_notes": [
+    "Per-file and Kuzu virtual database mapping caps are stricter than the production 1TiB maximum; the identical 2GiB OS per-file cap applies to every engine.",
+    "6GiB address-space cap implies a physical resident cap but is not a container/RSS accounting equivalence. Native charged class budgets remain separately reported."
+  ],
+  "binaries": {
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-workload-contract-worker": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+    "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker": "f2ccd02e3c5de7e00d18c179c64de1639f173f6802b86062f07989b89a1c6c63"
+  },
+  "contract_sha256": "6de35bce8841e58b2190e463b200a2e1aa9db328b8f0db95ee8c4b336a1f7d0e",
+  "source_proof": "benchmarks/architecture-design/decisions/20261016-s61-final-source-acceptance/proof.json",
+  "script_sha256": "91b3cc2ae84a028d88b750a55822a11c24127b488f86af2d676a236f42a1fcb8",
+  "isolated_family_policy": {
+    "maintenance": "three warmup windows excluded, then ten measured windows with 100 durable batch inserts each; 1000 measured insert observations per process",
+    "other_families": "full-size semantic and capability observations; one-pass operation timings do not satisfy repeated latency gates; after an unchanged family fails or exhausts 30 minutes, later rounds record the same unmeasurable dependency without repeating the failed workload",
+    "prior_dynamic_attempt": "30-minute cutoff, inconclusive; no full-size all-family pass assumed",
+    "ordering": "maintenance first, then documented family order; three rotating engine orders per family"
+  },
+  "known_native_budget_limits": {
+    "aggregate_100000_groups_owning_output": "Observed fixed QUERY-budget rejection. Validate every typed group/count via bounded partitions and preserve the full-output denial as unsupported N/A; no successful latency sample or ratio is inferred. Skewed groups and other failures are not exempt."
+  },
+  "untimed_fixture_protocol": "Committed-prefix continuation is disclosed in each fixture manifest. Original prefixes use 1000-row transactions; remaining fixture-only suffixes may use bounded 5000-row transactions. No import timing or fresh final-version import claim; final consumers are revalidated before use.",
+  "preflight_runner_sha256": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2",
+  "frozen_control_failure_policy": "One aligned maintenance attempt with original control; if it fails, retain exact failure and mark later unchanged processes unmeasurable, without inferred speedup or protection pass.",
+  "prepared_read_protocol": "immutable input from each corresponding engine; exact binary/CSV/database hashes checked before every independent process; private writable clone; missing requested indexes only; no import/write timing from prepared input",
+  "hardware": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "cpu_count": 5,
+    "allowed_cpus_before_restriction": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cgroup_memory_max": "17179869184",
+    "cgroup_cpu_max": "400000 100000"
+  },
+  "source_commit": "03436b7a75d0ace5830570b13840d9f55910de58",
+  "current_frozen_worker": "/workspace/zyx-optimization-final-delete-revalidated-20261016/binaries/2/zyx-workload-contract-worker",
+  "frozen_harness": "/workspace/zyx-optimization-final-delete-revalidated-20261016/source/benchmarks/graphdb-comparison/runner/workload_preflight.py",
+  "case_script_sha256": "3d3077fc4be19eaf0b3d1deedaeb4f72e787c21e6fd765dbf70278ca50522244",
+  "campaign_script_sha256": "d86af8f11bbc9a1a67999f42928f3092d9700ab98c569906273118795430b78a",
+  "delete_protocol": {
+    "query": "MATCH (n:Churn) DELETE n RETURN 1 AS deleted",
+    "expected_rows": 10000,
+    "expected_row": [
+      1
+    ],
+    "both_engines_full_result_validation": true,
+    "change": "Align explicit scalar outputs; preserve public native implicit full-result semantics. Do not pool old no-return/implicit-result failures or Kuzu-only timings."
+  },
+  "families": [
+    "maintenance"
+  ],
+  "sampling": {
+    "independent_processes_per_supported_engine": 3,
+    "warmup_windows": 3,
+    "measured_windows": 10,
+    "insert_batches_per_window": 100,
+    "nodes_per_batch": 100,
+    "body_bytes": 8192,
+    "tail_insert_observations_per_measured_process": 1000,
+    "query_timeout_ms": 30000,
+    "maintenance_workspace_bytes": 8388608,
+    "stop_seconds_per_case": 1800
+  },
+  "progress_logging": "One JSON line after each complete window, outside engine-operation timers; identical observational role on both engines.",
+  "baseline_version_rule": "The original source6a baseline remains separately versioned; no mixed-version overall performance claim."
+}

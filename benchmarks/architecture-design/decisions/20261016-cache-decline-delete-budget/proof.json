@@ -25,13 +25,14 @@
     "retired_values": 10000,
     "workspace_cap_bytes": 8388608,
     "reopen_integrity_and_live_counts": "passed",
-    "peak_rss_bytes_after_reopen": 30543872,
-    "rss_is_not_charged_allocation_peak": true
+    "rss_is_not_charged_allocation_peak": true,
+    "rss_bytes_after_reopen": 30543872
   },
   "formal_timing_samples_accepted": 0,
   "remaining": [
     "S0.3 same-condition complete baseline",
     "S5.5 full steady-state acceptance"
   ],
-  "source_hashes": "source-sha256.json"
+  "source_hashes": "source-sha256.json",
+  "source_commit": "03436b7a75d0ace5830570b13840d9f55910de58"
 }

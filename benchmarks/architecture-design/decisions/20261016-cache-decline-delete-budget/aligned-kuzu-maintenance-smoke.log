@@ -1,0 +1,12 @@
+{"event": "maintenance_window", "engine": "kuzu", "window": 1, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 2, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 3, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 4, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 5, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 6, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 7, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 8, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 9, "phase": "measure"}
+{"event": "maintenance_window", "engine": "kuzu", "window": 10, "phase": "measure"}
+{"event": "family_correctness", "family": "maintenance", "wall_seconds": 0.15667947300244123, "completed": 1, "total": 1}
+{"engine": "kuzu", "version": "0.11.3", "seed": 42, "profile": "smoke", "operations": 65, "performance_timing": false, "full_results_checked": true, "families": ["maintenance"], "isolated_family": "maintenance", "maintenance_windows": [{"file_bytes": 2408448}, {"file_bytes": 2424832}, {"file_bytes": 2433024}, {"file_bytes": 2441216}, {"file_bytes": 2449408}, {"file_bytes": 2457600}, {"file_bytes": 2465792}, {"file_bytes": 2473984}, {"file_bytes": 2482176}, {"file_bytes": 2490368}], "not_equivalent": {"dynamic": "fixed-schema tables cannot preserve arbitrary missing-key identity", "fence_interleaving": "native conservative fence errors differ; ordinary mixed workload is tested", "page_reclaim": "native journal/reclaimer/pin identity is engine-specific; old views and churn are tested", "budget": "native charged-byte/physical-readonly scratch contract is engine-specific"}, "trace_sha256": "88dc9c7ee6b746d2497e1e82ac715cf82cccb4ccd3414c829c571e1ab4314f5e"}

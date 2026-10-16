@@ -1,0 +1,59 @@
+{
+  "stage": "S6.1",
+  "status": "accepted_revalidated",
+  "source_commit": "6a735df86a678556aa71877b6aa66fe968292df7",
+  "frozen_directory": "/workspace/zyx-optimization-final-topk-revalidated-20261016",
+  "freeze_manifest_sha256": "fc2a7a8385a2839c2e416b33c55e9bbbf2a4c2345cde04111214efd695073588",
+  "frozen_source_files": 2673,
+  "binaries": [
+    {
+      "original": "/tmp/zyx-topk-final-affected-tests",
+      "copy": "binaries/0/zyx-topk-final-affected-tests",
+      "sha256": "7505107ac72acde9cafe25ba93d7ce7efbf5209b9869af6bdf64a9c8fb231dbf"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-compare-bench",
+      "copy": "binaries/1/zyx-compare-bench",
+      "sha256": "cc3251b02a2f2a5d87384ac1f11aae29314294a62a2b98ecb78b3ffc6b61d674"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker",
+      "copy": "binaries/2/zyx-workload-contract-worker",
+      "sha256": "a4f84fa69acec1aaaa3b54e11544f1661710d3e1bbf2e02ad4c416a3dbadbf38"
+    },
+    {
+      "original": "/tmp/zyx-mechanism-probe",
+      "copy": "binaries/3/zyx-mechanism-probe",
+      "sha256": "8cfe5fbbf6cb3f295de142a0ee045d3eef3405f19475c2ec32f1baa55b3ac2c0"
+    }
+  ],
+  "production_and_test_hashes": "../20261016-bounded-topk-default-read/source-sha256.json",
+  "affected_regression": {
+    "modules": 124,
+    "suites": 163,
+    "tests": 2628,
+    "failures": 0,
+    "full_suite": false,
+    "evidence": "../20261016-bounded-topk-default-read/affected-tests.xml"
+  },
+  "benchmark_configuration_tests": {
+    "cpp": 41,
+    "campaign_python": 29,
+    "kuzu_resources": 6,
+    "native_adapter": 25
+  },
+  "native_correctness_smoke": {
+    "families": 13,
+    "operations": 886,
+    "full_results_checked": true,
+    "four_client_replay_operations": 4000
+  },
+  "doc_links": "passed",
+  "performance": "final window registered separately after this source freeze",
+  "invalidation_rule": "Any production source change invalidates this freeze and requires affected regression before final acceptance.",
+  "medium_preparation": "complete validated input, consumer and lineage manifest retained",
+  "revalidation_evidence": "../20261016-bounded-topk-default-read/proof.json",
+  "benchmark_harness_updates_after_engine_freeze": "Only Python Kuzu capability/resource detection and failure-report continuation/collector repeat policy changed after engine freeze; 30 campaign and 23 Kuzu adapter tests pass. Actual formal timing binary hashes unchanged; amendments retained in bounded-loader-v3 evidence.",
+  "supplemental_benchmark_probe_registration": "../20261016-s04-hotspot-and-falsification/mechanism-corrected-binary-registration.json",
+  "supplemental_benchmark_probe_reason": "Only diagnostic required bounds changed from invalid zero to compatible positive sub-limits before successful sampling; production main, worker, core and 2628-test source unchanged."
+}
