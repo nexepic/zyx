@@ -19,6 +19,7 @@ class OwnedStdString final : private OwnedHeapReservation, public std::string {
     using Credit = OwnedHeapReservation;
     using String = std::string;
 public:
+    using OwnedHeapElement = void;
     OwnedStdString() : OwnedStdString(currentOwner(), std::string_view{}) {}
     OwnedStdString(const char *source) : OwnedStdString(currentOwner(), std::string_view(source)) {}
     OwnedStdString(std::string_view source) : OwnedStdString(currentOwner(), source) {}

@@ -49,7 +49,7 @@ namespace graph::storage {
 		std::function<uint64_t(std::string_view)> resolve_node_label_token;
 		std::function<uint64_t(std::string_view)> resolve_relationship_type_token;
 		std::function<bool(uint64_t)> has_support_tree;
-		std::function<std::vector<BTreePageEntry>(uint64_t, std::span<const std::byte>, size_t)> scan_support_tree;
+		std::function<utils::OwnedStdVector<BTreePageEntry>(uint64_t, std::span<const std::byte>, size_t)> scan_support_tree;
 	};
 
 	struct ConstraintMutationValidatorOptions {

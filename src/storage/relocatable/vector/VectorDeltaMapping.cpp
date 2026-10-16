@@ -121,12 +121,12 @@ namespace graph::storage {
 				 "relocatable Vector delta mapping Index ID already owns an immutable B+Tree root");
 		}
 		snapshot.release();
-		std::vector<BTreePageEntry> treeEntries;
+		utils::OwnedStdVector<BTreePageEntry> treeEntries;
 		treeEntries.reserve(entries.size());
 		for (const VectorDeltaEntry &entry: entries) {
 			treeEntries.push_back({key(entry.vector_id, entry.operation), entry.node_id});
 		}
-		const auto sharedEntries = std::make_shared<const std::vector<BTreePageEntry>>(std::move(treeEntries));
+		const auto sharedEntries = std::make_shared<const utils::OwnedStdVector<BTreePageEntry>>(std::move(treeEntries));
 		const OrderedBTreeEntrySource source = [sharedEntries] {
 			auto cursor = std::make_shared<size_t>(0U);
 			return [sharedEntries, cursor]() mutable -> std::optional<BTreePageEntry> {
@@ -183,7 +183,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable Vector delta mapping scan requires a bounded pinned snapshot");
 		}
-		const std::vector<BTreePageEntry> entries =
+		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(mappingIndexId, pages, metadata)
 						.scan(snapshot, std::nullopt, maximumEntries + 1U, BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 		if (entries.size() > maximumEntries) {

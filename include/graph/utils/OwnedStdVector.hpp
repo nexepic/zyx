@@ -6,6 +6,8 @@
 #pragma once
 #include <functional>
 #include <initializer_list>
+#include <iterator>
+#include <concepts>
 #include <type_traits>
 #include <vector>
 #include "graph/utils/OwnedHeapReservation.hpp"
@@ -33,6 +35,15 @@ public:
         reserve(source.size());
         for (const auto &value : source) push_back(value);
     }
+    template<std::forward_iterator Iterator> requires std::is_copy_constructible_v<T>
+    OwnedStdVector(Iterator first, Iterator last) : OwnedStdVector() {
+        const auto count = rangeSize(first, last);
+        reserve(count);
+        OwnedAllocationScope scope(Credit::owner());
+        Vector::insert(Vector::end(), first, last);
+    }
+    explicit OwnedStdVector(size_t count, const T &value = T{}) requires std::is_trivially_copyable_v<T>
+        : OwnedStdVector() { resize(count, value); }
     OwnedStdVector(Vector &&source)
         : Credit(currentOwner(), detail::standardVectorHeapBufferBytes(source)), Vector(std::move(source)) {}
     OwnedStdVector(const Vector &source) requires (std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>)
@@ -92,10 +103,63 @@ public:
         T candidate(std::forward<Args>(args)...);
         push_back(std::move(candidate)); return Vector::back();
     }
-    void resize(size_t count) requires std::is_nothrow_default_constructible_v<T> {
-        reserve(count); Vector::resize(count);
+    void resize(size_t count) requires std::is_default_constructible_v<T> {
+        reserve(count); OwnedAllocationScope scope(Credit::owner()); Vector::resize(count);
     }
+    void resize(size_t count, const T &value) requires std::is_trivially_copyable_v<T> {
+        const T stable = value;
+        reserve(count); Vector::resize(count, stable);
+    }
+    template<std::forward_iterator Iterator> requires std::is_copy_constructible_v<T>
+    void assign(Iterator first, Iterator last) {
+        OwnedAllocationScope scope(currentOwner(Credit::owner()));
+        OwnedStdVector copy(first, last); swap(copy);
+    }
+    void assign(size_t count, const T &value) requires std::is_trivially_copyable_v<T> {
+        OwnedAllocationScope scope(currentOwner(Credit::owner()));
+        OwnedStdVector copy(count, value); swap(copy);
+    }
+    template<std::forward_iterator Iterator> requires std::is_copy_constructible_v<T>
+    typename Vector::iterator insert(typename Vector::const_iterator position, Iterator first, Iterator last) {
+        const size_t index = static_cast<size_t>(position - Vector::cbegin());
+        const size_t count = rangeSize(first, last);
+        if (count == 0U) return Vector::begin() + index;
+        if (count > Vector::max_size() - Vector::size()) throw std::length_error("vector insertion overflowed");
+        if constexpr (!std::is_trivially_copyable_v<T>) {
+            // Element moves may themselves need quota (debug iterator proxies).
+            // Publish the new ordered sequence only after every private copy succeeds.
+            OwnedAllocationScope scope(Credit::owner());
+            OwnedStdVector copy;
+            copy.reserve(Vector::size() + count);
+            for (size_t offset = 0U; offset < index; ++offset) copy.push_back(Vector::operator[](offset));
+            for (auto iterator = first; iterator != last; ++iterator) copy.push_back(*iterator);
+            for (size_t offset = index; offset < Vector::size(); ++offset) copy.push_back(Vector::operator[](offset));
+            swap(copy);
+            return Vector::begin() + index;
+        } else {
+        if constexpr (std::contiguous_iterator<Iterator> && std::same_as<std::iter_value_t<Iterator>, T>) {
+            if (aliasIndex(std::to_address(first)) < Vector::size()) {
+                OwnedAllocationScope scope(Credit::owner());
+                OwnedStdVector stable(first, last);
+                reserve(Vector::size() + count);
+                return Vector::insert(Vector::cbegin() + index, stable.begin(), stable.end());
+            }
+        }
+        reserve(Vector::size() + count);
+        return Vector::insert(Vector::cbegin() + index, first, last);
+        }
+    }
+    typename Vector::iterator insert(typename Vector::const_iterator position, const T &value)
+            requires std::is_copy_constructible_v<T> { return insert(position, &value, &value + 1U); }
+    typename Vector::iterator insert(typename Vector::const_iterator position, T &&value)
+            requires std::is_copy_constructible_v<T> { return insert(position, &value, &value + 1U); }
+    typename Vector::iterator erase(typename Vector::const_iterator position) requires std::is_move_assignable_v<T> {
+        return Vector::erase(position);
+    }
+    typename Vector::iterator erase(typename Vector::const_iterator first, typename Vector::const_iterator last)
+            requires std::is_move_assignable_v<T> { return Vector::erase(first, last); }
     [[nodiscard]] size_t retainedBackingRequestBytes() const noexcept { return Credit::bytes(); }
+    [[nodiscard]] bool hasHeapAdmission() const noexcept { return Credit::governed(); }
 private:
     OwnedStdVector(std::shared_ptr<std::pmr::memory_resource> owner, const Vector &source)
         : Credit(std::move(owner), detail::addStandardHeapBytes(detail::standardContainerProxyBytes(), backingBytes(source.size()))), Vector() {
@@ -105,6 +169,13 @@ private:
     static std::shared_ptr<std::pmr::memory_resource> currentOwner(
             const std::shared_ptr<std::pmr::memory_resource> &fallback = {}) {
         return OwnedAllocationScope::active() ? OwnedAllocationScope::owner() : fallback;
+    }
+    template<std::forward_iterator Iterator>
+    static size_t rangeSize(Iterator first, Iterator last) {
+        const auto distance = std::distance(first, last);
+        if (distance < 0 || static_cast<uintmax_t>(distance) > (std::numeric_limits<size_t>::max)())
+            throw std::length_error("vector range size overflowed");
+        return static_cast<size_t>(distance);
     }
     static size_t backingBytes(size_t count) {
         if (count > (std::numeric_limits<size_t>::max)()/sizeof(T)) throw std::length_error("vector backing request overflowed");
@@ -123,9 +194,6 @@ private:
         if (old == maximum) throw std::length_error("vector capacity exhausted");
         reserve(old == 0U ? 1U : old + (std::min)(old, maximum - old));
     }
-    using Vector::assign;
-    using Vector::erase;
-    using Vector::insert;
     using Vector::shrink_to_fit;
 };
 } // namespace graph::utils

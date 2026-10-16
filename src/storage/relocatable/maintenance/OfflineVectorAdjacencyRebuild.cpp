@@ -380,7 +380,7 @@ namespace graph::storage {
 						   VectorAdjacencyPageStore &adjacencies, RelocatableMetadataStore &metadata, uint64_t indexId,
 						   uint64_t mappingIndexId, std::span<const VectorAdjacencyMaterializationRecord> expected,
 						   size_t maximumEntries) {
-			const std::vector<BTreePageEntry> actual =
+			const utils::OwnedStdVector<BTreePageEntry> actual =
 					BTreeIndex(mappingIndexId, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
 			if (actual.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,

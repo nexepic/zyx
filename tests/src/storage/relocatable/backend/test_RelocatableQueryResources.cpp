@@ -1181,3 +1181,138 @@ TEST_F(RelocatableStorageBackendTest, SchemaResultsUseSnapshotCacheAuthorityWith
     }
     backend.close(); EXPECT_EQ(cache->used(), 0U);
 }
+
+TEST_F(RelocatableStorageBackendTest, SchemaQueryOutputKeepsOnlyItsQueryStorageAfterBackendClose) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    const std::string name(1000U, 's');
+    static_cast<void>(backend->createLogicalNodeIndex({name, "Memory", {"value"}}));
+    const auto domain = backend->queryResourceDomain();
+    auto account = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_QUERY, 65536U);
+    query::QueryEngine engine(backend);
+    query::QueryContext context; context.resource_account = account;
+    {
+        const auto result = engine.execute("SHOW INDEXES", context);
+        ASSERT_FALSE(result.isEmpty());
+        EXPECT_GT(result.retainedResourceBytes(), name.size());
+        EXPECT_EQ(account->used(), result.retainedResourceBytes());
+        backend->close(); engine.resetEphemeralState();
+        EXPECT_TRUE(std::ranges::any_of(result.getRows(), [&](const auto &row) {
+            return row.at("name").asPrimitive() == PropertyValue(name);
+        }));
+        EXPECT_EQ(account->used(), result.retainedResourceBytes());
+    }
+    EXPECT_EQ(account->used(), 0U);
+}
+
+TEST_F(RelocatableStorageBackendTest, SchemaWritePressureRejectsBeforePublicationAndReleasesItsWorkspace) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto domain = backend.queryResourceDomain();
+    const size_t writeKind = static_cast<size_t>(ResourceClass::RCK_WRITE);
+    const size_t baseline = domain->usage().classes[writeKind];
+    auto pressureAccount = std::make_shared<ResourceAccount>(domain, ResourceClass::RCK_WRITE,
+        domain->classMaximum(ResourceClass::RCK_WRITE));
+    ResourceLease pressure(pressureAccount);
+    pressure.set(domain->classMaximum(ResourceClass::RCK_WRITE) - baseline);
+    const auto generation = backend.currentNativeMetadataGeneration(); backend.resetIoStats();
+    EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndex({"write_bound", "Memory", {"value"}})),
+        ResourceAdmissionDenied);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    EXPECT_EQ(pressureAccount->used(), pressure.bytes());
+    pressure.reset();
+    {
+        const auto created = backend.createLogicalNodeIndex({"write_bound", "Memory", {"value"}});
+        EXPECT_NE(created.index_id, 0U);
+        EXPECT_GT(domain->usage().classes[writeKind], baseline);
+        EXPECT_EQ(created.name, "write_bound");
+    }
+    EXPECT_EQ(domain->usage().classes[writeKind], baseline);
+}
+
+TEST_F(RelocatableStorageBackendTest, SchemaBatchNameValidationRejectsWithoutWritingAndPreservesDefaultNames) {
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto generation = backend.currentNativeMetadataGeneration();
+    const auto reject = [&](std::vector<LogicalGraphNodeIndexCreateRequest> requests) {
+        backend.resetIoStats();
+        EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(requests)), std::invalid_argument);
+        EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+        EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    };
+    reject({{"same", "Memory", {"value"}}, {"same", "Other", {"value"}}});
+    reject({{"first", "Memory", {"value"}}, {"second", "Memory", {"value"}}});
+    reject({{"repeat", "Memory", {"value", "value"}}});
+    reject({{"", std::string(4096U, 'l'), {"value"}}});
+    reject({{std::string(4097U, 'n'), "Memory", {"value"}}});
+    EXPECT_THROW((void)backend.createLogicalNodeVectorIndex({"vector", std::string(4097U, 'l'), "value", 2U, "l2"}), FormatException);
+    EXPECT_THROW((void)backend.createLogicalNodeVectorIndex({std::string(4097U, 'n'), "Memory", "value", 2U, "l2"}), FormatException);
+    EXPECT_THROW((void)backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+        LogicalGraphConstraintKind::LGCK_UNIQUE, std::string(4097U, 'l'), {"value"}}), FormatException);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.ioStats().data.write_calls, 0U);
+    const auto created = backend.createLogicalNodeIndex({"", "Memory", {"value"}});
+    EXPECT_EQ(created.name, "index_node_6_Memory_5_value");
+}
+
+TEST_F(RelocatableStorageBackendTest, EverySchemaDdlCheckpointCancellationRollsBackAndRefundsBeforeRetry) {
+    struct Cancelled {};
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    std::vector<LogicalGraphNodeCreateRequest> historical;
+    for (int64_t value = 0; value < 4; ++value)
+        historical.push_back({{"CancelSchema"}, {{"value", PropertyValue(value)},
+            {"embedding", PropertyValue(std::vector<PropertyValue>{PropertyValue(double(value + 1)), PropertyValue(2.0)})}}});
+    const auto nodes = backend.createLogicalNodes(historical);
+    const auto domain = backend.queryResourceDomain();
+    const auto writeKind = static_cast<size_t>(execution::detail::ResourceClass::RCK_WRITE);
+    const std::vector<LogicalGraphNodeIndexCreateRequest> requests{{"cancel_schema", "CancelSchema", {"value"}}};
+    for (int mode = 0; mode < 3; ++mode) {
+        SCOPED_TRACE(mode);
+        const auto create = [&](const std::function<void()> &checkpoint) {
+            if (mode == 0) (void)backend.createLogicalNodeIndexesWithCheckpoint(requests, checkpoint, {});
+            else if (mode == 1) (void)backend.createLogicalNodeVectorIndexWithCheckpoint(
+                {"cancel_schema", "CancelSchema", "embedding", 2U, "l2"}, checkpoint, {});
+            else (void)backend.createLogicalConstraintWithCheckpoint({"cancel_schema",
+                LogicalGraphConstraintEntityKind::LGCEK_NODE, LogicalGraphConstraintKind::LGCK_UNIQUE,
+                "CancelSchema", {"value"}}, checkpoint, {});
+        };
+        const auto drop = [&] {
+            if (mode == 2) EXPECT_TRUE(backend.dropLogicalConstraintByName("cancel_schema"));
+            else EXPECT_TRUE(backend.dropLogicalIndexByName("cancel_schema"));
+        };
+        size_t checkpoints = 0U;
+        create([&] { ++checkpoints; }); drop();
+        ASSERT_GT(checkpoints, 0U);
+        for (size_t cancelled = 0; cancelled < checkpoints; ++cancelled) {
+            SCOPED_TRACE(cancelled);
+            const auto baseline = domain->usage().classes[writeKind];
+            const auto fence = backend.currentNativeLogicalGraphMutationFence();
+            size_t visited = 0U;
+            EXPECT_THROW(create([&] { if (visited++ == cancelled) throw Cancelled{}; }), Cancelled);
+            EXPECT_EQ(visited, cancelled + 1U);
+            EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+            EXPECT_EQ(backend.currentNativeLogicalGraphMutationFence(), fence);
+            EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
+            EXPECT_TRUE(backend.listLogicalConstraints(8U).empty());
+            EXPECT_EQ(domain->usage().classes[writeKind], baseline);
+            {
+                auto snapshot = backend.openLogicalGraphReadSnapshot();
+                for (size_t i = 0; i < nodes.size(); ++i)
+                    EXPECT_EQ(snapshot->readNodeProperty(nodes[i], "value"), PropertyValue(static_cast<int64_t>(i)));
+            }
+            create({}); drop();
+        }
+    }
+    EXPECT_NO_THROW((void)backend.verifyIntegrity());
+    backend.close(); backend.open();
+    EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
+    EXPECT_TRUE(backend.listLogicalConstraints(8U).empty());
+}

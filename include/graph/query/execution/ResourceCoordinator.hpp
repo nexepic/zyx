@@ -86,6 +86,11 @@ public:
 	DatabaseResourceBudget &operator=(const DatabaseResourceBudget &) = delete;
 	[[nodiscard]] ResourceUsage usage() const { std::lock_guard lock(process_.mutex_); return usage_; }
 	[[nodiscard]] size_t maximum() const noexcept { return limits_.total; }
+    [[nodiscard]] size_t classMaximum(ResourceClass kind) const {
+        const auto index = static_cast<size_t>(kind);
+        if (index >= RESOURCE_CLASS_COUNT) throw std::invalid_argument("unknown resource class");
+        return limits_.classes[index];
+    }
 private:
 	friend class ResourceAccount;
 	friend class ResourceLease;

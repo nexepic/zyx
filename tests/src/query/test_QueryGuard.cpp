@@ -128,3 +128,10 @@ TEST(QueryGuardTest, ExceptionMessages_ContainUsefulInfo) {
 		EXPECT_NE(msg.find("1MB"), std::string::npos) << "Message should contain memory limit";
 	}
 }
+
+TEST(QueryGuardTest, ManagedAdmissionMessageDoesNotPresentBudgetBytesAsResidentMemory) {
+    const auto error = QueryMemoryExceededException::forResourceAdmission(1);
+    EXPECT_NE(std::string(error.what()).find("memory limit of 1MB"), std::string::npos);
+    EXPECT_NE(std::string(error.what()).find("account/database/process budget"), std::string::npos);
+    EXPECT_EQ(std::string(error.what()).find("RSS"), std::string::npos);
+}

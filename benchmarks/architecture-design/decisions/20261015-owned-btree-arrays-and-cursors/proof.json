@@ -1,0 +1,98 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 1611,
+  "selected_suites": 112,
+  "isolated_cases": 888,
+  "failures": 0,
+  "crash_cycles": 32,
+  "worker_sha256": "cc8c6818e3a9dbdbc30634d49d151e4ed599f839c1217fd96b4888640403e9d9",
+  "allocation_sweeps": {
+    "stage": {
+      "baseline_allocations": 9,
+      "tested_allocations": 9,
+      "exhaustive": true
+    },
+    "commit": {
+      "baseline_allocations": 4320,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "overlay": {
+      "baseline_allocations": 18,
+      "tested_allocations": 18,
+      "exhaustive": true
+    },
+    "creation": {
+      "baseline_allocations": 13,
+      "tested_allocations": 13,
+      "exhaustive": true
+    },
+    "overlay-creation": {
+      "baseline_allocations": 22,
+      "tested_allocations": 22,
+      "exhaustive": true
+    },
+    "lease-reserve": {
+      "baseline_allocations": 163,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "lease-cached": {
+      "baseline_allocations": 4,
+      "tested_allocations": 4,
+      "exhaustive": true
+    },
+    "lease-fresh": {
+      "baseline_allocations": 169,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "mixed": {
+      "baseline_allocations": 26,
+      "tested_allocations": 26,
+      "exhaustive": true
+    },
+    "scratch-write": {
+      "baseline_allocations": 1698,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "distinct": {
+      "baseline_allocations": 42282,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "source-materialization": {
+      "baseline_allocations": 1184,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "normalized-patch": {
+      "baseline_allocations": 90,
+      "tested_allocations": 90,
+      "exhaustive": true
+    },
+    "plan-cache": {
+      "baseline_allocations": 25108,
+      "tested_allocations": 96,
+      "exhaustive": false
+    },
+    "schema-cache": {
+      "baseline_allocations": 10,
+      "tested_allocations": 10,
+      "exhaustive": true
+    }
+  },
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "std::function closure allocations",
+    "public logical schema DTO/results",
+    "CSV path and bindings",
+    "compiler/runtime workspaces",
+    "full S5/S6 contracts"
+  ]
+}

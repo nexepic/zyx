@@ -20,7 +20,7 @@ namespace graph::storage {
 	struct InitialBTreePlanNode {
 		uint16_t level = 0U;
 		std::vector<std::byte> first_key;
-		std::vector<BTreePageEntry> leaf_entries;
+		utils::OwnedStdVector<BTreePageEntry> leaf_entries;
 		std::vector<size_t> children;
 	};
 

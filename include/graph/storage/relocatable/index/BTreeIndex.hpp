@@ -67,7 +67,7 @@ namespace graph::storage {
 		// within its authenticated separator bounds; never scan unrelated gaps.
 		[[nodiscard]] std::vector<std::optional<uint64_t>> findSorted(
 				const MetadataSnapshotPin &snapshot, std::span<const std::vector<std::byte>> keys) const;
-		[[nodiscard]] std::vector<BTreePageEntry> scan(const MetadataSnapshotPin &snapshot,
+		[[nodiscard]] utils::OwnedStdVector<BTreePageEntry> scan(const MetadataSnapshotPin &snapshot,
 																	   std::optional<std::span<const std::byte>> lowerBound,
 																	   size_t maximumEntries,
 																	   BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
@@ -88,43 +88,44 @@ namespace graph::storage {
 
 	private:
 		struct TraversalStep {
+            using OwnedHeapElement = void;
 			PageId page_id{};
 			uint16_t level = 0U;
 			size_t child_index = 0U;
-			std::optional<std::vector<std::byte>> parent_lower_inclusive;
-			std::optional<std::vector<std::byte>> parent_upper_exclusive;
+			std::optional<utils::OwnedStdVector<std::byte>> parent_lower_inclusive;
+			std::optional<utils::OwnedStdVector<std::byte>> parent_upper_exclusive;
 			// The route is already authenticated while descending from the root.
 			// Retain the decoded routing entries so successor-leaf traversal does
 			// not reread the same internal pages for every leaf in this cursor.
 			BTreePageHeader header{};
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 		};
 
 		struct LeafRoute {
 			PageId page_id{};
-			std::optional<std::vector<std::byte>> lower_inclusive;
-			std::optional<std::vector<std::byte>> upper_exclusive;
+			std::optional<utils::OwnedStdVector<std::byte>> lower_inclusive;
+			std::optional<utils::OwnedStdVector<std::byte>> upper_exclusive;
 		};
 
 		[[nodiscard]] std::optional<BTreePage> resolveRoot(const MetadataSnapshotPin &snapshot,
-			std::vector<BTreePageEntry> *decodedEntries = nullptr) const;
+			utils::OwnedStdVector<BTreePageEntry> *decodedEntries = nullptr) const;
 		[[nodiscard]] BTreePage descendToLeaf(const MetadataSnapshotPin &snapshot, BTreePage page,
 											  std::optional<std::span<const std::byte>> key,
 											  BufferPoolReadHint leafReadHint,
 											  const CancellationCheckpoint *cancellation,
-											  std::vector<TraversalStep> *traversal = nullptr,
-				std::vector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
-			std::vector<BTreePageEntry> *decodedRootEntries = nullptr) const;
+											  utils::OwnedStdVector<TraversalStep> *traversal = nullptr,
+				utils::OwnedStdVector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
+			utils::OwnedStdVector<BTreePageEntry> *decodedRootEntries = nullptr) const;
 		// Borrow the immutable root across exact probes. An empty return means
 		// the root itself is the leaf; all descent validation is shared with scans.
 		[[nodiscard]] std::optional<BTreePage> descendToLeafFromRoot(
 				const MetadataSnapshotPin &snapshot, const BTreePage &root,
 				std::optional<std::span<const std::byte>> key, BufferPoolReadHint leafReadHint,
-				const CancellationCheckpoint *cancellation, std::vector<TraversalStep> *traversal = nullptr,
-				std::vector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
-			std::vector<BTreePageEntry> *decodedRootEntries = nullptr) const;
+				const CancellationCheckpoint *cancellation, utils::OwnedStdVector<TraversalStep> *traversal = nullptr,
+				utils::OwnedStdVector<BTreePageEntry> *leafEntries = nullptr, LeafRoute *leafRoute = nullptr,
+			utils::OwnedStdVector<BTreePageEntry> *decodedRootEntries = nullptr) const;
 		[[nodiscard]] LeafRoute advanceToExpectedSiblingLeaf(const MetadataSnapshotPin &snapshot,
-																 std::vector<TraversalStep> &traversal,
+																 utils::OwnedStdVector<TraversalStep> &traversal,
 																					 const CancellationCheckpoint *cancellation) const;
 		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state,
 				const std::function<void(size_t)> &boundaryKeyAdmission) const;

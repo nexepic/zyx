@@ -191,7 +191,7 @@ namespace graph::storage {
 			++level;
 			std::vector<size_t> nextLevel;
 			static_cast<void>(measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level, BTreeLeafValueLayout::BLVL_U64));
-			std::vector<BTreePageEntry> separators;
+			utils::OwnedStdVector<BTreePageEntry> separators;
 			AppendSizer parentSizer;
 			InitialBTreePlanNode parentNode;
 			parentNode.level = level;
@@ -253,7 +253,7 @@ namespace graph::storage {
 			}
 			header.kind = BTreeNodeKind::BPN_INTERNAL;
 			header.leftmost_child = pageIds[node.children.front()];
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			entries.reserve(node.children.size() - 1U);
 			for (size_t childIndex = 1U; childIndex < node.children.size(); ++childIndex) {
 				const size_t childOrdinal = node.children[childIndex];

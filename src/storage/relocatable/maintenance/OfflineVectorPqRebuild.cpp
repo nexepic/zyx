@@ -148,7 +148,7 @@ namespace graph::storage {
 								   const VectorManifest &manifest,
 								   std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries,
 								   bool requireExactCodes) {
-			const std::vector<BTreePageEntry> mapping =
+			const utils::OwnedStdVector<BTreePageEntry> mapping =
 					BTreeIndex(mappingIndexId, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
 			if (mapping.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -221,7 +221,7 @@ namespace graph::storage {
 		manifestEntriesFromMapping(const MetadataSnapshotPin &snapshot, BTreePageStore &trees, VectorPageStore &vectors,
 								   RelocatableMetadataStore &metadata, const VectorManifest &base,
 								   uint64_t mappingIndexId, size_t maximumEntries) {
-			const std::vector<BTreePageEntry> mapping =
+			const utils::OwnedStdVector<BTreePageEntry> mapping =
 					BTreeIndex(mappingIndexId, trees, metadata).scan(snapshot, std::nullopt, maximumEntries);
 			std::set<PageId> pageIds;
 			for (const BTreePageEntry &entry: mapping) {
@@ -398,7 +398,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::vector<BTreePageEntry> mappingEntries;
+		utils::OwnedStdVector<BTreePageEntry> mappingEntries;
 		mappingEntries.reserve(encoded.size());
 		for (const PqVectorMaterializationRecord &record: encoded) {
 			mappingEntries.push_back({VectorPqMapping::key(record.vector_id), 0U});

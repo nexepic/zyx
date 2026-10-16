@@ -1,0 +1,27 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 13,
+  "heap_probe": {
+    "mode": "string-result-admission",
+    "shape_cases": 4,
+    "maximum_uncovered_private_bytes": 0,
+    "rejected_payload_allocations": 0,
+    "passed": true
+  },
+  "worker_sha256": "f6a183bf69359617dc2b4b777e893963e003f6ab5fa47c96870471491f934cb9",
+  "runtime_platform": "Linux libstdc++14",
+  "other_STLs": "source audit only",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "not_yet_wired_to_schema_runtime": true,
+  "open_boundaries": [
+    "public schema DTO/result wiring and DDL WRITE ownership",
+    "ReadRuntime manual output reservation relocation",
+    "QueryResult debug-STL move bookkeeping",
+    "function closures/CSV/bindings/AST/runtime workspaces",
+    "full S5/S6 acceptance"
+  ]
+}

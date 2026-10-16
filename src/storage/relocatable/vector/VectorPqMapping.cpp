@@ -70,12 +70,12 @@ namespace graph::storage {
 				 "relocatable PQ mapping Index ID already owns an immutable B+Tree root");
 		}
 		snapshot.release();
-		std::vector<BTreePageEntry> entries;
+		utils::OwnedStdVector<BTreePageEntry> entries;
 		entries.reserve(mappings.size());
 		for (const VectorPqPageMapping &mapping: mappings) {
 			entries.push_back({key(mapping.vector_id), mapping.page_id.value()});
 		}
-		const auto sharedEntries = std::make_shared<const std::vector<BTreePageEntry>>(std::move(entries));
+		const auto sharedEntries = std::make_shared<const utils::OwnedStdVector<BTreePageEntry>>(std::move(entries));
 		const OrderedBTreeEntrySource source = [sharedEntries] {
 			auto cursor = std::make_shared<size_t>(0U);
 			return [sharedEntries, cursor]() mutable -> std::optional<BTreePageEntry> {

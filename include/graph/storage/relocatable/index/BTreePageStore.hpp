@@ -195,6 +195,9 @@ namespace graph::storage {
 													  const MetadataPublishOptions &options = {});
 		[[nodiscard]] BTreePage read(const MetadataSnapshotPin &snapshot, PageId pageId,
 									 BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        [[nodiscard]] BTreePage readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
+            utils::OwnedStdVector<BTreePageEntry> &decodedEntries,
+            BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		[[nodiscard]] BTreePage readDecoded(const MetadataSnapshotPin &snapshot, PageId pageId,
 			std::vector<BTreePageEntry> &decodedEntries,
 			BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;

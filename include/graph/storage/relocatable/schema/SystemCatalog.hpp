@@ -12,6 +12,10 @@
 #include <functional>
 #include <cstdint>
 #include <map>
+#include <type_traits>
+#include "graph/utils/OwnedAssociativeContainers.hpp"
+#include "graph/utils/OwnedStdVector.hpp"
+#include "graph/core/OwnedPropertyValue.hpp"
 #include <optional>
 #include <span>
 #include <string>
@@ -62,6 +66,13 @@ namespace graph::storage {
 
 		bool operator==(const SystemCatalogSchemaToken &) const = default;
 	};
+
+    struct OwnedSystemCatalogSchemaToken {
+        using OwnedHeapElement = void;
+        uint64_t token_id = 0U;
+        SystemCatalogSchemaTokenKind kind = SystemCatalogSchemaTokenKind::SCSTK_LABEL;
+        utils::OwnedStdString name;
+    };
 
 	// Configuration is durable database metadata. Runtime counters and process
 	// controls intentionally remain outside this record so reopening a file has
@@ -127,11 +138,28 @@ namespace graph::storage {
 	// first-use entries until `finish()` can create the one catalog B+Tree root;
 	// later writes update that same root through the transaction-local overlay.
 	class SystemCatalogWriteSession final {
+        struct SchemaNameLess {
+            using is_transparent = void;
+            template<class Left, class Right>
+            bool operator()(const Left &a, const Right &b) const noexcept {
+                return a.first != b.first ? a.first < b.first : std::string_view(a.second) < std::string_view(b.second);
+            }
+        };
+        using InitialEntries = utils::OwnedMap<utils::OwnedStdVector<std::byte>, uint64_t, std::less<>>;
+        using PropertyTokens = utils::OwnedMap<utils::OwnedStdString, uint32_t, std::less<>>;
+        using SchemaTokens = utils::OwnedMap<std::pair<SystemCatalogSchemaTokenKind, utils::OwnedStdString>, uint64_t, SchemaNameLess>;
+        using IndexDefinitions = utils::OwnedMap<uint64_t, IndexDefinition>;
+        using ConstraintDefinitions = utils::OwnedMap<uint64_t, ConstraintDefinition>;
+        using Configurations = utils::OwnedMap<utils::OwnedStdString, OwnedPropertyValue, std::less<>>;
+        static constexpr bool nothrow_move = std::is_nothrow_move_constructible_v<InitialEntries> &&
+            std::is_nothrow_move_constructible_v<PropertyTokens> && std::is_nothrow_move_constructible_v<SchemaTokens> &&
+            std::is_nothrow_move_constructible_v<IndexDefinitions> && std::is_nothrow_move_constructible_v<ConstraintDefinitions> &&
+            std::is_nothrow_move_constructible_v<Configurations>;
 	public:
 		SystemCatalogWriteSession() = default;
 		SystemCatalogWriteSession(const SystemCatalogWriteSession &) = delete;
 		SystemCatalogWriteSession &operator=(const SystemCatalogWriteSession &) = delete;
-		SystemCatalogWriteSession(SystemCatalogWriteSession &&) noexcept;
+		SystemCatalogWriteSession(SystemCatalogWriteSession &&) noexcept(nothrow_move);
 		// Mutating the transaction overlay cannot be rolled back by an ordinary
 		// move assignment, so replacing an active session is intentionally forbidden.
 		SystemCatalogWriteSession &operator=(SystemCatalogWriteSession &&) = delete;
@@ -173,14 +201,18 @@ namespace graph::storage {
 		uint64_t next_schema_token_ = 0U;
 		uint64_t next_index_definition_id_ = 0U;
 		uint64_t next_constraint_definition_id_ = 0U;
-		std::map<std::vector<std::byte>, uint64_t> initial_entries_;
-		std::map<std::string, uint32_t, std::less<>> staged_property_tokens_;
-		std::map<std::pair<SystemCatalogSchemaTokenKind, std::string>, uint64_t> staged_schema_tokens_;
-		std::map<uint64_t, IndexDefinition> staged_index_definitions_;
-		std::map<uint64_t, ConstraintDefinition> staged_constraint_definitions_;
-		std::map<std::string, PropertyValue, std::less<>> staged_configurations_;
+		InitialEntries initial_entries_;
+		PropertyTokens staged_property_tokens_;
+		SchemaTokens staged_schema_tokens_;
+		IndexDefinitions staged_index_definitions_;
+		ConstraintDefinitions staged_constraint_definitions_;
+		Configurations staged_configurations_;
 		std::optional<NativeGraphCardinalityStatistics> staged_graph_statistics_;
 
+        [[nodiscard]] std::shared_ptr<std::pmr::memory_resource> allocationOwner() const noexcept {
+            auto owner = staged_property_tokens_.get_allocator().owner();
+            return owner ? std::move(owner) : utils::OwnedAllocationScope::owner();
+        }
 		void stageUpsert(std::vector<std::byte> key, uint64_t value);
 		void stageErase(const std::vector<std::byte> &key);
 		[[nodiscard]] uint64_t nextPropertyToken();
@@ -215,6 +247,8 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<SystemCatalogSchemaToken>
 		findSchemaToken(const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind, uint64_t token,
 			const std::function<void(size_t)> &nameAdmission = {}) const;
+        [[nodiscard]] std::optional<OwnedSystemCatalogSchemaToken> findOwnedSchemaToken(
+            const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind, uint64_t token) const;
 		[[nodiscard]] std::optional<IndexDefinition> findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
 																			 uint64_t indexId) const;
 		[[nodiscard]] std::optional<IndexDefinition> findIndexDefinitionByName(const MetadataSnapshotPin &snapshot,

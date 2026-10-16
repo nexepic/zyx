@@ -182,7 +182,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable derived-object reclamation adjacency mapping exceeds its configured scan bound");
 				}
-				const std::vector<BTreePageEntry> mappings = BTreeIndex(manifest.adjacency_mapping_index_id, trees_, metadata_)
+				const utils::OwnedStdVector<BTreePageEntry> mappings = BTreeIndex(manifest.adjacency_mapping_index_id, trees_, metadata_)
 																					.scan(snapshot, std::nullopt, baseIds.size() + 1U);
 				if (mappings.size() != baseIds.size()) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -326,7 +326,7 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable PQ reclamation mapping exceeds its configured scan bound");
 				}
-				const std::vector<BTreePageEntry> mappings =
+				const utils::OwnedStdVector<BTreePageEntry> mappings =
 						BTreeIndex(manifest.pq_mapping_index_id, trees_, metadata_)
 										.scan(snapshot, std::nullopt, baseIds.size() + 1U);
 				if (mappings.size() != baseIds.size()) {

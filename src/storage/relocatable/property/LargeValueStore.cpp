@@ -239,7 +239,7 @@ namespace graph::storage {
 				return result;
 			}
 
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			entries.reserve(operations.size());
 			for (const BTreeScalarIndexOperation &operation: operations) {
 				entries.push_back({operation.key, operation.value});
@@ -823,7 +823,7 @@ namespace graph::storage {
 		const std::vector<std::byte> identity =
 				contentIdentityPrefix(kind, bytes.size(), contentHash, canonicalMediaType);
 		BTreeIndex index(RSS_LARGE_VALUE_CONTENT_INDEX_ID, contentIndex(), metadata_);
-		const std::vector<BTreePageEntry> candidates =
+		const utils::OwnedStdVector<BTreePageEntry> candidates =
 				index.scan(snapshot, std::span<const std::byte>(identity), maximumCandidates);
 		size_t candidatesSeen = 0U;
 		for (const BTreePageEntry &candidate: candidates) {

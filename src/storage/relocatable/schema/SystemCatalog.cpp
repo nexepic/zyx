@@ -460,10 +460,14 @@ namespace graph::storage {
 					.find(snapshot, sequenceKey(kind));
 		}
 
-		[[nodiscard]] std::optional<std::string> findReverseName(const SystemCatalog &catalog,
+		template<class String = std::string>
+        [[nodiscard]] std::optional<String> findReverseName(const SystemCatalog &catalog,
 																 const MetadataSnapshotPin &snapshot,
 																 std::span<const std::byte> prefix,
 																 uint64_t expectedValue, const std::function<void(size_t)> &nameAdmission = {}) {
+            static_assert(std::is_same_v<String, std::string> || std::is_same_v<String, utils::OwnedStdString>);
+            std::optional<utils::OwnedAllocationScope> allocation;
+            if constexpr (std::is_same_v<String, utils::OwnedStdString>) allocation.emplace(schemaAllocationOwner(snapshot));
 			std::optional<BTreePageEntry> entry;
 			{
 				BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, catalog.pageStore(), catalog.metadataStore());
@@ -471,7 +475,7 @@ namespace graph::storage {
 				bool boundaryCharged = false;
 				const auto admitBoundary = [&](size_t bytes) {
 					if (!nameAdmission) return;
-					const size_t retained = entry ? entry->key.capacity() : 0U;
+					const size_t retained = entry && !entry->key.hasHeapAdmission() ? entry->key.capacity() : 0U;
 					if (bytes > std::numeric_limits<size_t>::max() - retained)
 						throw std::overflow_error("System Catalog cursor boundary size overflow");
 					const size_t total = retained + bytes;
@@ -483,7 +487,7 @@ namespace graph::storage {
 				};
 				entry = cursor.next(admitBoundary);
 				if (!entry || !startsWith(entry->key, prefix)) return std::nullopt;
-				if (nameAdmission) nameAdmission(entry->key.capacity());
+				if (nameAdmission && !entry->key.hasHeapAdmission()) nameAdmission(entry->key.capacity());
 				auto successor = cursor.next(admitBoundary);
 				if (entry->value_or_child != expectedValue || entry->key.size() == prefix.size() ||
 					(successor && startsWith(successor->key, prefix))) {
@@ -496,13 +500,14 @@ namespace graph::storage {
 			validateName(std::string_view(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize));
 			const auto admitName = [&](size_t bytes) {
 				if (!nameAdmission) return;
-				if (bytes > std::numeric_limits<size_t>::max() - entry->key.capacity())
+				const size_t keyBytes = entry->key.hasHeapAdmission() ? 0U : entry->key.capacity();
+                if (bytes > std::numeric_limits<size_t>::max() - keyBytes)
 					throw std::overflow_error("System Catalog reverse name buffer size overflow");
-				nameAdmission(entry->key.capacity() + bytes);
+				nameAdmission(keyBytes + bytes);
 			};
 			if (nameAdmission) admitName(std::max(nameSize, std::string{}.capacity()));
-            else detail::admitScopedPropertyString(nameSize);
-			std::string name(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize);
+            else if constexpr (std::is_same_v<String, std::string>) detail::admitScopedPropertyString(nameSize);
+			String name(std::string_view(reinterpret_cast<const char *>(entry->key.data() + prefix.size()), nameSize));
 			admitName(name.capacity());
 			entry.reset();
 			if (nameAdmission) nameAdmission(name.capacity());
@@ -590,7 +595,7 @@ namespace graph::storage {
 		}
 	}
 
-	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalogWriteSession &&other) noexcept :
+	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalogWriteSession &&other) noexcept(nothrow_move) :
 		catalog_(std::exchange(other.catalog_, nullptr)), transaction_(std::exchange(other.transaction_, nullptr)),
 		initial_root_(std::exchange(other.initial_root_, false)), changed_(std::exchange(other.changed_, false)),
 		finished_(std::exchange(other.finished_, false)),
@@ -611,6 +616,7 @@ namespace graph::storage {
 		staged_graph_statistics_(std::move(other.staged_graph_statistics_)) {}
 
 	void SystemCatalogWriteSession::stageUpsert(std::vector<std::byte> key, uint64_t value) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -623,12 +629,13 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::stageErase(const std::vector<std::byte> &key) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
 		changed_ = true;
 		if (initial_root_) {
-			initial_entries_.erase(key);
+			if (const auto found = initial_entries_.find(key); found != initial_entries_.end()) initial_entries_.erase(found);
 			return;
 		}
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID, key);
@@ -698,6 +705,7 @@ namespace graph::storage {
 	}
 
 	uint32_t SystemCatalogWriteSession::ensurePropertyToken(std::string_view name) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		validateName(name);
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
@@ -708,41 +716,43 @@ namespace graph::storage {
 		}
 		if (const std::optional<uint32_t> existing = catalog_->findPropertyToken(transaction_->baseSnapshot(), name);
 			existing.has_value()) {
-			staged_property_tokens_.emplace(std::string(name), *existing);
+			staged_property_tokens_.emplace(utils::OwnedStdString(name), *existing);
 			return *existing;
 		}
 		const uint64_t allocated = nextPropertyToken();
 		const uint32_t token = static_cast<uint32_t>(allocated);
 		stageUpsert(propertyNameKey(name), token);
 		stageUpsert(propertyTokenKey(token, name), token);
-		staged_property_tokens_.emplace(std::string(name), token);
+		staged_property_tokens_.emplace(utils::OwnedStdString(name), token);
 		return token;
 	}
 
 	uint64_t SystemCatalogWriteSession::ensureSchemaToken(SystemCatalogSchemaTokenKind kind, std::string_view name) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		validateSchemaKind(kind);
 		validateName(name);
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
-		const auto staged = staged_schema_tokens_.find({kind, std::string(name)});
+		const auto staged = staged_schema_tokens_.find(std::pair{kind, name});
 		if (staged != staged_schema_tokens_.end()) {
 			return staged->second;
 		}
 		if (const std::optional<uint64_t> existing =
 					catalog_->findSchemaToken(transaction_->baseSnapshot(), kind, name);
 			existing.has_value()) {
-			staged_schema_tokens_.emplace(std::make_pair(kind, std::string(name)), *existing);
+			staged_schema_tokens_.emplace(std::make_pair(kind, utils::OwnedStdString(name)), *existing);
 			return *existing;
 		}
 		const uint64_t token = nextSchemaToken();
 		stageUpsert(schemaNameKey(kind, name), token);
 		stageUpsert(schemaTokenKey(kind, token, name), token);
-		staged_schema_tokens_.emplace(std::make_pair(kind, std::string(name)), token);
+		staged_schema_tokens_.emplace(std::make_pair(kind, utils::OwnedStdString(name)), token);
 		return token;
 	}
 
 	IndexDefinition SystemCatalogWriteSession::createIndexDefinition(IndexDefinition definition) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -776,6 +786,7 @@ namespace graph::storage {
 	}
 
 	ConstraintDefinition SystemCatalogWriteSession::createConstraintDefinition(ConstraintDefinition definition) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -810,10 +821,11 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::setConfiguration(std::string_view name, const PropertyValue &value) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
-		const std::string ownedName(name);
+		utils::OwnedStdString ownedName(name);
 		static_cast<void>(configurationKey(ownedName, value));
 		if (const auto staged = staged_configurations_.find(ownedName); staged != staged_configurations_.end()) {
 			stageErase(configurationKey(ownedName, staged->second));
@@ -827,6 +839,7 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::setGraphCardinalityStatistics(const NativeGraphCardinalityStatistics &statistics) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -839,6 +852,7 @@ namespace graph::storage {
 
 	void SystemCatalogWriteSession::setTokenCardinality(SystemCatalogSchemaTokenKind kind, uint64_t token,
 			uint64_t count) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -847,6 +861,7 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::markTokenCardinalityComplete(SystemCatalogSchemaTokenKind kind) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -854,6 +869,7 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::dropIndexDefinition(const IndexDefinition &definition) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -872,6 +888,7 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::dropConstraintDefinition(const ConstraintDefinition &definition) {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
@@ -891,6 +908,7 @@ namespace graph::storage {
 	}
 
 	void SystemCatalogWriteSession::finish() {
+        utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr) {
 			throw std::logic_error("System Catalog write session is detached");
 		}
@@ -898,7 +916,7 @@ namespace graph::storage {
 			return;
 		}
 		if (initial_root_ && changed_) {
-			std::vector<BTreePageEntry> entries;
+			utils::OwnedStdVector<BTreePageEntry> entries;
 			entries.reserve(initial_entries_.size());
 			for (const auto &[key, value]: initial_entries_) {
 				entries.push_back({key, value});
@@ -1174,6 +1192,29 @@ namespace graph::storage {
 		return SystemCatalogSchemaToken{token, kind, std::move(*name)};
 	}
 
+    std::optional<OwnedSystemCatalogSchemaToken> SystemCatalog::findOwnedSchemaToken(
+            const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind, uint64_t token) const {
+        utils::OwnedAllocationScope allocation(schemaAllocationOwner(snapshot));
+        validateSchemaKind(kind);
+        if (token == 0U) fail(FormatError::FERR_INVALID_HEADER, "System Catalog schema lookup requires a nonzero Token");
+        if (!hasRoot(*this, snapshot)) return std::nullopt;
+        verifyBootstrap(*this, snapshot);
+        utils::OwnedHeapReservation prefixCredit(utils::OwnedAllocationScope::owner(),
+            utils::detail::addStandardHeapBytes(2U * utils::detail::standardContainerProxyBytes(), 2U + sizeof(token)));
+        const auto prefix = schemaTokenPrefix(kind, token);
+        auto name = findReverseName<utils::OwnedStdString>(*this, snapshot, prefix, token);
+        if (!name) return std::nullopt;
+        const size_t keyUpper = utils::detail::addStandardHeapBytes(2U, name->size());
+        utils::OwnedHeapReservation keyCredit(utils::OwnedAllocationScope::owner(), utils::detail::addStandardHeapBytes(
+            2U * utils::detail::standardContainerProxyBytes(),
+            utils::detail::standardAllocatorRequestBytes(keyUpper, alignof(std::byte))));
+        const auto key = schemaNameKey(kind, *name);
+        const auto forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+        if (!forward || *forward != token)
+            fail(FormatError::FERR_INVALID_STATE, "System Catalog schema reverse mapping has no matching forward mapping");
+        return OwnedSystemCatalogSchemaToken{token, kind, std::move(*name)};
+    }
+
 	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
 																		  uint64_t indexId) const {
         utils::OwnedAllocationScope schemaAllocation(schemaAllocationOwner(snapshot));
@@ -1185,7 +1226,7 @@ namespace graph::storage {
 		}
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> lower = indexDefinitionLowerBound(indexId);
-		const std::vector<BTreePageEntry> entries =
+		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, lower, 2U);
 		if (entries.empty() || !startsWith(entries.front().key, lower)) {
 			return std::nullopt;
@@ -1363,7 +1404,7 @@ namespace graph::storage {
 		}
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> lower = constraintDefinitionLowerBound(constraintId);
-		const std::vector<BTreePageEntry> entries =
+		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, lower, 2U);
 		if (entries.empty() || !startsWith(entries.front().key, lower)) {
 			return std::nullopt;
@@ -1487,7 +1528,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<BTreePageEntry> entries =
+		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, prefix, 2U);
 		if (entries.empty() || !startsWith(entries.front().key, prefix)) {
 			return std::nullopt;
@@ -1516,7 +1557,7 @@ namespace graph::storage {
 		}
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
-		const std::vector<BTreePageEntry> entries =
+		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, prefix, maximumRecords + 1U);
 		std::set<std::string, std::less<>> names;
 		std::vector<NativeConfigurationRecord> result;

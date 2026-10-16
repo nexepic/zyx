@@ -1,0 +1,23 @@
+{
+  "status": "component_not_stage_acceptance",
+  "accepted": 22,
+  "total": 34,
+  "percent": 64.7,
+  "selected_tests": 192,
+  "selected_suites": 8,
+  "key_heap_probe": {
+    "mode": "owned-btree-key-heap-accounting",
+    "shape_cases": 6,
+    "maximum_uncovered_private_bytes": 0,
+    "passed": true
+  },
+  "worker_sha256": "540936d07a897c9b94643db3cab12c28950a29833cc514b400d782ce5fb9a0fa",
+  "full_suite": false,
+  "new_performance_campaign": false,
+  "open_boundaries": [
+    "decoded entry array backing",
+    "route/restart/cursor allocations",
+    "raw caller-owned decoded output arrays",
+    "other S5/S6 contracts"
+  ]
+}

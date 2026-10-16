@@ -979,8 +979,8 @@ namespace graph::storage {
 				 "native graph transaction has overlapping Vector bootstrap mapping identities");
 		}
 
-		std::vector<BTreePageEntry> nodeMappingEntries;
-		std::vector<BTreePageEntry> vectorNodeMappingEntries;
+		utils::OwnedStdVector<BTreePageEntry> nodeMappingEntries;
+		utils::OwnedStdVector<BTreePageEntry> vectorNodeMappingEntries;
 		nodeMappingEntries.reserve(ordered.size());
 		vectorNodeMappingEntries.reserve(ordered.size());
 		StagedVectorBootstrap staged;
@@ -1495,7 +1495,7 @@ namespace graph::storage {
 					}
 				}
 			} else {
-				std::vector<BTreePageEntry> entries;
+				utils::OwnedStdVector<BTreePageEntry> entries;
 				entries.reserve(deltaOperations.size());
 				for (const auto &[vectorId, entry]: deltaOperations) {
 					entries.push_back({VectorDeltaMapping::key(vectorId, entry.operation), entry.node_id});

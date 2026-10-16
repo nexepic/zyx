@@ -1,0 +1,813 @@
+{
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    }
+  ],
+  "allocation_sweeps": {
+    "schema-vector": {
+      "probe": {
+        "mode": "schema-vector-allocation-fault",
+        "selected_fault": 18446744073709551615,
+        "fault_triggered": false,
+        "allocation_attempts": 5414,
+        "published": true,
+        "passed": true
+      },
+      "baseline_allocations": 5414,
+      "tested_allocations": 96,
+      "exhaustive": false,
+      "cases": [
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 0,
+          "fault_triggered": true,
+          "allocation_attempts": 1,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 56,
+          "fault_triggered": true,
+          "allocation_attempts": 57,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 113,
+          "fault_triggered": true,
+          "allocation_attempts": 114,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 170,
+          "fault_triggered": true,
+          "allocation_attempts": 171,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 227,
+          "fault_triggered": true,
+          "allocation_attempts": 228,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 284,
+          "fault_triggered": true,
+          "allocation_attempts": 285,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 341,
+          "fault_triggered": true,
+          "allocation_attempts": 342,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 398,
+          "fault_triggered": true,
+          "allocation_attempts": 399,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 455,
+          "fault_triggered": true,
+          "allocation_attempts": 456,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 512,
+          "fault_triggered": true,
+          "allocation_attempts": 513,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 569,
+          "fault_triggered": true,
+          "allocation_attempts": 570,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 626,
+          "fault_triggered": true,
+          "allocation_attempts": 627,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 683,
+          "fault_triggered": true,
+          "allocation_attempts": 684,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 740,
+          "fault_triggered": true,
+          "allocation_attempts": 741,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 797,
+          "fault_triggered": true,
+          "allocation_attempts": 798,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 854,
+          "fault_triggered": true,
+          "allocation_attempts": 855,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 911,
+          "fault_triggered": true,
+          "allocation_attempts": 912,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 968,
+          "fault_triggered": true,
+          "allocation_attempts": 969,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1025,
+          "fault_triggered": true,
+          "allocation_attempts": 1026,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1082,
+          "fault_triggered": true,
+          "allocation_attempts": 1083,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1139,
+          "fault_triggered": true,
+          "allocation_attempts": 1140,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1196,
+          "fault_triggered": true,
+          "allocation_attempts": 1197,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1253,
+          "fault_triggered": true,
+          "allocation_attempts": 1254,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1310,
+          "fault_triggered": true,
+          "allocation_attempts": 1311,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1367,
+          "fault_triggered": true,
+          "allocation_attempts": 1368,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1424,
+          "fault_triggered": true,
+          "allocation_attempts": 1425,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1481,
+          "fault_triggered": true,
+          "allocation_attempts": 1482,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1538,
+          "fault_triggered": true,
+          "allocation_attempts": 1539,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1595,
+          "fault_triggered": true,
+          "allocation_attempts": 1596,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1652,
+          "fault_triggered": true,
+          "allocation_attempts": 1653,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1709,
+          "fault_triggered": true,
+          "allocation_attempts": 1710,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1766,
+          "fault_triggered": true,
+          "allocation_attempts": 1767,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1823,
+          "fault_triggered": true,
+          "allocation_attempts": 1824,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1880,
+          "fault_triggered": true,
+          "allocation_attempts": 1881,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1937,
+          "fault_triggered": true,
+          "allocation_attempts": 1938,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 1994,
+          "fault_triggered": true,
+          "allocation_attempts": 1995,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2051,
+          "fault_triggered": true,
+          "allocation_attempts": 2052,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2108,
+          "fault_triggered": true,
+          "allocation_attempts": 2111,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2165,
+          "fault_triggered": true,
+          "allocation_attempts": 2168,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2222,
+          "fault_triggered": true,
+          "allocation_attempts": 2225,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2279,
+          "fault_triggered": true,
+          "allocation_attempts": 2282,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2336,
+          "fault_triggered": true,
+          "allocation_attempts": 2339,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2393,
+          "fault_triggered": true,
+          "allocation_attempts": 2396,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2450,
+          "fault_triggered": true,
+          "allocation_attempts": 2598,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2507,
+          "fault_triggered": true,
+          "allocation_attempts": 2655,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2564,
+          "fault_triggered": true,
+          "allocation_attempts": 2712,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2621,
+          "fault_triggered": true,
+          "allocation_attempts": 2781,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2678,
+          "fault_triggered": true,
+          "allocation_attempts": 2850,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2734,
+          "fault_triggered": true,
+          "allocation_attempts": 2912,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2791,
+          "fault_triggered": true,
+          "allocation_attempts": 2969,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2848,
+          "fault_triggered": true,
+          "allocation_attempts": 3026,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2905,
+          "fault_triggered": true,
+          "allocation_attempts": 3083,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 2962,
+          "fault_triggered": true,
+          "allocation_attempts": 3140,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3019,
+          "fault_triggered": true,
+          "allocation_attempts": 3197,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3076,
+          "fault_triggered": true,
+          "allocation_attempts": 3262,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3133,
+          "fault_triggered": true,
+          "allocation_attempts": 3319,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3190,
+          "fault_triggered": true,
+          "allocation_attempts": 3376,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3247,
+          "fault_triggered": true,
+          "allocation_attempts": 3430,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3304,
+          "fault_triggered": true,
+          "allocation_attempts": 3493,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3361,
+          "fault_triggered": true,
+          "allocation_attempts": 3550,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3418,
+          "fault_triggered": true,
+          "allocation_attempts": 3610,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3475,
+          "fault_triggered": true,
+          "allocation_attempts": 3736,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3532,
+          "fault_triggered": true,
+          "allocation_attempts": 3793,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3589,
+          "fault_triggered": true,
+          "allocation_attempts": 3947,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3646,
+          "fault_triggered": true,
+          "allocation_attempts": 3937,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3703,
+          "fault_triggered": true,
+          "allocation_attempts": 3994,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3760,
+          "fault_triggered": true,
+          "allocation_attempts": 4057,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3817,
+          "fault_triggered": true,
+          "allocation_attempts": 4120,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3874,
+          "fault_triggered": true,
+          "allocation_attempts": 4181,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3931,
+          "fault_triggered": true,
+          "allocation_attempts": 4251,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 3988,
+          "fault_triggered": true,
+          "allocation_attempts": 4332,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4045,
+          "fault_triggered": true,
+          "allocation_attempts": 4402,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4102,
+          "fault_triggered": true,
+          "allocation_attempts": 4483,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4159,
+          "fault_triggered": true,
+          "allocation_attempts": 4558,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4216,
+          "fault_triggered": true,
+          "allocation_attempts": 4618,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4273,
+          "fault_triggered": true,
+          "allocation_attempts": 4681,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4330,
+          "fault_triggered": true,
+          "allocation_attempts": 4741,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4387,
+          "fault_triggered": true,
+          "allocation_attempts": 4798,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4444,
+          "fault_triggered": true,
+          "allocation_attempts": 4855,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4501,
+          "fault_triggered": true,
+          "allocation_attempts": 4912,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4558,
+          "fault_triggered": true,
+          "allocation_attempts": 4969,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4615,
+          "fault_triggered": true,
+          "allocation_attempts": 5026,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4672,
+          "fault_triggered": true,
+          "allocation_attempts": 5083,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4729,
+          "fault_triggered": true,
+          "allocation_attempts": 5146,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4786,
+          "fault_triggered": true,
+          "allocation_attempts": 5203,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4843,
+          "fault_triggered": true,
+          "allocation_attempts": 5263,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4900,
+          "fault_triggered": true,
+          "allocation_attempts": 5132,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 4957,
+          "fault_triggered": true,
+          "allocation_attempts": 5189,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5014,
+          "fault_triggered": true,
+          "allocation_attempts": 5246,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5071,
+          "fault_triggered": true,
+          "allocation_attempts": 5303,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5128,
+          "fault_triggered": true,
+          "allocation_attempts": 5360,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5185,
+          "fault_triggered": true,
+          "allocation_attempts": 5417,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5242,
+          "fault_triggered": true,
+          "allocation_attempts": 5474,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5299,
+          "fault_triggered": true,
+          "allocation_attempts": 5531,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5356,
+          "fault_triggered": true,
+          "allocation_attempts": 5588,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-vector-allocation-fault",
+          "selected_fault": 5413,
+          "fault_triggered": true,
+          "allocation_attempts": 5414,
+          "published": true,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "crash_recovery": null,
+  "passed": 100,
+  "failures": 0,
+  "full_suite": false
+}

@@ -1,0 +1,37 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/query/api/test_QueryResultResources.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 13 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 13 tests from QueryResultResourcesTest
+[ RUN      ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment
+[       OK ] QueryResultResourcesTest.BorrowedColumnCopyRejectsBeforeChangingOutputAndAllowsSelfAssignment (0 ms)
+[ RUN      ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction
+[       OK ] QueryResultResourcesTest.RowsColumnsAndNotificationsRemainChargedUntilDestruction (0 ms)
+[ RUN      ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission
+[       OK ] QueryResultResourcesTest.RejectedGrowthPreservesOutputAndRefundsTemporaryAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce
+[       OK ] QueryResultResourcesTest.DeepCopyHasAnIndependentChargeAndMoveTransfersItOnce (0 ms)
+[ RUN      ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination
+[       OK ] QueryResultResourcesTest.CopyDenialPreservesSourceAndAssignmentDestination (0 ms)
+[ RUN      ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy
+[       OK ] QueryResultResourcesTest.MoveAssignmentReleasesOldOwnershipAndRetainsNewHierarchy (0 ms)
+[ RUN      ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased
+[       OK ] QueryResultResourcesTest.ResultKeepsAccountAliveAfterItsExternalOwnerIsReleased (0 ms)
+[ RUN      ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers
+[       OK ] QueryResultResourcesTest.ReplacingColumnStorageReleasesTheOldCharacterBuffers (0 ms)
+[ RUN      ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission
+[       OK ] QueryResultResourcesTest.NestedAndEntityPayloadsCannotBypassAdmission (0 ms)
+[ RUN      ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel
+[       OK ] QueryResultResourcesTest.EmptyMetadataAndLargeRowCapacityUseAllocatorRequestModel (0 ms)
+[ RUN      ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease
+[       OK ] QueryResultResourcesTest.NewEmptyResultRejectsAnAlreadyChargedLease (0 ms)
+[ RUN      ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput
+[       OK ] QueryResultResourcesTest.StringViewsAndJoinedFieldsAreAdmittedBeforeReplacingOrAppendingOutput (0 ms)
+[ RUN      ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows
+[       OK ] QueryResultResourcesTest.DuplicateStringFieldsRefundPartialConstructionAndKeepPriorRows (0 ms)
+[----------] 13 tests from QueryResultResourcesTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 13 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 13 tests.

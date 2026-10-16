@@ -45,7 +45,7 @@ namespace graph::storage {
 	constexpr uint16_t RSS_NATIVE_BULK_RUN_MANIFEST_ENTRY_BYTES = 16;
 
 	struct NativeBulkRunFragment {
-		std::vector<BTreePageEntry> entries;
+		utils::OwnedStdVector<BTreePageEntry> entries;
 
 		constexpr bool operator==(const NativeBulkRunFragment &) const = default;
 	};

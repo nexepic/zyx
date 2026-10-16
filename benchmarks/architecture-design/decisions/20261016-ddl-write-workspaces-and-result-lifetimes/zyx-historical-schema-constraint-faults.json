@@ -1,0 +1,813 @@
+{
+  "cases": [
+    {
+      "mode": "rollback-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-many-oom",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "rollback-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    },
+    {
+      "mode": "commit-retention",
+      "closed_object_bytes": 1856,
+      "passed": true
+    }
+  ],
+  "allocation_sweeps": {
+    "schema-constraint": {
+      "probe": {
+        "mode": "schema-constraint-allocation-fault",
+        "selected_fault": 18446744073709551615,
+        "fault_triggered": false,
+        "allocation_attempts": 4944,
+        "published": true,
+        "passed": true
+      },
+      "baseline_allocations": 4944,
+      "tested_allocations": 96,
+      "exhaustive": false,
+      "cases": [
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 0,
+          "fault_triggered": true,
+          "allocation_attempts": 1,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 52,
+          "fault_triggered": true,
+          "allocation_attempts": 53,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 104,
+          "fault_triggered": true,
+          "allocation_attempts": 105,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 156,
+          "fault_triggered": true,
+          "allocation_attempts": 157,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 208,
+          "fault_triggered": true,
+          "allocation_attempts": 209,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 260,
+          "fault_triggered": true,
+          "allocation_attempts": 261,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 312,
+          "fault_triggered": true,
+          "allocation_attempts": 313,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 364,
+          "fault_triggered": true,
+          "allocation_attempts": 365,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 416,
+          "fault_triggered": true,
+          "allocation_attempts": 417,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 468,
+          "fault_triggered": true,
+          "allocation_attempts": 469,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 520,
+          "fault_triggered": true,
+          "allocation_attempts": 521,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 572,
+          "fault_triggered": true,
+          "allocation_attempts": 573,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 624,
+          "fault_triggered": true,
+          "allocation_attempts": 625,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 676,
+          "fault_triggered": true,
+          "allocation_attempts": 677,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 728,
+          "fault_triggered": true,
+          "allocation_attempts": 729,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 780,
+          "fault_triggered": true,
+          "allocation_attempts": 781,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 832,
+          "fault_triggered": true,
+          "allocation_attempts": 833,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 884,
+          "fault_triggered": true,
+          "allocation_attempts": 885,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 936,
+          "fault_triggered": true,
+          "allocation_attempts": 937,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 988,
+          "fault_triggered": true,
+          "allocation_attempts": 989,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1040,
+          "fault_triggered": true,
+          "allocation_attempts": 1041,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1092,
+          "fault_triggered": true,
+          "allocation_attempts": 1093,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1144,
+          "fault_triggered": true,
+          "allocation_attempts": 1145,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1196,
+          "fault_triggered": true,
+          "allocation_attempts": 1197,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1248,
+          "fault_triggered": true,
+          "allocation_attempts": 1249,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1300,
+          "fault_triggered": true,
+          "allocation_attempts": 1301,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1352,
+          "fault_triggered": true,
+          "allocation_attempts": 1353,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1404,
+          "fault_triggered": true,
+          "allocation_attempts": 1405,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1456,
+          "fault_triggered": true,
+          "allocation_attempts": 1457,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1508,
+          "fault_triggered": true,
+          "allocation_attempts": 1509,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1560,
+          "fault_triggered": true,
+          "allocation_attempts": 1561,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1612,
+          "fault_triggered": true,
+          "allocation_attempts": 1613,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1665,
+          "fault_triggered": true,
+          "allocation_attempts": 1666,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1717,
+          "fault_triggered": true,
+          "allocation_attempts": 1718,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1769,
+          "fault_triggered": true,
+          "allocation_attempts": 1770,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1821,
+          "fault_triggered": true,
+          "allocation_attempts": 1822,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1873,
+          "fault_triggered": true,
+          "allocation_attempts": 1874,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1925,
+          "fault_triggered": true,
+          "allocation_attempts": 1926,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 1977,
+          "fault_triggered": true,
+          "allocation_attempts": 1978,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2029,
+          "fault_triggered": true,
+          "allocation_attempts": 2030,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2081,
+          "fault_triggered": true,
+          "allocation_attempts": 2082,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2133,
+          "fault_triggered": true,
+          "allocation_attempts": 2134,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2185,
+          "fault_triggered": true,
+          "allocation_attempts": 2186,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2237,
+          "fault_triggered": true,
+          "allocation_attempts": 2238,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2289,
+          "fault_triggered": true,
+          "allocation_attempts": 2290,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2341,
+          "fault_triggered": true,
+          "allocation_attempts": 2342,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2393,
+          "fault_triggered": true,
+          "allocation_attempts": 2394,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2445,
+          "fault_triggered": true,
+          "allocation_attempts": 2446,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2497,
+          "fault_triggered": true,
+          "allocation_attempts": 2498,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2549,
+          "fault_triggered": true,
+          "allocation_attempts": 2552,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2601,
+          "fault_triggered": true,
+          "allocation_attempts": 2604,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2653,
+          "fault_triggered": true,
+          "allocation_attempts": 2656,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2705,
+          "fault_triggered": true,
+          "allocation_attempts": 2708,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2757,
+          "fault_triggered": true,
+          "allocation_attempts": 2760,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2809,
+          "fault_triggered": true,
+          "allocation_attempts": 2812,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2861,
+          "fault_triggered": true,
+          "allocation_attempts": 3009,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2913,
+          "fault_triggered": true,
+          "allocation_attempts": 3061,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 2965,
+          "fault_triggered": true,
+          "allocation_attempts": 3119,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3017,
+          "fault_triggered": true,
+          "allocation_attempts": 3177,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3069,
+          "fault_triggered": true,
+          "allocation_attempts": 3229,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3121,
+          "fault_triggered": true,
+          "allocation_attempts": 3281,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3173,
+          "fault_triggered": true,
+          "allocation_attempts": 3333,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3225,
+          "fault_triggered": true,
+          "allocation_attempts": 3393,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3277,
+          "fault_triggered": true,
+          "allocation_attempts": 3445,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3330,
+          "fault_triggered": true,
+          "allocation_attempts": 3498,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3382,
+          "fault_triggered": true,
+          "allocation_attempts": 3547,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3434,
+          "fault_triggered": true,
+          "allocation_attempts": 3605,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3486,
+          "fault_triggered": true,
+          "allocation_attempts": 3657,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3538,
+          "fault_triggered": true,
+          "allocation_attempts": 3757,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3590,
+          "fault_triggered": true,
+          "allocation_attempts": 3809,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3642,
+          "fault_triggered": true,
+          "allocation_attempts": 3864,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3694,
+          "fault_triggered": true,
+          "allocation_attempts": 3922,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3746,
+          "fault_triggered": true,
+          "allocation_attempts": 3998,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3798,
+          "fault_triggered": true,
+          "allocation_attempts": 4062,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3850,
+          "fault_triggered": true,
+          "allocation_attempts": 4117,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3902,
+          "fault_triggered": true,
+          "allocation_attempts": 4178,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 3954,
+          "fault_triggered": true,
+          "allocation_attempts": 4236,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4006,
+          "fault_triggered": true,
+          "allocation_attempts": 4288,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4058,
+          "fault_triggered": true,
+          "allocation_attempts": 4340,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4110,
+          "fault_triggered": true,
+          "allocation_attempts": 4392,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4162,
+          "fault_triggered": true,
+          "allocation_attempts": 4444,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4214,
+          "fault_triggered": true,
+          "allocation_attempts": 4496,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4266,
+          "fault_triggered": true,
+          "allocation_attempts": 4548,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4318,
+          "fault_triggered": true,
+          "allocation_attempts": 4600,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4370,
+          "fault_triggered": true,
+          "allocation_attempts": 4658,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4422,
+          "fault_triggered": true,
+          "allocation_attempts": 4710,
+          "published": false,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4474,
+          "fault_triggered": true,
+          "allocation_attempts": 4658,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4526,
+          "fault_triggered": true,
+          "allocation_attempts": 4710,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4578,
+          "fault_triggered": true,
+          "allocation_attempts": 4762,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4630,
+          "fault_triggered": true,
+          "allocation_attempts": 4814,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4682,
+          "fault_triggered": true,
+          "allocation_attempts": 4866,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4734,
+          "fault_triggered": true,
+          "allocation_attempts": 4918,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4786,
+          "fault_triggered": true,
+          "allocation_attempts": 4970,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4838,
+          "fault_triggered": true,
+          "allocation_attempts": 5022,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4890,
+          "fault_triggered": true,
+          "allocation_attempts": 5074,
+          "published": true,
+          "passed": true
+        },
+        {
+          "mode": "schema-constraint-allocation-fault",
+          "selected_fault": 4943,
+          "fault_triggered": true,
+          "allocation_attempts": 4944,
+          "published": true,
+          "passed": true
+        }
+      ]
+    }
+  },
+  "crash_recovery": null,
+  "passed": 100,
+  "failures": 0,
+  "full_suite": false
+}

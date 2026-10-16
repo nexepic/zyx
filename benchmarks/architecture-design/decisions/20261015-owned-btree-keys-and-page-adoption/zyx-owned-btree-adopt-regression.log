@@ -1,0 +1,673 @@
+[0/2] Re-checking globbed directories...
+[1/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/InitialBTreeBuilder.cpp.o
+[2/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/IndexKeyCodec.cpp.o
+[3/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/NativeBulkRun.cpp.o
+[4/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.cpp.o
+[5/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/DerivedObjectReachabilityReclaimer.cpp.o
+[6/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/index/BTreePageStore.cpp.o
+[7/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyQuality.cpp.o
+[8/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineScalarIndexMaterializer.cpp.o
+[9/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.cpp.o
+[10/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorAdjacencyRebuild.cpp.o
+[11/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableCompactionCoordinator.cpp.o
+[12/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorPqRebuild.cpp.o
+[13/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/OfflineVectorBaseRebuild.cpp.o
+[14/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorIndexStateReclaimer.cpp.o
+[15/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/VectorPagePoolReclaimer.cpp.o
+[16/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp.o
+[17/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/maintenance/RelocatableMaintenanceService.cpp.o
+[18/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVector.cpp.o
+[19/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp.o
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp:535:97: warning: missing field 'replacement_pool' initializer [-Wmissing-field-initializers]
+  535 |                         mappingRetirementBatches.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
+      |                                                                                                                      ^
+/workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreVectorRebuild.cpp:560:80: warning: missing field 'replacement_pool' initializer [-Wmissing-field-initializers]
+  560 |                                 result.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
+      |                                                                                                            ^
+2 warnings generated.
+[20/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp.o
+[21/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/LargeValueStore.cpp.o
+[22/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/ConstraintMutationValidator.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/ConstraintMutationValidator.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/ConstraintMutationValidator.hpp:21:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[23/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp:32:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphEntityPageMaterializer.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeEntityPageBatcher.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeMaterializer.hpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[24/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/property/PropertyCollectionRootStore.cpp.o
+[25/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintDefinitionWriter.cpp.o
+[26/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/schema/NativeBulkEdgeCatalogTokenMaterializer.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeTokenRunBuilder.hpp:14:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[27/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyMapping.cpp.o
+[28/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/RelocatableVectorSearch.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/vector/RelocatableVectorSearch.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/vector/RelocatableVectorSearch.hpp:13:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:19:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/vector/RelocatableVectorSearch.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/vector/RelocatableVectorSearch.hpp:13:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[29/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/SystemCatalog.cpp.o
+[30/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorAdjacencyPageStore.cpp.o
+[31/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/schema/NativeConstraintSupportTreeBuilder.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/schema/NativeConstraintSupportTreeBuilder.cpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+5 warnings generated.
+[32/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorDeltaMapping.cpp.o
+[33/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestPage.cpp.o
+[34/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorManifestStore.cpp.o
+[35/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorNodeMapping.cpp.o
+[36/45] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/vector/VectorPqMapping.cpp.o
+[37/45] Linking CXX static library libzyx_core.a
+[38/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreeIndex.cpp.o
+[39/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreeIndexScanCache.cpp.o
+[40/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePage.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:27: warning: implicit conversion from 'unsigned int' to 'uint16_t' (aka 'unsigned short') changes value from 4294967295 to 65535 [-Wconstant-conversion]
+   68 |                 [](auto &v) { v.flags = UINT32_MAX; }}) {
+      |                                       ~ ^~~~~~~~~~
+/usr/include/stdint.h:118:23: note: expanded from macro 'UINT32_MAX'
+  118 | # define UINT32_MAX             (4294967295U)
+      |                                  ^~~~~~~~~~~
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2655:7: note: in instantiation of function template specialization 'RelocatableBTreePageCodecTest_ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata_Test::TestBody()::(anonymous class)::operator()<graph::storage::PageOwnerHeader>' requested here
+ 2655 |       std::declval<_Fn>()(std::declval<_Args>()...)
+      |       ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2666:29: note: while substituting deduced template arguments into function template '_S_test' [with _Fn = (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3) &, _Args = (no value)]
+ 2666 |       using type = decltype(_S_test<_Functor, _ArgTypes...>(0));
+      |                             ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:2672:14: note: in instantiation of template class 'std::__result_of_impl<false, false, (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3) &, graph::storage::PageOwnerHeader &>' requested here
+ 2672 |     : public __result_of_impl<
+      |              ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/type_traits:3035:29: note: in instantiation of template class 'std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3) &, graph::storage::PageOwnerHeader &>' requested here
+ 3035 |                                __void_t<typename _Result::type>>
+      |                                                  ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: during template argument deduction for class template partial specialization '__is_invocable_impl<_Result, _Ret, true, __void_t<typename _Result::type>>' [with _Result = std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3) &, graph::storage::PageOwnerHeader &>, _Ret = void]
+  349 |         : __is_invocable_impl<_Res2, _Res>::type
+      |           ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:349:4: note: in instantiation of template class 'std::__is_invocable_impl<std::__invoke_result<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3) &, graph::storage::PageOwnerHeader &>, void>' requested here
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:353:34: note: in instantiation of template class 'std::function<void (graph::storage::PageOwnerHeader &)>::_Callable<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3)>' requested here
+  353 |         using _Requires = __enable_if_t<_Cond::value, _Tp>;
+      |                                         ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:434:33: note: in instantiation of template type alias '_Requires' requested here
+  434 |                typename _Constraints = _Requires<_Callable<_Functor>>>
+      |                                        ^
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/std_function.h:435:2: note: in instantiation of default argument for 'function<(lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3)>' required here
+  435 |         function(_Functor&& __f)
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~
+  436 |         noexcept(_Handler<_Functor>::template _S_nothrow_init<_Functor>())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  437 |         : _Function_base()
+      |         ~~~~~~~~~~~~~~~~~~
+  438 |         {
+      |         ~
+  439 |           static_assert(is_copy_constructible<__decay_t<_Functor>>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  440 |               "std::function target must be copy-constructible");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  441 |           static_assert(is_constructible<__decay_t<_Functor>, _Functor>::value,
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  442 |               "std::function target must be constructible from the "
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  443 |               "constructor argument");
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~
+  444 | 
+  445 |           using _My_handler = _Handler<_Functor>;
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  446 | 
+  447 |           if (_My_handler::_M_not_empty_function(__f))
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  448 |             {
+      |             ~
+  449 |               _My_handler::_M_init_functor(_M_functor,
+      |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  450 |                                            std::forward<_Functor>(__f));
+      |                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3: note: while substituting deduced template arguments into function template 'function' [with _Functor = (lambda at /workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:68:3), _Constraints = (no value)]
+   68 |                 [](auto &v) { v.flags = UINT32_MAX; }}) {
+      |                 ^
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:65:18: warning: loop variable 'change' creates a copy from type 'std::function<void (graph::storage::PageOwnerHeader &)> const' [-Wrange-loop-construct]
+   65 |         for (const auto change : std::vector<std::function<void(PageOwnerHeader &)>>{
+      |                         ^
+/workspace/zyx/tests/src/storage/relocatable/index/test_BTreePage.cpp:65:7: note: use reference type 'std::function<void (graph::storage::PageOwnerHeader &)> const &' to prevent copying
+   65 |         for (const auto change : std::vector<std::function<void(PageOwnerHeader &)>>{
+      |              ^~~~~~~~~~~~~~~~~~~
+      |                         &
+2 warnings generated.
+[41/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BTreePageStore.cpp.o
+[42/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_VectorMaintenance.cpp.o
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_VectorMaintenance.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:502:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  502 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:596:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  596 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:605:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  605 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/tests/src/storage/relocatable/backend/test_RelocatableStorageBackendSchema_VectorMaintenance.cpp:9:
+In file included from /workspace/zyx/tests/include/storage/relocatable/backend/RelocatableStorageBackendSchemaTestFixture.hpp:29:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:132:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  132 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[43/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_SystemCatalogIndexEnumeration.cpp.o
+[44/45] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/schema/test_SystemCatalog.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 192 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 7 tests from OwnedStdVectorTest
+[ RUN      ] OwnedStdVectorTest.GrowthDenialPreservesValuesCapacityAndTheirOriginalCredit
+[       OK ] OwnedStdVectorTest.GrowthDenialPreservesValuesCapacityAndTheirOriginalCredit (0 ms)
+[ RUN      ] OwnedStdVectorTest.AdmissionPrecedesAdoptingAnExternalVector
+[       OK ] OwnedStdVectorTest.AdmissionPrecedesAdoptingAnExternalVector (0 ms)
+[ RUN      ] OwnedStdVectorTest.AliasedMovedElementsRemainValidAcrossBackingGrowth
+[       OK ] OwnedStdVectorTest.AliasedMovedElementsRemainValidAcrossBackingGrowth (0 ms)
+[ RUN      ] OwnedStdVectorTest.MovedEmptyVectorsRetainTheirAuthorityForReuse
+[       OK ] OwnedStdVectorTest.MovedEmptyVectorsRetainTheirAuthorityForReuse (0 ms)
+[ RUN      ] OwnedStdVectorTest.InitializerReplacementUsesReceiverAuthorityAndPreservesValuesOnDenial
+[       OK ] OwnedStdVectorTest.InitializerReplacementUsesReceiverAuthorityAndPreservesValuesOnDenial (0 ms)
+[ RUN      ] OwnedStdVectorTest.ByteRangeCopyAndAliasedInsertionKeepBackingCharged
+[       OK ] OwnedStdVectorTest.ByteRangeCopyAndAliasedInsertionKeepBackingCharged (0 ms)
+[ RUN      ] OwnedStdVectorTest.AliasedByteInsertionRefusalKeepsTheOriginalRangeAndCredit
+[       OK ] OwnedStdVectorTest.AliasedByteInsertionRefusalKeepsTheOriginalRangeAndCredit (0 ms)
+[----------] 7 tests from OwnedStdVectorTest (0 ms total)
+
+[----------] 27 tests from RelocatableBTreePageCodecTest
+[ RUN      ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata
+[       OK ] RelocatableBTreePageCodecTest.ValidatesNewPageWithoutChecksumWorkAndRejectsMalformedMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsLeafAndInternalPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders
+[       OK ] RelocatableBTreePageCodecTest.RejectsMalformedPageHeaders (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsVariableKeysAndRejectsMalformedEntries (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.StoresOrderedEntriesInPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload
+[       OK ] RelocatableBTreePageCodecTest.BulkMaterializesOneValidatedPackedPayload (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrExactlyRoundTripsEverySingleBitIndexPageMutation (2056 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.FindsKeysAcrossPackedRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor
+[       OK ] RelocatableBTreePageCodecTest.RoundTripsAnOrderedKeyThatExtendsItsPredecessor (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads
+[       OK ] RelocatableBTreePageCodecTest.RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads (12 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes
+[       OK ] RelocatableBTreePageCodecTest.StoresKeyOnlyLeafEntriesWithoutValueBytes (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams
+[       OK ] RelocatableBTreePageCodecTest.RejectsCorruptPackedPayloadMetadataAndStreams (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues
+[       OK ] RelocatableBTreePageCodecTest.RejectsInvalidPackedLayoutsAndTruncatedEntryValues (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata
+[       OK ] RelocatableBTreePageCodecTest.RejectsPackedEntryStreamsThatDisagreeWithTheirMetadata (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage
+[       OK ] RelocatableBTreePageCodecTest.RebindsTypedOwnerWithoutChangingTheLogicalTreePage (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedPackedPayloadSlotGeneration (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner
+[       OK ] RelocatableBTreePageCodecTest.RejectsAReusedHeaderSlotAndAHeaderThatDisagreesWithItsOwner (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants
+[       OK ] RelocatableBTreePageCodecTest.FailsClosedForPageOwnershipAndSlottedRecordInvariants (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups
+[       OK ] RelocatableBTreePageCodecTest.DecodedCompressedKeysRemainIndependentAcrossRestartGroups (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode
+[       OK ] RelocatableBTreePageCodecTest.EntriesValidateAndReturnOnePackedDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount
+[       OK ] RelocatableBTreePageCodecTest.RebindingPackedPagesDecodesOnceRegardlessOfEntryCount (2 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode
+[       OK ] RelocatableBTreePageCodecTest.MutationsReuseTheFullyAuthenticatedSourceDecode (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeMatchesCanonicalEncodingAcrossRestartsAndVarints (3297 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding
+[       OK ] RelocatableBTreePageCodecTest.PackedSizeRejectsTheSameInvalidEntriesAsEncoding (0 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads
+[       OK ] RelocatableBTreePageCodecTest.BoundarySizesHandleChangingPrefixLengthsAndEmptyPayloads (23 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership
+[       OK ] RelocatableBTreePageCodecTest.TransfersFullyValidatedEntriesWithIndependentOwnership (1 ms)
+[ RUN      ] RelocatableBTreePageCodecTest.AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction
+[       OK ] RelocatableBTreePageCodecTest.AdoptedSlottedPageKeepsItsSourceMemoryAuthorityUntilDestruction (0 ms)
+[----------] 27 tests from RelocatableBTreePageCodecTest (5396 ms total)
+
+[----------] 21 tests from RelocatableBTreeIndexTest
+[ RUN      ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf
+[       OK ] RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf (7 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree
+[       OK ] RelocatableBTreeIndexTest.ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults
+[       OK ] RelocatableBTreeIndexTest.ScanChecksCancellationBeforeReturningPartialResults (6 ms)
+[ RUN      ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.TraversesInternalSeparatorsAndLeafSiblingLinks (13 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound
+[       OK ] RelocatableBTreeIndexTest.ScansAcrossAnIntermediateSeparatorAndCanExcludeItsLowerBound (15 ms)
+[ RUN      ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors
+[       OK ] RelocatableBTreeIndexTest.StreamsBoundedOrderedSourcesFromIndependentCursors (14 ms)
+[ RUN      ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree
+[       OK ] RelocatableBTreeIndexTest.ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree (48 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsMissingChildrenAndBrokenLeafLinks (9 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsForeignMetadataAndReturnsEmptyForAnUnpublishedIndex (1 ms)
+[ RUN      ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges
+[       OK ] RelocatableBTreeIndexTest.DescendsMultipleInternalLevelsWithinSeparatorRanges (37 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildOwnedByAnotherIndex (13 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel
+[       OK ] RelocatableBTreeIndexTest.RejectsAChildAtTheWrongLevel (12 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsRootLeafSiblingLinks (10 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks
+[       OK ] RelocatableBTreeIndexTest.RejectsNonreciprocalLeafLinks (18 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink
+[       OK ] RelocatableBTreeIndexTest.RejectsAnEmptyNonRootLeafReachedThroughASiblingLink (14 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence
+[       OK ] RelocatableBTreeIndexTest.RejectsReciprocalSiblingOutsideTheRoutedLeafSequence (23 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsCyclicLeafChains (13 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains
+[       OK ] RelocatableBTreeIndexTest.RejectsUnorderedLeafChains (13 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange
+[       OK ] RelocatableBTreeIndexTest.RejectsLeafKeysOutsideTheirSeparatorRange (14 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator
+[       OK ] RelocatableBTreeIndexTest.RejectsALeftLeafKeyAtItsExclusiveUpperSeparator (10 ms)
+[ RUN      ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange
+[       OK ] RelocatableBTreeIndexTest.RejectsAnInternalSeparatorOutsideItsParentRange (9 ms)
+[----------] 21 tests from RelocatableBTreeIndexTest (315 ms total)
+
+[----------] 10 tests from BTreeIndexScanCacheTest
+[ RUN      ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently
+[       OK ] BTreeIndexScanCacheTest.KeepsRoutingPagesResidentAndStreamsLeafChainTransiently (27 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidReadHintBeforeResolvingThePageRoute (24 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot
+[       OK ] BTreeIndexScanCacheTest.RejectsAnInvalidInitialLeafHintBeforeResolvingTheRoot (24 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves
+[       OK ] BTreeIndexScanCacheTest.RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves (25 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage
+[       OK ] BTreeIndexScanCacheTest.RangeCursorChecksCancellationBeforeOpeningStorage (26 ms)
+[ RUN      ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease
+[       OK ] BTreeIndexScanCacheTest.RangeBoundaryAdmissionRejectsWithoutConsumingAndReportsRelease (30 ms)
+[ RUN      ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees
+[       OK ] BTreeIndexScanCacheTest.ScanAndCursorReuseValidatedLeafDecodesAcrossSubtrees (36 ms)
+[ RUN      ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries
+[       OK ] BTreeIndexScanCacheTest.PointLookupReusesAuthenticatedLeafEntries (26 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchReusesAuthenticatedRangesIncludingMissingKeys (29 ms)
+[ RUN      ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots
+[       OK ] BTreeIndexScanCacheTest.SortedExactBatchRejectsOrderBeforeIoAndHandlesEmptyAndUnpublishedRoots (23 ms)
+[----------] 10 tests from BTreeIndexScanCacheTest (275 ms total)
+
+[----------] 38 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.AtomicallyMaterializesAndCowReplacesAStableIndexPage
+[       OK ] RelocatableBTreePageStoreTest.AtomicallyMaterializesAndCowReplacesAStableIndexPage (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.EvacuatesARootPageAndRebindsItsGenerationAtomically
+[       OK ] RelocatableBTreePageStoreTest.EvacuatesARootPageAndRebindsItsGenerationAtomically (21 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.EvacuatesANonRootPageWithoutChangingTheIndexRoot
+[       OK ] RelocatableBTreePageStoreTest.EvacuatesANonRootPageWithoutChangingTheIndexRoot (17 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.EvacuatesAnUnrootedPageAndRejectsAnInvalidCheckpointLsn
+[       OK ] RelocatableBTreePageStoreTest.EvacuatesAnUnrootedPageAndRejectsAnInvalidCheckpointLsn (10 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.UpsertsAnUnsplitRootLeafThroughSnapshotSafeFrameCow
+[       OK ] RelocatableBTreePageStoreTest.UpsertsAnUnsplitRootLeafThroughSnapshotSafeFrameCow (21 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAnUnsplitRootLeafUpsertWithoutPublishingIt
+[       OK ] RelocatableBTreePageStoreTest.PlansAnUnsplitRootLeafUpsertWithoutPublishingIt (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PlansAnUnsplitRootLeafEraseWithoutPublishingIt
+[       OK ] RelocatableBTreePageStoreTest.PlansAnUnsplitRootLeafEraseWithoutPublishingIt (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ErasesRootLeafEntriesThroughSnapshotSafeFrameCow
+[       OK ] RelocatableBTreePageStoreTest.ErasesRootLeafEntriesThroughSnapshotSafeFrameCow (20 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MergesAnEmptyLeafAndCollapsesTheRootWithoutBreakingSnapshots
+[       OK ] RelocatableBTreePageStoreTest.MergesAnEmptyLeafAndCollapsesTheRootWithoutBreakingSnapshots (23 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversLeafMergeAndRootCollapseAfterDurableWalHeader
+[       OK ] RelocatableBTreePageStoreTest.RecoversLeafMergeAndRootCollapseAfterDurableWalHeader (22 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidRootLeafUpsertsBeforePublishingAFrame
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidRootLeafUpsertsBeforePublishingAFrame (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsARootLeafSplitWhenOneKeyCannotFitInEitherLeaf
+[       OK ] RelocatableBTreePageStoreTest.RejectsARootLeafSplitWhenOneKeyCannotFitInEitherLeaf (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.SplitsAnOverfullRootLeafThroughOneSnapshotSafePublication
+[       OK ] RelocatableBTreePageStoreTest.SplitsAnOverfullRootLeafThroughOneSnapshotSafePublication (18 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.SplitsARootLeafIntoABestFitExternalIndexPool
+[       OK ] RelocatableBTreePageStoreTest.SplitsARootLeafIntoABestFitExternalIndexPool (146 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ChoosesTheLowestSurplusEligiblePoolForARootLeafSplit
+[       OK ] RelocatableBTreePageStoreTest.ChoosesTheLowestSurplusEligiblePoolForARootLeafSplit (140 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.SplitsARootLeafIntoANewAtomicallyReservedIndexPool
+[       OK ] RelocatableBTreePageStoreTest.SplitsARootLeafIntoANewAtomicallyReservedIndexPool (156 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReclaimsAnUnpublishedNewIndexPoolAfterAnUndurableWalFailure
+[       OK ] RelocatableBTreePageStoreTest.ReclaimsAnUnpublishedNewIndexPoolAfterAnUndurableWalFailure (157 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversANewIndexPoolAfterTheWalHeaderIsDurable
+[       OK ] RelocatableBTreePageStoreTest.RecoversANewIndexPoolAfterTheWalHeaderIsDurable (146 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ElevatesAnOverfullLevelOneRootWithoutChangingExistingPageIds
+[       OK ] RelocatableBTreePageStoreTest.ElevatesAnOverfullLevelOneRootWithoutChangingExistingPageIds (35 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.SplitsALeafBelowALevelTwoRootWithOneSnapshotSafePublication
+[       OK ] RelocatableBTreePageStoreTest.SplitsALeafBelowALevelTwoRootWithOneSnapshotSafePublication (86 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversALevelTwoLeafSplitAfterTheWalHeaderIsDurable
+[       OK ] RelocatableBTreePageStoreTest.RecoversALevelTwoLeafSplitAfterTheWalHeaderIsDurable (85 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PropagatesALevelTwoLeafSplitThroughAnOverfullParentAtomically
+[       OK ] RelocatableBTreePageStoreTest.PropagatesALevelTwoLeafSplitThroughAnOverfullParentAtomically (105 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ElevatesALevelTwoRootThroughOneAtomicAncestorPathMutation
+[       OK ] RelocatableBTreePageStoreTest.ElevatesALevelTwoRootThroughOneAtomicAncestorPathMutation (197 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.MatchesAnOrderedReferenceModelAcrossRandomDeepInsertAndUpdateSequences
+[       OK ] RelocatableBTreePageStoreTest.MatchesAnOrderedReferenceModelAcrossRandomDeepInsertAndUpdateSequences (766 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesDeepSplitAcrossIndexPoolsThroughOneSnapshotSafeMutation
+[       OK ] RelocatableBTreePageStoreTest.PublishesDeepSplitAcrossIndexPoolsThroughOneSnapshotSafeMutation (110 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AppendsDeepSplitPagesToABestFitPoolWhenThePathPoolIsCapacityBound
+[       OK ] RelocatableBTreePageStoreTest.AppendsDeepSplitPagesToABestFitPoolWhenThePathPoolIsCapacityBound (186 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversMultiPoolDeepSplitAfterTheWalHeaderIsDurable
+[       OK ] RelocatableBTreePageStoreTest.RecoversMultiPoolDeepSplitAfterTheWalHeaderIsDurable (96 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReclaimsUnpublishedMultiPoolDeepSplitFramesAfterAnUndurableWalFailure
+[       OK ] RelocatableBTreePageStoreTest.ReclaimsUnpublishedMultiPoolDeepSplitFramesAfterAnUndurableWalFailure (103 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ElevatesARootAcrossPoolsAndUsesTheBestFitAppendPool
+[       OK ] RelocatableBTreePageStoreTest.ElevatesARootAcrossPoolsAndUsesTheBestFitAppendPool (209 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RecoversRootLeafSplitAfterTheWalHeaderIsDurable
+[       OK ] RelocatableBTreePageStoreTest.RecoversRootLeafSplitAfterTheWalHeaderIsDurable (18 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.UpsertsAndSplitsLeavesBelowALevelOneRootWithoutBreakingSnapshots
+[       OK ] RelocatableBTreePageStoreTest.UpsertsAndSplitsLeavesBelowALevelOneRootWithoutBreakingSnapshots (686 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.ReclaimsUnpublishedRootLeafSplitFramesAfterAnUndurableWalFailure
+[       OK ] RelocatableBTreePageStoreTest.ReclaimsUnpublishedRootLeafSplitFramesAfterAnUndurableWalFailure (23 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsRootLeafSplitWhenItsPoolCannotReserveEveryCowFrame
+[       OK ] RelocatableBTreePageStoreTest.RejectsRootLeafSplitWhenItsPoolCannotReserveEveryCowFrame (118 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.AppendsIndependentIndexPagesToAnExistingPool
+[       OK ] RelocatableBTreePageStoreTest.AppendsIndependentIndexPagesToAnExistingPool (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.PublishesSnapshotStableIndexRootsAndPreservesTheLogicalPageHighWater
+[       OK ] RelocatableBTreePageStoreTest.PublishesSnapshotStableIndexRootsAndPreservesTheLogicalPageHighWater (17 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidOrUnavailableIndexRootTargets
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidOrUnavailableIndexRootTargets (8 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RemovesIndexRootsWithoutMakingOldSnapshotsDangling
+[       OK ] RelocatableBTreePageStoreTest.RemovesIndexRootsWithoutMakingOldSnapshotsDangling (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsIncompatibleOrStalePageMaterializationBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.RejectsIncompatibleOrStalePageMaterializationBeforePublication (1 ms)
+[----------] 38 tests from RelocatableBTreePageStoreTest (3818 ms total)
+
+[----------] 60 tests from SystemCatalogTest
+[ RUN      ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists
+[       OK ] SystemCatalogTest.ReturnsAbsentMappingsBeforeTheCatalogRootExists (1 ms)
+[ RUN      ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue
+[       OK ] SystemCatalogTest.PublishesTypedConfigurationRecordsAtomicallyAndPersistsTheirLatestValue (19 ms)
+[ RUN      ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions
+[       OK ] SystemCatalogTest.RejectsConfigurationWritesFromMovedOrFinishedSessions (7 ms)
+[ RUN      ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen
+[       OK ] SystemCatalogTest.PublishesGraphCardinalityStatisticsAtomicallyAndPersistsThemAcrossReopen (16 ms)
+[ RUN      ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord
+[       OK ] SystemCatalogTest.PersistsZeroGraphCardinalityStatisticsAsACompleteRecord (5 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial
+[       OK ] SystemCatalogTest.FailsClosedWhenGraphCardinalityRecordIsPartial (5 ms)
+[ RUN      ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts
+[       OK ] SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts (1 ms)
+[ RUN      ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue
+[       OK ] SystemCatalogTest.PersistsEverySupportedScalarConfigurationValue (7 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog
+[       OK ] SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication
+[       OK ] SystemCatalogTest.RejectsMalformedOrNonScalarConfigurationRecordsBeforePublication (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedConfigurationEntriesAreMalformed (13 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration
+[       OK ] SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration (5 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound (11 ms)
+[ RUN      ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues
+[       OK ] SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues (20 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedDefinitionKeysAreTruncated (16 ms)
+[ RUN      ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords
+[       OK ] SystemCatalogTest.RejectsAmbiguousOrBoundedPersistedConfigurationRecords (19 ms)
+[ RUN      ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration
+[       OK ] SystemCatalogTest.PublishesTokenMappingsWithNativeGraphChangesInOneGeneration (13 ms)
+[ RUN      ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains
+[       OK ] SystemCatalogTest.KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains (9 ms)
+[ RUN      ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences
+[       OK ] SystemCatalogTest.PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences (38 ms)
+[ RUN      ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication
+[       OK ] SystemCatalogTest.RequiresFinishBeforeInitialRootPublication (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests
+[       OK ] SystemCatalogTest.RejectsInvalidAndFinishedWriteSessionRequests (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds
+[       OK ] SystemCatalogTest.RejectsInvalidOrDuplicateDefinitionsWithoutConsumingDurableIds (46 ms)
+[ RUN      ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction
+[       OK ] SystemCatalogTest.KeepsAnActiveCatalogSessionUsableAfterMoveConstruction (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange
+[       OK ] SystemCatalogTest.FailsClosedWhenPersistedAllocationSequencesAreOutOfRange (32 ms)
+[ RUN      ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion
+[       OK ] SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion (46 ms)
+[ RUN      ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds
+[       OK ] SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds (19 ms)
+[ RUN      ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts
+[       OK ] SystemCatalogTest.RejectsStagedAndDurableDefinitionConflicts (14 ms)
+[ RUN      ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings
+[       OK ] SystemCatalogTest.RejectsStaleFirstRootPublicationWithoutLeakingMappings (8 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication
+[       OK ] SystemCatalogTest.RecoversTheOldOrNewConfigurationValueAcrossInterruptedReplacementPublication (32 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock
+[       OK ] SystemCatalogTest.RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock (9 ms)
+[ RUN      ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock
+[       OK ] SystemCatalogTest.RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock (19 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord
+[       OK ] SystemCatalogTest.FailsClosedWhenAReachableCatalogHasNoBootstrapRecord (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingHasNoOrMismatchedReverseMapping (10 ms)
+[ RUN      ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics
+[       OK ] SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics (16 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous (6 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseRecordHasNoNameOrWrongTokenValue (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyReverseMappingHasNoOrMismatchedForwardMapping (7 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth
+[       OK ] SystemCatalogTest.FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth (6 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments
+[       OK ] SystemCatalogTest.RejectsInvalidPublicTokenLookupArguments (1 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent
+[       OK ] SystemCatalogTest.FailsClosedWhenSchemaForwardOrReverseMappingsAreIncompleteOrInconsistent (8 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds (7 ms)
+[ RUN      ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey
+[       OK ] SystemCatalogTest.PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey (7 ms)
+[ RUN      ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot
+[       OK ] SystemCatalogTest.PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot (20 ms)
+[ RUN      ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds
+[       OK ] SystemCatalogTest.RejectsInvalidDefinitionLookupAndEnumerationBounds (9 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexNameDirectionTargetsAnotherDefinition (15 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionTargetsAnotherDefinition (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionIsMissing (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintNameDirectionTargetsAnotherDefinition (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition
+[       OK ] SystemCatalogTest.FailsClosedWhenConstraintSemanticDirectionTargetsAnotherDefinition (13 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing
+[       OK ] SystemCatalogTest.FailsClosedWhenIndexSemanticDirectionIsMissing (12 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords (12 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree (14 ms)
+[ RUN      ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId
+[       OK ] SystemCatalogTest.FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId (15 ms)
+[ RUN      ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections
+[       OK ] SystemCatalogTest.DropsOnlyTheRequestedCanonicalDefinitionDirections (21 ms)
+[ RUN      ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes
+[       OK ] SystemCatalogTest.SchemaNameAdmissionPrecedesCopyAndCoversForwardKeyUntilLookupCompletes (9 ms)
+[ RUN      ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots
+[       OK ] SystemCatalogTest.BatchedSchemaNameLookupRetainsReverseIntegrityAndPinnedSnapshots (45 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsDuplicateLogicalIdsAndPreservesOlderDefinitions (16 ms)
+[ RUN      ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId
+[       OK ] SystemCatalogTest.IndexEnumerationRejectsLeafValuesDisagreeingWithTheEncodedLogicalId (13 ms)
+[ RUN      ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid
+[       OK ] SystemCatalogTest.DirectionValidationRejectsNameConflictsAcrossBatchesAndKeepsOlderSnapshotValid (34 ms)
+[----------] 60 tests from SystemCatalogTest (875 ms total)
+
+[----------] 1 test from SystemCatalogIdRangeTest
+[ RUN      ] SystemCatalogIdRangeTest.AcceptsOnlyPersistedDefinitionIdRanges
+[       OK ] SystemCatalogIdRangeTest.AcceptsOnlyPersistedDefinitionIdRanges (0 ms)
+[----------] 1 test from SystemCatalogIdRangeTest (0 ms total)
+
+[----------] 28 tests from RelocatableStorageBackendSchemaTest
+[ RUN      ] RelocatableStorageBackendSchemaTest.RecoversDurableVectorRebuildDebtAfterReopen
+[       OK ] RelocatableStorageBackendSchemaTest.RecoversDurableVectorRebuildDebtAfterReopen (200 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.EnqueuesCommittedVectorRebuildBeforeResumingMaintenance
+[       OK ] RelocatableStorageBackendSchemaTest.EnqueuesCommittedVectorRebuildBeforeResumingMaintenance (164 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RecoversCommittedVectorDebtWhenTheTransientMaintenanceQueueIsFull
+[       OK ] RelocatableStorageBackendSchemaTest.RecoversCommittedVectorDebtWhenTheTransientMaintenanceQueueIsFull (163 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementForwardMappingIsMissingBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementForwardMappingIsMissingBeforeCandidateTraversal (122 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseForwardMappingPointsBackToTheErasedVectorBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseForwardMappingPointsBackToTheErasedVectorBeforeCandidateTraversal (123 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementReverseMappingIsMissingBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementReverseMappingIsMissingBeforeCandidateTraversal (137 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementRawLocationIsMissingBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaTombstoneWhoseReplacementRawLocationIsMissingBeforeCandidateTraversal (149 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaInsertWhoseCurrentForwardMappingNoLongerMatchesBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaInsertWhoseCurrentForwardMappingNoLongerMatchesBeforeCandidateTraversal (125 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsDeltaInsertWhoseCurrentReverseMappingIsMissingOrMismatchedBeforeCandidateTraversal
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsDeltaInsertWhoseCurrentReverseMappingIsMissingOrMismatchedBeforeCandidateTraversal (176 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.FallsBackToExactForATombstonedPqEntryPointButStillValidatesTheCodebookBinding
+[       OK ] RelocatableStorageBackendSchemaTest.FallsBackToExactForATombstonedPqEntryPointButStillValidatesTheCodebookBinding (138 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.FallsBackToExactForATombstonedRawAdjacencyEntryPoint
+[       OK ] RelocatableStorageBackendSchemaTest.FallsBackToExactForATombstonedRawAdjacencyEntryPoint (116 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RawAdjacencySuppressesATombstonedNeighborAndRefinesItsReplacementInsert
+[       OK ] RelocatableStorageBackendSchemaTest.RawAdjacencySuppressesATombstonedNeighborAndRefinesItsReplacementInsert (115 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsCommittedPqDeltaInsertsThatExceedTheExactRefinementBudget
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsCommittedPqDeltaInsertsThatExceedTheExactRefinementBudget (112 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsCommittedRawAdjacencyDeltaInsertsThatExceedTheExactReadBudget
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsCommittedRawAdjacencyDeltaInsertsThatExceedTheExactReadBudget (133 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.TrainsCosineIndexWithoutChangingExactSemanticReads
+[       OK ] RelocatableStorageBackendSchemaTest.TrainsCosineIndexWithoutChangingExactSemanticReads (88 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.EvaluatesPropertiesAndScalarsOverLogicalVectorProcedureRows
+[       OK ] RelocatableStorageBackendSchemaTest.EvaluatesPropertiesAndScalarsOverLogicalVectorProcedureRows (53 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.DistinctVectorProcedureProjectionUsesLogicalStructuralRowKeys
+[       OK ] RelocatableStorageBackendSchemaTest.DistinctVectorProcedureProjectionUsesLogicalStructuralRowKeys (45 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.DistinctVectorProcedureProjectionKeepsTypedValuesDistinct
+[       OK ] RelocatableStorageBackendSchemaTest.DistinctVectorProcedureProjectionKeepsTypedValuesDistinct (44 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorProcedureLazilyLoadsNodePropertiesForScalarProjection
+[       OK ] RelocatableStorageBackendSchemaTest.VectorProcedureLazilyLoadsNodePropertiesForScalarProjection (49 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorProcedureHonorsExistingYieldWherePredicate
+[       OK ] RelocatableStorageBackendSchemaTest.VectorProcedureHonorsExistingYieldWherePredicate (94 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsVectorDdlBeforePublishingAnIncompleteHistoricalIndex
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsVectorDdlBeforePublishingAnIncompleteHistoricalIndex (21 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RequiresConsistentCodebookCacheBoundsAndAllowsExplicitDisable
+[       OK ] RelocatableStorageBackendSchemaTest.RequiresConsistentCodebookCacheBoundsAndAllowsExplicitDisable (7 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsInconsistentVectorDeltaBoundsBeforeOpening
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsInconsistentVectorDeltaBoundsBeforeOpening (9 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsEveryNonFiniteWritableResourceBoundBeforeOpening
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsEveryNonFiniteWritableResourceBoundBeforeOpening (176 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsAStaleRawVectorRecordBeforeScoringIt
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsAStaleRawVectorRecordBeforeScoringIt (52 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsAPersistedZeroNormCosineRawVector
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsAPersistedZeroNormCosineRawVector (52 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.RejectsAnOutOfRangePersistedPqCentroidCode
+[       OK ] RelocatableStorageBackendSchemaTest.RejectsAnOutOfRangePersistedPqCentroidCode (103 ms)
+[ RUN      ] RelocatableStorageBackendSchemaTest.VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle
+[       OK ] RelocatableStorageBackendSchemaTest.VectorRecoveryDoesNotMaterializeUnrelatedWideScalarDefinitionsPerCycle (2525 ms)
+[----------] 28 tests from RelocatableStorageBackendSchemaTest (5305 ms total)
+
+[----------] Global test environment tear-down
+[==========] 192 tests from 8 test suites ran. (15987 ms total)
+[  PASSED  ] 192 tests.

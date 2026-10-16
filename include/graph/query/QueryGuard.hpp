@@ -11,6 +11,7 @@
 #include <functional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #if defined(__GNUC__) || defined(__clang__)
 #define ZYX_LIKELY(x) __builtin_expect(!!(x), 1)
@@ -28,12 +29,20 @@ public:
 
 class QueryMemoryExceededException : public std::runtime_error {
 public:
+    [[nodiscard]] static QueryMemoryExceededException forResourceAdmission(int64_t limitMb) {
+        return QueryMemoryExceededException("Query resource admission denied under configured memory limit of " +
+            std::to_string(limitMb) + "MB (account/database/process budget)");
+    }
+
 	explicit QueryMemoryExceededException(int64_t limitMb, size_t baselineBytes, size_t currentBytes)
 		: std::runtime_error("Query exceeded memory limit of " + std::to_string(limitMb) +
 		                     "MB (query resident growth: " +
 		                     std::to_string((currentBytes - baselineBytes) / (1024 * 1024)) + "MB, baseline RSS: " +
 		                     std::to_string(baselineBytes / (1024 * 1024)) + "MB, current RSS: " +
 		                     std::to_string(currentBytes / (1024 * 1024)) + "MB)") {}
+private:
+    explicit QueryMemoryExceededException(std::string message) : std::runtime_error(std::move(message)) {}
+
 };
 
 class QueryGuard {
