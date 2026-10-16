@@ -3195,6 +3195,8 @@ namespace graph::storage {
 		const LogicalGraphMutationBatch &batch, std::optional<LogicalGraphMutationFence> expectedFence,
 		const LogicalGraphMutationBatch *patchCompanion, std::vector<LogicalGraphPropertyPatchRequest> patches,
 		size_t entryWork, const LogicalGraphMutationReadControl &control) {
+        std::optional<utils::OwnedAllocationScope> writeAllocation;
+        if (memory_owner_) writeAllocation.emplace(memory_owner_);
 		if (control.checkpoint) control.checkpoint();
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
 			throw std::logic_error("logical transaction overlay cannot stage a mutation after transaction completion");

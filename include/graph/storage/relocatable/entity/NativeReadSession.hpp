@@ -692,13 +692,19 @@ namespace graph::storage {
 			// Commit the two cache indexes together. If either allocation fails,
 			// leave the existing FIFO and entries intact instead of retaining a
 			// stale order ID or evicting a useful entry before admission succeeds.
-			const auto [inserted, didInsert] = cache.emplace(id, value);
-			if (!didInsert) return;
 			try {
-				order.push_back(id);
-			} catch (...) {
-				cache.erase(inserted);
-				throw;
+				const auto [inserted, didInsert] = cache.emplace(id, value);
+				if (!didInsert) return;
+				try {
+					order.push_back(id);
+				} catch (...) {
+					cache.erase(inserted);
+					throw;
+				}
+			} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+				// Caching is optional: exhausted credit must not fail the read.
+				// Rollback above also covers a denied FIFO block after map insertion.
+				return;
 			}
 			if (cache.size() > MAXIMUM_CACHED_ENTITY_RECORDS) {
 				cache.erase(order.front());

@@ -247,9 +247,15 @@ public:
  size_t live = 0U;
  size_t allocations = 0U;
  size_t fail_after = (std::numeric_limits<size_t>::max)();
+ bool deny_admission = false;
+ size_t denied_allocations = 0U;
 private:
  void *do_allocate(size_t bytes, size_t alignment) override {
-  if (allocations >= fail_after) throw std::bad_alloc();
+  if (allocations >= fail_after) {
+   ++denied_allocations;
+   if (deny_admission) throw graph::query::execution::detail::ResourceAdmissionDenied();
+   throw std::bad_alloc();
+  }
   void *result = std::pmr::new_delete_resource()->allocate(bytes, alignment);
   ++allocations; live += bytes; return result;
  }
@@ -586,4 +592,51 @@ TEST(NativeReadSessionTokenBudgetTest, CachedConstraintCopiesReleasePrivateQuery
         EXPECT_EQ(session.constraintDefinitions(64U)->front().name, name);
     }
     EXPECT_EQ(cache->used(), 0U);
+}
+
+TEST(NativeReadSessionTokenBudgetTest, OptionalEntityCacheDeclinesAdmissionAndRetriesAcrossFifoGrowth) {
+ for (size_t allocationOffset = 0U; allocationOffset < 3U; ++allocationOffset) {
+  auto memory = std::make_shared<SessionCountingResource>();
+  {
+   NativeReadSession session(memory);
+   memory->deny_admission = true;
+   size_t declined = 0U;
+   size_t partialInsertions = 0U;
+   for (uint64_t id = 1U; id <= 4U * NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS; ++id) {
+    const auto before = memory->allocations;
+    const auto denials = memory->denied_allocations;
+    memory->fail_after = before + allocationOffset;
+    EXPECT_NO_THROW(session.putNodeExists(id, (id % 2U) == 0U));
+    if (memory->denied_allocations != denials) {
+     ++declined;
+     if (memory->allocations > before) ++partialInsertions;
+     EXPECT_FALSE(session.nodeExists(id).has_value());
+     if (id > 1U) EXPECT_EQ(session.nodeExists(id - 1U), ((id - 1U) % 2U) == 0U);
+    }
+    memory->fail_after = (std::numeric_limits<size_t>::max)();
+    session.putNodeExists(id, (id % 2U) == 0U);
+    EXPECT_EQ(session.nodeExists(id), (id % 2U) == 0U);
+    if (id > NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS) {
+     EXPECT_FALSE(session.nodeExists(id - NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS).has_value());
+    }
+   }
+   if (allocationOffset == 0U) EXPECT_GT(declined, 0U);
+   // FIFO growth occurs after the map node has already been inserted.
+   if (allocationOffset == 1U) EXPECT_GT(partialInsertions, 0U);
+  }
+  EXPECT_EQ(memory->live, 0U);
+ }
+}
+
+TEST(NativeReadSessionTokenBudgetTest, OptionalEntityCachePreservesNonAdmissionAllocationFailures) {
+ auto memory = std::make_shared<SessionCountingResource>();
+ NativeReadSession session(memory);
+ session.putNodeExists(1U, true);
+ memory->fail_after = memory->allocations;
+ EXPECT_THROW(session.putNodeExists(2U, false), std::bad_alloc);
+ EXPECT_EQ(session.nodeExists(1U), true);
+ EXPECT_FALSE(session.nodeExists(2U).has_value());
+ memory->fail_after = (std::numeric_limits<size_t>::max)();
+ session.putNodeExists(2U, false);
+ EXPECT_EQ(session.nodeExists(2U), false);
 }

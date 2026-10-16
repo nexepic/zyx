@@ -1,5 +1,5 @@
 {
-  "status": "focused_verified_combined_revalidation_running",
+  "status": "combined_verified_medium_preparation_pending",
   "effective_accepted_progress": "24/34 (70.6%)",
   "negative_control": {
     "tests": 1,
@@ -19,11 +19,33 @@
     "admission": "before publication/ID leasing locks, within existing WRITE/database/process caps",
     "metadata": "explicit caller owns private decoded/copy/cursor buffers; cache publication retains CACHE ownership; private caller denial preserves shared entries"
   },
-  "remaining": "98-module regression, renewed source freeze and bounded medium preparation, then the single final performance window",
+  "remaining": "Release rebuild, bounded medium preparation validation, renewed source freeze, then final performance window",
   "production_source_sha256": {
     "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "4b09b58836f1a1d3ce6186ae2d20610230f8dc3d1a06d327218b6bdd2cc63410",
     "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "cc46588dcd534e02724c6f618e98c2bcef70245d197a4933283fafe4ee970862",
     "src/storage/relocatable/metadata/LocationDirectory.cpp": "fed962a0c74b175a7c0cf496e601bb30d592d381d3d1a1fdb6d211ad1b2a6e18",
-    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "a2fc9f580039b81f5ccadc0853b7d14c13b6501ba8e15885ccfe7d56ae95f5cb"
+    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "a2fc9f580039b81f5ccadc0853b7d14c13b6501ba8e15885ccfe7d56ae95f5cb",
+    "src/storage/LogicalGraphTransactionOverlay.cpp": "9207922cc444a5d9ce61282cd2f8c789439e00ca21ec76e74f35c4d18bd703ec",
+    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "54825fe849da803cbcca1f99c43bb48d4d4c2174c6f7d7e551a948bd598aba22"
+  },
+  "combined_positive": {
+    "modules": 98,
+    "suites": 139,
+    "tests": 2039,
+    "failures": 0,
+    "full_suite": false
+  },
+  "optional_cache": {
+    "negative_tests": 2,
+    "negative_failures": 1,
+    "positive_tests": 26,
+    "positive_failures": 0,
+    "declines_only": "ResourceAdmissionDenied",
+    "fifo_partial_insert_rollback": true,
+    "bad_alloc_propagates": true
+  },
+  "edge_overlay": {
+    "negative_failures": 1,
+    "fix": "install WRITE owner before relationship type resolution in executeStagedBatch"
   }
 }
