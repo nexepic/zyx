@@ -1,9 +1,9 @@
 {
   "stage": "S5.3",
-  "status": "accepted",
-  "tests": 1979,
-  "test_suites": 136,
-  "explicit_affected_modules": 95,
+  "status": "accepted_revalidated",
+  "tests": 2060,
+  "test_suites": 140,
+  "explicit_affected_modules": 99,
   "full_suite": false,
   "new_performance_campaign": false,
   "native_vector_failures_injected": 217,
@@ -22,5 +22,7 @@
   ],
   "prior_spill_fault_evidence": "20261016-s54-resource-fault-acceptance/proof.json",
   "prior_soak_evidence": "20261016-s63-resource-recovery-soak/proof.json",
-  "performance_acceptance": "S5.5 remains pending; this is implementation/resource correctness acceptance"
+  "performance_acceptance": "S5.5 remains pending; this is implementation/resource correctness acceptance",
+  "revalidation_evidence": "../20261016-write-workspace-cache-isolation/proof.json",
+  "medium_preparation": "both control/current untimed preparation timed out after 1800 seconds; no measured samples or full-medium correctness acceptance; S0.3 and S5.5 remain pending"
 }

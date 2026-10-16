@@ -23,11 +23,12 @@
     "S5.2",
     "S5.1",
     "S5.4",
-    "S6.3"
+    "S6.3",
+    "S5.3"
   ],
-  "accepted": 24,
+  "accepted": 25,
   "total": 34,
-  "percent": 70.6,
+  "percent": 73.5,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -55,9 +56,9 @@
       "percent": 75.0
     },
     "S5": {
-      "accepted": 3,
+      "accepted": 4,
       "total": 5,
-      "percent": 60
+      "percent": 80.0
     },
     "S6": {
       "accepted": 1,
@@ -124,7 +125,8 @@
     "completed_ids": [
       "S5.1",
       "S5.4",
-      "S6.3"
+      "S6.3",
+      "S5.3"
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
@@ -141,14 +143,16 @@
       "S0.4",
       "S5.5"
     ],
-    "completed_ids": [],
+    "completed_ids": [
+      "S5.3"
+    ],
     "status": "in_progress",
     "overall_goal_accepted_target": 34,
     "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
     "pending_revalidation_ids": [
-      "S5.3",
       "S6.1"
-    ]
+    ],
+    "completed": 1
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -216,7 +220,7 @@
       ]
     }
   ],
-  "S5.3": "revalidation_in_progress_cache_pressure",
+  "S5.3": "accepted_revalidated",
   "S6.1": "revalidation_required_after_production_fix",
   "last_certified_checkpoint": {
     "accepted": 26,

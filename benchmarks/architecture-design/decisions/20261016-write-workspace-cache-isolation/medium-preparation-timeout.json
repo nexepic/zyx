@@ -1,0 +1,12 @@
+{
+  "status": "untimed_input_preparation_timeout",
+  "seconds": 1800,
+  "engines": [
+    "control",
+    "current"
+  ],
+  "accepted_performance_samples": 0,
+  "error_type": "subprocess.TimeoutExpired",
+  "production_changes": false,
+  "next": "separate 7200-second untimed input preparation limit; measured case limit remains 1800 seconds"
+}

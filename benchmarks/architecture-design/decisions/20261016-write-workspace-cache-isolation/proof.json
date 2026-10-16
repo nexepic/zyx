@@ -1,6 +1,6 @@
 {
-  "status": "final_2060_affected_tests_verified_complete_preparation_pending",
-  "effective_accepted_progress": "24/34 (70.6%)",
+  "status": "accepted_S5.3_implementation_and_resource_correctness_revalidated",
+  "effective_accepted_progress": "25/34 (73.5%)",
   "negative_control": {
     "tests": 1,
     "failed": 1,
@@ -24,7 +24,7 @@
     "concurrent_staging_headroom_bytes": 33554432,
     "workspace_coordination": "same-file fixed registry gate acquired before any resource reservation or metadata publication; waiting writers retain no private COW grant"
   },
-  "remaining": "Release rebuild, bounded medium preparation validation, renewed source freeze, then final performance window",
+  "remaining": "complete untimed prepared inputs; performance S0.3/S0.4/S5.5 pending",
   "production_source_sha256": {
     "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "4b09b58836f1a1d3ce6186ae2d20610230f8dc3d1a06d327218b6bdd2cc63410",
     "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "ed81271cc58eb72caf9c9f3c3cf0e72b484479d2625ac7a5343533a57cd79e57",
@@ -184,5 +184,12 @@
     "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
     "binary_sha256": "f752a31c87ffea713026ed4b572750d3a5be75dcf0a60df7f8e5a99e4138ab82",
     "trace_sha256": "ecb548771c399e2a5e626b31cf89d9e1e14692c423580243554061307cec8de3"
+  },
+  "medium_preparation": {
+    "attempt": 11,
+    "status": "timeout_1800_seconds_both_control_and_current",
+    "quota_failure_observed": false,
+    "accepted_performance_samples": 0,
+    "full_medium_success_claim": false
   }
 }
