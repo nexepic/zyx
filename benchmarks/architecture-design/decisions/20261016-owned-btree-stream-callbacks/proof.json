@@ -1,0 +1,31 @@
+{
+  "status": "component_not_stage_acceptance",
+  "broad_tests": 1762,
+  "final_native_selection": 24,
+  "distinct_broad_and_native_tests": 1764,
+  "resource_revalidation_tests": 170,
+  "fault_cases": 1275,
+  "allocation_paths": 19,
+  "crash_cycles": 32,
+  "failures": 0,
+  "full_suite": false,
+  "performance_campaign": false,
+  "worker_sha256": "690e9d50447c975ffd054543679f8c6a130ebfaaf5152ee1ca4db27e8ac5c683",
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "a3277dd9e89878789a523414d5f82f0570bbe0a8016adb04fe956f1db382a677",
+    "include/graph/utils/OwnedFunction.hpp": "ec7296a228ce158229d134d7801f384a0ab15aec319937935f153faea3912b04",
+    "include/graph/storage/relocatable/index/BTreePageStore.hpp": "a52c131e1b628f96bc56d8da087f05dfb5e3545eb2f776771840d13d0032beda",
+    "tests/src/query/execution/test_OwnedFunction.cpp": "de0921e377bfa1b57db01093c383997570a53d370890c6e05fc7b915f92d5298",
+    "tests/src/storage/relocatable/index/test_BTreeIndexScanCache.cpp": "2161ee4fb31113da5e5c0490ac9e7c9a7838acc1bb3f3ed2d00c8f40c512a2d1"
+  },
+  "evidence_sha256": {
+    "zh.md": "8f97ae372674d0615ba074d463361a2b4a1c5a57d6936a1211145c1a2583ff57",
+    "native-cursor-regression.xml": "bf59e8b4bf1e24b39d5a60c8e5437b224ad62b129bfb6a1643f7550d620539a1",
+    "en.md": "1178307305d6705d958bd3d02003662198aee54c43d56fa488e827bca63d50d0",
+    "zyx-owned-callback-all-faults.json": "43be7ea9df3d023a401af58721e56d7c01db8a090ac2af2276c6fc7323099341",
+    "zyx-owned-callback-native-cursor-regression.log": "54a4f8d3865d4b2f5d1677fb5eeb559ab3e72ed5c4ad13d8490371d355462df7",
+    "resource-regression.log": "45959d13303499adc4193cba2a3ef4e025f448e76b844b1f824cb66fb10a048b",
+    "resource-regression.xml": "f2acbfefd571eec86d851c469164b51b34490bf6f4bda8a9bb694519522c87ba",
+    "zyx-owned-callback-affected-regression.log": "dfbce14d2d3a21689761e8ceb98a48a81fe7b1a3a063682f369c12681167422c"
+  }
+}

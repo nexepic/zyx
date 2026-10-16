@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include "graph/utils/OwnedFunction.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreePage.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -28,8 +29,8 @@ namespace graph::storage {
 
 	// A fresh cursor over a globally ordered logical entry stream. Both the
 	// bottom-up builder and snapshot readers use this storage-neutral contract.
-	using OrderedBTreeEntryCursor = std::function<std::optional<BTreePageEntry>()>;
-	using OrderedBTreeEntrySource = std::function<OrderedBTreeEntryCursor()>;
+	using OrderedBTreeEntryCursor = graph::utils::OwnedFunction<std::optional<BTreePageEntry>()>;
+	using OrderedBTreeEntrySource = graph::utils::OwnedFunction<OrderedBTreeEntryCursor()>;
 
 	// A validated B+Tree page scheduled for snapshot-safe retirement. The
 	// neutral type serves both vector-derived mappings and public scalar trees.
