@@ -2,6 +2,7 @@
 #include "query/execution/ProcessResourceDomains.hpp"
 #include "graph/utils/OwnedPmrAllocator.hpp"
 #include "graph/storage/LogicalGraphTransactionMemoryProvider.hpp"
+#include "graph/storage/LogicalGraphTransactionOverlay.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include <chrono>
@@ -1405,4 +1406,35 @@ TEST_F(RelocatableStorageBackendTest, NativeCowWriteAdmissionRejectsBeforePublic
     const auto created = backend.createLogicalNodes({{{"WritePressure"}, {{"value", PropertyValue(2)}}}});
     EXPECT_EQ(created.size(), 1U); EXPECT_EQ(domain->usage().classes[kind], baseline);
     backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeEdgeOverlayResolvesAnUnseenTypeUnderExhaustedCacheCredit) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend backend(options); backend.open();
+    const auto nodes = backend.createLogicalNodes({{{"Endpoints"}, {}}, {{"Endpoints"}, {}}});
+    ASSERT_EQ(nodes.size(), 2U);
+    const auto domain = backend.queryResourceDomain();
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(domain);
+    std::vector<uint64_t> edges;
+    {
+        auto transaction = backend.beginLogicalGraphTransaction(false);
+        LogicalGraphTransactionOverlay overlay(*transaction);
+        {
+            PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+            ASSERT_EQ(cache->used(), cache->capacity());
+            edges = overlay.createLogicalEdges({{nodes[0], nodes[1], "UnseenPressureType", {{"weight", PropertyValue(7)}}}});
+            const auto committed = transaction->commit();
+            EXPECT_EQ(committed.created_edge_ids, edges);
+            EXPECT_LE(cache->used(), cache->capacity());
+        }
+    }
+    auto snapshot = backend.openLogicalGraphReadSnapshot(); ASSERT_NE(snapshot, nullptr);
+    ASSERT_EQ(edges.size(), 1U);
+    const auto edge = snapshot->readEdge(edges.front());
+    EXPECT_EQ(edge.type, "UnseenPressureType");
+    EXPECT_EQ(edge.source_node_id, nodes[0]); EXPECT_EQ(edge.target_node_id, nodes[1]);
+    EXPECT_EQ(edge.properties.front().value, PropertyValue(7));
+    snapshot.reset(); backend.close();
 }
