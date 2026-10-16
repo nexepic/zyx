@@ -22,11 +22,12 @@
     "S4.3",
     "S5.2",
     "S5.1",
-    "S5.4"
+    "S5.4",
+    "S6.3"
   ],
-  "accepted": 23,
+  "accepted": 24,
   "total": 34,
-  "percent": 67.6,
+  "percent": 70.6,
   "stages": {
     "S0": {
       "accepted": 2,
@@ -59,9 +60,9 @@
       "percent": 60
     },
     "S6": {
-      "accepted": 0,
+      "accepted": 1,
       "total": 4,
-      "percent": 0
+      "percent": 25
     }
   },
   "S3.1": "accepted",
@@ -122,7 +123,8 @@
     "target_accepted": 34,
     "completed_ids": [
       "S5.1",
-      "S5.4"
+      "S5.4",
+      "S6.3"
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
@@ -140,7 +142,8 @@
       "S6.3"
     ],
     "completed_ids": [
-      "S5.4"
+      "S5.4",
+      "S6.3"
     ],
     "status": "in_progress",
     "overall_goal_accepted_target": 34,
@@ -180,8 +183,12 @@
       "20261016-owned-schema-query-results",
       "20261016-ddl-write-workspaces-and-result-lifetimes",
       "20261016-owned-catalog-keys-and-schema-encoding",
-      "20261016-s54-resource-fault-acceptance"
+      "20261016-s54-resource-fault-acceptance",
+      "20261016-owned-btree-stream-callbacks",
+      "20261016-owned-shortest-path-state",
+      "20261016-s63-resource-recovery-soak"
     ]
   },
-  "S5.4": "accepted_resource_fault_matrix"
+  "S5.4": "accepted_resource_fault_matrix",
+  "S6.3": "accepted_bounded_resource_recovery_soak"
 }
