@@ -106,13 +106,13 @@ namespace graph::storage {
 			}
 		}
 
-		void appendU16(std::vector<std::byte> &bytes, uint16_t value) {
+		void appendU16(utils::OwnedStdVector<std::byte> &bytes, uint16_t value) {
 			const size_t offset = bytes.size();
 			bytes.resize(offset + sizeof(value));
 			LittleEndianCodec::writeU16(bytes, offset, value);
 		}
 
-		void appendBytes(std::vector<std::byte> &bytes, std::string_view value) {
+		void appendBytes(utils::OwnedStdVector<std::byte> &bytes, std::string_view value) {
 			if (!value.empty()) {
 				const std::byte *begin = reinterpret_cast<const std::byte *>(value.data());
 				bytes.insert(bytes.end(), begin, begin + static_cast<std::ptrdiff_t>(value.size()));
@@ -132,19 +132,25 @@ namespace graph::storage {
 	} // namespace
 
 	std::vector<std::byte> ConstraintDefinitionCodec::encode(const ConstraintDefinition &definition) {
+        auto bytes = encodeOwned(definition);
+        // The legacy raw output is caller-owned; native private paths use encodeOwned.
+        return std::move(static_cast<std::vector<std::byte> &>(bytes));
+    }
+
+    void ConstraintDefinitionCodec::validate(const ConstraintDefinition &definition) { validateDefinition(definition); }
+
+    utils::OwnedStdVector<std::byte> ConstraintDefinitionCodec::encodeOwned(const ConstraintDefinition &definition) {
 		validateDefinition(definition);
-		std::vector<std::byte> payload;
-		payload.reserve(definition.name.size() + definition.property_names.size() * (sizeof(uint16_t) + 16U));
-		appendBytes(payload, definition.name);
-		for (const std::string &property: definition.property_names) {
-			appendU16(payload, static_cast<uint16_t>(property.size()));
-			appendBytes(payload, property);
-		}
-		if (payload.size() > std::numeric_limits<uint32_t>::max()) {
+        size_t payloadBytes = definition.name.size();
+        for (const auto &property : definition.property_names)
+            payloadBytes = utils::detail::addStandardHeapBytes(payloadBytes, sizeof(uint16_t) + property.size());
+		if (payloadBytes > std::numeric_limits<uint32_t>::max()) {
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 				 "relocatable constraint definition payload exceeds its wire capacity");
 		}
-		std::vector<std::byte> bytes(RSS_CONSTRAINT_DEFINITION_HEADER_BYTES);
+        utils::OwnedStdVector<std::byte> bytes;
+        bytes.reserve(utils::detail::addStandardHeapBytes(RSS_CONSTRAINT_DEFINITION_HEADER_BYTES, payloadBytes));
+        bytes.resize(RSS_CONSTRAINT_DEFINITION_HEADER_BYTES);
 		LittleEndianCodec::writeU32(bytes, 0U, RSS_CONSTRAINT_DEFINITION_MAGIC);
 		LittleEndianCodec::writeU16(bytes, 4U, RSS_CONSTRAINT_DEFINITION_VERSION);
 		LittleEndianCodec::writeU16(bytes, 6U, RSS_CONSTRAINT_DEFINITION_HEADER_BYTES);
@@ -156,9 +162,13 @@ namespace graph::storage {
 		LittleEndianCodec::writeU16(bytes, PROPERTY_COUNT_OFFSET,
 									 static_cast<uint16_t>(definition.property_names.size()));
 		LittleEndianCodec::writeU32(bytes, NAME_BYTES_OFFSET, static_cast<uint32_t>(definition.name.size()));
-		LittleEndianCodec::writeU32(bytes, PAYLOAD_BYTES_OFFSET, static_cast<uint32_t>(payload.size()));
+		LittleEndianCodec::writeU32(bytes, PAYLOAD_BYTES_OFFSET, static_cast<uint32_t>(payloadBytes));
 		LittleEndianCodec::writeU64(bytes, RESERVED_OFFSET, 0U);
-		bytes.insert(bytes.end(), payload.begin(), payload.end());
+        appendBytes(bytes, definition.name);
+        for (const auto &property : definition.property_names) {
+            appendU16(bytes, static_cast<uint16_t>(property.size()));
+            appendBytes(bytes, property);
+        }
 		return bytes;
 	}
 

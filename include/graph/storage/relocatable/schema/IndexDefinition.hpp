@@ -7,6 +7,7 @@
  **/
 
 #pragma once
+#include "graph/utils/OwnedStdVector.hpp"
 #include "graph/utils/OwnedStdString.hpp"
 #include "graph/utils/OwnedStringVector.hpp"
 #include "graph/utils/OwnedStdVector.hpp"
@@ -59,7 +60,9 @@ namespace graph::storage {
 
 	class IndexDefinitionCodec final {
 	public:
+        static void validate(const IndexDefinition &definition);
 		[[nodiscard]] static std::vector<std::byte> encode(const IndexDefinition &definition);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> encodeOwned(const IndexDefinition &definition);
 		[[nodiscard]] static IndexDefinition decode(std::span<const std::byte> bytes);
 	};
 

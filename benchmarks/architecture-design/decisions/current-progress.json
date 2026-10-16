@@ -64,7 +64,7 @@
     }
   },
   "S3.1": "accepted",
-  "commit_push": "resource_checkpoint_pushed_5e45ca3e",
+  "commit_push": "resource_checkpoint_pushed_055a085f",
   "S1.1": "accepted_design",
   "S1.6": "accepted_design",
   "S1.5": "accepted_design",
@@ -174,7 +174,8 @@
       "20261015-owned-btree-arrays-and-cursors",
       "20261016-pre-admitted-string-result-rows",
       "20261016-owned-schema-query-results",
-      "20261016-ddl-write-workspaces-and-result-lifetimes"
+      "20261016-ddl-write-workspaces-and-result-lifetimes",
+      "20261016-owned-catalog-keys-and-schema-encoding"
     ]
   }
 }

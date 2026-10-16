@@ -116,7 +116,7 @@ namespace graph::storage {
 						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							 "streamed type cardinality lost completeness or overflowed");
 					}
-					return BTreePageEntry{SystemCatalogTokenCardinalityCodec::countKey(
+					return BTreePageEntry{SystemCatalogTokenCardinalityCodec::countKeyOwned(
 												  SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, token),
 										  SystemCatalogGraphCardinalityCodec::encodeCount(*current + increment)};
 				};

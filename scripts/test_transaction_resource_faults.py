@@ -29,6 +29,7 @@ def main():
     parser.add_argument("--owned-index-definition-heap-accounting", action="store_true")
     parser.add_argument("--owned-constraint-definition-heap-accounting", action="store_true")
     parser.add_argument("--owned-btree-key-heap-accounting", action="store_true")
+    parser.add_argument("--owned-catalog-key-heap-accounting", action="store_true")
     parser.add_argument("--string-result-admission", action="store_true")
     parser.add_argument("--owned-logical-schema-heap-accounting", action="store_true")
     parser.add_argument("--result-column-copy-admission", action="store_true")
@@ -79,6 +80,8 @@ def main():
             results.append(run("codec-inspection-allocation-free"))
         if args.codec_admitted_heap_accounting:
             results.append(run("codec-admitted-heap-accounting"))
+        if args.owned_catalog_key_heap_accounting:
+            results.append(run("owned-catalog-key-heap-accounting"))
         if args.owned_logical_schema_heap_accounting:
             results.append(run("owned-logical-schema-heap-accounting"))
         if args.string_result_admission:

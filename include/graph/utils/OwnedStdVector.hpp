@@ -30,6 +30,7 @@ class OwnedStdVector final : private OwnedHeapReservation, public std::vector<T>
     using Credit = OwnedHeapReservation;
     using Vector = std::vector<T>;
 public:
+    using OwnedHeapElement = void;
     OwnedStdVector() : Credit(currentOwner(), detail::standardContainerProxyBytes()), Vector() {}
     OwnedStdVector(std::initializer_list<T> source) requires std::is_copy_constructible_v<T> : OwnedStdVector() {
         reserve(source.size());

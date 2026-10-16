@@ -6805,7 +6805,7 @@ namespace graph::storage {
 		NativeGraphCardinalityStatistics totals;
 		NativeReadSession session(snapshot); session.bind(snapshot);
 		const auto addMember = [&](SystemCatalogSchemaTokenKind kind, uint64_t token, uint64_t entity) {
-			auto key = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
+			auto key = SystemCatalogTokenCardinalityCodec::countKeyOwned(kind, token);
 			for (int shift = 56; shift >= 0; shift -= 8) key.push_back(static_cast<std::byte>((entity >> shift) & 0xffU));
 			sorter.add({std::move(key), entity});
 		};
@@ -6838,9 +6838,9 @@ namespace graph::storage {
 			auto cursor = sorted();
 			return [cursor = std::move(cursor), totals, checkpoint, phase = 0U, scanned = size_t{0U},
 					pending = std::optional<BTreePageEntry>{}]() mutable -> std::optional<BTreePageEntry> {
-				if (phase == 0U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+				if (phase == 0U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned(),
 						SystemCatalogGraphCardinalityCodec::encodeCount(totals.node_count)}; }
-				if (phase == 1U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::edgeCountKey(),
+				if (phase == 1U) { ++phase; return BTreePageEntry{SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned(),
 						SystemCatalogGraphCardinalityCodec::encodeCount(totals.edge_count)}; }
 				if (phase == 2U) {
 					if (!pending) pending = cursor();
@@ -6857,9 +6857,9 @@ namespace graph::storage {
 					}
 					++phase;
 				}
-				if (phase == 3U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKey(
+				if (phase == 3U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKeyOwned(
 						SystemCatalogSchemaTokenKind::SCSTK_LABEL), 1U}; }
-				if (phase == 4U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKey(
+				if (phase == 4U) { ++phase; return BTreePageEntry{SystemCatalogTokenCardinalityCodec::completeKeyOwned(
 						SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE), 1U}; }
 				return std::nullopt;
 			};
@@ -6884,7 +6884,7 @@ namespace graph::storage {
 			preserved = [] {
 				return [done = false]() mutable -> std::optional<BTreePageEntry> {
 					if (done) return std::nullopt; done = true;
-					return BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE};
+					return BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKeyOwned(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE};
 				};
 			};
 		}
@@ -7128,7 +7128,7 @@ namespace graph::storage {
 				tokens.push_back(catalogSession.ensurePropertyToken(property));
 			}
 			definition = catalogSession.createIndexDefinition(std::move(definition));
-			static_cast<void>(IndexDefinitionCodec::encode(definition));
+			IndexDefinitionCodec::validate(definition);
 			if (std::ranges::any_of(existing,
 									[&](const IndexDefinition &candidate) {
 										return candidate.name == definition.name ||

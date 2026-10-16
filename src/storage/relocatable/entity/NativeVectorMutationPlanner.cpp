@@ -31,7 +31,7 @@ namespace graph::storage {
 			std::ranges::sort(definitions, {}, &IndexDefinition::index_id);
 			uint64_t previousId = 0U;
 		for (const IndexDefinition &definition: definitions) {
-			static_cast<void>(IndexDefinitionCodec::encode(definition));
+			IndexDefinitionCodec::validate(definition);
 			if (previousId != 0U && definition.index_id == previousId) {
 				fail(FormatError::FERR_INVALID_HEADER,
 						 "native Vector mutation planner requires unique Index definitions");

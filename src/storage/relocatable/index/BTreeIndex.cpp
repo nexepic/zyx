@@ -303,8 +303,9 @@ namespace graph::storage {
 		return position->value_or_child;
 	}
 
-	std::vector<std::optional<uint64_t>> BTreeIndex::findSorted(
-			const MetadataSnapshotPin &snapshot, const std::span<const std::vector<std::byte>> keys) const {
+	template<class Key>
+    utils::OwnedStdVector<std::optional<uint64_t>> BTreeIndex::findSortedKeys(
+            const MetadataSnapshotPin &snapshot, const std::span<const Key> keys) const {
         utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active() ? utils::OwnedAllocationScope::owner()
             : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		for (size_t position = 1U; position < keys.size(); ++position) {
@@ -312,7 +313,7 @@ namespace graph::storage {
 				throwBTreeIndexError(FormatError::FERR_INVALID_HEADER,
 						"relocatable B+Tree exact batch keys must be strictly increasing");
 		}
-		std::vector<std::optional<uint64_t>> result(keys.size());
+		utils::OwnedStdVector<std::optional<uint64_t>> result(keys.size());
 		if (keys.empty()) return result;
 		const auto root = resolveRoot(snapshot);
 		if (!root.has_value()) return result;
@@ -336,6 +337,17 @@ namespace graph::storage {
 		}
 		return result;
 	}
+
+    std::vector<std::optional<uint64_t>> BTreeIndex::findSorted(
+            const MetadataSnapshotPin &snapshot, std::span<const std::vector<std::byte>> keys) const {
+        auto values = findSortedKeys(snapshot, keys);
+        return std::move(static_cast<std::vector<std::optional<uint64_t>> &>(values));
+    }
+
+    utils::OwnedStdVector<std::optional<uint64_t>> BTreeIndex::findSortedOwned(
+            const MetadataSnapshotPin &snapshot, std::span<const utils::OwnedStdVector<std::byte>> keys) const {
+        return findSortedKeys(snapshot, keys);
+    }
 
 	utils::OwnedStdVector<BTreePageEntry> BTreeIndex::scan(const MetadataSnapshotPin &snapshot,
 																 std::optional<std::span<const std::byte>> lowerBound,

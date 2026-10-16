@@ -886,7 +886,7 @@ namespace graph::storage {
 			NativeGraphVectorBootstrapOptions options) {
 		if (options.checkpoint) options.checkpoint();
 		requireActive("stage a Vector Index bootstrap");
-		static_cast<void>(IndexDefinitionCodec::encode(definition));
+		IndexDefinitionCodec::validate(definition);
 		const uint8_t invalidInput = static_cast<uint8_t>(definition.kind != IndexDefinitionKind::IDK_VECTOR) |
 				static_cast<uint8_t>(definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE) |
 				static_cast<uint8_t>(definition.index_id == 0U) | static_cast<uint8_t>(records.empty()) |
@@ -1054,7 +1054,7 @@ namespace graph::storage {
 														std::span<const NativeVectorMutation> mutations,
 														NativeGraphVectorDeltaOptions options) {
 		requireActive("stage a Vector Index delta");
-		static_cast<void>(IndexDefinitionCodec::encode(definition));
+		IndexDefinitionCodec::validate(definition);
 		const uint8_t invalidInput = static_cast<uint8_t>(definition.kind != IndexDefinitionKind::IDK_VECTOR) |
 				static_cast<uint8_t>(definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE) |
 				static_cast<uint8_t>(definition.index_id == 0U) | static_cast<uint8_t>(mutations.empty()) |

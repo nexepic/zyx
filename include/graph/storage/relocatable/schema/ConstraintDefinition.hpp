@@ -7,6 +7,7 @@
  */
 
 #pragma once
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include "graph/utils/OwnedStdString.hpp"
 #include "graph/utils/OwnedStringVector.hpp"
@@ -72,7 +73,9 @@ namespace graph::storage {
 
 	class ConstraintDefinitionCodec final {
 	public:
+        static void validate(const ConstraintDefinition &definition);
 		[[nodiscard]] static std::vector<std::byte> encode(const ConstraintDefinition &definition);
+        [[nodiscard]] static utils::OwnedStdVector<std::byte> encodeOwned(const ConstraintDefinition &definition);
 		[[nodiscard]] static ConstraintDefinition decode(std::span<const std::byte> bytes);
 	};
 

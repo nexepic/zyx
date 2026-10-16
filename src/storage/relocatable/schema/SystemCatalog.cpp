@@ -83,11 +83,15 @@ namespace graph::storage {
 			}
 		}
 
-		void appendByte(std::vector<std::byte> &target, uint8_t value) {
+        [[nodiscard]] bool catalogOwnedHeapAdmission() noexcept {
+            return dynamic_cast<utils::UnmanagedAllocationResource *>(utils::OwnedAllocationScope::owner().get()) != nullptr;
+        }
+
+		void appendByte(utils::OwnedStdVector<std::byte> &target, uint8_t value) {
 			target.push_back(static_cast<std::byte>(value));
 		}
 
-		void appendBigEndianU32(std::vector<std::byte> &target, uint32_t value) {
+		void appendBigEndianU32(utils::OwnedStdVector<std::byte> &target, uint32_t value) {
 			for (uint32_t shift = 24U;; shift -= 8U) {
 				appendByte(target, static_cast<uint8_t>((value >> shift) & UINT32_C(0xFF)));
 				if (shift == 0U) {
@@ -96,7 +100,7 @@ namespace graph::storage {
 			}
 		}
 
-		void appendBigEndianU64(std::vector<std::byte> &target, uint64_t value) {
+		void appendBigEndianU64(utils::OwnedStdVector<std::byte> &target, uint64_t value) {
 			for (uint32_t shift = 56U;; shift -= 8U) {
 				appendByte(target, static_cast<uint8_t>((value >> shift) & UINT64_C(0xFF)));
 				if (shift == 0U) {
@@ -127,45 +131,45 @@ namespace graph::storage {
 			return value;
 		}
 
-		void appendName(std::vector<std::byte> &target, std::string_view name) {
+		void appendName(utils::OwnedStdVector<std::byte> &target, std::string_view name) {
 			for (const char character: name) {
 				appendByte(target, static_cast<uint8_t>(static_cast<unsigned char>(character)));
 			}
 		}
 
-		[[nodiscard]] std::vector<std::byte> bootstrapKey() {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> bootstrapKey() {
 			return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_BOOTSTRAP)};
 		}
 
-		[[nodiscard]] std::vector<std::byte> propertyNameKey(std::string_view name) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> propertyNameKey(std::string_view name) {
 			validateName(name);
-			std::vector<std::byte> key;
+			utils::OwnedStdVector<std::byte> key;
 			key.reserve(1U + name.size());
 			appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_PROPERTY_NAME));
 			appendName(key, name);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> propertyTokenPrefix(uint32_t token) {
-			std::vector<std::byte> key;
+		[[nodiscard]] utils::OwnedStdVector<std::byte> propertyTokenPrefix(uint32_t token) {
+			utils::OwnedStdVector<std::byte> key;
 			key.reserve(1U + sizeof(token));
 			appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_PROPERTY_TOKEN));
 			appendBigEndianU32(key, token);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> propertyTokenKey(uint32_t token, std::string_view name) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> propertyTokenKey(uint32_t token, std::string_view name) {
 			validateName(name);
-			std::vector<std::byte> key = propertyTokenPrefix(token);
+			utils::OwnedStdVector<std::byte> key = propertyTokenPrefix(token);
 			key.reserve(key.size() + name.size());
 			appendName(key, name);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> schemaNameKey(SystemCatalogSchemaTokenKind kind, std::string_view name) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> schemaNameKey(SystemCatalogSchemaTokenKind kind, std::string_view name) {
 			validateSchemaKind(kind);
 			validateName(name);
-			std::vector<std::byte> key;
+			utils::OwnedStdVector<std::byte> key;
 			key.reserve(2U + name.size());
 			appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_SCHEMA_NAME));
 			appendByte(key, static_cast<uint8_t>(kind));
@@ -173,9 +177,9 @@ namespace graph::storage {
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> schemaTokenPrefix(SystemCatalogSchemaTokenKind kind, uint64_t token) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> schemaTokenPrefix(SystemCatalogSchemaTokenKind kind, uint64_t token) {
 			validateSchemaKind(kind);
-			std::vector<std::byte> key;
+			utils::OwnedStdVector<std::byte> key;
 			key.reserve(2U + sizeof(token));
 			appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_SCHEMA_TOKEN));
 			appendByte(key, static_cast<uint8_t>(kind));
@@ -183,16 +187,16 @@ namespace graph::storage {
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token,
+		[[nodiscard]] utils::OwnedStdVector<std::byte> schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token,
 															std::string_view name) {
 			validateName(name);
-			std::vector<std::byte> key = schemaTokenPrefix(kind, token);
+			utils::OwnedStdVector<std::byte> key = schemaTokenPrefix(kind, token);
 			key.reserve(key.size() + name.size());
 			appendName(key, name);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> sequenceKey(SystemCatalogSequenceKind kind) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> sequenceKey(SystemCatalogSequenceKind kind) {
 			return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_SEQUENCE), static_cast<std::byte>(kind)};
 		}
 
@@ -209,22 +213,23 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::vector<std::byte> configurationPrefix(std::string_view name) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> configurationPrefix(std::string_view name) {
 			validateName(name);
-			std::vector<std::byte> key = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+			utils::OwnedStdVector<std::byte> key = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
 			appendBigEndianU32(key, static_cast<uint32_t>(name.size()));
 			appendName(key, name);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> configurationKey(std::string_view name, const PropertyValue &value) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> configurationKey(std::string_view name, const PropertyValue &value) {
 			validateConfigurationValue(value);
-			std::vector<std::byte> key = configurationPrefix(name);
+			utils::OwnedStdVector<std::byte> key = configurationPrefix(name);
+            key.reserve(utils::detail::addStandardHeapBytes(key.size(), CanonicalPropertyValueCodec::encodedSize(value)));
 			CanonicalPropertyValueCodec::append(key, value);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> graphCardinalityKey(SystemCatalogGraphCardinalityKind kind) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> graphCardinalityKey(SystemCatalogGraphCardinalityKind kind) {
 			switch (kind) { // this private helper receives only the two fixed kinds below.
 				case SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT:
 				case SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT:
@@ -252,7 +257,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] NativeConfigurationRecord decodeConfigurationKey(std::span<const std::byte> key) {
-			const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+			const utils::OwnedStdVector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
 			if (key.empty() || key.front() != prefix.front()) { // callers filter this exact prefix.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has an invalid key kind");
 			}
@@ -281,54 +286,62 @@ namespace graph::storage {
 			return id >= RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST && id <= RSS_SYSTEM_CATALOG_CONSTRAINT_ID_LAST;
 		}
 
-		[[nodiscard]] std::vector<std::byte> definitionPrefix(SystemCatalogKeyKind kind) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> definitionPrefix(SystemCatalogKeyKind kind) {
 			return {static_cast<std::byte>(kind)};
 		}
 
 		[[nodiscard]] bool startsWith(std::span<const std::byte> bytes, std::span<const std::byte> prefix);
 
-		[[nodiscard]] std::vector<std::byte> indexDefinitionLowerBound(uint64_t id) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> indexDefinitionLowerBound(uint64_t id) {
 			if (!isIndexDefinitionId(id)) { // callers validate IDs before this private encoder.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition ID is outside its namespace");
 			}
-			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
+			utils::OwnedStdVector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
 			appendBigEndianU64(key, id);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> constraintDefinitionLowerBound(uint64_t id) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> constraintDefinitionLowerBound(uint64_t id) {
 			if (!isConstraintDefinitionId(id)) { // callers validate IDs before this private encoder.
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "System Catalog constraint definition ID is outside its namespace");
 			}
-			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
+			utils::OwnedStdVector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
 			appendBigEndianU64(key, id);
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> indexDefinitionKey(const IndexDefinition &definition) {
-			const std::vector<std::byte> encoded = IndexDefinitionCodec::encode(definition);
-			std::vector<std::byte> key = indexDefinitionLowerBound(definition.index_id);
-			key.insert(key.end(), encoded.begin(), encoded.end());
-			return key;
-		}
+        [[nodiscard]] utils::OwnedStdVector<std::byte> indexDefinitionKey(const IndexDefinition &definition) {
+            const auto encoded = IndexDefinitionCodec::encodeOwned(definition);
+            utils::OwnedStdVector<std::byte> key;
+            key.reserve(utils::detail::addStandardHeapBytes(1U + sizeof(uint64_t), encoded.size()));
+            // The fixed prefix writes borrow a fully admitted, sufficient capacity.
+            appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION));
+            appendBigEndianU64(key, definition.index_id);
+            key.insert(key.end(), encoded.begin(), encoded.end());
+            return key;
+        }
 
-		[[nodiscard]] std::vector<std::byte> constraintDefinitionKey(const ConstraintDefinition &definition) {
-			const std::vector<std::byte> encoded = ConstraintDefinitionCodec::encode(definition);
-			std::vector<std::byte> key = constraintDefinitionLowerBound(definition.constraint_id);
-			key.insert(key.end(), encoded.begin(), encoded.end());
-			return key;
-		}
+        [[nodiscard]] utils::OwnedStdVector<std::byte> constraintDefinitionKey(const ConstraintDefinition &definition) {
+            const auto encoded = ConstraintDefinitionCodec::encodeOwned(definition);
+            utils::OwnedStdVector<std::byte> key;
+            key.reserve(utils::detail::addStandardHeapBytes(1U + sizeof(uint64_t), encoded.size()));
+            // The fixed prefix writes borrow a fully admitted, sufficient capacity.
+            appendByte(key, static_cast<uint8_t>(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION));
+            appendBigEndianU64(key, definition.constraint_id);
+            key.insert(key.end(), encoded.begin(), encoded.end());
+            return key;
+        }
 
-		[[nodiscard]] std::vector<std::byte> namedKey(SystemCatalogKeyKind kind, std::string_view name) {
+		[[nodiscard]] utils::OwnedStdVector<std::byte> namedKey(SystemCatalogKeyKind kind, std::string_view name) {
 			validateName(name);
-			std::vector<std::byte> key = definitionPrefix(kind);
+			utils::OwnedStdVector<std::byte> key = definitionPrefix(kind);
             key.reserve(1U + name.size());
 			appendName(key, name);
 			return key;
 		}
 
-		void appendLengthPrefixedString(std::vector<std::byte> &key, std::string_view value) {
+		void appendLengthPrefixedString(utils::OwnedStdVector<std::byte> &key, std::string_view value) {
 			if (value.empty() || value.size() > std::numeric_limits<uint16_t>::max()) { // codec validates it.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog semantic key contains an invalid string");
 			}
@@ -346,15 +359,9 @@ namespace graph::storage {
             return bytes;
         }
 
-        template<class T> size_t schemaVectorRequest(size_t count) {
-            if (count > (std::numeric_limits<size_t>::max)()/sizeof(T))
-                throw std::overflow_error("schema direction vector request overflowed");
-            return utils::detail::addStandardHeapBytes(utils::detail::standardContainerProxyBytes(),
-                utils::detail::standardAllocatorRequestBytes(count*sizeof(T), alignof(T)));
-        }
 
-		[[nodiscard]] std::vector<std::byte> indexSemanticKey(const IndexDefinition &definition) {
-			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_SEMANTIC);
+		[[nodiscard]] utils::OwnedStdVector<std::byte> indexSemanticKey(const IndexDefinition &definition) {
+			utils::OwnedStdVector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_SEMANTIC);
             key.reserve(indexSemanticKeyBytes(definition));
 			appendByte(key, static_cast<uint8_t>(definition.entity_kind));
 			appendByte(key, static_cast<uint8_t>(definition.kind));
@@ -377,8 +384,8 @@ namespace graph::storage {
 			return key;
 		}
 
-		[[nodiscard]] std::vector<std::byte> constraintSemanticKey(const ConstraintDefinition &definition) {
-			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_SEMANTIC);
+		[[nodiscard]] utils::OwnedStdVector<std::byte> constraintSemanticKey(const ConstraintDefinition &definition) {
+			utils::OwnedStdVector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_SEMANTIC);
 			appendByte(key, static_cast<uint8_t>(definition.entity_kind));
 			appendByte(key, static_cast<uint8_t>(definition.kind));
 			appendBigEndianU64(key, definition.schema_token_id);
@@ -396,7 +403,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] IndexDefinition decodeIndexDefinition(std::span<const std::byte> key) {
-			const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
+			const utils::OwnedStdVector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
 			if (!startsWith(key, prefix)) {
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition entry has an invalid key kind");
 			}
@@ -413,7 +420,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] ConstraintDefinition decodeConstraintDefinition(std::span<const std::byte> key) {
-			const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
+			const utils::OwnedStdVector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
 			if (!startsWith(key, prefix)) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "System Catalog constraint definition entry has an invalid key kind");
@@ -516,31 +523,68 @@ namespace graph::storage {
 
 	} // namespace
 
-	std::vector<std::byte> SystemCatalogTokenKeyCodec::bootstrapKey() { return ::graph::storage::bootstrapKey(); }
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::bootstrapKey() {
+        auto key = bootstrapKeyOwned();
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::bootstrapKeyOwned() { return ::graph::storage::bootstrapKey(); }
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyNameKey(std::string_view name) {
+        auto key = propertyNameKeyOwned(name);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::propertyNameKeyOwned(std::string_view name) {
 		return ::graph::storage::propertyNameKey(name);
 	}
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenKey(uint32_t token, std::string_view name) {
+        auto key = propertyTokenKeyOwned(token, name);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenKeyOwned(uint32_t token, std::string_view name) {
 		return ::graph::storage::propertyTokenKey(token, name);
 	}
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaNameKey(SystemCatalogSchemaTokenKind kind,
+																	 std::string_view name) {
+        auto key = schemaNameKeyOwned(kind, name);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::schemaNameKeyOwned(SystemCatalogSchemaTokenKind kind,
 																	 std::string_view name) {
 		return ::graph::storage::schemaNameKey(kind, name);
 	}
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token,
 																	  std::string_view name) {
+        auto key = schemaTokenKeyOwned(kind, token, name);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenKeyOwned(SystemCatalogSchemaTokenKind kind, uint64_t token,
+																	  std::string_view name) {
 		return ::graph::storage::schemaTokenKey(kind, token, name);
 	}
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenSequenceKey() {
+        auto key = propertyTokenSequenceKeyOwned();
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenSequenceKeyOwned() {
 		return ::graph::storage::sequenceKey(SystemCatalogSequenceKind::SCSK_PROPERTY_TOKEN);
 	}
 
 	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenSequenceKey() {
+        auto key = schemaTokenSequenceKeyOwned();
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenSequenceKeyOwned() {
 		return ::graph::storage::sequenceKey(SystemCatalogSequenceKind::SCSK_SCHEMA_TOKEN);
 	}
 
@@ -551,10 +595,20 @@ namespace graph::storage {
 	}
 
 	std::vector<std::byte> SystemCatalogGraphCardinalityCodec::nodeCountKey() {
+        auto key = nodeCountKeyOwned();
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned() {
 		return ::graph::storage::graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT);
 	}
 
 	std::vector<std::byte> SystemCatalogGraphCardinalityCodec::edgeCountKey() {
+        auto key = edgeCountKeyOwned();
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned() {
 		return ::graph::storage::graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT);
 	}
 
@@ -568,17 +622,28 @@ namespace graph::storage {
 
 	std::vector<std::byte> SystemCatalogTokenCardinalityCodec::countKey(SystemCatalogSchemaTokenKind kind,
 			uint64_t token) {
+        auto key = countKeyOwned(kind, token);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenCardinalityCodec::countKeyOwned(SystemCatalogSchemaTokenKind kind,
+			uint64_t token) {
 		SystemCatalogTokenKeyCodec::validateSchemaKind(kind);
 		if (token == 0U && kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL) {
 			fail(FormatError::FERR_INVALID_HEADER, "label cardinality requires a nonzero Token");
 		}
-		std::vector<std::byte> key{static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY),
+		utils::OwnedStdVector<std::byte> key{static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY),
 			kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL ? std::byte{3U} : std::byte{4U}};
 		appendBigEndianU64(key, token);
 		return key;
 	}
 
 	std::vector<std::byte> SystemCatalogTokenCardinalityCodec::completeKey(SystemCatalogSchemaTokenKind kind) {
+        auto key = completeKeyOwned(kind);
+        return std::move(static_cast<std::vector<std::byte> &>(key));
+    }
+
+    utils::OwnedStdVector<std::byte> SystemCatalogTokenCardinalityCodec::completeKeyOwned(SystemCatalogSchemaTokenKind kind) {
 		SystemCatalogTokenKeyCodec::validateSchemaKind(kind);
 		return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY), kind == SystemCatalogSchemaTokenKind::SCSTK_LABEL ? std::byte{5U} : std::byte{6U}};
 	}
@@ -615,7 +680,7 @@ namespace graph::storage {
 		staged_configurations_(std::move(other.staged_configurations_)),
 		staged_graph_statistics_(std::move(other.staged_graph_statistics_)) {}
 
-	void SystemCatalogWriteSession::stageUpsert(std::vector<std::byte> key, uint64_t value) {
+	void SystemCatalogWriteSession::stageUpsert(utils::OwnedStdVector<std::byte> key, uint64_t value) {
         utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
@@ -628,7 +693,7 @@ namespace graph::storage {
 		transaction_->stageScalarIndexUpsert(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID, key, value);
 	}
 
-	void SystemCatalogWriteSession::stageErase(const std::vector<std::byte> &key) {
+	void SystemCatalogWriteSession::stageErase(const utils::OwnedStdVector<std::byte> &key) {
         utils::OwnedAllocationScope allocation(allocationOwner());
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
@@ -762,7 +827,7 @@ namespace graph::storage {
 		// Validate and reject duplicate definitions before staging a durable sequence
 		// advance. A caller may recover from validation failure and commit other work.
 		definition.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST;
-		static_cast<void>(IndexDefinitionCodec::encode(definition));
+		IndexDefinitionCodec::validate(definition);
 		if (std::ranges::any_of(staged_index_definitions_, [&](const auto &entry) {
 				return entry.second.name == definition.name ||
 					   indexSemanticKey(entry.second) == indexSemanticKey(definition);
@@ -796,7 +861,7 @@ namespace graph::storage {
 		// As with Index definitions, leave the transaction overlay untouched until
 		// validation and duplicate checks have succeeded.
 		definition.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST;
-		static_cast<void>(ConstraintDefinitionCodec::encode(definition));
+		ConstraintDefinitionCodec::validate(definition);
 		if (std::ranges::any_of(staged_constraint_definitions_, [&](const auto &entry) {
 				return entry.second.name == definition.name ||
 					   constraintSemanticKey(entry.second) == constraintSemanticKey(definition);
@@ -843,9 +908,9 @@ namespace graph::storage {
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
-		stageUpsert(SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+		stageUpsert(SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned(),
 					SystemCatalogGraphCardinalityCodec::encodeCount(statistics.node_count));
-		stageUpsert(SystemCatalogGraphCardinalityCodec::edgeCountKey(),
+		stageUpsert(SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned(),
 					SystemCatalogGraphCardinalityCodec::encodeCount(statistics.edge_count));
 		staged_graph_statistics_ = statistics;
 	}
@@ -856,7 +921,7 @@ namespace graph::storage {
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
-		stageUpsert(SystemCatalogTokenCardinalityCodec::countKey(kind, token),
+		stageUpsert(SystemCatalogTokenCardinalityCodec::countKeyOwned(kind, token),
 				SystemCatalogGraphCardinalityCodec::encodeCount(count));
 	}
 
@@ -865,7 +930,7 @@ namespace graph::storage {
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
 			throw std::logic_error("System Catalog write session is not active");
 		}
-		stageUpsert(SystemCatalogTokenCardinalityCodec::completeKey(kind), 1U);
+		stageUpsert(SystemCatalogTokenCardinalityCodec::completeKeyOwned(kind), 1U);
 	}
 
 	void SystemCatalogWriteSession::dropIndexDefinition(const IndexDefinition &definition) {
@@ -935,6 +1000,8 @@ namespace graph::storage {
 
 	std::optional<uint32_t> SystemCatalog::findPropertyToken(const MetadataSnapshotPin &snapshot,
 															 std::string_view name) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		validateName(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
@@ -959,16 +1026,18 @@ namespace graph::storage {
 
 	std::optional<NativeGraphCardinalityStatistics>
 	SystemCatalog::readGraphCardinalityStatistics(const MetadataSnapshotPin &snapshot) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
 		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
 		// Persisted namespaces put bootstrap before the ordered Node/Edge keys.
 		// Exact sorted probes reuse authenticated pages without scanning gaps.
-		const std::vector<std::vector<std::byte>> keys{
-			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKey(),
-			SystemCatalogGraphCardinalityCodec::edgeCountKey()};
-		const auto values = index.findSorted(snapshot, keys);
+		const utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{
+			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned(),
+			SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned()};
+		const auto values = index.findSortedOwned(snapshot, keys);
 		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE) {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		}
@@ -986,7 +1055,9 @@ namespace graph::storage {
 
 	bool SystemCatalog::hasCompleteTokenCardinality(const MetadataSnapshotPin &snapshot,
 			SystemCatalogSchemaTokenKind kind) const {
-		const auto key = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		const auto key = SystemCatalogTokenCardinalityCodec::completeKeyOwned(kind);
 		if (!hasRoot(*this, snapshot)) return false;
 		verifyBootstrap(*this, snapshot);
 		const auto complete = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
@@ -997,13 +1068,15 @@ namespace graph::storage {
 
 	std::optional<uint64_t> SystemCatalog::readTokenCardinality(const MetadataSnapshotPin &snapshot,
 			SystemCatalogSchemaTokenKind kind, uint64_t token) const {
-		const auto key = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
-		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		const auto key = SystemCatalogTokenCardinalityCodec::countKeyOwned(kind, token);
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKeyOwned(kind);
 		if (!hasRoot(*this, snapshot)) return std::nullopt;
 		// The count namespace precedes its completeness marker in the persisted
 		// codec. Read all three exact keys through one authenticated tree probe.
-		const std::vector<std::vector<std::byte>> keys{bootstrapKey(), key, completeKey};
-		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		const utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{bootstrapKey(), key, completeKey};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSortedOwned(snapshot, keys);
 		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		if (!values[2]) return std::nullopt;
@@ -1015,17 +1088,19 @@ namespace graph::storage {
 	std::vector<std::optional<uint64_t>> SystemCatalog::readTokenCardinalities(
 		const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
 		std::span<const uint64_t> tokens) const {
-		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
-		std::vector<std::vector<std::byte>> keys{bootstrapKey()};
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKeyOwned(kind);
+		utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{bootstrapKey()};
 		for (size_t i = 0U; i < tokens.size(); ++i) {
 			if (i && tokens[i - 1U] >= tokens[i])
 				fail(FormatError::FERR_INVALID_STATE, "token count batch requires strictly increasing tokens");
-			keys.push_back(SystemCatalogTokenCardinalityCodec::countKey(kind, tokens[i]));
+			keys.push_back(SystemCatalogTokenCardinalityCodec::countKeyOwned(kind, tokens[i]));
 		}
 		keys.push_back(completeKey);
-		std::vector<std::optional<uint64_t>> result(tokens.size());
+		utils::OwnedStdVector<std::optional<uint64_t>> result(tokens.size());
 		if (tokens.empty() || !hasRoot(*this, snapshot)) return result;
-		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSortedOwned(snapshot, keys);
 		if (!values.front() || *values.front() != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		if (!values.back()) return result;
@@ -1039,16 +1114,18 @@ namespace graph::storage {
 	std::optional<std::pair<NativeGraphCardinalityStatistics, uint64_t>>
 	SystemCatalog::readTokenCardinalityEstimate(const MetadataSnapshotPin &snapshot,
 			SystemCatalogSchemaTokenKind kind, uint64_t token) const {
-		const auto countKey = SystemCatalogTokenCardinalityCodec::countKey(kind, token);
-		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKey(kind);
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		const auto countKey = SystemCatalogTokenCardinalityCodec::countKeyOwned(kind, token);
+		const auto completeKey = SystemCatalogTokenCardinalityCodec::completeKeyOwned(kind);
 		if (!hasRoot(*this, snapshot)) return std::nullopt;
 		// These five persisted keys are ordered by namespace. Reuse one
 		// authenticated exact probe rather than decoding the same leaf for
 		// each statistic; completeness still gates interpretation of counts.
-		const std::vector<std::vector<std::byte>> keys{
-			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKey(),
-			SystemCatalogGraphCardinalityCodec::edgeCountKey(), countKey, completeKey};
-		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		const utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{
+			bootstrapKey(), SystemCatalogGraphCardinalityCodec::nodeCountKeyOwned(),
+			SystemCatalogGraphCardinalityCodec::edgeCountKeyOwned(), countKey, completeKey};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSortedOwned(snapshot, keys);
 		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		if (!values[4]) return std::nullopt;
@@ -1065,6 +1142,8 @@ namespace graph::storage {
 
 	std::optional<std::string> SystemCatalog::findPropertyName(const MetadataSnapshotPin &snapshot,
 															   uint32_t token, const std::function<void(size_t)> &nameAdmission) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		if (token == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog Property-key lookup requires a nonzero Token");
 		}
@@ -1072,7 +1151,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		if (!nameAdmission) detail::admitScopedPropertyVectorStorage<std::byte>(1U + sizeof(token));
+		if (!nameAdmission && !catalogOwnedHeapAdmission()) detail::admitScopedPropertyVectorStorage<std::byte>(1U + sizeof(token));
         auto name = findReverseName(*this, snapshot, propertyTokenPrefix(token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
@@ -1083,10 +1162,10 @@ namespace graph::storage {
 				name->size() > std::numeric_limits<size_t>::max() - name->capacity() - 1U) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property name admission size overflowed");
 			}
-			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 1U);
-            else detail::admitScopedPropertyVectorStorage<std::byte>(1U + name->size());
+			if (nameAdmission) nameAdmission(name->capacity() + (catalogOwnedHeapAdmission() ? 0U : name->size() + 1U));
+            else if (!catalogOwnedHeapAdmission()) detail::admitScopedPropertyVectorStorage<std::byte>(1U + name->size());
 			const auto key = propertyNameKey(*name);
-			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
+			if (nameAdmission) nameAdmission(name->capacity() + (key.hasHeapAdmission() ? 0U : key.capacity()));
 			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
 		}
 		if (nameAdmission) nameAdmission(name->capacity());
@@ -1100,13 +1179,15 @@ namespace graph::storage {
 	std::optional<uint64_t> SystemCatalog::findSchemaToken(const MetadataSnapshotPin &snapshot,
 														   SystemCatalogSchemaTokenKind kind,
 														   std::string_view name) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		validateSchemaKind(kind);
 		validateName(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
-		const std::vector<std::vector<std::byte>> keys{bootstrapKey(), schemaNameKey(kind, name)};
-		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		const utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{bootstrapKey(), schemaNameKey(kind, name)};
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSortedOwned(snapshot, keys);
 		if (!values[0] || *values[0] != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		const auto &value = values[1];
@@ -1130,17 +1211,19 @@ namespace graph::storage {
 	std::vector<std::optional<uint64_t>> SystemCatalog::findSchemaTokens(
 		const MetadataSnapshotPin &snapshot, SystemCatalogSchemaTokenKind kind,
 		std::span<const std::string> names) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		validateSchemaKind(kind);
-		std::vector<std::vector<std::byte>> keys{bootstrapKey()};
+		utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys{bootstrapKey()};
 		for (const auto &name : names) {
 			auto key = schemaNameKey(kind, name);
 			if (!std::lexicographical_compare(keys.back().begin(), keys.back().end(), key.begin(), key.end()))
 				fail(FormatError::FERR_INVALID_STATE, "schema name batch requires strictly increasing keys");
 			keys.push_back(std::move(key));
 		}
-		std::vector<std::optional<uint64_t>> result(names.size());
+		utils::OwnedStdVector<std::optional<uint64_t>> result(names.size());
 		if (names.empty() || !hasRoot(*this, snapshot)) return result;
-		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSorted(snapshot, keys);
+		const auto values = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).findSortedOwned(snapshot, keys);
 		if (!values.front() || *values.front() != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE)
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 		for (size_t i = 0U; i < names.size(); ++i) {
@@ -1159,6 +1242,8 @@ namespace graph::storage {
 	std::optional<SystemCatalogSchemaToken> SystemCatalog::findSchemaToken(const MetadataSnapshotPin &snapshot,
 																		   SystemCatalogSchemaTokenKind kind,
 																		   uint64_t token, const std::function<void(size_t)> &nameAdmission) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		validateSchemaKind(kind);
 		if (token == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog schema lookup requires a nonzero Token");
@@ -1167,7 +1252,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		if (!nameAdmission) detail::admitScopedPropertyVectorStorage<std::byte>(2U + sizeof(token));
+		if (!nameAdmission && !catalogOwnedHeapAdmission()) detail::admitScopedPropertyVectorStorage<std::byte>(2U + sizeof(token));
         auto name = findReverseName(*this, snapshot, schemaTokenPrefix(kind, token), token, nameAdmission);
 		if (!name.has_value()) {
 			return std::nullopt;
@@ -1178,10 +1263,10 @@ namespace graph::storage {
 				name->size() > std::numeric_limits<size_t>::max() - name->capacity() - 2U) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "schema name admission size overflowed");
 			}
-			if (nameAdmission) nameAdmission(name->capacity() + name->size() + 2U);
-            else detail::admitScopedPropertyVectorStorage<std::byte>(2U + name->size());
+			if (nameAdmission) nameAdmission(name->capacity() + (catalogOwnedHeapAdmission() ? 0U : name->size() + 2U));
+            else if (!catalogOwnedHeapAdmission()) detail::admitScopedPropertyVectorStorage<std::byte>(2U + name->size());
 			const auto key = schemaNameKey(kind, *name);
-			if (nameAdmission) nameAdmission(name->capacity() + key.capacity());
+			if (nameAdmission) nameAdmission(name->capacity() + (key.hasHeapAdmission() ? 0U : key.capacity()));
 			forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
 		}
 		if (nameAdmission) nameAdmission(name->capacity());
@@ -1199,15 +1284,9 @@ namespace graph::storage {
         if (token == 0U) fail(FormatError::FERR_INVALID_HEADER, "System Catalog schema lookup requires a nonzero Token");
         if (!hasRoot(*this, snapshot)) return std::nullopt;
         verifyBootstrap(*this, snapshot);
-        utils::OwnedHeapReservation prefixCredit(utils::OwnedAllocationScope::owner(),
-            utils::detail::addStandardHeapBytes(2U * utils::detail::standardContainerProxyBytes(), 2U + sizeof(token)));
         const auto prefix = schemaTokenPrefix(kind, token);
         auto name = findReverseName<utils::OwnedStdString>(*this, snapshot, prefix, token);
         if (!name) return std::nullopt;
-        const size_t keyUpper = utils::detail::addStandardHeapBytes(2U, name->size());
-        utils::OwnedHeapReservation keyCredit(utils::OwnedAllocationScope::owner(), utils::detail::addStandardHeapBytes(
-            2U * utils::detail::standardContainerProxyBytes(),
-            utils::detail::standardAllocatorRequestBytes(keyUpper, alignof(std::byte))));
         const auto key = schemaNameKey(kind, *name);
         const auto forward = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
         if (!forward || *forward != token)
@@ -1225,7 +1304,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<std::byte> lower = indexDefinitionLowerBound(indexId);
+		const utils::OwnedStdVector<std::byte> lower = indexDefinitionLowerBound(indexId);
 		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, lower, 2U);
 		if (entries.empty() || !startsWith(entries.front().key, lower)) {
@@ -1287,8 +1366,8 @@ namespace graph::storage {
 		probe.vector_dimensions = vectorDimensions;
 		probe.vector_metric = vectorMetric;
 		probe.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST;
-		static_cast<void>(IndexDefinitionCodec::encode(probe));
-		const std::vector<std::byte> key = indexSemanticKey(probe);
+		IndexDefinitionCodec::validate(probe);
+		const utils::OwnedStdVector<std::byte> key = indexSemanticKey(probe);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
@@ -1316,7 +1395,7 @@ namespace graph::storage {
 			return {};
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
+		const utils::OwnedStdVector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
 		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
         // Keep only the cursor's leaf/route and one encoded definition; the
         // validated typed output owns its own backing and strings.
@@ -1347,27 +1426,16 @@ namespace graph::storage {
         // Validate every direction in bounded batches. Duplicate directions in
         // different batches still fail: one canonical key cannot map to two
         // distinct strictly increasing definition IDs.
-        using Direction = std::pair<std::vector<std::byte>, uint64_t>;
+        struct Direction {
+            using OwnedHeapElement = void;
+            utils::OwnedStdVector<std::byte> first;
+            uint64_t second;
+        };
         constexpr size_t definitionsPerBatch = 64U;
         for (size_t first = 0U; first < result.size();) {
             const auto count = (std::min)(definitionsPerBatch, result.size() - first);
             const auto directionsCount = 2U*count;
-            auto upper = utils::detail::addStandardHeapBytes(schemaVectorRequest<Direction>(directionsCount),
-                utils::detail::addStandardHeapBytes(schemaVectorRequest<std::vector<std::byte>>(directionsCount),
-                    schemaVectorRequest<std::optional<uint64_t>>(directionsCount)));
-            for (size_t offset = 0U; offset < count; ++offset) {
-                const auto &definition = result[first + offset];
-                validateName(definition.name);
-                upper = utils::detail::addStandardHeapBytes(upper,
-                    utils::detail::addStandardHeapBytes(schemaVectorRequest<std::byte>(1U + definition.name.size()),
-                        schemaVectorRequest<std::byte>(indexSemanticKeyBytes(definition))));
-                // Prefix buffers overlap their exact replacement briefly;
-                // moves/sorting retain empty debug STL proxies as well.
-                upper = utils::detail::addStandardHeapBytes(upper,
-                    2U*schemaVectorRequest<std::byte>(1U) + 8U*utils::detail::standardContainerProxyBytes());
-            }
-            utils::OwnedHeapReservation directionCredit(utils::OwnedAllocationScope::owner(), upper);
-            std::vector<Direction> directions;
+            utils::OwnedStdVector<Direction> directions;
             directions.reserve(directionsCount);
             for (size_t offset = 0U; offset < count; ++offset) {
                 const auto &definition = result[first + offset];
@@ -1377,14 +1445,14 @@ namespace graph::storage {
             std::ranges::sort(directions, [](const auto &left, const auto &right) {
                 return std::lexicographical_compare(left.first.begin(), left.first.end(), right.first.begin(), right.first.end());
             });
-            std::vector<std::vector<std::byte>> keys;
+            utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys;
             keys.reserve(directions.size());
             for (auto &direction : directions) {
                 if (!keys.empty() && keys.back() == direction.first)
                     fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions are duplicated");
                 keys.push_back(std::move(direction.first));
             }
-            const auto values = index.findSorted(snapshot, keys);
+            const auto values = index.findSortedOwned(snapshot, keys);
             for (size_t position = 0U; position < values.size(); ++position)
                 if (!values[position] || *values[position] != directions[position].second)
                     fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions do not agree");
@@ -1403,7 +1471,7 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<std::byte> lower = constraintDefinitionLowerBound(constraintId);
+		const utils::OwnedStdVector<std::byte> lower = constraintDefinitionLowerBound(constraintId);
 		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, lower, 2U);
 		if (entries.empty() || !startsWith(entries.front().key, lower)) {
@@ -1464,8 +1532,8 @@ namespace graph::storage {
         for (const auto &name : propertyNames) probe.property_names.emplace_back(name);
 		probe.property_type = propertyType;
 		probe.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST;
-		static_cast<void>(ConstraintDefinitionCodec::encode(probe));
-		const std::vector<std::byte> key = constraintSemanticKey(probe);
+		ConstraintDefinitionCodec::validate(probe);
+		const utils::OwnedStdVector<std::byte> key = constraintSemanticKey(probe);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
@@ -1494,7 +1562,7 @@ namespace graph::storage {
 			return {};
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
+		const utils::OwnedStdVector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
         const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
         utils::OwnedHeapReservation boundaryCredit(utils::OwnedAllocationScope::owner());
         auto cursor = index.openRangeCursor(snapshot, prefix, maximumDefinitions + 1U);
@@ -1523,7 +1591,9 @@ namespace graph::storage {
 
 	std::optional<PropertyValue> SystemCatalog::findConfiguration(const MetadataSnapshotPin &snapshot,
 																  std::string_view name) const {
-		const std::vector<std::byte> prefix = configurationPrefix(name);
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
+		const utils::OwnedStdVector<std::byte> prefix = configurationPrefix(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
 		}
@@ -1548,6 +1618,8 @@ namespace graph::storage {
 
 	std::vector<NativeConfigurationRecord> SystemCatalog::readConfigurations(const MetadataSnapshotPin &snapshot,
 																			 size_t maximumRecords) const {
+        utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()
+            ? utils::OwnedAllocationScope::owner() : (snapshot.readContext() ? snapshot.readContext()->memoryOwner() : nullptr));
 		if (maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "System Catalog configuration read requires a finite positive bound");
@@ -1556,7 +1628,7 @@ namespace graph::storage {
 			return {};
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+		const utils::OwnedStdVector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
 		const utils::OwnedStdVector<BTreePageEntry> entries =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, prefix, maximumRecords + 1U);
 		std::set<std::string, std::less<>> names;
