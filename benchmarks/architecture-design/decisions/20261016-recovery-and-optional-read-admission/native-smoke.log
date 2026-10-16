@@ -1,0 +1,16 @@
+{"event": "family_correctness", "family": "point", "wall_seconds": 0.04558418900705874, "completed": 1, "total": 13}
+{"event": "family_correctness", "family": "scan", "wall_seconds": 0.0065184260020032525, "completed": 2, "total": 13}
+{"event": "family_correctness", "family": "traversal", "wall_seconds": 0.03730771300615743, "completed": 3, "total": 13}
+{"event": "family_correctness", "family": "aggregate", "wall_seconds": 0.015788527991389856, "completed": 4, "total": 13}
+{"event": "family_correctness", "family": "sort", "wall_seconds": 0.01543378600035794, "completed": 5, "total": 13}
+{"event": "family_correctness", "family": "parameters", "wall_seconds": 0.7322870920179412, "completed": 6, "total": 13}
+{"event": "family_correctness", "family": "dynamic", "wall_seconds": 0.7339220860158093, "completed": 7, "total": 13}
+{"event": "family_correctness", "family": "wide_large", "wall_seconds": 0.7821681500063278, "completed": 8, "total": 13}
+{"event": "family_correctness", "family": "write", "wall_seconds": 6.616989030997502, "completed": 9, "total": 13}
+{"event": "family_correctness", "family": "mixed", "wall_seconds": 1.066064288985217, "completed": 10, "total": 13}
+{"event": "family_correctness", "family": "snapshot", "wall_seconds": 0.4325895319925621, "completed": 11, "total": 13}
+{"event": "family_correctness", "family": "maintenance", "wall_seconds": 3.6087798539956566, "completed": 12, "total": 13}
+{"event": "family_correctness", "family": "budget", "wall_seconds": 0.2005993789935019, "completed": 13, "total": 13}
+{"engine": "zyx-native", "profile": "smoke", "seed": 42, "families": ["point", "scan", "traversal", "aggregate", "sort", "parameters", "dynamic", "wide_large", "write", "mixed", "snapshot", "maintenance", "budget"], "isolated_family": null, "operations": 886, "full_results_checked": true, "performance_timing": false, "unsupported_variants": [], "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios", "maintenance_windows": [{"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 519819264, "write_bytes": 2798912}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133005312, "write_bytes": 762240}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133005312, "write_bytes": 762304}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133005312, "write_bytes": 762240}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133005312, "write_bytes": 762304}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133218304, "write_bytes": 787072}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133349376, "write_bytes": 778752}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133345280, "write_bytes": 778752}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133349376, "write_bytes": 778816}, {"file_bytes": 8519680, "rss_bytes": 39268352, "read_bytes": 133345280, "write_bytes": 778752}], "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred", "binary_sha256": "6f62b53e39d0d1678ae297fc76eb175f7051d84cb181b3cccad1d8b9dff10287", "trace_sha256": "fb01a4c70b07a4942e954fd0f9b3972f81abf911c50f879d1e05afa8040116ee"}
+{'ok': True, 'retries': 349, 'clients': 4, 'operations': 4000}
+{'ok': True}

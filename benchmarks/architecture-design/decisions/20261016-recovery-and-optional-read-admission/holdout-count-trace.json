@@ -1,0 +1,146 @@
+[
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:User) RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        73000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "a6e2da28e180e60842fd3fac4b24a41dc7936bf2f9df063d32d44fa46b40b8e8",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:Post) RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        87000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "ba82199ad7da1bc9cc5adbeba93d9c10411b54181e49a60d716f4267d45af413",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:Tag) RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        3000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "844ede71c70911598ded7144ea3a4bca7101daf4cf206bbb3b1af72f0eaa647b",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH ()-[r:FOLLOWS]->() RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        511000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "b8ed75a5413caa56eee65aa66436cbf6f54041c04a3f46911886398650166193",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH ()-[r:AUTHORED]->() RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        87000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "ba82199ad7da1bc9cc5adbeba93d9c10411b54181e49a60d716f4267d45af413",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH ()-[r:HAS_TAG]->() RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        174000
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "f30af60bb3faa3bde60e58f2df3c4ab9dc8267f5bb95e82c12c82a193a5348d0",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "SHOW INDEXES"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "c40f4b68b2d13834140a086793f9f53b2f6f7b708031f259b5eee3cb27796e8b",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "QUERY",
+      "MATCH (n:User) WHERE n.country = 'CN' RETURN count(*) AS count"
+    ],
+    "expected": [
+      [
+        9125
+      ]
+    ],
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "cc8e11c20364a1781f1e395a36ea0d433d97b9b9b133092d4fbb8134a1760e6b",
+    "observed_rows": 1,
+    "ok": true,
+    "error": null
+  },
+  {
+    "command": [
+      "STATS"
+    ],
+    "expected": null,
+    "ordered": false,
+    "expected_error_contains": null,
+    "response_sha256": "7952e241926a4a8f2c34c7bb311b17c4f0f8456d60db19bb3f20e0a4c834a37d",
+    "observed_rows": 0,
+    "ok": true,
+    "error": null
+  }
+]

@@ -2916,6 +2916,9 @@ namespace graph::storage {
 			metadata_ = std::move(metadata);
 			physical_ = std::make_unique<PhysicalSegmentAllocator>(data_file_->io(), *metadata_);
 			if (writable) {
+                // Orphan discovery/reclamation is startup maintenance; its
+                // transient catalog decoding must not borrow exhausted CACHE.
+                utils::OwnedAllocationScope recoveryScratch(controlMemory);
 				// A live session's scratch has no graph route by design, so recovering it
 				// without the session lease would incorrectly treat durable live work as
 				// an orphan. A later writable reopen performs recovery after its holder
@@ -6657,12 +6660,18 @@ namespace graph::storage {
 
 	std::optional<PropertyValue> RelocatableStorageBackend::findConfiguration(std::string_view name) const {
 		requireOpen();
+        std::optional<utils::OwnedAllocationScope> privateRead;
+        if (!utils::OwnedAllocationScope::active())
+            privateRead.emplace(query::execution::detail::ProcessResourceDomains::defaultOwner()->controlGrant(resource_domain_));
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		return system_catalog_->findConfiguration(snapshot, name);
 	}
 
 	std::vector<LogicalGraphConfiguration> RelocatableStorageBackend::readConfigurations(size_t maximumRecords) const {
 		requireOpen();
+        std::optional<utils::OwnedAllocationScope> privateRead;
+        if (!utils::OwnedAllocationScope::active())
+            privateRead.emplace(query::execution::detail::ProcessResourceDomains::defaultOwner()->controlGrant(resource_domain_));
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		const std::vector<NativeConfigurationRecord> records =
 				system_catalog_->readConfigurations(snapshot, maximumRecords);

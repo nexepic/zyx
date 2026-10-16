@@ -1,0 +1,170 @@
+[0/2] Re-checking globbed directories...
+-- GLOB mismatch!
+-- GLOB mismatch!
+-- GLOB mismatch!
+[1/2] Re-running CMake...
+-- Configuring done (1.0s)
+CMake Warning at CMakeLists.txt:124 (add_library):
+  Cannot generate a safe runtime search path for target zyx because files in
+  some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:145 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_cli because files
+  in some directories may conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:149 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:154 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_compare_bench
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:158 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_workload_contract_worker because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:162 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_vector_calibrate
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:169 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_vector_build_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:176 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_large_value_calibrate because files in some directories may conflict
+  with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:183 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_bulk_edge_calibrate because files in some directories may conflict with
+  libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:212 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_query_scratch_crash_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:216 (add_executable):
+  Cannot generate a safe runtime search path for target
+  zyx_transaction_resource_fault_worker because files in some directories may
+  conflict with libraries in implicit directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at CMakeLists.txt:219 (add_executable):
+  Cannot generate a safe runtime search path for target zyx_test_suite
+  because files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+CMake Warning at benchmarks/leiden/CMakeLists.txt:5 (add_executable):
+  Cannot generate a safe runtime search path for target leiden_bench because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [libz.so.1] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+
+-- Generating done (0.1s)
+-- Build files have been written to: /workspace/zyx/buildDir
+[0/4] Re-checking globbed directories...
+[1/4] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStoreRecoveryResources.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RelocatableMetadataStoreTest
+[ RUN      ] RelocatableMetadataStoreTest.RecoveryAndReadonlyDiscoveryUseProtectedControlScratchWhenCacheIsFull
+unknown file: Failure
+C++ exception with description "hierarchical resource admission denied" thrown in the test body.
+
+[  FAILED  ] RelocatableMetadataStoreTest.RecoveryAndReadonlyDiscoveryUseProtectedControlScratchWhenCacheIsFull (3 ms)
+[----------] 1 test from RelocatableMetadataStoreTest (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (3 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] RelocatableMetadataStoreTest.RecoveryAndReadonlyDiscoveryUseProtectedControlScratchWhenCacheIsFull
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

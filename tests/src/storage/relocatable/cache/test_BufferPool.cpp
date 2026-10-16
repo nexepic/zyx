@@ -1026,3 +1026,31 @@ TEST_F(BufferPoolTest, FailedControlRecordWriteLeavesNoDirtyCachedImageToOverwri
   EXPECT_EQ(observed[index], index >= 64U && index < 72U ? std::byte{0x5A} : std::byte{0x11});
 }
 #endif
+
+TEST_F(BufferPoolTest, NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHits) {
+    open(2U);
+    auto memory = pageCacheGrant(RSS_BUFFER_POOL_PAGE_BYTES + 1024U);
+    pool_ = std::make_unique<BufferPool>(*io_, 2U * RSS_BUFFER_POOL_PAGE_BYTES, memory);
+    std::array<std::byte, 1U> first{};
+    ASSERT_EQ(pool_->read(0U, first), first.size());
+    const std::array<std::byte, 1U> changed{std::byte{0x5A}};
+    pool_->write(0U, changed);
+    {
+        auto pin = pool_->pin({0U, 0U});
+        const auto used = memory->used();
+        std::array<std::byte, 2U * RSS_BUFFER_POOL_PAGE_BYTES> observed{};
+        ASSERT_EQ(pool_->read(0U, observed), observed.size());
+        EXPECT_EQ(observed.front(), changed.front());
+        EXPECT_EQ(observed[RSS_BUFFER_POOL_PAGE_BYTES], std::byte{2});
+        EXPECT_EQ(pin.bytes().front(), changed.front());
+        BufferPool::PageBytes typed{};
+        ASSERT_EQ(pool_->readPage({RSS_BUFFER_POOL_PAGE_BYTES, 7U}, typed), typed.size());
+        EXPECT_EQ(typed.front(), std::byte{2});
+        ASSERT_EQ(pool_->readPages({RSS_BUFFER_POOL_PAGE_BYTES, 7U}, typed), typed.size());
+        EXPECT_EQ(typed.front(), std::byte{2});
+        EXPECT_EQ(memory->used(), used);
+        EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+        EXPECT_EQ(pool_->stats().evictions, 0U);
+    }
+    pool_.reset(); EXPECT_EQ(memory->used(), 0U);
+}

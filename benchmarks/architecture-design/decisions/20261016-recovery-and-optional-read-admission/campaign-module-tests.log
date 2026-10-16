@@ -1,0 +1,10 @@
+...........{"event": "family_correctness", "family": "point", "wall_seconds": 1.2147007510066032e-05, "completed": 1, "total": 2}
+.{"event": "family_correctness", "family": "point", "wall_seconds": 1799.0, "completed": 1, "total": 2}
+.{"event": "family_correctness", "family": "maintenance", "wall_seconds": 0.05504342500353232, "completed": 1, "total": 1}
+..{"event": "family_correctness", "family": "maintenance", "wall_seconds": 0.00026388801052235067, "completed": 1, "total": 1}
+..{"event": "family_correctness", "family": "snapshot", "wall_seconds": 0.00017937400843948126, "completed": 1, "total": 1}
+...........
+----------------------------------------------------------------------
+Ran 28 tests in 0.222s
+
+OK

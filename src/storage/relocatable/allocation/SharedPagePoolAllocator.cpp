@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
+#include "graph/query/execution/ResourceCoordinator.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1363,8 +1364,14 @@ namespace graph::storage {
 		}
 
 		const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
-		std::optional<BufferPool::Pin> pagePin =
-				io_->pinTypedPage({pageOffset, location.generation.value()}, hint);
+        std::optional<BufferPool::Pin> pagePin;
+        try {
+            pagePin = io_->pinTypedPage({pageOffset, location.generation.value()}, hint);
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            // The validated pool/location can still be read through an owned
+            // copy; optional pin admission is not a logical read failure.
+            return std::nullopt;
+        }
 		if (!pagePin.has_value()) {
 			return std::nullopt;
 		}

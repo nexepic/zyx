@@ -171,6 +171,7 @@ namespace graph::storage {
         // through the copy so a concurrent control-record invalidation waits
         // for these few bytes instead of rejecting an otherwise valid writer.
         std::lock_guard lock(mutex_);
+        try {
         Entry &entry = loadLocked(key, hint);
         if (entry.private_cow) {
             throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
@@ -182,6 +183,12 @@ namespace graph::storage {
             entries_.erase(key);
         }
         return bytes;
+        } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+            const size_t bytes = io_.readAtUncached(key.page_offset, output.data(), output.size());
+            disk_read_bytes_ += bytes;
+            debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytes));
+            return bytes;
+        }
 	}
 
 	void BufferPool::writePage(BufferPoolPageKey key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> input) {
@@ -258,6 +265,7 @@ namespace graph::storage {
 				continue;
 			}
 			if (hint != BufferPoolReadHint::BPRH_SEQUENTIAL) {
+                try {
 				Entry &entry = loadLocked(key, hint);
 				const size_t bytes = std::min<size_t>(
 						entry.valid_bytes, static_cast<size_t>(std::min<uint64_t>(RSS_BUFFER_POOL_PAGE_BYTES,
@@ -269,6 +277,15 @@ namespace graph::storage {
 					return copied;
 				}
 				continue;
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    const size_t bytes = io_.readAtUncached(pageOffset, output.data() + copied,
+                        static_cast<size_t>(std::min<uint64_t>(RSS_BUFFER_POOL_PAGE_BYTES, fileSize - pageOffset)));
+                    disk_read_bytes_ += bytes;
+                    debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(bytes));
+                    copied += bytes;
+                    if (bytes != RSS_BUFFER_POOL_PAGE_BYTES) return copied;
+                    continue;
+                }
 			}
 
 			// Sequential typed scans have no useful working-set residency. Coalesce
@@ -449,9 +466,18 @@ namespace graph::storage {
 				// The cache lock protects this page from eviction while its bytes are
 				// copied; a short logical read does not need an externally visible pin.
 				std::lock_guard lock(mutex_);
-				Entry &entry = loadLocked({pageOffset, 0U}, hint);
-				std::copy_n(entry.bytes.begin() + static_cast<std::ptrdiff_t>(inPage), bytes,
-							output.begin() + static_cast<std::ptrdiff_t>(copied));
+                try {
+                    Entry &entry = loadLocked({pageOffset, 0U}, hint);
+                    std::copy_n(entry.bytes.begin() + static_cast<std::ptrdiff_t>(inPage), bytes,
+                        output.begin() + static_cast<std::ptrdiff_t>(copied));
+                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    // A normal byte read can bypass optional residency when
+                    // another alias/pin owns the entire shared cache grant.
+                    const size_t observed = io_.readAtUncached(current, output.data() + copied, bytes);
+                    disk_read_bytes_ += observed;
+                    debug::PerfTrace::addValue("storage.buffer_pool.physical_read_bytes", static_cast<int64_t>(observed));
+                    if (observed != bytes) return copied + observed;
+                }
 			}
 			copied += bytes;
 			current += bytes;
