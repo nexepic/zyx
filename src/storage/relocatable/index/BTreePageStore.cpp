@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <deque>
 #include <limits>
 #include <map>
 #include <memory>
@@ -364,6 +365,7 @@ namespace graph::storage {
 		std::optional<OverlayPageReference> right_sibling;
 		std::optional<OverlayPageReference> leftmost_child;
 		utils::OwnedStdVector<BTreePageEntry> leaf_entries;
+        utils::OwnedStdVector<std::byte> packed_leaf_entries;
 		std::vector<OverlayInternalEntry> internal_entries;
 		bool dirty = false;
 		bool retired = false;
@@ -630,7 +632,7 @@ namespace graph::storage {
 
 			const OverlayMutationNode &finalRoot = nodeFor(root_);
 			const bool finalTreeEmpty = finalRoot.header.kind == BTreeNodeKind::BPN_LEAF &&
-									finalRoot.leaf_entries.empty();
+									finalRoot.leaf_entries.empty() && finalRoot.packed_leaf_entries.empty();
 			const IndexRootLocation expectedRoot = expected_root_;
 			const BTreeStructuralMutationPreparer preparer = [self = shared_from_this(),
 															  replacements = std::move(replacements),
@@ -791,7 +793,7 @@ namespace graph::storage {
             if (requireReduction && std::ranges::any_of(leaves, [this](const auto &leaf) {
                     return !leaf.is_virtual && !existing_nodes_.contains(leaf.existing_page_id.value());
                 })) return false; // Optional densification must not retain an entire cold tree.
-            if (leaves.size() == 1U && leaves.front() == root_ && nodeFor(root_).leaf_entries.empty()) {
+            if (leaves.size() == 1U && leaves.front() == root_ && nodeFor(root_).leaf_entries.empty() && nodeFor(root_).packed_leaf_entries.empty()) {
 				// An empty root leaf is a valid scalar-index state. When a source pool
 				// cannot COW the final erase, retire the old reachable tree and publish
 				// one fresh empty root instead of rejecting the logical deletion.
@@ -852,7 +854,7 @@ namespace graph::storage {
                         return entry;
                     }
                     return std::nullopt;
-                }, leaf_value_layout_);
+                }, leaf_value_layout_, InitialBTreeLeafStorage::IBLS_PACKED);
             }
 			const size_t liveVirtualCount = static_cast<size_t>(std::ranges::count_if(
 					virtual_nodes_, [](const OverlayMutationNode &node) { return !node.retired; }));
@@ -891,6 +893,7 @@ namespace graph::storage {
 					// Transfer the private plan backing; copying would retain a third
 					// complete leaf set alongside the source and replacement tree.
 					node.leaf_entries = std::move(plan.nodes[ordinal].leaf_entries);
+                    node.packed_leaf_entries = std::move(plan.nodes[ordinal].packed_leaf_entries);
 					node.left_sibling = ordinal == 0U ? std::nullopt : std::optional(rebuilt[ordinal - 1U]);
 					node.right_sibling =
 							ordinal + 1U == plan.leaf_count ? std::nullopt : std::optional(rebuilt[ordinal + 1U]);
@@ -1050,7 +1053,15 @@ namespace graph::storage {
 
 		[[nodiscard]] OverlayMutationNode &loadNode(const OverlayPageReference &reference, uint16_t expectedLevel) {
 			if (reference.is_virtual) {
-				return nodeFor(reference);
+                auto &node = nodeFor(reference);
+                if (!node.packed_leaf_entries.empty()) {
+                    if (node.header.kind != BTreeNodeKind::BPN_LEAF || !node.leaf_entries.empty())
+                        throw FormatException(FormatError::FERR_INVALID_STATE, "overlay leaf has mixed private representations");
+                    node.leaf_entries = PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF,
+                        node.packed_leaf_entries, leaf_value_layout_);
+                    node.packed_leaf_entries = {};
+                }
+				return node;
 			}
 			return loadExisting(reference.existing_page_id, expected_root_.root_generation.value(), expectedLevel);
 		}
@@ -1104,7 +1115,14 @@ namespace graph::storage {
 				const PageId left = node.left_sibling.has_value() ? resolve(*node.left_sibling, virtualIds) : PageId{};
 				const PageId right =
 						node.right_sibling.has_value() ? resolve(*node.right_sibling, virtualIds) : PageId{};
-				return makeLeafPage(node.header, owner, left, right, node.leaf_entries);
+                std::optional<utils::OwnedStdVector<BTreePageEntry>> decoded;
+                if (!node.packed_leaf_entries.empty()) {
+                    if (!node.leaf_entries.empty()) throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "overlay leaf has mixed private representations");
+                    decoded.emplace(PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF,
+                        node.packed_leaf_entries, node.header.leaf_value_layout));
+                }
+				return makeLeafPage(node.header, owner, left, right, decoded ? *decoded : node.leaf_entries);
 			}
 			BTreePageHeader header = node.header;
 			header.leftmost_child = resolve(*node.leftmost_child, virtualIds);
@@ -1126,7 +1144,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool underfull(const OverlayMutationNode &node) const {
-			const bool empty = node.header.kind == BTreeNodeKind::BPN_LEAF ? node.leaf_entries.empty()
+			const bool empty = node.header.kind == BTreeNodeKind::BPN_LEAF ? node.leaf_entries.empty() && node.packed_leaf_entries.empty()
 																		   : node.internal_entries.empty();
 			return empty || encodedNodeOccupancy(materializePreview(node)) < RSS_BTREE_MIN_NODE_OCCUPIED_BYTES;
 		}
@@ -1149,6 +1167,7 @@ namespace graph::storage {
 				header.generation, LogSequenceNumber(1U)), header);
 			constexpr size_t overhead = RSS_SLOTTED_PAGE_HEADER_BYTES +
 				2U * RSS_SLOTTED_PAGE_SLOT_BYTES + RSS_BTREE_PAGE_HEADER_BYTES;
+            if (!node.packed_leaf_entries.empty()) return overhead + node.packed_leaf_entries.size();
 			return overhead + PackedBTreePageCodec::encodedSize(header.kind, node.leaf_entries,
 				header.leaf_value_layout);
 		}
@@ -1644,7 +1663,7 @@ namespace graph::storage {
 		// Transaction-local, last-leaf only. Erases/non-appends and splits
 		// invalidate it; no persisted bytes or cross-snapshot proof is cached.
 		std::optional<LeafAppendSize> leaf_append_size_;
-		std::vector<OverlayMutationNode> virtual_nodes_;
+		std::deque<OverlayMutationNode, utils::OwnedPmrAllocator<OverlayMutationNode>> virtual_nodes_;
 	};
 
 	namespace {

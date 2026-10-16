@@ -369,3 +369,92 @@ TEST(InitialBTreeBuilderTest, StreamingSourceFailureAndInvalidInputsReleaseAllPr
  }
  EXPECT_EQ(memory->used(),0U);
 }
+
+TEST(InitialBTreeBuilderTest, PackedCursorPlanKeepsHundredThousandKeysWithinTheSameGrant) {
+ using namespace graph::query::execution::detail;
+ constexpr size_t count = 100000U, maximum = 4U * 1024U * 1024U;
+ auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+ auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+ auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_WRITE, maximum);
+ auto memory = std::make_shared<PrepaidMemoryResource>(account, maximum);
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  size_t ordinal = 0U;
+  const auto next = [&]() -> std::optional<BTreePageEntry> {
+   if (ordinal == count) return std::nullopt;
+   ++ordinal; return BTreePageEntry{keyFor(ordinal), ordinal};
+  };
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(71U, next)), ResourceAdmissionDenied);
+  EXPECT_EQ(memory->used(), 0U);
+  ordinal = 0U;
+  const auto plan = InitialBTreeBuilder::planFromCursor(71U, next, BTreeLeafValueLayout::BLVL_U64,
+   InitialBTreeLeafStorage::IBLS_PACKED);
+  ASSERT_EQ(ordinal, count);
+  std::vector<PageId> ids;
+  for (size_t index = 0U; index < plan.nodes.size(); ++index) ids.emplace_back((uint64_t{1} << 63U) + index);
+  const std::vector<Generation> generations(ids.size(), Generation(1U));
+  const auto pages = InitialBTreeBuilder::materialize(71U, plan, ids, generations, LogSequenceNumber(2U));
+  size_t seen = 0U;
+  for (size_t leaf = 0U; leaf < plan.leaf_count; ++leaf) {
+   EXPECT_TRUE(plan.nodes[leaf].leaf_entries.empty());
+   EXPECT_FALSE(plan.nodes[leaf].packed_leaf_entries.empty());
+   for (const auto &entry : pages[leaf].entries()) {
+    ++seen; EXPECT_EQ(entry.key, keyFor(seen)); EXPECT_EQ(entry.value_or_child, seen);
+   }
+  }
+  EXPECT_EQ(seen, count);
+  EXPECT_LT(memory->peakAdmitted(), maximum);
+ }
+ EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST(InitialBTreeBuilderTest, PackedAndEntryPlansProduceIdenticalPersistedPagesForBothLeafLayouts) {
+ for (const auto layout : {BTreeLeafValueLayout::BLVL_U64, BTreeLeafValueLayout::BLVL_EMPTY}) {
+  std::vector<BTreePageEntry> input;
+  for (uint64_t index = 1U; index <= 2048U; ++index)
+   input.push_back({keyFor(index), layout == BTreeLeafValueLayout::BLVL_U64 ? index : 0U});
+  const auto plain = InitialBTreeBuilder::plan(71U, input, layout);
+  size_t ordinal = 0U;
+  const auto packed = InitialBTreeBuilder::planFromCursor(71U, [&]() -> std::optional<BTreePageEntry> {
+   if (ordinal == input.size()) return std::nullopt;
+   return input[ordinal++];
+  }, layout, InitialBTreeLeafStorage::IBLS_PACKED);
+  ASSERT_EQ(plain.nodes.size(), packed.nodes.size());
+  EXPECT_EQ(plain.root_ordinal, packed.root_ordinal); EXPECT_EQ(plain.leaf_count, packed.leaf_count);
+  std::vector<PageId> ids;
+  for (size_t index = 0U; index < plain.nodes.size(); ++index) ids.emplace_back((uint64_t{1} << 63U) + index);
+  const std::vector<Generation> generations(ids.size(), Generation(1U));
+  const auto first = InitialBTreeBuilder::materialize(71U, plain, ids, generations, LogSequenceNumber(2U));
+  const auto second = InitialBTreeBuilder::materialize(71U, packed, ids, generations, LogSequenceNumber(2U));
+  for (size_t index = 0U; index < first.size(); ++index) EXPECT_EQ(first[index].serialize(), second[index].serialize());
+ }
+}
+
+TEST(InitialBTreeBuilderTest, PackedPlansRejectCorruptionAndReleaseAllCreditAfterSourceFailure) {
+ using namespace graph::query::execution::detail;
+ constexpr size_t maximum = 1024U * 1024U;
+ auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(maximum));
+ auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(maximum));
+ auto account = std::make_shared<ResourceAccount>(database, ResourceClass::RCK_WRITE, maximum);
+ auto memory = std::make_shared<PrepaidMemoryResource>(account, maximum);
+ {
+  graph::utils::OwnedAllocationScope scope(memory);
+  size_t calls = 0U;
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::planFromCursor(71U, [&]() -> std::optional<BTreePageEntry> {
+   if (++calls == 5000U) throw std::runtime_error("source failure");
+   return BTreePageEntry{keyFor(calls), calls};
+  }, BTreeLeafValueLayout::BLVL_U64, InitialBTreeLeafStorage::IBLS_PACKED)), std::runtime_error);
+  EXPECT_EQ(memory->used(), 0U);
+  calls = 0U;
+  auto plan = InitialBTreeBuilder::planFromCursor(71U, [&]() -> std::optional<BTreePageEntry> {
+   if (calls == 2048U) return std::nullopt;
+   ++calls; return BTreePageEntry{keyFor(calls), calls};
+  }, BTreeLeafValueLayout::BLVL_U64, InitialBTreeLeafStorage::IBLS_PACKED);
+  std::vector<PageId> ids;
+  for (size_t index = 0U; index < plan.nodes.size(); ++index) ids.emplace_back(index + 1U);
+  const std::vector<Generation> generations(ids.size(), Generation(1U));
+  plan.nodes.front().packed_leaf_entries.front() ^= std::byte{1U};
+  EXPECT_THROW(static_cast<void>(InitialBTreeBuilder::materialize(71U, plan, ids, generations, LogSequenceNumber(2U))), FormatException);
+ }
+ EXPECT_EQ(memory->used(), 0U);
+}

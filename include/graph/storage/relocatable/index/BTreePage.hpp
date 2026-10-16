@@ -112,6 +112,10 @@ namespace graph::storage {
 		[[nodiscard]] static std::vector<std::byte>
 		encode(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+		// Same canonical bytes, with pre-admitted stream and output backing.
+		[[nodiscard]] static utils::OwnedStdVector<std::byte>
+		encodeOwned(BTreeNodeKind kind, std::span<const BTreePageEntry> entries,
+			BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		[[nodiscard]] static utils::OwnedStdVector<BTreePageEntry>
 		decode(BTreeNodeKind kind, std::span<const std::byte> bytes,
 			   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);

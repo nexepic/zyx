@@ -5,6 +5,7 @@
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "query/execution/BoundPropertyBindings.hpp"
 #include <chrono>
 #include <barrier>
 #include <thread>
@@ -1523,4 +1524,27 @@ TEST_F(RelocatableStorageBackendTest, OverlayEndpointValidationDoesNotBorrowExha
   EXPECT_LE(cache->used(), cache->capacity());
  }
  backend.close();
+}
+
+
+TEST_F(RelocatableStorageBackendTest, BoundPropertyTokenResolutionDoesNotBorrowExhaustedCacheCredit) {
+    using namespace execution::detail;
+    materializeNativeDatabase();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
+    (void)backend->createLogicalNodes({{{"BoundAggregate"}, {{"group", PropertyValue(7)}}}});
+    auto snapshot = backend->openLogicalGraphReadSnapshot();
+    auto cache = ProcessResourceDomains::defaultOwner()->cacheGrant(backend->queryResourceDomain());
+    auto account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, 65536U);
+    {
+        execution::MaterializedByteBudget budget(65536U, account);
+        BoundSlotRegistry slots(1U, 1U, 32U, budget);
+        const auto slot = slots.declare(slots.root(), "n"); slots.seal();
+        const std::array<BoundPropertyRequest, 1U> requests{{{slot, "group"}}};
+        PrepaidMemoryResource::ExternalReservation pressure(cache, cache->capacity() - cache->used());
+        BoundPropertyBindings bindings(slots, *snapshot, requests, 1U, 32U, budget);
+        EXPECT_TRUE(bindings.view(bindings.descriptor(0U), *snapshot).token.has_value());
+    }
+    EXPECT_EQ(account->used(), 0U);
+    snapshot.reset(); backend->close();
 }
