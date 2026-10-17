@@ -1,0 +1,20 @@
+{
+  "first": {
+    "ok": true,
+    "retired_values": 10000
+  },
+  "idempotent_second": {
+    "ok": true,
+    "retired_values": 0
+  },
+  "source_sha256": "c471f17890f3115d8ab4b51af6046021e34ae181c284dee20b0c907887853a43",
+  "reopen_and_integrity": "passed",
+  "stats": {
+    "ok": true,
+    "read_bytes": 1686110224,
+    "write_bytes": 280128,
+    "file_bytes": 246808576,
+    "cache_hits": 0,
+    "rss_bytes": 36945920
+  }
+}

@@ -152,17 +152,21 @@
     "completed": 0,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [],
-    "implementation": "Only observed O3/O5/O6 causes repaired;40modules/1011distinct tests passed across initial run and24-test module rerun.120untimed budget checks, two complete inputs and retained maintenance recovery passed; unchanged budgets.",
+    "pending_revalidation_ids": [
+      "S6.1"
+    ],
+    "implementation": "f0 complete read/write records retained but actual O6 pool-reactivation failure rejects overall candidate. Fix9dd3ffaf revalidates current PageDir after value publication; old-core counterexample and6modules/94tests pass. Exact retained file repaired/idempotent; full13window untimed maintenance running. No new acceptance or raised limits.",
     "final_window": "/tmp/zyx-final-five-repaired-window-20261017",
     "source_commit": "63f65f37b8705e3aadae5b0c22b998f845d2c11b",
     "source_revalidation": {
       "id": "S6.1",
       "score_increase": false,
       "evidence": "20261017-final-protection-and-maintenance-repairs/proof.json",
-      "scope": "Clean final repaired source and actual Debug/Release binaries frozen.40affected modules;1011distinct tests passed. Earlier source test runs remain historical."
+      "scope": "Historical f0 clean freeze with40modules/1011distinct tests remains versioned. New9dd O6 patch has6modules/94tests; full maintenance correctness and new clean freeze pending."
     },
-    "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed."
+    "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
+    "working_source_commit": "9dd3ffaf",
+    "final_window_status": "f0 stopped at engine-free boundary after actual maintenance failure; deferred contracts never passes or failures"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
