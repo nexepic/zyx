@@ -3,6 +3,7 @@ import subprocess,json,os,signal,sys
 sys.path.insert(0,'/workspace/zyx/benchmarks/graphdb-comparison')
 from runner.workload_preflight import NATIVE_FAMILY_ORDER,KUZU_FAMILY_ORDER
 root=Path('/tmp/zyx-final-five-repaired-window-20261017')
+subprocess.run(['/workspace/zyx-benchmark-venv/bin/python','/tmp/zyx-final-repaired-bounded-extensions.py'],check=True)
 subprocess.run(['/workspace/zyx-benchmark-venv/bin/python','/tmp/run-zyx-final-repaired-write-campaign.py'],check=True)
 orders=[['control','current','kuzu'],['current','kuzu','control'],['kuzu','control','current']]
 # O6 runs first so an unrelated exhausted family cannot suppress its evidence.

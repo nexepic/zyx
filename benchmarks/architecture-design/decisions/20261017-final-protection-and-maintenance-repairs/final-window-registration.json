@@ -54,12 +54,14 @@
   "contract_sha256": "6de35bce8841e58b2190e463b200a2e1aa9db328b8f0db95ee8c4b336a1f7d0e",
   "source_proof": "benchmarks/architecture-design/decisions/20261017-final-protection-and-maintenance-repairs/proof.json",
   "script_sha256": {
+    "zyx-final-repaired-extended-read.py": "23f1f4431ad6efc2e9ffa91f95ffb2c4b3fe64a8afee87570cf2832ce2f8ed8d",
+    "zyx-final-repaired-bounded-extensions.py": "ee46be10478ce3547bb9f6b795aec2372fdcad36e49d93e20f85caa00f257687",
     "workload_preflight.py": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2",
     "zyx-final-five-owned-case.py": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9",
     "zyx-final-repaired-write-case.py": "b42fa589a9f39ebefb079cfdea797ba021e71bf647f8770707a0608de7f306f1",
     "run-zyx-final-repaired-write-campaign.py": "985f33ede9abd040c1c87a1ee8e150ad099cacbb787a4131e2a9354acb5a134b",
     "run-zyx-final-repaired-acceptance.py": "e4f0592db92179ce44563de8f8fe4d130666ba265d1fec008c7b90d64a0bf3f3",
-    "run-zyx-final-repaired-contract-campaign.py": "cbf395afdc4e176bc119d2d2632b40b2477b87e201948674d9c2ed59f7be83d2",
+    "run-zyx-final-repaired-contract-campaign.py": "4dea6c9ecbdd897ac5c09c9ff3ae80999bde12a8d8a5fb1a731eef51f9d12236",
     "zyx-final-repaired-contract-case.py": "5b09ecc4620c9e3ead9f34bd7cf122bd2de5d5d6706f9385a085578d356a0462",
     "zyx-final-repaired-window.py": "086236a24be5d5c503fb89fa6490dac87255baf20c354f09bb987857238a75d2"
   },
@@ -1791,5 +1793,6 @@
       "zyx-final-repaired-contract-case.py": "5b09ecc4620c9e3ead9f34bd7cf122bd2de5d5d6706f9385a085578d356a0462",
       "zyx-final-repaired-window.py": "086236a24be5d5c503fb89fa6490dac87255baf20c354f09bb987857238a75d2"
     }
-  }
+  },
+  "bounded_extension_scheduling": "Apply original range/near-gate uncertainty rule after45base read slots and before writes;2processes\u00d7100samples at most per triggered workload/source. No broad profile or Kuzu repeat. Exact triggers registered before supplements; original3\u00d710 kept separate."
 }
