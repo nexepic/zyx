@@ -1,0 +1,5 @@
+database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode
+zyx,aggregation_count_by_group,holdout,10,377.92,366.971,375.0967,374.247,387.806,387.806,387.806,2.6659791994970896,ok,api
+zyx,label_scan_filter,holdout,10,303.493,301.649,307.7936,305.055,325.874,325.874,325.874,3.2489304520951703,ok,api
+zyx,topk_property_sort,holdout,10,389.237,374.764,389.0666,380.417,425.507,425.507,425.507,2.5702540387686836,ok,api
+zyx,two_hop_expand,holdout,10,3.34687,2.93553,3.2961599999999995,3.2568,3.61307,3.61307,3.61307,303.38333090626674,ok,api

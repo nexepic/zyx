@@ -1,0 +1,15 @@
+{
+  "engine": "current",
+  "round": 1,
+  "scale": "medium",
+  "profile": "indexed",
+  "maxrss_kib": 375984,
+  "rss_scope": "all child processes of the read driver, including Git/provenance helpers and the native benchmark; not an isolated engine peak",
+  "driver_maxrss_kib": 375984,
+  "maxrss_addition": "Do not sum noncoincident peaks",
+  "block_input_operations": 0,
+  "block_output_operations": 40,
+  "block_io_scope": "whole case including cloning/preparation, not database-only or physical-device totals",
+  "case_wall_seconds": 27.308332811982837,
+  "capture": "post-query OS getrusage, outside every measured query timer"
+}

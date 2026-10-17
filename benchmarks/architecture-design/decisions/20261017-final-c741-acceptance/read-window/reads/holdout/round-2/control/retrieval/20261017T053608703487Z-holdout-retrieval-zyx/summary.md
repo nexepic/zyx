@@ -1,0 +1,12 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | point_node_fetch_by_id | holdout | 10 | 23.5108 | 23.3884 | 24.04661 | 23.8715 | 25.4251 | 25.4251 | 25.4251 | 41.58590337681694 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

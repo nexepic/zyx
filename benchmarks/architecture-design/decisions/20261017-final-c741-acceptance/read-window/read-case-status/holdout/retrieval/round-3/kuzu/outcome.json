@@ -1,0 +1,9 @@
+{
+  "scale": "holdout",
+  "profile": "retrieval",
+  "round": 3,
+  "engine": "kuzu",
+  "status": "completed",
+  "returncode": 0,
+  "log": "/tmp/zyx-final-five-c741-window-20261017/logs/read-holdout-retrieval-3-kuzu.log"
+}

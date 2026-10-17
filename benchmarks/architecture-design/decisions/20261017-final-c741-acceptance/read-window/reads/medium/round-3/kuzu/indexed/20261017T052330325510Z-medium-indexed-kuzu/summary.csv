@@ -1,0 +1,4 @@
+database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode
+kuzu,point_lookup_indexed,medium,10,0.20960799884051085,0.20000399672426283,0.23491339816246182,0.20960799884051085,0.3766339796129614,0.3766339796129614,0.3766339796129614,4256.887890695865,ok,cypher
+kuzu,property_equality_indexed,medium,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,unsupported,cypher
+kuzu,property_range_indexed,medium,0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,unsupported,cypher

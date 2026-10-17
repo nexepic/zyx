@@ -1,0 +1,2 @@
+operation_type,database,scale,workload_count,workloads,ok_workloads,unsupported_workloads,failed_workloads,samples,geomean_p50_ms,avg_p50_ms,min_p50_ms,max_p50_ms
+other,zyx,holdout,1,point_node_fetch_by_id,1,0,0,10,24.411700000000003,24.4117,24.4117,24.4117

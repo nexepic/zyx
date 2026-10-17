@@ -1,0 +1,10 @@
+[
+  {
+    "pid": 167405,
+    "scope": "live post-exec /proc status snapshot, not guaranteed terminal peak",
+    "observed": {
+      "VmHWM": "76604 kB",
+      "VmRSS": "76344 kB"
+    }
+  }
+]

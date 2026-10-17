@@ -1,0 +1,2 @@
+database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode
+kuzu,point_node_fetch_by_id,holdout,10,0.2613940159790218,0.21505600307136774,0.2518736000638455,0.2300890046171844,0.3531500115059316,0.3531500115059316,0.3531500115059316,3970.2453919208588,ok,cypher

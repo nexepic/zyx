@@ -1,0 +1,14 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | point_lookup_indexed | medium | 10 | 10.2759 | 10.0156 | 10.073049999999999 | 10.0308 | 10.2759 | 10.2759 | 10.2759 | 99.2747976035064 | ok | api |
+| zyx | property_equality_indexed | medium | 10 | 3186.1 | 3052.37 | 3186.123 | 3129.23 | 3402.78 | 3402.78 | 3402.78 | 0.313861078181853 | ok | api |
+| zyx | property_range_indexed | medium | 10 | 20541.3 | 20194.8 | 20865.95 | 20770.0 | 21636.2 | 21636.2 | 21636.2 | 0.047924968669051736 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

@@ -1,0 +1,21 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | aggregation_count_by_group | medium | 10 | 2856.7 | 2759.64 | 2856.046 | 2856.7 | 2964.46 | 2964.46 | 2964.46 | 0.35013441660253375 | ok | api |
+| zyx | aggregation_group_by | medium | 10 | 2886.41 | 2777.18 | 2865.4190000000003 | 2848.65 | 2973.22 | 2973.22 | 2973.22 | 0.34898910072139533 | ok | api |
+| zyx | all_nodes_property_filter | medium | 10 | 5649.97 | 5355.28 | 5742.59 | 5752.36 | 5982.1 | 5982.1 | 5982.1 | 0.17413745365767014 | ok | api |
+| zyx | label_multi_property_filter | medium | 10 | 2862.75 | 2763.33 | 2841.822 | 2844.57 | 2926.41 | 2926.41 | 2926.41 | 0.3518869232485356 | ok | api |
+| zyx | label_scan_filter | medium | 10 | 2793.12 | 2743.1 | 2842.17 | 2831.26 | 2972.83 | 2972.83 | 2972.83 | 0.3518438376311058 | ok | api |
+| zyx | one_hop_expand | medium | 10 | 15.474 | 15.3816 | 15.44617 | 15.4112 | 15.7348 | 15.7348 | 15.7348 | 64.74096814938589 | ok | api |
+| zyx | relationship_property_filter | medium | 10 | 6451.29 | 6239.53 | 6417.037 | 6411.19 | 6727.32 | 6727.32 | 6727.32 | 0.15583516192909594 | ok | api |
+| zyx | relationship_type_scan | medium | 10 | 562.634 | 562.634 | 583.0213 | 581.053 | 599.829 | 599.829 | 599.829 | 1.7152032009808218 | ok | api |
+| zyx | topk_property_sort | medium | 10 | 3569.97 | 3387.43 | 3570.34 | 3570.12 | 3681.93 | 3681.93 | 3681.93 | 0.2800853700207823 | ok | api |
+| zyx | two_hop_expand | medium | 10 | 19.6698 | 19.6016 | 20.109460000000002 | 19.701 | 22.7434 | 22.7434 | 22.7434 | 49.72783953422916 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

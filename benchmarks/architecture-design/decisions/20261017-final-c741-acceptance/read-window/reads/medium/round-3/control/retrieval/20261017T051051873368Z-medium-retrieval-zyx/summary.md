@@ -1,0 +1,16 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | batch_node_fetch_100 | medium | 10 | 23.9232 | 23.1122 | 23.58491 | 23.5466 | 24.3358 | 24.3358 | 24.3358 | 42.399992198401435 | ok | api |
+| zyx | one_hop_fetch_neighbor_ids | medium | 10 | 21.9338 | 20.8781 | 21.61602 | 21.6089 | 22.8761 | 22.8761 | 22.8761 | 46.261985323847775 | ok | api |
+| zyx | one_hop_fetch_neighbor_records | medium | 10 | 34.2979 | 32.9462 | 34.06951 | 34.0407 | 35.135 | 35.135 | 35.135 | 29.351757627274356 | ok | api |
+| zyx | point_edge_fetch_by_endpoints | medium | 10 | 21.3924 | 21.1767 | 22.10586 | 21.4054 | 27.4574 | 27.4574 | 27.4574 | 45.23687384250149 | ok | api |
+| zyx | point_node_fetch_by_id | medium | 10 | 26.7915 | 24.575 | 25.13732 | 24.8382 | 26.7915 | 26.7915 | 26.7915 | 39.781488241387706 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

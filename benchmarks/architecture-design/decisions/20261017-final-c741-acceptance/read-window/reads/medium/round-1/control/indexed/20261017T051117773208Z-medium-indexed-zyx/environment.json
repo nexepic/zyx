@@ -1,0 +1,109 @@
+{
+  "benchmark_schema_version": 1,
+  "created_at": "2026-10-17T05:11:19.674687+00:00",
+  "databases": [
+    "zyx"
+  ],
+  "dataset_manifest": {
+    "counts": {
+      "authored": 120000,
+      "follows": 500000,
+      "has_tag": 240000,
+      "posts": 120000,
+      "tags": 5000,
+      "users": 100000
+    },
+    "files": {
+      "authored.csv": {
+        "bytes": 3240016,
+        "sha256": "0d156972cad4131ea6fe5c433716ad282fa5d5ad10896643ac793fcb7833f716"
+      },
+      "follows.csv": {
+        "bytes": 13500016,
+        "sha256": "0cc872dff7d7db81182bcb2838a31af456014c3f3175bfd3e935bbd9af639747"
+      },
+      "has_tag.csv": {
+        "bytes": 6240016,
+        "sha256": "b8666dd97d6696332b521107e53bcb3b16e099f9b033c42cc8242a6114568641"
+      },
+      "posts.csv": {
+        "bytes": 4054761,
+        "sha256": "eb1f9a5e566a1b33d6e32bcdc71f7a96105e30f03951da91cbfe910fe7dd3f46"
+      },
+      "tags.csv": {
+        "bytes": 83899,
+        "sha256": "590882d7930e115210bb738530f7bcb3b7db58ddef57619f278afd336ab7aebf"
+      },
+      "users.csv": {
+        "bytes": 2977829,
+        "sha256": "802adcdd8c70d42a5e333a644eb4790cef52234a7e576a003ee9cf3ac69a7b67"
+      }
+    },
+    "scale": "medium",
+    "schema": {
+      "Post": {
+        "created_at": "int64",
+        "id": "string",
+        "score": "double"
+      },
+      "Tag": {
+        "id": "string",
+        "rank": "int64"
+      },
+      "User": {
+        "age": "int64",
+        "country": "string",
+        "id": "string",
+        "score": "double"
+      },
+      "relationships": {
+        "AUTHORED": "weight:int64",
+        "FOLLOWS": "weight:int64",
+        "HAS_TAG": "weight:int64"
+      }
+    },
+    "seed": 42,
+    "topology": "directed ring; each outgoing hop is a distinct edge; self-loops/multiplicity retained"
+  },
+  "event": "environment",
+  "execution_mode": "warm",
+  "git_branch": "work",
+  "git_commit": "4464408d5ff859b2a069ae5cd06848e69e916acd",
+  "git_dirty": false,
+  "iterations": 10,
+  "keep_db_artifacts": false,
+  "machine": "x86_64",
+  "measurement_semantics": {
+    "execution_contract": "Measure operations on one loaded/open database handle after the configured query warmup. This is a steady-state latency view.",
+    "execution_mode": "warm",
+    "profile": "indexed",
+    "profile_contract": {
+      "durability_contract": "not_applicable",
+      "latency_contract": "read_query_or_load_latency",
+      "phase_contract": "profile outputs classify raw timers into operation families and semantic phases when available."
+    },
+    "workload_isolation": {
+      "cold-ish": "fresh loaded adapter/database per measured non-load workload sample",
+      "load_nodes_edges": "fresh adapter/database per warmup and measured load sample",
+      "mutating_warm_opened": "fresh loaded adapter/database per mutating warmup and measured sample, excluding load/open from measured latency"
+    }
+  },
+  "mutating_workloads": [],
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "profile": "indexed",
+  "python": "3.12.14",
+  "required_workloads": [
+    "point_lookup_indexed",
+    "property_equality_indexed",
+    "property_range_indexed"
+  ],
+  "result_observation": "full_rows_retained_inside_timing_serialized_afterward",
+  "scale": "medium",
+  "seed": 42,
+  "system": "Linux",
+  "thread_contract": "fixed 1 execution thread(s)",
+  "threads": 1,
+  "warmup": 3,
+  "zyx_compare_bench": "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded",
+  "zyx_emit_profile": false
+}

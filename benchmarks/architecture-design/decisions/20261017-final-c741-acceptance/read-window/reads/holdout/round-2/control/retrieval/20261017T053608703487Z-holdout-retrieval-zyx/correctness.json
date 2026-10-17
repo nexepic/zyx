@@ -1,0 +1,13 @@
+{
+  "scalar": {
+    "expected": {
+      "point_node_fetch_by_id": 1
+    },
+    "failures": [],
+    "scope": "scalar values and projected row counts; projected values, types, ordering and duplicates need separate semantic tests"
+  },
+  "full_results": {
+    "failures": [],
+    "scope": "complete country/count groups and ordered Top-K IDs; finite unique-ID input dataset"
+  }
+}

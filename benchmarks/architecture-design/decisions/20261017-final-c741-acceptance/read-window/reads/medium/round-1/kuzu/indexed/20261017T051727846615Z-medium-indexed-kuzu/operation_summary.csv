@@ -1,0 +1,2 @@
+operation_type,database,scale,workload_count,workloads,ok_workloads,unsupported_workloads,failed_workloads,samples,geomean_p50_ms,avg_p50_ms,min_p50_ms,max_p50_ms
+property filter,kuzu,medium,3,point_lookup_indexed;property_equality_indexed;property_range_indexed,1,2,0,10,0.20555200171656904,0.20555200171656907,0.20555200171656907,0.20555200171656907

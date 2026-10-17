@@ -1,0 +1,4 @@
+operation_type,database,scale,workload_count,workloads,ok_workloads,unsupported_workloads,failed_workloads,samples,geomean_p50_ms,avg_p50_ms,min_p50_ms,max_p50_ms
+adjacency expand,zyx,holdout,1,two_hop_expand,1,0,0,10,3.28386,3.28386,3.28386,3.28386
+property filter,zyx,holdout,1,label_scan_filter,1,0,0,10,308.62099999999987,308.621,308.621,308.621
+topk/group,zyx,holdout,2,aggregation_count_by_group;topk_property_sort,2,0,0,20,389.58836211570775,389.589,388.884,390.294

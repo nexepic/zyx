@@ -1,0 +1,21 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | aggregation_count_by_group | medium | 10 | 490.908 | 473.371 | 480.88379999999995 | 477.461 | 493.15 | 493.15 | 493.15 | 2.079504445772555 | ok | api |
+| zyx | aggregation_group_by | medium | 10 | 475.703 | 474.877 | 495.17629999999997 | 483.485 | 523.358 | 523.358 | 523.358 | 2.019482757959135 | ok | api |
+| zyx | all_nodes_property_filter | medium | 10 | 778.773 | 759.14 | 772.6587000000001 | 772.276 | 782.609 | 782.609 | 782.609 | 1.294232498773391 | ok | api |
+| zyx | label_multi_property_filter | medium | 10 | 481.274 | 465.592 | 472.5259 | 466.998 | 487.902 | 487.902 | 487.902 | 2.116286112570761 | ok | api |
+| zyx | label_scan_filter | medium | 10 | 409.321 | 405.809 | 411.822 | 412.104 | 415.294 | 415.294 | 415.294 | 2.4282335572164673 | ok | api |
+| zyx | one_hop_expand | medium | 10 | 2.4349 | 2.38069 | 2.458544 | 2.4249 | 2.68043 | 2.68043 | 2.68043 | 406.74480505534984 | ok | api |
+| zyx | relationship_property_filter | medium | 10 | 986.311 | 974.68 | 1004.4687 | 1005.62 | 1034.96 | 1034.96 | 1034.96 | 0.9955511804399679 | ok | api |
+| zyx | relationship_type_scan | medium | 10 | 332.01 | 332.01 | 373.4675 | 350.366 | 537.996 | 537.996 | 537.996 | 2.6776091627785554 | ok | api |
+| zyx | topk_property_sort | medium | 10 | 504.402 | 497.141 | 506.4832 | 504.402 | 519.571 | 519.571 | 519.571 | 1.974399150850413 | ok | api |
+| zyx | two_hop_expand | medium | 10 | 3.16079 | 3.01549 | 3.241726 | 3.17079 | 3.52188 | 3.52188 | 3.52188 | 308.47764431663876 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.
