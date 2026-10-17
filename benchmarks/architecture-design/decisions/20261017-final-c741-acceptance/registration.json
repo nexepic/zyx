@@ -1,0 +1,185 @@
+{
+  "window": "Final five deliveries; single integrated acceptance window after implementation and targeted regression.",
+  "continuation_reason": "Final candidate after bounded Catalog selected-child routing and integrity evidence lifetime corrections. Source033 first-pair data remain separate and are not pooled.",
+  "preparation_transaction_rows": 1000,
+  "native_read_process_scope": "one dataset preparation per independent profile process, exact selected query list; each query retains three warmups and ten owning-output samples",
+  "status": "registered_before_measurement",
+  "orders": [
+    [
+      "control",
+      "current",
+      "kuzu"
+    ],
+    [
+      "current",
+      "kuzu",
+      "control"
+    ],
+    [
+      "kuzu",
+      "control",
+      "current"
+    ]
+  ],
+  "rounds": 3,
+  "warmups": 3,
+  "samples": 10,
+  "tail_sensitive_samples_per_process": 1000,
+  "primary_gate_p50_reduction": 0.1,
+  "protection_regression_limit": 0.05,
+  "stop_minutes_per_case": 30,
+  "contract_case_unit": "one isolated workload family in a private process, at most 30 minutes including setup; failed/inconclusive families retained independently",
+  "extended_sampling": "at most two independent 100-sample processes when preregistered uncertainty rule applies",
+  "resources": {
+    "affinity": "one allowed CPU",
+    "address_space_bytes": 6442450944,
+    "per_file_bytes": 2147483648,
+    "kuzu_pool_bytes": 67108864,
+    "kuzu_mapping_bytes": 2147483648,
+    "threads_per_query": 1,
+    "native_query_materialization_bytes": 67108864,
+    "durability": "default sync and acknowledgements; never disabled",
+    "os_cache": "warm; no cold-cache claim"
+  },
+  "resource_notes": [
+    "Per-file and Kuzu virtual database mapping caps are stricter than the production 1TiB maximum; the identical 2GiB OS per-file cap applies to every engine.",
+    "6GiB address-space cap implies a physical resident cap but is not a container/RSS accounting equivalence. Native charged class budgets remain separately reported."
+  ],
+  "binaries": {
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-workload-contract-worker": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+    "/tmp/zyx-final-five-c741-window-20261017/current-binaries/zyx-workload-contract-worker": "fa996c8a448e00d825147eb1c2bf234628b6995375194ef22e0a5c34f55aed54",
+    "/tmp/zyx-final-five-c741-window-20261017/current-binaries/zyx-compare-bench": "f082079c4d6d5d75aa2f3b03ec24f708c9fe077bdde9b86649e89cd2886c233c"
+  },
+  "contract_sha256": "6de35bce8841e58b2190e463b200a2e1aa9db328b8f0db95ee8c4b336a1f7d0e",
+  "source_proof": "benchmarks/architecture-design/decisions/20261017-integrity-large-value-evidence/proof.json",
+  "script_sha256": {
+    "zyx-final-c741-window.py": "2209c741afb474cbe1f374a96225b2d34e6edc2d2eb02959c011abd6cfdda764",
+    "zyx-final-c741-contract-case.py": "29a0aa08d74831becd08c6edfa1164789d75aaab00cbdb3478b541819caabae0",
+    "run-zyx-final-c741-contract-campaign.py": "9877e17399fa5687e0cb4f26c0064994470c97c3cd3bc372ad54308d296df88a",
+    "run-zyx-final-c741-acceptance.py": "11421f237d596997af86dd4e05757f697893b612b72e253f5eca424fa01c606c",
+    "zyx-final-five-owned-case.py": "5b253d1c315cecd16faf182c601af42dc85cd80e8366076b3861f41d99de5f81"
+  },
+  "isolated_family_policy": {
+    "maintenance": "three warmup windows excluded, then ten measured windows with 100 durable batch inserts each; 1000 measured insert observations per process",
+    "other_families": "full-size semantic and capability observations; one-pass operation timings do not satisfy repeated latency gates; after an unchanged family fails or exhausts 30 minutes, later rounds record the same unmeasurable dependency without repeating the failed workload",
+    "prior_dynamic_attempt": "30-minute cutoff, inconclusive; no full-size all-family pass assumed",
+    "ordering": "maintenance first, then documented family order; three rotating engine orders per family"
+  },
+  "known_native_budget_limits": {
+    "aggregate_100000_groups_owning_output": "Observed fixed QUERY-budget rejection. Validate every typed group/count via bounded partitions and preserve the full-output denial as unsupported N/A; no successful latency sample or ratio is inferred. Skewed groups and other failures are not exempt."
+  },
+  "untimed_fixture_protocol": "Committed-prefix continuation is disclosed in each fixture manifest. Original prefixes use 1000-row transactions; remaining fixture-only suffixes may use bounded 5000-row transactions. No import timing or fresh final-version import claim; final consumers are revalidated before use.",
+  "preflight_runner_sha256": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2",
+  "frozen_control_failure_policy": "One failed or timed-out deterministic family/profile is retained; later unchanged independent slots are marked unmeasurable, never success.",
+  "prepared_read_protocol": "Both native consumers clone identical prepared file; existing frozen-control import failures remain failures and are not repaired/reclassified. Input producer source6a and mixed-batch preparation history retained. Formal queries use exact full-result oracles; every failed consumer remains failed.",
+  "hardware": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "cpu_count": 5,
+    "allowed_cpus_before_restriction": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cgroup_memory_max": "17179869184",
+    "cgroup_cpu_max": "400000 100000"
+  },
+  "source_commit": "c741b5b2eb7b463d0096f06bee452be0114efe0f",
+  "current_frozen_worker": "/workspace/zyx-optimization-final-catalog-integrity-20261017/binaries/2/zyx-workload-contract-worker",
+  "frozen_harness": "/tmp/zyx-final-five-c741-window-20261017/frozen-harness/workload_preflight.py",
+  "delete_protocol": {
+    "query": "MATCH (n:Churn) DELETE n RETURN 1 AS deleted",
+    "expected_rows": 10000,
+    "expected_row": [
+      1
+    ],
+    "both_engines_full_result_validation": true,
+    "change": "Align explicit scalar outputs; preserve public native implicit full-result semantics. Do not pool old no-return/implicit-result failures or Kuzu-only timings."
+  },
+  "families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "sampling": {
+    "independent_processes_per_supported_engine": 3,
+    "warmup_windows": 3,
+    "measured_windows": 10,
+    "insert_batches_per_window": 100,
+    "nodes_per_batch": 100,
+    "body_bytes": 8192,
+    "tail_insert_observations_per_measured_process": 1000,
+    "query_timeout_ms": 30000,
+    "maintenance_workspace_bytes": 8388608,
+    "stop_seconds_per_case": 1800
+  },
+  "progress_logging": "One JSON line after each complete window, outside engine-operation timers; identical observational role on both engines.",
+  "baseline_version_rule": "The original source6a baseline remains separately versioned; no mixed-version overall performance claim.",
+  "shared_read_input_policy": "Both native consumers clone identical prepared file; existing frozen-control import failures remain failures and are not repaired/reclassified. Input producer source6a and mixed-batch preparation history retained. Formal queries use exact full-result oracles; every failed consumer remains failed.",
+  "formal_read_profiles": [
+    "scan",
+    "retrieval",
+    "indexed (medium only; unsupported and failures retained)"
+  ],
+  "formal_read_scales": [
+    "medium",
+    "holdout"
+  ],
+  "full_family_count": 13,
+  "full_family_slots": 117,
+  "new_source_tests": {
+    "modules": 17,
+    "tests": 522,
+    "full_suite": false
+  },
+  "source_freeze_manifest": "/workspace/zyx-optimization-final-catalog-integrity-20261017/manifest.json",
+  "kuzu_version": "0.11.3",
+  "accepted_total_before": 29,
+  "new_acceptance": "No automatic acceptance: review primary/protection/resource/steady-state gates separately. Failed/inconclusive cases never become passes.",
+  "performance_limitations": [
+    "AS/RSS scope remains as in previous protocol; no claim of 6GiB cgroup equivalence.",
+    "Native IPC and Kuzu Python have disclosed unequal entry/trace overheads.",
+    "Contract families except maintenance have descriptive operation timings, not invented 3/10 query repeats.",
+    "Shared input proves query/read comparability only; it does not measure or repair original import."
+  ],
+  "premeasurement_space_amendment": {
+    "original_excluded_attempt": "/workspace/zyx-optimization-final-five-window-20261017/excluded-preparation-space-failure.json",
+    "accepted_samples_in_excluded_attempt": 0,
+    "output_filesystem": "/tmp; 8.8GiB filesystem, 4.5GiB free at registration; both private native clones and all Kuzu working databases are on this same filesystem",
+    "original_input": "Immutable source remains on /workspace; cloning/preparation is outside query timers. No storage-device-equivalence claim to previous window."
+  },
+  "untimed_budget_replay": {
+    "operations": 120,
+    "complete": true,
+    "performance_samples": 0
+  },
+  "storage_location": {
+    "all_engine_working_databases": "/tmp",
+    "free_bytes_before_measurement": 5063057408,
+    "scope": "Same filesystem and device policy for all engines; cloning and setup excluded from query timers; no cross-window device-I/O equivalence claim."
+  },
+  "owned_case_cleanup": "Record exact TemporaryDirectory device/inode before use. After the isolated case exits, hash and remove only its still-matching owned clones, including after timeout; retain all raw outcomes. Read-side clones are likewise scoped to the exact owned result directory.",
+  "pending_user_decision": {
+    "family": "wide_large",
+    "current_file_limit_bytes": 2147483648,
+    "requested_wide_only_file_and_kuzu_mapping_bytes": 4294967296,
+    "raw_body_bytes": 2162688000,
+    "status": "awaiting_explicit_user_reply",
+    "rule": "Do not apply amendment without reply; all other registered work continues, wide cohort stays pending."
+  },
+  "raw_git_metadata_note": "Environment git_commit labels harness checkout metadata. Per-engine production source is established by this registration, immutable binary SHA256 and source freeze; original control core stays d09, current corec741."
+}

@@ -1,0 +1,24 @@
+{
+  "status": "final_frozen_candidate_acceptance_running",
+  "source_commit": "c741b5b2eb7b463d0096f06bee452be0114efe0f",
+  "source_freeze": "freeze-manifest.json",
+  "tests": {
+    "modules": 17,
+    "suites": 23,
+    "passed": 522,
+    "full_suite": false
+  },
+  "untimed_budget_replay": {
+    "operations": 120,
+    "all_results_checked": true,
+    "performance_samples": 0,
+    "evidence": "../20261017-integrity-large-value-evidence/proof.json"
+  },
+  "immutable_input_consumer_validation": "Both scales6exactcounts passed on final physically read-only consumer; formal queries still validate full results before samples are usable. Original control independently passed the same inputs.",
+  "new_accepted_ids": [],
+  "accepted_total": 29,
+  "percent": 85.3,
+  "window": "/tmp/zyx-final-five-c741-window-20261017",
+  "pending_user_decision": "Wide-only2GiB->4GiB file/mapping amendment requested, not authorized/applied. Other cases run; the entire wide cohort stays pending until the reply.",
+  "no_mixed_source_samples": "Source033 incomplete-window data excluded from this sourcec741 acceptance; original frozen core remainsd09. Per-engine binary hashes, not the raw harness checkout Git label, establish actual source."
+}
