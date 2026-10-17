@@ -1243,6 +1243,11 @@ namespace graph::storage {
 			leaf_append_size_.reset();
 			if (position != leaf.leaf_entries.end() && std::ranges::equal(position->key, key)) {
 				position->value_or_child = value;
+			} else if (append) {
+				// OwnedStdVector's general insertion keeps a private copy for
+				// throwing element moves. Appending has no shifted suffix and can
+				// use its admitted, geometrically grown backing directly.
+				leaf.leaf_entries.push_back(std::move(next));
 			} else {
 				leaf.leaf_entries.insert(position, std::move(next));
 			}
@@ -1480,28 +1485,35 @@ namespace graph::storage {
 			combined.insert(combined.end(), right.leaf_entries.begin(), right.leaf_entries.end());
 			std::optional<size_t> redistribution;
 			uint64_t smallestSkew = std::numeric_limits<uint64_t>::max();
+			// Authenticate the common headers and references once. Exact packed
+			// boundary sizes include each candidate's independently aligned restart
+			// table; constructing two complete pages per split only repeats copies,
+			// encoding and validation of the same immutable keys.
+			static_cast<void>(validatedLeafOccupancy(left));
+			static_cast<void>(validatedLeafOccupancy(right));
+			constexpr size_t overhead = RSS_SLOTTED_PAGE_HEADER_BYTES +
+				2U * RSS_SLOTTED_PAGE_SLOT_BYTES + RSS_BTREE_PAGE_HEADER_BYTES;
+			constexpr size_t capacity = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - overhead;
+			const auto sizes = PackedBTreePageCodec::encodedBoundarySizes(
+				BTreeNodeKind::BPN_LEAF, combined, leaf_value_layout_);
 			for (size_t split = 1U; split < combined.size(); ++split) {
-				OverlayMutationNode leftCandidate = left;
-				OverlayMutationNode rightCandidate = right;
-				leftCandidate.leaf_entries.assign(combined.begin(), combined.begin() + static_cast<ptrdiff_t>(split));
-				rightCandidate.leaf_entries.assign(combined.begin() + static_cast<ptrdiff_t>(split), combined.end());
-				try {
-					const uint32_t leftBytes = encodedNodeOccupancy(materializePreview(leftCandidate));
-					const uint32_t rightBytes = encodedNodeOccupancy(materializePreview(rightCandidate));
-					if (leftBytes >= RSS_BTREE_MIN_NODE_OCCUPIED_BYTES &&
-						rightBytes >= RSS_BTREE_MIN_NODE_OCCUPIED_BYTES) {
-						const uint64_t skew = leftBytes > rightBytes ? leftBytes - rightBytes : rightBytes - leftBytes;
-						if (!redistribution.has_value() || skew < smallestSkew) {
-							redistribution = split;
-							smallestSkew = skew;
-						}
+				if (sizes.prefixes[split] > capacity || sizes.suffixes[split] > capacity) continue;
+				const size_t leftBytes = overhead + sizes.prefixes[split];
+				const size_t rightBytes = overhead + sizes.suffixes[split];
+				if (leftBytes >= RSS_BTREE_MIN_NODE_OCCUPIED_BYTES &&
+					rightBytes >= RSS_BTREE_MIN_NODE_OCCUPIED_BYTES) {
+					const uint64_t skew = leftBytes > rightBytes ? leftBytes - rightBytes : rightBytes - leftBytes;
+					if (!redistribution.has_value() || skew < smallestSkew) {
+						redistribution = split;
+						smallestSkew = skew;
 					}
-				} catch (const FormatException &) {
 				}
 			}
 			if (redistribution.has_value()) {
 				left.leaf_entries.assign(combined.begin(), combined.begin() + static_cast<ptrdiff_t>(*redistribution));
 				right.leaf_entries.assign(combined.begin() + static_cast<ptrdiff_t>(*redistribution), combined.end());
+				static_cast<void>(materializePreview(left));
+				static_cast<void>(materializePreview(right));
 				left.dirty = true;
 				right.dirty = true;
 				parent.internal_entries[leftOrdinal].key = right.leaf_entries.front().key;
