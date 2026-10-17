@@ -1,0 +1,79 @@
+{
+  "registered_before_partitioned_measurements": true,
+  "reason": "Existing8-querycontrolprofile at100samples needs~36minutes from already-completed baselineP50s, exceeds30minute/profile limit. Correct orchestration packing, not engine/query/threshold changes.",
+  "cancelled_original_round4": {
+    "pid": 183313,
+    "args": [
+      "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded",
+      "--dataset",
+      "/tmp/zyx-final-five-steady-window-20261017/reads/medium/round-4/control/scan/20261017T125501238385Z-medium-scan-zyx/dataset",
+      "--db-path",
+      "/tmp/zyx-final-five-steady-window-20261017/reads/medium/round-4/control/scan/20261017T125501238385Z-medium-scan-zyx/zyx.db",
+      "--scale",
+      "medium",
+      "--profile",
+      "scan",
+      "--warmup",
+      "3",
+      "--iterations",
+      "100",
+      "--execution-mode",
+      "warm",
+      "--workloads",
+      "aggregation_group_by,all_nodes_property_filter,label_multi_property_filter,label_scan_filter,one_hop_expand,relationship_property_filter,relationship_type_scan,two_hop_expand",
+      "--prepared-db",
+      "/tmp/zyx-final-five-steady-window-20261017/prepared-inputs/medium/control.zyx",
+      "--threads",
+      "1",
+      "--load-batch-rows",
+      "1000",
+      "--emit-result-rows"
+    ],
+    "elapsed_seconds": 1176,
+    "classification": "cancelled_incomplete_orchestration_packing_attempt",
+    "valid_accepted_samples": 0,
+    "partial_output_retained_never_a_success": true
+  },
+  "use_only_original_unused_slot": {
+    "engine": "control",
+    "scale": "medium",
+    "profile": "scan",
+    "round": 5,
+    "samples_per_workload": 100,
+    "warmups": 3
+  },
+  "partitions": [
+    [
+      "relationship_property_filter",
+      "label_multi_property_filter",
+      "relationship_type_scan",
+      "two_hop_expand",
+      "one_hop_expand"
+    ],
+    [
+      "all_nodes_property_filter",
+      "aggregation_group_by",
+      "label_scan_filter"
+    ]
+  ],
+  "estimated_query_seconds_per_partition": [
+    1036.232736,
+    1165.1205499999999
+  ],
+  "maximum_attempts_per_workload_per_source_including_cancelled": 2,
+  "maximum_query_samples_per_workload_per_source_including_partial": 200,
+  "original_total_control_profile_budget_seconds": 3600,
+  "remaining_control_profile_budget_seconds": 2424,
+  "maximum_seconds_per_partition": 1800,
+  "global_remaining_budget_enforced": true,
+  "base3independent_rounds_unchanged": true,
+  "current_round4and5_unchanged": true,
+  "no_source_or_binary_or_input_or_query_or_timer_or_resource_cap_change": true,
+  "supplemental_control_success_count_can_be1_per_workload": "At most2is a cap, not a requirement to discard a remaining valid independent round. Original base3processes remain the primary reproducibility evidence. No ratio from the cancelled attempt.",
+  "engine_free_write_guard": {
+    "path": "/tmp/run-zyx-final-steady-write-campaign.py",
+    "original_sha256": "7f9aea369c23fec90fb22972c2b8da3013a55246ce84b4179b35898f4ce175ac",
+    "new_sha256": "cb4e978a4153680ba972746b7320aa65d901fdc09d53610f6f7402a53d12dde1",
+    "changes_before_unstarted_write_processes_only": true
+  }
+}
