@@ -1,0 +1,3 @@
+# Frozen property-name batch acceptance
+
+Progress remains 31/34 (91.2%), this request 2/5. Source 64ee94dd is frozen after 281 selected module tests. Both immutable read inputs passed six exact read-only counts with unchanged hashes. This registration precedes all new formal cases. The first full-size 10,000-entity dynamic case must finish under the original 1,800-second cap before the integrated matrix starts. Original resource limits, full oracles, finite supplemental budgets and failed original controls remain unchanged. No old/new candidate samples are pooled. Kuzu performance objective remains unmet.
