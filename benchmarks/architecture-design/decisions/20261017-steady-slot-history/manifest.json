@@ -76,5 +76,23 @@
     "archive": "raw/12-retention.json.gz",
     "bytes": 421,
     "sha256": "80ab32566352365d54401fcdac6865147ce3e33c49a2ba9ad2d50adf6875220c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/repaired-retained-metadata.json",
+    "archive": "raw/retained-repaired-retained-metadata.json.gz",
+    "bytes": 1466428,
+    "sha256": "788edb91fff350f40bcf71a543231211d3fea815b5048c46d8e1c6e3dd1daf45"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/retained-metadata-summary.json",
+    "archive": "raw/retained-retained-metadata-summary.json.gz",
+    "bytes": 341,
+    "sha256": "fa281a753aaf755bed0e954833d26c65ba364dd069928a99b9cdc6c251170246"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/registration.json",
+    "archive": "raw/retained-registration.json.gz",
+    "bytes": 601,
+    "sha256": "0fd34b05b1644d81e6e6c6079e5f837b7877ae1abe45ba399d8c633c3a682e11"
   }
 ]

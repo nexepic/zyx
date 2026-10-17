@@ -25,7 +25,21 @@
     "Reclaim authenticated unmapped Entity/Property pools through existing bounded lifecycle, keeping fresh PageDir revalidation.",
     "During already-authorized batched slot release erase at most2 old obsolete shared-pool owners per released slot, after snapshot fence and full current PageDir validation; newest obsolete owner retained."
   ],
-  "retained_check_limit": "Already-normalized zero-Churn file has no pending maintenance candidates; latest untimed MAINTAIN was a no-op. Integrity/counts passed, but this does not prove old history was vacuumed.",
+  "retained_check_limit": "retired_values counts values only. Actual1361\u21921363 generation and Catalog20292\u219219878 prove pool lifecycle publication despite zero values. Unmapped sealed Entity/Property counts12/189\u21920/0; exact counts, reopen and integrity pass. End-of-check STATS after REOPEN cannot represent earlier maintenance writes. Old history is drained only for selected released slots, never a full idle vacuum.",
   "new_caps": false,
-  "kuzu_goal_achieved": false
+  "kuzu_goal_achieved": false,
+  "retained_repair": {
+    "before_generation": 1361,
+    "after_generation": 1363,
+    "before_catalog_entries": 20292,
+    "after_catalog_entries": 19878,
+    "before_unmapped_entity_property": [
+      12,
+      189
+    ],
+    "after_unmapped_entity_property": [
+      0,
+      0
+    ]
+  }
 }
