@@ -4,7 +4,7 @@
   "percent": 85.3,
   "this_request_completed": 0,
   "source": "5657e287",
-  "status": "13window_correctness_passed_resource_plateau_failed_existing_metadata_gc_repair_in_progress",
+  "status": "final_route_replay_and1021distinct_selected_tests_passed_final_integrated_window_pending",
   "performance_admission": false,
   "negative": "Four regressions fail against unchanged9dd Debug core for intended orphan-pool, history growth, pin and reference-validation causes.",
   "positive": {
@@ -74,5 +74,63 @@
     "all42_modules_rerun_after_followup": false,
     "full_suite": false
   },
-  "metadata_cleanup_limits": "Owned candidates/IDs and owning returned slot backing use the existing maintenance scope. Reuse the ordinary metadata publication route-capacity checks, same snapshot proof and failure fence. Skip optional extra publication at exhausted checkpointLSN. No format or publicDriverABI changes, larger resource caps or new background tasks."
+  "metadata_cleanup_limits": "Owned candidates/IDs and owning returned slot backing use the existing maintenance scope. Reuse the ordinary metadata publication route-capacity checks, same snapshot proof and failure fence. Skip optional extra publication at exhausted checkpointLSN. No format or publicDriverABI changes, larger resource caps or new background tasks.",
+  "metadata_cleanup_retained": {
+    "source": "e4c12fde",
+    "status": "passed_under_original_backend_caps",
+    "full10000_user_rows_checked": true,
+    "reopen_integrity": "passed",
+    "file_bytes_before_after": [
+      292028416,
+      292028416
+    ],
+    "metadata_pool_count_before_after": [
+      478,
+      376
+    ],
+    "not_a_steady_or_performance_acceptance": true
+  },
+  "actual_remaining_route_retention": {
+    "generation": 1501,
+    "registered_metadata_routes": 9161,
+    "current_directory_metadata_routes": 305,
+    "routes_without_current_directory_reference": 8856,
+    "diagnosis": "Normal route publication unions every old route with staged routes, retaining detached directory pages. Empty-pool cleanup alone cannot free these targets.",
+    "unit_negative": "Small valid typed Entity/Directory fixture passes pinned reads but retains detached routes before and after reopen on unchanged e4 core; missing-PageDir prototype is not evidence.",
+    "repair_scope": "Maintenance-only batch request selects the authenticated current directory graph as route baseline, then overlays final staged routes through existing publication. Old pinned bootstrap branches remain immutable. Ordinary writes keep their existing baseline.",
+    "status": "genuine_old_core_counterexample_and_selected1021distinct_tests_passed_release_endpoint_pending"
+  },
+  "route_pruning_source": "5fc768cb",
+  "route_pruning_regression": {
+    "modules": 42,
+    "tests": 1019,
+    "passed": 1019,
+    "separate_reclaim_module_tests": 4,
+    "separate_passed": 4,
+    "distinct_total": 1021,
+    "core_sha256_same_for_full42_and4": true,
+    "full_suite": false,
+    "new_failure_tests": "Before inactive Superblock write preserves old route branch; after inactive write recovers pruned branch; pinned old node-map reads remain valid."
+  },
+  "final_route_replay": {
+    "source": "5fc768cb",
+    "worker_sha256": "615acc14c8384f1b4698c2e060847f66ff98317c3c332bcfb1c69e82140494c3",
+    "registered_routes_before_after": [
+      9161,
+      305
+    ],
+    "detached_routes_before_after": [
+      8856,
+      0
+    ],
+    "full10000_user_rows_empty_churn_reopen_integrity": "passed",
+    "file_bytes_before_after": [
+      292028416,
+      292028416
+    ],
+    "metadata_pools_after": 354,
+    "empty_durable_metadata_pool_headers_after": 300,
+    "caveat": "These newly unreachable target pools become eligible after pruning publication; retained metadata capacity and full ongoing file plateau still require the final O6 window. Zero detached routes is not a steady-performance pass."
+  },
+  "final_window_efficiency": "After implementation and exact retained-file correctness, freeze source/binaries and run O6 first within the final integrated performance window. Its first13window current process also validates full resource behavior; do not add a duplicate untimed13window run. Do not launch the broad read/write/family matrix if actual O6 correctness/resource checkpoint fails."
 }

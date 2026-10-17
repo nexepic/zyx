@@ -165,7 +165,7 @@
       "scope": "Historical f0 clean freeze with40modules/1011distinct tests remains versioned. New9dd O6 patch has6modules/94tests; full maintenance correctness and new clean freeze pending."
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
-    "working_source_commit": "e4c12fde",
+    "working_source_commit": "5fc768cb",
     "final_window_status": "f0 stopped at engine-free boundary after actual maintenance failure; deferred contracts never passes or failures",
     "latest_checkpoint": "20261017-steady-slot-history/proof.json",
     "latest_targeted_tests": {
@@ -175,7 +175,7 @@
       "full_suite": false
     },
     "full_maintenance_preflight": "13_of_13_correctness_passed_resource_plateau_failed_13.7_percent_growth",
-    "pending_repair": "Metadata cleanup selected regression passes after idle zero-write fix; Release retained-file and full resource revalidation pending.",
+    "pending_repair": "Implementation1021selected distinct tests and exactRelease route replay pass; final frozen integrated O6-first resource/performance admission pending.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -185,7 +185,17 @@
       "followup_passed": 93,
       "distinct_passing_after_targeted_followup": 1018,
       "full_suite": false
-    }
+    },
+    "route_pruning_targeted_tests": {
+      "modules": 42,
+      "tests": 1019,
+      "passed": 1019,
+      "additional_module_tests": 4,
+      "additional_distinct": 2,
+      "total_distinct_passed": 1021,
+      "full_suite": false
+    },
+    "final_window_order": "O6 first, current13window case doubles as resource correctness checkpoint; no duplicate untimed full13window run; do not start broad matrix after actualO6resource failure."
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
