@@ -1,14 +1,14 @@
 {
   "source": "e8c38315",
   "production": "5fc768cb",
-  "status": "in_progress_O6accepted_read_phase_running",
-  "accepted": 30,
+  "status": "S44andS55accepted_remaining_three_gates_pending",
+  "accepted": 31,
   "total": 34,
-  "percent": 88.2,
-  "this_request_completed": 1,
+  "percent": 91.2,
+  "this_request_completed": 2,
   "window": "/tmp/zyx-final-five-steady-window-20261017",
   "O6_first": true,
   "all_caps_and_thresholds_unchanged": true,
   "Kuzu_goal_achieved": false,
-  "latest_acceptance": "20261017-s55-steady-acceptance/proof.json"
+  "latest_acceptance": "20261017-s44-graph-access-acceptance/proof.json"
 }

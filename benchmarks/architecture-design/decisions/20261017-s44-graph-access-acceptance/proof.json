@@ -1,0 +1,908 @@
+{
+  "accepted_id": "S4.4",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "request_completed": 2,
+  "source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+  "production": "5fc768cb",
+  "scope": "Existing admitted key-only authenticated adjacency and snapshot-bound batch/cache access; no covering/segmented format adopted. Graph read/edge-write/space acceptance only.",
+  "base_read_graph_workloads": [
+    {
+      "scale": "holdout",
+      "workload": "two_hop_expand",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8461215149089504
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_expand",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8481510665063106
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_fetch_neighbor_ids",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.856151094557406
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_fetch_neighbor_records",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8653234033301931
+    },
+    {
+      "scale": "medium",
+      "workload": "point_edge_fetch_by_endpoints",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8416414044598197
+    },
+    {
+      "scale": "medium",
+      "workload": "relationship_property_filter",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8373131728228188
+    },
+    {
+      "scale": "medium",
+      "workload": "relationship_type_scan",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.44203897173118
+    },
+    {
+      "scale": "medium",
+      "workload": "two_hop_expand",
+      "all_current_p50_below_all_control_p50": true,
+      "all_current_p95_below_all_control_p95": true,
+      "p50_reduction": 0.8606927071172042
+    }
+  ],
+  "finite_graph_reads": [
+    {
+      "scale": "holdout",
+      "workload": "two_hop_expand",
+      "processes": {
+        "control": [
+          {
+            "scale": "holdout",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "control",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 21.25275,
+            "p95_ms": 24.19721,
+            "full_results_verified": true
+          },
+          {
+            "scale": "holdout",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 20.65415,
+            "p95_ms": 24.098129999999998,
+            "full_results_verified": true
+          }
+        ],
+        "current": [
+          {
+            "scale": "holdout",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 3.029865,
+            "p95_ms": 3.5202644999999997,
+            "full_results_verified": true
+          },
+          {
+            "scale": "holdout",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 3.061165,
+            "p95_ms": 4.133808999999999,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 2,
+      "control_p50_ms": 20.95345,
+      "control_p95_ms": 24.147669999999998,
+      "current_processes": 2,
+      "current_p50_ms": 3.045515,
+      "current_p95_ms": 3.8270367499999995,
+      "p50_reduction_vs_control": 0.854653290985494,
+      "p95_change_vs_control": -0.8415152786997668
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_expand",
+      "processes": {
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "one_hop_expand",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 2.37493,
+            "p95_ms": 2.717866,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "one_hop_expand",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 2.44133,
+            "p95_ms": 2.869935,
+            "full_results_verified": true
+          }
+        ],
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "one_hop_expand",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 16.9481,
+            "p95_ms": 19.001054999999997,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 1,
+      "control_p50_ms": 16.9481,
+      "control_p95_ms": 19.001054999999997,
+      "current_processes": 2,
+      "current_p50_ms": 2.40813,
+      "current_p95_ms": 2.7939005,
+      "p50_reduction_vs_control": 0.8579115063045415,
+      "p95_change_vs_control": -0.8529607698098869
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_fetch_neighbor_ids",
+      "processes": {
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_ids",
+            "engine": "control",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 22.9179,
+            "p95_ms": 25.89745,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_ids",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 22.1109,
+            "p95_ms": 23.63972,
+            "full_results_verified": true
+          }
+        ],
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_ids",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 2.97364,
+            "p95_ms": 3.285324,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_ids",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 3.16901,
+            "p95_ms": 3.7441699999999996,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 2,
+      "control_p50_ms": 22.514400000000002,
+      "control_p95_ms": 24.768585,
+      "current_processes": 2,
+      "current_p50_ms": 3.071325,
+      "current_p95_ms": 3.514747,
+      "p50_reduction_vs_control": 0.8635839729239954,
+      "p95_change_vs_control": -0.8580965767725528
+    },
+    {
+      "scale": "medium",
+      "workload": "one_hop_fetch_neighbor_records",
+      "processes": {
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_records",
+            "engine": "control",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 33.681700000000006,
+            "p95_ms": 38.316044999999995,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_records",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 33.1535,
+            "p95_ms": 34.80494,
+            "full_results_verified": true
+          }
+        ],
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_records",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 4.67276,
+            "p95_ms": 5.323853,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "retrieval",
+            "workload": "one_hop_fetch_neighbor_records",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 5.03672,
+            "p95_ms": 6.116662999999999,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 2,
+      "control_p50_ms": 33.41760000000001,
+      "control_p95_ms": 36.560492499999995,
+      "current_processes": 2,
+      "current_p50_ms": 4.85474,
+      "current_p95_ms": 5.720257999999999,
+      "p50_reduction_vs_control": 0.8547250550608063,
+      "p95_change_vs_control": -0.8435399085501926
+    },
+    {
+      "scale": "medium",
+      "workload": "relationship_property_filter",
+      "processes": {
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_property_filter",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 996.5935,
+            "p95_ms": 1072.1605,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_property_filter",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 993.342,
+            "p95_ms": 1060.1454999999999,
+            "full_results_verified": true
+          }
+        ],
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_property_filter",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 6505.594999999999,
+            "p95_ms": 6736.4394999999995,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 1,
+      "control_p50_ms": 6505.594999999999,
+      "control_p95_ms": 6736.4394999999995,
+      "current_processes": 2,
+      "current_p50_ms": 994.96775,
+      "current_p95_ms": 1066.1529999999998,
+      "p50_reduction_vs_control": 0.8470596847790248,
+      "p95_change_vs_control": -0.8417334557817969
+    },
+    {
+      "scale": "medium",
+      "workload": "relationship_type_scan",
+      "processes": {
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_type_scan",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 341.5425,
+            "p95_ms": 367.90815,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_type_scan",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 337.012,
+            "p95_ms": 364.75124999999997,
+            "full_results_verified": true
+          }
+        ],
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "relationship_type_scan",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 577.611,
+            "p95_ms": 625.26645,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 1,
+      "control_p50_ms": 577.611,
+      "control_p95_ms": 625.26645,
+      "current_processes": 2,
+      "current_p50_ms": 339.27725,
+      "current_p95_ms": 366.3297,
+      "p50_reduction_vs_control": 0.41261982545346265,
+      "p95_change_vs_control": -0.4141222514017824
+    },
+    {
+      "scale": "medium",
+      "workload": "two_hop_expand",
+      "processes": {
+        "current": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 2.88361,
+            "p95_ms": 3.1733105,
+            "full_results_verified": true
+          },
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 3.03204,
+            "p95_ms": 3.7258005,
+            "full_results_verified": true
+          }
+        ],
+        "control": [
+          {
+            "scale": "medium",
+            "profile": "scan",
+            "workload": "two_hop_expand",
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 20.6256,
+            "p95_ms": 21.841505,
+            "full_results_verified": true
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "control_processes": 1,
+      "control_p50_ms": 20.6256,
+      "control_p95_ms": 21.841505,
+      "current_processes": 2,
+      "current_p50_ms": 2.9578249999999997,
+      "current_p95_ms": 3.4495554999999998,
+      "p50_reduction_vs_control": 0.856594474827399,
+      "p95_change_vs_control": -0.8420642029933377
+    }
+  ],
+  "edge_write_protections": [
+    {
+      "workload": "create_edge",
+      "processes": {
+        "control": [
+          {
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 28.9411085,
+            "p95_ms": 37.20752795,
+            "peak_profile_rss_kib": 39516,
+            "median_statement_read_bytes_delta": 13049856.0,
+            "median_statement_write_bytes_delta": 302144.0,
+            "median_statement_file_bytes_delta": 0.0
+          },
+          {
+            "engine": "control",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 28.9881415,
+            "p95_ms": 32.86076625,
+            "peak_profile_rss_kib": 39544,
+            "median_statement_read_bytes_delta": 13049856.0,
+            "median_statement_write_bytes_delta": 302144.0,
+            "median_statement_file_bytes_delta": 0.0
+          }
+        ],
+        "current": [
+          {
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 28.722983,
+            "p95_ms": 32.34737145,
+            "peak_profile_rss_kib": 39384,
+            "median_statement_read_bytes_delta": 12439552.0,
+            "median_statement_write_bytes_delta": 302144.0,
+            "median_statement_file_bytes_delta": 0.0
+          },
+          {
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 28.349505999999998,
+            "p95_ms": 32.334756299999995,
+            "peak_profile_rss_kib": 39376,
+            "median_statement_read_bytes_delta": 12439552.0,
+            "median_statement_write_bytes_delta": 302144.0,
+            "median_statement_file_bytes_delta": 0.0
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "p95_note": "Two separate100sample processes/source; no further same-source repeats.",
+      "control_processes": 2,
+      "control_p50_ms": 28.964624999999998,
+      "control_p95_ms": 35.0341471,
+      "control_peak_profile_rss_kib": 39530.0,
+      "control_median_statement_read_bytes_delta": 13049856.0,
+      "control_median_statement_write_bytes_delta": 302144.0,
+      "control_median_statement_file_bytes_delta": 0.0,
+      "current_processes": 2,
+      "current_p50_ms": 28.5362445,
+      "current_p95_ms": 32.341063874999996,
+      "current_peak_profile_rss_kib": 39380.0,
+      "current_median_statement_read_bytes_delta": 12439552.0,
+      "current_median_statement_write_bytes_delta": 302144.0,
+      "current_median_statement_file_bytes_delta": 0.0,
+      "current_p50_ms_change_vs_control": -0.014789782363831772,
+      "current_p95_ms_change_vs_control": -0.07687023797990511
+    },
+    {
+      "workload": "delete_edge",
+      "processes": {
+        "control": [
+          {
+            "engine": "control",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 21.8419065,
+            "p95_ms": 25.432499149999998,
+            "peak_profile_rss_kib": 39516,
+            "median_statement_read_bytes_delta": 7266304.0,
+            "median_statement_write_bytes_delta": 273216.0,
+            "median_statement_file_bytes_delta": 0.0
+          },
+          {
+            "engine": "control",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 21.880734500000003,
+            "p95_ms": 24.88076585,
+            "peak_profile_rss_kib": 39544,
+            "median_statement_read_bytes_delta": 7266304.0,
+            "median_statement_write_bytes_delta": 273216.0,
+            "median_statement_file_bytes_delta": 0.0
+          }
+        ],
+        "current": [
+          {
+            "engine": "current",
+            "round": 5,
+            "samples": 100,
+            "p50_ms": 8.6329615,
+            "p95_ms": 9.629543349999999,
+            "peak_profile_rss_kib": 39384,
+            "median_statement_read_bytes_delta": 4349952.0,
+            "median_statement_write_bytes_delta": 273216.0,
+            "median_statement_file_bytes_delta": 0.0
+          },
+          {
+            "engine": "current",
+            "round": 4,
+            "samples": 100,
+            "p50_ms": 8.961811,
+            "p95_ms": 11.5919536,
+            "peak_profile_rss_kib": 39376,
+            "median_statement_read_bytes_delta": 4349952.0,
+            "median_statement_write_bytes_delta": 273216.0,
+            "median_statement_file_bytes_delta": 0.0
+          }
+        ]
+      },
+      "automatic_acceptance": false,
+      "p95_note": "Two separate100sample processes/source; no further same-source repeats.",
+      "control_processes": 2,
+      "control_p50_ms": 21.8613205,
+      "control_p95_ms": 25.1566325,
+      "control_peak_profile_rss_kib": 39530.0,
+      "control_median_statement_read_bytes_delta": 7266304.0,
+      "control_median_statement_write_bytes_delta": 273216.0,
+      "control_median_statement_file_bytes_delta": 0.0,
+      "current_processes": 2,
+      "current_p50_ms": 8.79738625,
+      "current_p95_ms": 10.610748475,
+      "current_peak_profile_rss_kib": 39380.0,
+      "current_median_statement_read_bytes_delta": 4349952.0,
+      "current_median_statement_write_bytes_delta": 273216.0,
+      "current_median_statement_file_bytes_delta": 0.0,
+      "current_p50_ms_change_vs_control": -0.5975821199821849,
+      "current_p95_ms_change_vs_control": -0.5782126850642668
+    }
+  ],
+  "full_size_traversal_cases": [
+    {
+      "round": 1,
+      "engine": "control",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 17.838885898003355,
+        "maxrss_kib": 41004,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36756,
+        "seed": 42
+      }
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "615acc14c8384f1b4698c2e060847f66ff98317c3c332bcfb1c69e82140494c3",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 18.424991275009234,
+        "maxrss_kib": 42880,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36844,
+        "seed": 42
+      }
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "report": {
+        "engine": "kuzu",
+        "version": "0.11.3",
+        "seed": 42,
+        "profile": "contract",
+        "operations": 10318,
+        "performance_timing": false,
+        "full_results_checked": true,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "maintenance_windows": [],
+        "not_equivalent": {
+          "dynamic": "fixed-schema tables cannot preserve arbitrary missing-key identity",
+          "fence_interleaving": "native conservative fence errors differ; ordinary mixed workload is tested",
+          "page_reclaim": "native journal/reclaimer/pin identity is engine-specific; old views and churn are tested",
+          "budget": "native charged-byte/physical-readonly scratch contract is engine-specific"
+        },
+        "trace_sha256": "f566f052aae200c38c98c9c19497ca7b9c5fe3feb6d8530b2145fea86960dc30"
+      },
+      "resources": {
+        "wall_seconds": 6.556153850018745,
+        "maxrss_kib": 99780,
+        "rss_scope": "Kuzu in-process driver and engine",
+        "driver_maxrss_kib": 99780,
+        "seed": 42
+      }
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 17.657903735991567,
+        "maxrss_kib": 41040,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36772,
+        "seed": 42
+      }
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "615acc14c8384f1b4698c2e060847f66ff98317c3c332bcfb1c69e82140494c3",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 18.36920544700115,
+        "maxrss_kib": 42880,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36944,
+        "seed": 42
+      }
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "report": {
+        "engine": "kuzu",
+        "version": "0.11.3",
+        "seed": 42,
+        "profile": "contract",
+        "operations": 10318,
+        "performance_timing": false,
+        "full_results_checked": true,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "maintenance_windows": [],
+        "not_equivalent": {
+          "dynamic": "fixed-schema tables cannot preserve arbitrary missing-key identity",
+          "fence_interleaving": "native conservative fence errors differ; ordinary mixed workload is tested",
+          "page_reclaim": "native journal/reclaimer/pin identity is engine-specific; old views and churn are tested",
+          "budget": "native charged-byte/physical-readonly scratch contract is engine-specific"
+        },
+        "trace_sha256": "f566f052aae200c38c98c9c19497ca7b9c5fe3feb6d8530b2145fea86960dc30"
+      },
+      "resources": {
+        "wall_seconds": 6.545416503009619,
+        "maxrss_kib": 99456,
+        "rss_scope": "Kuzu in-process driver and engine",
+        "driver_maxrss_kib": 99456,
+        "seed": 42
+      }
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 18.85778659299831,
+        "maxrss_kib": 41156,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36756,
+        "seed": 42
+      }
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "report": {
+        "engine": "zyx-native",
+        "profile": "contract",
+        "seed": 42,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "operations": 418,
+        "full_results_checked": true,
+        "performance_timing": false,
+        "unsupported_variants": [],
+        "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+        "maintenance_windows": [],
+        "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+        "binary_sha256": "615acc14c8384f1b4698c2e060847f66ff98317c3c332bcfb1c69e82140494c3",
+        "trace_sha256": "8966aca4b4210c25cd03e1a9f3814e70420c5e594f2a781fe5b80759cce7530f"
+      },
+      "resources": {
+        "wall_seconds": 18.453327978990274,
+        "maxrss_kib": 42872,
+        "rss_scope": "native worker child peak; one worker per isolated case",
+        "driver_maxrss_kib": 36960,
+        "seed": 42
+      }
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "report": {
+        "engine": "kuzu",
+        "version": "0.11.3",
+        "seed": 42,
+        "profile": "contract",
+        "operations": 10318,
+        "performance_timing": false,
+        "full_results_checked": true,
+        "families": [
+          "traversal"
+        ],
+        "isolated_family": "traversal",
+        "maintenance_windows": [],
+        "not_equivalent": {
+          "dynamic": "fixed-schema tables cannot preserve arbitrary missing-key identity",
+          "fence_interleaving": "native conservative fence errors differ; ordinary mixed workload is tested",
+          "page_reclaim": "native journal/reclaimer/pin identity is engine-specific; old views and churn are tested",
+          "budget": "native charged-byte/physical-readonly scratch contract is engine-specific"
+        },
+        "trace_sha256": "f566f052aae200c38c98c9c19497ca7b9c5fe3feb6d8530b2145fea86960dc30"
+      },
+      "resources": {
+        "wall_seconds": 6.703399304009508,
+        "maxrss_kib": 99548,
+        "rss_scope": "Kuzu in-process driver and engine",
+        "driver_maxrss_kib": 99548,
+        "seed": 42
+      }
+    }
+  ],
+  "median_whole_worker_peak_rss_kib": {
+    "control": 41040,
+    "current": 42880,
+    "kuzu": 99548
+  },
+  "native_rss_change_fraction": 0.04483430799220267,
+  "graph_semantics": "10000-neighbor hub, parallel edges, self-loop, one/two-hop full ID/value/multiplicity oracles in3independent cases/engine; unchanged production authenticated Edge backlookup and snapshot/continuation/budget contracts. Existing selected semantic and fault evidence is retained separately; no invented six-hop timing result.",
+  "space": "Edge create/delete statement write bytes and file deltas equal control; unchanged physical graph format.3finalO6processes meet existing sustained file/RSS boundary; closed endpoint0detachedroutes/0retirequeue. O6control deletion remains unavailable, never a long-run relative protection pass.",
+  "maintenance_evidence": "../20261017-s55-steady-acceptance/proof.json",
+  "existing_semantic_evidence": [
+    "../20261014-s4-candidate-comparison/proof.json",
+    "../20261014-s4-production-batch/proof.json",
+    "../20261017-steady-slot-history/proof.json"
+  ],
+  "not_accepted_or_waived": [
+    "S2.5 global primary/protection acceptance",
+    "S3.5 property write P95 uncertainty: create_nodes_100+6.33percent andset_score_large_body+10.29percent; finite budget exhausted, not a pass",
+    "S6.2 full integrated matrix still running"
+  ],
+  "kuzu_goal_achieved": false,
+  "strict_cross_engine_win": false,
+  "full_unit_suite": false,
+  "archive_count": 2082,
+  "decompressed_hashes_verified": true,
+  "counterexample_preservation": "Canceled read supplement remains failed; unused original control slot remains skipped with separately recorded two successful partitions; no canceled samples accepted; successful source process counts explicit."
+}

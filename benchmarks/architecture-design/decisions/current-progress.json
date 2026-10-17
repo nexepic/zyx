@@ -29,11 +29,12 @@
     "S0.4",
     "S6.4",
     "S0.3",
-    "S5.5"
+    "S5.5",
+    "S4.4"
   ],
-  "accepted": 30,
+  "accepted": 31,
   "total": 34,
-  "percent": 88.2,
+  "percent": 91.2,
   "stages": {
     "S0": {
       "accepted": 4,
@@ -56,9 +57,9 @@
       "percent": 80
     },
     "S4": {
-      "accepted": 3,
+      "accepted": 4,
       "total": 4,
-      "percent": 75.0
+      "percent": 100
     },
     "S5": {
       "accepted": 5,
@@ -133,7 +134,8 @@
       "S6.3",
       "S5.3",
       "S6.1",
-      "S5.5"
+      "S5.5",
+      "S4.4"
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
@@ -151,9 +153,10 @@
       "S6.2"
     ],
     "completed_ids": [
-      "S5.5"
+      "S5.5",
+      "S4.4"
     ],
-    "completed": 1,
+    "completed": 2,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
     "pending_revalidation_ids": [],
@@ -169,8 +172,8 @@
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
     "working_source_commit": "5fc768cb",
-    "final_window_status": "O6complete_read_phase_running",
-    "latest_checkpoint": "20261017-s55-steady-acceptance/proof.json",
+    "final_window_status": "graph_access_accepted_property_write_tails_uncertain_remaining_contracts_running",
+    "latest_checkpoint": "20261017-s44-graph-access-acceptance/proof.json",
     "latest_targeted_tests": {
       "modules": 42,
       "tests": 1019,
@@ -180,7 +183,7 @@
       "full_suite": false
     },
     "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
-    "pending_repair": "No pending implementation patch; remaining4documented read/write/space/integrated acceptance items running.",
+    "pending_repair": "Two property-write P95 uncertainties remain; no same-source repeats. Full-size dynamic/wide/write/mixed/snapshot/budget contracts continue.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -313,18 +316,19 @@
   "S5.3": "accepted_revalidated",
   "S6.1": "accepted_revalidated",
   "last_certified_checkpoint": {
-    "accepted": 30,
-    "percent": 88.2,
+    "accepted": 31,
+    "percent": 91.2,
     "production_source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
-    "latest_delivery": "S5.5",
-    "evidence": "20261017-s55-steady-acceptance/proof.json",
+    "latest_delivery": "S4.4",
+    "evidence": "20261017-s44-graph-access-acceptance/proof.json",
     "performance_acceptance": false,
-    "accepted_scope": "S5.5O6 only; primary/protection/integrated comparison gates remain pending. Kuzu goal unmet.",
+    "accepted_scope": "S4.4 graph read/edge-write/space plus previously acceptedS5.5; property-write tails and integrated gates remain pending; no threshold waiver.",
     "source_revalidation_evidence": "20261017-steady-slot-history/proof.json",
     "performance_baseline_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8"
   },
   "S0.4": "accepted_diagnostic_report_with_explicit_limits",
   "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot",
   "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits",
-  "S5.5": "accepted_O6_sustained_cost_and_bounded_resource_contract_with_explicit_comparison_limits"
+  "S5.5": "accepted_O6_sustained_cost_and_bounded_resource_contract_with_explicit_comparison_limits",
+  "S4.4": "accepted_graph_read_edge_write_and_bounded_space_contract"
 }
