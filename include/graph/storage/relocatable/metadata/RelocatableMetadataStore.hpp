@@ -19,6 +19,7 @@
 #include <optional>
 #include <span>
 #include <vector>
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
@@ -55,7 +56,7 @@ namespace graph::storage {
 	struct MetadataPagePoolReclamation {
 		Superblock superblock;
 		uint64_t reclaimed_pool_slots = 0;
-		std::vector<PhysicalSlotId> released_pool_slots;
+		utils::OwnedStdVector<PhysicalSlotId> released_pool_slots;
 	};
 
 	// A COW image can seed a previously unallocated Entity pool. The stable

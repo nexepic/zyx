@@ -7876,6 +7876,7 @@ namespace graph::storage {
 														   *metadata_);
 			try {
 				report = reclaimer.reclaim(options, checkpointLsn, publishOptions);
+
 			} catch (...) {
 				markReopenRequiredIfPublicationAdvanced(publicationBase);
 				throw;
@@ -7953,6 +7954,20 @@ namespace graph::storage {
 			LargeValueReachabilityReclaimer reclaimer(*large_values_, *slotted_pages_, *metadata_);
 			try {
 				report = reclaimer.reclaim(options, checkpointLsn, publishOptions);
+                // An idle pass must retain its zero-write contract. Reclaim
+                // metadata pools after this pass actually published pool/value
+                // retirement, using the same protected maintenance account.
+                if (report.retired_values != 0U || report.empty_pools_retired != 0U ||
+                    report.retired_pools_released != 0U) {
+                    auto after = metadata_->openSnapshot();
+                    const uint64_t maintenanceLsn = after.superblock().checkpoint_lsn.value();
+                    after.release();
+                    if (maintenanceLsn != std::numeric_limits<uint64_t>::max()) {
+                        const auto reclaimed = metadata_->reclaimEmptyMetadataPagePools(
+                            LogSequenceNumber(maintenanceLsn + 1U), publishOptions);
+                        report.published_generation = reclaimed.superblock.generation;
+                    }
+                }
 			} catch (...) {
 				markReopenRequiredIfPublicationAdvanced(publicationBase);
 				throw;
