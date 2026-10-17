@@ -2916,11 +2916,22 @@ namespace graph::storage {
 				candidates.push_back(entry);
 			}
 		});
-		if (candidates.empty()) {
+        bool pruneRoutes = false;
+        if (current.usesPageDirectoryBootstrap()) {
+            MetadataPageRouteDirectory routes(pages_);
+            const auto header = pages_.readPageDirectoryBootstrap(current.page_directory_root);
+            // Validate the complete old branch before discarding detached targets.
+            const auto registered = routes.collectRoutesFromRouteBranch(current, header.metadata_page_directory_root);
+            auto physical = current; physical.page_directory_root = header.data_page_directory_root;
+            const auto live = routes.collectRoutesFromPhysicalDirectoryRoots(physical);
+            pruneRoutes = registered.size() > live.size();
+        }
+		if (candidates.empty() && !pruneRoutes) {
 			return MetadataPagePoolReclamation{current, 0U, {}};
 		}
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+        if (pruneRoutes) batch.requestMetadataRoutePruning();
 		utils::OwnedStdVector<PhysicalSlotId> candidateSlots;
 		utils::OwnedVector<SegmentId> candidateSegmentIds;
 		candidateSlots.reserve(candidates.size());
@@ -2944,7 +2955,7 @@ namespace graph::storage {
 		for (CatalogEntry &entry: candidates) {
 			allocator_.prepareSetAllocated(batch, entry.physical_slot, false);
 		}
-		catalog_.prepareErase(batch, candidateSegmentIds);
+		if (!candidateSegmentIds.empty()) catalog_.prepareErase(batch, candidateSegmentIds);
 		try {
 			// The normal publication path establishes route-frame capacity after
 			// excluding every released pool, and reconciles newly created pools.

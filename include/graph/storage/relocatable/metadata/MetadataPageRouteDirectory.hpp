@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <span>
 #include <vector>
+#include "graph/utils/OwnedStdVector.hpp"
 
 #include "graph/storage/relocatable/metadata/MetadataPageRoute.hpp"
 
@@ -32,7 +33,7 @@ namespace graph::storage {
 		// Before the Page Directory bootstrap header is published, the existing
 		// Superblock roots provide the complete physical metadata graph. Collect it
 		// once so the initial typed route branch cannot omit unchanged COW pages.
-		[[nodiscard]] std::vector<MetadataPageRoute>
+		[[nodiscard]] utils::OwnedStdVector<MetadataPageRoute>
 		collectRoutesFromPhysicalDirectoryRoots(const Superblock &superblock) const;
 		// Returns the exact number of metadata frames needed by a standalone
 		// initial migration: route leaves, radix plumbing, and the physical header.

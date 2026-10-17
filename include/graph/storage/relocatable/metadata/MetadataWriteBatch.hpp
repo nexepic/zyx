@@ -84,6 +84,13 @@ namespace graph::storage {
 		// metadata target. It still needs a new branch and header before that source
 		// becomes unreachable at the next Superblock publication.
 		void requestBootstrapRouteRefresh() noexcept { bootstrap_route_refresh_requested_ = true; }
+		// Maintenance may drop routes detached from the current directory graph.
+		// Historical snapshots keep their own immutable bootstrap route branch.
+		void requestMetadataRoutePruning() noexcept {
+			metadata_route_pruning_requested_ = true;
+			requestBootstrapRouteRefresh();
+		}
+		[[nodiscard]] bool metadataRoutePruningRequested() const noexcept { return metadata_route_pruning_requested_; }
 		[[nodiscard]] bool bootstrapRouteRefreshRequested() const noexcept {
 			return bootstrap_route_refresh_requested_;
 		}
@@ -191,6 +198,7 @@ namespace graph::storage {
 		bool published_ = false;
 		bool bootstrap_route_published_ = false;
 		bool bootstrap_route_refresh_requested_ = false;
+		bool metadata_route_pruning_requested_ = false;
 		bool metadata_frame_reservation_active_ = false;
 		std::optional<PhysicalPageRef> pending_bootstrap_data_root_;
 	};
