@@ -7,8 +7,7 @@ p=argparse.ArgumentParser();p.add_argument('--engine',required=True,choices=['co
 os.environ['ZYX_FINAL_CASE_FAMILY']=a.family
 if a.family=='wide_large':
  decision_path=window.OUT/'wide-resource-decision.json'
- if not decision_path.exists():raise RuntimeError('Wide resource amendment awaits the user reply')
- decision=json.loads(decision_path.read_text())
+ decision=json.loads(decision_path.read_text()) if decision_path.exists() else {'approved':False}
  if decision.get('approved') is True:
   assert decision['file_limit_bytes']==4*1024**3
   os.environ['ZYX_FINAL_CASE_FILE_BYTES']=str(decision['file_limit_bytes'])

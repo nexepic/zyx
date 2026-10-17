@@ -162,7 +162,7 @@
       "evidence": "20261017-final-protection-and-maintenance-repairs/proof.json",
       "scope": "Clean final repaired source and actual Debug/Release binaries frozen.40affected modules;1011distinct tests passed. Earlier source test runs remain historical."
     },
-    "pending_user_resource_decision": "Wide-only2GiB->4GiB file/mapping amendment requested, not authorized/applied. Other cases run; the entire wide cohort stays pending until the reply."
+    "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed."
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",

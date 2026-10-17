@@ -13,9 +13,6 @@ import importlib
 owned_case=importlib.import_module('zyx-final-five-owned-case')
 results=[]
 for family in families:
- if family=='wide_large' and not (root/'wide-resource-decision.json').exists():
-  entry={'family':family,'status':'not_run_pending_user_resource_decision','slots':9,'reason':'RAW bodies alone exceed2GiB; a4GiB-wide-only amendment requires the pending user reply. Other families continue.','no_performance_samples':True}
-  (root/'wide-resource-pending.json').write_text(json.dumps(entry,indent=2)+'\n');results.append(entry);continue
  for number,order in enumerate(orders,1):
   for engine in order:
    case=root/'contract'/f'round-{number}'/engine/family
@@ -23,8 +20,6 @@ for family in families:
     case.mkdir(parents=True,exist_ok=True);entry={'status':'unsupported_NA','engine':engine,'family':family,'round':number};(case/'campaign-case-unsupported.json').write_text(json.dumps(entry));results.append(entry);continue
    marker=next((case/n for n in ['campaign-case-completed.json','campaign-case-failed.json'] if (case/n).exists()),None)
    if marker:results.append(json.loads(marker.read_text()));continue
-   if family=='wide_large' and engine!='kuzu' and not json.loads((root/'wide-resource-decision.json').read_text()).get('approved'):
-    case.mkdir(parents=True,exist_ok=True);entry={'round':number,'engine':engine,'family':family,'status':'unmeasurable_fixed_file_budget','reason':'The RAW body bytes2162688000 exceed the unchanged2GiB file cap before metadata; user kept the cap. Not an engine pass or latency sample.'};(case/'campaign-case-failed.json').write_text(json.dumps(entry,indent=2)+'\n');results.append(entry);continue
    previous=next((v for v in results if v['engine']==engine and v['family']==family and v['status'] in ['failed','inconclusive_timeout','unmeasurable_previous_failure']),None)
    if previous:
     case.mkdir(parents=True,exist_ok=True)
