@@ -1,0 +1,38 @@
+{
+  "accepted": 29,
+  "total": 34,
+  "percent": 85.3,
+  "current_request_completed": 0,
+  "remaining": [
+    "S2.5",
+    "S3.5",
+    "S4.4",
+    "S5.5",
+    "S6.2"
+  ],
+  "source": "f0e44b78",
+  "status": "narrow_repairs_tested_release_build_and_final_window_pending",
+  "full_unit_suite": false,
+  "selected_modules": 40,
+  "initial_tests": 1011,
+  "initial_passed": 1010,
+  "initial_failed": 1,
+  "failure": "Checkpoint-exhaustion fixture assumed five per-pool publications; production now uses three batched phases. Changed fixture and asserted recovered on-disk checkpoint is UINT64_MAX.",
+  "targeted_rerun_tests": 24,
+  "targeted_rerun_passed": 24,
+  "unique_tests_passed_across_initial_and_targeted_rerun": 1011,
+  "old_candidate_formal_samples": 3500,
+  "old_candidate_accepted": false,
+  "old_candidate_limits": [
+    "2010 original read samples,690 restored write samples,800 separately registered point supplements. Never pooled as new-source evidence.",
+    "Stable indexed lookup and create/delete protections failed; current maintenance timed out after four of thirteen windows. No complete steady distribution.",
+    "Only two of117 contract slots attempted;115 deferred. Wide-resource authorization remains unanswered.",
+    "Initial maintenance-resume negative fixture was invalid; only corrected v2 is a genuine regression counterexample."
+  ],
+  "repairs": [
+    "O5 ordered leaf appends and exact-size split selection",
+    "O3 same-grant clean unpinned raw-page reclamation for decoded metadata",
+    "O6 atomic batched pool lifecycle, resumed empty pools and authenticated orphan private content-index pools"
+  ],
+  "kuzu_goal_achieved": false
+}
