@@ -2782,8 +2782,35 @@ namespace graph::storage {
 		}
 		if (blocked) return std::nullopt;
 		std::ranges::sort(retirements, {}, &RetireQueueEntry::physical_slot);
+        // A reused slot must not retain one permanent Catalog owner per release.
+        // Only older, already-obsolete shared-pool owners of these exact slots
+        // are eligible. Two old owners per released slot bound this transaction
+        // and gradually drain history created by earlier engine versions.
+        if (requests.size() > std::numeric_limits<size_t>::max() / 2U)
+            throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+                "relocatable Catalog history cleanup bound overflow");
+        const size_t maximumHistory = requests.size() * 2U;
+        utils::OwnedVector<SegmentId> obsoleteOwners;
+        obsoleteOwners.reserve(maximumHistory);
+        catalog_.visit(current, [&](const CatalogEntry &entry) {
+            if (obsoleteOwners.size() == maximumHistory || entry.state != SegmentState::SGS_OBSOLETE ||
+                !isSharedPagePoolSegmentKind(entry.kind)) return;
+            const auto selected = std::lower_bound(retirements.begin(), retirements.end(), entry.physical_slot,
+                [](const RetireQueueEntry &retirement, PhysicalSlotId slot) { return retirement.physical_slot < slot; });
+            if (selected != retirements.end() && selected->physical_slot == entry.physical_slot)
+                obsoleteOwners.push_back(entry.segment_id);
+        });
+        if (!obsoleteOwners.empty()) {
+            std::ranges::sort(obsoleteOwners);
+            locations_.visitPages(current, [&](const PageLocation &location) {
+                if (std::binary_search(obsoleteOwners.begin(), obsoleteOwners.end(), location.segment_id))
+                    throw FormatException(FormatError::FERR_INVALID_STATE,
+                        "relocatable obsolete Catalog history still has a current Page Directory reference");
+            });
+        }
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		retire_queue_reclaimer_.prepareReclamation(batch, retirements);
+        if (!obsoleteOwners.empty()) catalog_.prepareErase(batch, obsoleteOwners);
 		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
