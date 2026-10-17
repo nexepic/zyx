@@ -172,8 +172,8 @@
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
     "working_source_commit": "5fc768cb",
-    "final_window_status": "graph_access_accepted_property_write_tails_uncertain_remaining_contracts_running",
-    "latest_checkpoint": "20261017-s44-graph-access-acceptance/proof.json",
+    "final_window_status": "stopped_after_candidate_dynamic_timeout_for_focused_repair",
+    "latest_checkpoint": "20261017-dynamic-timeout-repair-checkpoint/proof.json",
     "latest_targeted_tests": {
       "modules": 42,
       "tests": 1019,
@@ -183,7 +183,7 @@
       "full_suite": false
     },
     "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
-    "pending_repair": "Two property-write P95 uncertainties remain; no same-source repeats. Full-size dynamic/wide/write/mixed/snapshot/budget contracts continue.",
+    "pending_repair": "Dynamic10000entity actual1800s timeout; diagnose full-property decoding/allocation. Two writeP95uncertainties remain. No same-source performance repeats.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -206,7 +206,7 @@
     "final_window_order": "O6 first, current13window case doubles as resource correctness checkpoint; no duplicate untimed full13window run; do not start broad matrix after actualO6resource failure.",
     "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
-    "final_performance_window": "in_progress_O6complete_remaining_gates_pending",
+    "final_performance_window": "stopped_not_full_matrix_no_threshold_waiver",
     "historical_iterations_evidence": "20261017-steady-slot-history/proof.json"
   },
   "S5.4": "accepted_resource_fault_matrix",
