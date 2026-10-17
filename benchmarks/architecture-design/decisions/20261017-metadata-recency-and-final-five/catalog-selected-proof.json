@@ -1,0 +1,34 @@
+{
+  "status": "implementation_and_targeted_regression_passed_final_acceptance_pending",
+  "source_parent": "e293dac4",
+  "accepted_total": 29,
+  "new_accepted_ids": [],
+  "scope": "Only O3 Catalog required/optional point lookup; complete codec/visibility/type/ordinal checks remain, selected logical root/child target IDs are checked explicitly; mutable preparation/full traversal retain complete resolution.",
+  "mechanism_counter": {
+    "before_route_leaf_decodes_per_point_lookup": 66,
+    "after_route_leaf_decodes_per_point_lookup": 2,
+    "fixture": "64 Catalog branches with separate route leaves; no metadata read cache",
+    "performance_claim": "None; module work-count regression, not an end-to-end benchmark."
+  },
+  "tests": {
+    "modules": 15,
+    "suites": 21,
+    "passed": 453,
+    "full_suite": false,
+    "negative": "original code fails exactly the bounded point-work assertion; existing corruption test still passes",
+    "faults": [
+      "wrong directory",
+      "selected leaf byte corruption",
+      "checksum-valid root or leaf PageId substitution",
+      "missing requested route",
+      "optional/mandatory misses",
+      "full traversal still rejects an unrequested missing route"
+    ]
+  },
+  "source_sha256": {
+    "src/storage/relocatable/metadata/CatalogTree.cpp": "b3a64ebdc6135f5e175d7951c7cf231a99a44ffb29fd7b3bb88693d434bafbb4",
+    "tests/src/storage/relocatable/metadata/test_CatalogTree.cpp": "fbbd78306c963f50e243bfe25da2ad2a4809e4e5512451d884b56c636197fcbe"
+  },
+  "source033_window": "Stopped after one valid scan-profile process per engine (300 valid sample records) and cancellation of partial current round2. Not a final replicated acceptance, no pooling with later source. Archive retains raw results, semantic oracles, scripts and provenance; input CSV hashes retained and original inputs kept separately.",
+  "known_budget_failure": "Untimed replay confirms budget/reopen/integrity still returns hierarchical resource admission denied. Diagnose this existing required resource case before another final matrix; do not increase the 8MiB integrity workspace."
+}

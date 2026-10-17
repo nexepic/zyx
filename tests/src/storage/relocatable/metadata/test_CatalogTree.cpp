@@ -25,6 +25,8 @@
 
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -1364,4 +1366,136 @@ TEST_F(RelocatableCatalogTreeTest, RejectsMalformedOrAbsentEraseRequestsWithoutP
 	MetadataWriteBatch foreignBatch(foreignAllocator, published, LogSequenceNumber(3));
 	const std::array existing{SegmentId(1)};
 	expectFormatError([&] { tree.prepareErase(foreignBatch, existing); }, FormatError::FERR_INVALID_STATE);
+}
+
+class CatalogSelectedLookupTest : public RelocatableCatalogTreeTest {
+protected:
+    Superblock current;
+    TestMetadataPageAllocator allocator;
+    std::unique_ptr<MetadataPageFile> pages;
+    PhysicalPageRef rootReference{PhysicalSlotId(100U), 1U, Generation(2U)};
+    PhysicalPageRef firstLeaf{PhysicalSlotId(101U), 1U, Generation(2U)};
+    void SetUp() override {
+        RelocatableCatalogTreeTest::SetUp();
+        const auto initial = superblock(1U, 1U);
+        pages = std::make_unique<MetadataPageFile>(io, initial);
+        MetadataWriteBatch construction(allocator, initial, LogSequenceNumber(2U));
+        MetadataRadixPage root;
+        root.kind = CatalogRadixPageKind::CRPK_ROOT;
+        root.level = 0U;
+        root.page_id = MetadataPageId(1000000U);
+        root.generation = Generation(2U);
+        root.committed_lsn = LogSequenceNumber(2U);
+        root.logical_children_enabled = true;
+        std::vector<MetadataPageRoute> routes;
+        for (uint64_t index = 0U; index < 64U; ++index) {
+            CatalogLeafPage leaf;
+            leaf.page_id = MetadataPageId(1U + index * 1024U);
+            leaf.generation = Generation(2U);
+            leaf.committed_lsn = LogSequenceNumber(2U);
+            const uint64_t id = 1U + index * RSS_CATALOG_PAGE_MAX_ENTRIES;
+            leaf.minimum_segment_id = leaf.maximum_segment_id = SegmentId(id);
+            leaf.entries.push_back(entry(id, 500U + index, 1U, 1U));
+            const PhysicalPageRef reference{PhysicalSlotId(101U + index), 1U, Generation(2U)};
+            pages->writeCatalogLeaf(reference, leaf);
+            root.logical_children[index] = leaf.page_id;
+            routes.push_back({leaf.page_id, reference});
+        }
+        pages->writeMetadataRadix(rootReference, root);
+        routes.push_back({root.page_id, rootReference});
+        const auto routeRoot = MetadataPageRouteDirectory(*pages).buildFromCompleteRouteSet(construction, routes);
+        const PhysicalPageRef bootstrapReference{PhysicalSlotId(200U), 1U, Generation(2U)};
+        PageDirectoryBootstrap bootstrap;
+        bootstrap.generation = Generation(2U);
+        bootstrap.committed_lsn = LogSequenceNumber(2U);
+        bootstrap.metadata_page_directory_root = routeRoot;
+        bootstrap.metadata_directory_roots[static_cast<size_t>(MetadataDirectoryRootOrdinal::MDRO_CATALOG)] = root.page_id;
+        pages->writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+        current = superblock(2U, 2U);
+        current.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+        current.catalog_root = rootReference;
+        current.page_directory_root = bootstrapReference;
+    }
+    void TearDown() override {
+        graph::debug::PerfTrace::setValueCollectionEnabled(false);
+        graph::debug::PerfTrace::reset();
+        pages.reset();
+        RelocatableCatalogTreeTest::TearDown();
+    }
+};
+
+TEST_F(CatalogSelectedLookupTest, PointReadsResolveOnlyTheRequestedCatalogRoute) {
+    CatalogTree tree(*pages, allocator);
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    for (const bool optional : {false, true}) {
+        graph::debug::PerfTrace::reset();
+        const auto found = optional ? tree.findOptional(current, SegmentId(1U))
+                                    : std::optional<CatalogEntry>(tree.find(current, SegmentId(1U)));
+        ASSERT_TRUE(found);
+        EXPECT_EQ(found->physical_slot, PhysicalSlotId(500U));
+        const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+        const auto leaves = trace.find("native_graph.read.metadata_decodes.route_leaf");
+        ASSERT_NE(leaves, trace.end());
+        RecordProperty(optional ? "optional_route_leaf_decodes" : "mandatory_route_leaf_decodes",
+            static_cast<int>(leaves->second.totalValue));
+        EXPECT_LE(leaves->second.totalValue, 8);
+    }
+}
+
+TEST_F(CatalogSelectedLookupTest, SelectedLeafCorruptionAndWrongDirectoryStillFailClosed) {
+    CatalogTree tree(*pages, allocator);
+    auto root = pages->readMetadataRadixUnresolved(rootReference);
+    root.directory_type = MetadataDirectoryType::MDT_EXTENT;
+    pages->writeMetadataRadix(rootReference, root);
+    EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+    EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+    root.directory_type = MetadataDirectoryType::MDT_CATALOG;
+    pages->writeMetadataRadix(rootReference, root);
+    const std::byte corrupt{0U};
+    io->writeAt(pages->pageOffset(firstLeaf), &corrupt, 1U);
+    EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+    EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+}
+
+TEST_F(CatalogSelectedLookupTest, MissesKeepMandatoryAndOptionalErrorContracts) {
+    CatalogTree tree(*pages, allocator);
+    for (const uint64_t id : {2U, 64U * RSS_CATALOG_PAGE_MAX_ENTRIES + 1U,
+            RSS_CATALOG_RADIX_FANOUT * RSS_CATALOG_PAGE_MAX_ENTRIES + 1U}) {
+        EXPECT_FALSE(tree.findOptional(current, SegmentId(id)));
+        EXPECT_THROW(tree.find(current, SegmentId(id)), FormatException);
+    }
+    auto root = pages->readMetadataRadixUnresolved(rootReference);
+    root.logical_children[0] = MetadataPageId(999999U);
+    pages->writeMetadataRadix(rootReference, root);
+    EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+    EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+}
+
+TEST_F(CatalogSelectedLookupTest, FullTraversalStillAuthenticatesUnrequestedRoutes) {
+    CatalogTree tree(*pages, allocator);
+    size_t count = 0U;
+    tree.visit(current, [&](const CatalogEntry &) { ++count; });
+    EXPECT_EQ(count, 64U);
+    auto root = pages->readMetadataRadixUnresolved(rootReference);
+    root.logical_children[63] = MetadataPageId(999999U);
+    pages->writeMetadataRadix(rootReference, root);
+    EXPECT_EQ(tree.find(current, SegmentId(1U)).physical_slot, PhysicalSlotId(500U));
+    EXPECT_THROW(tree.visit(current, [](const CatalogEntry &) {}), FormatException);
+}
+
+TEST_F(CatalogSelectedLookupTest, RejectsChecksumValidRootAndLeafIdentitySubstitution) {
+    CatalogTree tree(*pages, allocator);
+    auto root = pages->readMetadataRadixUnresolved(rootReference);
+    const auto correct = root.page_id;
+    root.page_id = MetadataPageId(999999U);
+    pages->writeMetadataRadix(rootReference, root);
+    EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+    EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+    root.page_id = correct;
+    pages->writeMetadataRadix(rootReference, root);
+    auto leaf = pages->readCatalogLeaf(firstLeaf);
+    leaf.page_id = MetadataPageId(999999U);
+    pages->writeCatalogLeaf(firstLeaf, leaf);
+    EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+    EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
 }

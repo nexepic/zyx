@@ -1,0 +1,132 @@
+{
+  "status": "one_process_per_engine_not_reproducible_acceptance",
+  "samples": {
+    "control": {
+      "label_scan_filter": {
+        "count": 10,
+        "p50_ms": 2800.88
+      },
+      "all_nodes_property_filter": {
+        "count": 10,
+        "p50_ms": 5518.43
+      },
+      "label_multi_property_filter": {
+        "count": 10,
+        "p50_ms": 2925.2200000000003
+      },
+      "relationship_type_scan": {
+        "count": 10,
+        "p50_ms": 590.6949999999999
+      },
+      "relationship_property_filter": {
+        "count": 10,
+        "p50_ms": 6564.965
+      },
+      "one_hop_expand": {
+        "count": 10,
+        "p50_ms": 17.8268
+      },
+      "two_hop_expand": {
+        "count": 10,
+        "p50_ms": 22.3838
+      },
+      "aggregation_group_by": {
+        "count": 10,
+        "p50_ms": 2872.6549999999997
+      },
+      "aggregation_count_by_group": {
+        "count": 10,
+        "p50_ms": 2969.8450000000003
+      },
+      "topk_property_sort": {
+        "count": 10,
+        "p50_ms": 3612.925
+      }
+    },
+    "current": {
+      "label_scan_filter": {
+        "count": 10,
+        "p50_ms": 2862.335
+      },
+      "all_nodes_property_filter": {
+        "count": 10,
+        "p50_ms": 5679.389999999999
+      },
+      "label_multi_property_filter": {
+        "count": 10,
+        "p50_ms": 3081.955
+      },
+      "relationship_type_scan": {
+        "count": 10,
+        "p50_ms": 658.12
+      },
+      "relationship_property_filter": {
+        "count": 10,
+        "p50_ms": 6801.75
+      },
+      "one_hop_expand": {
+        "count": 10,
+        "p50_ms": 20.6657
+      },
+      "two_hop_expand": {
+        "count": 10,
+        "p50_ms": 26.8194
+      },
+      "aggregation_group_by": {
+        "count": 10,
+        "p50_ms": 3107.4750000000004
+      },
+      "aggregation_count_by_group": {
+        "count": 10,
+        "p50_ms": 3063.855
+      },
+      "topk_property_sort": {
+        "count": 10,
+        "p50_ms": 3207.4700000000003
+      }
+    },
+    "kuzu": {
+      "label_scan_filter": {
+        "count": 10,
+        "p50_ms": 2.1225260134087875
+      },
+      "all_nodes_property_filter": {
+        "count": 10,
+        "p50_ms": 0.8523029973730445
+      },
+      "label_multi_property_filter": {
+        "count": 10,
+        "p50_ms": 2.229102508863434
+      },
+      "relationship_type_scan": {
+        "count": 10,
+        "p50_ms": 6.072909498470835
+      },
+      "relationship_property_filter": {
+        "count": 10,
+        "p50_ms": 10.94297600502614
+      },
+      "one_hop_expand": {
+        "count": 10,
+        "p50_ms": 0.36715999885927886
+      },
+      "two_hop_expand": {
+        "count": 10,
+        "p50_ms": 0.7816740107955411
+      },
+      "aggregation_group_by": {
+        "count": 10,
+        "p50_ms": 3.1160265061771497
+      },
+      "aggregation_count_by_group": {
+        "count": 10,
+        "p50_ms": 3.3298714988632128
+      },
+      "topk_property_sort": {
+        "count": 10,
+        "p50_ms": 3.91138150007464
+      }
+    }
+  },
+  "accepted_ids": []
+}

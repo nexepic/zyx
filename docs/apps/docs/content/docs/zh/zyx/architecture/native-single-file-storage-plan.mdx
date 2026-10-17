@@ -190,6 +190,8 @@ route identity、reference generation、visibility fence 和 target page identit
 
 2026-10-15 解码元数据读取契约：缓存视图不可变，编码器在准入前校验 ID 严格排序。有效 ID 的 `(id - 1) / leaf_capacity` 单调，因此检查首尾即可证明每条记录均属于选中的叶序号；该捷径仅用于解码后的只读视图，可变 COW 校验继续扫描全部条目。单点及批量元数据路由查找均在返回命中前检查叶页 ID 范围，不能因命中前部记录而漏掉后部错误路由。这会比原单点查找更早拒绝损坏尾部，不改变有效查询结果或磁盘格式。CRC、代际、可见性、目录类型、所选物理引用及 IO 变更纪元失效机制仍必须执行。
 
+2026-10-17 Catalog 点查范围：必需及可选点查先校验所访问页的完整 codec 字节，再仅解析所请求的逻辑子路由；继续验证目录类型、PageId 路由、generation、LSN 可见性及叶序号。单次点查不保证发现未访问分支的缺失路由；完整遍历及 integrity 扫描负责检查这些全局不一致。可变 COW 准备与完整遍历保持完整子路由解析，磁盘格式和发布协议不变。
+
 在迁移开始前，恢复与 evacuation 必须对同一 Superblock 当前可达的全部 metadata radix、internal 和 leaf page 执行逻辑
 `PageId` 非空且全局唯一校验；重复身份或无效身份必须在 publication 前 fail closed，不能通过重新分配新 ID 掩盖损坏。
 
