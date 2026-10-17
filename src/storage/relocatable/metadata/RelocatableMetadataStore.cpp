@@ -2893,7 +2893,7 @@ namespace graph::storage {
 		// generation that can still read this process.
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, current);
 
-		std::vector<CatalogEntry> candidates;
+		utils::OwnedVector<CatalogEntry> candidates;
 		catalog_.visit(current, [this, &candidates, &current](const CatalogEntry &entry) {
 			if (entry.kind != SegmentKind::SGK_METADATA_PAGE_POOL || entry.state == SegmentState::SGS_OBSOLETE) {
 				return;
@@ -2921,8 +2921,8 @@ namespace graph::storage {
 		}
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		std::vector<PhysicalSlotId> candidateSlots;
-		std::vector<SegmentId> candidateSegmentIds;
+		utils::OwnedStdVector<PhysicalSlotId> candidateSlots;
+		utils::OwnedVector<SegmentId> candidateSegmentIds;
 		candidateSlots.reserve(candidates.size());
 		candidateSegmentIds.reserve(candidates.size());
 		for (const CatalogEntry &entry: candidates) {
@@ -2945,11 +2945,10 @@ namespace graph::storage {
 			allocator_.prepareSetAllocated(batch, entry.physical_slot, false);
 		}
 		catalog_.prepareErase(batch, candidateSegmentIds);
-		pool_ownership_.preparePublication(batch);
-		prepareBootstrapRoutes(batch);
-
 		try {
-			batch.publish(bootstrap_, options.bootstrap_failpoint);
+			// The normal publication path establishes route-frame capacity after
+			// excluding every released pool, and reconciles newly created pools.
+			publishBatch(batch, writer, options);
 		} catch (const BootstrapPublishInterrupted &) {
 			// An interruption after the inactive Superblock is durable must also
 			// retire the in-memory pool registry; otherwise this process could
@@ -2960,7 +2959,6 @@ namespace graph::storage {
 			throw;
 		}
 		metadata_page_pool_.releaseEmptyCatalogPools(candidateSlots);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 		return MetadataPagePoolReclamation{batch.candidate(), candidateSlots.size(), std::move(candidateSlots)};
 	}
 
