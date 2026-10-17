@@ -559,6 +559,8 @@ namespace graph::storage {
 			uint64_t tokenId, const std::function<void(size_t)> &admission) const override;
 		[[nodiscard]] std::string resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
 			uint32_t tokenId, const std::function<void(size_t)> &admission) const override;
+		void prefetchPropertyKeyNames(const MetadataSnapshotPin &snapshot, std::span<const uint32_t> tokens,
+			const std::function<void(uint32_t, std::string_view)> &consume) const override;
 		[[nodiscard]] std::string resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																				  uint32_t tokenId) const override;
 		[[nodiscard]] std::optional<uint32_t> resolvePropertyToken(const MetadataSnapshotPin &snapshot,

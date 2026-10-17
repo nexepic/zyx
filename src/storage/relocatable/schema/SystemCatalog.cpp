@@ -1140,6 +1140,64 @@ namespace graph::storage {
 				values[3] ? SystemCatalogGraphCardinalityCodec::decodeCount(*values[3]) : 0U};
 	}
 
+	utils::OwnedVector<std::optional<utils::OwnedStdString>> SystemCatalog::findPropertyNamesSorted(
+		const MetadataSnapshotPin &snapshot, std::span<const uint32_t> tokens) const {
+		utils::OwnedAllocationScope allocation(schemaAllocationOwner(snapshot));
+		for (size_t i = 0U; i < tokens.size(); ++i) {
+			if (tokens[i] == 0U || (i != 0U && tokens[i - 1U] >= tokens[i]))
+				fail(FormatError::FERR_INVALID_HEADER, "Property name batch requires strictly increasing nonzero tokens");
+		}
+		if (tokens.size() == std::numeric_limits<size_t>::max())
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "Property name cursor bound overflowed");
+		utils::OwnedVector<std::optional<utils::OwnedStdString>> result(tokens.size());
+		if (tokens.empty() || !hasRoot(*this, snapshot)) return result;
+		verifyBootstrap(*this, snapshot);
+		BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
+		for (size_t first = 0U; first < tokens.size();) {
+			size_t end = first + 1U;
+			while (end < tokens.size() && uint64_t(tokens[end]) == uint64_t(tokens[end - 1U]) + 1U) ++end;
+			const auto lower = propertyTokenPrefix(tokens[first]);
+			// One successor proves uniqueness of the last mapping. Starting a new
+			// cursor at each nonconsecutive token avoids traversing unrelated gaps.
+			auto cursor = index.openRangeCursor(snapshot, lower, end - first + 1U);
+			auto entry = cursor.next();
+			for (size_t i = first; i < end; ++i) {
+				const auto prefix = propertyTokenPrefix(tokens[i]);
+				if (!entry || !startsWith(entry->key, prefix)) continue;
+				if (entry->value_or_child != tokens[i] || entry->key.size() == prefix.size())
+					fail(FormatError::FERR_INVALID_STATE, "System Catalog reverse mapping is malformed or mismatched");
+				auto successor = cursor.next();
+				if (successor && startsWith(successor->key, prefix))
+					fail(FormatError::FERR_INVALID_STATE, "System Catalog reverse mapping is ambiguous");
+				const std::string_view name(reinterpret_cast<const char *>(entry->key.data() + prefix.size()),
+					entry->key.size() - prefix.size());
+				validateName(name);
+				result[i].emplace(name);
+				entry = std::move(successor);
+			}
+			first = end;
+		}
+		utils::OwnedStdVector<size_t> order;
+		order.reserve(tokens.size());
+		for (size_t i = 0U; i < result.size(); ++i) if (result[i]) order.push_back(i);
+		const auto nameAt = [&](size_t i) { return std::string_view(result[i]->data(), result[i]->size()); };
+		std::ranges::sort(order, [&](size_t left, size_t right) { return nameAt(left) < nameAt(right); });
+		utils::OwnedStdVector<utils::OwnedStdVector<std::byte>> keys;
+		keys.reserve(order.size());
+		for (size_t i = 0U; i < order.size(); ++i) {
+			if (i != 0U && nameAt(order[i - 1U]) == nameAt(order[i]))
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog reverse mappings contain duplicate names");
+			keys.push_back(propertyNameKey(nameAt(order[i])));
+		}
+		if (!keys.empty()) {
+			const auto values = index.findSortedOwned(snapshot, keys);
+			for (size_t i = 0U; i < order.size(); ++i)
+				if (!values[i] || *values[i] != tokens[order[i]])
+					fail(FormatError::FERR_INVALID_STATE, "System Catalog Property forward and reverse mappings disagree");
+		}
+		return result;
+	}
+
 	std::optional<std::string> SystemCatalog::findPropertyName(const MetadataSnapshotPin &snapshot,
 															   uint32_t token, const std::function<void(size_t)> &nameAdmission) const {
         utils::OwnedAllocationScope catalogKeyAllocation(utils::OwnedAllocationScope::active()

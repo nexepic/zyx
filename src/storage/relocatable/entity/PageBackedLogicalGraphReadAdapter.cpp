@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <limits>
 #include <memory_resource>
@@ -20,6 +21,7 @@
 #include <vector>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/utils/OwnedPmrAllocator.hpp"
 #include "graph/storage/detail/ScopedPropertyBuffers.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
@@ -27,6 +29,8 @@
 namespace graph::storage {
 
 	namespace {
+
+		constexpr size_t PROPERTY_NAME_PREFETCH_BATCH = 16U;
 
 		[[noreturn]] void throwLogicalAdapterError(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -201,6 +205,33 @@ namespace graph::storage {
 		return resolved;
 	}
 
+	void PageBackedLogicalGraphReadAdapter::prefetchPropertyKeyNames(const MetadataSnapshotPin &snapshot,
+		std::span<const PropertyCollectionRootEntry> properties, NativeReadSession &session) const try {
+		std::array<uint32_t, PROPERTY_NAME_PREFETCH_BATCH> missing{};
+		size_t count = 0U;
+		for (const auto &property : properties) {
+			if (property.key_token == 0U) return; // Preserve the materializer's existing error.
+			if (!session.hasTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, property.key_token)) {
+				if (count == missing.size()) break;
+				missing[count++] = property.key_token;
+			}
+		}
+		if (count < 2U) return;
+		std::ranges::sort(std::span(missing).first(count));
+		const auto end = std::unique(missing.begin(), missing.begin() + count);
+		const auto tokens = std::span(missing).first(static_cast<size_t>(end - missing.begin()));
+		if (tokens.size() < 2U) return;
+		names_.prefetchPropertyKeyNames(snapshot, tokens, [&](uint32_t token, std::string_view name) {
+			session.putTokenName(NativeReadSession::TokenNameKind::TNK_PROPERTY_KEY, token, name);
+		});
+	} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+		// Batching is optional. Its owned temporaries unwind before the existing
+		// individual path tries the smaller mandatory working set; corruption and
+		// cancellation are never swallowed.
+	} catch (const query::execution::MaterializedByteLimitExceeded &) {
+		// Standalone materialization budgets have their own typed admission error.
+	}
+
 	std::optional<std::vector<uint64_t>> PageBackedLogicalGraphReadAdapter::resolveNodeLabelTokens(
 			const MetadataSnapshotPin &snapshot, const std::span<const std::string> labels, NativeReadSession &session) const {
 		std::vector<uint64_t> tokens;
@@ -280,7 +311,12 @@ namespace graph::storage {
         result.properties.reserve(node.properties.size());
         std::pmr::unordered_set<std::string_view> propertyNames(nameResource);
         propertyNames.reserve(node.properties.size());
+		size_t propertyOrdinal = 0U;
 		for (auto &property: node.properties) {
+			if (propertyOrdinal % PROPERTY_NAME_PREFETCH_BATCH == 0U)
+				prefetchPropertyKeyNames(snapshot, std::span(node.properties).subspan(propertyOrdinal,
+					std::min<size_t>(PROPERTY_NAME_PREFETCH_BATCH, node.properties.size() - propertyOrdinal)), session);
+			++propertyOrdinal;
 			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
@@ -356,7 +392,12 @@ namespace graph::storage {
 		AdmittedTemporaryResource propertyNameMemory(temporaryAdmission, session.memoryOwner());
 		std::pmr::unordered_set<std::string_view> propertyNames(&propertyNameMemory);
 		propertyNames.reserve(edge.properties.size());
+		size_t propertyOrdinal = 0U;
 		for (auto &property: edge.properties) {
+			if (propertyOrdinal % PROPERTY_NAME_PREFETCH_BATCH == 0U)
+				prefetchPropertyKeyNames(snapshot, std::span(edge.properties).subspan(propertyOrdinal,
+					std::min<size_t>(PROPERTY_NAME_PREFETCH_BATCH, edge.properties.size() - propertyOrdinal)), session);
+			++propertyOrdinal;
 			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
