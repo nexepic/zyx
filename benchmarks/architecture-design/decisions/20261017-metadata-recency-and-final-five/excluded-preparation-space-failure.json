@@ -1,0 +1,18 @@
+{
+  "status": "excluded_before_any_accepted_measurement",
+  "observed": "workspace filesystem 100 percent during preparation of two private benchmark clones",
+  "action": "Terminate owned initial case; retain original immutable inputs; discard only owned partial clones after hash; move final-window output to /tmp filesystem with 4.5GiB available. Same binaries, workload, budget, seeds and acceptance thresholds.",
+  "accepted_samples": 0,
+  "removed_owned_files": [
+    {
+      "path": "/workspace/zyx-optimization-final-five-window-20261017/reads/medium/round-1/control/scan/20261017T040747244173Z-medium-scan-zyx/zyx.db.benchmark-baseline",
+      "bytes": 1667235840,
+      "sha256": "5235e1005b596cb4a6a1f99d893e2e1cd38fa936f6cffc25cbf9de10062c53e2"
+    },
+    {
+      "path": "/workspace/zyx-optimization-final-five-window-20261017/reads/medium/round-1/control/scan/20261017T040747244173Z-medium-scan-zyx/zyx.db",
+      "bytes": 1667235840,
+      "sha256": "5235e1005b596cb4a6a1f99d893e2e1cd38fa936f6cffc25cbf9de10062c53e2"
+    }
+  ]
+}

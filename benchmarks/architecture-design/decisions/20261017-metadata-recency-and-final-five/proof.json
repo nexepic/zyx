@@ -23,12 +23,35 @@
     "control_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
     "database_origin": "6a735df8 prepared medium current input; original manifest and input unchanged",
     "expected_counts": {
-      "User": 100000,
-      "Post": 120000,
-      "Tag": 5000
+      "medium": {
+        "User": 100000,
+        "Post": 120000,
+        "Tag": 5000,
+        "FOLLOWS": 500000,
+        "AUTHORED": 120000,
+        "HAS_TAG": 240000
+      },
+      "holdout": {
+        "User": 73000,
+        "Post": 87000,
+        "Tag": 3000,
+        "FOLLOWS": 511000,
+        "AUTHORED": 87000,
+        "HAS_TAG": 174000
+      }
     },
     "timing_samples": 0,
-    "qualification": "Only input compatibility and these three counts checked so far. Full semantic queries and remaining graph counts must pass before registering shared-input formal comparisons; no import performance claim."
+    "qualification": "Both scales passed all six exact counts. Full semantic query oracles must pass within each formal process before accepting its latency samples. No import or producer-layout performance claim."
   },
-  "new_accepted_ids": []
+  "new_accepted_ids": [],
+  "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
+  "source_freeze_manifest": "freeze-manifest.json",
+  "performance_window": {
+    "status": "running",
+    "root": "/tmp/zyx-final-five-window-20261017",
+    "registration": "final-window-registration.json",
+    "source": "033e8e79",
+    "excluded_preparation_attempt": "excluded-preparation-space-failure.json",
+    "accepted_ids": []
+  }
 }
