@@ -1,0 +1,2228 @@
+[
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/resource-checkpoint.json",
+    "archive": "raw/contract/round-3/current/maintenance/resource-checkpoint.json.gz",
+    "bytes": 360,
+    "sha256": "f1f88a2ed4f1fe603d352891e0e81cf1a3378cebd87baae086b735cad6dd692a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-3/current/maintenance/campaign-case-completed.json.gz",
+    "bytes": 319,
+    "sha256": "64ab48f84335a2f1f9ca4e6b737fd78d42dedbd47c06f33feeb9260e4800fbc6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/elapsed.json",
+    "archive": "raw/contract/round-3/current/maintenance/elapsed.json.gz",
+    "bytes": 182,
+    "sha256": "49ce068961b8a1023db3c08d767b8caa70303933540dbbdc65a2064be11f68ec"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-3/current/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 617812,
+    "sha256": "5c97ac8fd3225067808b08d2101dbf1be06e831d9c8f1ae66f17833817a545fb"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-3/current/maintenance/final-storage-resources.json.gz",
+    "bytes": 408,
+    "sha256": "f88482d22832d9fe68f4fe26134e86e7569e11038158d28058efb35dcf6442a8"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/partial-trace.json",
+    "archive": "raw/contract/round-3/current/maintenance/partial-trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "9e1e1ec160369754d94a7ae65e56d5d4be4cae3767bbbcd38fe29524b6aad0f2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/report.json",
+    "archive": "raw/contract/round-3/current/maintenance/report.json.gz",
+    "bytes": 2087,
+    "sha256": "22445ebe513342e21fd41839c461b2c1adf36273e617ef1a1cd1afcc1847f4b5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/trace.json",
+    "archive": "raw/contract/round-3/current/maintenance/trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "9e1e1ec160369754d94a7ae65e56d5d4be4cae3767bbbcd38fe29524b6aad0f2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-3/current/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "72781036c0fd30f76f2fa7bb76bf94df743f02f93eca5c48212237359c0446ef"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/ipc-operation-timings-progress.jsonl",
+    "archive": "raw/contract/round-3/current/maintenance/ipc-operation-timings-progress.jsonl.gz",
+    "bytes": 538064,
+    "sha256": "5cfec8a48a30110295cc49bdf23827b32484dd633ec897851e67a223eba0f43a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/registration.json",
+    "archive": "raw/contract/round-3/current/maintenance/registration.json.gz",
+    "bytes": 712,
+    "sha256": "30b5466abd023a1ceda5909ff3f6da291fe0b83e1db7ed5117db55082f007fd3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38.gz",
+    "bytes": 5306,
+    "sha256": "16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d.gz",
+    "bytes": 5306,
+    "sha256": "64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66.gz",
+    "bytes": 5306,
+    "sha256": "36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd.gz",
+    "bytes": 5306,
+    "sha256": "9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a.gz",
+    "bytes": 5306,
+    "sha256": "fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62.gz",
+    "bytes": 5306,
+    "sha256": "27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143.gz",
+    "bytes": 5306,
+    "sha256": "fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175.gz",
+    "bytes": 5306,
+    "sha256": "5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816.gz",
+    "bytes": 5306,
+    "sha256": "34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba.gz",
+    "bytes": 5306,
+    "sha256": "1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e.gz",
+    "bytes": 5306,
+    "sha256": "b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b.gz",
+    "bytes": 5306,
+    "sha256": "e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134.gz",
+    "bytes": 5306,
+    "sha256": "ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf.gz",
+    "bytes": 5306,
+    "sha256": "d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20.gz",
+    "bytes": 5306,
+    "sha256": "7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd.gz",
+    "bytes": 5306,
+    "sha256": "e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf.gz",
+    "bytes": 5306,
+    "sha256": "824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828.gz",
+    "bytes": 5306,
+    "sha256": "6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40.gz",
+    "bytes": 5306,
+    "sha256": "f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689.gz",
+    "bytes": 5306,
+    "sha256": "1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07.gz",
+    "bytes": 5306,
+    "sha256": "0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2.gz",
+    "bytes": 5306,
+    "sha256": "ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482.gz",
+    "bytes": 5306,
+    "sha256": "ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe.gz",
+    "bytes": 5306,
+    "sha256": "8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1.gz",
+    "bytes": 5306,
+    "sha256": "b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821.gz",
+    "bytes": 5306,
+    "sha256": "cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc.gz",
+    "bytes": 5306,
+    "sha256": "ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617.gz",
+    "bytes": 5306,
+    "sha256": "543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0.gz",
+    "bytes": 5306,
+    "sha256": "f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5.gz",
+    "bytes": 5306,
+    "sha256": "dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af.gz",
+    "bytes": 5306,
+    "sha256": "6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f.gz",
+    "bytes": 5306,
+    "sha256": "911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a.gz",
+    "bytes": 5306,
+    "sha256": "dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061.gz",
+    "bytes": 5306,
+    "sha256": "89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7.gz",
+    "bytes": 5306,
+    "sha256": "b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171.gz",
+    "bytes": 5306,
+    "sha256": "b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a.gz",
+    "bytes": 5306,
+    "sha256": "33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4.gz",
+    "bytes": 5306,
+    "sha256": "a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6.gz",
+    "bytes": 5306,
+    "sha256": "bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6.gz",
+    "bytes": 5306,
+    "sha256": "7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed.gz",
+    "bytes": 5306,
+    "sha256": "f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f.gz",
+    "bytes": 5306,
+    "sha256": "e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95.gz",
+    "bytes": 5306,
+    "sha256": "0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1.gz",
+    "bytes": 5306,
+    "sha256": "9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0.gz",
+    "bytes": 5306,
+    "sha256": "435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e.gz",
+    "bytes": 5306,
+    "sha256": "205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d.gz",
+    "bytes": 5306,
+    "sha256": "86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130.gz",
+    "bytes": 5306,
+    "sha256": "ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab.gz",
+    "bytes": 5306,
+    "sha256": "d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa.gz",
+    "bytes": 5306,
+    "sha256": "4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f.gz",
+    "bytes": 5306,
+    "sha256": "6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986.gz",
+    "bytes": 5306,
+    "sha256": "0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b.gz",
+    "bytes": 5306,
+    "sha256": "c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f.gz",
+    "bytes": 5306,
+    "sha256": "f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970.gz",
+    "bytes": 5306,
+    "sha256": "231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce.gz",
+    "bytes": 5306,
+    "sha256": "10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a.gz",
+    "bytes": 5306,
+    "sha256": "51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2.gz",
+    "bytes": 5306,
+    "sha256": "775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c.gz",
+    "bytes": 5306,
+    "sha256": "041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908.gz",
+    "bytes": 5306,
+    "sha256": "462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a.gz",
+    "bytes": 5306,
+    "sha256": "7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d.gz",
+    "bytes": 5306,
+    "sha256": "70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432.gz",
+    "bytes": 5306,
+    "sha256": "fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb.gz",
+    "bytes": 5306,
+    "sha256": "459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65.gz",
+    "bytes": 5306,
+    "sha256": "0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87.gz",
+    "bytes": 5306,
+    "sha256": "23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d.gz",
+    "bytes": 5306,
+    "sha256": "759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807.gz",
+    "bytes": 5306,
+    "sha256": "ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae.gz",
+    "bytes": 5306,
+    "sha256": "19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db.gz",
+    "bytes": 5306,
+    "sha256": "ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35.gz",
+    "bytes": 5306,
+    "sha256": "abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112.gz",
+    "bytes": 5306,
+    "sha256": "48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f.gz",
+    "bytes": 5306,
+    "sha256": "193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed.gz",
+    "bytes": 5306,
+    "sha256": "d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9.gz",
+    "bytes": 5306,
+    "sha256": "0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e.gz",
+    "bytes": 5306,
+    "sha256": "147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7.gz",
+    "bytes": 5306,
+    "sha256": "4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c.gz",
+    "bytes": 5306,
+    "sha256": "016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c.gz",
+    "bytes": 5306,
+    "sha256": "9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66.gz",
+    "bytes": 5306,
+    "sha256": "9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6.gz",
+    "bytes": 5306,
+    "sha256": "38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e.gz",
+    "bytes": 5306,
+    "sha256": "72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6.gz",
+    "bytes": 5306,
+    "sha256": "45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0.gz",
+    "bytes": 5306,
+    "sha256": "b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4.gz",
+    "bytes": 5306,
+    "sha256": "7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99.gz",
+    "bytes": 5306,
+    "sha256": "ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990.gz",
+    "bytes": 5306,
+    "sha256": "02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c.gz",
+    "bytes": 5306,
+    "sha256": "6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea.gz",
+    "bytes": 5306,
+    "sha256": "08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43.gz",
+    "bytes": 5306,
+    "sha256": "e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04.gz",
+    "bytes": 5206,
+    "sha256": "4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a.gz",
+    "bytes": 5206,
+    "sha256": "4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08.gz",
+    "bytes": 5206,
+    "sha256": "58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf.gz",
+    "bytes": 5206,
+    "sha256": "d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9.gz",
+    "bytes": 5206,
+    "sha256": "207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597.gz",
+    "bytes": 5206,
+    "sha256": "177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880.gz",
+    "bytes": 5206,
+    "sha256": "527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f.gz",
+    "bytes": 5206,
+    "sha256": "d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066.gz",
+    "bytes": 5206,
+    "sha256": "5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed",
+    "archive": "raw/contract/round-3/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed.gz",
+    "bytes": 5096,
+    "sha256": "6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/campaign-case-completed.json.gz",
+    "bytes": 313,
+    "sha256": "b4a028f4d798fc4233be11b3fc39c4eace5ab5224033c4d0a2580a14ee17f86d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/elapsed.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/elapsed.json.gz",
+    "bytes": 162,
+    "sha256": "d2f1a344733adde59caed6a6f22211cad2e11b825c3b576be3d52d8d2525ffd5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 2235388,
+    "sha256": "8975a2ef95de1847e59f13d804f3c9c3004cd70caf2f35e468dfc761a508305f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/report.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/report.json.gz",
+    "bytes": 1197,
+    "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/trace.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/trace.json.gz",
+    "bytes": 9863010,
+    "sha256": "1b4e54c8fbeb71c35bb60d5897853fcd697963ee314afe36b50d02998cbb2086"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-3/kuzu/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "41f8c0238de6f8b915b66160ddce6486ed6a4d4bfd0ffa0af7e8ac003d376d00"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-3/kuzu/maintenance/final-storage-resources.json.gz",
+    "bytes": 309,
+    "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-3/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-3/control/maintenance/campaign-case-failed.json",
+    "archive": "raw/contract/round-3/control/maintenance/campaign-case-failed.json.gz",
+    "bytes": 848,
+    "sha256": "a2f69569e3454cfef76bc6b962c36c0b5cf9921fb4e22009e51c8948a4dc2792"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/resource-checkpoint.json",
+    "archive": "raw/contract/round-2/current/maintenance/resource-checkpoint.json.gz",
+    "bytes": 360,
+    "sha256": "94e34de90fd76272cb05b2b64290cb21209e2d56c860d36b0605be9ae20aa3b9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-2/current/maintenance/campaign-case-completed.json.gz",
+    "bytes": 319,
+    "sha256": "4cfa079c2d5dc296fb08a3b24c4fb46a0da6b7d832e467825515531f4d3dabcc"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/elapsed.json",
+    "archive": "raw/contract/round-2/current/maintenance/elapsed.json.gz",
+    "bytes": 182,
+    "sha256": "df7033d47fc904c8af467efde44dde70e6fa69fd0349d50b1522b8b67376ffda"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-2/current/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 617816,
+    "sha256": "bc2f3905b47f97c897e4967763ab7d4226f6a44fe2703c08fbabcd9e0520e4ad"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-2/current/maintenance/final-storage-resources.json.gz",
+    "bytes": 408,
+    "sha256": "74315e7490a57811a229b892615885f2a198d50ef3113c6c7e520ee6c873258f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/partial-trace.json",
+    "archive": "raw/contract/round-2/current/maintenance/partial-trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "2a3c8ce0655ffdf1b8cecc28072e2a5d1ba69a7429795547a547526291703157"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/report.json",
+    "archive": "raw/contract/round-2/current/maintenance/report.json.gz",
+    "bytes": 2087,
+    "sha256": "c475d860556025dbfef46d7a5759806f90fccdeae3f4dd624463bc68b378500c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/trace.json",
+    "archive": "raw/contract/round-2/current/maintenance/trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "2a3c8ce0655ffdf1b8cecc28072e2a5d1ba69a7429795547a547526291703157"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-2/current/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "f89d98288731fb6aff6ed2cda35532b632ad9d584ea2d90539e0393517e0b4b9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/ipc-operation-timings-progress.jsonl",
+    "archive": "raw/contract/round-2/current/maintenance/ipc-operation-timings-progress.jsonl.gz",
+    "bytes": 538068,
+    "sha256": "217aaa7118aa611c1024ebd2f277678bc4d1de1cbb87cd986f847afe98b1a4af"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/registration.json",
+    "archive": "raw/contract/round-2/current/maintenance/registration.json.gz",
+    "bytes": 712,
+    "sha256": "30b5466abd023a1ceda5909ff3f6da291fe0b83e1db7ed5117db55082f007fd3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38.gz",
+    "bytes": 5306,
+    "sha256": "16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d.gz",
+    "bytes": 5306,
+    "sha256": "64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66.gz",
+    "bytes": 5306,
+    "sha256": "36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd.gz",
+    "bytes": 5306,
+    "sha256": "9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a.gz",
+    "bytes": 5306,
+    "sha256": "fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62.gz",
+    "bytes": 5306,
+    "sha256": "27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143.gz",
+    "bytes": 5306,
+    "sha256": "fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175.gz",
+    "bytes": 5306,
+    "sha256": "5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816.gz",
+    "bytes": 5306,
+    "sha256": "34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba.gz",
+    "bytes": 5306,
+    "sha256": "1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e.gz",
+    "bytes": 5306,
+    "sha256": "b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b.gz",
+    "bytes": 5306,
+    "sha256": "e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134.gz",
+    "bytes": 5306,
+    "sha256": "ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf.gz",
+    "bytes": 5306,
+    "sha256": "d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20.gz",
+    "bytes": 5306,
+    "sha256": "7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd.gz",
+    "bytes": 5306,
+    "sha256": "e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf.gz",
+    "bytes": 5306,
+    "sha256": "824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828.gz",
+    "bytes": 5306,
+    "sha256": "6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40.gz",
+    "bytes": 5306,
+    "sha256": "f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689.gz",
+    "bytes": 5306,
+    "sha256": "1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07.gz",
+    "bytes": 5306,
+    "sha256": "0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2.gz",
+    "bytes": 5306,
+    "sha256": "ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482.gz",
+    "bytes": 5306,
+    "sha256": "ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe.gz",
+    "bytes": 5306,
+    "sha256": "8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1.gz",
+    "bytes": 5306,
+    "sha256": "b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821.gz",
+    "bytes": 5306,
+    "sha256": "cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc.gz",
+    "bytes": 5306,
+    "sha256": "ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617.gz",
+    "bytes": 5306,
+    "sha256": "543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0.gz",
+    "bytes": 5306,
+    "sha256": "f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5.gz",
+    "bytes": 5306,
+    "sha256": "dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af.gz",
+    "bytes": 5306,
+    "sha256": "6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f.gz",
+    "bytes": 5306,
+    "sha256": "911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a.gz",
+    "bytes": 5306,
+    "sha256": "dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061.gz",
+    "bytes": 5306,
+    "sha256": "89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7.gz",
+    "bytes": 5306,
+    "sha256": "b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171.gz",
+    "bytes": 5306,
+    "sha256": "b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a.gz",
+    "bytes": 5306,
+    "sha256": "33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4.gz",
+    "bytes": 5306,
+    "sha256": "a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6.gz",
+    "bytes": 5306,
+    "sha256": "bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6.gz",
+    "bytes": 5306,
+    "sha256": "7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed.gz",
+    "bytes": 5306,
+    "sha256": "f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f.gz",
+    "bytes": 5306,
+    "sha256": "e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95.gz",
+    "bytes": 5306,
+    "sha256": "0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1.gz",
+    "bytes": 5306,
+    "sha256": "9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0.gz",
+    "bytes": 5306,
+    "sha256": "435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e.gz",
+    "bytes": 5306,
+    "sha256": "205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d.gz",
+    "bytes": 5306,
+    "sha256": "86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130.gz",
+    "bytes": 5306,
+    "sha256": "ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab.gz",
+    "bytes": 5306,
+    "sha256": "d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa.gz",
+    "bytes": 5306,
+    "sha256": "4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f.gz",
+    "bytes": 5306,
+    "sha256": "6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986.gz",
+    "bytes": 5306,
+    "sha256": "0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b.gz",
+    "bytes": 5306,
+    "sha256": "c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f.gz",
+    "bytes": 5306,
+    "sha256": "f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970.gz",
+    "bytes": 5306,
+    "sha256": "231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce.gz",
+    "bytes": 5306,
+    "sha256": "10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a.gz",
+    "bytes": 5306,
+    "sha256": "51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2.gz",
+    "bytes": 5306,
+    "sha256": "775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c.gz",
+    "bytes": 5306,
+    "sha256": "041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908.gz",
+    "bytes": 5306,
+    "sha256": "462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a.gz",
+    "bytes": 5306,
+    "sha256": "7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d.gz",
+    "bytes": 5306,
+    "sha256": "70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432.gz",
+    "bytes": 5306,
+    "sha256": "fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb.gz",
+    "bytes": 5306,
+    "sha256": "459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65.gz",
+    "bytes": 5306,
+    "sha256": "0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87.gz",
+    "bytes": 5306,
+    "sha256": "23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d.gz",
+    "bytes": 5306,
+    "sha256": "759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807.gz",
+    "bytes": 5306,
+    "sha256": "ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae.gz",
+    "bytes": 5306,
+    "sha256": "19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db.gz",
+    "bytes": 5306,
+    "sha256": "ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35.gz",
+    "bytes": 5306,
+    "sha256": "abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112.gz",
+    "bytes": 5306,
+    "sha256": "48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f.gz",
+    "bytes": 5306,
+    "sha256": "193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed.gz",
+    "bytes": 5306,
+    "sha256": "d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9.gz",
+    "bytes": 5306,
+    "sha256": "0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e.gz",
+    "bytes": 5306,
+    "sha256": "147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7.gz",
+    "bytes": 5306,
+    "sha256": "4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c.gz",
+    "bytes": 5306,
+    "sha256": "016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c.gz",
+    "bytes": 5306,
+    "sha256": "9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66.gz",
+    "bytes": 5306,
+    "sha256": "9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6.gz",
+    "bytes": 5306,
+    "sha256": "38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e.gz",
+    "bytes": 5306,
+    "sha256": "72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6.gz",
+    "bytes": 5306,
+    "sha256": "45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0.gz",
+    "bytes": 5306,
+    "sha256": "b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4.gz",
+    "bytes": 5306,
+    "sha256": "7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99.gz",
+    "bytes": 5306,
+    "sha256": "ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990.gz",
+    "bytes": 5306,
+    "sha256": "02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c.gz",
+    "bytes": 5306,
+    "sha256": "6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea.gz",
+    "bytes": 5306,
+    "sha256": "08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43.gz",
+    "bytes": 5306,
+    "sha256": "e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04.gz",
+    "bytes": 5206,
+    "sha256": "4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a.gz",
+    "bytes": 5206,
+    "sha256": "4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08.gz",
+    "bytes": 5206,
+    "sha256": "58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf.gz",
+    "bytes": 5206,
+    "sha256": "d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9.gz",
+    "bytes": 5206,
+    "sha256": "207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597.gz",
+    "bytes": 5206,
+    "sha256": "177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880.gz",
+    "bytes": 5206,
+    "sha256": "527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f.gz",
+    "bytes": 5206,
+    "sha256": "d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066.gz",
+    "bytes": 5206,
+    "sha256": "5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed",
+    "archive": "raw/contract/round-2/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed.gz",
+    "bytes": 5096,
+    "sha256": "6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/campaign-case-completed.json.gz",
+    "bytes": 313,
+    "sha256": "ef67b56807710f7feaa7dbbd934407b9dfe1fc5dba4aa9de9af2af4757d0202a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/elapsed.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/elapsed.json.gz",
+    "bytes": 162,
+    "sha256": "a4ddc6c24230384a6291640ed4f7eff4b967e3f71f87b7d466ba06657c5f9526"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 2235383,
+    "sha256": "ee22a9f99d129bd3a6c56a2c18509aeb30dd1dedf4e7d0c8d3dc5f58eb278958"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/report.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/report.json.gz",
+    "bytes": 1197,
+    "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/trace.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/trace.json.gz",
+    "bytes": 9863010,
+    "sha256": "1b4e54c8fbeb71c35bb60d5897853fcd697963ee314afe36b50d02998cbb2086"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-2/kuzu/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "d2b0aa10b609f520272c3e0ee28955df39aeaa7adce4c149549ebdb7e494c327"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-2/kuzu/maintenance/final-storage-resources.json.gz",
+    "bytes": 309,
+    "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-2/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-2/control/maintenance/campaign-case-failed.json",
+    "archive": "raw/contract/round-2/control/maintenance/campaign-case-failed.json.gz",
+    "bytes": 848,
+    "sha256": "cbe5784231cc4b5ea64cc2958b8a27f51a3af5efe404dfe5605b6a388ab75e8b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/campaign-case-completed.json.gz",
+    "bytes": 313,
+    "sha256": "d8ae802c9f4f67f478343e162b257c9c32b3920b9020c20b08aad77e4b1ad773"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/elapsed.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/elapsed.json.gz",
+    "bytes": 162,
+    "sha256": "c0aa47ec1be193de7bf8bf9739184c6de22e551400ab5a2ac5450f400b418261"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 2235373,
+    "sha256": "bd40ccc363d5cfaf9aa47d63b0a7881abc085ac17ea7af99f40f101893823dc5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/report.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/report.json.gz",
+    "bytes": 1197,
+    "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/trace.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/trace.json.gz",
+    "bytes": 9863010,
+    "sha256": "1b4e54c8fbeb71c35bb60d5897853fcd697963ee314afe36b50d02998cbb2086"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-1/kuzu/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "e6a54595745098fc7c598aa4c03ee861498c71e0bbad817acc783503c1a56da6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-1/kuzu/maintenance/final-storage-resources.json.gz",
+    "bytes": 309,
+    "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-1/kuzu/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/resource-checkpoint.json",
+    "archive": "raw/contract/round-1/current/maintenance/resource-checkpoint.json.gz",
+    "bytes": 360,
+    "sha256": "23d3a82d4e877a99e6571d16a002503a8da0993003b818bd81e4ea8c2d616779"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/campaign-case-completed.json",
+    "archive": "raw/contract/round-1/current/maintenance/campaign-case-completed.json.gz",
+    "bytes": 319,
+    "sha256": "e777b93e505c4a13aa92366bddd26de96749e0806007149e4883a23d9bd6a8e0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/elapsed.json",
+    "archive": "raw/contract/round-1/current/maintenance/elapsed.json.gz",
+    "bytes": 182,
+    "sha256": "a1fd04d443b970401cce29ee718cb5c0cd48dfadc405f28d32956eb3da749a19"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/ipc-operation-timings.json",
+    "archive": "raw/contract/round-1/current/maintenance/ipc-operation-timings.json.gz",
+    "bytes": 617820,
+    "sha256": "21d190cbcfa45d60f7e526c33c8d66be7a2fe52a6890edba46db9e0b39e5a6f1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/final-storage-resources.json",
+    "archive": "raw/contract/round-1/current/maintenance/final-storage-resources.json.gz",
+    "bytes": 408,
+    "sha256": "e8dc8a6a67f12998a0716a055a77489dfa06c6723ff0d7b5c93edc61c80792e1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/partial-trace.json",
+    "archive": "raw/contract/round-1/current/maintenance/partial-trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "4306608434245a8675704fb281c80f3eb379f531269aacc69791d5b3dca99222"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/report.json",
+    "archive": "raw/contract/round-1/current/maintenance/report.json.gz",
+    "bytes": 2087,
+    "sha256": "f5a1bc84754df387d7b4d6cc473d82efabf7054110e7bb081971f89e85e00c15"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/trace.json",
+    "archive": "raw/contract/round-1/current/maintenance/trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "4306608434245a8675704fb281c80f3eb379f531269aacc69791d5b3dca99222"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/family-progress.jsonl",
+    "archive": "raw/contract/round-1/current/maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "6f4a8e46d68fb6756c56004769931824515e94051adba0b38b1cdff30771e0e2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/ipc-operation-timings-progress.jsonl",
+    "archive": "raw/contract/round-1/current/maintenance/ipc-operation-timings-progress.jsonl.gz",
+    "bytes": 538072,
+    "sha256": "618ab26f4d1de78caa46ff8a44b081c0638461503ea9daaec3232575b58a79e5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/registration.json",
+    "archive": "raw/contract/round-1/current/maintenance/registration.json.gz",
+    "bytes": 712,
+    "sha256": "30b5466abd023a1ceda5909ff3f6da291fe0b83e1db7ed5117db55082f007fd3"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38.gz",
+    "bytes": 5306,
+    "sha256": "16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d.gz",
+    "bytes": 5306,
+    "sha256": "64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66.gz",
+    "bytes": 5306,
+    "sha256": "36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd.gz",
+    "bytes": 5306,
+    "sha256": "9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a.gz",
+    "bytes": 5306,
+    "sha256": "fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62.gz",
+    "bytes": 5306,
+    "sha256": "27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143.gz",
+    "bytes": 5306,
+    "sha256": "fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175.gz",
+    "bytes": 5306,
+    "sha256": "5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816.gz",
+    "bytes": 5306,
+    "sha256": "34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba.gz",
+    "bytes": 5306,
+    "sha256": "1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e.gz",
+    "bytes": 5306,
+    "sha256": "b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b.gz",
+    "bytes": 5306,
+    "sha256": "e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134.gz",
+    "bytes": 5306,
+    "sha256": "ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf.gz",
+    "bytes": 5306,
+    "sha256": "d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20.gz",
+    "bytes": 5306,
+    "sha256": "7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd.gz",
+    "bytes": 5306,
+    "sha256": "e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf.gz",
+    "bytes": 5306,
+    "sha256": "824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828.gz",
+    "bytes": 5306,
+    "sha256": "6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40.gz",
+    "bytes": 5306,
+    "sha256": "f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689.gz",
+    "bytes": 5306,
+    "sha256": "1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07.gz",
+    "bytes": 5306,
+    "sha256": "0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2.gz",
+    "bytes": 5306,
+    "sha256": "ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482.gz",
+    "bytes": 5306,
+    "sha256": "ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe.gz",
+    "bytes": 5306,
+    "sha256": "8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1.gz",
+    "bytes": 5306,
+    "sha256": "b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821.gz",
+    "bytes": 5306,
+    "sha256": "cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc.gz",
+    "bytes": 5306,
+    "sha256": "ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617.gz",
+    "bytes": 5306,
+    "sha256": "543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0.gz",
+    "bytes": 5306,
+    "sha256": "f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5.gz",
+    "bytes": 5306,
+    "sha256": "dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af.gz",
+    "bytes": 5306,
+    "sha256": "6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f.gz",
+    "bytes": 5306,
+    "sha256": "911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a.gz",
+    "bytes": 5306,
+    "sha256": "dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061.gz",
+    "bytes": 5306,
+    "sha256": "89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7.gz",
+    "bytes": 5306,
+    "sha256": "b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171.gz",
+    "bytes": 5306,
+    "sha256": "b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a.gz",
+    "bytes": 5306,
+    "sha256": "33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4.gz",
+    "bytes": 5306,
+    "sha256": "a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6.gz",
+    "bytes": 5306,
+    "sha256": "bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6.gz",
+    "bytes": 5306,
+    "sha256": "7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed.gz",
+    "bytes": 5306,
+    "sha256": "f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f.gz",
+    "bytes": 5306,
+    "sha256": "e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95.gz",
+    "bytes": 5306,
+    "sha256": "0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1.gz",
+    "bytes": 5306,
+    "sha256": "9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0.gz",
+    "bytes": 5306,
+    "sha256": "435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e.gz",
+    "bytes": 5306,
+    "sha256": "205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d.gz",
+    "bytes": 5306,
+    "sha256": "86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130.gz",
+    "bytes": 5306,
+    "sha256": "ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab.gz",
+    "bytes": 5306,
+    "sha256": "d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa.gz",
+    "bytes": 5306,
+    "sha256": "4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f.gz",
+    "bytes": 5306,
+    "sha256": "6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986.gz",
+    "bytes": 5306,
+    "sha256": "0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b.gz",
+    "bytes": 5306,
+    "sha256": "c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f.gz",
+    "bytes": 5306,
+    "sha256": "f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970.gz",
+    "bytes": 5306,
+    "sha256": "231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce.gz",
+    "bytes": 5306,
+    "sha256": "10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a.gz",
+    "bytes": 5306,
+    "sha256": "51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2.gz",
+    "bytes": 5306,
+    "sha256": "775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c.gz",
+    "bytes": 5306,
+    "sha256": "041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908.gz",
+    "bytes": 5306,
+    "sha256": "462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a.gz",
+    "bytes": 5306,
+    "sha256": "7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d.gz",
+    "bytes": 5306,
+    "sha256": "70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432.gz",
+    "bytes": 5306,
+    "sha256": "fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb.gz",
+    "bytes": 5306,
+    "sha256": "459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65.gz",
+    "bytes": 5306,
+    "sha256": "0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87.gz",
+    "bytes": 5306,
+    "sha256": "23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d.gz",
+    "bytes": 5306,
+    "sha256": "759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807.gz",
+    "bytes": 5306,
+    "sha256": "ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae.gz",
+    "bytes": 5306,
+    "sha256": "19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db.gz",
+    "bytes": 5306,
+    "sha256": "ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35.gz",
+    "bytes": 5306,
+    "sha256": "abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112.gz",
+    "bytes": 5306,
+    "sha256": "48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f.gz",
+    "bytes": 5306,
+    "sha256": "193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed.gz",
+    "bytes": 5306,
+    "sha256": "d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9.gz",
+    "bytes": 5306,
+    "sha256": "0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e.gz",
+    "bytes": 5306,
+    "sha256": "147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7.gz",
+    "bytes": 5306,
+    "sha256": "4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c.gz",
+    "bytes": 5306,
+    "sha256": "016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c.gz",
+    "bytes": 5306,
+    "sha256": "9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66.gz",
+    "bytes": 5306,
+    "sha256": "9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6.gz",
+    "bytes": 5306,
+    "sha256": "38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e.gz",
+    "bytes": 5306,
+    "sha256": "72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6.gz",
+    "bytes": 5306,
+    "sha256": "45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0.gz",
+    "bytes": 5306,
+    "sha256": "b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4.gz",
+    "bytes": 5306,
+    "sha256": "7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99.gz",
+    "bytes": 5306,
+    "sha256": "ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990.gz",
+    "bytes": 5306,
+    "sha256": "02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c.gz",
+    "bytes": 5306,
+    "sha256": "6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea.gz",
+    "bytes": 5306,
+    "sha256": "08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43.gz",
+    "bytes": 5306,
+    "sha256": "e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04.gz",
+    "bytes": 5206,
+    "sha256": "4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a.gz",
+    "bytes": 5206,
+    "sha256": "4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08.gz",
+    "bytes": 5206,
+    "sha256": "58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf.gz",
+    "bytes": 5206,
+    "sha256": "d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9.gz",
+    "bytes": 5206,
+    "sha256": "207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597.gz",
+    "bytes": 5206,
+    "sha256": "177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880.gz",
+    "bytes": 5206,
+    "sha256": "527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f.gz",
+    "bytes": 5206,
+    "sha256": "d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066.gz",
+    "bytes": 5206,
+    "sha256": "5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed",
+    "archive": "raw/contract/round-1/current/maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed.gz",
+    "bytes": 5096,
+    "sha256": "6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/contract/round-1/control/maintenance/campaign-case-failed.json",
+    "archive": "raw/contract/round-1/control/maintenance/campaign-case-failed.json.gz",
+    "bytes": 848,
+    "sha256": "c96bd94e08de6b74f08e6d0b92840fa69ec51c8fcef916c4a9a0a113bc2d364e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/maintenance-campaign-completed.json",
+    "archive": "raw/maintenance-campaign-completed.json.gz",
+    "bytes": 4999,
+    "sha256": "07e85cd8ccf73d562035f7db009ccaf7a1ff31a95554c10b154f9b75f63a36c0"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/maintenance-comparison-progress.json",
+    "archive": "raw/maintenance-comparison-progress.json.gz",
+    "bytes": 25538,
+    "sha256": "6c54911702be9164e45a627fa3b8ac953000156b903b85da65cc19848b8cb97f"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/registration.json",
+    "archive": "raw/registration.json.gz",
+    "bytes": 111791,
+    "sha256": "a0453d9ed503769929b9dcc888c79f71431ad45e74267797ec99688f7446f2c9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/historical-control-maintenance-failure.log.gz",
+    "archive": "raw/historical-control-maintenance-failure.log.gz.gz",
+    "bytes": 495,
+    "sha256": "be38dd1cdc14626f73f11f444ec4ef5fe79a4e88411fc25430ab1299689f8a98"
+  },
+  {
+    "source": "/tmp/report-zyx-final-steady-maintenance.py",
+    "archive": "raw/report-zyx-final-steady-maintenance.py.gz",
+    "bytes": 3432,
+    "sha256": "5a8bf5a8b0796cca0967081c22ddab0250502c1e5a827f427328cabf203539b1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/read-only-resource-diagnostics/first-current-summary.json",
+    "archive": "raw/read-only-resource-diagnostics/first-current-summary.json.gz",
+    "bytes": 1594,
+    "sha256": "1619e605365f33214da64100ac5e82ec7c339902c16bcfdad9ccae355b50c0a4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/read-only-resource-diagnostics/zyx-maintenance-catalog-inspector.json",
+    "archive": "raw/read-only-resource-diagnostics/zyx-maintenance-catalog-inspector.json.gz",
+    "bytes": 634,
+    "sha256": "5ef9e4356200679d04e309669a9e40432adff79fcc3e2024410e634ee980be60"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/read-only-resource-diagnostics/zyx-route-liveness-inspector.json",
+    "archive": "raw/read-only-resource-diagnostics/zyx-route-liveness-inspector.json.gz",
+    "bytes": 150776,
+    "sha256": "b8c63c0ec4b02ffcc9453cf61ae3ccdf76811431f5ef2f1f578d5b51d9868431"
+  }
+]

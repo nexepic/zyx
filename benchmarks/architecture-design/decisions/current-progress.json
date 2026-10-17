@@ -28,11 +28,12 @@
     "S6.1",
     "S0.4",
     "S6.4",
-    "S0.3"
+    "S0.3",
+    "S5.5"
   ],
-  "accepted": 29,
+  "accepted": 30,
   "total": 34,
-  "percent": 85.3,
+  "percent": 88.2,
   "stages": {
     "S0": {
       "accepted": 4,
@@ -60,9 +61,9 @@
       "percent": 75.0
     },
     "S5": {
-      "accepted": 4,
+      "accepted": 5,
       "total": 5,
-      "percent": 80.0
+      "percent": 100
     },
     "S6": {
       "accepted": 3,
@@ -131,7 +132,8 @@
       "S5.4",
       "S6.3",
       "S5.3",
-      "S6.1"
+      "S6.1",
+      "S5.5"
     ],
     "status": "in_progress",
     "performance_window": "after_remaining_implementation"
@@ -148,34 +150,37 @@
       "S5.5",
       "S6.2"
     ],
-    "completed_ids": [],
-    "completed": 0,
+    "completed_ids": [
+      "S5.5"
+    ],
+    "completed": 1,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [
-      "S6.1"
-    ],
-    "implementation": "f0 complete read/write records retained but actual O6 pool-reactivation failure rejects overall candidate. Fix9dd3ffaf revalidates current PageDir after value publication; old-core counterexample and6modules/94tests pass. Exact retained file repaired/idempotent; full13window untimed maintenance running. No new acceptance or raised limits.",
-    "final_window": "/tmp/zyx-final-five-repaired-window-20261017",
-    "source_commit": "63f65f37b8705e3aadae5b0c22b998f845d2c11b",
+    "pending_revalidation_ids": [],
+    "implementation": "Final5fcimplementation and1021distinct selected cases pass; clean e8source/binaries frozen.3NativeO6full13window processes pass; read/write/remaining full contracts continue under originalcaps.",
+    "final_window": "/tmp/zyx-final-five-steady-window-20261017",
+    "source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_revalidation": {
       "id": "S6.1",
       "score_increase": false,
-      "evidence": "20261017-final-protection-and-maintenance-repairs/proof.json",
-      "scope": "Historical f0 clean freeze with40modules/1011distinct tests remains versioned. New9dd O6 patch has6modules/94tests; full maintenance correctness and new clean freeze pending."
+      "source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+      "evidence": "20261017-steady-slot-history/proof.json",
+      "scope": "Final42module1019tests plus4reclaim cases(2new) give1021distinct passes on sameDebugcore; finalRelease exact10000User replay and full3processO6correctness pass. No full suite."
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
     "working_source_commit": "5fc768cb",
-    "final_window_status": "f0 stopped at engine-free boundary after actual maintenance failure; deferred contracts never passes or failures",
-    "latest_checkpoint": "20261017-final-steady-integrated-window/proof.json",
+    "final_window_status": "O6complete_read_phase_running",
+    "latest_checkpoint": "20261017-s55-steady-acceptance/proof.json",
     "latest_targeted_tests": {
-      "modules": 9,
-      "tests": 150,
-      "passed": 150,
+      "modules": 42,
+      "tests": 1019,
+      "passed": 1019,
+      "additional_reclaim_tests": 4,
+      "distinct_passed": 1021,
       "full_suite": false
     },
-    "full_maintenance_preflight": "13_of_13_correctness_passed_resource_plateau_failed_13.7_percent_growth",
-    "pending_repair": "Implementation1021selected distinct tests and exactRelease route replay pass; final frozen integrated O6-first resource/performance admission pending.",
+    "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
+    "pending_repair": "No pending implementation patch; remaining4documented read/write/space/integrated acceptance items running.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -198,7 +203,8 @@
     "final_window_order": "O6 first, current13window case doubles as resource correctness checkpoint; no duplicate untimed full13window run; do not start broad matrix after actualO6resource failure.",
     "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
-    "final_performance_window": "registered_O6_first_not_yet_started"
+    "final_performance_window": "in_progress_O6complete_remaining_gates_pending",
+    "historical_iterations_evidence": "20261017-steady-slot-history/proof.json"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -307,16 +313,18 @@
   "S5.3": "accepted_revalidated",
   "S6.1": "accepted_revalidated",
   "last_certified_checkpoint": {
-    "accepted": 29,
-    "percent": 85.3,
-    "production_source": "03436b7a75d0ace5830570b13840d9f55910de58",
-    "latest_delivery": "S0.3",
-    "evidence": "20261016-s03-complete-versioned-baseline/proof.json",
+    "accepted": 30,
+    "percent": 88.2,
+    "production_source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+    "latest_delivery": "S5.5",
+    "evidence": "20261017-s55-steady-acceptance/proof.json",
     "performance_acceptance": false,
-    "source_revalidation_evidence": "20261016-cache-decline-delete-budget/proof.json",
-    "baseline_source": "6a735df86a678556aa71877b6aa66fe968292df7"
+    "accepted_scope": "S5.5O6 only; primary/protection/integrated comparison gates remain pending. Kuzu goal unmet.",
+    "source_revalidation_evidence": "20261017-steady-slot-history/proof.json",
+    "performance_baseline_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8"
   },
   "S0.4": "accepted_diagnostic_report_with_explicit_limits",
   "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot",
-  "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits"
+  "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits",
+  "S5.5": "accepted_O6_sustained_cost_and_bounded_resource_contract_with_explicit_comparison_limits"
 }
