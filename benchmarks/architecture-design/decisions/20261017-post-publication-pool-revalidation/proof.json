@@ -1,0 +1,50 @@
+{
+  "accepted": 29,
+  "total": 34,
+  "percent": 85.3,
+  "this_request_completed": 0,
+  "status": "actual_maintenance_reactivation_fixed_untimed_full_13window_correctness_pending",
+  "performance_admission": false,
+  "rejected_source": "63f65f37/f0e44b78",
+  "rejected_window": "/tmp/zyx-final-five-repaired-window-20261017",
+  "read_write_timing_samples": {
+    "base_read": 2010,
+    "separate_bounded_read": 2800,
+    "base_restored_write": 690,
+    "separate_bounded_write": 3200,
+    "sum": 8700,
+    "no_pooling_across_source_or_protocol": true
+  },
+  "kuzu_maintenance": "Three complete13window cases retained separately; their1000measured insert observations/process are not included in the8700read/write count and do not prove Native steady admission.",
+  "native_maintenance": "Original control failed its logical-plan deletion; f0 failed its first MAINTAIN after value retirement. No Native completed steady windows or valid steady P50 distribution.",
+  "formal_write_boundary": "create100nodes supplemental P50+2.57%, P95+5.49%; independent control P95 range and per-process results retained. No automatic protection pass or extra same-source repetitions.",
+  "confirmed_reactivation": {
+    "before_generation": 211,
+    "after_generation": 212,
+    "mapped_previously_empty_pools": [
+      {
+        "id": 1560,
+        "kind": 3,
+        "owner": 18446744073709551615,
+        "state": 2,
+        "generation": 1,
+        "new_pages": [
+          {
+            "page": 51910,
+            "segment": 1560
+          }
+        ]
+      }
+    ]
+  },
+  "negative": "Final regression reproduces exact PageDir retirement rejection against unchanged Debugf0 core; earlier incomplete capacity fixtures are not evidence.",
+  "positive": {
+    "affected_modules": 6,
+    "tests": 94,
+    "passed": 94,
+    "full_suite": false
+  },
+  "fix": "After value publication, bounded authenticated current-PageDir walk filters newly mapped pool candidates before retirement/release. Final writer-locked emptiness checks remain intact.",
+  "new_performance_or_resource_caps": false,
+  "kuzu_goal_achieved": false
+}
