@@ -21,10 +21,27 @@
 #include "graph/storage/relocatable/metadata/CatalogRadix.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/utils/OwnedAssociativeContainers.hpp"
 
 namespace graph::storage {
 
 	namespace {
+
+		template<class Visitor>
+		void visitBatchBaseRoutes(MetadataPageFile &pages, const MetadataWriteBatch &batch,
+								 PhysicalPageRef root, Visitor &&visitor) {
+			MetadataPageRouteDirectory directory(pages);
+			if (batch.metadataRoutePruningRequested()) {
+				// Resolve logical children through the still-published bootstrap.
+				// Substitute only its physical data-directory root for traversal.
+				auto physical = batch.current();
+				const auto header = pages.readPageDirectoryBootstrap(physical.page_directory_root);
+				physical.page_directory_root = header.data_page_directory_root;
+				for (const auto &route : directory.collectRoutesFromPhysicalDirectoryRoots(physical)) visitor(route);
+			} else {
+				for (const auto &route : directory.collectRoutesFromRouteBranch(batch.candidate(), root)) visitor(route);
+			}
+		}
 
 		[[noreturn]] void throwRouteDirectoryError(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -226,7 +243,7 @@ namespace graph::storage {
 		return writeNode(pages_, batch, level, children, true);
 	}
 
-	std::vector<MetadataPageRoute>
+	utils::OwnedStdVector<MetadataPageRoute>
 	MetadataPageRouteDirectory::collectRoutesFromPhysicalDirectoryRoots(const Superblock &superblock) const {
 		struct Root final {
 			PhysicalPageRef reference;
@@ -248,8 +265,8 @@ namespace graph::storage {
 				Root{superblock.state_directory_root, MetadataDirectoryType::MDT_STATE},
 				Root{superblock.retire_queue_root, MetadataDirectoryType::MDT_RETIRE_QUEUE},
 		};
-		std::set<std::pair<uint64_t, uint8_t>> frames;
-		std::map<uint64_t, PhysicalPageRef> routes;
+		utils::OwnedSet<std::pair<uint64_t, uint8_t>> frames;
+		utils::OwnedMap<uint64_t, PhysicalPageRef> routes;
 
 		const auto registerPage = [&](MetadataPageId pageId, PhysicalPageRef reference) {
 			validateReference(reference, superblock, "metadata PageId route graph has an invalid physical reference");
@@ -333,7 +350,7 @@ namespace graph::storage {
 				visitDirectory(visitDirectory, root.reference, root.directory_type, true, 0U, 0U);
 			}
 		}
-		std::vector<MetadataPageRoute> result;
+		utils::OwnedStdVector<MetadataPageRoute> result;
 		result.reserve(routes.size());
 		for (const auto &[pageId, reference]: routes) {
 			result.push_back({MetadataPageId(pageId), reference});
@@ -374,10 +391,9 @@ namespace graph::storage {
 								  "Page Directory bootstrap is newer than the metadata write batch");
 		}
 		std::map<uint64_t, PhysicalPageRef> routes;
-		for (const MetadataPageRoute &route:
-			 collectRoutesFromRouteBranch(batch.candidate(), previous.metadata_page_directory_root)) {
+		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
-		}
+		});
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
@@ -535,9 +551,9 @@ namespace graph::storage {
 	PhysicalPageRef MetadataPageRouteDirectory::buildNextRouteBranch(MetadataWriteBatch &batch,
 																	PhysicalPageRef currentRoot) {
 		std::map<uint64_t, PhysicalPageRef> routes;
-		for (const MetadataPageRoute &route: collectRoutesFromRouteBranch(batch.candidate(), currentRoot)) {
+		visitBatchBaseRoutes(pages_, batch, currentRoot, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
-		}
+		});
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
@@ -568,10 +584,9 @@ namespace graph::storage {
 		}
 		replacement.metadata_page_directory_root = buildNextRouteBranch(batch, previous.metadata_page_directory_root);
 		std::map<uint64_t, PhysicalPageRef> routes;
-		for (const MetadataPageRoute &route:
-			 collectRoutesFromRouteBranch(batch.candidate(), previous.metadata_page_directory_root)) {
+		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
-		}
+		});
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
