@@ -886,5 +886,179 @@
     "archive": "raw/metadata-cleanup/zyx-removed-completed-test-executables-20261017.json.gz",
     "bytes": 1633,
     "sha256": "bde2b4ed46268b56b89e15cd9e2e970955ec2fa2a75c706c2efdd6abd9a7bbc6"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained-20261017/route-liveness.json",
+    "archive": "raw/route-pruning/route-liveness.json.gz",
+    "bytes": 173717,
+    "sha256": "82621d7bde00f4a4e9b0af44648d32f606feea6a7db426b43a6ecc6de2dc5920"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained-20261017/summary.json",
+    "archive": "raw/route-pruning/summary.json.gz",
+    "bytes": 394,
+    "sha256": "fb99d7a394e7b241e26ef2492fbe3648c999c2cae389bd3ca43d4035b138745b"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained-20261017/metadata.json",
+    "archive": "raw/route-pruning/metadata.json.gz",
+    "bytes": 193511,
+    "sha256": "b554822e8087ab0796efc8822e45d7e75d9edd1658b90d5469176b04a4e2e562"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained-20261017/trace.json",
+    "archive": "raw/route-pruning/trace.json.gz",
+    "bytes": 742674,
+    "sha256": "10359c4905836175f944ea44eb61d67050a439d584354a4703676d5edcab2695"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained-20261017/report.json",
+    "archive": "raw/route-pruning/report.json.gz",
+    "bytes": 953,
+    "sha256": "d91ba866d06dc958a7c037306646bd7a9fc5cd3f2d04faa47fe0d3142ae1ab67"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained.py",
+    "archive": "raw/route-pruning/zyx-metadata-cleanup-retained.py.gz",
+    "bytes": 2236,
+    "sha256": "69f576a7a70486556f5e2488fb9d75778b214bc8234ef0b4789eb8271445ef8e"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-retained.log",
+    "archive": "raw/route-pruning/zyx-metadata-cleanup-retained.log.gz",
+    "bytes": 851,
+    "sha256": "e4fdb2ffd879ba6c976333d97ea1407b768833eb8aaf9ca3bec9022f05a00b98"
+  },
+  {
+    "source": "/tmp/zyx-route-liveness-inspector.cpp",
+    "archive": "raw/route-pruning/zyx-route-liveness-inspector.cpp.gz",
+    "bytes": 2216,
+    "sha256": "786f111d87482b2ba17e72565cb015929404d7871a35ba46821c5bfc11041a33"
+  },
+  {
+    "source": "/tmp/zyx-route-liveness-inspector-provenance.json",
+    "archive": "raw/route-pruning/zyx-route-liveness-inspector-provenance.json.gz",
+    "bytes": 2096,
+    "sha256": "4d4c7f01169c447b2a73a37a5881e0c38c5fdfdd3f0a652c0dcfecfb7a9c42e0"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-negative-tests.xml",
+    "archive": "raw/route-pruning/zyx-route-pruning-negative-tests.xml.gz",
+    "bytes": 1782,
+    "sha256": "e250c813ae23db6bf4a60e180ec197a0f472e9db2eba0403b87da64d86057750"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-negative.log",
+    "archive": "raw/route-pruning/zyx-route-pruning-negative.log.gz",
+    "bytes": 2077,
+    "sha256": "e72ef227a63bb8fb83d726018b1bfffba9268ffa9dcea5b5530f54b9aba71345"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-negative-provenance.json",
+    "archive": "raw/route-pruning/zyx-route-pruning-negative-provenance.json.gz",
+    "bytes": 1429,
+    "sha256": "f09a87355d777b77e7d32f463b06fab2372f41fb1e890788dda964f1de9d34d4"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-production-hashes.json",
+    "archive": "raw/route-pruning/zyx-route-pruning-production-hashes.json.gz",
+    "bytes": 561,
+    "sha256": "6c5fe3ce4147d5c1aff9f294fe4ac2f7882860f367e6466228e25d2f5e907085"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-regression.log",
+    "archive": "raw/route-pruning/zyx-route-pruning-regression.log.gz",
+    "bytes": 374832,
+    "sha256": "26091b60d8741977d08224de472ad5e77b6281f3b177d5d7e87c05898759a5a1"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-affected-tests.xml",
+    "archive": "raw/route-pruning/zyx-route-pruning-affected-tests.xml.gz",
+    "bytes": 319893,
+    "sha256": "a00f8924e018ea10b64df5ec5a39204458dc68450f7a0ff69816820c4ebb99c2"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-regression-provenance.json",
+    "archive": "raw/route-pruning/zyx-route-pruning-regression-provenance.json.gz",
+    "bytes": 10404,
+    "sha256": "1ac2861a7b03e8d2be33579ad61da0b5ee6666d3bfef198313dd863d1b2fbafc"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-positive.log",
+    "archive": "raw/route-pruning/zyx-route-pruning-positive.log.gz",
+    "bytes": 1476,
+    "sha256": "b6278198cba0ca7c6674993e1949d2261970aa076d86a45daaf93e4b2a284e9a"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-positive-tests.xml",
+    "archive": "raw/route-pruning/zyx-route-pruning-positive-tests.xml.gz",
+    "bytes": 1634,
+    "sha256": "ac457257b5e65e3476306fff02b5b1b3d39ac5b6950c9d4786bded4e4d1b3d86"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-positive-provenance.json",
+    "archive": "raw/route-pruning/zyx-route-pruning-positive-provenance.json.gz",
+    "bytes": 1429,
+    "sha256": "c002f7e313ddd87848b246f82557302bb889be66b6ac19d3b3537c4e0459d7d4"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-regression.py",
+    "archive": "raw/route-pruning/zyx-route-pruning-regression.py.gz",
+    "bytes": 1474,
+    "sha256": "091fb4be91040eea40c945fa4e50d72eb7cf511faf11c0276f38775d3ba7a042"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-positive.py",
+    "archive": "raw/route-pruning/zyx-route-pruning-positive.py.gz",
+    "bytes": 1256,
+    "sha256": "87d8c3885b2f3ab5a821976b54700a0df0b69aa5cb72d7ed481c424f106d29d4"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained-20261017/summary.json",
+    "archive": "raw/final-route-replay/summary.json.gz",
+    "bytes": 423,
+    "sha256": "6f175ac06f5179cd488cb91e71631672dc814bcd245a0ae770628ae800edc647"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained-20261017/metadata.json",
+    "archive": "raw/final-route-replay/metadata.json.gz",
+    "bytes": 190505,
+    "sha256": "ed4037b08df56069558daa324e4322e41dc62bdf23837679183a77f45bdfe519"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained-20261017/route-liveness.json",
+    "archive": "raw/final-route-replay/route-liveness.json.gz",
+    "bytes": 172151,
+    "sha256": "79d4fe742cc0a9b5071de40da562b77aa780424e58f52cb97cc22ece7c0f4b6d"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained-20261017/trace.json",
+    "archive": "raw/final-route-replay/trace.json.gz",
+    "bytes": 742674,
+    "sha256": "2992011cbcb9ed99d05add7d8899ce912b80a286b2cff18757ece11c4ebf69fd"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained-20261017/report.json",
+    "archive": "raw/final-route-replay/report.json.gz",
+    "bytes": 953,
+    "sha256": "141a1fbb523f836af6ac4c843e03bfcc85779d3f90bc7303e07e2bf7770e39a0"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained.py",
+    "archive": "raw/final-route-replay/zyx-route-pruning-retained.py.gz",
+    "bytes": 2233,
+    "sha256": "15a1604396a2dcefee0593fb846db1a8c71102ad98b86b40836bcc58538543f4"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-retained.log",
+    "archive": "raw/final-route-replay/zyx-route-pruning-retained.log.gz",
+    "bytes": 851,
+    "sha256": "9b0d45e4220467d4495926c938186f279ef81e4980251c02dea93726c81d55d4"
+  },
+  {
+    "source": "/tmp/zyx-route-pruning-release-build.log",
+    "archive": "raw/final-route-replay/zyx-route-pruning-release-build.log.gz",
+    "bytes": 131524,
+    "sha256": "0f396280da550f3ba05c03c21a9195adc430592e78a9b8db57fd082d3d584664"
   }
 ]
