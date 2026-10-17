@@ -1,0 +1,76 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1448:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+ 1448 |     EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+      |                  ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1449:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+ 1449 |     EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1454:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+ 1454 |     EXPECT_THROW(tree.find(current, SegmentId(1U)), FormatException);
+      |                  ^~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1455:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+ 1455 |     EXPECT_THROW(tree.findOptional(current, SegmentId(1U)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+4 warnings generated.
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = CatalogSelectedLookupTest.*
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from CatalogSelectedLookupTest
+[ RUN      ] CatalogSelectedLookupTest.PointReadsResolveOnlyTheRequestedCatalogRoute
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1439: Failure
+Expected: (leaves->second.totalValue) <= (8), actual: 66 vs 8
+
+/workspace/zyx/tests/src/storage/relocatable/metadata/test_CatalogTree.cpp:1439: Failure
+Expected: (leaves->second.totalValue) <= (8), actual: 66 vs 8
+
+[  FAILED  ] CatalogSelectedLookupTest.PointReadsResolveOnlyTheRequestedCatalogRoute (7 ms)
+[ RUN      ] CatalogSelectedLookupTest.SelectedLeafCorruptionAndWrongDirectoryStillFailClosed
+[       OK ] CatalogSelectedLookupTest.SelectedLeafCorruptionAndWrongDirectoryStillFailClosed (13 ms)
+[----------] 2 tests from CatalogSelectedLookupTest (20 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (20 ms total)
+[  PASSED  ] 1 test.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] CatalogSelectedLookupTest.PointReadsResolveOnlyTheRequestedCatalogRoute
+
+ 1 FAILED TEST
+Selected verification failed, exit: 1

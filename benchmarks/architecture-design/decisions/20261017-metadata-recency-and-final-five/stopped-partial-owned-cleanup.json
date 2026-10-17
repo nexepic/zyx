@@ -1,0 +1,12 @@
+[
+  {
+    "path": "/tmp/zyx-final-five-window-20261017/reads/medium/round-2/current/scan/20261017T042207146417Z-medium-scan-zyx/zyx.db.benchmark-baseline",
+    "bytes": 1667235840,
+    "sha256": "5235e1005b596cb4a6a1f99d893e2e1cd38fa936f6cffc25cbf9de10062c53e2"
+  },
+  {
+    "path": "/tmp/zyx-final-five-window-20261017/reads/medium/round-2/current/scan/20261017T042207146417Z-medium-scan-zyx/zyx.db",
+    "bytes": 1667235840,
+    "sha256": "5235e1005b596cb4a6a1f99d893e2e1cd38fa936f6cffc25cbf9de10062c53e2"
+  }
+]

@@ -47,11 +47,12 @@
   "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
   "source_freeze_manifest": "freeze-manifest.json",
   "performance_window": {
-    "status": "running",
+    "status": "stopped_source033_before_further_O3_implementation",
     "root": "/tmp/zyx-final-five-window-20261017",
     "registration": "final-window-registration.json",
     "source": "033e8e79",
     "excluded_preparation_attempt": "excluded-preparation-space-failure.json",
     "accepted_ids": []
-  }
+  },
+  "continued_implementation": "catalog-selected-proof.json"
 }

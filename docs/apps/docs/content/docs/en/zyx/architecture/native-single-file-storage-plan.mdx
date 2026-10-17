@@ -187,6 +187,8 @@ values independent and prevents either a recursive route or a data-directory ent
 
 2026-10-15 decoded metadata read contract: cached views are immutable, and their codecs check strict ID ordering before admission. Since `(id - 1) / leaf_capacity` is monotonic for valid IDs, checking both endpoints proves that every entry belongs to the selected leaf ordinal. This shortcut applies only to decoded read views; mutable COW validation retains its complete entry scan. Point and batched metadata-route lookups validate the leaf ID range before returning a hit, so a matching prefix cannot hide a misrouted later entry. This strengthens the earlier point lookup's detection of a corrupt tail; valid lookup results and wire formats do not change. CRC, generation, visibility, directory type, selected physical-reference checks and IO-epoch invalidation remain required.
 
+2026-10-17 Catalog point-lookup scope: required and optional lookups authenticate each visited codec page in full, then resolve only the requested logical child. Directory type, PageId route, generation, LSN visibility and leaf ordinal checks remain required. A point lookup does not guarantee detection of missing routes in unvisited branches; full traversal and integrity scans check those global inconsistencies. Mutable COW preparation and full traversal retain complete child resolution. Wire formats and publication protocols are unchanged.
+
 Before migration begins, recovery and evacuation must validate that every currently reachable metadata radix, internal, and leaf
 page in one Superblock has a non-empty, globally unique logical `PageId`. Duplicate or invalid identities must fail closed before
 publication; assigning a fresh ID must never mask corruption.

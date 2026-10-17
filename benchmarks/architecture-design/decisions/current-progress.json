@@ -152,8 +152,10 @@
     "completed": 0,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [],
-    "implementation": "Bounded decoded metadata recency reuse; acceptance pending targeted regression and final performance evidence.",
+    "pending_revalidation_ids": [
+      "S6.1"
+    ],
+    "implementation": "Catalog selected point routes implemented; 15 modules/453 tests passed. Existing budget-family integrity admission failure reproduced and requires diagnosis; accepted delivery count unchanged.",
     "final_window": "/tmp/zyx-final-five-window-20261017",
     "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
     "source_revalidation": {

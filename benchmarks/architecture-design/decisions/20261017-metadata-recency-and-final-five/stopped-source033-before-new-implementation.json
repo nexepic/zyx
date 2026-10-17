@@ -1,0 +1,12 @@
+{
+  "reason": "First paired process has no scan/aggregate primary benefit and traversal protection regressions; do not accept it or continue expensive later old-source rounds. Source review confirms Catalog point lookups still resolve every logical radix child, unlike existing selected LocationDirectory lookups. Apply this bounded documented O3 path before final acceptance.",
+  "completed_profiles": 3,
+  "source": "033e8e79",
+  "accepted_items": 0,
+  "partial_round2_current": "externally canceled; not a failure/timeout or accepted sample",
+  "no_pool_with_later_source": true,
+  "processes_stopped": [
+    165430,
+    165743
+  ]
+}
