@@ -1,0 +1,34 @@
+{
+  "status": "implementation_and_targeted_regression_complete_performance_acceptance_pending",
+  "accepted_total": 29,
+  "percent": 85.3,
+  "request_completed": 0,
+  "candidate_ids": [
+    "S2.5",
+    "S3.5",
+    "S4.4",
+    "S5.5",
+    "S6.2"
+  ],
+  "change": "Use allocation-free LRU promotion on successful decoded metadata copy/view hits; same 128-entry and 1MiB ceilings, unchanged first authentication and mutation-epoch invalidation. Entry accounting includes the additional list iterator.",
+  "tests": {
+    "modules": 9,
+    "suites": 12,
+    "passed": 212,
+    "full_unit_suite": false
+  },
+  "test_fixture_correction": "The first borrowed-view test wrongly assumed a CatalogLeaf payload fills half its byte limit. Its initial failure was retained in the local log. Set the test limit to twice the measured entry charge to ensure exactly two entries; no production limit changed.",
+  "shared_input_probe": {
+    "status": "physically_read_only_control_counts_passed",
+    "control_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8",
+    "database_origin": "6a735df8 prepared medium current input; original manifest and input unchanged",
+    "expected_counts": {
+      "User": 100000,
+      "Post": 120000,
+      "Tag": 5000
+    },
+    "timing_samples": 0,
+    "qualification": "Only input compatibility and these three counts checked so far. Full semantic queries and remaining graph counts must pass before registering shared-input formal comparisons; no import performance claim."
+  },
+  "new_accepted_ids": []
+}

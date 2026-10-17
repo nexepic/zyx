@@ -1,0 +1,13 @@
+{
+  "scope": "untimed correctness only; no benchmark latency samples",
+  "source": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/medium/current.zyx",
+  "commands": [
+    "FORMAT",
+    "QUERY\tMATCH (n:User) RETURN count(n) AS total",
+    "QUERY\tMATCH (n:Post) RETURN count(n) AS total",
+    "QUERY\tMATCH (n:Tag) RETURN count(n) AS total"
+  ],
+  "returncode": 0,
+  "stdout": "{\"ok\":true,\"format_envelope\":5,\"superblock\":31}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",100000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",120000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",5000]]]}\n",
+  "stderr": ""
+}

@@ -511,3 +511,56 @@ TEST_F(MetadataPageReadContextTest, PrivateCopyDenialPreservesTheSharedEntryAndA
     }
     EXPECT_EQ(caller->used(), 0U);
 }
+
+TEST_F(MetadataPageReadContextTest, RepeatedRootHitsSurviveStreamingColdPagesWithinTheSameBudget) {
+    MetadataPageFile pages(io, root);
+    const auto hot = writeRadix(pages, 1U);
+    std::vector<PhysicalPageRef> cold;
+    for (uint8_t frame = 2U; frame != 12U; ++frame) cold.push_back(writeRadix(pages, frame));
+    const size_t limit = 2U * sizeof(MetadataRadixPage) + 1024U;
+    auto context = std::make_shared<MetadataPageReadContext>(root, limit);
+    MetadataPageReadContext::Scope scope(context, *io);
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    for (const auto reference : cold) {
+        EXPECT_EQ(pages.readMetadataRadixUnresolved(hot).page_id, MetadataPageId(1U));
+        EXPECT_EQ(pages.readMetadataRadixUnresolved(reference).page_id, MetadataPageId(reference.frame_index));
+        EXPECT_LE(context->size(), 2U);
+        EXPECT_LE(context->chargedBytes(), limit);
+    }
+    const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+    EXPECT_EQ(trace.at("native_graph.read.metadata_decodes.radix").totalValue, cold.size() + 1U);
+}
+
+TEST_F(MetadataPageReadContextTest, BorrowedPageHitsRefreshRecencyWithoutAllocating) {
+    auto memory = metadataReadGrant(64U * 1024U);
+    auto sizing = std::make_shared<MetadataPageReadContext>(root);
+    size_t entryCharge = 0U;
+    {
+        MetadataPageReadContext::Scope scope(sizing, *io);
+        sizing->put(PhysicalPageRef{PhysicalSlotId(1U), 1U, Generation(1U)}, oneCatalogPage(),
+            oneCatalogPage().entries.capacity() * sizeof(CatalogEntry));
+        entryCharge = sizing->chargedBytes();
+    }
+    ASSERT_GT(entryCharge, 0U);
+    auto context = std::make_shared<MetadataPageReadContext>(root, 2U * entryCharge, memory);
+    MetadataPageFile pages(io, root);
+    const PhysicalPageRef first{PhysicalSlotId(1U), 1U, Generation(1U)};
+    const PhysicalPageRef second{PhysicalSlotId(1U), 2U, Generation(1U)};
+    const PhysicalPageRef third{PhysicalSlotId(1U), 3U, Generation(1U)};
+    auto page = oneCatalogPage();
+    pages.writeCatalogLeaf(first, page);
+    pages.writeCatalogLeaf(second, page);
+    pages.writeCatalogLeaf(third, page);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readCatalogLeafView(first));
+    static_cast<void>(pages.readCatalogLeafView(second));
+    ASSERT_EQ(context->size(), 2U);
+    const auto used = memory->used();
+    const auto held = context->findView<CatalogLeafPage>(first);
+    ASSERT_TRUE(held);
+    EXPECT_EQ(memory->used(), used);
+    static_cast<void>(pages.readCatalogLeafView(third));
+    EXPECT_TRUE(context->findView<CatalogLeafPage>(first));
+    EXPECT_FALSE(context->findView<CatalogLeafPage>(second));
+    EXPECT_EQ(held->entries.front().segment_id, SegmentId(100U));
+}

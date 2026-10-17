@@ -5,6 +5,7 @@
 #pragma once
 
 #include <list>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <memory>
@@ -89,6 +90,7 @@ namespace graph::storage {
             const auto found = cache_->entries.find(key<Page>(reference));
             if (found == cache_->entries.end()) return {};
             debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
+            cache_->order.splice(cache_->order.end(), cache_->order, found->second.position);
             return std::static_pointer_cast<const Page>(found->second.page);
         }
 
@@ -102,16 +104,19 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
             utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active()
                 ? utils::OwnedAllocationScope::owner() : memory_owner_);
-            try { return *std::static_pointer_cast<const Page>(found->second.page); }
+            try {
+                Page copy = *std::static_pointer_cast<const Page>(found->second.page);
+                cache_->order.splice(cache_->order.end(), cache_->order, found->second.position);
+                return copy;
+            }
             catch (const query::execution::detail::ResourceAdmissionDenied &) {
                 // A private caller quota failure must not evict shared cache state.
                 if (utils::OwnedAllocationScope::owner() != memory_owner_) throw;
                 // A cache copy may need a second payload allocation. Drop this
                 // optional entry so the caller can decode one admitted copy.
-                const Key identity = found->first;
                 charged_bytes_ -= found->second.charge;
+                cache_->order.erase(found->second.position);
                 cache_->entries.erase(found);
-                std::erase(cache_->order, identity);
                 return std::nullopt;
             }
 		}
@@ -152,7 +157,7 @@ namespace graph::storage {
                 try {
                     auto copy = std::allocate_shared<const Page>(utils::OwnedPmrAllocator<Page>(memory_owner_), page);
                     cache_->order.push_back(identity);
-                    try { cache_->entries.emplace(identity, Entry{std::move(copy), charge}); }
+                    try { cache_->entries.emplace(identity, Entry{std::move(copy), charge, std::prev(cache_->order.end())}); }
                     catch (...) { cache_->order.pop_back(); throw; }
                     charged_bytes_ += charge;
                     return;
@@ -183,7 +188,13 @@ namespace graph::storage {
 					(static_cast<size_t>(key.reference.frame_index) << 3U) ^ key.type.hash_code();
 			}
 		};
-		struct Entry { std::shared_ptr<const void> page; size_t charge; };
+		// Hits move the existing node without allocating or extending either limit.
+        // Keep frequently reused directory roots while scan leaves cycle through.
+        struct Entry {
+            std::shared_ptr<const void> page;
+            size_t charge;
+            std::pmr::list<Key>::iterator position;
+        };
 		template<typename Page> static Key key(PhysicalPageRef ref) { return {ref, typeid(Page)}; }
 		void synchronizeWrites() {
 			const uint64_t epoch = io_->dataMutationEpoch();
