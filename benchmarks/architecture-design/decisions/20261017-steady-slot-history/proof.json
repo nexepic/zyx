@@ -1,0 +1,31 @@
+{
+  "accepted": 29,
+  "total": 34,
+  "percent": 85.3,
+  "this_request_completed": 0,
+  "source": "5657e287",
+  "status": "two_actual_steady_growth_causes_fixed_full_preflight_running",
+  "performance_admission": false,
+  "negative": "Four regressions fail against unchanged9dd Debug core for intended orphan-pool, history growth, pin and reference-validation causes.",
+  "positive": {
+    "modules": 9,
+    "tests": 150,
+    "passed": 150,
+    "full_suite": false
+  },
+  "previous_9dd_preflight": "11/13 windows completed; registered30minute deadline during window12. Retained final partial state was normalized separately; never a full preflight pass.",
+  "previous_endpoint": {
+    "catalog_entries": 20292,
+    "obsolete_owners": 18512,
+    "physical_slots_with_history": 1853,
+    "maximum_obsolete_owners_per_slot": 11,
+    "extra_obsolete_owners": 16659
+  },
+  "fixes": [
+    "Reclaim authenticated unmapped Entity/Property pools through existing bounded lifecycle, keeping fresh PageDir revalidation.",
+    "During already-authorized batched slot release erase at most2 old obsolete shared-pool owners per released slot, after snapshot fence and full current PageDir validation; newest obsolete owner retained."
+  ],
+  "retained_check_limit": "Already-normalized zero-Churn file has no pending maintenance candidates; latest untimed MAINTAIN was a no-op. Integrity/counts passed, but this does not prove old history was vacuumed.",
+  "new_caps": false,
+  "kuzu_goal_achieved": false
+}

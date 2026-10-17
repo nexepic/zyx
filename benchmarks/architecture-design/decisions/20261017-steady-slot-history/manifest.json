@@ -1,0 +1,80 @@
+[
+  {
+    "source": "/tmp/zyx-steady-history-negative.log",
+    "archive": "raw/0-zyx-steady-history-negative.log.gz",
+    "bytes": 8506,
+    "sha256": "9c1ad6cdce61e1a9154c6524870b004485b010c20da6519e818269729620e951"
+  },
+  {
+    "source": "/tmp/zyx-steady-history-negative-tests.xml",
+    "archive": "raw/1-zyx-steady-history-negative-tests.xml.gz",
+    "bytes": 8127,
+    "sha256": "a4242855c605c0702a6baeb57c79b18d3256ac64057afbd49f2057646cb1a766"
+  },
+  {
+    "source": "/tmp/zyx-steady-history-negative-provenance.json",
+    "archive": "raw/2-zyx-steady-history-negative-provenance.json.gz",
+    "bytes": 600,
+    "sha256": "89e657c2312180ecfc7ddc780cac257098261a890580df055f718eab460d1754"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-regression.log",
+    "archive": "raw/3-zyx-steady-lifecycle-regression.log.gz",
+    "bytes": 35793,
+    "sha256": "23f36b0e13ef3e98940ef64722a2028a659d10dd784424f5674bdad0a8fa9570"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-targeted-tests.xml",
+    "archive": "raw/4-zyx-steady-lifecycle-targeted-tests.xml.gz",
+    "bytes": 51170,
+    "sha256": "95df1ee3246c5d48d2b7cdc59fc543e48fd1a3443ee6a5942aea024e313cb02b"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-regression-provenance.json",
+    "archive": "raw/5-zyx-steady-lifecycle-regression-provenance.json.gz",
+    "bytes": 3260,
+    "sha256": "ce091cde7c1267144f82570503b6698cf4601194e7be298ddda92b3e67e04ac8"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed.log",
+    "archive": "raw/6-zyx-reactivation-full-untimed.log.gz",
+    "bytes": 3028,
+    "sha256": "4fcc518abc63764c4ffe7fb0f1063796aa0624a94694d376b6c33f58b1049a22"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed.py",
+    "archive": "raw/7-zyx-reactivation-full-untimed.py.gz",
+    "bytes": 2571,
+    "sha256": "17634787a76c1268d0861231b176c40d42b22aae5aa06618d96cef6b257bf5e4"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight.py",
+    "archive": "raw/8-zyx-steady-lifecycle-preflight.py.gz",
+    "bytes": 3447,
+    "sha256": "2a22407e63fbd7be5cde2b95e8753a7992ff14dc409a71a34bc29c3cd9e0646b"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed-20261017/endpoint-catalog-pages.json",
+    "archive": "raw/9-endpoint-catalog-pages.json.gz",
+    "bytes": 2193422,
+    "sha256": "a4971facd3122ed79e06d80ee932406fd91dbed552a72a075874ee3cef374bdc"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed-20261017/endpoint-slot-history.json",
+    "archive": "raw/10-endpoint-slot-history.json.gz",
+    "bytes": 2425584,
+    "sha256": "8da8a4e2503e72956d30d1bcee87cf2a47f5d3fb7a1509e1eddaf6a25c25c7f4"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed-20261017/normalization-v2/report.json",
+    "archive": "raw/11-report.json.gz",
+    "bytes": 854,
+    "sha256": "cc95e6d432eabde01ef2bb29e4306c4e132909c8b30d5a838f4f1e96ac71e315"
+  },
+  {
+    "source": "/tmp/zyx-reactivation-full-untimed-20261017/retention.json",
+    "archive": "raw/12-retention.json.gz",
+    "bytes": 421,
+    "sha256": "80ab32566352365d54401fcdac6865147ce3e33c49a2ba9ad2d50adf6875220c"
+  }
+]
