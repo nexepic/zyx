@@ -746,6 +746,11 @@ namespace graph::storage {
 		return {};
 	}
 
+	bool StorageIO::tryReleaseCachedPage(std::pmr::memory_resource *expectedOwner) const {
+		if (const auto pool = bufferPool()) return pool->tryReleaseCachedPage(expectedOwner);
+		return false;
+	}
+
 	void StorageIO::resetBufferPoolStats() {
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->resetStats();

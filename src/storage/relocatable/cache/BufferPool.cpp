@@ -732,15 +732,21 @@ namespace graph::storage {
 		}
 	}
 
-	bool BufferPool::evictOneLocked() {
-		const auto evictFrom = [this](PageQueue &queue) {
+	bool BufferPool::tryReleaseCachedPage(std::pmr::memory_resource *expectedOwner) {
+		if (expectedOwner == nullptr || expectedOwner != memory_) return false;
+		std::lock_guard lock(mutex_);
+		return evictOneLocked(true);
+	}
+
+	bool BufferPool::evictOneLocked(bool cleanOnly) {
+		const auto evictFrom = [this, cleanOnly](PageQueue &queue) {
 			for (auto iterator = queue.rbegin(); iterator != queue.rend(); ++iterator) {
 				const auto found = entries_.find(*iterator);
 				if (found == entries_.end()) { // ZYX_COV_EXCL_LINE: recency and entry maps are mutated under one lock.
 					throw std::logic_error("buffer pool recency list references a missing page");
 				}
 				Entry &entry = *found->second;
-				if (entry.pin_count != 0U) {
+				if (entry.pin_count != 0U || (cleanOnly && (entry.dirty || entry.private_cow))) {
 					continue;
 				}
 				if (entry.dirty) {

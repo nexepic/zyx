@@ -564,3 +564,56 @@ TEST_F(MetadataPageReadContextTest, BorrowedPageHitsRefreshRecencyWithoutAllocat
     EXPECT_FALSE(context->findView<CatalogLeafPage>(second));
     EXPECT_EQ(held->entries.front().segment_id, SegmentId(100U));
 }
+
+TEST_F(MetadataPageReadContextTest, DecoderAdmissionCanReclaimAnUnpinnedPageFromTheSameCacheGrant) {
+ using graph::query::execution::detail::PrepaidMemoryResource;
+ constexpr size_t pageBytes = RSS_BUFFER_POOL_PAGE_BYTES;
+ std::array<std::byte, pageBytes> bytes{}; bytes.fill(std::byte{0x4A});
+ for (size_t i = 0U; i < 8U; ++i) io->writeAt(i * pageBytes, bytes.data(), bytes.size());
+ auto memory = metadataReadGrant(64U * 1024U);
+ io->enableBufferPool(8U * pageBytes, memory);
+ auto pinned = io->pinTypedPage({0U, 1U});
+ ASSERT_TRUE(pinned.has_value());
+ for (size_t i = 1U; i < 8U; ++i) { auto page = io->pinTypedPage({i * pageBytes, 1U}); ASSERT_TRUE(page.has_value()); }
+ const auto evictions = io->bufferPoolStats().evictions;
+ auto context = std::make_shared<MetadataPageReadContext>(root, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, memory);
+ {
+  PrepaidMemoryResource::ExternalReservation pressure(memory, memory->capacity() - memory->used());
+  MetadataPageReadContext::Scope scope(context, *io);
+  const PhysicalPageRef reference{PhysicalSlotId(1U), 2U, Generation(1U)};
+  const auto input = oneCatalogPage();
+  context->put(reference, input, input.entries.capacity() * sizeof(CatalogEntry));
+  const auto cached = context->findView<CatalogLeafPage>(reference);
+  EXPECT_TRUE(cached);
+  if (cached) EXPECT_EQ(CatalogLeafPageCodec::encode(*cached), CatalogLeafPageCodec::encode(input));
+  EXPECT_GT(io->bufferPoolStats().evictions, evictions);
+  EXPECT_EQ(pinned->bytes()[0], std::byte{0x4A});
+  EXPECT_LE(memory->used(), memory->capacity());
+ }
+ context.reset(); pinned.reset(); io->disableBufferPool();
+ EXPECT_EQ(memory->used(), 0U);
+}
+
+TEST_F(MetadataPageReadContextTest, DecoderAdmissionDoesNotEvictPagesFundedByAnotherGrant) {
+ using graph::query::execution::detail::PrepaidMemoryResource;
+ constexpr size_t pageBytes = RSS_BUFFER_POOL_PAGE_BYTES;
+ std::array<std::byte, pageBytes> bytes{};
+ io->writeAt(0U, bytes.data(), bytes.size());
+ auto raw = metadataReadGrant(32U * 1024U);
+ auto decoded = metadataReadGrant(32U * 1024U);
+ io->enableBufferPool(4U * pageBytes, raw);
+ { auto page = io->pinTypedPage({0U, 1U}); ASSERT_TRUE(page.has_value()); }
+ const auto evictions = io->bufferPoolStats().evictions;
+ auto context = std::make_shared<MetadataPageReadContext>(root, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, decoded);
+ {
+  PrepaidMemoryResource::ExternalReservation pressure(decoded, decoded->capacity() - decoded->used());
+  MetadataPageReadContext::Scope scope(context, *io);
+  const PhysicalPageRef reference{PhysicalSlotId(1U), 2U, Generation(1U)};
+  const auto input = oneCatalogPage();
+  context->put(reference, input, input.entries.capacity() * sizeof(CatalogEntry));
+  EXPECT_FALSE(context->findView<CatalogLeafPage>(reference));
+  EXPECT_EQ(io->bufferPoolStats().evictions, evictions);
+ }
+ context.reset(); io->disableBufferPool();
+ EXPECT_EQ(decoded->used(), 0U); EXPECT_EQ(raw->used(), 0U);
+}

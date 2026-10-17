@@ -97,6 +97,9 @@ namespace graph::storage {
 
 		[[nodiscard]] BufferPoolStats stats() const;
 		void resetStats();
+		// Optional sibling caches can reclaim one clean, unpinned page only
+		// when both consumers charge the exact same allocation authority.
+		[[nodiscard]] bool tryReleaseCachedPage(std::pmr::memory_resource *expectedOwner);
 
 	private:
 		// Test-only access verifies fail-closed guards that public Pin ownership
@@ -134,7 +137,7 @@ namespace graph::storage {
 		void admitLocked(BufferPoolPageKey key, Entry &entry);
 		void eraseLocked(BufferPoolPageKey key, Entry &entry);
 		void ensureCapacityLocked(size_t requiredBytes);
-		bool evictOneLocked();
+		bool evictOneLocked(bool cleanOnly = false);
 		void flushEntryLocked(Entry &entry, uint64_t pageOffset);
 		void discardStaleGenerationsLocked(BufferPoolPageKey key);
 		void discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount);

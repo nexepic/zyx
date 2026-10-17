@@ -137,13 +137,29 @@ namespace graph::storage {
                             std::is_same_v<Page, MetadataPageRouteLeafPage> || std::is_same_v<Page, PageDirectoryBootstrap>)) {
                 if (memory_owner_) return;
             }
+			const size_t charge = fixed + variableBytes;
+			// A raw-page cache sharing this grant must not crowd every decoded
+			// root out. Bound the request by this entry's size plus bucket slack;
+			// failed optional admission never drains an unrelated cache or writes
+			// dirty/private pages to make room.
+			size_t rawPageAttempts = charge / RSS_BUFFER_POOL_PAGE_BYTES + 2U;
+			const auto reclaimRawPage = [&]() {
+				if (!memory_owner_ || rawPageAttempts == 0U) return false;
+				--rawPageAttempts;
+				if (!io_->tryReleaseCachedPage(memory_owner_.get())) return false;
+				debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_page_evictions", 1);
+				return true;
+			};
             if (!cache_) {
-                try { cache_.emplace(memory_owner_ ? memory_owner_.get() : std::pmr::get_default_resource()); }
-                catch (const query::execution::detail::ResourceAdmissionDenied &) { return; }
+                for (;;) {
+                    try { cache_.emplace(memory_owner_ ? memory_owner_.get() : std::pmr::get_default_resource()); break; }
+                    catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                        if (!reclaimRawPage()) return;
+                    }
+                }
             }
 			const Key identity = key<Page>(reference);
 			if (cache_->entries.contains(identity)) return;
-			const size_t charge = fixed + variableBytes;
 			while (!cache_->order.empty() &&
 				(cache_->entries.size() == MAXIMUM_ENTRIES || charge > maximum_bytes_ - charged_bytes_)) {
 				const auto found = cache_->entries.find(cache_->order.front());
@@ -162,6 +178,7 @@ namespace graph::storage {
                     charged_bytes_ += charge;
                     return;
                 } catch (const query::execution::detail::ResourceAdmissionDenied &) {
+                    if (reclaimRawPage()) continue;
                     if (cache_->order.empty()) return;
                     const auto oldest = cache_->entries.find(cache_->order.front());
                     charged_bytes_ -= oldest->second.charge;
