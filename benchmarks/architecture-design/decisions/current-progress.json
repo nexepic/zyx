@@ -152,10 +152,16 @@
     "completed": 0,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [
-      "S6.1"
-    ],
-    "implementation": "Bounded decoded metadata recency reuse; acceptance pending targeted regression and final performance evidence."
+    "pending_revalidation_ids": [],
+    "implementation": "Bounded decoded metadata recency reuse; acceptance pending targeted regression and final performance evidence.",
+    "final_window": "/tmp/zyx-final-five-window-20261017",
+    "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
+    "source_revalidation": {
+      "id": "S6.1",
+      "score_increase": false,
+      "evidence": "20261017-metadata-recency-and-final-five/proof.json",
+      "scope": "Only decoded-cache header changed; 9 affected storage/metadata/resource modules, 212 tests passed; source and binaries frozen. Earlier full 130-module run remains historical source034, not attributed to033."
+    }
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",

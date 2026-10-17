@@ -1,0 +1,164 @@
+{
+  "window": "Final five deliveries; single integrated acceptance window after implementation and targeted regression.",
+  "continuation_reason": "New source033e8e79 after bounded decoded-cache recency change; final five request, not a continuation of canceled O6v4 samples.",
+  "preparation_transaction_rows": 1000,
+  "native_read_process_scope": "one dataset preparation per independent profile process, exact selected query list; each query retains three warmups and ten owning-output samples",
+  "status": "registered_before_measurement",
+  "orders": [
+    [
+      "control",
+      "current",
+      "kuzu"
+    ],
+    [
+      "current",
+      "kuzu",
+      "control"
+    ],
+    [
+      "kuzu",
+      "control",
+      "current"
+    ]
+  ],
+  "rounds": 3,
+  "warmups": 3,
+  "samples": 10,
+  "tail_sensitive_samples_per_process": 1000,
+  "primary_gate_p50_reduction": 0.1,
+  "protection_regression_limit": 0.05,
+  "stop_minutes_per_case": 30,
+  "contract_case_unit": "one isolated workload family in a private process, at most 30 minutes including setup; failed/inconclusive families retained independently",
+  "extended_sampling": "at most two independent 100-sample processes when preregistered uncertainty rule applies",
+  "resources": {
+    "affinity": "one allowed CPU",
+    "address_space_bytes": 6442450944,
+    "per_file_bytes": 2147483648,
+    "kuzu_pool_bytes": 67108864,
+    "kuzu_mapping_bytes": 2147483648,
+    "threads_per_query": 1,
+    "native_query_materialization_bytes": 67108864,
+    "durability": "default sync and acknowledgements; never disabled",
+    "os_cache": "warm; no cold-cache claim"
+  },
+  "resource_notes": [
+    "Per-file and Kuzu virtual database mapping caps are stricter than the production 1TiB maximum; the identical 2GiB OS per-file cap applies to every engine.",
+    "6GiB address-space cap implies a physical resident cap but is not a container/RSS accounting equivalence. Native charged class budgets remain separately reported."
+  ],
+  "binaries": {
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-workload-contract-worker": "9dca0a7032203e63c2c1f3317405e544d13a49a4805a648268cc3c6788bcd24d",
+    "/workspace/zyx-optimization-control-20261015/binaries/zyx-compare-bench-bounded": "86d36ddb673c3c7727ae3916cee150522785fd8c7c04f86f38b52919faac7a77",
+    "/tmp/zyx-final-five-window-20261017/current-binaries/zyx-workload-contract-worker": "2759507902dac5e7ede0fc3b9f8178e08c381e1ac6782d0cc76cad85316b4451",
+    "/tmp/zyx-final-five-window-20261017/current-binaries/zyx-compare-bench": "bce583c484fe25e24a74c1547189ffa93d07afc738c3666946395e37a875d2c3"
+  },
+  "contract_sha256": "6de35bce8841e58b2190e463b200a2e1aa9db328b8f0db95ee8c4b336a1f7d0e",
+  "source_proof": "benchmarks/architecture-design/decisions/20261017-metadata-recency-and-final-five/proof.json",
+  "script_sha256": {
+    "zyx-final-five-window.py": "8079e4c05235aba6fc363675d6dae59483c7f4a331150526952d493f3043f135",
+    "zyx-final-five-contract-case.py": "7d6663e36fcbdbbdff4873ad8917cab024d04e4860247b122ba4a119739432a2",
+    "run-zyx-final-five-contract-campaign.py": "d99425210ebdd1a769facb1c2c10af6d403b307243092e4da830fd4de9f343ea",
+    "run-zyx-final-five-acceptance.py": "b41dba7b6a0b881a6e01e572048ecf7ff632c08e2c3e9ce54088ad530f161b3a"
+  },
+  "isolated_family_policy": {
+    "maintenance": "three warmup windows excluded, then ten measured windows with 100 durable batch inserts each; 1000 measured insert observations per process",
+    "other_families": "full-size semantic and capability observations; one-pass operation timings do not satisfy repeated latency gates; after an unchanged family fails or exhausts 30 minutes, later rounds record the same unmeasurable dependency without repeating the failed workload",
+    "prior_dynamic_attempt": "30-minute cutoff, inconclusive; no full-size all-family pass assumed",
+    "ordering": "maintenance first, then documented family order; three rotating engine orders per family"
+  },
+  "known_native_budget_limits": {
+    "aggregate_100000_groups_owning_output": "Observed fixed QUERY-budget rejection. Validate every typed group/count via bounded partitions and preserve the full-output denial as unsupported N/A; no successful latency sample or ratio is inferred. Skewed groups and other failures are not exempt."
+  },
+  "untimed_fixture_protocol": "Committed-prefix continuation is disclosed in each fixture manifest. Original prefixes use 1000-row transactions; remaining fixture-only suffixes may use bounded 5000-row transactions. No import timing or fresh final-version import claim; final consumers are revalidated before use.",
+  "preflight_runner_sha256": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2",
+  "frozen_control_failure_policy": "One failed or timed-out deterministic family/profile is retained; later unchanged independent slots are marked unmeasurable, never success.",
+  "prepared_read_protocol": "Both native consumers clone identical prepared file; existing frozen-control import failures remain failures and are not repaired/reclassified. Input producer source6a and mixed-batch preparation history retained. Formal queries use exact full-result oracles; every failed consumer remains failed.",
+  "hardware": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "cpu_count": 5,
+    "allowed_cpus_before_restriction": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+    "cgroup_memory_max": "17179869184",
+    "cgroup_cpu_max": "400000 100000"
+  },
+  "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
+  "current_frozen_worker": "/workspace/zyx-optimization-final-recency-20261017/binaries/2/zyx-workload-contract-worker",
+  "frozen_harness": "/tmp/zyx-final-five-window-20261017/frozen-harness/workload_preflight.py",
+  "delete_protocol": {
+    "query": "MATCH (n:Churn) DELETE n RETURN 1 AS deleted",
+    "expected_rows": 10000,
+    "expected_row": [
+      1
+    ],
+    "both_engines_full_result_validation": true,
+    "change": "Align explicit scalar outputs; preserve public native implicit full-result semantics. Do not pool old no-return/implicit-result failures or Kuzu-only timings."
+  },
+  "families": [
+    "point",
+    "scan",
+    "traversal",
+    "aggregate",
+    "sort",
+    "parameters",
+    "dynamic",
+    "wide_large",
+    "write",
+    "mixed",
+    "snapshot",
+    "maintenance",
+    "budget"
+  ],
+  "sampling": {
+    "independent_processes_per_supported_engine": 3,
+    "warmup_windows": 3,
+    "measured_windows": 10,
+    "insert_batches_per_window": 100,
+    "nodes_per_batch": 100,
+    "body_bytes": 8192,
+    "tail_insert_observations_per_measured_process": 1000,
+    "query_timeout_ms": 30000,
+    "maintenance_workspace_bytes": 8388608,
+    "stop_seconds_per_case": 1800
+  },
+  "progress_logging": "One JSON line after each complete window, outside engine-operation timers; identical observational role on both engines.",
+  "baseline_version_rule": "The original source6a baseline remains separately versioned; no mixed-version overall performance claim.",
+  "shared_read_input_policy": "Both native consumers clone identical prepared file; existing frozen-control import failures remain failures and are not repaired/reclassified. Input producer source6a and mixed-batch preparation history retained. Formal queries use exact full-result oracles; every failed consumer remains failed.",
+  "formal_read_profiles": [
+    "scan",
+    "retrieval",
+    "indexed (medium only; unsupported and failures retained)"
+  ],
+  "formal_read_scales": [
+    "medium",
+    "holdout"
+  ],
+  "full_family_count": 13,
+  "full_family_slots": 117,
+  "new_source_tests": {
+    "modules": 9,
+    "tests": 212,
+    "full_suite": false
+  },
+  "source_freeze_manifest": "/workspace/zyx-optimization-final-recency-20261017/manifest.json",
+  "kuzu_version": "0.11.3",
+  "accepted_total_before": 29,
+  "new_acceptance": "No automatic acceptance: review primary/protection/resource/steady-state gates separately. Failed/inconclusive cases never become passes.",
+  "performance_limitations": [
+    "AS/RSS scope remains as in previous protocol; no claim of 6GiB cgroup equivalence.",
+    "Native IPC and Kuzu Python have disclosed unequal entry/trace overheads.",
+    "Contract families except maintenance have descriptive operation timings, not invented 3/10 query repeats.",
+    "Shared input proves query/read comparability only; it does not measure or repair original import."
+  ],
+  "premeasurement_space_amendment": {
+    "original_excluded_attempt": "/workspace/zyx-optimization-final-five-window-20261017/excluded-preparation-space-failure.json",
+    "accepted_samples_in_excluded_attempt": 0,
+    "output_filesystem": "/tmp; 8.8GiB filesystem, 4.5GiB free at registration; both private native clones and all Kuzu working databases are on this same filesystem",
+    "original_input": "Immutable source remains on /workspace; cloning/preparation is outside query timers. No storage-device-equivalence claim to previous window."
+  }
+}

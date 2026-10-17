@@ -1,0 +1,62 @@
+[
+  {
+    "path": "/tmp/zyx-trace-distinct-result-admission-tests",
+    "bytes": 302980368,
+    "sha256": "b3f4003e352efbf5a3f06c80f8e950586f330ac06e0c1a4aa3e0f723c5cf1bdb",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-trace-full-property-allocation-tests",
+    "bytes": 258461056,
+    "sha256": "5e112c1127ca58463a1ab3c5a3ad430766144d77b0ce96ba977839ad775f011f",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-trace-materialized-throw-after-headroom-tests",
+    "bytes": 303072480,
+    "sha256": "e5dcd7b0d8bf17be33947fb993d6b503ada8fb0f42a512da36b016c8bb298b20",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-trace-materialized-throw-tests",
+    "bytes": 303005472,
+    "sha256": "cb2aac691846f0f3a43254339745bb5fef7ad2399e68134d5a1e93104966fd60",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-trace-pinned-invalidation-tests",
+    "bytes": 259308432,
+    "sha256": "6bfee7925fac0ebc785ed8baac8585828b2e4698de8f2278462f86274fed25b9",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-revalidated-affected-tests",
+    "bytes": 305737264,
+    "sha256": "7a37771591219336e4d4e8db45724288c2a3b3f745710cd26d3850eb8f58b9a2",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-topk-final-affected-tests",
+    "bytes": 324151992,
+    "sha256": "27989707a7d8d940789693e6e29f3efec7df1a67db80aa6830d1ec0f6110a93f",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-s54-acceptance-tests",
+    "bytes": 174493944,
+    "sha256": "93d22bfa3f616c1477e926386e7d2e4d5bd49604ce2ba9523ea0ab20c4b6ef2d",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-streamed-cow-focused-tests",
+    "bytes": 173077184,
+    "sha256": "e83505c63bff79461c9bdc2bb010df818b35fc5f4948e0ee649b7376f7d223a2",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  },
+  {
+    "path": "/tmp/zyx-write-metadata-owner-tests",
+    "bytes": 170946296,
+    "sha256": "ff090735689f2b71650d0cf26bec9f8a3c45897adaf71daa6f9f046adaa83c15",
+    "reason": "Obsolete task-owned standalone debug executable; retain source, logs/XML and frozen final binaries."
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "medium": {
+    "commands": [
+      "QUERY\tMATCH (n:User) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Post) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Tag) RETURN count(n) AS total",
+      "QUERY\tMATCH ()-[r:FOLLOWS]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:AUTHORED]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:HAS_TAG]->() RETURN count(r) AS total"
+    ],
+    "returncode": 0,
+    "stdout": "{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",100000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",120000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",5000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",500000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",120000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",240000]]]}\n",
+    "stderr": ""
+  },
+  "holdout": {
+    "commands": [
+      "QUERY\tMATCH (n:User) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Post) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Tag) RETURN count(n) AS total",
+      "QUERY\tMATCH ()-[r:FOLLOWS]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:AUTHORED]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:HAS_TAG]->() RETURN count(r) AS total"
+    ],
+    "returncode": 0,
+    "stdout": "{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",73000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",87000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",3000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",511000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",87000]]]}\n{\"ok\":true,\"columns\":[\"total\"],\"rows\":[[[\"integer\",174000]]]}\n",
+    "stderr": ""
+  }
+}
