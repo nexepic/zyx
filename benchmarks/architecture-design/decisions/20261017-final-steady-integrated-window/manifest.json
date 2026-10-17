@@ -1,0 +1,122 @@
+[
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/registration.json",
+    "archive": "registered/registration.json.gz",
+    "bytes": 111791,
+    "sha256": "a0453d9ed503769929b9dcc888c79f71431ad45e74267797ec99688f7446f2c9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/wide-resource-decision.json",
+    "archive": "registered/wide-resource-decision.json.gz",
+    "bytes": 185,
+    "sha256": "a60885bfc00a71a0e64e34f5c3bf353878c7d5f5a03f0e68b0eca7de0971b6b8"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/premeasurement-owned-cleanup.json",
+    "archive": "registered/premeasurement-owned-cleanup.json.gz",
+    "bytes": 2957,
+    "sha256": "d728d09b32286cefb4d1753fd6b5162eecd8b1ed7efac4f616ce4707bfdab4c4"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/workload_preflight.py",
+    "archive": "registered/workload_preflight.py.gz",
+    "bytes": 47657,
+    "sha256": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-five-owned-case.py",
+    "archive": "registered/zyx-final-five-owned-case.py.gz",
+    "bytes": 2931,
+    "sha256": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-write-case.py",
+    "archive": "registered/zyx-final-steady-write-case.py.gz",
+    "bytes": 9609,
+    "sha256": "083c306491fd5da58f3058ba240ee6212145cbf8a08d793dd31210aaccce0252"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-window.py",
+    "archive": "registered/zyx-final-steady-window.py.gz",
+    "bytes": 13260,
+    "sha256": "082fd4fd19cff97fe6229f31dd6753f9b968eaf88c42cddcc60be59cd205f65e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-extended-read.py",
+    "archive": "registered/zyx-final-steady-extended-read.py.gz",
+    "bytes": 2820,
+    "sha256": "eafdcd9e57c9abae9bc967208971980cedaf80d9e8eefb869a109686ae5c085d"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-contract-case.py",
+    "archive": "registered/zyx-final-steady-contract-case.py.gz",
+    "bytes": 7192,
+    "sha256": "a94b51adbe5db6670a0c23d6c7834a8c63cc0b9aa7cb199fbe0b154fb703251e"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-bounded-write-extensions.py",
+    "archive": "registered/zyx-final-steady-bounded-write-extensions.py.gz",
+    "bytes": 3594,
+    "sha256": "7c46435c8bc1b76b61a2d14a7b40981ed7caf9410c969dfb9e3253dcbdaa46e7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/zyx-final-steady-bounded-extensions.py",
+    "archive": "registered/zyx-final-steady-bounded-extensions.py.gz",
+    "bytes": 3810,
+    "sha256": "8afcf9e16fe4afeccb857307ce226385cf3ffcdac84650f3914b59fda325b921"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/run-zyx-final-steady-write-campaign.py",
+    "archive": "registered/run-zyx-final-steady-write-campaign.py.gz",
+    "bytes": 1994,
+    "sha256": "7f9aea369c23fec90fb22972c2b8da3013a55246ce84b4179b35898f4ce175ac"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/run-zyx-final-steady-contract-campaign.py",
+    "archive": "registered/run-zyx-final-steady-contract-campaign.py.gz",
+    "bytes": 5236,
+    "sha256": "9ffa01284955f94ea2f6c18978157192a6f60586cffd93724777d0a1370b8ea7"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/run-zyx-final-steady-acceptance.py",
+    "archive": "registered/run-zyx-final-steady-acceptance.py.gz",
+    "bytes": 3327,
+    "sha256": "45613cad871f94be4bf7b51c7f318dfd5fef3129bc53323809e6533b14cd35d1"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/report-zyx-final-steady-writes.py",
+    "archive": "registered/report-zyx-final-steady-writes.py.gz",
+    "bytes": 2535,
+    "sha256": "96a3df4711eebe318706b6606484e812152d3d6da9dfb6a25d07f4373df81b12"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/report-zyx-final-steady-state.py",
+    "archive": "registered/report-zyx-final-steady-state.py.gz",
+    "bytes": 3075,
+    "sha256": "399b2f7aa52a91f8af5a8b4ef23bb14ad30cab58692162d082995606004ed88b"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/report-zyx-final-steady-state-v4.py",
+    "archive": "registered/report-zyx-final-steady-state-v4.py.gz",
+    "bytes": 3488,
+    "sha256": "bc75a8d1f41220731c2e6b6706da0f62ece2ab75d53106b6cadbc26439ef18bb"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/report-zyx-final-steady-reads.py",
+    "archive": "registered/report-zyx-final-steady-reads.py.gz",
+    "bytes": 4264,
+    "sha256": "a43a7f9f55465bef3f4d720be007188e234a9daa56a72f73e11252919756a913"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/report-zyx-final-steady-extended-writes.py",
+    "archive": "registered/report-zyx-final-steady-extended-writes.py.gz",
+    "bytes": 2533,
+    "sha256": "fd6eb713fd915a2c09ba0a681dd2ef4a268e74944de6bbbe6c04c70dfe1f4da8"
+  },
+  {
+    "source": "/tmp/zyx-final-five-steady-window-20261017/harness/register-zyx-final-steady-window.py",
+    "archive": "registered/register-zyx-final-steady-window.py.gz",
+    "bytes": 7985,
+    "sha256": "c8edbb408839f5e269b13c5f798eaca6c9fb86f0c7c29c65355c026ab189d1d4"
+  }
+]
