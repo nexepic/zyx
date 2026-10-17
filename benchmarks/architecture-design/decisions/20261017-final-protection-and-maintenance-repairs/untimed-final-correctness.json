@@ -1,0 +1,82 @@
+{
+  "scope": "Untimed final-source correctness only; zero formal performance samples",
+  "source": "f0e44b78",
+  "binary_sha256": "4f143431fffe6f739acd5b33947af99eb7c1e840eff01f14a3fa1f30ea137dbb",
+  "budget": {
+    "engine": "zyx-native",
+    "profile": "contract",
+    "seed": 42,
+    "families": [
+      "budget"
+    ],
+    "isolated_family": "budget",
+    "operations": 120,
+    "full_results_checked": true,
+    "performance_timing": false,
+    "unsupported_variants": [],
+    "support_scope": "all successful outputs fully checked; declared quota-rejected variants are N/A, never successes or latency ratios",
+    "maintenance_windows": [],
+    "four_clients": "real native threads plus deterministic conflict interleavings; parallel timing deferred",
+    "binary_sha256": "4f143431fffe6f739acd5b33947af99eb7c1e840eff01f14a3fa1f30ea137dbb",
+    "trace_sha256": "c33a27cede0e19452bcad0e218a186a59e90ef0ea46e24e20ecaccacf7c0f3eb"
+  },
+  "inputs": {
+    "medium": {
+      "source": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/medium/current.zyx",
+      "sha256": "b901c7beeaff0148e36a475a1e8ab4f9675bd640d0719e743e88b4abe4ed7e7e",
+      "expected": [
+        100000,
+        120000,
+        5000,
+        500000,
+        120000,
+        240000
+      ],
+      "full_counts_passed": true,
+      "physically_read_only": true,
+      "stats": {
+        "ok": true,
+        "read_bytes": 472936464,
+        "write_bytes": 0,
+        "file_bytes": 1667235840,
+        "cache_hits": 0,
+        "rss_bytes": 42692608
+      }
+    },
+    "holdout": {
+      "source": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/current.zyx",
+      "sha256": "092496295079b43606826fb9d69b232e9f964961057b6ca006ae3a4fe1857f30",
+      "expected": [
+        73000,
+        87000,
+        3000,
+        511000,
+        87000,
+        174000
+      ],
+      "full_counts_passed": true,
+      "physically_read_only": true,
+      "stats": {
+        "ok": true,
+        "read_bytes": 407703568,
+        "write_bytes": 0,
+        "file_bytes": 1490157568,
+        "cache_hits": 0,
+        "rss_bytes": 36642816
+      }
+    }
+  },
+  "retained_maintenance_resume": {
+    "source": "/tmp/zyx-final-five-c741-window-20261017/diagnostic-maintenance-round1-current.zyx",
+    "sha256": "bd9ed2411344f2c012b262c8b2596c786d3b1891feb3f10eadb540719da56077",
+    "full_integrity_and_repeated_maintenance": "passed",
+    "stats": {
+      "ok": true,
+      "read_bytes": 1984405520,
+      "write_bytes": 0,
+      "file_bytes": 487325696,
+      "cache_hits": 0,
+      "rss_bytes": 54833152
+    }
+  }
+}

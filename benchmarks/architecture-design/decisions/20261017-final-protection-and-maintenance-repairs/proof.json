@@ -11,7 +11,7 @@
     "S6.2"
   ],
   "source": "f0e44b78",
-  "status": "narrow_repairs_tested_release_build_and_final_window_pending",
+  "status": "final_source_revalidated_integrated_performance_pending",
   "full_unit_suite": false,
   "selected_modules": 40,
   "initial_tests": 1011,
@@ -34,5 +34,28 @@
     "O3 same-grant clean unpinned raw-page reclamation for decoded metadata",
     "O6 atomic batched pool lifecycle, resumed empty pools and authenticated orphan private content-index pools"
   ],
-  "kuzu_goal_achieved": false
+  "kuzu_goal_achieved": false,
+  "frozen_source_commit": "63f65f37b8705e3aadae5b0c22b998f845d2c11b",
+  "source_freeze_status": "clean",
+  "source_files": 4326,
+  "binaries": [
+    {
+      "original": "/tmp/zyx-final-five-targeted-tests",
+      "copy": "binaries/0/zyx-final-five-targeted-tests",
+      "sha256": "aa46b97d9c53b47cdce58c90205a06914feba6bfa32f9c0963498de0f6c573b8"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-compare-bench",
+      "copy": "binaries/1/zyx-compare-bench",
+      "sha256": "a9d47c7082a4262a56b47aed545db1c446dae46a4d04a3aaaa12f773052b4881"
+    },
+    {
+      "original": "/workspace/zyx/buildDir_perf_control/zyx-workload-contract-worker",
+      "copy": "binaries/2/zyx-workload-contract-worker",
+      "sha256": "4f143431fffe6f739acd5b33947af99eb7c1e840eff01f14a3fa1f30ea137dbb"
+    }
+  ],
+  "untimed_final": "120budget checks, both complete input six-count oracles, exact retained-file repeated maintenance and integrity passed",
+  "release_build_verification": "Both explicit Release targets built; subsequent actual Ninja invocation reports no work to do. No full-suite target.",
+  "performance_accepted": false
 }
