@@ -8,6 +8,7 @@
 
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <limits>
@@ -17,6 +18,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "../index/RelocatableBTreePageStoreTestUtils.hpp"
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -1551,4 +1554,147 @@ TEST_F(RelocatableMetadataStoreTest, RetiredPoolBatchValidatesEveryMemberBeforeR
   }
  }
  EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata).scan().large_value_manifest_routes, 0U);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ SlottedPagePool indexPages(io, *metadata);
+ BTreePageStore indexes(indexPages, *metadata);
+ relocatable_btree_test::NativeBTreeWriteContext indexWrites(io, *metadata, indexPages);
+ const auto segment = metadata->allocateLogicalSegmentIds(1U, nextCheckpointLsn(*metadata)).front();
+ std::vector<PageId> indexPagesIds;
+ std::vector<IndexRootLocation> roots;
+ for (size_t i = 0U; i < RSS_PAGE_POOL_DATA_FRAME_COUNT; ++i) {
+  const auto page = metadata->allocateLogicalPageId(nextCheckpointLsn(*metadata));
+  indexPagesIds.push_back(page);
+  const uint64_t index = 10000U + i;
+  const auto lsn = nextCheckpointLsn(*metadata);
+  PageOwnerHeader owner;
+  owner.page_id = page; owner.owner_id = index; owner.kind = PageOwnerKind::POK_INDEX;
+  owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES; owner.generation = Generation(1U);
+  owner.committed_lsn = lsn;
+  BTreePageHeader header;
+  header.index_id = index; header.page_id = page; header.generation = Generation(1U);
+  const auto bytes = BTreePage::create(owner, header);
+  if (i == 0U) {
+   SlottedPagePoolAllocationRequest request;
+   request.segment_id = segment; request.pool_kind = SegmentKind::SGK_INDEX_PAGE_POOL;
+   request.pool_owner_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID; request.generation = Generation(1U);
+   request.page_id = page; request.page_owner_id = index; request.page_owner_kind = PageOwnerKind::POK_INDEX;
+   ASSERT_TRUE(indexes.allocate(request, bytes, PhysicalSlotId(110U), PhysicalSlotId(110U), lsn).has_value());
+  } else {
+   static_cast<void>(indexes.append({segment, Generation(1U), page, index, PageOwnerKind::POK_INDEX}, bytes, lsn));
+  }
+  roots.push_back({index, page, Generation(1U)});
+ }
+ static_cast<void>(indexes.publishRoots(roots, {}, nextCheckpointLsn(*metadata)));
+ std::vector<LargeValueRef> references;
+ auto writeOptions = propertyValueWriteOptions();
+ writeOptions.media_type = "application/vnd.zyx.test-reactivated-index";
+ std::vector<std::byte> liveBytes(8192U, std::byte{0x61});
+ {
+  LargeValueStore writer(io, *metadata);
+  for (size_t i = 0U; i < 96U; ++i) {
+   auto bytes = liveBytes; bytes[0] = static_cast<std::byte>(i);
+   references.push_back(writer.write(bytes, writeOptions, nextCheckpointLsn(*metadata)).reference);
+  }
+ }
+ // Keep all but one retired frame pinned. The empty pool then has
+ // exactly one reusable frame and wins the deterministic best-fit choice.
+ {
+  auto transaction = indexWrites.beginTransaction();
+  transaction.stageScalarIndexDrop(indexes, roots.front().index_id, 8U);
+  ASSERT_TRUE(transaction.commit().committed());
+ }
+ static_cast<void>(metadata->allocateLogicalPageId(nextCheckpointLsn(*metadata)));
+ auto allocationFence = metadata->openSnapshot();
+ {
+  auto transaction = indexWrites.beginTransaction();
+  for (size_t i = 1U; i < roots.size(); ++i)
+   transaction.stageScalarIndexDrop(indexes, roots[i].index_id, 8U);
+  ASSERT_TRUE(transaction.commit().committed());
+ }
+ indexes.reclaimRetiredFrames(segment);
+ {
+  auto snapshot = metadata->openSnapshot();
+  ASSERT_EQ(indexPages.availableFrameCount(snapshot, segment), 1U);
+ }
+ // Occupy the other compatible pools so replacing the surviving value's
+ // leaf must use the single reusable frame in the now-empty pool.
+ std::vector<CatalogEntry> mappedPools;
+ {
+  auto snapshot = metadata->openSnapshot();
+  metadata->visitCatalogEntries(snapshot, [&](const CatalogEntry &entry) {
+   if (entry.kind == SegmentKind::SGK_INDEX_PAGE_POOL && entry.state == SegmentState::SGS_SEALED &&
+       entry.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID && entry.segment_id != segment)
+    mappedPools.push_back(entry);
+  });
+ }
+ std::vector<IndexRootLocation> fillerRoots;
+ for (const auto &pool : mappedPools) {
+  for (;;) {
+   auto snapshot = metadata->openSnapshot();
+   const auto available = indexPages.availableFrameCount(snapshot, pool.segment_id);
+   snapshot.release();
+   if (available == 0U) break;
+   const auto page = metadata->allocateLogicalPageId(nextCheckpointLsn(*metadata));
+   const uint64_t index = 20000U + fillerRoots.size();
+   const auto lsn = nextCheckpointLsn(*metadata);
+   PageOwnerHeader owner;
+   owner.page_id = page; owner.owner_id = index; owner.kind = PageOwnerKind::POK_INDEX;
+   owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES; owner.generation = pool.generation;
+   owner.committed_lsn = lsn;
+   BTreePageHeader header;
+   header.index_id = index; header.page_id = page; header.generation = pool.generation;
+   static_cast<void>(indexes.append({pool.segment_id, pool.generation, page, index, PageOwnerKind::POK_INDEX},
+                                   BTreePage::create(owner, header), lsn));
+   fillerRoots.push_back({index, page, pool.generation});
+  }
+ }
+ static_cast<void>(indexes.publishRoots(fillerRoots, {}, nextCheckpointLsn(*metadata)));
+ std::vector<SegmentId> emptyIndexPools;
+ {
+  auto snapshot = metadata->openSnapshot();
+  metadata->visitCatalogEntries(snapshot, [&](const CatalogEntry &entry) {
+   if (entry.kind != SegmentKind::SGK_INDEX_PAGE_POOL || entry.state != SegmentState::SGS_SEALED ||
+       entry.owner_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID) return;
+   bool mapped = false;
+   static_cast<void>(metadata->visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
+    if (location.segment_id == entry.segment_id) mapped = true;
+    return !mapped;
+   }));
+   if (!mapped) emptyIndexPools.push_back(entry.segment_id);
+  });
+ }
+ ASSERT_FALSE(emptyIndexPools.empty());
+ // A cold allocator can reuse an initially empty pool for the surviving
+ // content-index root during the value-retirement publication itself.
+ LargeValueStore values(io, *metadata);
+ SlottedPagePool propertyPages(io, *metadata);
+ const std::array<LargeValueOwnershipScannerPtr, 1U> scanners{
+  std::make_shared<TestLargeValueOwnershipScanner>(writeOptions.media_type, references.front())};
+ LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata, scanners);
+ auto options = reclaimOptions();
+ options.maximum_manifest_locations = 128U; options.maximum_manifest_metadata_pages = 256U;
+ options.maximum_manifest_nodes = 128U; options.maximum_data_pages = 512U;
+ options.maximum_retirements = 512U; options.maximum_page_locations = 1024U;
+ const auto report = reclaimer.reclaim(options, nextCheckpointLsn(*metadata));
+ EXPECT_EQ(report.retired_values, references.size() - 1U);
+ auto snapshot = metadata->openSnapshot();
+ const auto root = metadata->findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+ ASSERT_TRUE(root.has_value());
+ const auto location = metadata->findPageLocation(snapshot, root->root_page_id);
+ EXPECT_NE(std::find(emptyIndexPools.begin(), emptyIndexPools.end(), location.segment_id), emptyIndexPools.end());
+ EXPECT_EQ(metadata->findCatalog(snapshot, location.segment_id).state, SegmentState::SGS_SEALED);
+ liveBytes[0] = std::byte{0};
+ EXPECT_EQ(values.read(snapshot, references.front()), liveBytes);
+ EXPECT_FALSE(metadata->findLargeValueManifestOptional(snapshot, references.back().value_id).has_value());
+ snapshot.release();
+ EXPECT_EQ(indexes.read(allocationFence, indexPagesIds.back()).header().index_id, roots.back().index_id);
+ allocationFence.release();
+ EXPECT_EQ(reclaimer.reclaim(options, nextCheckpointLsn(*metadata)).retired_values, 0U);
+ auto reopened = RelocatableMetadataStore::open(io);
+ LargeValueStore reopenedValues(io, *reopened);
+ auto durable = reopened->openSnapshot();
+ EXPECT_EQ(reopenedValues.read(durable, references.front()), liveBytes);
 }

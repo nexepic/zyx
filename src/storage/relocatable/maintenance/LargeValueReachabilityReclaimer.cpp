@@ -47,23 +47,48 @@ namespace graph::storage {
 
         template<class NextLsn>
         void publishPoolLifecycle(RelocatableMetadataStore &metadata, std::span<const CatalogEntry> sealed,
-                const WorkMap<uint64_t, CatalogEntry> &retired, NextLsn &&nextLsn,
+                const WorkMap<uint64_t, CatalogEntry> &retired, size_t maximumPageLocations, NextLsn &&nextLsn,
                 const MetadataPublishOptions &options, LargeValueReachabilityReclaimReport &report,
                 Superblock &published, bool &hasPublished) {
             utils::OwnedVector<CatalogSegmentRetirementRequest> requests;
             requests.reserve(sealed.size() + retired.size());
             for (const auto &pool : sealed) requests.push_back({pool.segment_id, pool.generation});
             if (!requests.empty()) {
+                // Value retirement can reuse an initially empty index pool for
+                // its surviving content-index root. Recheck the published
+                // directory before retiring pools; writer-locked validation in
+                // retireCatalogSegments remains authoritative.
+                std::ranges::sort(requests, {}, &CatalogSegmentRetirementRequest::segment_id);
+                utils::OwnedVector<uint8_t> mapped(requests.size(), 0U);
+                auto snapshot = metadata.openSnapshot();
+                size_t scanned = 0U;
+                static_cast<void>(metadata.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
+                    if (scanned++ == maximumPageLocations)
+                        fail(FormatError::FERR_INVALID_STATE,
+                            "LargeValue pool revalidation exceeded its Page Directory bound");
+                    const auto candidate = std::lower_bound(requests.begin(), requests.end(),
+                        location.segment_id.value(), [](const CatalogSegmentRetirementRequest &request, uint64_t id) {
+                            return request.segment_id.value() < id;
+                        });
+                    if (candidate != requests.end() && candidate->segment_id == location.segment_id)
+                        mapped[static_cast<size_t>(candidate - requests.begin())] = 1U;
+                    return true;
+                }));
+                snapshot.release();
+                size_t retained = 0U;
+                for (size_t index = 0U; index < requests.size(); ++index)
+                    if (mapped[index] == 0U) requests[retained++] = requests[index];
+                requests.resize(retained);
+            }
+            if (!requests.empty()) {
                 published = metadata.retireCatalogSegments(requests, nextLsn(), options);
                 hasPublished = true;
                 report.empty_pools_retired += requests.size();
             }
-            requests.clear();
             for (const auto &[id, pool] : retired) {
                 static_cast<void>(id);
                 requests.push_back({pool.segment_id, pool.generation});
             }
-            for (const auto &pool : sealed) requests.push_back({pool.segment_id, pool.generation});
             if (!requests.empty()) {
                 if (auto released = metadata.tryReleaseRetiredCatalogSegments(requests, nextLsn(), options)) {
                     published = *released;
@@ -637,7 +662,7 @@ namespace graph::storage {
 			static_cast<void>(segmentId);
 			values_.reclaimRetiredFrames(pool.segment_id);
 		}
-        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, takePublicationLsn,
+        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, options.maximum_page_locations, takePublicationLsn,
             publishOptions, report, published, hasPublished);
 		report.published_generation = hasPublished ? published.generation : report.scanned_generation;
 		return report;
@@ -913,7 +938,7 @@ namespace graph::storage {
 			values_.reclaimRetiredFrames(pool.segment_id);
 		}
 
-        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, takePublicationLsn,
+        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, options.maximum_page_locations, takePublicationLsn,
             publishOptions, report, published, hasPublished);
 		report.published_generation = hasPublished ? published.generation : report.scanned_generation;
 		return report;
