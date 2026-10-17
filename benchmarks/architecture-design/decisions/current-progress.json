@@ -138,41 +138,24 @@
   },
   "current_request": {
     "requested_additional_items": 5,
-    "baseline_accepted": 24,
-    "target_accepted": 29,
-    "target_percent": 85.3,
+    "baseline_accepted": 29,
+    "target_accepted": 34,
+    "target_percent": 100,
     "candidate_ids": [
-      "S5.3",
-      "S6.1",
-      "S0.3",
-      "S0.4",
-      "S6.4"
+      "S2.5",
+      "S3.5",
+      "S4.4",
+      "S5.5",
+      "S6.2"
     ],
-    "completed_ids": [
-      "S5.3",
-      "S6.1",
-      "S0.4",
-      "S6.4",
-      "S0.3"
+    "completed_ids": [],
+    "completed": 0,
+    "status": "in_progress",
+    "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
+    "pending_revalidation_ids": [
+      "S6.1"
     ],
-    "status": "completed",
-    "overall_goal_accepted_target": 34,
-    "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
-    "pending_revalidation_ids": [],
-    "completed": 5,
-    "selection_history": [
-      {
-        "candidate_ids": [
-          "S5.3",
-          "S6.1",
-          "S0.3",
-          "S0.4",
-          "S5.5"
-        ],
-        "amendment": "Replace unaccepted S5.5 with the documented optional-decision/final-documentation delivery S6.4. Keep S5.5 mandatory and unaccepted; no threshold change."
-      }
-    ],
-    "completion_evidence": "20261016-s03-complete-versioned-baseline/proof.json"
+    "implementation": "Bounded decoded metadata recency reuse; acceptance pending targeted regression and final performance evidence."
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
@@ -238,6 +221,44 @@
         "20261016-owned-gds-projection-catalog-and-procedure-results",
         "20261016-owned-gds-algorithm-workspaces"
       ]
+    },
+    {
+      "requested_additional_items": 5,
+      "baseline_accepted": 24,
+      "target_accepted": 29,
+      "target_percent": 85.3,
+      "candidate_ids": [
+        "S5.3",
+        "S6.1",
+        "S0.3",
+        "S0.4",
+        "S6.4"
+      ],
+      "completed_ids": [
+        "S5.3",
+        "S6.1",
+        "S0.4",
+        "S6.4",
+        "S0.3"
+      ],
+      "status": "completed",
+      "overall_goal_accepted_target": 34,
+      "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
+      "pending_revalidation_ids": [],
+      "completed": 5,
+      "selection_history": [
+        {
+          "candidate_ids": [
+            "S5.3",
+            "S6.1",
+            "S0.3",
+            "S0.4",
+            "S5.5"
+          ],
+          "amendment": "Replace unaccepted S5.5 with the documented optional-decision/final-documentation delivery S6.4. Keep S5.5 mandatory and unaccepted; no threshold change."
+        }
+      ],
+      "completion_evidence": "20261016-s03-complete-versioned-baseline/proof.json"
     }
   ],
   "S5.3": "accepted_revalidated",
