@@ -1412,3 +1412,143 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsRetirementBudgetB
 	EXPECT_TRUE(metadata->findLargeValueManifestOptional(snapshot, orphan.reference.value_id).has_value());
 	EXPECT_EQ(values.read(snapshot, orphan.reference), std::vector<std::byte>({std::byte{0xA1}}));
 }
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerBatchesPoolLifecyclePublications) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ LargeValueStore values(io, *metadata);
+ SlottedPagePool propertyPages(io, *metadata);
+ constexpr size_t count = 24U;
+ std::vector<LargeValueRef> references;
+ for (size_t i = 0U; i < count; ++i) {
+  std::vector<std::byte> bytes(8192U, std::byte{0x61}); bytes[0] = static_cast<std::byte>(i);
+  references.push_back(values.write(bytes, propertyValueWriteOptions(), nextCheckpointLsn(*metadata)).reference);
+ }
+ auto options = reclaimOptions(); options.maximum_data_pages = 128U; options.maximum_retirements = 128U;
+ LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+ const auto report = reclaimer.reclaim(options, nextCheckpointLsn(*metadata));
+ EXPECT_EQ(report.retired_values, count);
+ EXPECT_GE(report.empty_pools_retired, 4U);
+ EXPECT_EQ(report.retired_pools_released, report.empty_pools_retired);
+ const auto publications = report.published_generation.value() - report.scanned_generation.value();
+ RecordProperty("maintenance_publications", std::to_string(publications));
+ // One value/page retirement, one pool retirement and one pool release, even
+ // when the payload spans several independently owned allocation pools.
+ EXPECT_LE(publications, 3U);
+ auto current = metadata->openSnapshot();
+ for (const auto &reference : references)
+  EXPECT_FALSE(metadata->findLargeValueManifestOptional(current, reference.value_id).has_value());
+ current.release();
+ EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata).scan().large_value_manifest_routes, 0U);
+ auto reopened = RelocatableMetadataStore::open(io);
+ EXPECT_EQ(RelocatableIntegrityScanner(io, *reopened).scan().large_value_manifest_routes, 0U);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValuePoolBatchReleaseWaitsForPinnedReaders) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ LargeValueStore values(io, *metadata);
+ SlottedPagePool propertyPages(io, *metadata);
+ std::vector<LargeValueRef> references;
+ for (size_t i = 0U; i < 24U; ++i) {
+  std::vector<std::byte> bytes(8192U, std::byte{0x62}); bytes[0] = static_cast<std::byte>(i);
+  references.push_back(values.write(bytes, propertyValueWriteOptions(), nextCheckpointLsn(*metadata)).reference);
+ }
+ auto old = metadata->openSnapshot();
+ auto options = reclaimOptions(); options.maximum_data_pages = 128U; options.maximum_retirements = 128U;
+ LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+ const auto retired = reclaimer.reclaim(options, nextCheckpointLsn(*metadata));
+ EXPECT_EQ(retired.retired_values, references.size());
+ EXPECT_EQ(retired.retired_pools_released, 0U);
+ for (size_t i = 0U; i < references.size(); ++i) {
+  std::vector<std::byte> expected(8192U, std::byte{0x62}); expected[0] = static_cast<std::byte>(i);
+  EXPECT_EQ(values.read(old, references[i]), expected);
+ }
+ old.release();
+ const auto released = reclaimer.reclaim(options, nextCheckpointLsn(*metadata));
+ EXPECT_GE(released.retired_pools_released, retired.empty_pools_retired);
+ EXPECT_LE(released.published_generation.value() - released.scanned_generation.value(), 2U);
+ EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata).scan().large_value_manifest_routes, 0U);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ LargeValueStore values(io, *metadata);
+ SlottedPagePool propertyPages(io, *metadata);
+ const std::array payload{std::byte{0x71}};
+ const auto written = values.write(payload, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+ auto before = metadata->openSnapshot();
+ const auto generation = before.superblock().generation;
+ std::array retirements{
+  values.planPageRetirement(before, written.manifest.page_id, written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_MANIFEST),
+  values.planPageRetirement(before, written.manifest.chunks.front().first_data_page_id, written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_DATA)};
+ std::ranges::sort(retirements, [](const auto &left, const auto &right) { return left.location.page_id < right.location.page_id; });
+ before.release();
+ const std::array ids{written.reference.value_id};
+ auto options = reclaimOptions();
+ // Model a durable interruption after page/value retirement, before the
+ // independently recoverable pool-retirement/release phases.
+ static_cast<void>(values.retireUnreachablePages(generation, ids, retirements, options.first_index_slot,
+                                               options.last_index_slot, nextCheckpointLsn(*metadata)));
+ auto reopened = RelocatableMetadataStore::open(io);
+ LargeValueStore reopenedValues(io, *reopened);
+ SlottedPagePool reopenedPages(io, *reopened);
+ LargeValueReachabilityReclaimer reclaimer(reopenedValues, reopenedPages, *reopened);
+ const auto report = reclaimer.reclaim(options, nextCheckpointLsn(*reopened));
+ EXPECT_EQ(report.retired_values, 0U);
+ EXPECT_GE(report.empty_pools_retired, 2U);
+ EXPECT_EQ(report.retired_pools_released, report.empty_pools_retired);
+ EXPECT_EQ(RelocatableIntegrityScanner(io, *reopened).scan().large_value_manifest_routes, 0U);
+}
+
+TEST_F(RelocatableMetadataStoreTest, RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+ LargeValueStore values(io, *metadata);
+ const std::array payload{std::byte{0x72}};
+ const auto written = values.write(payload, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+ auto old = metadata->openSnapshot();
+ const auto generation = old.superblock().generation;
+ const auto dataLocation = metadata->findPageLocation(old, written.manifest.chunks.front().first_data_page_id);
+ const auto manifestLocation = metadata->findPageLocation(old, written.manifest.page_id);
+ const auto dataPool = metadata->findCatalog(old, dataLocation.segment_id);
+ const auto manifestPool = metadata->findCatalog(old, manifestLocation.segment_id);
+ std::array retirements{
+  values.planPageRetirement(old, written.manifest.page_id, written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_MANIFEST),
+  values.planPageRetirement(old, written.manifest.chunks.front().first_data_page_id, written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_DATA)};
+ std::ranges::sort(retirements, [](const auto &left, const auto &right) { return left.location.page_id < right.location.page_id; });
+ const std::array ids{written.reference.value_id};
+ auto options = reclaimOptions();
+ static_cast<void>(values.retireUnreachablePages(generation, ids, retirements, options.first_index_slot,
+                                               options.last_index_slot, nextCheckpointLsn(*metadata)));
+ const std::array requests{CatalogSegmentRetirementRequest{dataPool.segment_id, dataPool.generation},
+                          CatalogSegmentRetirementRequest{manifestPool.segment_id, manifestPool.generation}};
+ const auto retired = metadata->retireCatalogSegments(requests, nextCheckpointLsn(*metadata));
+ auto wrong = requests; wrong[1].expected_generation = Generation(manifestPool.generation.value() + 1U);
+ expectFormatError([&] { static_cast<void>(metadata->tryReleaseRetiredCatalogSegments(wrong, nextCheckpointLsn(*metadata))); },
+                   FormatError::FERR_INVALID_STATE);
+ const std::array duplicates{requests[0], requests[0]};
+ expectFormatError([&] { static_cast<void>(metadata->tryReleaseRetiredCatalogSegments(duplicates, nextCheckpointLsn(*metadata))); },
+                   FormatError::FERR_INVALID_HEADER);
+ EXPECT_FALSE(metadata->tryReleaseRetiredCatalogSegments(requests, nextCheckpointLsn(*metadata)).has_value());
+ {
+  auto current = metadata->openSnapshot();
+  EXPECT_EQ(current.superblock(), retired);
+  for (const auto &request : requests) {
+   const auto entry = metadata->findCatalog(current, request.segment_id);
+   EXPECT_EQ(entry.state, SegmentState::SGS_RETIRED);
+   EXPECT_TRUE(metadata->findRetireQueueEntryOptional(current, entry.physical_slot).has_value());
+   EXPECT_TRUE(metadata->isPhysicalSlotAllocated(current, entry.physical_slot));
+  }
+ }
+ EXPECT_EQ(values.read(old, written.reference), std::vector<std::byte>(payload.begin(), payload.end()));
+ old.release();
+ ASSERT_TRUE(metadata->tryReleaseRetiredCatalogSegments(requests, nextCheckpointLsn(*metadata)).has_value());
+ {
+  auto current = metadata->openSnapshot();
+  for (const auto &request : requests) {
+   const auto entry = metadata->findCatalog(current, request.segment_id);
+   EXPECT_EQ(entry.state, SegmentState::SGS_OBSOLETE);
+   EXPECT_FALSE(metadata->findRetireQueueEntryOptional(current, entry.physical_slot).has_value());
+   EXPECT_FALSE(metadata->isPhysicalSlotAllocated(current, entry.physical_slot));
+  }
+ }
+ EXPECT_EQ(RelocatableIntegrityScanner(io, *metadata).scan().large_value_manifest_routes, 0U);
+}

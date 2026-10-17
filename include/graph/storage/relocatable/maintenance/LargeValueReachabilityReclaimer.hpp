@@ -121,6 +121,8 @@ namespace graph::storage {
 		// prevents malformed metadata from turning reclamation into an unbounded
 		// traversal.
 		size_t maximum_page_locations = 0U;
+		// Data/manifest pools and unreachable pools in the reserved LargeValue
+		// content-index namespace share this bound. Public graph indexes do not.
 		size_t maximum_pools = 64U;
 		// COW deletion from the persistent content index can require a fresh
 		// Index-page pool. Maintenance receives this explicit allocator policy
@@ -149,6 +151,7 @@ namespace graph::storage {
 		uint64_t retired_values = 0U;
 		uint64_t retired_manifest_pages = 0U;
 		uint64_t retired_data_pages = 0U;
+		// Pool counts also include orphaned private content-index pools.
 		uint64_t pools_scanned = 0U;
 		uint64_t empty_pools_retired = 0U;
 		uint64_t retired_pools_released = 0U;

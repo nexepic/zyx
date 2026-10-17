@@ -92,7 +92,9 @@ TEST_F(RelocatableStorageBackendSchemaTest,
 		Superblock finalPublication = superblocks.recover();
 		ASSERT_LT(finalPublication.generation.value(), std::numeric_limits<uint64_t>::max());
 		finalPublication.generation = Generation(finalPublication.generation.value() + 1U);
-		finalPublication.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 5U);
+		// The value retirement and the two batched pool-lifecycle publications
+		// consume exactly three checkpoints, regardless of the number of pools.
+		finalPublication.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 3U);
 		superblocks.publish(finalPublication);
 		io->sync();
 		io.reset();
@@ -105,6 +107,12 @@ TEST_F(RelocatableStorageBackendSchemaTest,
 	EXPECT_THROW(static_cast<void>(exhausted.reclaimUnreachableLargeValues(largeValueReclaimOptions())),
 			 FormatException);
 	exhausted.close();
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		EXPECT_EQ(SuperblockFile(io).recover().checkpoint_lsn.value(), std::numeric_limits<uint64_t>::max());
+	}
 }
 
 TEST_F(RelocatableStorageBackendSchemaTest,
