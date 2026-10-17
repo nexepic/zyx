@@ -1,0 +1,33 @@
+{
+  "registered_before_tail_measurements": true,
+  "reason": "Document6.1requires bounded supplements for unstable protection tails; old selector considered only controlP50range and nearP50gate, omitting two unstable P95workloads. No clear regression is relabeled as passed.",
+  "cases": [
+    {
+      "workload": "delete_node",
+      "p95_process_range_fractions": {
+        "control": 0.15352240659428731,
+        "current": 0.0884615750298113
+      }
+    },
+    {
+      "workload": "unchanged_score_large_body",
+      "p95_process_range_fractions": {
+        "control": 0.03803915643395663,
+        "current": 0.17274945288993934
+      }
+    }
+  ],
+  "rounds": [
+    4,
+    5
+  ],
+  "samples": 100,
+  "warmups": 3,
+  "max_process_attempts_per_source_workload": 2,
+  "existing_six_workloads_unchanged": true,
+  "original_total_write_supplement_seconds": 7200,
+  "remaining_budget_rule": "7200 minus elapsed walltime from original finite-write registration to its completion; engine-free boundary; all tail processes share this remainder, each<=1800sec.",
+  "no_binary_query_timer_input_resource_or_gate_change": true,
+  "case_script_sha256": "5466846d2cc3c9cdbcc69d7a4d8c339ea259fb1342ca540b30d410ad5eaa60fb",
+  "case_output_and_temporary_names_only_changed": true
+}
