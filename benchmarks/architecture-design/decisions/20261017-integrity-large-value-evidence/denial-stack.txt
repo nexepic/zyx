@@ -1,0 +1,24 @@
+graph::query::execution::detail::PrepaidMemoryResource::do_allocate(unsigned long, unsigned long)
+??:?
+std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte> >::vector(std::vector<std::byte, graph::utils::OwnedPmrAllocator<std::byte> > const&)
+??:?
+std::_Function_handler<void (graph::storage::PageLocation const&), graph::storage::RelocatableIntegrityScanner::scan() const::$_2>::_M_invoke(std::_Any_data const&, graph::storage::PageLocation const&)
+RelocatableIntegrityScanner.cpp:?
+std::_Function_handler<void (graph::storage::LocationLeafEntry const&), graph::storage::LocationDirectory::visitPages(graph::storage::Superblock const&, std::function<void (graph::storage::PageLocation const&)> const&) const::$_0>::_M_invoke(std::_Any_data const&, graph::storage::LocationLeafEntry const&)
+LocationDirectory.cpp:?
+std::_Function_handler<bool (graph::storage::LocationLeafEntry const&), graph::storage::LocationDirectory::visit(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, std::function<void (graph::storage::LocationLeafEntry const&)> const&) const::$_0>::_M_invoke(std::_Any_data const&, graph::storage::LocationLeafEntry const&)
+LocationDirectory.cpp:?
+std::_Function_handler<bool (graph::storage::CatalogRadixPage const&, unsigned long), graph::storage::LocationDirectory::visitUntil(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, std::function<bool (graph::storage::LocationLeafEntry const&)> const&) const::$_0>::_M_invoke(std::_Any_data const&, graph::storage::CatalogRadixPage const&, unsigned long&&)
+LocationDirectory.cpp:?
+graph::storage::LocationDirectory::visitUntil(graph::storage::Superblock const&, graph::storage::MetadataDirectoryType, std::function<bool (graph::storage::LocationLeafEntry const&)> const&) const
+??:?
+graph::storage::LocationDirectory::visitPages(graph::storage::Superblock const&, std::function<void (graph::storage::PageLocation const&)> const&) const
+??:?
+graph::storage::RelocatableIntegrityScanner::scan() const
+??:?
+graph::storage::RelocatableStorageBackend::verifyIntegrity() const
+??:?
+main
+??:?
+_start
+??:?

@@ -1,0 +1,18 @@
+#include <typeinfo>
+#include <cstring>
+#include <cstdint>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <unistd.h>
+struct Trace { uintptr_t base; uint64_t count; void *frames[48]; };
+extern "C" [[noreturn]] void __cxa_throw(void *value, void *type, void (*destroy)(void *)) {
+ const auto *info=static_cast<std::type_info *>(type);
+ if(std::strstr(info->name(),"ResourceAdmissionDenied")) {
+  Trace trace{};trace.count=::backtrace(trace.frames,48);Dl_info location{};
+  if(::dladdr(__builtin_return_address(0),&location))trace.base=reinterpret_cast<uintptr_t>(location.dli_fbase);
+  const int fd=::open("/tmp/zyx-maint-admission-raw-stack.bin",O_WRONLY|O_CREAT|O_TRUNC,0600);
+  if(fd>=0){static_cast<void>(::write(fd,&trace,sizeof(trace)));::close(fd);}
+ }
+ using Throw=void(*)(void*,void*,void(*)(void*));static auto original=reinterpret_cast<Throw>(::dlsym(RTLD_NEXT,"__cxa_throw"));original(value,type,destroy);__builtin_unreachable();
+}

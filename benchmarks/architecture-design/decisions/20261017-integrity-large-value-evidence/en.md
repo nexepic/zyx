@@ -1,0 +1,3 @@
+After the existing per-page codec/owner/CRC authentication, retain only decoded headers, identities and manifests needed for subsequent LargeValue cross-checks. Other page images and orphan/directory/content-index checks remain complete. The default8MiB workspace is unchanged.
+
+The exact10000indexed thin-node plus three2MiB-value regression fails old code and passes new code. The initial three-value-only fixture did not reproduce the failure and is not presented as a negative control. All522 tests in17 affected modules and120 complete Release budget-family checks passed. No full suite or performance acceptance; progress remains29/34(85.3%).

@@ -1,0 +1,33 @@
+{
+  "status": "correctness_fix_and_regression_passed_performance_acceptance_pending",
+  "accepted_total": 29,
+  "new_accepted_ids": [],
+  "root_cause": "ResourceAdmissionDenied stack identifies charged OwnedVector image copying into integrity scannedPages. That map retained full LargeValue DATA/MANIFEST images although later checks use decoded headers/manifests. Its separate data map also retained unneeded uncharged payload vectors.",
+  "fix": "Authenticate every visited page with the same codec/owner/CRC checks, retain only identity/visibility records and decoded manifests for LargeValue pages, and fixed-size data identity/range fields. Other typed page images and all later cross-structure/orphan/content-index checks remain.",
+  "default_integrity_workspace_bytes": 8388608,
+  "limits_raised": false,
+  "small_fixture_note": "Three2MiB values alone passed the original implementation; it does not reproduce the documented baseline. The regression uses exactly the documented10000indexed thinUser baseline plus3x2MiB owning Property collections, and fails the old implementation at verifyIntegrity.",
+  "unit_regression": {
+    "negative": "Exact documented fixture fails old code with ResourceAdmissionDenied",
+    "positive": "Same fixture, unchanged8MiB, writable and physical-read-only reopen integrity pass; no writes or metadata generation change"
+  },
+  "tests": {
+    "modules": 17,
+    "suites": 23,
+    "passed": 522,
+    "full_suite": false,
+    "includes": "Catalog/metadata/resource modules and both integrity/corruption modules"
+  },
+  "untimed_full_budget_replay": {
+    "operations": 120,
+    "full_results_checked": true,
+    "expected_quota_readonly_cancel_errors_checked": true,
+    "reopen_integrity": "passed",
+    "performance_samples": 0,
+    "binary_sha256": "fa996c8a448e00d825147eb1c2bf234628b6995375194ef22e0a5c34f55aed54"
+  },
+  "source_sha256": {
+    "src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp": "f7e582d81f5a9be17bad4ba5f537a2dc56ada934c16106947b3094f08b087deb",
+    "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp": "e5355dab1c47238e974ef6c234fd5ee442d9a73bb050a0beae0acd5f3c99eb8f"
+  }
+}

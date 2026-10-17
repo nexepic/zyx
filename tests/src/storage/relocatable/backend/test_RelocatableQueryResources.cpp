@@ -1703,3 +1703,40 @@ TEST_F(RelocatableStorageBackendTest, LiteralDeletePrivateReaderDoesNotBorrowExh
     backend->close();backend->open();
     EXPECT_EQ(engine.execute("MATCH (n:CacheLiteralDelete) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(),PropertyValue(int64_t{0}));
 }
+
+TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceFitsTheUnchangedDefaultWorkspace) {
+    materializeNativeDatabase();
+    auto options = backendOptions();
+    options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    ASSERT_EQ(options.maximum_integrity_workspace_bytes, 8U * 1024U * 1024U);
+    RelocatableStorageBackend backend(options); backend.open();
+    // Match the documented budget-family baseline: 10,000 indexed thin
+    // entities plus three 2MiB owning Property collections.
+    for (int64_t begin = 0; begin < 10000; begin += 100) {
+        std::vector<LogicalGraphNodeCreateRequest> requests;
+        for (int64_t id = begin; id < begin + 100; ++id) {
+            requests.push_back({{"User"}, {{"id", PropertyValue(id)},
+                {"country", PropertyValue("country-" + std::to_string(id % 8))},
+                {"score", PropertyValue(id % 7)}, {"age", PropertyValue(18 + id % 53)}}});
+        }
+        (void)backend.createLogicalNodes(requests);
+    }
+    (void)backend.createLogicalNodeIndex({"contract_base_user_id", "User", {"id"}});
+    for (int id = 0; id < 3; ++id) {
+        (void)backend.createLogicalNodes({{{"Wide"}, {{"id", PropertyValue(id)},
+            {"body", PropertyValue(std::string(2U * 1024U * 1024U, 'b'))}}}});
+    }
+    backend.close(); backend.open();
+    const auto generation = backend.currentNativeMetadataGeneration();
+    backend.resetIoStats();
+    RelocatableIntegrityReport report;
+    ASSERT_NO_THROW(report = backend.verifyIntegrity());
+    EXPECT_GE(report.large_value_manifest_routes, 3U);
+    EXPECT_GT(report.large_value_data_pages, 1000U);
+    EXPECT_EQ(backend.currentNativeMetadataGeneration(), generation);
+    EXPECT_EQ(backend.ioStats().data.write_bytes, 0U);
+    backend.close();
+    RelocatableStorageBackend reader(backendOptions()); reader.open();
+    ASSERT_NO_THROW(static_cast<void>(reader.verifyIntegrity()));
+    reader.close();
+}
