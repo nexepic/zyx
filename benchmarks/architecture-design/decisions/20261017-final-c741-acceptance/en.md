@@ -1,0 +1,3 @@
+Sourcec741b5b2, its522-test selected binary and both actual Release entry binaries are frozen. All17modules/23suites passed. The previously failing budget family now passes120 complete-result checks without increasing the8MiB integrity grant. The final core also passed physically read-only exact6node/edge counts at both scales. Integrated acceptance is running; source033 partial data remain strictly separate.
+
+Wide RAW body bytes alone exceed the2GiB file cap. The equal4GiB-wide-only amendment awaits the user reply and is not applied automatically; other registered work continues. Only actual acceptance increases the score: still29/34(85.3%), request0/5.

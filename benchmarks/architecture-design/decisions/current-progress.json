@@ -152,18 +152,17 @@
     "completed": 0,
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [
-      "S6.1"
-    ],
+    "pending_revalidation_ids": [],
     "implementation": "Catalog selected point routing and integrity LargeValue evidence lifetimes implemented.17modules/522tests and120untimed full budget-family checks passed; default budgets unchanged; final performance acceptance pending.",
-    "final_window": "/tmp/zyx-final-five-window-20261017",
-    "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
+    "final_window": "/tmp/zyx-final-five-c741-window-20261017",
+    "source_commit": "c741b5b2eb7b463d0096f06bee452be0114efe0f",
     "source_revalidation": {
       "id": "S6.1",
       "score_increase": false,
-      "evidence": "20261017-metadata-recency-and-final-five/proof.json",
-      "scope": "Only decoded-cache header changed; 9 affected storage/metadata/resource modules, 212 tests passed; source and binaries frozen. Earlier full 130-module run remains historical source034, not attributed to033."
-    }
+      "evidence": "20261017-final-c741-acceptance/proof.json",
+      "scope": "Finalc741source and actual binaries frozen;17affectedmodules/522tests passed. Earlier2882-test/source034 run remains historical, not attributed toc741."
+    },
+    "pending_user_resource_decision": "Wide-only2GiB->4GiB file/mapping amendment requested, not authorized/applied. Other cases run; the entire wide cohort stays pending until the reply."
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",

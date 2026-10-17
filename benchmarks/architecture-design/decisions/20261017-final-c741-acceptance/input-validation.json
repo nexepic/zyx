@@ -1,0 +1,62 @@
+{
+  "medium": {
+    "source": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/medium/current.zyx",
+    "commands": [
+      "QUERY\tMATCH (n:User) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Post) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Tag) RETURN count(n) AS total",
+      "QUERY\tMATCH ()-[r:FOLLOWS]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:AUTHORED]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:HAS_TAG]->() RETURN count(r) AS total"
+    ],
+    "expected": [
+      100000,
+      120000,
+      5000,
+      500000,
+      120000,
+      240000
+    ],
+    "observed": [
+      100000,
+      120000,
+      5000,
+      500000,
+      120000,
+      240000
+    ],
+    "physically_read_only": true,
+    "source_core": "c741b5b2",
+    "performance_samples": 0
+  },
+  "holdout": {
+    "source": "/workspace/zyx-optimization-final-window-20261016/prepared-inputs/holdout/current.zyx",
+    "commands": [
+      "QUERY\tMATCH (n:User) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Post) RETURN count(n) AS total",
+      "QUERY\tMATCH (n:Tag) RETURN count(n) AS total",
+      "QUERY\tMATCH ()-[r:FOLLOWS]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:AUTHORED]->() RETURN count(r) AS total",
+      "QUERY\tMATCH ()-[r:HAS_TAG]->() RETURN count(r) AS total"
+    ],
+    "expected": [
+      73000,
+      87000,
+      3000,
+      511000,
+      87000,
+      174000
+    ],
+    "observed": [
+      73000,
+      87000,
+      3000,
+      511000,
+      87000,
+      174000
+    ],
+    "physically_read_only": true,
+    "source_core": "c741b5b2",
+    "performance_samples": 0
+  }
+}

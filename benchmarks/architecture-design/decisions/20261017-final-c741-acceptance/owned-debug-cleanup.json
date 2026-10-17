@@ -1,0 +1,38 @@
+[
+  {
+    "path": "/tmp/zyx-final-five-integrity-affected-tests",
+    "bytes": 198859336,
+    "sha256": "8813028e42a8f9f78c61a316818d757eb2ce00882f0bee87cec2f06fb0ce562a",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  },
+  {
+    "path": "/tmp/zyx-catalog-selected-affected-tests",
+    "bytes": 195939888,
+    "sha256": "de32d91993ca2817c7f1e2151372d62c6f5ff1500c33f50981b601b86a9f144a",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  },
+  {
+    "path": "/tmp/zyx-entity-cache-decline-tests",
+    "bytes": 171511008,
+    "sha256": "14a9da4bb68f10476c09fa1ea0c8b3adaa51b9e1928f60e804071c3425143323",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  },
+  {
+    "path": "/tmp/zyx-metadata-recency-affected-tests",
+    "bytes": 182284568,
+    "sha256": "ea9faf95ef7892467f7201210b8d2e52498b55b6e766a0544b2538ecc2f86eb3",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  },
+  {
+    "path": "/tmp/zyx-metadata-recency-tests",
+    "bytes": 8571200,
+    "sha256": "d1a995c044018a7e62bbf2353d517ee14fb8d428df3fe39dcc6d9048d95c701d",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  },
+  {
+    "path": "/tmp/zyx-catalog-selected-tests",
+    "bytes": 68248952,
+    "sha256": "77f841d58a7d1c9b70349b0f1e935dd54a7311a094cd079e36fe1117a8d855d9",
+    "purpose": "Remove task-owned reproducible standalone test links after all runs finished; final source/binary freeze, XML and source remain."
+  }
+]
