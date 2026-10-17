@@ -1,5 +1,6 @@
 #include "RelocatableBTreePageStoreTestUtils.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
 #include "graph/utils/UnmanagedAllocationResource.hpp"
 
 namespace {
@@ -123,3 +124,45 @@ TEST_F(RelocatableBTreePageStoreTest, OverlayLeafRedistributionDoesNotMaterializ
 }
 } // namespace
 
+TEST_F(RelocatableBTreePageStoreTest, LargeValueCleanupPreservesMappedIndexRootsAndReclaimsOnlyOrphanPools) {
+ auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+ SlottedPagePool pages(io, *metadata);
+ NativeBTreeWriteContext writes(io, *metadata, pages);
+ BTreePageStore store(pages, *metadata);
+ auto request = allocationRequest(); request.pool_owner_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+ ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2)), PhysicalSlotId(40), PhysicalSlotId(40),
+                           LogSequenceNumber(2)).has_value());
+ const IndexRootLocation root{17U, request.page_id, request.generation};
+ static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3)));
+ LargeValueStore values(io, *metadata);
+ LargeValueReachabilityReclaimer reclaimer(values, pages, *metadata);
+ LargeValueReachabilityReclaimOptions options;
+ options.maximum_manifest_locations = 32U; options.maximum_manifest_metadata_pages = 32U;
+ options.maximum_manifest_nodes = 32U; options.maximum_owner_locations = 32U;
+ options.maximum_owner_metadata_pages = 32U; options.maximum_data_pages = 128U;
+ options.maximum_retirements = 128U; options.maximum_page_locations = 128U;
+ options.first_index_slot = PhysicalSlotId(40U); options.last_index_slot = PhysicalSlotId(100U);
+ const auto nextLsn = [&] {
+  auto snapshot = metadata->openSnapshot();
+  return LogSequenceNumber(snapshot.superblock().checkpoint_lsn.value() + 1U);
+ };
+ // Allocation namespace ownership never authorizes removing a mapped root,
+ // even when the B+Tree itself currently contains no entries.
+ EXPECT_EQ(reclaimer.reclaim(options, nextLsn()).empty_pools_retired, 0U);
+ auto old = metadata->openSnapshot();
+ auto transaction = writes.beginTransaction();
+ transaction.stageScalarIndexDrop(store, 17U, 8U);
+ ASSERT_TRUE(transaction.commit().committed());
+ const auto retired = reclaimer.reclaim(options, nextLsn());
+ EXPECT_EQ(retired.retired_values, 0U); EXPECT_EQ(retired.empty_pools_retired, 1U);
+ EXPECT_EQ(retired.retired_pools_released, 0U);
+ EXPECT_EQ(store.read(old, request.page_id).header().index_id, 17U);
+ old.release();
+ const auto released = reclaimer.reclaim(options, nextLsn());
+ EXPECT_EQ(released.retired_pools_released, 1U);
+ auto current = metadata->openSnapshot();
+ const auto pool = metadata->findCatalog(current, request.segment_id);
+ EXPECT_EQ(pool.state, SegmentState::SGS_OBSOLETE);
+ EXPECT_FALSE(metadata->isPhysicalSlotAllocated(current, pool.physical_slot));
+ current.release();
+}

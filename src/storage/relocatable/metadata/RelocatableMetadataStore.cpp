@@ -7,6 +7,7 @@
  **/
 
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/utils/OwnedVector.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataStoreLifecycle.hpp"
@@ -2746,6 +2747,43 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		segment_retirement_coordinator_.prepareRetiredRelease(batch, retirement);
+		publishBatch(batch, writer, options);
+		return batch.candidate();
+	}
+
+	std::optional<Superblock> RelocatableMetadataStore::tryReleaseRetiredCatalogSegments(
+			std::span<const CatalogSegmentRetirementRequest> requests, LogSequenceNumber checkpointLsn,
+			const MetadataPublishOptions &options) {
+		if (requests.empty() || !checkpointLsn.isValid())
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+				"relocatable retired slot release requires a nonempty batch and checkpoint LSN");
+		MetadataWriteGuard writer = beginWrite();
+		const Superblock current = bootstrap_.recover();
+		utils::OwnedVector<uint64_t> identities;
+		identities.reserve(requests.size());
+		for (const auto &request : requests) {
+			if (!request.segment_id.isValid() || !request.expected_generation.isValid())
+				throw FormatException(FormatError::FERR_INVALID_HEADER,
+					"relocatable retired slot release has an invalid segment identity");
+			identities.push_back(request.segment_id.value());
+		}
+		std::ranges::sort(identities);
+		if (std::adjacent_find(identities.begin(), identities.end()) != identities.end())
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+				"relocatable retired slot release has a duplicate segment");
+		utils::OwnedVector<RetireQueueEntry> retirements;
+		retirements.reserve(requests.size());
+		bool blocked = false;
+		for (const auto &request : requests) {
+			const auto retirement = segment_retirement_coordinator_.validateRetiredRelease(
+				current, request.segment_id, request.expected_generation);
+			blocked = retirement_.isVisibleToActiveSnapshot(writer, retirement) || blocked;
+			retirements.push_back(retirement);
+		}
+		if (blocked) return std::nullopt;
+		std::ranges::sort(retirements, {}, &RetireQueueEntry::physical_slot);
+		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		retire_queue_reclaimer_.prepareReclamation(batch, retirements);
 		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}

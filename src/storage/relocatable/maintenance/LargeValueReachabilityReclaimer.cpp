@@ -24,6 +24,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/StateRecord.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 
@@ -43,6 +44,34 @@ namespace graph::storage {
 		};
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
+
+        template<class NextLsn>
+        void publishPoolLifecycle(RelocatableMetadataStore &metadata, std::span<const CatalogEntry> sealed,
+                const WorkMap<uint64_t, CatalogEntry> &retired, NextLsn &&nextLsn,
+                const MetadataPublishOptions &options, LargeValueReachabilityReclaimReport &report,
+                Superblock &published, bool &hasPublished) {
+            utils::OwnedVector<CatalogSegmentRetirementRequest> requests;
+            requests.reserve(sealed.size() + retired.size());
+            for (const auto &pool : sealed) requests.push_back({pool.segment_id, pool.generation});
+            if (!requests.empty()) {
+                published = metadata.retireCatalogSegments(requests, nextLsn(), options);
+                hasPublished = true;
+                report.empty_pools_retired += requests.size();
+            }
+            requests.clear();
+            for (const auto &[id, pool] : retired) {
+                static_cast<void>(id);
+                requests.push_back({pool.segment_id, pool.generation});
+            }
+            for (const auto &pool : sealed) requests.push_back({pool.segment_id, pool.generation});
+            if (!requests.empty()) {
+                if (auto released = metadata.tryReleaseRetiredCatalogSegments(requests, nextLsn(), options)) {
+                    published = *released;
+                    hasPublished = true;
+                    report.retired_pools_released += requests.size();
+                }
+            }
+        }
 
 		void validateOptions(const LargeValueReachabilityReclaimOptions &options, LogSequenceNumber checkpointLsn) {
 			const uint8_t invalid = static_cast<uint8_t>(options.maximum_manifest_locations == 0U) |
@@ -383,6 +412,7 @@ namespace graph::storage {
 		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
 		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
 		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> contentIndexPoolCandidates;
 		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 		try {
 			for (const LargeValueId valueId: journal.candidate_value_ids) {
@@ -464,11 +494,14 @@ namespace graph::storage {
 				}
 			};
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
+                const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
+                    pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
 				if (pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
-					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) {
+					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool) {
 					return;
 				}
-				const uint64_t expectedPoolOwner = pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
+                const uint64_t expectedPoolOwner = contentIndexPool ? RSS_LARGE_VALUE_CONTENT_INDEX_ID :
+                    pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
 													   ? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
 													   : RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
 				if (pool.owner_id != expectedPoolOwner) { // typed LargeValue pool creation fixes the namespace owner for its kind.
@@ -486,11 +519,17 @@ namespace graph::storage {
 				if (pool.state != SegmentState::SGS_SEALED) {
 					return;
 				}
-				const bool hasPlannedRetirements = retiredPageIdsBySegment.contains(pool.segment_id.value());
+                if (contentIndexPool) {
+                    if (contentIndexPoolCandidates.size() == options.maximum_pools)
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue content-index pool scan exceeded its bound");
+                    contentIndexPoolCandidates.emplace(pool.segment_id.value(), pool);
+                    return;
+                }
 				retainSealedPool(pool);
-				if (hasPlannedRetirements) {
-					static_cast<void>(sealedPoolCandidates.emplace(pool.segment_id.value(), pool));
-				}
+                // An interrupted pass may already have removed every value/page
+                // route while its pool is still sealed. Directory emptiness,
+                // not membership in this pass's retirement list, is decisive.
+                sealedPoolCandidates.emplace(pool.segment_id.value(), pool);
 			});
 			static_cast<void>(metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
 				if (report.page_locations_scanned == options.maximum_page_locations) {
@@ -498,6 +537,7 @@ namespace graph::storage {
 							 "LargeValue maintenance journal exceeded its Page Directory scan bound");
 				}
 				++report.page_locations_scanned;
+                contentIndexPoolCandidates.erase(location.segment_id.value());
 				const auto candidate = sealedPoolCandidates.find(location.segment_id.value());
 				if (candidate == sealedPoolCandidates.end()) {
 					return true;
@@ -508,6 +548,20 @@ namespace graph::storage {
 				}
 				return true;
 			}));
+            if (!contentIndexPoolCandidates.empty()) {
+                if (const auto root = metadata_.findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID)) {
+                    const auto page = values_.contentIndex().read(snapshot, root->root_page_id);
+                    const auto header = page.header();
+                    if (header.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
+                        header.generation != root->root_generation || header.left_sibling.isValid() || header.right_sibling.isValid())
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue cleanup has an invalid content-index root");
+                }
+            }
+            for (const auto &[id, pool] : contentIndexPoolCandidates) {
+                retainSealedPool(pool);
+                sealedPoolCandidates.emplace(id, pool);
+            }
+            contentIndexPoolCandidates.clear();
 			report.pools_scanned = frameReclaimPools.size() + retiredPoolCandidates.size();
 			snapshot.release();
 		} catch (...) {
@@ -547,6 +601,7 @@ namespace graph::storage {
 			static_cast<void>(segmentId);
 			sealedPools.push_back(pool);
 		}
+        sealedPoolCandidates.clear();
 		uint64_t remainingPublicationIncrements = std::numeric_limits<uint64_t>::max() - checkpointLsn.value();
 		bool hasReservedPublication = false;
 		const auto reservePublicationLsns = [&](size_t count) {
@@ -564,9 +619,8 @@ namespace graph::storage {
 			remainingPublicationIncrements -= static_cast<uint64_t>(count);
 		};
 		reservePublicationLsns(retirements.empty() ? 0U : 1U);
-		reservePublicationLsns(sealedPools.size());
-		reservePublicationLsns(retiredPoolCandidates.size());
-		reservePublicationLsns(sealedPools.size());
+        reservePublicationLsns(sealedPools.empty() ? 0U : 1U);
+        reservePublicationLsns(sealedPools.empty() && retiredPoolCandidates.empty() ? 0U : 1U);
 		uint64_t publicationOrdinal = 0U;
 		const auto takePublicationLsn = [&] { return LogSequenceNumber(checkpointLsn.value() + publicationOrdinal++); };
 		Superblock published;
@@ -583,21 +637,8 @@ namespace graph::storage {
 			static_cast<void>(segmentId);
 			values_.reclaimRetiredFrames(pool.segment_id);
 		}
-		for (const CatalogEntry &pool: sealedPools) {
-			published = values_.retireEmptyPool(pool.segment_id, pool.generation, takePublicationLsn(), publishOptions);
-			hasPublished = true;
-			++report.empty_pools_retired;
-			retiredPoolCandidates.emplace(pool.segment_id.value(), pool);
-		}
-		if (metadata_.activeSnapshotCount() == 0U) {
-			for (const auto &[segmentId, pool]: retiredPoolCandidates) {
-				static_cast<void>(segmentId);
-				published = values_.releaseRetiredEmptyPool(pool.segment_id, pool.generation, takePublicationLsn(),
-															publishOptions);
-				hasPublished = true;
-				++report.retired_pools_released;
-			}
-		}
+        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, takePublicationLsn,
+            publishOptions, report, published, hasPublished);
 		report.published_generation = hasPublished ? published.generation : report.scanned_generation;
 		return report;
 	}
@@ -614,6 +655,7 @@ namespace graph::storage {
 		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
 		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
 		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> contentIndexPoolCandidates;
 		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
@@ -717,11 +759,14 @@ namespace graph::storage {
 				}
 			};
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
+                const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
+                    pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
 				if (pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
-					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) {
+					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool) {
 					return;
 				}
-				const uint64_t expectedPoolOwner = pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
+                const uint64_t expectedPoolOwner = contentIndexPool ? RSS_LARGE_VALUE_CONTENT_INDEX_ID :
+                    pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
 														   ? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
 														   : RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
 				if (pool.owner_id != expectedPoolOwner) {
@@ -738,11 +783,17 @@ namespace graph::storage {
 				if (pool.state != SegmentState::SGS_SEALED) {
 					return;
 				}
-				const bool hasPlannedRetirements = retiredPageIdsBySegment.contains(pool.segment_id.value());
+                if (contentIndexPool) {
+                    if (contentIndexPoolCandidates.size() == options.maximum_pools)
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue content-index pool scan exceeded its bound");
+                    contentIndexPoolCandidates.emplace(pool.segment_id.value(), pool);
+                    return;
+                }
 				retainSealedPool(pool);
-				if (hasPlannedRetirements) {
-					static_cast<void>(sealedPoolCandidates.emplace(pool.segment_id.value(), pool));
-				}
+                // An interrupted pass may already have removed every value/page
+                // route while its pool is still sealed. Directory emptiness,
+                // not membership in this pass's retirement list, is decisive.
+                sealedPoolCandidates.emplace(pool.segment_id.value(), pool);
 			});
 			// A shared pool remains sealed when one or more current routes survive.
 			// The snapshot's Page Directory is authoritative; the Catalog owner is
@@ -753,6 +804,7 @@ namespace graph::storage {
 						 "LargeValue reclamation exceeded its Page Directory scan bound");
 				}
 				++report.page_locations_scanned;
+                contentIndexPoolCandidates.erase(location.segment_id.value());
 				const auto candidate = sealedPoolCandidates.find(location.segment_id.value());
 				if (candidate == sealedPoolCandidates.end()) {
 					return true;
@@ -763,6 +815,20 @@ namespace graph::storage {
 				}
 				return true;
 			}));
+            if (!contentIndexPoolCandidates.empty()) {
+                if (const auto root = metadata_.findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID)) {
+                    const auto page = values_.contentIndex().read(snapshot, root->root_page_id);
+                    const auto header = page.header();
+                    if (header.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID ||
+                        header.generation != root->root_generation || header.left_sibling.isValid() || header.right_sibling.isValid())
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue cleanup has an invalid content-index root");
+                }
+            }
+            for (const auto &[id, pool] : contentIndexPoolCandidates) {
+                retainSealedPool(pool);
+                sealedPoolCandidates.emplace(id, pool);
+            }
+            contentIndexPoolCandidates.clear();
 			report.pools_scanned = frameReclaimPools.size() + retiredPoolCandidates.size();
 			snapshot.release();
 		} catch (...) {
@@ -804,9 +870,9 @@ namespace graph::storage {
 			static_cast<void>(segmentId);
 			sealedPools.push_back(pool);
 		}
-		// Reserve the worst-case publication sequence before mutating metadata. A
-		// caller's snapshot may drain while this pass runs, so every current and
-		// newly retired pool can require a later release publication.
+        sealedPoolCandidates.clear();
+		// Reserve value retirement and at most two pool-lifecycle publications
+		// before mutating metadata. Snapshot fences may defer the release batch.
 		uint64_t remainingPublicationIncrements = std::numeric_limits<uint64_t>::max() - checkpointLsn.value();
 		bool hasReservedPublication = false;
 		const auto reservePublicationLsns = [&](size_t count) {
@@ -824,9 +890,8 @@ namespace graph::storage {
 			remainingPublicationIncrements -= static_cast<uint64_t>(count);
 		};
 		reservePublicationLsns(retirements.empty() ? 0U : 1U);
-		reservePublicationLsns(sealedPools.size());
-		reservePublicationLsns(retiredPoolCandidates.size());
-		reservePublicationLsns(sealedPools.size());
+        reservePublicationLsns(sealedPools.empty() ? 0U : 1U);
+        reservePublicationLsns(sealedPools.empty() && retiredPoolCandidates.empty() ? 0U : 1U);
 		uint64_t publicationOrdinal = 0U;
 		const auto takePublicationLsn = [&] { return LogSequenceNumber(checkpointLsn.value() + publicationOrdinal++); };
 		Superblock published;
@@ -848,25 +913,8 @@ namespace graph::storage {
 			values_.reclaimRetiredFrames(pool.segment_id);
 		}
 
-		for (const CatalogEntry &pool: sealedPools) {
-			published = values_.retireEmptyPool(pool.segment_id, pool.generation, takePublicationLsn(), publishOptions);
-			hasPublished = true;
-			++report.empty_pools_retired;
-			// The pool is now in the same retired-slot protocol as pools found at
-			// the beginning of this pass. Keep it in the release batch so a pass
-			// without pinned snapshots does not require an unnecessary retry.
-			retiredPoolCandidates.emplace(pool.segment_id.value(), pool);
-		}
-
-		if (metadata_.activeSnapshotCount() == 0U) {
-			for (const auto &[segmentId, pool]: retiredPoolCandidates) {
-				static_cast<void>(segmentId);
-				published = values_.releaseRetiredEmptyPool(pool.segment_id, pool.generation, takePublicationLsn(),
-															publishOptions);
-				hasPublished = true;
-				++report.retired_pools_released;
-			}
-		}
+        publishPoolLifecycle(metadata_, sealedPools, retiredPoolCandidates, takePublicationLsn,
+            publishOptions, report, published, hasPublished);
 		report.published_generation = hasPublished ? published.generation : report.scanned_generation;
 		return report;
 	}

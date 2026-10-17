@@ -61,19 +61,6 @@ namespace graph::storage {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable Catalog retirement requires allocated unique sealed generations");
 			}
-			if (isSharedPagePoolSegmentKind(currentEntry.kind)) {
-				bool hasCurrentPage = false;
-				locations_.visitPages(current, [&currentEntry, &hasCurrentPage](const PageLocation &location) {
-					hasCurrentPage = static_cast<bool>(static_cast<uint8_t>(hasCurrentPage) |
-														 static_cast<uint8_t>(location.segment_id == currentEntry.segment_id));
-				});
-				if (hasCurrentPage) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable shared page pool retirement requires an empty current Page Directory");
-				}
-			}
-
 			CatalogEntry retired = currentEntry;
 			retired.state = SegmentState::SGS_RETIRED;
 			batch.reserveDataSlot(retired.physical_slot);
@@ -83,6 +70,25 @@ namespace graph::storage {
 		}
 
 		std::ranges::sort(retiredEntries, {}, &CatalogEntry::segment_id);
+		// Every candidate is checked against the same immutable directory. One
+		// authenticated traversal proves emptiness for the entire batch instead
+		// of scanning every current page again for each retired pool.
+		if (std::ranges::any_of(retiredEntries, [](const CatalogEntry &entry) {
+			return isSharedPagePoolSegmentKind(entry.kind);
+		})) {
+			bool hasCurrentPage = false;
+			locations_.visitPages(current, [&](const PageLocation &location) {
+				const auto candidate = std::lower_bound(retiredEntries.begin(), retiredEntries.end(),
+					location.segment_id.value(), [](const CatalogEntry &entry, uint64_t id) {
+						return entry.segment_id.value() < id;
+					});
+				if (candidate != retiredEntries.end() && candidate->segment_id == location.segment_id &&
+					isSharedPagePoolSegmentKind(candidate->kind)) hasCurrentPage = true;
+			});
+			if (hasCurrentPage)
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+					"relocatable shared page pool retirement requires an empty current Page Directory");
+		}
 		std::ranges::sort(retirements, {}, &RetireQueueEntry::physical_slot);
 		catalog_.prepareUpsert(batch, retiredEntries);
 		retirement_.prepareQueueInsertions(batch, retirements);

@@ -1439,6 +1439,12 @@ namespace graph::storage {
         [[nodiscard]] std::optional<Superblock> tryReleaseRetiredCatalogSegment(SegmentId segmentId, Generation expectedGeneration,
 															  LogSequenceNumber checkpointLsn,
 															  const MetadataPublishOptions &options = {});
+		// The same snapshot/identity checks for a caller-bounded set, with one
+		// allocator/Catalog/Retire Queue publication. A pinned member blocks the
+		// whole batch; unrelated retirement records are never consumed.
+		[[nodiscard]] std::optional<Superblock> tryReleaseRetiredCatalogSegments(
+			std::span<const CatalogSegmentRetirementRequest> requests, LogSequenceNumber checkpointLsn,
+			const MetadataPublishOptions &options = {});
 
 		// Reserves a destination and switches one Catalog mapping to it in one
 		// generation. The old slot enters the Retire Queue in the same publication.
