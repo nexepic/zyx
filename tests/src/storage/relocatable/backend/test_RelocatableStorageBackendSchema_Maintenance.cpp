@@ -1076,3 +1076,57 @@ TEST_F(RelocatableStorageBackendSchemaTest, DropsCanonicalIndexAndRecreatesItsLo
 	EXPECT_EQ(reopened.listLogicalIndexes(8U), std::vector<LogicalGraphIndexDefinition>{recreated});
 	reopened.close();
 }
+
+TEST_F(RelocatableStorageBackendSchemaTest, MaintenanceReclaimsUnmappedGraphPoolsAfterTheOldReaderReleasesThem) {
+ RelocatableStorageBackend backend(options()); backend.open();
+ const std::string body(8192U, 'x');
+ static_cast<void>(backend.createLogicalNodes({{{"Keep"}, {{"body", graph::PropertyValue(std::string("keep"))}}}}));
+ std::vector<uint64_t> ids;
+ for (int64_t start = 0; start < 2000; start += 100) {
+  std::vector<LogicalGraphNodeCreateRequest> requests;
+  for (int64_t i = start; i < start + 100; ++i)
+   requests.push_back({{"Churn"}, {{"id", graph::PropertyValue(i)}, {"body", graph::PropertyValue(body)}}});
+  const auto batch = backend.createLogicalNodes(requests);
+  ASSERT_EQ(batch.size(), requests.size()); ids.insert(ids.end(), batch.begin(), batch.end());
+ }
+ ASSERT_EQ(ids.size(), 2000U);
+ auto old = backend.openLogicalGraphReadSnapshot();
+ std::vector<LogicalGraphNodeDeleteRequest> deletes;
+ for (const auto id : ids) deletes.push_back({id, false, 0U});
+ backend.deleteLogicalNodes(deletes);
+ auto reclaim = largeValueReclaimOptions();
+ reclaim.maximum_manifest_locations = 4096U; reclaim.maximum_manifest_metadata_pages = 4096U;
+ reclaim.maximum_manifest_nodes = 4096U; reclaim.maximum_owner_locations = 4096U;
+ reclaim.maximum_owner_metadata_pages = 4096U; reclaim.maximum_data_pages = 8192U;
+ reclaim.maximum_retirements = 8192U; reclaim.maximum_page_locations = 16384U; reclaim.maximum_pools = 2048U;
+ const auto first = backend.reclaimUnreachableLargeValues(reclaim);
+ EXPECT_EQ(first.retired_values, ids.size());
+ const auto retained = old->readNode(ids.front());
+ const auto value = std::find_if(retained.properties.begin(), retained.properties.end(),
+  [](const LogicalGraphPropertyEntry &entry) { return entry.key == "body"; });
+ ASSERT_NE(value, retained.properties.end()); EXPECT_EQ(value->value, graph::PropertyValue(body));
+ old.reset();
+ EXPECT_EQ(backend.reclaimUnreachableLargeValues(reclaim).retired_values, 0U);
+ EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity())); backend.close();
+ {
+  auto stream = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::binary);
+  auto storage = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE, StorageIOAccessMode::SIOAM_READ_ONLY);
+  auto metadata = RelocatableMetadataStore::openReadOnly(storage);
+  auto snapshot = metadata->openSnapshot(); size_t orphanGraphPools = 0U;
+  metadata->visitCatalogEntries(snapshot, [&](const CatalogEntry &entry) {
+   if (entry.state != SegmentState::SGS_SEALED ||
+       (entry.kind != SegmentKind::SGK_ENTITY_PAGE_POOL && entry.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL)) return;
+   bool mapped = false;
+   static_cast<void>(metadata->visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
+    mapped |= location.segment_id == entry.segment_id; return !mapped;
+   }));
+   if (!mapped) ++orphanGraphPools;
+  });
+  RecordProperty("unmapped_graph_pools", std::to_string(orphanGraphPools));
+  EXPECT_EQ(orphanGraphPools, 0U);
+ }
+ RelocatableStorageBackend reopened(options()); reopened.open();
+ const auto fresh = reopened.createLogicalNodes({{{"Churn"}, {{"body", graph::PropertyValue(std::string("new"))}}}});
+ ASSERT_EQ(fresh.size(), 1U); EXPECT_GT(fresh.front(), ids.back());
+ EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity())); reopened.close();
+}
