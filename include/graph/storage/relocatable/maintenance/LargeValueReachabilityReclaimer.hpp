@@ -121,8 +121,9 @@ namespace graph::storage {
 		// prevents malformed metadata from turning reclamation into an unbounded
 		// traversal.
 		size_t maximum_page_locations = 0U;
-		// Data/manifest pools and unreachable pools in the reserved LargeValue
-		// content-index namespace share this bound. Public graph indexes do not.
+		// Data/manifest pools, unmapped Entity/Property pools, and unreachable
+		// pools in the reserved LargeValue content-index namespace share this
+		// bound. Other public graph-index namespaces are excluded.
 		size_t maximum_pools = 64U;
 		// COW deletion from the persistent content index can require a fresh
 		// Index-page pool. Maintenance receives this explicit allocator policy

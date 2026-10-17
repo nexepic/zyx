@@ -437,7 +437,7 @@ namespace graph::storage {
 		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
 		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
 		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
-		WorkMap<uint64_t, CatalogEntry> contentIndexPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> orphanPagePoolCandidates;
 		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 		try {
 			for (const LargeValueId valueId: journal.candidate_value_ids) {
@@ -521,15 +521,17 @@ namespace graph::storage {
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
                 const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
                     pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+                const bool graphPool = pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL ||
+                    pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL;
 				if (pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
-					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool) {
+					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool && !graphPool) {
 					return;
 				}
                 const uint64_t expectedPoolOwner = contentIndexPool ? RSS_LARGE_VALUE_CONTENT_INDEX_ID :
                     pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
 													   ? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
 													   : RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
-				if (pool.owner_id != expectedPoolOwner) { // typed LargeValue pool creation fixes the namespace owner for its kind.
+				if (!graphPool && pool.owner_id != expectedPoolOwner) { // typed LargeValue pool creation fixes the namespace owner for its kind.
 					fail(FormatError::FERR_INVALID_STATE,
 							 "LargeValue maintenance journal found a pool outside its shared namespace");
 				}
@@ -544,10 +546,10 @@ namespace graph::storage {
 				if (pool.state != SegmentState::SGS_SEALED) {
 					return;
 				}
-                if (contentIndexPool) {
-                    if (contentIndexPoolCandidates.size() == options.maximum_pools)
-                        fail(FormatError::FERR_INVALID_STATE, "LargeValue content-index pool scan exceeded its bound");
-                    contentIndexPoolCandidates.emplace(pool.segment_id.value(), pool);
+                if (contentIndexPool || graphPool) {
+                    if (orphanPagePoolCandidates.size() == options.maximum_pools)
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance orphan-pool scan exceeded its bound");
+                    orphanPagePoolCandidates.emplace(pool.segment_id.value(), pool);
                     return;
                 }
 				retainSealedPool(pool);
@@ -562,7 +564,7 @@ namespace graph::storage {
 							 "LargeValue maintenance journal exceeded its Page Directory scan bound");
 				}
 				++report.page_locations_scanned;
-                contentIndexPoolCandidates.erase(location.segment_id.value());
+                orphanPagePoolCandidates.erase(location.segment_id.value());
 				const auto candidate = sealedPoolCandidates.find(location.segment_id.value());
 				if (candidate == sealedPoolCandidates.end()) {
 					return true;
@@ -573,7 +575,7 @@ namespace graph::storage {
 				}
 				return true;
 			}));
-            if (!contentIndexPoolCandidates.empty()) {
+            if (!orphanPagePoolCandidates.empty()) {
                 if (const auto root = metadata_.findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID)) {
                     const auto page = values_.contentIndex().read(snapshot, root->root_page_id);
                     const auto header = page.header();
@@ -582,11 +584,11 @@ namespace graph::storage {
                         fail(FormatError::FERR_INVALID_STATE, "LargeValue cleanup has an invalid content-index root");
                 }
             }
-            for (const auto &[id, pool] : contentIndexPoolCandidates) {
+            for (const auto &[id, pool] : orphanPagePoolCandidates) {
                 retainSealedPool(pool);
                 sealedPoolCandidates.emplace(id, pool);
             }
-            contentIndexPoolCandidates.clear();
+            orphanPagePoolCandidates.clear();
 			report.pools_scanned = frameReclaimPools.size() + retiredPoolCandidates.size();
 			snapshot.release();
 		} catch (...) {
@@ -680,7 +682,7 @@ namespace graph::storage {
 		WorkMap<uint64_t, WorkSet<uint64_t>> retiredPageIdsBySegment;
 		WorkMap<uint64_t, CatalogEntry> frameReclaimPools;
 		WorkMap<uint64_t, CatalogEntry> sealedPoolCandidates;
-		WorkMap<uint64_t, CatalogEntry> contentIndexPoolCandidates;
+		WorkMap<uint64_t, CatalogEntry> orphanPagePoolCandidates;
 		WorkMap<uint64_t, CatalogEntry> retiredPoolCandidates;
 
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
@@ -786,15 +788,17 @@ namespace graph::storage {
 			metadata_.visitCatalogEntries(snapshot, [&](const CatalogEntry &pool) {
                 const bool contentIndexPool = pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL &&
                     pool.owner_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+                const bool graphPool = pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL ||
+                    pool.kind == SegmentKind::SGK_PROPERTY_PAGE_POOL;
 				if (pool.kind != SegmentKind::SGK_LARGE_VALUE_DATA_POOL &&
-					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool) {
+					pool.kind != SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL && !contentIndexPool && !graphPool) {
 					return;
 				}
                 const uint64_t expectedPoolOwner = contentIndexPool ? RSS_LARGE_VALUE_CONTENT_INDEX_ID :
                     pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
 														   ? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
 														   : RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
-				if (pool.owner_id != expectedPoolOwner) {
+				if (!graphPool && pool.owner_id != expectedPoolOwner) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "LargeValue reclamation found a pool outside its shared namespace");
 				}
@@ -808,10 +812,10 @@ namespace graph::storage {
 				if (pool.state != SegmentState::SGS_SEALED) {
 					return;
 				}
-                if (contentIndexPool) {
-                    if (contentIndexPoolCandidates.size() == options.maximum_pools)
-                        fail(FormatError::FERR_INVALID_STATE, "LargeValue content-index pool scan exceeded its bound");
-                    contentIndexPoolCandidates.emplace(pool.segment_id.value(), pool);
+                if (contentIndexPool || graphPool) {
+                    if (orphanPagePoolCandidates.size() == options.maximum_pools)
+                        fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance orphan-pool scan exceeded its bound");
+                    orphanPagePoolCandidates.emplace(pool.segment_id.value(), pool);
                     return;
                 }
 				retainSealedPool(pool);
@@ -829,7 +833,7 @@ namespace graph::storage {
 						 "LargeValue reclamation exceeded its Page Directory scan bound");
 				}
 				++report.page_locations_scanned;
-                contentIndexPoolCandidates.erase(location.segment_id.value());
+                orphanPagePoolCandidates.erase(location.segment_id.value());
 				const auto candidate = sealedPoolCandidates.find(location.segment_id.value());
 				if (candidate == sealedPoolCandidates.end()) {
 					return true;
@@ -840,7 +844,7 @@ namespace graph::storage {
 				}
 				return true;
 			}));
-            if (!contentIndexPoolCandidates.empty()) {
+            if (!orphanPagePoolCandidates.empty()) {
                 if (const auto root = metadata_.findIndexRootOptional(snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID)) {
                     const auto page = values_.contentIndex().read(snapshot, root->root_page_id);
                     const auto header = page.header();
@@ -849,11 +853,11 @@ namespace graph::storage {
                         fail(FormatError::FERR_INVALID_STATE, "LargeValue cleanup has an invalid content-index root");
                 }
             }
-            for (const auto &[id, pool] : contentIndexPoolCandidates) {
+            for (const auto &[id, pool] : orphanPagePoolCandidates) {
                 retainSealedPool(pool);
                 sealedPoolCandidates.emplace(id, pool);
             }
-            contentIndexPoolCandidates.clear();
+            orphanPagePoolCandidates.clear();
 			report.pools_scanned = frameReclaimPools.size() + retiredPoolCandidates.size();
 			snapshot.release();
 		} catch (...) {
