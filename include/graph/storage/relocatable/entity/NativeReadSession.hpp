@@ -299,6 +299,10 @@ namespace graph::storage {
             // Optional retention must not invalidate an authenticated read.
         }
 
+		[[nodiscard]] bool hasTokenName(TokenNameKind kind, uint64_t tokenId) const {
+			return token_name_cache_.contains(TokenNameKey{kind, tokenId});
+		}
+
 		[[nodiscard]] std::optional<std::string> tokenName(TokenNameKind kind, uint64_t tokenId,
 				const std::function<void(size_t)> &copyAdmission = {}) const {
 			const auto found = token_name_cache_.find(TokenNameKey{kind, tokenId});

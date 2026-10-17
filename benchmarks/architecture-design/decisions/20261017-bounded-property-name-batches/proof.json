@@ -1,0 +1,82 @@
+{
+  "scope": "Same immutable closed failing dynamic endpoint, four instrumented read queries per source. Mechanism counters and exact outputs only;0formal performance samples, no latency acceptance or pooledprocess claims.",
+  "before_source": "5fc768cb",
+  "after_source": "uncommitted bounded property-name batches",
+  "input": "/tmp/zyx-final-five-steady-window-20261017/diagnostic-current-dynamic-endpoint.zyx",
+  "input_sha256": "5aee47409ceb4b0fb761a992a75c4595a23f3f5d69bc5a47dfb73334cd7fde8b",
+  "physically_readonly": true,
+  "rows": [
+    {
+      "width": 64,
+      "phase": "fresh-query",
+      "old_packed_decodes": 561,
+      "new_packed_decodes": 87,
+      "old_range_descents": 70,
+      "new_range_descents": 13,
+      "full_typed_result_unchanged": true
+    },
+    {
+      "width": 64,
+      "phase": "repeated-query",
+      "old_packed_decodes": 556,
+      "new_packed_decodes": 82,
+      "old_range_descents": 70,
+      "new_range_descents": 13,
+      "full_typed_result_unchanged": true
+    },
+    {
+      "width": 1,
+      "phase": "fresh-query",
+      "old_packed_decodes": 65,
+      "new_packed_decodes": 59,
+      "old_range_descents": 8,
+      "new_range_descents": 8,
+      "full_typed_result_unchanged": true
+    },
+    {
+      "width": 1,
+      "phase": "repeated-query",
+      "old_packed_decodes": 60,
+      "new_packed_decodes": 54,
+      "old_range_descents": 8,
+      "new_range_descents": 8,
+      "full_typed_result_unchanged": true
+    }
+  ],
+  "new_targeted_module_tests": 281,
+  "full_unit_suite": false,
+  "source_changed": true,
+  "performance_gates_pending": true,
+  "status": "implementation_and_module_validation_no_delivery_progress",
+  "accepted": 31,
+  "percent": 91.2,
+  "request_completed": 2,
+  "module_count": 15,
+  "tests": 281,
+  "passed": 281,
+  "new_tests": 12,
+  "remaining_ids": [
+    "S2.5",
+    "S3.5",
+    "S6.2"
+  ],
+  "source_file_hashes": {
+    "include/graph/storage/relocatable/schema/SystemCatalog.hpp": "10c79cc9be6c24b2f6499899d50bd292d91045ce4bf7b05026c9755f942ef6d4",
+    "include/graph/storage/relocatable/entity/NativeReadSession.hpp": "fbbc9620659ffde6142e44f36ada3f0f973d43b6a645f8abc53db56e6daa04ad",
+    "include/graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp": "ac75a051a15d9eda904bfef48435073e64bb66c53d0c6db0ce1d2c0b58e83450",
+    "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp": "93794aa038cec05db1b3eec87423d9147c0094fabaa87149664109d0349d9fad",
+    "src/storage/relocatable/schema/SystemCatalog.cpp": "fd7b7520328f8b1bb5911878ee28326b0dede57f0cc36ce6a8b717cbaaaad324",
+    "src/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.cpp": "d1fa0d93dea7e2224cd95db4fecb2f196266a3f616897bce5957e4c8aa72d35a",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "a7f3718fa0499389549bd70c065ebb9b722e9fb488a98b7717eb6e0fc53cce98",
+    "tests/src/storage/relocatable/schema/test_SystemCatalogPropertyNameBatch.cpp": "4c1ae67d7706054d5f9576d8190840de3d632181e028c5f3ff403dcb5cf7a99c",
+    "tests/src/storage/relocatable/entity/test_PropertyNameBatchMaterialization.cpp": "95c45455ce7a634bc62781e3b6c9fa7f91973e27553d7353abeaea3b4610b045"
+  },
+  "all_raw_decompressed_hashes_verified": true,
+  "format_change": false,
+  "driver_abi_change": false,
+  "cache_limits_increased": false,
+  "persistent_cache_added": false,
+  "implementation": "Resolve consecutive property-token runs through one bounded cursor, verify bootstrap and every forward/reverse mapping; populate only existing snapshot-local cache in chunks<=16. Missing cache names only; sparse gaps reopen, never scan unrelated ranges. Both native resource admission and materialized-budget limits fall back to individual lookup; corruption/cancellation remain failures.",
+  "earlier_failures": "Preserved compile/selected-link failures and initial279/280result. Initialquota test assumed coordinated denial, while directbudget uses MaterializedByteLimitExceeded; productionfallback now catches both exact typedquota errors and12newcases coverboth.",
+  "kuzu_goal_achieved": false
+}

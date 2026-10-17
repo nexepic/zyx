@@ -15,6 +15,7 @@
 #include <type_traits>
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 #include "graph/utils/OwnedStdVector.hpp"
+#include "graph/utils/OwnedVector.hpp"
 #include "graph/core/OwnedPropertyValue.hpp"
 #include <optional>
 #include <span>
@@ -249,6 +250,10 @@ namespace graph::storage {
 																std::string_view name) const;
 		[[nodiscard]] std::optional<std::string> findPropertyName(const MetadataSnapshotPin &snapshot,
 																  uint32_t token, const std::function<void(size_t)> &nameAdmission = {}) const;
+		// Strictly increasing tokens. Only consecutive token runs share a cursor;
+		// sparse gaps are never scanned. Every reverse and forward mapping is checked.
+		[[nodiscard]] utils::OwnedVector<std::optional<utils::OwnedStdString>> findPropertyNamesSorted(
+			const MetadataSnapshotPin &snapshot, std::span<const uint32_t> tokens) const;
 		[[nodiscard]] std::optional<uint64_t> findSchemaToken(const MetadataSnapshotPin &snapshot,
 															  SystemCatalogSchemaTokenKind kind,
 															  std::string_view name) const;

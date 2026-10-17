@@ -8314,6 +8314,18 @@ namespace graph::storage {
 		return std::move(*resolved);
 	}
 
+	void RelocatableStorageBackend::prefetchPropertyKeyNames(const MetadataSnapshotPin &snapshot,
+		std::span<const uint32_t> tokens, const std::function<void(uint32_t, std::string_view)> &consume) const {
+		const auto names = system_catalog_->findPropertyNamesSorted(snapshot, tokens);
+		// Validate the complete batch before publishing any optional cache entry.
+		for (size_t i = 0U; i < names.size(); ++i)
+			if (!names[i] || names[i]->empty())
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+					"relocatable native logical reader found an unknown Property-key Token: " + std::to_string(tokens[i]));
+		for (size_t i = 0U; i < names.size(); ++i)
+			consume(tokens[i], std::string_view(names[i]->data(), names[i]->size()));
+	}
+
 	std::string RelocatableStorageBackend::resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
 															  uint32_t tokenId, const std::function<void(size_t)> &admission) const {
 		if (tokenId == 0U) {

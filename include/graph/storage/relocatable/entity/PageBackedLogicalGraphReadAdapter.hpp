@@ -47,6 +47,10 @@ namespace graph::storage {
 		}
 		[[nodiscard]] virtual std::string resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 																		 uint32_t tokenId) const = 0;
+		// Optional bounded prefetch into the existing snapshot-local name cache.
+		// Compatibility resolvers retain their individual lookup behavior.
+		virtual void prefetchPropertyKeyNames(const MetadataSnapshotPin &, std::span<const uint32_t>,
+			const std::function<void(uint32_t, std::string_view)> &) const {}
 		[[nodiscard]] virtual std::string resolvePropertyKeyWithNameAdmission(const MetadataSnapshotPin &snapshot,
 			uint32_t tokenId, const std::function<void(size_t)> &admission) const {
 			auto name = resolvePropertyKey(snapshot, tokenId);
@@ -243,6 +247,8 @@ namespace graph::storage {
 				const std::function<void(size_t)> &copyAdmission = {}) const;
 		[[nodiscard]] std::string resolvePropertyKeyName(const MetadataSnapshotPin &snapshot, uint32_t tokenId,
 														 NativeReadSession &session, const std::function<void(size_t)> &copyAdmission = {}) const;
+		void prefetchPropertyKeyNames(const MetadataSnapshotPin &snapshot,
+			std::span<const PropertyCollectionRootEntry> properties, NativeReadSession &session) const;
 		[[nodiscard]] std::optional<std::vector<uint64_t>> resolveNodeLabelTokens(
 				const MetadataSnapshotPin &snapshot, std::span<const std::string> labels, NativeReadSession &session) const;
 

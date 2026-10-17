@@ -172,18 +172,18 @@
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
     "working_source_commit": "5fc768cb",
-    "final_window_status": "stopped_after_candidate_dynamic_timeout_for_focused_repair",
-    "latest_checkpoint": "20261017-dynamic-timeout-repair-checkpoint/proof.json",
+    "final_window_status": "bounded_property_name_repair_281selected_tests_pass_ready_for_clean_freeze",
+    "latest_checkpoint": "20261017-bounded-property-name-batches/proof.json",
     "latest_targeted_tests": {
-      "modules": 42,
-      "tests": 1019,
-      "passed": 1019,
-      "additional_reclaim_tests": 4,
-      "distinct_passed": 1021,
-      "full_suite": false
+      "modules": 15,
+      "tests": 281,
+      "passed": 281,
+      "new_tests": 12,
+      "full_suite": false,
+      "scope": "Boundedpropertynamebatch repair only; earlier1021cases belongto5fcsource, not claimedrerun."
     },
     "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
-    "pending_repair": "Dynamic10000entity actual1800s timeout; diagnose full-property decoding/allocation. Two writeP95uncertainties remain. No same-source performance repeats.",
+    "pending_repair": "No pending code change; finaldynamic/workload and two writeP95gates require a newly frozen candidate, not repeats of5fc. PrioracceptedO6/graph evidence remains source-versioned.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,

@@ -1,0 +1,110 @@
+[
+  {
+    "source": "/tmp/zyx-property-name-batch-tests.xml",
+    "archive": "raw/00-zyx-property-name-batch-tests.xml.gz",
+    "bytes": 88583,
+    "sha256": "6d8aebb84073ba918491a9c2280d9e53877f605278201a49a411bbed2611df09"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression-provenance.json",
+    "archive": "raw/01-zyx-property-name-batch-regression-provenance.json.gz",
+    "bytes": 4459,
+    "sha256": "031c2e124f9d6a95c636870157b95d2fd932601cd57a00f5f2b51a7eb7ee75ab"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression-typed-quota.log",
+    "archive": "raw/02-zyx-property-name-batch-regression-typed-quota.log.gz",
+    "bytes": 66663,
+    "sha256": "cceeac28cb126a4c39595c75dddd1596a85c176aab965a79d8c0555e8666a292"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression-selected.log",
+    "archive": "raw/03-zyx-property-name-batch-regression-selected.log.gz",
+    "bytes": 61905,
+    "sha256": "8eef61a3d3e9a9a75aac2e80a7feacc2b4d28c075328406b4037529733367656"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression.log",
+    "archive": "raw/04-zyx-property-name-batch-regression.log.gz",
+    "bytes": 27971,
+    "sha256": "8ee4f7046152df3c6f362a73387168739012ddc911311deecedb3f403a439b3d"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression-pmr.log",
+    "archive": "raw/05-zyx-property-name-batch-regression-pmr.log.gz",
+    "bytes": 62096,
+    "sha256": "bfb1e5daaa329ab4d876026dac89ae8aeee35acb7f858aa63c2855c1674a1d51"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression-include.log",
+    "archive": "raw/06-zyx-property-name-batch-regression-include.log.gz",
+    "bytes": 113057,
+    "sha256": "2ddec7db97e0ed7957cb0aa218dcbb5b23c4814bf63f303a296716dfb435a296"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-regression.py",
+    "archive": "raw/07-zyx-property-name-batch-regression.py.gz",
+    "bytes": 2323,
+    "sha256": "15788e78e53395c37fe11bba0616f42dca446f5a44af961a439000ab4a387daf"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-release-build.log",
+    "archive": "raw/08-zyx-property-name-batch-release-build.log.gz",
+    "bytes": 61691,
+    "sha256": "8ea7c373caeff8234252fedb9b49822259a0ba9dd91078baaf64de8004d2c355"
+  },
+  {
+    "source": "/tmp/zyx-dynamic-read-diagnostic-before-batch-provenance.json",
+    "archive": "raw/09-zyx-dynamic-read-diagnostic-before-batch-provenance.json.gz",
+    "bytes": 2301,
+    "sha256": "99fda7f33a7bb44bcf3c556d5c4ee62d1f314697f5e944c71c0360e58a46caf3"
+  },
+  {
+    "source": "/tmp/zyx-dynamic-read-diagnostic-provenance.json",
+    "archive": "raw/10-zyx-dynamic-read-diagnostic-provenance.json.gz",
+    "bytes": 2239,
+    "sha256": "290c99508f08f914307df587d3ebbd25092476ebf6baf2095535076f1b726433"
+  },
+  {
+    "source": "/tmp/zyx-dynamic-read-diagnostic-before-batch.cpp",
+    "archive": "raw/11-zyx-dynamic-read-diagnostic-before-batch.cpp.gz",
+    "bytes": 13251,
+    "sha256": "82ca8bce822524dc07014fe7f58406ce878c3a86f1fbcfd39403f1a1c4e88099"
+  },
+  {
+    "source": "/tmp/zyx-dynamic-read-diagnostic.cpp",
+    "archive": "raw/12-zyx-dynamic-read-diagnostic.cpp.gz",
+    "bytes": 13251,
+    "sha256": "82ca8bce822524dc07014fe7f58406ce878c3a86f1fbcfd39403f1a1c4e88099"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-mechanism-20261017/proof.json",
+    "archive": "raw/13-proof.json.gz",
+    "bytes": 1607,
+    "sha256": "12baf0aeddbf6f50bcae44e727be17e4cf0cbb139e901765a01e2ed065b2e06f"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-mechanism-20261017/width-1-stderr.log",
+    "archive": "raw/14-width-1-stderr.log.gz",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-mechanism-20261017/width-1-stdout.jsonl",
+    "archive": "raw/15-width-1-stdout.jsonl.gz",
+    "bytes": 20027,
+    "sha256": "a2c6d4cd8f80b4fd02ae4dd74abfa57be50b28d0e0606a095bab4c8f6e3955c0"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-mechanism-20261017/width-64-stderr.log",
+    "archive": "raw/16-width-64-stderr.log.gz",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "/tmp/zyx-property-name-batch-mechanism-20261017/width-64-stdout.jsonl",
+    "archive": "raw/17-width-64-stdout.jsonl.gz",
+    "bytes": 23495,
+    "sha256": "7441771d9c734e0c06551d25d33aa951ff2ca87f238e56a49b2077b6f860ff8d"
+  }
+]
