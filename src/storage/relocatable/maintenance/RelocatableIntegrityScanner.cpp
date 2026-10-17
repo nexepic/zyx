@@ -153,6 +153,17 @@ namespace graph::storage {
 			return kind == VectorStorageKind::VSK_RAW ? PageOwnerKind::POK_VECTOR_RAW : PageOwnerKind::POK_VECTOR_PQ;
 		}
 
+        // Data bytes are authenticated during the page visit. Later manifest
+        // cross-checks use only these fixed-size identity/range fields.
+        struct ScannedLargeValueDataPage {
+            LargeValueId value_id;
+            Generation generation;
+            uint32_t chunk_ordinal;
+            uint16_t page_ordinal;
+            uint16_t page_count;
+            uint32_t stored_chunk_bytes;
+        };
+
 		struct ScannedPage {
 			PageLocation location;
 			CatalogEntry pool;
@@ -391,7 +402,7 @@ namespace graph::storage {
 		ScanMap<uint64_t, VectorCodebookHeader> scannedCodebooks;
 		ScanMap<uint64_t, VectorCodebookExtentHeader> scannedCodebookExtents;
 		ScanMap<uint64_t, LargeValueManifest> scannedLargeValueManifests;
-		ScanMap<uint64_t, LargeValueDataPage> scannedLargeValueDataPages;
+		ScanMap<uint64_t, ScannedLargeValueDataPage> scannedLargeValueDataPages;
 		ScanMap<uint64_t, StateLocation> scannedStates;
 		ScanMap<uint64_t, VectorPageHeader> vectorPages;
 		ScanMap<uint64_t, ScanSet<uint64_t>> rawVectorIdsByIndex;
@@ -422,8 +433,15 @@ namespace graph::storage {
 			}
 			// LocationDirectory route validation gives every logical PageId exactly one
 			// leaf position, so a second insertion cannot be produced by a decoded tree.
-			static_cast<void>(scannedPages.emplace(
-					location.page_id.value(), ScannedPage{location, contents.pool, contents.owner, contents.payload}));
+            // LargeValue codecs below authenticate their full bytes immediately.
+            // Their decoded headers/manifests retain every field needed later;
+            // keeping an extra raw image for every data page exhausted the
+            // protected workspace as a function of the live payload byte count.
+            const bool retainImage = contents.owner.kind != PageOwnerKind::POK_LARGE_VALUE_DATA &&
+                contents.owner.kind != PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
+            static_cast<void>(scannedPages.emplace(location.page_id.value(),
+                ScannedPage{location, contents.pool, contents.owner,
+                    retainImage ? contents.payload : utils::OwnedVector<std::byte>{}}));
 			++report.page_locations;
 			switch (contents.owner.kind) {
 				case PageOwnerKind::POK_ENTITY: {
@@ -613,8 +631,10 @@ namespace graph::storage {
 						throwIntegrityError(
 								"relocatable integrity scan found stale LargeValue data page free-space metadata");
 					}
-					const LargeValueDataPage data = LargeValueDataFrame::open(contents.owner, contents.payload).page();
-					static_cast<void>(scannedLargeValueDataPages.emplace(data.page_id.value(), data));
+                    const LargeValueDataPage data = LargeValueDataFrame::decodePage(contents.owner, contents.payload);
+                    static_cast<void>(scannedLargeValueDataPages.emplace(data.page_id.value(),
+                        ScannedLargeValueDataPage{data.value_id, data.generation, data.chunk_ordinal,
+                            data.page_ordinal, data.page_count, data.stored_chunk_bytes}));
 					break;
 				}
 				default: // ZYX_COV_EXCL_LINE: invalidFrame proves the typed owner matches its validated pool kind.

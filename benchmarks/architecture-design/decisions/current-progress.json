@@ -155,7 +155,7 @@
     "pending_revalidation_ids": [
       "S6.1"
     ],
-    "implementation": "Catalog selected point routes implemented; 15 modules/453 tests passed. Existing budget-family integrity admission failure reproduced and requires diagnosis; accepted delivery count unchanged.",
+    "implementation": "Catalog selected point routing and integrity LargeValue evidence lifetimes implemented.17modules/522tests and120untimed full budget-family checks passed; default budgets unchanged; final performance acceptance pending.",
     "final_window": "/tmp/zyx-final-five-window-20261017",
     "source_commit": "033e8e79c3ed6689fe4bdcbd6a315fd534b4e91d",
     "source_revalidation": {
