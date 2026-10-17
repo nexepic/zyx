@@ -1,0 +1,15 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | aggregation_count_by_group | holdout | 10 | 377.742 | 367.211 | 384.26599999999996 | 380.535 | 403.999 | 403.999 | 403.999 | 2.6023639874461963 | ok | api |
+| zyx | label_scan_filter | holdout | 10 | 361.507 | 296.985 | 315.236 | 302.639 | 361.507 | 361.507 | 361.507 | 3.172226522351508 | ok | api |
+| zyx | topk_property_sort | holdout | 10 | 412.779 | 377.318 | 384.77599999999995 | 382.071 | 412.779 | 412.779 | 412.779 | 2.59891469322411 | ok | api |
+| zyx | two_hop_expand | holdout | 10 | 3.29332 | 3.08427 | 3.5007010000000003 | 3.24737 | 4.27421 | 4.27421 | 4.27421 | 285.65707268344255 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

@@ -1,0 +1,16 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| kuzu | batch_node_fetch_100 | medium | 10 | 0.5220679740887135 | 0.45609098742716014 | 0.5127640935825184 | 0.4787340003531426 | 0.6218549970071763 | 0.6218549970071763 | 0.6218549970071763 | 1950.214557757585 | ok | cypher |
+| kuzu | one_hop_fetch_neighbor_ids | medium | 10 | 0.5289479740895331 | 0.5175209953449667 | 0.5480437976075336 | 0.5289479740895331 | 0.6088550144340843 | 0.6088550144340843 | 0.6088550144340843 | 1824.6716856672142 | ok | cypher |
+| kuzu | one_hop_fetch_neighbor_records | medium | 10 | 0.6366360175888985 | 0.6176279857754707 | 0.6539816997246817 | 0.6568160024471581 | 0.7052569999359548 | 0.7052569999359548 | 0.7052569999359548 | 1529.0947750082116 | ok | cypher |
+| kuzu | point_edge_fetch_by_endpoints | medium | 10 | 0.5739840271417052 | 0.39597300929017365 | 0.4652772011468187 | 0.4295109829399735 | 0.6576369924005121 | 0.6576369924005121 | 0.6576369924005121 | 2149.256394973131 | ok | cypher |
+| kuzu | point_node_fetch_by_id | medium | 10 | 0.22811500821262598 | 0.2162180026061833 | 0.23813099542167038 | 0.22499999613501132 | 0.3196499892510474 | 0.3196499892510474 | 0.3196499892510474 | 4199.369335475419 | ok | cypher |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

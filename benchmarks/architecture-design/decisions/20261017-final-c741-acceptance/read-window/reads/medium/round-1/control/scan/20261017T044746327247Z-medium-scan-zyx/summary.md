@@ -1,0 +1,21 @@
+# 图数据库性能对比报告
+
+## Summary
+
+| database | workload | scale | samples | first_ms | min_ms | avg_ms | p50_ms | p95_ms | p99_ms | max_ms | ops_per_sec | status | equivalent_mode |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| zyx | aggregation_count_by_group | medium | 10 | 2867.62 | 2791.14 | 2931.927 | 2910.79 | 3095.01 | 3095.01 | 3095.01 | 0.34107261197158045 | ok | api |
+| zyx | aggregation_group_by | medium | 10 | 2992.49 | 2787.89 | 2892.757 | 2878.46 | 3039.0 | 3039.0 | 3039.0 | 0.34569097922846614 | ok | api |
+| zyx | all_nodes_property_filter | medium | 10 | 5783.86 | 5348.57 | 5511.213 | 5490.81 | 5783.86 | 5783.86 | 5783.86 | 0.18144825830538577 | ok | api |
+| zyx | label_multi_property_filter | medium | 10 | 2954.92 | 2771.19 | 2860.716 | 2815.06 | 3005.1 | 3005.1 | 3005.1 | 0.3495628367164025 | ok | api |
+| zyx | label_scan_filter | medium | 10 | 2714.24 | 2647.33 | 2789.2 | 2789.81 | 2918.14 | 2918.14 | 2918.14 | 0.35852574214828625 | ok | api |
+| zyx | one_hop_expand | medium | 10 | 16.0083 | 15.644 | 16.38417 | 16.0083 | 17.0726 | 17.0726 | 17.0726 | 61.03452295722029 | ok | api |
+| zyx | relationship_property_filter | medium | 10 | 6761.79 | 6151.68 | 6471.702 | 6425.36 | 6898.05 | 6898.05 | 6898.05 | 0.15451885763590473 | ok | api |
+| zyx | relationship_type_scan | medium | 10 | 613.295 | 564.781 | 596.5863 | 594.774 | 639.29 | 639.29 | 639.29 | 1.6762034260592307 | ok | api |
+| zyx | topk_property_sort | medium | 10 | 3449.06 | 3449.06 | 3589.193 | 3579.33 | 3701.14 | 3701.14 | 3701.14 | 0.27861416201357797 | ok | api |
+| zyx | two_hop_expand | medium | 10 | 20.8966 | 20.8966 | 25.30321 | 22.6093 | 35.2221 | 35.2221 | 35.2221 | 39.52067741602745 | ok | api |
+
+## Limitations
+
+- Benchmarks run through adapter-defined equivalent Cypher workloads and may not cover every engine-specific optimization.
+- Results depend on local hardware, dataset scale, cache state, and runtime configuration captured in environment.json.

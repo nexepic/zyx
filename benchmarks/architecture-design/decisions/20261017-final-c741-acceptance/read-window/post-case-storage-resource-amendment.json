@@ -1,0 +1,7 @@
+{
+  "scope": "Only post-query/end-of-case storage observation; do not change queries, expected results, resource caps, timers or sample counts. No contract process has started. NativeIO counters include setup; KuzuDB/deviceIO bytes remain unavailable.",
+  "before_sha256": "29a0aa08d74831becd08c6edfa1164789d75aaab00cbdb3478b541819caabae0",
+  "after_sha256": "22c5f4f5b1613dd2aec81273c47134a69ee5d4c6e3451070e9351c0ee0ed476b",
+  "effective": "all future contract processes before their first execution",
+  "no_added_benchmark_or_sampling": true
+}

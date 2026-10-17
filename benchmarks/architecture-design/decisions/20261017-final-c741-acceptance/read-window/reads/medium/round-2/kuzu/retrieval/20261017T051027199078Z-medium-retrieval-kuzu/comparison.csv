@@ -1,0 +1,6 @@
+workload,scale,best_database,best_p50_ms,zyx_p50_ms,zyx_first_ms,zyx_rank_by_p50,zyx_vs_best_p50,zyx_p95_ms,zyx_p95_to_p50,zyx_first_to_p50,fastest_non_zyx_database,fastest_non_zyx_p50_ms,zyx_vs_fastest_non_zyx_p50
+batch_node_fetch_100,medium,kuzu,0.47115300549194217,,,,,,,,kuzu,0.47115300549194217,
+one_hop_fetch_neighbor_ids,medium,kuzu,0.5477750091813505,,,,,,,,kuzu,0.5477750091813505,
+one_hop_fetch_neighbor_records,medium,kuzu,0.6747520237695426,,,,,,,,kuzu,0.6747520237695426,
+point_edge_fetch_by_endpoints,medium,kuzu,0.40421501034870744,,,,,,,,kuzu,0.40421501034870744,
+point_node_fetch_by_id,medium,kuzu,0.2203339827246964,,,,,,,,kuzu,0.2203339827246964,

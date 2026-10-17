@@ -1,0 +1,17 @@
+{
+  "engine": "current",
+  "round": 1,
+  "scale": "medium",
+  "profile": "retrieval",
+  "maxrss_kib": 375988,
+  "rss_scope": "all child processes of the read driver, including Git/provenance helpers and the native benchmark; not an isolated engine peak",
+  "driver_maxrss_kib": 375988,
+  "maxrss_addition": "Do not sum noncoincident peaks",
+  "block_input_operations": 0,
+  "block_output_operations": 0,
+  "block_io_scope": "whole case including cloning/preparation, not database-only or physical-device totals",
+  "case_wall_seconds": 9.661683982994873,
+  "capture": "post-query OS getrusage, outside every measured query timer",
+  "previous_scope_label": "single native benchmark child process including private cloning/startup/query/close; not query-only",
+  "scope_correction": "Numeric observation unchanged. RUSAGE_CHILDREN covers every completed child, not just the benchmark."
+}

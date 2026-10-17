@@ -1,0 +1,34 @@
+{
+  "rule": "At most two independent 100-sample processes per affected engine/workload after protection P50/P95 uncertainty or >5% observation; all outcomes retained, no repeat-to-pass.",
+  "affected": [
+    {
+      "scale": "medium",
+      "workload": "point_lookup_indexed",
+      "p50_change_percent": 9.4,
+      "p95_change_percent": 11.2
+    },
+    {
+      "scale": "holdout",
+      "workload": "point_node_fetch_by_id",
+      "p50_change_percent": 13.1,
+      "p95_change_percent": 24.9
+    }
+  ],
+  "engines": [
+    "control",
+    "current"
+  ],
+  "rounds": [
+    4,
+    5
+  ],
+  "warmups": 3,
+  "measured_per_process": 100,
+  "kuzu": "Original three independent processes retained; supplementary purpose is frozen-control regression determination.",
+  "source": "c741b5b2",
+  "scripts": {
+    "/tmp/zyx-c741-extended-read.py": "c4bccc3309c3bc676dcf987f4d3e40dfd5f58f6a23fc62eafe7f88e1aae15558",
+    "/tmp/zyx-c741-followup.py": "49eb9481ee51054520fd2acb7158b0c05591742759eaca65f4f08ce8d321f985"
+  },
+  "scheduling": "Serial after active integrated campaign exits; no simultaneous benchmark processes."
+}

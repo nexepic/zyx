@@ -1,0 +1,4 @@
+operation_type,database,scale,workload_count,workloads,ok_workloads,unsupported_workloads,failed_workloads,samples,geomean_p50_ms,avg_p50_ms,min_p50_ms,max_p50_ms
+adjacency expand,kuzu,holdout,1,two_hop_expand,1,0,0,10,0.8528130128979683,0.8528130128979683,0.8528130128979683,0.8528130128979683
+property filter,kuzu,holdout,1,label_scan_filter,1,0,0,10,1.6546620172448456,1.6546620172448456,1.6546620172448456,1.6546620172448456
+topk/group,kuzu,holdout,2,aggregation_count_by_group;topk_property_sort,2,0,0,20,2.8265732787919067,2.842312489519827,2.543608978157863,3.141016000881791

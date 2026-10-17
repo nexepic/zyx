@@ -1,0 +1,15 @@
+{
+  "scalar": {
+    "expected": {
+      "point_lookup_indexed": 1,
+      "property_equality_indexed": 12500,
+      "property_range_indexed": 18870
+    },
+    "failures": [],
+    "scope": "scalar values and projected row counts; projected values, types, ordering and duplicates need separate semantic tests"
+  },
+  "full_results": {
+    "failures": [],
+    "scope": "complete country/count groups and ordered Top-K IDs; finite unique-ID input dataset"
+  }
+}

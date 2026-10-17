@@ -1,0 +1,16 @@
+{
+  "reason": "Read runner also spawns Git/provenance subprocesses. Aggregate RUSAGE_CHILDREN must not be labeled a single native-engine peak. It may include inherited pre-exec RSS. Numeric values unchanged; no query rerun.",
+  "engine_only_peak": "unavailable from this aggregate",
+  "correction_files": [
+    "read-process-resources/medium/retrieval/round-2/current.json",
+    "read-process-resources/medium/retrieval/round-1/current.json",
+    "read-process-resources/medium/retrieval/round-1/control.json",
+    "read-process-resources/medium/scan/round-3/current.json",
+    "read-process-resources/medium/scan/round-3/control.json",
+    "read-process-resources/medium/scan/round-2/control.json",
+    "read-process-resources/medium/scan/round-2/current.json"
+  ],
+  "current_script_sha256": "e8fbc6a84b587bd82bb52f72a916f82796479f8ff4194b6ed64a1579bb1366c9",
+  "first_medium_scan_control_current": "terminal getrusage unavailable, not fabricated",
+  "contract_scope": "Native contract cases launch one worker and no Git helper; their separately recorded child scope remains distinct."
+}

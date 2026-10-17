@@ -1,0 +1,4 @@
+workload,scale,best_database,best_p50_ms,zyx_p50_ms,zyx_first_ms,zyx_rank_by_p50,zyx_vs_best_p50,zyx_p95_ms,zyx_p95_to_p50,zyx_first_to_p50,fastest_non_zyx_database,fastest_non_zyx_p50_ms,zyx_vs_fastest_non_zyx_p50
+point_lookup_indexed,medium,zyx,10.0308,10.0308,10.2759,1,1.0,10.2759,1.024434740997727,1.024434740997727,,,
+property_equality_indexed,medium,zyx,3129.23,3129.23,3186.1,1,1.0,3402.78,1.087417671439939,1.0181737999443952,,,
+property_range_indexed,medium,zyx,20770.0,20770.0,20541.3,1,1.0,21636.2,1.0417043813192104,0.9889889263360616,,,

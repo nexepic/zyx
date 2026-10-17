@@ -1,0 +1,8 @@
+{
+  "scope": "Add post-query OS resource capture only; no query, input, binary, timing boundaries, quotas, warmup or sampling changes. Already imported processes retain their old script and have unavailable terminal RSS; do not fabricate their peaks. Later processes record exact child/driver RSS and coarse whole-case block counters.",
+  "before_sha256": "2209c741afb474cbe1f374a96225b2d34e6edc2d2eb02959c011abd6cfdda764",
+  "after_sha256": "0b984ed8bef8544735cd36e8636740ea106e8a27b0924dccf3d28b7cc58c5bb0",
+  "effective": "subsequent independent read process imports; medium scan round1 control and current were already launched",
+  "source_core": "c741b5b2",
+  "no_rerun_or_extra_measurements": true
+}

@@ -1,0 +1,5 @@
+workload,scale,best_database,best_p50_ms,zyx_p50_ms,zyx_first_ms,zyx_rank_by_p50,zyx_vs_best_p50,zyx_p95_ms,zyx_p95_to_p50,zyx_first_to_p50,fastest_non_zyx_database,fastest_non_zyx_p50_ms,zyx_vs_fastest_non_zyx_p50
+aggregation_count_by_group,holdout,zyx,2087.15,2087.15,1975.11,1,1.0,2216.81,1.0621229906810723,0.9463191433294205,,,
+label_scan_filter,holdout,zyx,1922.82,1922.82,1982.88,1,1.0,2031.78,1.056666770680563,1.031235373045839,,,
+topk_property_sort,holdout,zyx,2626.05,2626.05,2629.79,1,1.0,2924.22,1.1135431541669045,1.0014241922278706,,,
+two_hop_expand,holdout,zyx,19.0057,19.0057,18.885,1,1.0,19.0822,1.0040251082569966,0.9936492736389609,,,

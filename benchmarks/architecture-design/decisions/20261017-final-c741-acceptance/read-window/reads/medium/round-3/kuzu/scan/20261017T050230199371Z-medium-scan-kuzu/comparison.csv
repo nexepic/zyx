@@ -1,0 +1,11 @@
+workload,scale,best_database,best_p50_ms,zyx_p50_ms,zyx_first_ms,zyx_rank_by_p50,zyx_vs_best_p50,zyx_p95_ms,zyx_p95_to_p50,zyx_first_to_p50,fastest_non_zyx_database,fastest_non_zyx_p50_ms,zyx_vs_fastest_non_zyx_p50
+aggregation_count_by_group,medium,kuzu,3.411615005461499,,,,,,,,kuzu,3.411615005461499,
+aggregation_group_by,medium,kuzu,3.327010024804622,,,,,,,,kuzu,3.327010024804622,
+all_nodes_property_filter,medium,kuzu,0.7957099878694862,,,,,,,,kuzu,0.7957099878694862,
+label_multi_property_filter,medium,kuzu,2.167666010791436,,,,,,,,kuzu,2.167666010791436,
+label_scan_filter,medium,kuzu,2.0949500030837953,,,,,,,,kuzu,2.0949500030837953,
+one_hop_expand,medium,kuzu,0.35574298817664385,,,,,,,,kuzu,0.35574298817664385,
+relationship_property_filter,medium,kuzu,10.524791985517368,,,,,,,,kuzu,10.524791985517368,
+relationship_type_scan,medium,kuzu,6.047339993529022,,,,,,,,kuzu,6.047339993529022,
+topk_property_sort,medium,kuzu,3.750893025426194,,,,,,,,kuzu,3.750893025426194,
+two_hop_expand,medium,kuzu,0.8111729985103011,,,,,,,,kuzu,0.8111729985103011,

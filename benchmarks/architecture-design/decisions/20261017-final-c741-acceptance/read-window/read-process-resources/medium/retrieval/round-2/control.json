@@ -1,0 +1,15 @@
+{
+  "engine": "control",
+  "round": 2,
+  "scale": "medium",
+  "profile": "retrieval",
+  "maxrss_kib": 375984,
+  "rss_scope": "single native benchmark child process including private cloning/startup/query/close; not query-only",
+  "driver_maxrss_kib": 375984,
+  "maxrss_addition": "Do not sum noncoincident peaks",
+  "block_input_operations": 0,
+  "block_output_operations": 0,
+  "block_io_scope": "whole case including cloning/preparation, not database-only or physical-device totals",
+  "case_wall_seconds": 15.981791201018495,
+  "capture": "post-query OS getrusage, outside every measured query timer"
+}

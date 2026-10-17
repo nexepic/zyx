@@ -1,0 +1,6 @@
+workload,scale,best_database,best_p50_ms,zyx_p50_ms,zyx_first_ms,zyx_rank_by_p50,zyx_vs_best_p50,zyx_p95_ms,zyx_p95_to_p50,zyx_first_to_p50,fastest_non_zyx_database,fastest_non_zyx_p50_ms,zyx_vs_fastest_non_zyx_p50
+batch_node_fetch_100,medium,zyx,23.3605,23.3605,23.0618,1,1.0,24.8547,1.0639626720318487,0.98721345861604,,,
+one_hop_fetch_neighbor_ids,medium,zyx,21.2402,21.2402,21.0793,1,1.0,22.3549,1.0524806734399863,0.9924247417632601,,,
+one_hop_fetch_neighbor_records,medium,zyx,34.085,34.085,33.9491,1,1.0,34.574,1.0143464867243654,0.9960129089042101,,,
+point_edge_fetch_by_endpoints,medium,zyx,22.0144,22.0144,22.636,1,1.0,22.9965,1.0446117086997604,1.0282360636674177,,,
+point_node_fetch_by_id,medium,zyx,25.645,25.645,25.8287,1,1.0,26.3236,1.0264612984987327,1.0071631897055957,,,

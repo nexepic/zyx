@@ -1,0 +1,32 @@
+{
+  "status": "registered_before_any_write_profile_measurement",
+  "scope": "Fill the documented immutable-restored-write latency/protection requirement; existing full-family one-pass timings remain descriptive, never relabeled3warm+10. No source, core binary, quota or primary metric change.",
+  "source_core": "c741b5b2",
+  "case_processes": 9,
+  "samples_per_workload_process": 10,
+  "warmup_per_workload_process": 3,
+  "native_worker_processes_per_case": 1,
+  "cases": [
+    "set_score_large_body",
+    "unchanged_score_large_body",
+    "remove_age (Native only)",
+    "create_nodes_100",
+    "create_nodes_1000",
+    "create_edge",
+    "delete_edge",
+    "delete_node"
+  ],
+  "fixture": "10000 User numeric IDs and4fields, id index; User0 has1MiB unchanged body. Empty Written namespace/id index, oneFOLLOWS edge0->1(weight1). Native nonunique indexes vs Kuzu primary keys disclosed; REMOVE missing-key semantics are KuzuN/A.",
+  "baseline_rule": "After preparation close/reopen RO. Hash immutable database template. Before every warmup and measured sample restore that exact template and validate baseline. Native uses private-path inode swap only while physically readonly, then REOPEN; fixed Linux benchmark orchestration. No new public API/CLI/production code.",
+  "poststate_rule": "After every sampled acknowledgement close/reopen (Native physicallyRO), independently verify full affected values including the entire unchanged1MiB body, IDs/order, exact edge multiplicity or deleted-node/count state. Validation, cloning and opens excluded from the operation timer. Native samples also run the unchanged integrity checker outside their timer.",
+  "timer_scope": "Native existing IPC call including result consumption/check/bookkeeping, versus Kuzu Python execute/drain/check. Entry overhead and schema/durability implementation differences prohibit an unqualified engine-only win claim. Native before/after STATS IO includes the statement only; per-case RSS includes setup/validation and has exactly one native worker/no Git children.",
+  "limits": "unchanged1CPU,6GiBAS/process,2GiBfile,64MiBNativeQuery/Cache and64MiBKuzupool/2GiBmap; default durable synchronized Native publication, normal Kuzu autocommit acknowledgement; no added checkpoint inside query timer.",
+  "stop_rule": "30min/case including setup; after unchanged failure later rounds unmeasurable. Registered uncertainty limit remains at most2affected100sample processes, not rerun-to-pass.",
+  "scripts": {
+    "zyx-final-c741-write-case.py": "c372fc9dfac5d5f0ab9581a77fc798e552dcf3466da5e07177018f8a5be7863c",
+    "run-zyx-final-c741-write-campaign.py": "a632c4d2731eb8b0be14ec7e3d83e63e4a5c809347ed94225fad8354e29491b7",
+    "run-zyx-final-c741-contract-campaign.py": "0b25a0acb8ba5c6467146adb6f8abe416bcba7e55ad74ff4a9e940d9d8a76a0b",
+    "zyx-final-five-owned-case.py": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9"
+  },
+  "schema_difference": "Native User.id and Written.id property indexes are nonunique; Kuzu primary keys include uniqueness/non-null semantics. Report Kuzu numbers descriptively, not as a strict equivalent-schema win. Native control/current schemas and acknowledgement protocols are identical."
+}

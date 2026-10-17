@@ -1,0 +1,2 @@
+operation_type,database,scale,workload_count,workloads,ok_workloads,unsupported_workloads,failed_workloads,samples,geomean_p50_ms,avg_p50_ms,min_p50_ms,max_p50_ms
+property filter,zyx,medium,3,point_lookup_indexed;property_equality_indexed;property_range_indexed,3,0,0,30,136.77924659272134,463.27590000000004,11.0367,1182.76

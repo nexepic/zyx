@@ -1,0 +1,13 @@
+{
+  "accepted": 29,
+  "total": 34,
+  "percent": 85.3,
+  "current_request_completed": 0,
+  "source": "c741b5b2eb7b463d0096f06bee452be0114efe0f",
+  "read_processes": 45,
+  "valid_read_samples": 2010,
+  "all_read_oracles_passed": true,
+  "performance_admission": "pending; point protections observed above5percent require bounded registered followup; write and maintenance still pending",
+  "kuzu_goal_met": false,
+  "raw_scope": "Completed original45read processes and versioned harness amendments; not the still-running integrated contract campaign."
+}

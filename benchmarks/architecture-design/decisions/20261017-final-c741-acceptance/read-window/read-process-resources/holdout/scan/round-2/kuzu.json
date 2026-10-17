@@ -1,0 +1,15 @@
+{
+  "engine": "kuzu",
+  "round": 2,
+  "scale": "holdout",
+  "profile": "scan",
+  "maxrss_kib": 328368,
+  "rss_scope": "whole Kuzu Python driver+engine including setup and validation",
+  "driver_maxrss_kib": 328368,
+  "maxrss_addition": "Do not sum noncoincident peaks",
+  "block_input_operations": 0,
+  "block_output_operations": 0,
+  "block_io_scope": "whole case including cloning/preparation, not database-only or physical-device totals",
+  "case_wall_seconds": 3.91376984200906,
+  "capture": "post-query OS getrusage, outside every measured query timer"
+}

@@ -1,0 +1,18 @@
+{
+  "reason": "REOPEN preserves backend open_mode; physically readonly snapshot handle requires explicit existing READWRITE command after private inode replacement. Both original control/current failed before first timed sample.",
+  "production_source_unchanged": "c741b5b2",
+  "old_sha256": "c372fc9dfac5d5f0ab9581a77fc798e552dcf3466da5e07177018f8a5be7863c",
+  "new_sha256": "498f0f71de6440d4dedc5cd032522e59479e27549d90aab592401cfa9a9476fb",
+  "prior_failures_retained": true,
+  "new_native_rounds": [
+    4,
+    5,
+    6
+  ],
+  "kuzu_rounds_retained": [
+    1,
+    2,
+    3
+  ],
+  "all_other_queries_resources_oracles_unchanged": true
+}
