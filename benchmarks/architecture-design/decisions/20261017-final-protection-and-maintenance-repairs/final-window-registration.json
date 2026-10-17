@@ -59,8 +59,8 @@
     "zyx-final-repaired-write-case.py": "b42fa589a9f39ebefb079cfdea797ba021e71bf647f8770707a0608de7f306f1",
     "run-zyx-final-repaired-write-campaign.py": "985f33ede9abd040c1c87a1ee8e150ad099cacbb787a4131e2a9354acb5a134b",
     "run-zyx-final-repaired-acceptance.py": "e4f0592db92179ce44563de8f8fe4d130666ba265d1fec008c7b90d64a0bf3f3",
-    "run-zyx-final-repaired-contract-campaign.py": "94b39183adfab3ae18fe503ba163ae0595c720c76409c4a181d39e8be819c0c3",
-    "zyx-final-repaired-contract-case.py": "f5028fced6a42e77037488d4b462a0a441b10ecc31df7d3e1b8693e31774b7cf",
+    "run-zyx-final-repaired-contract-campaign.py": "cbf395afdc4e176bc119d2d2632b40b2477b87e201948674d9c2ed59f7be83d2",
+    "zyx-final-repaired-contract-case.py": "5b09ecc4620c9e3ead9f34bd7cf122bd2de5d5d6706f9385a085578d356a0462",
     "zyx-final-repaired-window.py": "086236a24be5d5c503fb89fa6490dac87255baf20c354f09bb987857238a75d2"
   },
   "isolated_family_policy": {
@@ -198,7 +198,7 @@
     "requested_wide_only_file_and_kuzu_mapping_bytes": 4294967296,
     "raw_body_bytes": 2162688000,
     "status": "awaiting_explicit_user_reply",
-    "rule": "Do not apply amendment without reply; all other registered work continues, wide cohort stays pending."
+    "rule": "No4GiB change without explicit reply. Entire unchanged wide cohort now executes under original2GiB; actual failures/timeouts retained."
   },
   "raw_git_metadata_note": "Git metadata labels harness checkout. Frozen original d09 and repaired source/binary hashes establish engine provenance.",
   "production_fix_commit": "f0e44b78",
@@ -1769,5 +1769,27 @@
     },
     "schema_difference": "Native User.id and Written.id property indexes are nonunique; Kuzu primary keys include uniqueness/non-null semantics. Report Kuzu numbers descriptively, not as a strict equivalent-schema win. Native control/current schemas and acknowledgement protocols are identical."
   },
-  "restored_write_readwrite_fix": "All new rounds use READWRITE after private inode replacement. REOPEN retains the current access mode; no old invalid attempt is mixed in."
+  "restored_write_readwrite_fix": "All new rounds use READWRITE after private inode replacement. REOPEN retains the current access mode; no old invalid attempt is mixed in.",
+  "wide_fixed_cap_correction": {
+    "date_utc": "2026-10-17T07:29:27.619210+00:00",
+    "status": "registered_before_any_wide_or_contract_case",
+    "reason": "Logical RAW bytes2162688000 are not a lower bound on physical bytes: duplicate LargeValue bodies can share storage. Earlier pending policy inferred an inevitable file-limit failure without measurement. Run the full unchanged workload under the original2GiB cap for every engine and retain actual outcomes.",
+    "new_workloads": false,
+    "workload_sizes_or_timers_changed": false,
+    "resources_raised": false,
+    "per_file_and_kuzu_mapping_bytes": 2147483648,
+    "four_gib_authorization": "Unanswered and unapplied; no affirmative or negative user reply inferred.",
+    "prior_c741_source": "Its unattempted wide cohort remains deferred, never retrospectively relabeled.",
+    "current_source_or_binary_changed": false,
+    "script_sha256": {
+      "workload_preflight.py": "33bbcd5117dbfb722f273de54cd71425540c6a2b305e40a36fa76b9d2a9a26a2",
+      "zyx-final-five-owned-case.py": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9",
+      "zyx-final-repaired-write-case.py": "b42fa589a9f39ebefb079cfdea797ba021e71bf647f8770707a0608de7f306f1",
+      "run-zyx-final-repaired-write-campaign.py": "985f33ede9abd040c1c87a1ee8e150ad099cacbb787a4131e2a9354acb5a134b",
+      "run-zyx-final-repaired-acceptance.py": "e4f0592db92179ce44563de8f8fe4d130666ba265d1fec008c7b90d64a0bf3f3",
+      "run-zyx-final-repaired-contract-campaign.py": "cbf395afdc4e176bc119d2d2632b40b2477b87e201948674d9c2ed59f7be83d2",
+      "zyx-final-repaired-contract-case.py": "5b09ecc4620c9e3ead9f34bd7cf122bd2de5d5d6706f9385a085578d356a0462",
+      "zyx-final-repaired-window.py": "086236a24be5d5c503fb89fa6490dac87255baf20c354f09bb987857238a75d2"
+    }
+  }
 }
