@@ -4,7 +4,7 @@
   "percent": 85.3,
   "this_request_completed": 0,
   "source": "5657e287",
-  "status": "two_actual_steady_growth_causes_fixed_full_preflight_running",
+  "status": "13window_correctness_passed_resource_plateau_failed_existing_metadata_gc_repair_in_progress",
   "performance_admission": false,
   "negative": "Four regressions fail against unchanged9dd Debug core for intended orphan-pool, history growth, pin and reference-validation causes.",
   "positive": {
@@ -41,5 +41,38 @@
       0,
       0
     ]
-  }
+  },
+  "full_maintenance_preflight": {
+    "completed_windows": 13,
+    "wall_seconds": 1405.8120272879896,
+    "correctness": "passed",
+    "formal_performance_samples": 0,
+    "resource_acceptance": false,
+    "measured_file_growth_fraction": 0.13731495661051563,
+    "endpoint_catalog_entries": 2276,
+    "obsolete_per_slot_max": 1,
+    "unmapped_entity_property_pools": [
+      0,
+      0
+    ],
+    "metadata_pools": 478
+  },
+  "actual_remaining_failure": "Existing direct metadata-pool reclaim on private clone of exact closed endpoint throws metadata frame reservation lacks existing free frames. The normal metadata publication path already handles route capacity; new source will reuse it and run cleanup under existing backend maintenance allocation scope. The direct diagnostic itself is not backend8MiBquota admission.",
+  "invalid_fixture_note": "Small routed fixture passed old source; retained64synthetic snapshots generated excessive unrelated work and was stopped incomplete. Neither is claimed as a negative counterexample. The actual stopped endpoint is the counterexample.",
+  "metadata_cleanup_source": "e4c12fde",
+  "metadata_cleanup_tests": {
+    "first_selected_modules": 42,
+    "first_distinct_tests": 1018,
+    "first_passed": 1017,
+    "first_failed": 1,
+    "actual_first_failure": "Idle maintenance reconciled metadata headers despite no retired values/pools, violating zero-write contract.",
+    "fix": "Only run metadata-pool cleanup after this maintenance pass actually retires values/pools; keep report published_generation current.",
+    "followup_modules": 3,
+    "followup_tests": 93,
+    "followup_passed": 93,
+    "distinct_tests_passing_after_targeted_followup": 1018,
+    "all42_modules_rerun_after_followup": false,
+    "full_suite": false
+  },
+  "metadata_cleanup_limits": "Owned candidates/IDs and owning returned slot backing use the existing maintenance scope. Reuse the ordinary metadata publication route-capacity checks, same snapshot proof and failure fence. Skip optional extra publication at exhausted checkpointLSN. No format or publicDriverABI changes, larger resource caps or new background tasks."
 }

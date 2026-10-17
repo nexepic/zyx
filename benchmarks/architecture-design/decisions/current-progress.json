@@ -165,7 +165,7 @@
       "scope": "Historical f0 clean freeze with40modules/1011distinct tests remains versioned. New9dd O6 patch has6modules/94tests; full maintenance correctness and new clean freeze pending."
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
-    "working_source_commit": "5657e287",
+    "working_source_commit": "e4c12fde",
     "final_window_status": "f0 stopped at engine-free boundary after actual maintenance failure; deferred contracts never passes or failures",
     "latest_checkpoint": "20261017-steady-slot-history/proof.json",
     "latest_targeted_tests": {
@@ -174,7 +174,18 @@
       "passed": 150,
       "full_suite": false
     },
-    "full_maintenance_preflight": "running_after_9dd_timeout_11_of_13_windows"
+    "full_maintenance_preflight": "13_of_13_correctness_passed_resource_plateau_failed_13.7_percent_growth",
+    "pending_repair": "Metadata cleanup selected regression passes after idle zero-write fix; Release retained-file and full resource revalidation pending.",
+    "metadata_cleanup_targeted_tests": {
+      "modules_first": 42,
+      "tests_first": 1018,
+      "passed_first": 1017,
+      "failed_first": 1,
+      "followup_modules": 3,
+      "followup_passed": 93,
+      "distinct_passing_after_targeted_followup": 1018,
+      "full_suite": false
+    }
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",

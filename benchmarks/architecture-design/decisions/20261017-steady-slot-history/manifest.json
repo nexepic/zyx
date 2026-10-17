@@ -94,5 +94,797 @@
     "archive": "raw/retained-registration.json.gz",
     "bytes": 601,
     "sha256": "0fd34b05b1644d81e6e6c6079e5f837b7877ae1abe45ba399d8c633c3a682e11"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/existing-metadata-reclaim-diagnostic.json",
+    "archive": "raw/full13/existing-metadata-reclaim-diagnostic.json.gz",
+    "bytes": 550,
+    "sha256": "9c37ae53e4df2a7ae4aaccc3cf0dba227c19cbf69e0d0e4df947f2229e8f9c9e"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/fresh-endpoint-summary.json",
+    "archive": "raw/full13/fresh-endpoint-summary.json.gz",
+    "bytes": 780,
+    "sha256": "5e6c35ea667430c9863fde550bc11697ee88e16016d8d1679e5fa883567b8bb0"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/fresh-endpoint-metadata.json",
+    "archive": "raw/full13/fresh-endpoint-metadata.json.gz",
+    "bytes": 208032,
+    "sha256": "9fa40d6005d2b4102511d45adf22355e105f885f28c7d99aefbd3d20f506d609"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/proof.json",
+    "archive": "raw/full13/proof.json.gz",
+    "bytes": 3403,
+    "sha256": "7b6f5ba96639e2da1ea8c1a470ee4cb9e00b735afd1a964efcd88c2cf834c62c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/repaired-retained-pool-headers.json",
+    "archive": "raw/full13/repaired-retained-pool-headers.json.gz",
+    "bytes": 1488586,
+    "sha256": "0ed1b9c94c3caf55e29126e6204cc6b17da1935a0e5e7f714ca10b37d919717a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/retained-metadata-summary.json",
+    "archive": "raw/full13/retained-metadata-summary.json.gz",
+    "bytes": 341,
+    "sha256": "fa281a753aaf755bed0e954833d26c65ba364dd069928a99b9cdc6c251170246"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/repaired-retained-metadata.json",
+    "archive": "raw/full13/repaired-retained-metadata.json.gz",
+    "bytes": 1466428,
+    "sha256": "788edb91fff350f40bcf71a543231211d3fea815b5048c46d8e1c6e3dd1daf45"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/registration.json",
+    "archive": "raw/full13/registration.json.gz",
+    "bytes": 601,
+    "sha256": "0fd34b05b1644d81e6e6c6079e5f837b7877ae1abe45ba399d8c633c3a682e11"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/partial-trace.json",
+    "archive": "raw/full13/full-maintenance/partial-trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "2825e3f5ac147fb431bc0acb06bee26a2029ddbae8b7768e97395c43f2c7426d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/report.json",
+    "archive": "raw/full13/full-maintenance/report.json.gz",
+    "bytes": 2087,
+    "sha256": "6dd2e89c48cecd160373b5082a09eddbe4035462e6288fc9cdecb991643a258a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/trace.json",
+    "archive": "raw/full13/full-maintenance/trace.json.gz",
+    "bytes": 8339323,
+    "sha256": "2825e3f5ac147fb431bc0acb06bee26a2029ddbae8b7768e97395c43f2c7426d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/family-progress.jsonl",
+    "archive": "raw/full13/full-maintenance/family-progress.jsonl.gz",
+    "bytes": 121,
+    "sha256": "96c72baa203348bcc3d40a9a0d09f4824e9855ccceccf46dd4130f9fd964567f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/registration.json",
+    "archive": "raw/full13/full-maintenance/registration.json.gz",
+    "bytes": 712,
+    "sha256": "ba4b9a425259610459b6e3ce99cb40f12cfee7df2cbdc0bee147effd0d6611aa"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/retained-repair/trace.json",
+    "archive": "raw/full13/retained-repair/trace.json.gz",
+    "bytes": 3236,
+    "sha256": "92464a14678e47e04677811c08b80a89a1bcb1408f1e2df4f11573577babebfe"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/retained-repair/report.json",
+    "archive": "raw/full13/retained-repair/report.json.gz",
+    "bytes": 412,
+    "sha256": "f46f6f6724f07e6499e6eedf30644cb86770a048e9a39aacea8cd6d006b69538"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7",
+    "archive": "raw/full13/full-maintenance/inputs/4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7.gz",
+    "bytes": 8192,
+    "sha256": "4b7fa1f19b33c15008d4c3b063524262fe9efb9acea89d089f77abd20d5356a7"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38",
+    "archive": "raw/full13/full-maintenance/inputs/16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38.gz",
+    "bytes": 5306,
+    "sha256": "16960400271fb283efe14008a937ddc00a7e0668415500758a7e910c61bfea38"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d",
+    "archive": "raw/full13/full-maintenance/inputs/64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d.gz",
+    "bytes": 5306,
+    "sha256": "64f5dfbb85ff8b7d138aed358b6ec5acc628203d43ce24fd0b6bb792b5f4aa4d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66",
+    "archive": "raw/full13/full-maintenance/inputs/36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66.gz",
+    "bytes": 5306,
+    "sha256": "36cb534c33457628cf510ff0bffbe7919c37226bedac94ba49f905925039af66"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd",
+    "archive": "raw/full13/full-maintenance/inputs/9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd.gz",
+    "bytes": 5306,
+    "sha256": "9203080a8a528db51738d8b5faf9b4cd17a4fa1c6152a70efb226b1f71f690dd"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a",
+    "archive": "raw/full13/full-maintenance/inputs/fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a.gz",
+    "bytes": 5306,
+    "sha256": "fb120d71cdebf4b75e54b3bc6967accce77d631fd10159160b9ec380385dc46a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62",
+    "archive": "raw/full13/full-maintenance/inputs/27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62.gz",
+    "bytes": 5306,
+    "sha256": "27c50e63fbc87eb3a765b707f01fdcab5eb12da89973ac7338e5b1fd5f8d1b62"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143",
+    "archive": "raw/full13/full-maintenance/inputs/fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143.gz",
+    "bytes": 5306,
+    "sha256": "fcfa8a350dab9c296e596331795b590ad271202c39196be9869ce75bd12c8143"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175",
+    "archive": "raw/full13/full-maintenance/inputs/5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175.gz",
+    "bytes": 5306,
+    "sha256": "5a235fedacda054025392b8c25400001027c4bb7d1c5ce06cfabaf2970e88175"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816",
+    "archive": "raw/full13/full-maintenance/inputs/34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816.gz",
+    "bytes": 5306,
+    "sha256": "34bfb5f818651c9c8b628b58ceb5831fe2497f242569e6cef4356a1069f4f816"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba",
+    "archive": "raw/full13/full-maintenance/inputs/1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba.gz",
+    "bytes": 5306,
+    "sha256": "1fefca964924431aef3f2b433807946e6bab4ec61d46b8554d2655b3db89d2ba"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e",
+    "archive": "raw/full13/full-maintenance/inputs/b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e.gz",
+    "bytes": 5306,
+    "sha256": "b724175d6d3b4879233ab2bfb7852039837fa884f75d02db316c16ea328b348e"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b",
+    "archive": "raw/full13/full-maintenance/inputs/e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b.gz",
+    "bytes": 5306,
+    "sha256": "e4603f3ff63d4ba3cd659fd8bdcfdbe8d2c658f0c297b32bee32ca415174615b"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134",
+    "archive": "raw/full13/full-maintenance/inputs/ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134.gz",
+    "bytes": 5306,
+    "sha256": "ba87079d18b54ea0bec89e9a0e65aae399bd1550f3da96da5971e13d79f3d134"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf",
+    "archive": "raw/full13/full-maintenance/inputs/d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf.gz",
+    "bytes": 5306,
+    "sha256": "d774d5c082281c3941f1db2c565263c4ae27e7a6cc2a367e273b0720a8b053cf"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20",
+    "archive": "raw/full13/full-maintenance/inputs/7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20.gz",
+    "bytes": 5306,
+    "sha256": "7c6b2814f72aa663a6cf1122abbaf366724e7aa4645a0212fb4d87459c52af20"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd",
+    "archive": "raw/full13/full-maintenance/inputs/e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd.gz",
+    "bytes": 5306,
+    "sha256": "e3eb923318f9afe6ddd9b6df3432197d9787b7fb7e4615e99a72ec1ed6aaf8cd"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf",
+    "archive": "raw/full13/full-maintenance/inputs/824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf.gz",
+    "bytes": 5306,
+    "sha256": "824855dcd7cb213cea8cb4263bdcd6af7b90e0cd150bd401e1bee5bcbfc5bbcf"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828",
+    "archive": "raw/full13/full-maintenance/inputs/6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828.gz",
+    "bytes": 5306,
+    "sha256": "6b49044b52d0945f6dcdffa3c206cbe65c25d3aa9ea8aa86d62da17798190828"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40",
+    "archive": "raw/full13/full-maintenance/inputs/f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40.gz",
+    "bytes": 5306,
+    "sha256": "f55a7bb7fd38dea2be24992a45c2935ee61bdd258943fc20f0c8c0e30ddf6b40"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689",
+    "archive": "raw/full13/full-maintenance/inputs/1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689.gz",
+    "bytes": 5306,
+    "sha256": "1e7aa136c26d5ecbb51b7488b3fe9bdfd9efb7c48cdc319257edb84c9ef87689"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07",
+    "archive": "raw/full13/full-maintenance/inputs/0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07.gz",
+    "bytes": 5306,
+    "sha256": "0469607afcaee34c3ec7d53f035e2ca3f0c1d68226dac41ce2869f6c96a51c07"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2",
+    "archive": "raw/full13/full-maintenance/inputs/ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2.gz",
+    "bytes": 5306,
+    "sha256": "ae4f52f5402e70b70f85bdcd22bd79bb764b2c578be6bfc502d8533161981fd2"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482",
+    "archive": "raw/full13/full-maintenance/inputs/ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482.gz",
+    "bytes": 5306,
+    "sha256": "ad3a2950080a70a0d2f4ad4afa9b544fe02ce404dc788563aab6cdd24b4dc482"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe",
+    "archive": "raw/full13/full-maintenance/inputs/8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe.gz",
+    "bytes": 5306,
+    "sha256": "8cfa007e0efc06905133e9d2e28510f769e995a2b0929a42b0cd58a503e808fe"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1",
+    "archive": "raw/full13/full-maintenance/inputs/b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1.gz",
+    "bytes": 5306,
+    "sha256": "b12f7f91d8ce9060769fe0b2e1512ca41587d379480821498d8447644f9d72b1"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821",
+    "archive": "raw/full13/full-maintenance/inputs/cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821.gz",
+    "bytes": 5306,
+    "sha256": "cd3c6bd9edc37c8c27d1a3c9381392f577702e6455174d791ed2b538fe7f1821"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc",
+    "archive": "raw/full13/full-maintenance/inputs/ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc.gz",
+    "bytes": 5306,
+    "sha256": "ea5d85a367ecc8c9fa277a169d3ad6b214beb07777e6773fbfced3f5954f92dc"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617",
+    "archive": "raw/full13/full-maintenance/inputs/543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617.gz",
+    "bytes": 5306,
+    "sha256": "543dc31f2408be1b8be11fd646d160bc42f225d7d9b35ed4846b1c6cc58ae617"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0",
+    "archive": "raw/full13/full-maintenance/inputs/f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0.gz",
+    "bytes": 5306,
+    "sha256": "f2b562328fa5ddbee9620d1386f86ab209894924663a3776fcb20b98df9d5fd0"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5",
+    "archive": "raw/full13/full-maintenance/inputs/dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5.gz",
+    "bytes": 5306,
+    "sha256": "dff5d543797bd8e6e348c235aeab9774ed65ae9d489fa6e218fef8779b0c37c5"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af",
+    "archive": "raw/full13/full-maintenance/inputs/6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af.gz",
+    "bytes": 5306,
+    "sha256": "6a48e826b7026eb93cc8004f12f544727d5d639a3139823c2f911317b1a690af"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f",
+    "archive": "raw/full13/full-maintenance/inputs/911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f.gz",
+    "bytes": 5306,
+    "sha256": "911554dca7446cc1622a0bfc548b14e592e8ad506b0addf65ac0c62eda96fa9f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a",
+    "archive": "raw/full13/full-maintenance/inputs/dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a.gz",
+    "bytes": 5306,
+    "sha256": "dcee0a2925c7bf7110e0d90906c666d7d402ef4bd914f972e583de7c61fe153a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061",
+    "archive": "raw/full13/full-maintenance/inputs/89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061.gz",
+    "bytes": 5306,
+    "sha256": "89ad0c9a22be5adf7ddb02deb02660d03c72c98dd7dabe29c8d6d3c3e09fa061"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7",
+    "archive": "raw/full13/full-maintenance/inputs/b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7.gz",
+    "bytes": 5306,
+    "sha256": "b451e5f880915d28ea1f228f166e4301d2e86e619dc033d7e5fa28d75de318f7"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171",
+    "archive": "raw/full13/full-maintenance/inputs/b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171.gz",
+    "bytes": 5306,
+    "sha256": "b1dccc412f9126131a370afa25919ce47fda40938dc1a3b134ce278a8c358171"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a",
+    "archive": "raw/full13/full-maintenance/inputs/33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a.gz",
+    "bytes": 5306,
+    "sha256": "33d9d65adad60cddad878db086b15c0585d5afffabce2a71ae3a93ea427c2f3a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4",
+    "archive": "raw/full13/full-maintenance/inputs/a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4.gz",
+    "bytes": 5306,
+    "sha256": "a4cf509501d80f9dd03c9203de50eb4ee5de22402508466953343dbb7dece8a4"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6",
+    "archive": "raw/full13/full-maintenance/inputs/bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6.gz",
+    "bytes": 5306,
+    "sha256": "bc56775bd55c793e968ce9554588e0ba52c03c30f7c1aec861cb0175c313a7e6"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6",
+    "archive": "raw/full13/full-maintenance/inputs/7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6.gz",
+    "bytes": 5306,
+    "sha256": "7ac92c309fb80211c7281b638191f356212a67c321685b62d7cd98e2fc800bb6"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed",
+    "archive": "raw/full13/full-maintenance/inputs/f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed.gz",
+    "bytes": 5306,
+    "sha256": "f4e772e47a818c24d26dfde23be874caf5309f17a9b20edd73317e0ee444cbed"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f",
+    "archive": "raw/full13/full-maintenance/inputs/e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f.gz",
+    "bytes": 5306,
+    "sha256": "e6f4bfb5f872f61bd3ba99b20de1074db79dcb347909ca095f4e5f060ce0388f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95",
+    "archive": "raw/full13/full-maintenance/inputs/0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95.gz",
+    "bytes": 5306,
+    "sha256": "0cac4f06acf5f021c339fc5a0c3b6521374f1fc5a720bc6e7190813661255a95"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1",
+    "archive": "raw/full13/full-maintenance/inputs/9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1.gz",
+    "bytes": 5306,
+    "sha256": "9e4b98cd7373910f45c9dddf2c1fde0dbe505d24d18d134904a12b242a2128d1"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0",
+    "archive": "raw/full13/full-maintenance/inputs/435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0.gz",
+    "bytes": 5306,
+    "sha256": "435f46001464a41bffcc022a81e1d1d9f756e65adc7b5d3d46b5c58a0eb641a0"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e",
+    "archive": "raw/full13/full-maintenance/inputs/205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e.gz",
+    "bytes": 5306,
+    "sha256": "205187f3585c06b173b0c82355f1b654c4f73d2ef0c8a081317f5c4be9c4788e"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d",
+    "archive": "raw/full13/full-maintenance/inputs/86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d.gz",
+    "bytes": 5306,
+    "sha256": "86b44bb95063efd182a7222f7242de1bbd0a138da19a4676078c8902158d2b4d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130",
+    "archive": "raw/full13/full-maintenance/inputs/ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130.gz",
+    "bytes": 5306,
+    "sha256": "ce9160365e17064add5bf75e031c844eb8f273975eead686cd3b919ee48ad130"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab",
+    "archive": "raw/full13/full-maintenance/inputs/d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab.gz",
+    "bytes": 5306,
+    "sha256": "d115046e4cacb2d24bdea11eb17863f46c5fcccca8dd85e00636b38d31ec91ab"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa",
+    "archive": "raw/full13/full-maintenance/inputs/4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa.gz",
+    "bytes": 5306,
+    "sha256": "4e3bca59bdee41d421e5ea8b7152de9f78331a6ebd6b37dd893dfbf57b7802aa"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f",
+    "archive": "raw/full13/full-maintenance/inputs/6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f.gz",
+    "bytes": 5306,
+    "sha256": "6d18b959b644b5b805a4365300295692d13fde2b3fe12a1f9f76025fe647fd2f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986",
+    "archive": "raw/full13/full-maintenance/inputs/0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986.gz",
+    "bytes": 5306,
+    "sha256": "0b4e6bfb75c22f02b9b26332d2a056501fbfbf5255faec4cb65c3e12bd44a986"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b",
+    "archive": "raw/full13/full-maintenance/inputs/c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b.gz",
+    "bytes": 5306,
+    "sha256": "c960fab54198df587b4bd1d7534a28a728dcb50071b9c5cc8ad8543d3709cd4b"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f",
+    "archive": "raw/full13/full-maintenance/inputs/f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f.gz",
+    "bytes": 5306,
+    "sha256": "f897260cd587cbea3501f07c38bd61df6be1e3248706cc3a57f9661757d2e85f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970",
+    "archive": "raw/full13/full-maintenance/inputs/231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970.gz",
+    "bytes": 5306,
+    "sha256": "231e4bc186e17439bd7ef6d9db8f96f3a3bab663cfc1bc74a86099f0a0406970"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce",
+    "archive": "raw/full13/full-maintenance/inputs/10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce.gz",
+    "bytes": 5306,
+    "sha256": "10bb2a75d34da64c35673f466658004c8e13b7d40a929884ddc005a249149fce"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a",
+    "archive": "raw/full13/full-maintenance/inputs/51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a.gz",
+    "bytes": 5306,
+    "sha256": "51c2e09bd87021e5b816b51fe3e0f2e051f2ad9403ca8dbd6f88aca20deaa26a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2",
+    "archive": "raw/full13/full-maintenance/inputs/775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2.gz",
+    "bytes": 5306,
+    "sha256": "775b181c373df8af70d0759d2316798c908b153eb90c32a5f6ba76e51542bda2"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c",
+    "archive": "raw/full13/full-maintenance/inputs/041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c.gz",
+    "bytes": 5306,
+    "sha256": "041394d23bef0572bf92261f3fff8e27c3bb36b6ca655b4001f96bedf1b1116c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908",
+    "archive": "raw/full13/full-maintenance/inputs/462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908.gz",
+    "bytes": 5306,
+    "sha256": "462682ac438111e9d7a55889492e5899f9d78321608b55bb7567b4205ca95908"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a",
+    "archive": "raw/full13/full-maintenance/inputs/7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a.gz",
+    "bytes": 5306,
+    "sha256": "7797cc15b7a2c1ea61ced9ee76181b9d749ca0ee03a4d0f2177762627167ab1a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d",
+    "archive": "raw/full13/full-maintenance/inputs/70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d.gz",
+    "bytes": 5306,
+    "sha256": "70a1694d5fa79085dd826b1e4d571ebbeae0583a50c54aa3da2f25e917a1855d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432",
+    "archive": "raw/full13/full-maintenance/inputs/fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432.gz",
+    "bytes": 5306,
+    "sha256": "fa90054b07d62706d09b09f26d8ec086f0bbc3f6d2102258a363654aab9bd432"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb",
+    "archive": "raw/full13/full-maintenance/inputs/459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb.gz",
+    "bytes": 5306,
+    "sha256": "459eee82372e046ab24954bc70e4947ccd3042c1a93e1f1e77a02bffdbe3ffeb"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65",
+    "archive": "raw/full13/full-maintenance/inputs/0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65.gz",
+    "bytes": 5306,
+    "sha256": "0446bb0785e3c61743d1eea307b251fd28e70d3d5421abfdc55f638946beeb65"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87",
+    "archive": "raw/full13/full-maintenance/inputs/23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87.gz",
+    "bytes": 5306,
+    "sha256": "23bebcca250f7dee7b1505e73b060d7f207f9db22f4468bdcaa997c3266d7f87"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d",
+    "archive": "raw/full13/full-maintenance/inputs/759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d.gz",
+    "bytes": 5306,
+    "sha256": "759c3232f771037f34b7e0ffcae45fcb12daead4364c7826fa4ac836ef011a8d"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807",
+    "archive": "raw/full13/full-maintenance/inputs/ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807.gz",
+    "bytes": 5306,
+    "sha256": "ef8e375f4af75ea8d25ecb16baf0d7bf5378606b1137b2586573314c44b97807"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae",
+    "archive": "raw/full13/full-maintenance/inputs/19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae.gz",
+    "bytes": 5306,
+    "sha256": "19dbb93474c69f45dafadcd074715e9e0a87ffe1a2b99b2978ccb97beeef58ae"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db",
+    "archive": "raw/full13/full-maintenance/inputs/ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db.gz",
+    "bytes": 5306,
+    "sha256": "ff00ab86196acc9be8e4f0ecd1a5d9041f162b732e61c346f29955b31b8144db"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35",
+    "archive": "raw/full13/full-maintenance/inputs/abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35.gz",
+    "bytes": 5306,
+    "sha256": "abfe6bb54862b13f74775f39347a928f2301e9fa1cfb9b0d6408ac493be10f35"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112",
+    "archive": "raw/full13/full-maintenance/inputs/48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112.gz",
+    "bytes": 5306,
+    "sha256": "48c98f29b950eea2b49713f2de2edb7886e1603a673cc1072ebf0620e2dc7112"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f",
+    "archive": "raw/full13/full-maintenance/inputs/193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f.gz",
+    "bytes": 5306,
+    "sha256": "193ad47170af94968ed44e53ce1befd6c366420c2e8e17cd24d294aa3f75ba6f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed",
+    "archive": "raw/full13/full-maintenance/inputs/d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed.gz",
+    "bytes": 5306,
+    "sha256": "d2037bbdc4311fae63763aa29bab57da5ca1b2ef2ed0329c439368ae0bc9a3ed"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9",
+    "archive": "raw/full13/full-maintenance/inputs/0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9.gz",
+    "bytes": 5306,
+    "sha256": "0fba7ed3ceeca71a5bf5345d19829c392350505fe03cc6a392b9b377842de9d9"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e",
+    "archive": "raw/full13/full-maintenance/inputs/147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e.gz",
+    "bytes": 5306,
+    "sha256": "147910207280ed4cb3866d3fcc358b619077fb9f91c268471cbc29717db70f7e"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7",
+    "archive": "raw/full13/full-maintenance/inputs/4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7.gz",
+    "bytes": 5306,
+    "sha256": "4cf5851f1d94504ef795ae7545c2b3b5ea40f77e377421937ac779ccde753be7"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c",
+    "archive": "raw/full13/full-maintenance/inputs/016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c.gz",
+    "bytes": 5306,
+    "sha256": "016fdfb22a7a32e381efb5313c30c7644863c5042224bc504d1555fd06f3729c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c",
+    "archive": "raw/full13/full-maintenance/inputs/9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c.gz",
+    "bytes": 5306,
+    "sha256": "9e017a9f3058bd045310453b7cf5b24e096790e557292ee935328ce67236b02c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66",
+    "archive": "raw/full13/full-maintenance/inputs/9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66.gz",
+    "bytes": 5306,
+    "sha256": "9b48de1eee365dd37e431e8818c713c34329a44a0896b420a913d2a481b67e66"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6",
+    "archive": "raw/full13/full-maintenance/inputs/38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6.gz",
+    "bytes": 5306,
+    "sha256": "38216b3c518ce45ee3f881bef779740b09f42ec3d9ccffd39871422b50c6d1b6"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e",
+    "archive": "raw/full13/full-maintenance/inputs/72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e.gz",
+    "bytes": 5306,
+    "sha256": "72b9039ff08f07481d80ddf74336dad2330a57e123e4185433a53c8e2e1ff51e"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6",
+    "archive": "raw/full13/full-maintenance/inputs/45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6.gz",
+    "bytes": 5306,
+    "sha256": "45c8bb9ccacc71049ad20535f0933ed151315898a74db9f2009f4d6e33c72bd6"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0",
+    "archive": "raw/full13/full-maintenance/inputs/b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0.gz",
+    "bytes": 5306,
+    "sha256": "b7445d54c89b1404b9f24f44e09c19b4ae7e38fff2d449d10672103d4df593d0"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4",
+    "archive": "raw/full13/full-maintenance/inputs/7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4.gz",
+    "bytes": 5306,
+    "sha256": "7dea5c3f1c61ccc709488c713e54dbc5cff78f90cd7f66e6dc7d1a1f018220e4"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99",
+    "archive": "raw/full13/full-maintenance/inputs/ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99.gz",
+    "bytes": 5306,
+    "sha256": "ed49435bb5203344f1539523297410fa9e1cf1cfdc4910347013394450802d99"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990",
+    "archive": "raw/full13/full-maintenance/inputs/02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990.gz",
+    "bytes": 5306,
+    "sha256": "02421624a8cb498598cc9dc43f756375279ccd91164f49a9d241e61d74788990"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c",
+    "archive": "raw/full13/full-maintenance/inputs/6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c.gz",
+    "bytes": 5306,
+    "sha256": "6ade1e09c5a09d6ffdd550eb3782d117763cff2c8878617c5e3899b09ac2d51c"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea",
+    "archive": "raw/full13/full-maintenance/inputs/08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea.gz",
+    "bytes": 5306,
+    "sha256": "08163e2a84caf7eb267ced8157e71b3c7695b49d0eb84b8761ecf834463e50ea"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43",
+    "archive": "raw/full13/full-maintenance/inputs/e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43.gz",
+    "bytes": 5306,
+    "sha256": "e22449d0e9001440d3c61a9d408f33a211274976f5c0accc014e811272087b43"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04",
+    "archive": "raw/full13/full-maintenance/inputs/4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04.gz",
+    "bytes": 5206,
+    "sha256": "4d66de725eebbb06cdf03ba6f5ce61a7adc1820cd90eb61ae99e3973b89f7f04"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a",
+    "archive": "raw/full13/full-maintenance/inputs/4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a.gz",
+    "bytes": 5206,
+    "sha256": "4129eea58e758c9bd0bb9b9febb1239f94ef571a00f115183292726688b7d07a"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08",
+    "archive": "raw/full13/full-maintenance/inputs/58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08.gz",
+    "bytes": 5206,
+    "sha256": "58e0ad9ab02f8bdfe545d4d8a5d53c85876a05be3456e437c4d98e320be84c08"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf",
+    "archive": "raw/full13/full-maintenance/inputs/d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf.gz",
+    "bytes": 5206,
+    "sha256": "d622fb06674ca7ef2a09b4fdf8c882174145399c72c6ce0af3757b762941d5cf"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9",
+    "archive": "raw/full13/full-maintenance/inputs/207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9.gz",
+    "bytes": 5206,
+    "sha256": "207ea4266584e89b3d5b6cb7ff8e03a3a0abc0a730fddf857de2135ae55441f9"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597",
+    "archive": "raw/full13/full-maintenance/inputs/177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597.gz",
+    "bytes": 5206,
+    "sha256": "177724f64f41f85938ffcb13691b9a7a75227631c92644f28715375da3dec597"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880",
+    "archive": "raw/full13/full-maintenance/inputs/527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880.gz",
+    "bytes": 5206,
+    "sha256": "527f98d3191f91b6ae9a210826191b59d0095993666264c2758db170905d5880"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f",
+    "archive": "raw/full13/full-maintenance/inputs/d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f.gz",
+    "bytes": 5206,
+    "sha256": "d5518abe141159ba438a078878aa907f7b00464b259348d0f00e9a9d61970d8f"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066",
+    "archive": "raw/full13/full-maintenance/inputs/5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066.gz",
+    "bytes": 5206,
+    "sha256": "5df738cb493596fff0d5f1ebb0848e1570e72aabee3cba87b2672ecb90f46066"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight-20261017/full-maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed",
+    "archive": "raw/full13/full-maintenance/inputs/6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed.gz",
+    "bytes": 5096,
+    "sha256": "6770049aa9b70c1205e575ce6b3ddece83df63a8f3841017840e9ed3a14934ed"
+  },
+  {
+    "source": "/tmp/zyx-steady-lifecycle-preflight.log",
+    "archive": "raw/full13/zyx-steady-lifecycle-preflight.log.gz",
+    "bytes": 2034,
+    "sha256": "4c582ac39d37730d2bf97b663f3b346fad3d985f8754c31ffa0647cd00ae0034"
+  },
+  {
+    "source": "/tmp/zyx-steady-pool-inspector.cpp",
+    "archive": "raw/full13/zyx-steady-pool-inspector.cpp.gz",
+    "bytes": 2038,
+    "sha256": "f17eeca5a305b8550a8b6e84fc7ac5e2958c32688461522ab409c60ac4b89e1d"
+  },
+  {
+    "source": "/tmp/zyx-steady-pool-inspector-provenance.json",
+    "archive": "raw/full13/zyx-steady-pool-inspector-provenance.json.gz",
+    "bytes": 2081,
+    "sha256": "99249a466682a21409ba5fd94aa68472752a821965c8c02c3bcdd18a5c19b4a4"
+  },
+  {
+    "source": "/tmp/zyx-existing-metadata-reclaim.cpp",
+    "archive": "raw/full13/zyx-existing-metadata-reclaim.cpp.gz",
+    "bytes": 1096,
+    "sha256": "6ca4b750512f63fec37e07dec8ee081db3b226f8c1050fac7d249567644946a9"
+  },
+  {
+    "source": "/tmp/zyx-existing-metadata-reclaim-provenance.json",
+    "archive": "raw/full13/zyx-existing-metadata-reclaim-provenance.json.gz",
+    "bytes": 2101,
+    "sha256": "547daa567d6bf0519174b88fe9b8cf93c0d1e6612966c8351d7ec712a1c41cba"
+  },
+  {
+    "source": "/tmp/zyx-metadata-headroom-oversized-fixture-stopped.json",
+    "archive": "raw/full13/zyx-metadata-headroom-oversized-fixture-stopped.json.gz",
+    "bytes": 477,
+    "sha256": "58efd40ba432823fdebeacb81acc3c90e8106ac8afe813701588c28e626bf47a"
+  },
+  {
+    "source": "/tmp/zyx-steady-final-regression.log",
+    "archive": "raw/metadata-cleanup/zyx-steady-final-regression.log.gz",
+    "bytes": 373085,
+    "sha256": "20d19acae50e1fa97d6a837f121107398c22f3c7560cfbea1f6d11e0f14ee38c"
+  },
+  {
+    "source": "/tmp/zyx-steady-final-affected-tests.xml",
+    "archive": "raw/metadata-cleanup/zyx-steady-final-affected-tests.xml.gz",
+    "bytes": 320064,
+    "sha256": "5f8e1a83c32eb3153aa3ac61ddb3205f4830cc0f7fd4614f93a763cbcf18d15e"
+  },
+  {
+    "source": "/tmp/zyx-steady-final-regression-provenance.json",
+    "archive": "raw/metadata-cleanup/zyx-steady-final-regression-provenance.json.gz",
+    "bytes": 10403,
+    "sha256": "ae7431f23727d90975d65e1408afde974e114d4f5f5070bd5553e3f208a4c3d3"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-protected.log",
+    "archive": "raw/metadata-cleanup/zyx-metadata-cleanup-protected.log.gz",
+    "bytes": 28583,
+    "sha256": "0e85783b65eca51cd6fbdd1566c3413a08bad13c529558524dad6dc850d7c552"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-protected-tests.xml",
+    "archive": "raw/metadata-cleanup/zyx-metadata-cleanup-protected-tests.xml.gz",
+    "bytes": 31071,
+    "sha256": "3bdfa4b445b3329f53be7d969d7d2cd26941388f6668339ba3fa24c784cc46df"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-protected-provenance.json",
+    "archive": "raw/metadata-cleanup/zyx-metadata-cleanup-protected-provenance.json.gz",
+    "bytes": 1901,
+    "sha256": "9e5688278afeda5376d733d1db63b9c8733639883a763bfa98779536e8a1fb1e"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-production-hashes.json",
+    "archive": "raw/metadata-cleanup/zyx-metadata-cleanup-production-hashes.json.gz",
+    "bytes": 418,
+    "sha256": "ed4266b399efd22c012a22f7f22c40082c7f4fbb496b314f013d7bcc01afb9ae"
+  },
+  {
+    "source": "/tmp/zyx-metadata-cleanup-protected.py",
+    "archive": "raw/metadata-cleanup/zyx-metadata-cleanup-protected.py.gz",
+    "bytes": 1436,
+    "sha256": "6c17857bbeb3c8b234b0623f1a20866e9dc12e701fc402b403ab23e2c63afea7"
+  },
+  {
+    "source": "/tmp/zyx-steady-final-regression.py",
+    "archive": "raw/metadata-cleanup/zyx-steady-final-regression.py.gz",
+    "bytes": 1471,
+    "sha256": "ff8d5029e62b5263ec3ad86aab7a0f054f1f83bc0956cd0f3723222f59f7b5db"
+  },
+  {
+    "source": "/tmp/zyx-removed-completed-test-executables-20261017.json",
+    "archive": "raw/metadata-cleanup/zyx-removed-completed-test-executables-20261017.json.gz",
+    "bytes": 1633,
+    "sha256": "bde2b4ed46268b56b89e15cd9e2e970955ec2fa2a75c706c2efdd6abd9a7bbc6"
   }
 ]
