@@ -329,6 +329,7 @@ namespace graph::storage {
 		void prefetchPages(std::span<const BufferPoolPageKey> keys,
 						   BufferPoolReadHint admissionHint = BufferPoolReadHint::BPRH_PREFETCH) const;
 		[[nodiscard]] BufferPoolStats bufferPoolStats() const;
+		[[nodiscard]] bool tryReleaseCachedPage(std::pmr::memory_resource *expectedOwner) const;
 		// Keeps resident/pinned/dirty state intact and resets telemetry counters.
 		void resetBufferPoolStats();
 		// Counters measure bytes submitted through this abstraction, not filesystem

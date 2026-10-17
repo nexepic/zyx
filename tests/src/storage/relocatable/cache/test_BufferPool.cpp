@@ -1054,3 +1054,25 @@ TEST_F(BufferPoolTest, NormalReadsBypassDeniedResidencyAndPreservePinnedDirtyHit
     }
     pool_.reset(); EXPECT_EQ(memory->used(), 0U);
 }
+
+TEST_F(BufferPoolTest, SiblingCacheReclamationNeverFlushesDirtyPrivateOrPinnedPages) {
+ open(4U); pool_ = createPool(4U);
+ {
+  auto page = pool_->allocatePrivate({0U, 17U});
+  page.mutableBytes()[0] = std::byte{0xA1}; page.markDirty();
+ }
+ std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> dirty{}; dirty.fill(std::byte{0xA2});
+ pool_->writePage({RSS_BUFFER_POOL_PAGE_BYTES, 19U}, dirty);
+ auto pinned = pool_->pin({2U * RSS_BUFFER_POOL_PAGE_BYTES, 1U});
+ { auto clean = pool_->pin({3U * RSS_BUFFER_POOL_PAGE_BYTES, 1U}); }
+ const auto writes = io_->stats().write_bytes;
+ EXPECT_FALSE(pool_->tryReleaseCachedPage(nullptr));
+ EXPECT_TRUE(pool_->tryReleaseCachedPage(std::pmr::get_default_resource()));
+ EXPECT_FALSE(pool_->tryReleaseCachedPage(std::pmr::get_default_resource()));
+ EXPECT_EQ(pool_->stats().evictions, 1U);
+ EXPECT_EQ(pool_->stats().dirty_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+ EXPECT_EQ(io_->stats().write_bytes, writes);
+ EXPECT_EQ(diskByte(0U), std::byte{1U});
+ EXPECT_EQ(diskByte(RSS_BUFFER_POOL_PAGE_BYTES), std::byte{2U});
+ EXPECT_EQ(pinned.bytes()[0], std::byte{3U});
+}
