@@ -1,0 +1,111 @@
+{
+  "status": "repair_checkpoint_no_progress_increase",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "request_completed": 2,
+  "production": "5fc768cb",
+  "clean_frozen_source": "e8c38315",
+  "remaining": [
+    "S2.5",
+    "S3.5",
+    "S6.2"
+  ],
+  "formal_read_samples": 7610,
+  "formal_write_protection_samples": 3890,
+  "same_source_supplement_budget_exhausted": true,
+  "property_write_tail_uncertainty": {
+    "create_nodes_100_P50_fraction": 0.0341,
+    "create_nodes_100_P95_fraction": 0.0633,
+    "set_score_large_body_P50_fraction": 0.0144,
+    "set_score_large_body_P95_fraction": 0.1029
+  },
+  "dynamic_actual_control_and_current": "Both reached original1800secondcap before10000entities; not performance/correctness successes. Subsequentsame-source slots reuse failures, no retries.",
+  "contract_slots_observed": 73,
+  "contract_status_counts": {
+    "failed": 1,
+    "inconclusive_timeout": 2,
+    "unmeasurable_previous_failure": 9,
+    "completed": 57,
+    "cancelled_incomplete_after_candidate_gate_failed": 1,
+    "unsupported_NA": 3
+  },
+  "not_full_matrix_completion": true,
+  "wide_control": "One partialcase canceled explicitly when stopping invalidcandidatewindow,0accepted samples; not an observed capacity failure. Current/Kuzu wide not run in thiswindow; no invented failures or N/Apasses.",
+  "limits_unchanged": true,
+  "approved_larger_file_limit": null,
+  "closed_dynamic_structural_observations": {
+    "original-control": {
+      "generation": 19060,
+      "registered_metadata_routes": 324,
+      "current_directory_metadata_routes": 324,
+      "routes_without_current_directory_reference": 0,
+      "catalog_kind_state_counts": [
+        {
+          "kind": 1,
+          "state": 2,
+          "count": 238
+        },
+        {
+          "kind": 2,
+          "state": 2,
+          "count": 337
+        },
+        {
+          "kind": 3,
+          "state": 2,
+          "count": 22
+        },
+        {
+          "kind": 9,
+          "state": 2,
+          "count": 27
+        }
+      ],
+      "retire_queue_by_kind": [],
+      "database_sha256": "56ed471291434109bb1c232376bda5ce809ae00e16af897d6bb62b7f114aa8b1",
+      "unchanged_after_inspection": true
+    },
+    "current": {
+      "generation": 17697,
+      "registered_metadata_routes": 314,
+      "current_directory_metadata_routes": 314,
+      "routes_without_current_directory_reference": 0,
+      "catalog_kind_state_counts": [
+        {
+          "kind": 1,
+          "state": 2,
+          "count": 221
+        },
+        {
+          "kind": 2,
+          "state": 2,
+          "count": 314
+        },
+        {
+          "kind": 3,
+          "state": 2,
+          "count": 19
+        },
+        {
+          "kind": 9,
+          "state": 2,
+          "count": 26
+        }
+      ],
+      "retire_queue_by_kind": [],
+      "database_sha256": "5aee47409ceb4b0fb761a992a75c4595a23f3f5d69bc5a47dfb73334cd7fde8b",
+      "unchanged_after_inspection": true
+    }
+  },
+  "diagnosis": "Existing setuptrace: current full64propertyread38.46ms vscontrol24.85ms forIDs1000..1999. Oneprocesssetupattributiononly, not independentformaldistributions. No detachedroutes/retirequeue. RepeatedownedBTree decoding is an unproven hypothesis needing focused instrumentation; no cache/format change yet.",
+  "existing_acceptances": [
+    "../20261017-s44-graph-access-acceptance/proof.json",
+    "../20261017-s55-steady-acceptance/proof.json"
+  ],
+  "next": "Focused readonly diagnosis on retained endpoints; implement only evidenced correction, selected module tests, then one frozen validation window. No same-source repeat-until-pass; no full unit suite.",
+  "kuzu_goal_achieved": false,
+  "full_unit_suite": false,
+  "raw_archives": 4465,
+  "all_decompressed_hashes_verified": true
+}
