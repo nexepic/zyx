@@ -1,0 +1,7 @@
+# Final protection and maintenance repairs
+
+Progress remains29/34 (85.3%), this request0/5. Candidate c741 failed admission:2010 original read samples,690 restored-write samples and800 separately registered point supplements remain separate from the repaired source. Indexed lookup, batch creation and deletion regressed; maintenance completed only4of13 windows before its30-minute deadline. Only2of117 contract slots were attempted;115 were deferred.
+
+Repairs address the observed causes only: avoid whole-leaf copies on ordered BTree append and materialize only the selected redistribution boundary; let decoded metadata reclaim clean unpinned raw pages under the exact same CACHE authority; batch LargeValue pool retirement/release, resume already empty pools, and preserve every mapped private content-index pool. No budget or storage-format increase.
+
+The40 selected modules initially passed1010of1011 tests. The sole failure assumed the former five-publication lifecycle. The fixture now uses three batched phases and verifies the recovered on-disk checkpoint reaches UINT64_MAX; all24 tests in that module passed on rerun, giving1011 distinct passing tests across the two runs. No full unit suite ran. The archive and per-file hashes preserve negative controls, diagnostics and results; the invalid initial resume fixture is not used as a counterexample, only its corrected v2. A new frozen-source integrated window is still required. The Kuzu goal is unmet; the wide-only4GiB amendment remains unanswered and unapplied.
