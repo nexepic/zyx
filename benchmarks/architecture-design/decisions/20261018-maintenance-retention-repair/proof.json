@@ -1,0 +1,107 @@
+{
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "amendment": {
+    "status": "after_first_maintenance_full_validation_and_worker_exit_before_second_case",
+    "before_sha256": "07bc23e0631e66776160c670e16f2d0ae37af3dfb2fcac0e6e30d80396e9c175",
+    "after_sha256": "5faece9e6f7e3bfc88055fb93717d475ad05e5776ca2d5ffa2391542d030375d",
+    "scope": "Post-worker-exit diagnostic retention only: EXDEV fallback copies to exclusive new file. Retain each independent round for endpoint review; timed operations, binary, inputs, sampling, gates and caps unchanged. Original harness exit failure and records preserved."
+  },
+  "round1_adjudication": {
+    "round": 1,
+    "engine": "current",
+    "family": "maintenance",
+    "status": "completed",
+    "returncode": 1,
+    "log": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/logs/contract-1-current-maintenance.log",
+    "rule": "Independent family outcome; failures and timeouts are never latency successes or protection passes.",
+    "harness_returncode": 1,
+    "classification": "full_validation_and_worker_exit_complete_post_close_retention_failed",
+    "automatic_acceptance": false,
+    "evidence_note": "Original nonzero harness return and failed marker retained. Original close returned normally: traceback is exclusively finally os.link EXDEV, no chained close exception. report/trace SHA and all IPC operation failures checked. Diagnostic endpoint lost when owned temp cleaned; later rounds must retain endpoints for recovery/reclamation review."
+  },
+  "records": [
+    {
+      "archive": "raw/case-before-retention-repair.py.gz",
+      "bytes": 7610,
+      "sha256": "07bc23e0631e66776160c670e16f2d0ae37af3dfb2fcac0e6e30d80396e9c175"
+    },
+    {
+      "archive": "raw/case-after-retention-repair.py.gz",
+      "bytes": 8044,
+      "sha256": "5faece9e6f7e3bfc88055fb93717d475ad05e5776ca2d5ffa2391542d030375d"
+    },
+    {
+      "archive": "raw/registration-before.json.gz",
+      "bytes": 28383,
+      "sha256": "bb0af90bb9dfc0a0e866892d7af68d2a1432dbc054f8c89e7dffc4a504b2e8df"
+    },
+    {
+      "archive": "raw/registration-after.json.gz",
+      "bytes": 28971,
+      "sha256": "e774f39b8cb716f8c2257a63b56ef836347c51c8d6bdc9d4cb8fa1fb88a73658"
+    },
+    {
+      "archive": "raw/elapsed.json.gz",
+      "bytes": 242,
+      "sha256": "8e11d67aaab214d4a2ad32f317b9a9f848fd9c15534e23259d34b3d41fa7e0ae"
+    },
+    {
+      "archive": "raw/final-storage-resources.json.gz",
+      "bytes": 411,
+      "sha256": "c3109ca541301f9ae08ff7859e91dcd6d9850ea0f728190b51aa2501bbc8d396"
+    },
+    {
+      "archive": "raw/resource-checkpoint.json.gz",
+      "bytes": 449,
+      "sha256": "7d5030b429ebed76e1bd3f8838073a2f3cc8b9d251703b460c4ccbcaeb0f41b7"
+    },
+    {
+      "archive": "raw/resource-checkpoint-before-harness-adjudication.json.gz",
+      "bytes": 163,
+      "sha256": "2cabacc45f1b2e88f9332f6021072af7deb539055fe6f55719e6b400046c03ff"
+    },
+    {
+      "archive": "raw/campaign-case-completed.json.gz",
+      "bytes": 862,
+      "sha256": "da91d5826c8f72c76bb5614a596d48680bd42b1410742e5bfde375c58f2aa009"
+    },
+    {
+      "archive": "raw/campaign-case-failed.json.gz",
+      "bytes": 340,
+      "sha256": "783204b27158ef16e3dfd0e83f0f695cea2b4a52e2b4fabe942fe1a425dda0a2"
+    },
+    {
+      "archive": "raw/report.json.gz",
+      "bytes": 2087,
+      "sha256": "ae04e0447fde271273b712cc05708f1b083349ee1b304bb3007af1ce0311ae48"
+    },
+    {
+      "archive": "raw/native-process-memory-before-close.json.gz",
+      "bytes": 292,
+      "sha256": "b74026f9ee9af38c4aee5e517020f011ab98efbdcac1dcd6e83cbe025b14bd6c"
+    },
+    {
+      "archive": "raw/registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "archive": "raw/ipc-operation-timings.json.gz",
+      "bytes": 617729,
+      "sha256": "1730d88f5342135e3be1dbece560c4b3b7fdcd4be5064ebb2ae7414f3d7d7b64"
+    },
+    {
+      "archive": "raw/maintenance-failed-driver.log.gz",
+      "bytes": 1230,
+      "sha256": "e6371526e32a0a4598412f904d22fbc9e56847dfedfa50db669d0aa600ccc069"
+    },
+    {
+      "archive": "raw/maintenance-round1.log.gz",
+      "bytes": 2971,
+      "sha256": "80e9d42bc412a49543cbef554a5b0dec43be304108ac4b3065d6e8510c8d9cd1"
+    }
+  ]
+}
