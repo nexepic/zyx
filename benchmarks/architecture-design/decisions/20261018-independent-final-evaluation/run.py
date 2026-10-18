@@ -2,7 +2,8 @@ from pathlib import Path
 import subprocess,json,os,signal,hashlib
 root=Path('/tmp/zyx-final-five-publication-window-20261018')
 orders=[['control','current','kuzu'],['current','kuzu','control'],['kuzu','control','current']]
-import importlib
+import importlib,sys
+sys.path.insert(0, "/tmp")
 owned_case=importlib.import_module('zyx-final-five-owned-case')
 results=[]
 for scale,profile in [('medium','scan'),('medium','retrieval'),('medium','indexed'),('holdout','scan'),('holdout','retrieval')]:
