@@ -195,6 +195,30 @@
       "archive": "raw/prepare-route-reuse-final-window.py-corrected-before-performance.gz",
       "uncompressed_bytes": 4134,
       "uncompressed_sha256": "e897d4cecb0a1d62d0d0f12f7ceffde6c0fc7ea5db48047c964b3bf809984de8"
+    },
+    {
+      "name": "run-route-reuse-final-evaluation.py-before-path-correction",
+      "archive": "raw/driver-before-path-correction.py.gz",
+      "uncompressed_bytes": 5015,
+      "uncompressed_sha256": "f0f0a2e79460db47f1b41aeef0f7266550f3883f5fc4efcf4bc99ef9fb89dc9b"
+    },
+    {
+      "name": "run-route-reuse-final-evaluation.py",
+      "archive": "raw/driver-after-path-correction.py.gz",
+      "uncompressed_bytes": 5039,
+      "uncompressed_sha256": "e0c82ff296d65f46bf4fd4f2543fdf135a7e7db34de9e33a2c07c66076011f45"
+    },
+    {
+      "name": "route-reuse-final-window/registration.json",
+      "archive": "raw/registration-after-path-correction.json.gz",
+      "uncompressed_bytes": 28383,
+      "uncompressed_sha256": "bb0af90bb9dfc0a0e866892d7af68d2a1432dbc054f8c89e7dffc4a504b2e8df"
+    },
+    {
+      "name": "prepare-route-reuse-final-window.py",
+      "archive": "raw/generator-after-path-correction.py.gz",
+      "uncompressed_bytes": 4203,
+      "uncompressed_sha256": "8b252b8bcd3db96d28eebd8233dbe15fbf2866336b45f693c53b6bdb51effd39"
     }
   ],
   "premeasurement_registration_correction": {
@@ -211,5 +235,11 @@
     "missing": [],
     "maintenance_orders_equal_existing_orders": true,
     "no_changed_sampling_resource_or_success_thresholds": true
+  },
+  "premeasurement_driver_path_correction": {
+    "before_sha256": "f0f0a2e79460db47f1b41aeef0f7266550f3883f5fc4efcf4bc99ef9fb89dc9b",
+    "after_sha256": "e0c82ff296d65f46bf4fd4f2543fdf135a7e7db34de9e33a2c07c66076011f45",
+    "performance_started": false,
+    "reason": "Resolve three r-relative maintenance/report/rest entry points to the already registered route-reuse harness; no metrics, sampling, limits, binaries or frozen harness changes."
   }
 }
