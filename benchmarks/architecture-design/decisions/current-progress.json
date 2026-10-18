@@ -175,7 +175,7 @@
     },
     "pending_user_resource_decision": "4GiB proposal not applied or needed for the six passing full cases; all use original2GiB cap.",
     "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
-    "final_window_status": "three_full_maintenance_rounds_validated_formal_read_window_running",
+    "final_window_status": "all45_base_read_processes_pass_finite_preregistered_read_supplements_running",
     "latest_checkpoint": "20261018-immutable-route-branch-reuse/proof.json",
     "latest_targeted_tests": {
       "modules": 60,
@@ -358,7 +358,17 @@
       "evidence": "20261018-route-reuse-full-correctness/proof.json"
     },
     "latest_harness_repair_evidence": "20261018-maintenance-retention-repair/proof.json",
-    "latest_maintenance_evidence": "20261018-route-reuse-maintenance-checkpoint/proof.json"
+    "latest_maintenance_evidence": "20261018-route-reuse-maintenance-checkpoint/proof.json",
+    "current_base_read_checkpoint": {
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "independent_processes": 45,
+      "all_full_oracles_passed": true,
+      "valid_samples": 2010,
+      "process_workload_distributions": 201,
+      "compared_workloads": 23,
+      "evidence": "20261018-route-reuse-base-read-checkpoint/proof.json",
+      "acceptance_increase": false
+    }
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
