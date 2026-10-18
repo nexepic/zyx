@@ -1,0 +1,318 @@
+{
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "status": "three_full_maintenance_rounds_validated_endpoint_resource_review_pending",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "summary": {
+    "current": {
+      "independent_processes": 3,
+      "insert_samples": 3000,
+      "median_process_insert_p50_ms": 371.16403349999996,
+      "median_process_insert_p95_ms": 538.4526896,
+      "file_growth_fractions": [
+        0.012565445026178068,
+        0.012565445026178068,
+        0.012565445026178068
+      ],
+      "peak_whole_case_rss_kib": [
+        151572,
+        152116,
+        152180
+      ]
+    },
+    "kuzu": {
+      "independent_processes": 3,
+      "insert_samples": 3000,
+      "median_process_insert_p50_ms": 7.313159000000001,
+      "median_process_insert_p95_ms": 12.414700949999999,
+      "file_growth_fractions": [
+        0.3999999999999999,
+        0.3999999999999999,
+        0.3999999999999999
+      ],
+      "peak_whole_case_rss_kib": [
+        281452,
+        272488,
+        277764
+      ]
+    }
+  },
+  "round1_infrastructure_failure": "Original harness exit1 preserved; independently checked all13windows/report/1000samples and normalworkerexit. OnlypostcloseretentionEXDEVfailed; endpointlost, no endpoint review inferred. See20261018-maintenance-retention-repair.",
+  "rss_scope_correction": "peak_whole_case_rss_kib in legacy report is legacyRUSAGE_CHILDREN, which may include pre-exec driver peak. Use per-case native-process-memory-before-close.json for nativepostexecVmHWM throughfinalvalidation, excludingclosepeak. NevercalllegacyRSSisolatedenginepeak.",
+  "endpoint_review": "Round2/3 closed endpoints retained; reclamation/liveness/read-only recovery review pending after activeformalperf.",
+  "no_missing_original_control_protection_pass": true,
+  "Kuzu_goal": "not_met; entry/implicitCREATEoutput/durabilitydifferencesdisclosed, no strictwininferred",
+  "records": [
+    {
+      "source": "maintenance-comparison-progress.json",
+      "archive": "raw/maintenance-comparison-progress.json.gz",
+      "bytes": 24780,
+      "sha256": "2b2255e81a133cbfe15577c1b071969d5089bfdf4b0d19b7b04e52d5abf6a5fe"
+    },
+    {
+      "source": "maintenance-campaign-completed.json",
+      "archive": "raw/maintenance-campaign-completed.json.gz",
+      "bytes": 4568,
+      "sha256": "51f338104a1836dda487327dd2e1ef5b114345f51da9b46a13f8b32e02dbd711"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/elapsed.json",
+      "archive": "raw/contract--round-1--current--maintenance--elapsed.json.gz",
+      "bytes": 242,
+      "sha256": "8e11d67aaab214d4a2ad32f317b9a9f848fd9c15534e23259d34b3d41fa7e0ae"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-1--current--maintenance--final-storage-resources.json.gz",
+      "bytes": 411,
+      "sha256": "c3109ca541301f9ae08ff7859e91dcd6d9850ea0f728190b51aa2501bbc8d396"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/resource-checkpoint.json",
+      "archive": "raw/contract--round-1--current--maintenance--resource-checkpoint.json.gz",
+      "bytes": 449,
+      "sha256": "7d5030b429ebed76e1bd3f8838073a2f3cc8b9d251703b460c4ccbcaeb0f41b7"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/resource-checkpoint-before-harness-adjudication.json",
+      "archive": "raw/contract--round-1--current--maintenance--resource-checkpoint-before-harness-adjudication.json.gz",
+      "bytes": 163,
+      "sha256": "2cabacc45f1b2e88f9332f6021072af7deb539055fe6f55719e6b400046c03ff"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-1--current--maintenance--campaign-case-completed.json.gz",
+      "bytes": 862,
+      "sha256": "da91d5826c8f72c76bb5614a596d48680bd42b1410742e5bfde375c58f2aa009"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/campaign-case-failed.json",
+      "archive": "raw/contract--round-1--current--maintenance--campaign-case-failed.json.gz",
+      "bytes": 340,
+      "sha256": "783204b27158ef16e3dfd0e83f0f695cea2b4a52e2b4fabe942fe1a425dda0a2"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/report.json",
+      "archive": "raw/contract--round-1--current--maintenance--report.json.gz",
+      "bytes": 2087,
+      "sha256": "ae04e0447fde271273b712cc05708f1b083349ee1b304bb3007af1ce0311ae48"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/native-process-memory-before-close.json",
+      "archive": "raw/contract--round-1--current--maintenance--native-process-memory-before-close.json.gz",
+      "bytes": 292,
+      "sha256": "b74026f9ee9af38c4aee5e517020f011ab98efbdcac1dcd6e83cbe025b14bd6c"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/registration.json",
+      "archive": "raw/contract--round-1--current--maintenance--registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "contract/round-1/current/maintenance/ipc-operation-timings.json",
+      "archive": "raw/contract--round-1--current--maintenance--ipc-operation-timings.json.gz",
+      "bytes": 617729,
+      "sha256": "1730d88f5342135e3be1dbece560c4b3b7fdcd4be5064ebb2ae7414f3d7d7b64"
+    },
+    {
+      "source": "contract/round-1/control/maintenance/campaign-case-failed.json",
+      "archive": "raw/contract--round-1--control--maintenance--campaign-case-failed.json.gz",
+      "bytes": 506,
+      "sha256": "04c202ff66ca840555021221c26e37349f8ef0512c52201d5843e9b2d74c07d2"
+    },
+    {
+      "source": "contract/round-1/kuzu/maintenance/elapsed.json",
+      "archive": "raw/contract--round-1--kuzu--maintenance--elapsed.json.gz",
+      "bytes": 162,
+      "sha256": "bb94a9dc18ac86cacc59d4aa7ebc19387f846d3639d7e5e22a90f6cf4fc464f9"
+    },
+    {
+      "source": "contract/round-1/kuzu/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-1--kuzu--maintenance--final-storage-resources.json.gz",
+      "bytes": 309,
+      "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+    },
+    {
+      "source": "contract/round-1/kuzu/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-1--kuzu--maintenance--campaign-case-completed.json.gz",
+      "bytes": 337,
+      "sha256": "0e6845d457073ebb32da3e33d4abf94c974a215a9ea6d6885cc3dc34dd2c3587"
+    },
+    {
+      "source": "contract/round-1/kuzu/maintenance/report.json",
+      "archive": "raw/contract--round-1--kuzu--maintenance--report.json.gz",
+      "bytes": 1197,
+      "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/elapsed.json",
+      "archive": "raw/contract--round-2--current--maintenance--elapsed.json.gz",
+      "bytes": 242,
+      "sha256": "f61a9870b8955875fd6abb17b9b51cdcaf632c5cc121b2df3c8e181447ed1e69"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-2--current--maintenance--final-storage-resources.json.gz",
+      "bytes": 411,
+      "sha256": "62fe69539a621ca758259f09294d2c4ef3275c2582336898ea05d7706ca98529"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/resource-checkpoint.json",
+      "archive": "raw/contract--round-2--current--maintenance--resource-checkpoint.json.gz",
+      "bytes": 360,
+      "sha256": "f32739185b2833a2bfe634c9a4c8bb5a243bd5fc789141e83d4cae1753bee8d9"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-2--current--maintenance--campaign-case-completed.json.gz",
+      "bytes": 343,
+      "sha256": "2a444d4cdc575248d5a3a26f81d5eeeb0dd82e90bcfc3eac975a8ace44b79ba1"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/report.json",
+      "archive": "raw/contract--round-2--current--maintenance--report.json.gz",
+      "bytes": 2087,
+      "sha256": "ea7f0216e05b383d1b0e871c0b498b569034d8d920d53b19e26bd157b46cc8a1"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/native-process-memory-before-close.json",
+      "archive": "raw/contract--round-2--current--maintenance--native-process-memory-before-close.json.gz",
+      "bytes": 292,
+      "sha256": "ad0e2954ad82a7d219401f06084123635a62dcc42b37047b40917858534abe12"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/registration.json",
+      "archive": "raw/contract--round-2--current--maintenance--registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "contract/round-2/current/maintenance/ipc-operation-timings.json",
+      "archive": "raw/contract--round-2--current--maintenance--ipc-operation-timings.json.gz",
+      "bytes": 617727,
+      "sha256": "14750f6fc2b0704fa601196a702cb0791233a35346bdc0924d726b29c3369d52"
+    },
+    {
+      "source": "contract/round-2/control/maintenance/campaign-case-failed.json",
+      "archive": "raw/contract--round-2--control--maintenance--campaign-case-failed.json.gz",
+      "bytes": 506,
+      "sha256": "a48feb047939aa290f7087bcc1c0e5f951460180fcf4b7bdb592c04ee9f60782"
+    },
+    {
+      "source": "contract/round-2/kuzu/maintenance/elapsed.json",
+      "archive": "raw/contract--round-2--kuzu--maintenance--elapsed.json.gz",
+      "bytes": 162,
+      "sha256": "dca571af46a4aad6479bdcf60b533854f269042f186cad6f71712cbc8d2b15fa"
+    },
+    {
+      "source": "contract/round-2/kuzu/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-2--kuzu--maintenance--final-storage-resources.json.gz",
+      "bytes": 309,
+      "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+    },
+    {
+      "source": "contract/round-2/kuzu/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-2--kuzu--maintenance--campaign-case-completed.json.gz",
+      "bytes": 337,
+      "sha256": "023b99b632994eca6e4092b8ffb6a82e5e801bdd172d9863c077b67fc15a7a81"
+    },
+    {
+      "source": "contract/round-2/kuzu/maintenance/report.json",
+      "archive": "raw/contract--round-2--kuzu--maintenance--report.json.gz",
+      "bytes": 1197,
+      "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/elapsed.json",
+      "archive": "raw/contract--round-3--current--maintenance--elapsed.json.gz",
+      "bytes": 242,
+      "sha256": "9de5a01791895be6a1eb4e6e7e2fd182197f7dc2a5e251c1c2326d4271f88064"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-3--current--maintenance--final-storage-resources.json.gz",
+      "bytes": 411,
+      "sha256": "8719f5c0ee0874ee39a2d6f0fe56aea4b7a8f10a01d4db607ee9534dd1ce3287"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/resource-checkpoint.json",
+      "archive": "raw/contract--round-3--current--maintenance--resource-checkpoint.json.gz",
+      "bytes": 360,
+      "sha256": "a46262a35b28624bc57f83ab655f3b61c572ff71c9d75c095cd29451f293f331"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-3--current--maintenance--campaign-case-completed.json.gz",
+      "bytes": 343,
+      "sha256": "503b98525bf611be444594dbf632c912c0a496a3e2a4a5a5a4f62751d0808f00"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/report.json",
+      "archive": "raw/contract--round-3--current--maintenance--report.json.gz",
+      "bytes": 2087,
+      "sha256": "0d7b67b1250ed139f545b2a9e661939cba9ce905a6d9485eedf41fdc0199a506"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/native-process-memory-before-close.json",
+      "archive": "raw/contract--round-3--current--maintenance--native-process-memory-before-close.json.gz",
+      "bytes": 292,
+      "sha256": "cacf31e159e539dcd7329510321ce4b2cc66b2b906490970fe4e978bbd1d058e"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/registration.json",
+      "archive": "raw/contract--round-3--current--maintenance--registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "contract/round-3/current/maintenance/ipc-operation-timings.json",
+      "archive": "raw/contract--round-3--current--maintenance--ipc-operation-timings.json.gz",
+      "bytes": 617736,
+      "sha256": "d1cee3c74f3eb6f886be13ce1e2dbb0c0489d96a930225401e4fc5e933c9c017"
+    },
+    {
+      "source": "contract/round-3/control/maintenance/campaign-case-failed.json",
+      "archive": "raw/contract--round-3--control--maintenance--campaign-case-failed.json.gz",
+      "bytes": 506,
+      "sha256": "577957546b0b499b664d94c9f73f08fafd92643001e5a7d2ab01d80fbef8b3a7"
+    },
+    {
+      "source": "contract/round-3/kuzu/maintenance/elapsed.json",
+      "archive": "raw/contract--round-3--kuzu--maintenance--elapsed.json.gz",
+      "bytes": 161,
+      "sha256": "edc4f6b13ba688c3d557f0e9a1411bcce1ed78139f540563894be86a1ac3342d"
+    },
+    {
+      "source": "contract/round-3/kuzu/maintenance/final-storage-resources.json",
+      "archive": "raw/contract--round-3--kuzu--maintenance--final-storage-resources.json.gz",
+      "bytes": 309,
+      "sha256": "c3ed94fa45494e441e8e07fa8cb97d682b3a6621c1d334e43bb36d5bc0d84503"
+    },
+    {
+      "source": "contract/round-3/kuzu/maintenance/campaign-case-completed.json",
+      "archive": "raw/contract--round-3--kuzu--maintenance--campaign-case-completed.json.gz",
+      "bytes": 337,
+      "sha256": "d5142c0f70ec7edc5ff5f8bd70719e52de9a27c5994096113f44fc4be3e13941"
+    },
+    {
+      "source": "contract/round-3/kuzu/maintenance/report.json",
+      "archive": "raw/contract--round-3--kuzu--maintenance--report.json.gz",
+      "bytes": 1197,
+      "sha256": "bdaf0bdade8bed7158d8e65e8afa478d6948481aa7ecca2e93e1520220ef83c3"
+    },
+    {
+      "source": "diagnostic-maintenance-round3-retention.json",
+      "archive": "raw/diagnostic-maintenance-round3-retention.json.gz",
+      "bytes": 460,
+      "sha256": "73e5d2992e73887e6b4f21fb9305282b26dc97fcc14ad64f19f61a2db19edc12"
+    },
+    {
+      "source": "diagnostic-maintenance-round2-retention.json",
+      "archive": "raw/diagnostic-maintenance-round2-retention.json.gz",
+      "bytes": 461,
+      "sha256": "e994a55f45f7375ec24ffa70ccf2b93a0c6d159b9e68e9373834e0f6231da624"
+    }
+  ]
+}
