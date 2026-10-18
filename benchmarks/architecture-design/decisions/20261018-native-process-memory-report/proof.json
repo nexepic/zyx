@@ -1,0 +1,145 @@
+{
+  "status": "benchmark_resource_capture_fix_verified_no_acceptance_score_increase",
+  "source_files": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "70476620bbc90ef43611083ffaac44cc4c529756abcb48db6afa401cb1141fc3"
+    },
+    {
+      "path": "apps/compare_benchmark/main.cpp",
+      "sha256": "d84e207cdfc6cd98dd2477b5a21727bba126aa5793536ec329faaa71e6626c67"
+    }
+  ],
+  "scope": "Optional benchmark-only report after all query timers. Does not certify any production candidate or compare engine memory wins.",
+  "capture_on_linux": "/proc/self/status VmHWM from the post-exec memory map",
+  "other_platforms": "Windows PeakWorkingSetSize; POSIX non-Linux rusage explicitly labelled possible pre-exec peak. Only Linux was executed here.",
+  "same_harness_copied_to_control": true,
+  "harness_sha256": "d84e207cdfc6cd98dd2477b5a21727bba126aa5793536ec329faaa71e6626c67",
+  "deliberately_resident_parent_bytes": 282288128,
+  "legacy_children_peak_bytes": 300273664,
+  "checked_cases": [
+    {
+      "label": "current",
+      "returncode": 0,
+      "binary_sha256": "33ed38874b650253b8393b83d3000ae489b47b496d240fa6b5dc020ee0bf1630",
+      "negative_existing_path_check": false,
+      "formal_performance_samples": 0,
+      "native_process_memory": {
+        "peak_rss_bytes": 17797120,
+        "source": "linux_post_exec_VmHWM",
+        "scope": "whole_native_benchmark_process_including_setup_and_output",
+        "capture": "after_all_query_timers"
+      }
+    },
+    {
+      "label": "control",
+      "returncode": 0,
+      "binary_sha256": "8535fca445c4f5e7836315f2452efa97651a9f7474951c628816552cf9764791",
+      "negative_existing_path_check": false,
+      "formal_performance_samples": 0,
+      "native_process_memory": {
+        "peak_rss_bytes": 12349440,
+        "source": "linux_post_exec_VmHWM",
+        "scope": "whole_native_benchmark_process_including_setup_and_output",
+        "capture": "after_all_query_timers"
+      }
+    },
+    {
+      "label": "default-no-report",
+      "returncode": 0,
+      "binary_sha256": "33ed38874b650253b8393b83d3000ae489b47b496d240fa6b5dc020ee0bf1630",
+      "negative_existing_path_check": false,
+      "formal_performance_samples": 0
+    },
+    {
+      "label": "existing-report-rejected",
+      "returncode": 1,
+      "binary_sha256": "33ed38874b650253b8393b83d3000ae489b47b496d240fa6b5dc020ee0bf1630",
+      "negative_existing_path_check": true,
+      "formal_performance_samples": 0
+    }
+  ],
+  "initial_test_invocation_correction": "The first tiny integration verifier parsed only stdout; existing error events use stderr. Preserve the failed verifier log, then check both JSONL streams on a fresh directory. No C++ source or expectation was weakened.",
+  "formal_performance_samples": 0,
+  "threshold_or_resource_limit_change": false,
+  "records": [
+    {
+      "name": "verify-native-process-memory-report.py",
+      "archive": "raw/verify-native-process-memory-report.py.gz",
+      "uncompressed_sha256": "5db7a5eee77d721eb17b17a8181fdb8ec8082e0c756b66bc0e263850b246c10d",
+      "uncompressed_bytes": 3788
+    },
+    {
+      "name": "native-process-memory-report-check.json",
+      "archive": "raw/native-process-memory-report-check.json.gz",
+      "uncompressed_sha256": "f41e4e928e581c92d86443e63007532b361abb4b1fb2fc62b133dbd456435c91",
+      "uncompressed_bytes": 1916
+    },
+    {
+      "name": "native-process-memory-report-check.log",
+      "archive": "raw/native-process-memory-report-check.log.gz",
+      "uncompressed_sha256": "60e3abbade10a878c57ce8d2ef1aad3f0e7ade37818cc4f64266ba24a5742642",
+      "uncompressed_bytes": 1522
+    },
+    {
+      "name": "native-process-memory-report-check-verified/control-memory.json",
+      "archive": "raw/native-process-memory-report-check-verified--control-memory.json.gz",
+      "uncompressed_sha256": "2ef25c53df51f3a99e044cc74510a1436db9ea252324e9274a056749dcb47540",
+      "uncompressed_bytes": 164
+    },
+    {
+      "name": "native-process-memory-report-check-verified/current-memory.json",
+      "archive": "raw/native-process-memory-report-check-verified--current-memory.json.gz",
+      "uncompressed_sha256": "be3a2edb8a8a1eca800aa5cd16d3b6e7dcf10165a0264b389c4bf22553f55d8f",
+      "uncompressed_bytes": 164
+    },
+    {
+      "name": "native-process-memory-report-check-verified/control-stdout.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--control-stdout.jsonl.gz",
+      "uncompressed_sha256": "3540b3df4ea771b9c3c4b0fb235ff7675f0422cd4c57e1ed5551175fa8988fb6",
+      "uncompressed_bytes": 240
+    },
+    {
+      "name": "native-process-memory-report-check-verified/existing-report-rejected-stdout.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--existing-report-rejected-stdout.jsonl.gz",
+      "uncompressed_sha256": "1e366f0fd41d4597a486af07a681c5a8e1493b0074ce7f0be9efeef191fe84f0",
+      "uncompressed_bytes": 240
+    },
+    {
+      "name": "native-process-memory-report-check-verified/default-no-report-stdout.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--default-no-report-stdout.jsonl.gz",
+      "uncompressed_sha256": "1d7ff1196183e2e44a3c8fd2c4eaa277e8dd35b338f2a017231dcfbfbdcc1169",
+      "uncompressed_bytes": 240
+    },
+    {
+      "name": "native-process-memory-report-check-verified/current-stdout.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--current-stdout.jsonl.gz",
+      "uncompressed_sha256": "c630b56c79939992b23e6ea46b5e94370675fa7928b3692617a3e8926c0c5048",
+      "uncompressed_bytes": 240
+    },
+    {
+      "name": "native-process-memory-report-check-verified/existing-report-rejected-stderr.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--existing-report-rejected-stderr.jsonl.gz",
+      "uncompressed_sha256": "b1b4aeb7a65a2ebc12ef2a21038f8b81132091e8709445113c6f014accfb73d0",
+      "uncompressed_bytes": 201
+    },
+    {
+      "name": "native-process-memory-report-check-verified/default-no-report-stderr.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--default-no-report-stderr.jsonl.gz",
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    },
+    {
+      "name": "native-process-memory-report-check-verified/current-stderr.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--current-stderr.jsonl.gz",
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    },
+    {
+      "name": "native-process-memory-report-check-verified/control-stderr.jsonl",
+      "archive": "raw/native-process-memory-report-check-verified--control-stderr.jsonl.gz",
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "uncompressed_bytes": 0
+    }
+  ]
+}

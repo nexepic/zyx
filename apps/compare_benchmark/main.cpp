@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -26,7 +27,64 @@
 #include <variant>
 #include <vector>
 
+#if defined(_WIN32)
+#include <windows.h>
+#include <psapi.h>
+#else
+#include <sys/resource.h>
+#endif
+
 namespace {
+
+	// Collected after run(), outside every query timer. Linux VmHWM belongs to
+	// the post-exec memory map; getrusage can retain the Python launcher's peak.
+	void emitProcessMemoryReport() {
+		const char *destination = std::getenv("ZYX_COMPARE_PROCESS_MEMORY_REPORT");
+		if (destination == nullptr || *destination == '\0') return;
+		uint64_t bytes = 0U;
+		const char *source = nullptr;
+#if defined(__linux__)
+		std::ifstream status("/proc/self/status");
+		std::string key;
+		while (status >> key) {
+			if (key == "VmHWM:") {
+				uint64_t kib = 0U;
+				std::string unit;
+				if (!(status >> kib >> unit) || unit != "kB" || kib > std::numeric_limits<uint64_t>::max() / 1024U)
+					throw std::runtime_error("invalid native process VmHWM");
+				bytes = kib * 1024U;
+				break;
+			}
+			std::string remainder;
+			std::getline(status, remainder);
+		}
+		source = "linux_post_exec_VmHWM";
+#elif defined(_WIN32)
+		PROCESS_MEMORY_COUNTERS counters{};
+		if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)) == 0)
+			throw std::runtime_error("could not query native process memory");
+		bytes = static_cast<uint64_t>(counters.PeakWorkingSetSize);
+		source = "windows_peak_working_set";
+#else
+		rusage usage{};
+		if (getrusage(RUSAGE_SELF, &usage) != 0 || usage.ru_maxrss < 0)
+			throw std::runtime_error("could not query native process memory");
+#if defined(__APPLE__)
+		bytes = static_cast<uint64_t>(usage.ru_maxrss);
+#else
+		bytes = static_cast<uint64_t>(usage.ru_maxrss) * 1024U;
+#endif
+		source = "posix_rusage_possible_pre_exec_peak";
+#endif
+		if (bytes == 0U || std::filesystem::exists(destination))
+			throw std::runtime_error("native process memory report requires a peak and a fresh path");
+		std::ofstream output(destination);
+		output << "{\"peak_rss_bytes\":" << bytes << ",\"source\":\"" << source
+			   << "\",\"scope\":\"whole_native_benchmark_process_including_setup_and_output\","
+			   << "\"capture\":\"after_all_query_timers\"}\n";
+		output.close();
+		if (!output) throw std::runtime_error("could not write native process memory report");
+	}
 
 	constexpr std::string_view kDatabase = "zyx";
 	constexpr std::string_view kEquivalentMode = "api";
@@ -1714,7 +1772,9 @@ int main(int argc, char **argv) {
 		if (options.onlyWorkload.has_value()) {
 			workload = *options.onlyWorkload;
 		}
-		return run(options);
+		const int result = run(options);
+		emitProcessMemoryReport();
+		return result;
 	} catch (const std::exception &exc) {
 		emitError(workload, scale, exc.what());
 		return 1;
