@@ -1,6 +1,7 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp"
+#include <random>
 
 namespace {
 LargeValueWriteOptions chunkOptions() {
@@ -53,6 +54,84 @@ TEST(PropertyRowChunkPolicyTest, CostAdmissionKeepsSmallAndSingletonFieldsInRowM
 	EXPECT_TRUE(PropertyRowChunkPolicy::select(EntityPropertyLargeValuePayloadCodec::encode(roots), base, true).logical_chunk_ends.empty());
 	base.codec = LargeValueCodec::LVC_LZ4;
 	EXPECT_TRUE(PropertyRowChunkPolicy::select(payload, base, true).logical_chunk_ends.empty());
+}
+
+TEST(PropertyRowChunkPolicyTest, CompressionRetainsExplicitPoliciesAndRequiresRawFallback) {
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(
+		std::vector<PropertyCollectionRootEntry>{{1U, graph::PropertyValue(std::string(256U * 1024U, 'x'))},
+			{2U, graph::PropertyValue(7)}});
+	LargeValueCompressionOptions base;
+	EXPECT_EQ(PropertyRowChunkPolicy::select(payload, base, false), base);
+	base.allow_raw_fallback = false;
+	const auto strictRaw = PropertyRowChunkPolicy::select(payload, base, true);
+	EXPECT_EQ(strictRaw.codec, LargeValueCodec::LVC_RAW);
+	EXPECT_FALSE(strictRaw.allow_raw_fallback);
+	base.codec = LargeValueCodec::LVC_ZSTD;
+	EXPECT_EQ(PropertyRowChunkPolicy::select(payload, base, true), base);
+	base = {};
+	base.logical_chunk_ends = {32U};
+	EXPECT_EQ(PropertyRowChunkPolicy::select(payload, base, true), base);
+}
+
+TEST_F(RelocatableMetadataStoreTest, AdmittedRowCompressionReducesActualPagesAndPreservesCanonicalValues) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	const std::vector<PropertyCollectionRootEntry> roots{
+		{1U, graph::PropertyValue(std::string(256U * 1024U, 'x'))}, {2U, graph::PropertyValue(7)}};
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(roots);
+	auto options = chunkOptions();
+	options.compression = PropertyRowChunkPolicy::select(payload, {}, true);
+	ASSERT_FALSE(options.compression.logical_chunk_ends.empty());
+	auto raw = options.compression;
+	raw.codec = LargeValueCodec::LVC_RAW;
+	const auto rawPages = store.plannedDataPageCount(payload, raw);
+	const auto written = store.write(payload, options, LogSequenceNumber(2U));
+	auto pin = metadata->openSnapshot();
+	size_t actualPages = 0U;
+	for (const auto &manifest : store.manifestTree(pin, written.manifest)) {
+		for (const auto &chunk : manifest.chunks) actualPages += chunk.data_page_count;
+	}
+#if ZYX_HAS_LZ4
+	EXPECT_EQ(options.compression.codec, LargeValueCodec::LVC_LZ4);
+	EXPECT_LT(actualPages, rawPages);
+#else
+	EXPECT_EQ(actualPages, rawPages);
+#endif
+	EXPECT_EQ(store.read(pin, written.reference), payload);
+	EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::decode(store.read(pin, written.reference)), roots);
+	for (const size_t offset : {size_t{0}, size_t{32760}, payload.size() - 16U}) {
+		EXPECT_EQ(store.readRange(pin, written.reference, offset, 16U),
+			std::vector<std::byte>(payload.begin() + offset, payload.begin() + offset + 16U));
+	}
+}
+
+TEST_F(RelocatableMetadataStoreTest, IncompressibleRowChunksFallBackWithoutGrowingTheRawPageBound) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	std::mt19937 random(314159U);
+	std::string body(256U * 1024U, ' ');
+	for (auto &byte : body) byte = static_cast<char>(32U + random() % 95U);
+	const auto payload = EntityPropertyLargeValuePayloadCodec::encode(
+		std::vector<PropertyCollectionRootEntry>{{1U, graph::PropertyValue(body)}, {2U, graph::PropertyValue(7)}});
+	auto options = chunkOptions();
+	options.compression = PropertyRowChunkPolicy::select(payload, {}, true);
+	auto raw = options.compression;
+	raw.codec = LargeValueCodec::LVC_RAW;
+	const auto rawPages = store.plannedDataPageCount(payload, raw);
+	const auto written = store.write(payload, options, LogSequenceNumber(2U));
+	auto pin = metadata->openSnapshot();
+	size_t actualPages = 0U;
+	bool rawBodyChunk = false;
+	for (const auto &manifest : store.manifestTree(pin, written.manifest)) {
+		for (const auto &chunk : manifest.chunks) {
+			actualPages += chunk.data_page_count;
+			rawBodyChunk |= chunk.codec == LargeValueCodec::LVC_RAW &&
+				chunk.uncompressed_bytes == RSS_LARGE_VALUE_EXTENT_32K_BYTES;
+		}
+	}
+	EXPECT_TRUE(rawBodyChunk);
+	EXPECT_LE(actualPages, rawPages);
+	EXPECT_EQ(store.read(pin, written.reference), payload);
 }
 
 TEST_F(RelocatableMetadataStoreTest, StreamedChunkBoundaryMaterializationUsesActualOffsetsAcrossManifestTreeLevels) {

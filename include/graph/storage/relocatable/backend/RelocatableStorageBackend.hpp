@@ -98,7 +98,8 @@ namespace graph::storage {
         size_t maximum_integrity_workspace_bytes = 8U * 1024U * 1024U;
         // Per explicit reclamation pass, admitted before publication.
         size_t maximum_reclaim_workspace_bytes = 8U * 1024U * 1024U;
-		// Cost-admitted ROW chunk placement; callers can retain uniform chunks.
+		// Cost-admitted ROW chunks with bounded compression and RAW fallback;
+		// callers can retain uniform RAW placement by disabling this policy.
 		bool adaptive_property_row_chunks = true;
 		// Internal query-only permission, independent of graph write permissions.
 		bool query_scratch_enabled = false;
