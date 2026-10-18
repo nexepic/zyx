@@ -1,0 +1,20 @@
+--- a/benchmarks/graphdb-comparison/runner/workload_preflight.py
++++ b/benchmarks/graphdb-comparison/runner/workload_preflight.py
+@@ -46,9 +46,15 @@
+ 
+     def remaining(self):
+         origin = self.run_started if self.profile == "smoke" else self.started
+-        remaining = self.limit - (self.clock() - origin)
++        limit = self.limit
++        if self.profile == "contract" and self.current_family == "dynamic":
++            configured = os.environ.get("ZYX_APPROVED_DYNAMIC_TIMEOUT_SECONDS", "1800")
++            if configured not in {"1800", "3600"}:
++                raise ValueError("dynamic contract deadline must be 1800 or 3600 seconds")
++            limit = int(configured)
++        remaining = limit - (self.clock() - origin)
+         if remaining <= 0:
+-            raise TimeoutError(f"{self.profile} family {self.current_family} exceeded its {self.limit}-second budget")
++            raise TimeoutError(f"{self.profile} family {self.current_family} exceeded its {limit}-second budget")
+         return remaining
+ 
+     def append(self, name):

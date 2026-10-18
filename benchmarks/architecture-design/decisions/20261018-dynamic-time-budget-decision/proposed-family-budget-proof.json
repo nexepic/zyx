@@ -1,0 +1,43 @@
+{
+  "proposal_only": true,
+  "applied_to_production_runner": false,
+  "approved": false,
+  "formal_samples": 0,
+  "finding": "The existing proposal only changes parent process waits; NativeWorker.call still takes the minimum of operation timeout and ContractFamilyProgress.remaining, whose contract limit remains1800. Parent and inner deadlines must agree.",
+  "activation_after_approval": "Apply both proposed patches to the frozen evaluation harness and pass ZYX_APPROVED_DYNAMIC_TIMEOUT_SECONDS=3600 only for dynamic contract processes. Keep all other limits unchanged.",
+  "isolated_clock_checks": [
+    {
+      "family": "dynamic",
+      "profile": "contract",
+      "configured_override": null,
+      "remaining_checked": 1,
+      "exact_deadline_rejected": true
+    },
+    {
+      "family": "dynamic",
+      "profile": "contract",
+      "configured_override": "3600",
+      "remaining_checked": 1800,
+      "exact_deadline_rejected": true
+    },
+    {
+      "family": "point",
+      "profile": "contract",
+      "configured_override": "3600",
+      "remaining_checked": 1,
+      "exact_deadline_rejected": true
+    },
+    {
+      "family": "dynamic",
+      "profile": "smoke",
+      "configured_override": "3600",
+      "remaining_checked": 1,
+      "exact_deadline_rejected": true
+    },
+    {
+      "unregistered_limit_rejected": true
+    }
+  ],
+  "patch_source_sha256": "b3d61cb3fe4bc9df8308d425e9bdf3e9274549113fce5df3ac97c150ecd65f18",
+  "frozen_harness_requirement": "The family-budget patch targets the current runner including the accepted smoke-profile changes. Freeze that exact runner before applying; do not apply blindly to a different historical /tmp harness."
+}
