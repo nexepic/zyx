@@ -28,9 +28,44 @@ namespace graph::storage {
 
 	namespace {
 
+		struct ReusableRouteLeaf final {
+			PhysicalPageRef reference;
+			size_t entries = 0U;
+			bool unchanged = false;
+		};
+
+		// Per-call, charged work tables, never a persistent or snapshot cache.
+		struct RouteBranchReuse final {
+			utils::OwnedMap<uint64_t, ReusableRouteLeaf> leaves;
+			utils::OwnedMap<std::pair<uint16_t, uint64_t>, PhysicalPageRef> nodes;
+			PhysicalPageRef root;
+			bool enabled = true;
+
+			void disable() {
+				leaves.clear();
+				nodes.clear();
+				root = {};
+				enabled = false;
+				debug::PerfTrace::addValue("native_graph.route.reuse_admission_fallback", 1);
+			}
+
+			template<class Map, class Key, class Value>
+			void remember(Map &map, Key key, Value value) {
+				if (!enabled) return;
+				try { map.emplace(key, value); }
+				catch (const query::execution::detail::ResourceAdmissionDenied &) {
+					// Optional reuse must not turn index admission into a write failure.
+					disable();
+				}
+			}
+		};
+
+		std::vector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
+			PhysicalPageRef root, RouteBranchReuse *reuse, std::span<const MetadataPageRoute> pending);
+
 		template<class Visitor>
 		void visitBatchBaseRoutes(MetadataPageFile &pages, const MetadataWriteBatch &batch,
-								 PhysicalPageRef root, Visitor &&visitor) {
+								 PhysicalPageRef root, Visitor &&visitor, RouteBranchReuse *reuse = nullptr) {
 			debug::PerfTrace::addValue("native_graph.route.publication_base_traversals", 1);
 			MetadataPageRouteDirectory directory(pages);
 			if (batch.metadataRoutePruningRequested()) {
@@ -41,7 +76,20 @@ namespace graph::storage {
 				physical.page_directory_root = header.data_page_directory_root;
 				for (const auto &route : directory.collectRoutesFromPhysicalDirectoryRoots(physical)) visitor(route);
 			} else {
-				for (const auto &route : directory.collectRoutesFromRouteBranch(batch.candidate(), root)) visitor(route);
+				if (reuse != nullptr && !batch.bootstrapRouteRefreshRequested()) {
+					const auto pending = batch.metadataPageRoutes();
+					try {
+						for (const auto &route : collectRouteBranch(pages, batch.candidate(), root, reuse, pending)) visitor(route);
+					} catch (const query::execution::detail::ResourceAdmissionDenied &) {
+						// The optional table can also crowd a later mandatory codec read.
+						// Refund it and validate the source again through the original path.
+						if (!reuse->enabled) throw;
+						reuse->disable();
+						for (const auto &route : directory.collectRoutesFromRouteBranch(batch.candidate(), root)) visitor(route);
+					}
+				} else {
+					for (const auto &route : directory.collectRoutesFromRouteBranch(batch.candidate(), root)) visitor(route);
+				}
 			}
 		}
 
@@ -94,6 +142,7 @@ namespace graph::storage {
 		struct Child final {
 			uint64_t ordinal = 0U;
 			PhysicalPageRef reference{};
+			bool changed = false;
 		};
 
 		[[nodiscard]] PhysicalPageRef writeNode(MetadataPageFile &pages, MetadataWriteBatch &batch, uint16_t level,
@@ -186,63 +235,91 @@ namespace graph::storage {
 
 	MetadataPageRouteDirectory::MetadataPageRouteDirectory(MetadataPageFile &pages) : pages_(pages) {}
 
-	PhysicalPageRef MetadataPageRouteDirectory::buildFromCompleteRouteSet(MetadataWriteBatch &batch,
-																					std::span<const MetadataPageRoute> routes) {
-		if (routes.empty()) {
-			throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
-									"metadata PageId route branch requires a nonempty complete route set");
-		}
-		uint64_t previousId = 0U;
-		for (const MetadataPageRoute &route: routes) {
-			validateRoute(route, batch.candidate());
-			if (route.page_id.value() <= previousId) {
-				throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
-									"metadata PageId route set must be strictly ordered and unique");
+	namespace {
+		PhysicalPageRef buildRouteBranch(MetadataPageFile &pages, MetadataWriteBatch &batch,
+			std::span<const MetadataPageRoute> routes, const RouteBranchReuse *reuse) {
+			if (routes.empty()) throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
+				"metadata PageId route branch requires a nonempty complete route set");
+			uint64_t previousId = 0U;
+			for (const auto &route : routes) {
+				validateRoute(route, batch.candidate());
+				if (route.page_id.value() <= previousId) throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
+					"metadata PageId route set must be strictly ordered and unique");
+				previousId = route.page_id.value();
 			}
-			previousId = route.page_id.value();
-		}
-
-		std::vector<Child> children;
-		for (size_t begin = 0U; begin < routes.size();) {
-			const uint64_t ordinal = leafOrdinal(routes[begin].page_id);
-			size_t end = begin;
-			while (end < routes.size() && leafOrdinal(routes[end].page_id) == ordinal) {
-				++end;
-			}
-			MetadataPageRouteLeafPage leaf;
-			leaf.page_id = batch.allocateMetadataPageId();
-			leaf.generation = batch.generation();
-			leaf.committed_lsn = batch.checkpointLsn();
-			leaf.routes.assign(routes.begin() + static_cast<std::ptrdiff_t>(begin),
-								   routes.begin() + static_cast<std::ptrdiff_t>(end));
-			const PhysicalPageRef reference = batch.allocatePage();
-			pages_.writeMetadataPageRouteLeaf(reference, leaf);
-			children.push_back({ordinal, reference});
-			begin = end;
-		}
-
-		uint16_t level = 0U;
-		while (children.size() > 1U) {
-			std::vector<Child> parents;
-			for (size_t begin = 0U; begin < children.size();) {
-				const uint64_t parentOrdinal = children[begin].ordinal / RSS_CATALOG_RADIX_FANOUT;
-				size_t end = begin;
-				while (end < children.size() && children[end].ordinal / RSS_CATALOG_RADIX_FANOUT == parentOrdinal) {
-					++end;
+			const auto writeOrReuse = [&](uint16_t level, uint64_t ordinal,
+				std::span<const Child> children, bool rootNode) -> Child {
+				PhysicalPageRef previous;
+				if (reuse != nullptr && reuse->enabled &&
+					std::ranges::none_of(children, [](const Child &child) { return child.changed; })) {
+					if (rootNode) previous = reuse->root;
+					else if (const auto found = reuse->nodes.find({level, ordinal}); found != reuse->nodes.end())
+						previous = found->second;
 				}
-				parents.push_back({parentOrdinal,
-								   writeNode(pages_, batch, level,
-											 std::span<const Child>(children).subspan(begin, end - begin), false)});
+				if (previous.isValid()) {
+					const auto old = pages.readMetadataRadix(previous);
+					std::array<PhysicalPageRef, RSS_CATALOG_RADIX_FANOUT> expected{};
+					for (const auto &child : children) expected[child.ordinal % RSS_CATALOG_RADIX_FANOUT] = child.reference;
+					if (old.kind == (rootNode ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL) &&
+						old.directory_type == MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE && old.level == level &&
+						!old.logical_children_enabled && old.children == expected) {
+						debug::PerfTrace::addValue("native_graph.route.reused_radix_nodes", 1);
+						return {ordinal, previous, false};
+					}
+				}
+				return {ordinal, writeNode(pages, batch, level, children, rootNode), true};
+			};
+			std::vector<Child> children;
+			for (size_t begin = 0U; begin < routes.size();) {
+				const uint64_t ordinal = leafOrdinal(routes[begin].page_id);
+				size_t end = begin;
+				while (end < routes.size() && leafOrdinal(routes[end].page_id) == ordinal) ++end;
+				PhysicalPageRef reference;
+				bool changed = true;
+				if (reuse != nullptr && reuse->enabled) {
+					const auto found = reuse->leaves.find(ordinal);
+					if (found != reuse->leaves.end() && found->second.unchanged && found->second.entries == end - begin) {
+						reference = found->second.reference;
+						changed = false;
+						debug::PerfTrace::addValue("native_graph.route.reused_leaves", 1);
+					}
+				}
+				if (changed) {
+					MetadataPageRouteLeafPage leaf;
+					leaf.page_id = batch.allocateMetadataPageId();
+					leaf.generation = batch.generation();
+					leaf.committed_lsn = batch.checkpointLsn();
+					leaf.routes.assign(routes.begin() + static_cast<std::ptrdiff_t>(begin),
+						routes.begin() + static_cast<std::ptrdiff_t>(end));
+					reference = batch.allocatePage();
+					pages.writeMetadataPageRouteLeaf(reference, leaf);
+				}
+				children.push_back({ordinal, reference, changed});
 				begin = end;
 			}
-			children = std::move(parents);
-			if (level == RSS_CATALOG_RADIX_MAX_LEVEL) { // valid uint64 logical IDs cannot require another radix level.
-				throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-										"metadata PageId route set exceeds the radix identity domain");
+			uint16_t level = 0U;
+			while (children.size() > 1U) {
+				std::vector<Child> parents;
+				for (size_t begin = 0U; begin < children.size();) {
+					const uint64_t ordinal = children[begin].ordinal / RSS_CATALOG_RADIX_FANOUT;
+					size_t end = begin;
+					while (end < children.size() && children[end].ordinal / RSS_CATALOG_RADIX_FANOUT == ordinal) ++end;
+					parents.push_back(writeOrReuse(level, ordinal,
+						std::span<const Child>(children).subspan(begin, end - begin), false));
+					begin = end;
+				}
+				children = std::move(parents);
+				if (level == RSS_CATALOG_RADIX_MAX_LEVEL) throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					"metadata PageId route set exceeds the radix identity domain");
+				++level;
 			}
-			++level;
+			return writeOrReuse(level, 0U, children, true).reference;
 		}
-		return writeNode(pages_, batch, level, children, true);
+	}
+
+	PhysicalPageRef MetadataPageRouteDirectory::buildFromCompleteRouteSet(MetadataWriteBatch &batch,
+		std::span<const MetadataPageRoute> routes) {
+		return buildRouteBranch(pages_, batch, routes, nullptr);
 	}
 
 	utils::OwnedStdVector<MetadataPageRoute>
@@ -425,86 +502,110 @@ namespace graph::storage {
 		return buildFromCompleteRouteSet(batch, complete);
 	}
 
+	namespace {
+		std::vector<MetadataPageRoute> collectRouteBranch(MetadataPageFile &pages, const Superblock &superblock,
+			PhysicalPageRef root, RouteBranchReuse *reuse, std::span<const MetadataPageRoute> pending) {
+			debug::ScopedPerfTimer timer("native_graph.route.collect_route_branch");
+			validateReference(root, superblock, "metadata PageId route branch has an invalid root reference");
+			std::set<std::pair<uint64_t, uint8_t>> bootstrapFrames;
+			std::set<std::pair<uint64_t, uint8_t>> targetFrames;
+			std::map<uint64_t, PhysicalPageRef> routes;
+
+			const auto registerBootstrapFrame = [&bootstrapFrames](PhysicalPageRef reference) {
+				if (!bootstrapFrames.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
+										"metadata PageId route branch aliases or cycles through bootstrap frames");
+				}
+			};
+			const auto registerRoute = [&](const MetadataPageRoute &route) {
+				validateRoute(route, superblock);
+				if (!targetFrames.emplace(route.physical_reference.physical_slot.value(),
+										  route.physical_reference.frame_index)
+						 .second ||
+					!routes.emplace(route.page_id.value(), route.physical_reference).second) {
+					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
+										"metadata PageId route branch has duplicate logical pages or physical frames");
+				}
+			};
+
+			const auto visitNode = [&](auto &&self, PhysicalPageRef reference, bool rootNode,
+										  uint16_t expectedLevel, uint64_t ordinalBase) -> void {
+				validateReference(reference, superblock, "metadata PageId route branch has an invalid radix reference");
+				registerBootstrapFrame(reference);
+				const MetadataRadixPage node = pages.readMetadataRadix(reference);
+				if (node.kind != (rootNode ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL) ||
+					node.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
+					(!rootNode && node.level != expectedLevel)) {
+					throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"metadata PageId route branch has an invalid radix page");
+				}
+				validateVisible(node.generation, node.committed_lsn, superblock,
+								"metadata PageId route branch has a future radix page");
+				if (reuse != nullptr && reuse->enabled) {
+					if (rootNode) reuse->root = reference;
+					else reuse->remember(reuse->nodes,
+						std::pair{node.level, ordinalBase / radixFactor(node.level) / RSS_CATALOG_RADIX_FANOUT}, reference);
+				}
+				const uint64_t factor = radixFactor(node.level);
+				for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
+					const PhysicalPageRef child = node.children[index];
+					if (!child.isValid()) {
+						continue;
+					}
+					validateReference(child, superblock, "metadata PageId route branch has an invalid child reference");
+					if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) { // codec-bounded radix paths stay inside the logical ordinal domain.
+						throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+												"metadata PageId route branch ordinal overflows");
+					}
+					const uint64_t ordinal = ordinalBase + static_cast<uint64_t>(index) * factor;
+					if (node.level != 0U) {
+						self(self, child, false, static_cast<uint16_t>(node.level - 1U), ordinal);
+						continue;
+					}
+					registerBootstrapFrame(child);
+					const auto leaf = pages.readMetadataPageRouteLeafView(child);
+					validateVisible(leaf->generation, leaf->committed_lsn, superblock,
+										"metadata PageId route branch has a future leaf");
+					for (const MetadataPageRoute &route: leaf->routes) {
+						if (leafOrdinal(route.page_id) != ordinal) {
+							throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
+													"metadata PageId route leaf does not match its radix route");
+						}
+						registerRoute(route);
+					}
+					if (reuse != nullptr && reuse->enabled) {
+						bool unchanged = true;
+						auto update = std::lower_bound(pending.begin(), pending.end(), ordinal,
+							[](const MetadataPageRoute &route, uint64_t value) { return leafOrdinal(route.page_id) < value; });
+						for (; update != pending.end() && leafOrdinal(update->page_id) == ordinal; ++update) {
+							const auto found = std::lower_bound(leaf->routes.begin(), leaf->routes.end(), update->page_id.value(),
+								[](const MetadataPageRoute &route, uint64_t id) { return route.page_id.value() < id; });
+							if (found == leaf->routes.end() || found->page_id != update->page_id ||
+								found->physical_reference != update->physical_reference) { unchanged = false; break; }
+						}
+						reuse->remember(reuse->leaves, ordinal, ReusableRouteLeaf{child, leaf->routes.size(), unchanged});
+					}
+				}
+			};
+			visitNode(visitNode, root, true, 0U, 0U);
+			for (const auto &[pageId, reference]: routes) {
+				if (bootstrapFrames.contains({reference.physical_slot.value(), reference.frame_index})) {
+					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
+										"metadata PageId route target aliases bootstrap plumbing");
+				}
+			}
+			std::vector<MetadataPageRoute> result;
+			result.reserve(routes.size());
+			for (const auto &[pageId, reference]: routes) {
+				result.push_back({MetadataPageId(pageId), reference});
+			}
+			return result;
+		}
+	}
+
 	std::vector<MetadataPageRoute>
 	MetadataPageRouteDirectory::collectRoutesFromRouteBranch(const Superblock &superblock, PhysicalPageRef root) const {
-		debug::ScopedPerfTimer timer("native_graph.route.collect_route_branch");
-		validateReference(root, superblock, "metadata PageId route branch has an invalid root reference");
-		std::set<std::pair<uint64_t, uint8_t>> bootstrapFrames;
-		std::set<std::pair<uint64_t, uint8_t>> targetFrames;
-		std::map<uint64_t, PhysicalPageRef> routes;
-
-		const auto registerBootstrapFrame = [&bootstrapFrames](PhysicalPageRef reference) {
-			if (!bootstrapFrames.emplace(reference.physical_slot.value(), reference.frame_index).second) {
-				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
-									"metadata PageId route branch aliases or cycles through bootstrap frames");
-			}
-		};
-		const auto registerRoute = [&](const MetadataPageRoute &route) {
-			validateRoute(route, superblock);
-			if (!targetFrames.emplace(route.physical_reference.physical_slot.value(),
-									  route.physical_reference.frame_index)
-					 .second ||
-				!routes.emplace(route.page_id.value(), route.physical_reference).second) {
-				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
-									"metadata PageId route branch has duplicate logical pages or physical frames");
-			}
-		};
-
-		const auto visitNode = [&](auto &&self, PhysicalPageRef reference, bool rootNode,
-									  uint16_t expectedLevel, uint64_t ordinalBase) -> void {
-			validateReference(reference, superblock, "metadata PageId route branch has an invalid radix reference");
-			registerBootstrapFrame(reference);
-			const MetadataRadixPage node = pages_.readMetadataRadix(reference);
-			if (node.kind != (rootNode ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL) ||
-				node.directory_type != MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE ||
-				(!rootNode && node.level != expectedLevel)) {
-				throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
-									"metadata PageId route branch has an invalid radix page");
-			}
-			validateVisible(node.generation, node.committed_lsn, superblock,
-							"metadata PageId route branch has a future radix page");
-			const uint64_t factor = radixFactor(node.level);
-			for (uint32_t index = 0U; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
-				const PhysicalPageRef child = node.children[index];
-				if (!child.isValid()) {
-					continue;
-				}
-				validateReference(child, superblock, "metadata PageId route branch has an invalid child reference");
-				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) { // codec-bounded radix paths stay inside the logical ordinal domain.
-					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-											"metadata PageId route branch ordinal overflows");
-				}
-				const uint64_t ordinal = ordinalBase + static_cast<uint64_t>(index) * factor;
-				if (node.level != 0U) {
-					self(self, child, false, static_cast<uint16_t>(node.level - 1U), ordinal);
-					continue;
-				}
-				registerBootstrapFrame(child);
-				const auto leaf = pages_.readMetadataPageRouteLeafView(child);
-				validateVisible(leaf->generation, leaf->committed_lsn, superblock,
-									"metadata PageId route branch has a future leaf");
-				for (const MetadataPageRoute &route: leaf->routes) {
-					if (leafOrdinal(route.page_id) != ordinal) {
-						throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
-												"metadata PageId route leaf does not match its radix route");
-					}
-					registerRoute(route);
-				}
-			}
-		};
-		visitNode(visitNode, root, true, 0U, 0U);
-		for (const auto &[pageId, reference]: routes) {
-			if (bootstrapFrames.contains({reference.physical_slot.value(), reference.frame_index})) {
-				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
-									"metadata PageId route target aliases bootstrap plumbing");
-			}
-		}
-		std::vector<MetadataPageRoute> result;
-		result.reserve(routes.size());
-		for (const auto &[pageId, reference]: routes) {
-			result.push_back({MetadataPageId(pageId), reference});
-		}
-		return result;
+		return collectRouteBranch(pages_, superblock, root, nullptr, {});
 	}
 
 	std::vector<PhysicalPageRef>
@@ -555,10 +656,11 @@ namespace graph::storage {
 
 	PhysicalPageRef MetadataPageRouteDirectory::buildNextRouteBranch(MetadataWriteBatch &batch,
 																	PhysicalPageRef currentRoot) {
+		RouteBranchReuse reuse;
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, currentRoot, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
-		});
+		}, &reuse);
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
@@ -567,7 +669,7 @@ namespace graph::storage {
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
 		}
-		return buildFromCompleteRouteSet(batch, complete);
+		return buildRouteBranch(pages_, batch, complete, &reuse);
 	}
 
 	PhysicalPageRef MetadataPageRouteDirectory::publishNextBootstrap(MetadataWriteBatch &batch,
@@ -588,10 +690,11 @@ namespace graph::storage {
 		if (dataRoot.isValid()) {
 			replacement.data_page_directory_root = dataRoot;
 		}
+		RouteBranchReuse reuse;
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
-		});
+		}, &reuse);
 		for (const MetadataPageRoute &route: batch.metadataPageRoutes()) {
 			routes.insert_or_assign(route.page_id.value(), route.physical_reference);
 		}
@@ -603,7 +706,7 @@ namespace graph::storage {
 		// Route-branch pages are physical bootstrap plumbing, so building them
 		// does not add routed targets. Reuse this validated complete set for the
 		// logical root identities instead of collecting the published trees twice.
-		replacement.metadata_page_directory_root = buildFromCompleteRouteSet(batch, complete);
+		replacement.metadata_page_directory_root = buildRouteBranch(pages_, batch, complete, &reuse);
 		assignLogicalRoots(replacement, batch.candidate(), complete);
 		const PhysicalPageRef reference = batch.allocatePage();
 		pages_.writePageDirectoryBootstrap(reference, replacement);
