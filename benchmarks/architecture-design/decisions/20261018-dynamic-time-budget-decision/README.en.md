@@ -1,0 +1,3 @@
+# Dynamic correctness time-budget decision
+
+Approval pending: change only the full dynamic correctness case deadline from30to60minutes, for the existing three independent rounds per supported engine. Preserve10000entities, exact old/current snapshot oracles, every file/memory cap, all other30minute cases and10%/5% performance gates. Retain all actual old timeouts; never pool them with successes or repeat until pass. No amendment is applied before user approval. The648e60ff case really timed out at1800s,last CREATE8347,55750recorded operations,0operation errors,not a complete pass. A tiny cache-context experiment is rejected and its patch/raw diagnostics retained; it is not a new production requirement. Progress31/34(91.2%),request2/5,Kuzu objective unmet.

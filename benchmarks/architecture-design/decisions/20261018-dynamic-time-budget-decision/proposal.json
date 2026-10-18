@@ -1,0 +1,79 @@
+{
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "request_completed": 2,
+  "status": "pending_user_decision_not_approved",
+  "reason": "Full10000entity correctness case648e60ff actually timed out at1800s, last CREATE8347; original limits retained. Broader matrix not started.",
+  "proposed_change": {
+    "family": "dynamic",
+    "case_deadline_seconds": 3600,
+    "previous_seconds": 1800,
+    "independent_rounds_per_supported_engine": 3,
+    "same_full_10000_entities": true,
+    "all_other_family_deadlines_seconds": 1800,
+    "per_file_bytes": 2147483648,
+    "address_space_bytes": 6442450944,
+    "query_and_cache_bytes": 67108864,
+    "maintenance_workspace_bytes": 8388608,
+    "primary_p50_reduction": 0.1,
+    "protection_regression_fraction": 0.05,
+    "same_source_repeated_until_pass": false,
+    "old_timeouts_retained": true,
+    "old_samples_pooled": false
+  },
+  "experiment": {
+    "adopted": false,
+    "reason": "Scoped published-context experiment reduced metadata-page reads7293to6827; tiny mechanism run does not establish sufficient repeatable end-to-end gain to justify extra context. Restore prior implementation; no formal sample or acceptance credit.",
+    "formal_samples": 0,
+    "typed_results_equal": true,
+    "files": [
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-warm-before-leaf-trace.json",
+        "archive": "raw/pinned-warm-before-leaf-trace.json.gz",
+        "sha256": "5706673d616a0bd701bc42231499769185a300932da5372a4341d009433993e9"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-published-context-trace.json",
+        "archive": "raw/pinned-published-context-trace.json.gz",
+        "sha256": "628892770234e91c750676653decc5948e1fbfe601e741497605ade4ba037ede"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-diagnostic-before-leaf-provenance.json",
+        "archive": "raw/pinned-diagnostic-before-leaf-provenance.json.gz",
+        "sha256": "9036509037f3ae698f1ea78b47b761ce077ba0a0bccd14215ec3e7f2500c1175"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-diagnostic-published-context-provenance.json",
+        "archive": "raw/pinned-diagnostic-published-context-provenance.json.gz",
+        "sha256": "7e2bc93821c9ae92eaf5ee5f1ba4d9f9b72b1e5b8423e3f1b303e51f109fb3c2"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/build-pinned-diagnostic.py",
+        "archive": "raw/build-pinned-diagnostic.py.gz",
+        "sha256": "34ca69c69ed0a1234447de4c962fcf58e5ce6664a3a11288fb83dae13aec56d2"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/run-pinned-diagnostic.py",
+        "archive": "raw/run-pinned-diagnostic.py.gz",
+        "sha256": "e59c9bbbb55c180f5bace0b4e2290d87f4a4040833d75798211faf964967429a"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-warm-before-summary.json",
+        "archive": "raw/pinned-warm-before-summary.json.gz",
+        "sha256": "44ac438960e8f3b8a41baabec84d2687d9985ee48d767c7554ad1613479d2cbc"
+      },
+      {
+        "source": "/workspace/zyx-optimization-artifacts/20261018-final-publication/pinned-published-summary.json",
+        "archive": "raw/pinned-published-summary.json.gz",
+        "sha256": "8d249a9da18ce7150c0f693ba2d93bd3c7cb8ef310750f48f1505493ff5f88ff"
+      }
+    ]
+  },
+  "approved": null,
+  "rejected_experiment_source_restored": true,
+  "restored_release_binary_matches_frozen": {
+    "zyx-compare-bench": true,
+    "zyx-workload-contract-worker": true
+  }
+}

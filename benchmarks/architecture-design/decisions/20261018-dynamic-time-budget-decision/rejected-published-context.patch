@@ -1,0 +1,38 @@
+diff --git a/src/storage/relocatable/metadata/MetadataPagePool.cpp b/src/storage/relocatable/metadata/MetadataPagePool.cpp
+index 35d265cf..e00abba0 100644
+--- a/src/storage/relocatable/metadata/MetadataPagePool.cpp
++++ b/src/storage/relocatable/metadata/MetadataPagePool.cpp
+@@ -11,6 +11,8 @@
+ #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
+ #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+ #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
++#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+ 
+ #include <algorithm>
+ #include <array>
+@@ -1103,6 +1105,24 @@ namespace graph::storage {
+ 		std::unique_lock lock(mutex_);
+ 		try {
+ 			requireHealthyLocked();
++            std::optional<MetadataPageReadContext::Scope> publishedReads;
++            const auto inherited = MetadataPageReadContext::Scope::currentOwner(*io_);
++            if (inherited && !inherited->authenticates(current)) {
++                // Publication advanced the durable root beyond the writer's
++                // decode context. Synchronize its invalidated cache before
++                // using the same bounded allowance for this published view.
++                { MetadataPageReadContext::Scope synchronize(inherited, *io_); }
++                try {
++                    auto context = std::allocate_shared<MetadataPageReadContext>(
++                        utils::OwnedPmrAllocator<MetadataPageReadContext>(utils::OwnedAllocationScope::owner()),
++                        current, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, inherited->memoryOwner());
++                    publishedReads.emplace(std::move(context), *io_);
++                    debug::PerfTrace::addValue("native_metadata.reclaim.published_read_contexts", 1);
++                } catch (const query::execution::detail::ResourceAdmissionDenied &) {
++                    // Optional acceleration must not reject mandatory reclamation.
++                } catch (const query::execution::MaterializedByteLimitExceeded &) {
++                }
++            }
+ 			debug::PerfTrace::addValue("native_metadata.reclaim.pending_allocations", allocations_since_reconciliation_);
+             if (debug::PerfTrace::areValuesEnabled()) {
+                 uint64_t free = 0U;
