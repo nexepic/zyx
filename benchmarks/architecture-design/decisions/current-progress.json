@@ -157,7 +157,7 @@
       "S4.4"
     ],
     "completed": 2,
-    "status": "blocked_pending_user_time_budget_decision",
+    "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
     "pending_revalidation_ids": [],
     "implementation": "Final48related modules970distinct tests pass, Release targets built; no full suite. Eight-pool bounded reclamation with two-pool free-frame floor; charged binding/carrier fallback.",
@@ -204,14 +204,25 @@
       "total_distinct_passed": 1021,
       "full_suite": false
     },
-    "final_window_order": "O6 first, current13window case doubles as resource correctness checkpoint; no duplicate untimed full13window run; do not start broad matrix after actualO6resource failure.",
+    "final_window_order": "Independent final read/write evaluation may proceed; retain actual dynamic timeout without unchanged-source retries or treating smoke as full acceptance.",
     "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
     "final_performance_window": "stopped_not_full_matrix_no_threshold_waiver",
     "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
     "latest_repair_evidence": "20261018-bounded-publication-and-binding/proof.json",
     "latest_timeout_evidence": "20261018-publication-dynamic-timeout/proof.json",
-    "pending_user_time_budget_decision": "20261018-dynamic-time-budget-decision/proposal.json"
+    "pending_user_time_budget_decision": "Historical 3600-second proposal remains unapplied; no approval required for short development checks.",
+    "development_verification": {
+      "profile": "smoke",
+      "whole_run_budget_seconds": 120,
+      "family_selection": "--family",
+      "full_contract": "final_acceptance_or_performance_evaluation_only",
+      "latest_dynamic_operations": 84,
+      "latest_dynamic_seconds": 0.398,
+      "latest_all_smoke_operations": 886,
+      "latest_all_smoke_seconds": 9.686,
+      "acceptance_score_increase": false
+    }
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
