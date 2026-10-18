@@ -491,7 +491,7 @@ namespace graph::storage {
 
 	Superblock AllocatorDirectory::initializeNew(const Superblock &initial, PhysicalSlotId bootstrapPoolSlot,
 														 PhysicalSlotId emergencyReserveSlot) {
-		static_cast<void>(SuperblockCodec::encode(initial));
+		SuperblockCodec::validate(initial);
 		const uint8_t invalidInitial = static_cast<uint8_t>(initial.allocator_root.isValid()) |
 									   static_cast<uint8_t>(initial.catalog_root.isValid()) |
 									   static_cast<uint8_t>(initial.page_directory_root.isValid()) |
@@ -574,7 +574,7 @@ namespace graph::storage {
 	}
 
 	bool AllocatorDirectory::isAllocated(const Superblock &superblock, PhysicalSlotId slot) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		const uint64_t ordinal = leafOrdinal(slot);
 		const std::optional<AllocatorLeafPage> leaf = readLeafForOrdinal(pages_, superblock, ordinal);
 		if (!leaf.has_value()) {
@@ -594,7 +594,7 @@ namespace graph::storage {
 	std::optional<PhysicalSlotId> AllocatorDirectory::findFirstFree(const Superblock &superblock,
 																	PhysicalSlotId firstSlot,
 																	PhysicalSlotId lastSlot) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		validateRange(firstSlot, lastSlot);
 		const uint64_t firstOrdinal = leafOrdinal(firstSlot);
 		const uint64_t lastOrdinal = leafOrdinal(lastSlot);
@@ -642,7 +642,7 @@ namespace graph::storage {
 														  PhysicalSlotId slot, bool allocated,
 														  LogSequenceNumber checkpointLsn,
 														  BootstrapPublishFailpoint failpoint) {
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		if (!checkpointLsn.isValid() || checkpointLsn <= current.checkpoint_lsn ||
 			current.generation.value() >= RSS_MAX_PHYSICAL_PAGE_GENERATION) {
 			throwAllocatorDirectoryError(

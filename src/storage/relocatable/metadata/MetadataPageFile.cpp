@@ -105,12 +105,12 @@ namespace graph::storage {
 		if (!io_) {
 			throw std::invalid_argument("relocatable MetadataPageFile requires StorageIO");
 		}
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		data_region_offset_ = superblock.data_region_offset;
 	}
 
 	void MetadataPageFile::rebindSuperblock(const Superblock &superblock) {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (superblock.data_region_offset != data_region_offset_) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 								   "relocatable metadata page file cannot change its data-region layout");
@@ -211,7 +211,7 @@ namespace graph::storage {
 																								  BufferPoolReadHint hint) const {
 		if (auto *context = MetadataPageReadContext::current(*io_);
 			context == nullptr || !context->authenticates(routeContext)) {
-			static_cast<void>(SuperblockCodec::encode(routeContext));
+			SuperblockCodec::validate(routeContext);
 		}
 		if (routeContext.data_region_offset != data_region_offset_) {
 			throwMetadataPageError(FormatError::FERR_INVALID_STATE,
@@ -413,7 +413,7 @@ namespace graph::storage {
 			std::span<PhysicalPageRef> results) const {
 		if (auto *context = MetadataPageReadContext::current(*io_);
 			context == nullptr || !context->authenticates(routeContext)) {
-			static_cast<void>(SuperblockCodec::encode(routeContext));
+			SuperblockCodec::validate(routeContext);
 		}
 		if (routeContext.data_region_offset != data_region_offset_ ||
 			routeContext.database_id != superblock_.database_id ||

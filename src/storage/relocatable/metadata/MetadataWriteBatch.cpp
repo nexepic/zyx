@@ -42,7 +42,7 @@ namespace graph::storage {
 	MetadataWriteBatch::MetadataWriteBatch(MetadataPageAllocator &allocator, const Superblock &current,
 										   LogSequenceNumber checkpointLsn) :
 		allocator_(allocator), current_(current), candidate_(current) {
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		if (!checkpointLsn.isValid() || checkpointLsn <= current.checkpoint_lsn ||
 			current.generation.value() >= RSS_MAX_PHYSICAL_PAGE_GENERATION) {
 			throwMetadataBatchError(

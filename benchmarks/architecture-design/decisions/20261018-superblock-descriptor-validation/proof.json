@@ -1,0 +1,206 @@
+{
+  "status": "necessary_module_and_mechanism_verification_complete_no_new_acceptance",
+  "captured_utc": "2026-10-18T10:36:38.837954+00:00",
+  "base_work_head": "4ff7d0ef956a0323dc6b6846ef06d36988e0a1a2",
+  "accepted_progress": {
+    "accepted": 31,
+    "total": 34,
+    "percent": 91.2
+  },
+  "affected_modules": 39,
+  "tests_passed": 567,
+  "new_tests": 3,
+  "full_unit_suite_run": false,
+  "validation_only_encode_sites_replaced": 29,
+  "shared_field_validation_function": "validateSuperblock",
+  "file_codec_decode_crc_and_publication_unchanged": true,
+  "file_format_and_driver_abi_unchanged": true,
+  "resource_limits_and_performance_thresholds_unchanged": true,
+  "formal_performance_acceptance": false,
+  "full_dynamic_and_wide_large_deadlines_still_require_final_validation": true,
+  "mechanism_operations_per_source": 578,
+  "after_diagnosis_concurrent_with_test_build_no_timing_comparison": true,
+  "source_files": [
+    {
+      "path": "src/storage/relocatable/allocation/AllocatorDirectory.cpp",
+      "sha256": "83fc899501ce602e01bb814513ec9601e266f29522efce44f9d485cdd8d0b46d"
+    },
+    {
+      "path": "src/storage/relocatable/backend/RelocatableStorageBackend.cpp",
+      "sha256": "1a895324353796e9c1db2edb56a343f28cd79b807a7a20ced656244f90ad7907"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/CatalogTree.cpp",
+      "sha256": "5e944ed1c1bd8812e5f35faa75332e1f7eb49a42677e80e9e4b0ef880e33ad1f"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/LocationDirectory.cpp",
+      "sha256": "0628a7f9f194d7cfc6666b26cd05433c07362e76182dff078b142ebe50de01ae"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/MetadataPageFile.cpp",
+      "sha256": "1c8f87dc0fb0d3e6bd6e4996961d113dbdb7e604592d95ae4b7cd1c7ae69bb30"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/MetadataPagePool.cpp",
+      "sha256": "8bd935a7f4698b9e5ff236b6c560d0d6a51521dba7b877206eaf336aeeffbba4"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp",
+      "sha256": "8feff5e8b712aad5958027cdcf84e073282d5fc2309eb1b213404ce42c96979c"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/MetadataWriteBatch.cpp",
+      "sha256": "b2e233a8ae392d5bc5a88061fea38150da4d4047272875deb2e212bf4cf6b5a4"
+    },
+    {
+      "path": "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp",
+      "sha256": "3a4a2da5f277a011299ef7f8b9d484568f488282647b2680509b83bec338b104"
+    },
+    {
+      "path": "include/graph/storage/relocatable/format/Superblock.hpp",
+      "sha256": "64e8fce7b5dc9385dd4a1b64b2954f296222ae15aa4a207f5d62dc4b4424351d"
+    },
+    {
+      "path": "src/storage/relocatable/format/Superblock.cpp",
+      "sha256": "3335e3e55e19507f65e92e36e5f80de98879f069df5131f454778a7410d5484b"
+    },
+    {
+      "path": "tests/src/storage/relocatable/format/test_Superblock.cpp",
+      "sha256": "dc4cb7938675aac26cd162423157509b9a8d1649f166bd276d35ef9e4056eb97"
+    }
+  ],
+  "binaries": {
+    "zyx-workload-contract-worker": "37f6984017598553041a7daf22a8ec8744dec397bf51fc1593672dffb228642a",
+    "zyx-compare-bench": "d511b641070e2e6289f18243a9aed4a852dbe9214cfa99b1635dfe6ed31ab378"
+  },
+  "records": [
+    {
+      "name": "superblock-repair-test-registration.json",
+      "archive": "raw/superblock-repair-test-registration.json.gz",
+      "uncompressed_sha256": "16380bca2ed6a018823f24937822b77d9c39d5509eb452cb64d0dcaa4b1dfdf2",
+      "uncompressed_bytes": 3530
+    },
+    {
+      "name": "superblock-repair-tests.json",
+      "archive": "raw/superblock-repair-tests.json.gz",
+      "uncompressed_sha256": "4f8e8242609c2a3768401ebde2b91aa8706662d73a9456192a63c52d528b4bfa",
+      "uncompressed_bytes": 253604
+    },
+    {
+      "name": "superblock-repair-test-link.json",
+      "archive": "raw/superblock-repair-test-link.json.gz",
+      "uncompressed_sha256": "eb004afe5049d32e592f40cd0e9f8427cce4b0c7e321746e854da8b5bfea4ff2",
+      "uncompressed_bytes": 5547
+    },
+    {
+      "name": "superblock-validation-repair-files.json",
+      "archive": "raw/superblock-validation-repair-files.json.gz",
+      "uncompressed_sha256": "17a4f93eda11216ebd789001ad931d128627c2706283aa95fadbe00e71aa0b65",
+      "uncompressed_bytes": 938
+    },
+    {
+      "name": "superblock-validation-mechanism-comparison.json",
+      "archive": "raw/superblock-validation-mechanism-comparison.json.gz",
+      "uncompressed_sha256": "1d6dd453c71488af9d2155859c60d5a7a7ba2305b848283cd239ea3587966eec",
+      "uncompressed_bytes": 15225
+    },
+    {
+      "name": "build-superblock-repair-tests.py",
+      "archive": "raw/build-superblock-repair-tests.py.gz",
+      "uncompressed_sha256": "1f4add06d447ceaa867b966604323cbc600a6f66a4504ed2832bc27c6dcc00f2",
+      "uncompressed_bytes": 2368
+    },
+    {
+      "name": "build-diagnostic-worker.py",
+      "archive": "raw/build-diagnostic-worker.py.gz",
+      "uncompressed_sha256": "841b63e5acdf948f0fd9b7a11fd19dca9005d12c30130bb003be2f60c1c774b2",
+      "uncompressed_bytes": 2518
+    },
+    {
+      "name": "diagnostic-worker.cpp",
+      "archive": "raw/diagnostic-worker.cpp.gz",
+      "uncompressed_sha256": "aa75beb158f81bb37ad754275f7379ca605ec3aadf05701ed5772a74d0945f3b",
+      "uncompressed_bytes": 13055
+    },
+    {
+      "name": "diagnostic-worker-provenance.json",
+      "archive": "raw/diagnostic-worker-provenance.json.gz",
+      "uncompressed_sha256": "7979135997b8daeea598a3c2ed6796d0484cb2756d1ff9ff793a41b7251fed97",
+      "uncompressed_bytes": 2270
+    },
+    {
+      "name": "diagnostic-worker-before-superblock-repair-provenance.json",
+      "archive": "raw/diagnostic-worker-before-superblock-repair-provenance.json.gz",
+      "uncompressed_sha256": "f939cb99917b94f8f7f0f0a1a52ac6cfa61807743a744de64f06cc7e1c25f6eb",
+      "uncompressed_bytes": 2270
+    },
+    {
+      "name": "diagnose-property-paths.py",
+      "archive": "raw/diagnose-property-paths.py.gz",
+      "uncompressed_sha256": "2c5f41e6271300581079e6870242e7045e688b4729df8618d2e72d93ac60d399",
+      "uncompressed_bytes": 3513
+    },
+    {
+      "name": "diagnose-property-paths-before-relocation.py",
+      "archive": "raw/diagnose-property-paths-before-relocation.py.gz",
+      "uncompressed_sha256": "576b2e1326a7656cd1167c215cfad429f0b144ecded27dc0a7eaa73a166b0730",
+      "uncompressed_bytes": 3464
+    },
+    {
+      "name": "summarize-superblock-repair-diagnosis.py",
+      "archive": "raw/summarize-superblock-repair-diagnosis.py.gz",
+      "uncompressed_sha256": "bf5fe5de08cd5dc482e5d7e78572263d7fb0960c17662f0509e62ff608623f6a",
+      "uncompressed_bytes": 2113
+    },
+    {
+      "name": "property-path-diagnosis/completed.json",
+      "archive": "raw/property-path-diagnosis--completed.json.gz",
+      "uncompressed_sha256": "88bd521c521b29a714c56fe1276c7437aaa9aaa46f4e327d6adc35046e6c30d3",
+      "uncompressed_bytes": 233
+    },
+    {
+      "name": "property-path-diagnosis/operations.jsonl",
+      "archive": "raw/property-path-diagnosis--operations.jsonl.gz",
+      "uncompressed_sha256": "18a9dc59dacd3e844867dc140ee3c33ff1ad356b68700a213361d8c7750bc958",
+      "uncompressed_bytes": 3838553
+    },
+    {
+      "name": "property-path-diagnosis-after-superblock-repair/completed.json",
+      "archive": "raw/property-path-diagnosis-after-superblock-repair--completed.json.gz",
+      "uncompressed_sha256": "c524dc75c217c4a57ed8fc9a0dd9654d5a6c0ae534eb2ea1a8772bd9013db9b1",
+      "uncompressed_bytes": 395
+    },
+    {
+      "name": "property-path-diagnosis-after-superblock-repair/operations.jsonl",
+      "archive": "raw/property-path-diagnosis-after-superblock-repair--operations.jsonl.gz",
+      "uncompressed_sha256": "6549134c5323aef118be1df27b05d46e0495cb7c129b40b989c05bada39a2f85",
+      "uncompressed_bytes": 3839689
+    },
+    {
+      "name": "superblock-repair-smoke/report.json",
+      "archive": "raw/superblock-repair-smoke--report.json.gz",
+      "uncompressed_sha256": "a09fa10c23e71ce3b0dc2aeb08b720b193fcef024441714274045994962ee708",
+      "uncompressed_bytes": 2173
+    },
+    {
+      "name": "superblock-repair-smoke/registration.json",
+      "archive": "raw/superblock-repair-smoke--registration.json.gz",
+      "uncompressed_sha256": "4ea926889cc2fd507acda392da14357e532b63aa7465aecd9486d90e3e3a0478",
+      "uncompressed_bytes": 762
+    },
+    {
+      "name": "superblock-repair-smoke/family-progress.jsonl",
+      "archive": "raw/superblock-repair-smoke--family-progress.jsonl.gz",
+      "uncompressed_sha256": "61a6814badcf9382ba3aa2f57f76efd95a82ca953d312ee57dffc59ece37a68e",
+      "uncompressed_bytes": 1547
+    }
+  ],
+  "smoke": {
+    "families": 13,
+    "operations": 886,
+    "full_results_checked": true,
+    "whole_run_budget_seconds": 120,
+    "performance_timing": false
+  }
+}

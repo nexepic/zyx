@@ -362,7 +362,7 @@ namespace graph::storage {
 		if (!io_) {
 			throw std::invalid_argument("relocatable MetadataPagePoolAllocator requires StorageIO");
 		}
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		const bool rootReachabilityMode = openMode == MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER ||
 										  openMode == MetadataPagePoolOpenMode::CPOM_ROOT_DISCOVER_ONLY;
 		if (openMode != MetadataPagePoolOpenMode::CPOM_RECOVER &&
@@ -679,7 +679,7 @@ namespace graph::storage {
 	}
 
 	void MetadataPagePoolAllocator::beginUnpublishedBatch(const Superblock &current) {
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		std::lock_guard lock(mutex_);
 		requireHealthyLocked();
 		if (current.generation.value() == std::numeric_limits<uint64_t>::max()) {
@@ -891,7 +891,7 @@ namespace graph::storage {
 	}
 
 	void MetadataPagePoolAllocator::recover(const Superblock &superblock) {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		const std::array<Superblock, 1> protectedSuperblocks = {superblock};
 		std::unique_lock lock(mutex_);
 		try {
@@ -905,7 +905,7 @@ namespace graph::storage {
 	}
 
 	void MetadataPagePoolAllocator::rebaseToPublishedSuperblock(const Superblock &superblock) {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		std::lock_guard lock(mutex_);
 		if (superblock.data_region_offset != data_region_offset_) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
@@ -917,7 +917,7 @@ namespace graph::storage {
 	}
 
 	void MetadataPagePoolAllocator::validateReachability(const Superblock &superblock) {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		const std::array<Superblock, 1> protectedSuperblocks = {superblock};
 		std::unique_lock lock(mutex_);
 		try {
@@ -1085,12 +1085,12 @@ namespace graph::storage {
 
 	void MetadataPagePoolAllocator::reclaimUnreachable(const Superblock &current,
 													   std::span<const Superblock> activeSnapshots, bool force) {
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		std::vector<Superblock> protectedSuperblocks;
 		protectedSuperblocks.reserve(activeSnapshots.size() + 1U);
 		protectedSuperblocks.push_back(current);
 		for (const Superblock &snapshot: activeSnapshots) {
-			static_cast<void>(SuperblockCodec::encode(snapshot));
+			SuperblockCodec::validate(snapshot);
 			if (snapshot.database_id != current.database_id || snapshot.generation > current.generation ||
 				snapshot.checkpoint_lsn > current.checkpoint_lsn ||
 				snapshot.data_region_offset != current.data_region_offset) {
