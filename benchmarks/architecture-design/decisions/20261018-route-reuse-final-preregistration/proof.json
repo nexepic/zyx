@@ -1,0 +1,182 @@
+{
+  "status": "registered_before_performance",
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "required_correctness": "first_full_wide_case_running",
+  "formal_performance_processes_started": 0,
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "no_historical_source_samples_pooled": true,
+  "limits_and_sampling_unchanged": true,
+  "checks": "22Python modules parse and match registered SHA256; final driver digest matches; immutable prepared source hashes verified",
+  "records": [
+    {
+      "name": "route-reuse-final-harness/build-readonly-check.py",
+      "archive": "raw/route-reuse-final-harness--build-readonly-check.py.gz",
+      "uncompressed_bytes": 939,
+      "uncompressed_sha256": "921ff1dd28b481232d97e027b6569793656a437d5c5b29df591f0ba98091fe46"
+    },
+    {
+      "name": "route-reuse-final-harness/frozen-workload-preflight.py",
+      "archive": "raw/route-reuse-final-harness--frozen-workload-preflight.py.gz",
+      "uncompressed_bytes": 48489,
+      "uncompressed_sha256": "b3d61cb3fe4bc9df8308d425e9bdf3e9274549113fce5df3ac97c150ecd65f18"
+    },
+    {
+      "name": "route-reuse-final-harness/native_process_memory.py",
+      "archive": "raw/route-reuse-final-harness--native_process_memory.py.gz",
+      "uncompressed_bytes": 1320,
+      "uncompressed_sha256": "ef40f9dfc167fbda5f051cb8bda40a8e05c2a7ba0c034aed3e00a3a44970d482"
+    },
+    {
+      "name": "route-reuse-final-harness/report-zyx-final-name-batch-extended-reads.py",
+      "archive": "raw/route-reuse-final-harness--report-zyx-final-name-batch-extended-reads.py.gz",
+      "uncompressed_bytes": 2598,
+      "uncompressed_sha256": "9a51982297b9cc3b7c43b4a156d514ac1ab784f6493d60498e008e06ee7626c7"
+    },
+    {
+      "name": "route-reuse-final-harness/report-zyx-final-name-batch-extended-writes.py",
+      "archive": "raw/route-reuse-final-harness--report-zyx-final-name-batch-extended-writes.py.gz",
+      "uncompressed_bytes": 2630,
+      "uncompressed_sha256": "35a614efc12e7c8f9ec291aa973704ddaf4d04b94f114f9022e169c70f66b51b"
+    },
+    {
+      "name": "route-reuse-final-harness/report-zyx-final-name-batch-maintenance.py",
+      "archive": "raw/route-reuse-final-harness--report-zyx-final-name-batch-maintenance.py.gz",
+      "uncompressed_bytes": 3447,
+      "uncompressed_sha256": "223a1016603827be2afac891c016368b515d9b79f5a02b7dff06ff2944cb9d54"
+    },
+    {
+      "name": "route-reuse-final-harness/report-zyx-final-name-batch-reads.py",
+      "archive": "raw/route-reuse-final-harness--report-zyx-final-name-batch-reads.py.gz",
+      "uncompressed_bytes": 4288,
+      "uncompressed_sha256": "147eee73dfaf2ea01a6c6be9ec0955958e547ae70ca0caa19fd47a0112deeac4"
+    },
+    {
+      "name": "route-reuse-final-harness/report-zyx-final-name-batch-writes.py",
+      "archive": "raw/route-reuse-final-harness--report-zyx-final-name-batch-writes.py.gz",
+      "uncompressed_bytes": 2559,
+      "uncompressed_sha256": "ed91668815537aca86190d9a479b25a3a798df1c61ff29040b388d5daaa5538a"
+    },
+    {
+      "name": "route-reuse-final-harness/run-zyx-final-name-batch-acceptance.py",
+      "archive": "raw/route-reuse-final-harness--run-zyx-final-name-batch-acceptance.py.gz",
+      "uncompressed_bytes": 4219,
+      "uncompressed_sha256": "f9420a0e917e80adeb009271db71cb4671112280bd7e740aa75a6a0416756fe4"
+    },
+    {
+      "name": "route-reuse-final-harness/run-zyx-final-name-batch-contract-campaign.py",
+      "archive": "raw/route-reuse-final-harness--run-zyx-final-name-batch-contract-campaign.py.gz",
+      "uncompressed_bytes": 7193,
+      "uncompressed_sha256": "05feca638ecb642d09293721f2f8c2c3d3278e1f3d1a22dc9133dff8b461163d"
+    },
+    {
+      "name": "route-reuse-final-harness/run-zyx-final-name-batch-write-campaign.py",
+      "archive": "raw/route-reuse-final-harness--run-zyx-final-name-batch-write-campaign.py.gz",
+      "uncompressed_bytes": 2708,
+      "uncompressed_sha256": "c2a07da28c4918a44cdd9802e75d21b18fc4952947a197ae1b8e13ae08eb0c95"
+    },
+    {
+      "name": "route-reuse-final-harness/run-zyx-name-batch-dynamic-first.py",
+      "archive": "raw/route-reuse-final-harness--run-zyx-name-batch-dynamic-first.py.gz",
+      "uncompressed_bytes": 2807,
+      "uncompressed_sha256": "f71bea3f5f662698887e07b277a364ab455ac3543162f1c33990f65e19643d8d"
+    },
+    {
+      "name": "route-reuse-final-harness/validate-zyx-name-batch-inputs.py",
+      "archive": "raw/route-reuse-final-harness--validate-zyx-name-batch-inputs.py.gz",
+      "uncompressed_bytes": 2555,
+      "uncompressed_sha256": "07ac53002650115cd93e903377837df57946c16e273d6a5834b5bf373c1bbed5"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-five-owned-case.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-five-owned-case.py.gz",
+      "uncompressed_bytes": 2931,
+      "uncompressed_sha256": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-bounded-extensions-before-tail-fix.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-bounded-extensions-before-tail-fix.py.gz",
+      "uncompressed_bytes": 5783,
+      "uncompressed_sha256": "4f5122d8e9c3b3b160e835958deb7f5712b12cd9ee37058ca7b51dd128e642f6"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-bounded-extensions.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-bounded-extensions.py.gz",
+      "uncompressed_bytes": 5422,
+      "uncompressed_sha256": "05fbeb6dc853cddbfac2869977ab3a6fcfccd849a06d19f98dceeefafc0a3833"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-bounded-write-extensions-before-tail-fix.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-bounded-write-extensions-before-tail-fix.py.gz",
+      "uncompressed_bytes": 4053,
+      "uncompressed_sha256": "dea96cd6fdb76e5caaf9cda32cb5950caf8c0e02ad08898692baffe985f61182"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-bounded-write-extensions.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-bounded-write-extensions.py.gz",
+      "uncompressed_bytes": 3636,
+      "uncompressed_sha256": "8f186b2313adef6bab45f8f0148cc1c66f6d477aae2c430b6b3abdf235cf9007"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-contract-case.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-contract-case.py.gz",
+      "uncompressed_bytes": 7610,
+      "uncompressed_sha256": "07bc23e0631e66776160c670e16f2d0ae37af3dfb2fcac0e6e30d80396e9c175"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-extended-read.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-extended-read.py.gz",
+      "uncompressed_bytes": 3012,
+      "uncompressed_sha256": "026eabf799345f4f672cd1c09c6715582fa9ffe596c37f40ecc2c56615f898c4"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-window.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-window.py.gz",
+      "uncompressed_bytes": 13328,
+      "uncompressed_sha256": "d3f25b6c43c698df1cfb8348c5a7f7dae78bd854e65a9e78605c93aca4a0e199"
+    },
+    {
+      "name": "route-reuse-final-harness/zyx-final-name-batch-write-case.py",
+      "archive": "raw/route-reuse-final-harness--zyx-final-name-batch-write-case.py.gz",
+      "uncompressed_bytes": 9999,
+      "uncompressed_sha256": "6545c205fe04b4eaea9b66cd9477f5b78a85bc174ff8b4f4b82eaa4503f6c601"
+    },
+    {
+      "name": "route-reuse-final-window/registration.json",
+      "archive": "raw/route-reuse-final-window--registration.json.gz",
+      "uncompressed_bytes": 27426,
+      "uncompressed_sha256": "85306588104f712fab69cdb202f5f73da43a27c502decf96343c6b76352a7bf9"
+    },
+    {
+      "name": "route-reuse-freeze.json",
+      "archive": "raw/route-reuse-freeze.json.gz",
+      "uncompressed_bytes": 952,
+      "uncompressed_sha256": "3a717d81d2e8a2a1f0a93e7c26955416f68c9273faf834f63848bca1744589d8"
+    },
+    {
+      "name": "run-route-reuse-contracts.py",
+      "archive": "raw/run-route-reuse-contracts.py.gz",
+      "uncompressed_bytes": 2571,
+      "uncompressed_sha256": "2570be5153634f5499635d1aba79c4a630781e1ed5ccb1a77bfb2d57b861af09"
+    },
+    {
+      "name": "run-route-reuse-contract-case.py",
+      "archive": "raw/run-route-reuse-contract-case.py.gz",
+      "uncompressed_bytes": 4518,
+      "uncompressed_sha256": "8e57de3193d61b51b234b60afc1903f6a986f7816ee5478a8f99483dc9d353bc"
+    },
+    {
+      "name": "run-route-reuse-final-evaluation.py",
+      "archive": "raw/run-route-reuse-final-evaluation.py.gz",
+      "uncompressed_bytes": 5015,
+      "uncompressed_sha256": "f0f0a2e79460db47f1b41aeef0f7266550f3883f5fc4efcf4bc99ef9fb89dc9b"
+    },
+    {
+      "name": "prepare-route-reuse-final-window.py",
+      "archive": "raw/prepare-route-reuse-final-window.py.gz",
+      "uncompressed_bytes": 4098,
+      "uncompressed_sha256": "8147d8cda883c1dda5367274f244105d8b2f0b906ba85f84f353cadfac152bf4"
+    }
+  ]
+}
