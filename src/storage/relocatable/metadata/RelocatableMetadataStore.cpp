@@ -225,7 +225,7 @@ namespace graph::storage {
 		// same-generation route context for the next graph publication.
 		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
         // The lease mutex excludes intervening registrations; these maps use
         // equal std allocators and transfer their prepared nodes without allocation.
         outstanding_node_id_leases_.merge(prepared.nodes);
@@ -306,7 +306,7 @@ namespace graph::storage {
         auto prepared = prepareOutstanding(result);
         prepareBootstrapRoutes(batch);
         batch.publish(bootstrap_);
-        snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+        snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
         if (requestedNodes != 0U) available_node_ids_ = nextAvailableNodes;
         if (requestedEdges != 0U) available_edge_ids_ = nextAvailableEdges;
         registerPrepared(prepared);
@@ -446,7 +446,7 @@ namespace graph::storage {
 		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
 		pages_.rebindSuperblock(batch.candidate());
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
 	}
 
 	Superblock RelocatableMetadataStore::upsertCatalog(std::span<const CatalogEntry> entries,

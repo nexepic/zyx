@@ -161,7 +161,11 @@ namespace graph::storage {
 		// root. A snapshot is represented by its immutable Superblock generation.
 		// The caller must serialize this operation with metadata publication so no
 		// in-flight copy-on-write generation can lose an unpublished page.
-		void reclaimUnreachable(const Superblock &current, std::span<const Superblock> activeSnapshots);
+		// Ordinary publications may defer a full traversal for fewer than eight pools
+		// of allocations. Explicit cleanup/recovery remains eager. Deferred frames
+		// stay allocated and cannot be reused before authenticated reconciliation.
+		void reclaimUnreachable(const Superblock &current, std::span<const Superblock> activeSnapshots,
+								bool force = true);
 		// Keeps a relocated source pool out of normal COW allocation until every
 		// process-local snapshot has drained and reachability reconciliation clears it.
 		void protectPoolUntilSnapshotsDrain(PhysicalSlotId slot);
@@ -233,6 +237,7 @@ namespace graph::storage {
 		// Relocated source pools stay unavailable while older snapshots can still
 		// resolve their frames, preserving eventual evacuation/reclaim progress.
 		std::set<uint64_t> snapshot_protected_pool_slots_;
+		uint32_t allocations_since_reconciliation_ = 0U;
 		// Process-local search hint only. Durable pool headers remain the source of
 		// truth; mutations that can make an earlier pool reusable clear this hint.
 		std::optional<uint64_t> allocation_cursor_slot_;

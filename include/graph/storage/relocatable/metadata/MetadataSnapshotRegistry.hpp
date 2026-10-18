@@ -97,7 +97,7 @@ namespace graph::storage {
 		// Reclaims after publication while the supplied guard excludes new snapshot
 		// registrations. `current` must be the newest durable Superblock.
 		void reclaimAfterPublication(const MetadataWriteGuard &guard, MetadataPagePoolAllocator &allocator,
-									 const Superblock &current) const;
+									 const Superblock &current, bool force = true) const;
 		// Evaluates pinned durable roots while this registry's writer guard excludes
 		// new registrations. Callers use this for generation-aware reclamation of a
 		// physical object whose reachability is resolved through a COW directory.

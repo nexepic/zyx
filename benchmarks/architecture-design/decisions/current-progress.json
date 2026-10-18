@@ -160,8 +160,8 @@
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
     "pending_revalidation_ids": [],
-    "implementation": "Final5fcimplementation and1021distinct selected cases pass; clean e8source/binaries frozen.3NativeO6full13window processes pass; read/write/remaining full contracts continue under originalcaps.",
-    "final_window": "/tmp/zyx-final-five-steady-window-20261017",
+    "implementation": "Final48related modules970distinct tests pass, Release targets built; no full suite. Eight-pool bounded reclamation with two-pool free-frame floor; charged binding/carrier fallback.",
+    "final_window": "/tmp/zyx-final-five-name-batch-window-20261017",
     "source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_revalidation": {
       "id": "S6.1",
@@ -171,8 +171,8 @@
       "scope": "Final42module1019tests plus4reclaim cases(2new) give1021distinct passes on sameDebugcore; finalRelease exact10000User replay and full3processO6correctness pass. No full suite."
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
-    "working_source_commit": "5fc768cb",
-    "final_window_status": "bounded_property_name_repair_281selected_tests_pass_ready_for_clean_freeze",
+    "working_source_commit": "working_tree_after_a724601a",
+    "final_window_status": "final_modules_passed_new_freeze_pending",
     "latest_checkpoint": "20261017-bounded-property-name-batches/proof.json",
     "latest_targeted_tests": {
       "modules": 15,
@@ -207,7 +207,9 @@
     "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
     "final_performance_window": "stopped_not_full_matrix_no_threshold_waiver",
-    "historical_iterations_evidence": "20261017-steady-slot-history/proof.json"
+    "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
+    "latest_repair_evidence": "20261018-bounded-publication-and-binding/proof.json",
+    "latest_timeout_evidence": "20261017-property-name-batch-dynamic-timeout/proof.json"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
