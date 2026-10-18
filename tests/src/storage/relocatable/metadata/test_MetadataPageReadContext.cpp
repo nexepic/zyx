@@ -20,6 +20,10 @@ protected:
 	std::shared_ptr<StorageIO> io;
 	Superblock root;
 	void SetUp() override {
+		// Each counter assertion must start independently of earlier test suites.
+		graph::debug::PerfTrace::setEnabled(false);
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		graph::debug::PerfTrace::reset();
 		path = std::filesystem::temp_directory_path() /
 			("zyx_metadata_context_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".db");
 		stream = std::make_shared<std::fstream>(path, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);

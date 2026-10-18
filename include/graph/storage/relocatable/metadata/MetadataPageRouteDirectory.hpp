@@ -44,8 +44,10 @@ namespace graph::storage {
 		// metadata COW has converged. This is used by the creation transaction so
 		// Catalog ownership pages are included in the reservation.
 		[[nodiscard]] size_t initialBootstrapFrameCount(const MetadataWriteBatch &batch) const;
-		// Counts the exact branch/header frames needed to overlay the current
-		// batch's final routes on a published bootstrap. Callers preflight this
+		// Bounds branch/header capacity for a full rewrite overlaying the current
+		// batch's final routes on a published bootstrap. Reuse may write fewer frames;
+		// retaining full capacity permits optional reuse-index denial to fall back safely.
+		// Callers preflight this
 		// after all ordinary metadata COW work has completed.
 		[[nodiscard]] size_t nextBootstrapFrameCount(const MetadataWriteBatch &batch) const;
 		// Once the bootstrap header is published, this replaces the physical-root

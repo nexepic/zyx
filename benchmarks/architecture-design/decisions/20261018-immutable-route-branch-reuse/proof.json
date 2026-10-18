@@ -1,0 +1,269 @@
+{
+  "status": "mechanism_and_necessary_modules_verified_full_acceptance_pending",
+  "base_commit": "6a8988c32593eae4f030fffe4fbf2eaa405ad8f1",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "necessary_modules": 60,
+  "distinct_tests_passed_after_targeted_fixture_rerun": 847,
+  "first_pass": {
+    "tests": 847,
+    "passed": 846,
+    "failed": 1
+  },
+  "fixture_rerun": {
+    "module": "MetadataPageReadContextTest",
+    "tests": 28,
+    "passed": 28,
+    "milliseconds": 6,
+    "full60modules_not_repeated": true
+  },
+  "fixture_root_cause": "The first read-context counter test inherited4radix decodes/18cache hits from earlier suites; this unchanged physical-read path does not call the route writer. All28tests already pass in an isolated pre-fix process. Reset global tracing at fixture start; retain the original2decode/1hit assertions. Initial failure and isolated/fixed results are retained.",
+  "first_new_test_compile_error": "Nonexistent RCK_WORK test enum was corrected to existing RCK_WRITE; no production enum added. Failed compile log retained.",
+  "new_reuse_tests": 6,
+  "direct_api_regression": {
+    "modules": 4,
+    "tests": 91,
+    "milliseconds": 220
+  },
+  "full_unit_suite_run": false,
+  "smoke": {
+    "families": 13,
+    "operations": 886,
+    "full_results_checked": true,
+    "whole_run_budget_seconds": 120
+  },
+  "same_failed_wide128_private_endpoint": {
+    "source_endpoint_sha256": "0f0183598bdfa5d6ada22b543eb824e2eb737c0aa88e18348502530998efb3a6",
+    "exact_full_properties_checked_before_and_after": true,
+    "source_endpoint_unchanged": true,
+    "read_bytes": [
+      39444480,
+      35950592
+    ],
+    "write_bytes": [
+      4107072,
+      425472
+    ],
+    "reused_leaves": 853,
+    "reused_radix_nodes": 32,
+    "final_release_core_matches_diagnostic_core": true,
+    "closed_database_bytes_may_differ": true,
+    "durations_not_compared_or_accepted": true
+  },
+  "safety": {
+    "entire_source_route_graph_authenticated_before_writes": true,
+    "only_identical_ordered_leaf_routes_reused": true,
+    "only_identical_kind_level_directory_and_physical_children_reused": true,
+    "old_pages_never_modified": true,
+    "forced_refresh_and_evacuation_rewrite_all_plumbing": true,
+    "transient_index_uses_active_OwnedAllocationScope_credit": true,
+    "typed_optional_index_denial_refunds_and_falls_back": true,
+    "codec_pressure_from_index_refunds_then_revalidates_original_path": true,
+    "original_full_rewrite_capacity_preflight_preserved": true,
+    "format_driver_ABI_and_resource_gates_unchanged": true
+  },
+  "remaining": [
+    "full required correctness",
+    "final performance",
+    "steady resources/recovery revalidation"
+  ],
+  "source_files": [
+    {
+      "path": "src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp",
+      "sha256": "87f9fd4c7b7092459c589ab4836c19b95f6dedbffe74d83775eb4ae82233c8db"
+    },
+    {
+      "path": "include/graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp",
+      "sha256": "0bf7825fe7ce66c0b43b26f2a392c8173ca482ddc8af83587eef20806d05fdb3"
+    },
+    {
+      "path": "tests/src/storage/relocatable/metadata/test_MetadataPageRouteDirectoryReuse.cpp",
+      "sha256": "8b7393941244d2d8981dba73e14e3a201e54275f132c366b3d170001a1d9fa54"
+    },
+    {
+      "path": "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp",
+      "sha256": "6f75b397060505b957be48d0deac517ee483dd2749ccabfde56ab96972a8e38e"
+    }
+  ],
+  "binaries": {
+    "zyx-workload-contract-worker": "8cf994e2e48e151c8e3a8b395047460b537555c10234c490c882ce6dd0fec63e",
+    "zyx-compare-bench": "ab7011c8584d437b54f911d1a824c1e26e6dc5bedbdf84c82b0dafb959dc828c"
+  },
+  "records": [
+    {
+      "name": "build-route-branch-reuse-tests.py",
+      "archive": "raw/build-route-branch-reuse-tests.py.gz",
+      "uncompressed_bytes": 3240,
+      "uncompressed_sha256": "7ecd585bac5dd5040d019ed2c9778b3ffd9338bb7d2665d7f694dd58132d6400"
+    },
+    {
+      "name": "route-branch-reuse-test-registration.json",
+      "archive": "raw/route-branch-reuse-test-registration.json.gz",
+      "uncompressed_bytes": 5364,
+      "uncompressed_sha256": "ece49962e0935daff9cfecb7ccc8fcd4d1f0d081a3f7efeb5132f311e3026fde"
+    },
+    {
+      "name": "route-branch-reuse-tests.json",
+      "archive": "raw/route-branch-reuse-tests.json.gz",
+      "uncompressed_bytes": 377845,
+      "uncompressed_sha256": "17e0cab555c80c2c080f6ef0aa9e5b73efc788210fdad8fa03764b19c4791a15"
+    },
+    {
+      "name": "route-branch-reuse-final-test.log",
+      "archive": "raw/route-branch-reuse-final-test.log.gz",
+      "uncompressed_bytes": 216790,
+      "uncompressed_sha256": "ae559aedbf659d698f2315bac36e1840f5581438f6c65c346d9a254cd9a115fd"
+    },
+    {
+      "name": "route-branch-reuse-test.log",
+      "archive": "raw/route-branch-reuse-test.log.gz",
+      "uncompressed_bytes": 78185,
+      "uncompressed_sha256": "92fe532ddd088f468401d626fd77fb97b2a3507f42fe481c4ee451399d80070d"
+    },
+    {
+      "name": "route-branch-reuse-quick-tests.json",
+      "archive": "raw/route-branch-reuse-quick-tests.json.gz",
+      "uncompressed_bytes": 2993,
+      "uncompressed_sha256": "dfbb31182d6dfc5ec7852a7eb762bc36c2f4f337d8ba320b5b7d8913e2f2a771"
+    },
+    {
+      "name": "route-branch-reuse-quick-test.log",
+      "archive": "raw/route-branch-reuse-quick-test.log.gz",
+      "uncompressed_bytes": 2032,
+      "uncompressed_sha256": "082d6bff3dd62a5f37e6271a2ee7b440561f4f17aa2e4565d11e3958747b6f9d"
+    },
+    {
+      "name": "route-branch-reuse-api-tests.json",
+      "archive": "raw/route-branch-reuse-api-tests.json.gz",
+      "uncompressed_bytes": 40342,
+      "uncompressed_sha256": "affc72fb621a4ea0232bd05da851608366d511f31f4d2d8c97bb7d2643310b1e"
+    },
+    {
+      "name": "route-branch-reuse-api-test.log",
+      "archive": "raw/route-branch-reuse-api-test.log.gz",
+      "uncompressed_bytes": 20501,
+      "uncompressed_sha256": "072d4a29f45514cffe5c8656051116c82cac5eef15df6388271bb04565c3481e"
+    },
+    {
+      "name": "route-context-isolated-before-fixture-fix.json",
+      "archive": "raw/route-context-isolated-before-fixture-fix.json.gz",
+      "uncompressed_bytes": 12237,
+      "uncompressed_sha256": "47d14193189f90cb74df8c5dedb97933af887bed11f2d79aaab38168ef167e69"
+    },
+    {
+      "name": "route-context-isolated-before-fixture-fix.log",
+      "archive": "raw/route-context-isolated-before-fixture-fix.log.gz",
+      "uncompressed_bytes": 6172,
+      "uncompressed_sha256": "04b64b67820c33c578de4edc3b6aacb8ada5c6b7d54b1c71cefa43a473ed3eb7"
+    },
+    {
+      "name": "build-route-context-isolation-tests.py",
+      "archive": "raw/build-route-context-isolation-tests.py.gz",
+      "uncompressed_bytes": 3094,
+      "uncompressed_sha256": "cac877dfe122ae709311278a8c14caf1815fa8fcb1caf2383482f6ec39297fa3"
+    },
+    {
+      "name": "route-context-isolation-tests.json",
+      "archive": "raw/route-context-isolation-tests.json.gz",
+      "uncompressed_bytes": 12237,
+      "uncompressed_sha256": "b184639c5d08dd09b0af823734f6ac41fd13ad02dc23f30b30fbe5784069a9a1"
+    },
+    {
+      "name": "route-context-isolation-test.log",
+      "archive": "raw/route-context-isolation-test.log.gz",
+      "uncompressed_bytes": 8663,
+      "uncompressed_sha256": "ab00de5567b3feefb80a4878f3ca8179080dcf583476a884c56908ca4be0a785"
+    },
+    {
+      "name": "route-branch-reuse-freeze-build.log",
+      "archive": "raw/route-branch-reuse-freeze-build.log.gz",
+      "uncompressed_bytes": 352,
+      "uncompressed_sha256": "f59d2208afcc0a16b7ce671c0831a2b094560b4db99c00451d95092c58d73899"
+    },
+    {
+      "name": "route-branch-reuse-smoke/report.json",
+      "archive": "raw/route-branch-reuse-smoke--report.json.gz",
+      "uncompressed_bytes": 2162,
+      "uncompressed_sha256": "71c1976392fc6eaec48ac0c25703c0e6a5d7764dc4b86401196edac440f3e42b"
+    },
+    {
+      "name": "route-branch-reuse-smoke/registration.json",
+      "archive": "raw/route-branch-reuse-smoke--registration.json.gz",
+      "uncompressed_bytes": 762,
+      "uncompressed_sha256": "e5efa151382d8eae22d22500ebc00fc048d5f2c91003bab543be513d817a5fae"
+    },
+    {
+      "name": "route-branch-reuse-smoke/trace.json",
+      "archive": "raw/route-branch-reuse-smoke--trace.json.gz",
+      "uncompressed_bytes": 652397,
+      "uncompressed_sha256": "c61ec66289ceff2b8ef5ba718f6462140c963e42298dacb4dc794d1beecf2dd1"
+    },
+    {
+      "name": "mature-route-diagnosis-before-route-reuse/proof.json",
+      "archive": "raw/mature-route-diagnosis-before-route-reuse--proof.json.gz",
+      "uncompressed_bytes": 16462,
+      "uncompressed_sha256": "4408bf5e7ec575d3db5e5737a4ee4a0d3d2696bfba1196dc6ca3e2239c38dd96"
+    },
+    {
+      "name": "mature-route-diagnosis-route-reuse/proof.json",
+      "archive": "raw/mature-route-diagnosis-route-reuse--proof.json.gz",
+      "uncompressed_bytes": 16624,
+      "uncompressed_sha256": "b59bd975798afa24757f1ab814b066003510ee6f44afdb73cecd6e9470bca648"
+    },
+    {
+      "name": "mature-route-diagnosis-wide128-before-route-reuse/proof.json",
+      "archive": "raw/mature-route-diagnosis-wide128-before-route-reuse--proof.json.gz",
+      "uncompressed_bytes": 16482,
+      "uncompressed_sha256": "d0478b4a92a4a1ba2adca3e3fd5d047eaf5a11441ad04c37377294b21766e205"
+    },
+    {
+      "name": "mature-route-diagnosis-wide128-route-reuse/proof.json",
+      "archive": "raw/mature-route-diagnosis-wide128-route-reuse--proof.json.gz",
+      "uncompressed_bytes": 16666,
+      "uncompressed_sha256": "d77a522eb8049f18560a850911ec99f53d7c8dc20dae83ce07ebbe11dcc0da39"
+    },
+    {
+      "name": "mature-diagnostic-worker-provenance.json",
+      "archive": "raw/mature-diagnostic-worker-provenance.json.gz",
+      "uncompressed_bytes": 2417,
+      "uncompressed_sha256": "0d4a2539756cdcf3b4488d45d0db415945fd66eec34bb0f9937ced2a67aee06d"
+    },
+    {
+      "name": "mature-diagnostic-worker-before-route-reuse-provenance.json",
+      "archive": "raw/mature-diagnostic-worker-before-route-reuse-provenance.json.gz",
+      "uncompressed_bytes": 2592,
+      "uncompressed_sha256": "53c9d5e256e12b63ba418f10d8904311ad8b6623b38f68f0306d9c0a75b36c48"
+    },
+    {
+      "name": "before-route-reuse-core-preservation.json",
+      "archive": "raw/before-route-reuse-core-preservation.json.gz",
+      "uncompressed_bytes": 194,
+      "uncompressed_sha256": "fdfd7310f1d6ac3d627008bb92baa9023dfc3a86278f1a6290e4727d3dc7e620"
+    },
+    {
+      "name": "diagnose-mature-wide128.py",
+      "archive": "raw/diagnose-mature-wide128.py.gz",
+      "uncompressed_bytes": 3150,
+      "uncompressed_sha256": "5f47b169f03d1ebf789e1b7b00976bca343ad185f469ae5cc26306cdf10fbda5"
+    },
+    {
+      "name": "build-mature-before-route-reuse.py",
+      "archive": "raw/build-mature-before-route-reuse.py.gz",
+      "uncompressed_bytes": 3272,
+      "uncompressed_sha256": "9f4cb3bb05c8d0932230f0057287389a999832d9e1a106ba009cd7f318215ce5"
+    },
+    {
+      "name": "build-mature-diagnostic-worker.py",
+      "archive": "raw/build-mature-diagnostic-worker.py.gz",
+      "uncompressed_bytes": 3078,
+      "uncompressed_sha256": "b52470902e001dfac8c42f670ee5a7527dd29571facb4a28fdfa56378183c77a"
+    },
+    {
+      "name": "route-reuse-capacity-review.md",
+      "archive": "raw/route-reuse-capacity-review.md.gz",
+      "uncompressed_bytes": 660,
+      "uncompressed_sha256": "b73380e0230569f32bfc4c99a3d9357dd87cb6bcd751f03db7e90ef8901c2bf9"
+    }
+  ]
+}
