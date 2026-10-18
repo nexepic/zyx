@@ -73,6 +73,11 @@ namespace graph::storage {
 
 	class MetadataPagePoolAllocator final : public MetadataPageAllocator {
 	public:
+		// Trigger publication reclamation after roughly 4 MiB of allocations.
+		// The free-frame floor still forces reclamation before capacity pressure.
+		static constexpr uint32_t PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES =
+			32U * RSS_PAGE_POOL_DATA_FRAME_COUNT;
+
 		MetadataPagePoolAllocator(std::shared_ptr<StorageIO> io, const Superblock &superblock,
 								  MetadataPagePoolOpenMode openMode = MetadataPagePoolOpenMode::CPOM_RECOVER);
 

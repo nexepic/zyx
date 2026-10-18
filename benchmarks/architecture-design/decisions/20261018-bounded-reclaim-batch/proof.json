@@ -1,0 +1,126 @@
+{
+  "status": "targeted_validation_passed_full_acceptance_pending",
+  "base_commit": "f0128a9f7b54847be5cf1d2858630009fb529687",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "modules": 56,
+  "tests": 811,
+  "failures": 0,
+  "full_unit_suite_run": false,
+  "reclamation_trigger_frames": 992,
+  "previous_trigger_frames": 248,
+  "frame_bytes": 4096,
+  "free_floor_frames": 62,
+  "no_extra_pool_preallocation": true,
+  "forced_close_recovery_reclamation_unchanged": true,
+  "snapshot_roots_authenticated_before_deferral": true,
+  "instrumented_mature_update": {
+    "read_bytes_before": 35418112,
+    "read_bytes_after": 21770240,
+    "write_bytes_before": 2222720,
+    "write_bytes_after": 2221952,
+    "all_property_values_exact": true,
+    "source_database_unchanged": true,
+    "closed_bytes_differ_due_to_deferred_frame_bitmap": true,
+    "no_timing_or_performance_claim": true
+  },
+  "gates_unchanged": {
+    "family_seconds": 1800,
+    "file_bytes": 2147483648,
+    "AS_bytes": 6442450944,
+    "query_bytes": 67108864
+  },
+  "remaining_revalidation": [
+    "full wide_large/dynamic correctness",
+    "final read/write performance",
+    "S5.5 steady resources",
+    "S6.3 recovery/cleanup"
+  ],
+  "records": [
+    {
+      "name": "build-bounded-reclaim-batch-tests.py",
+      "archive": "raw/build-bounded-reclaim-batch-tests.py.gz",
+      "uncompressed_bytes": 3066,
+      "uncompressed_sha256": "2e215e926a32992ea850a0de28b4bd3795386f6988cb5b7c2df1e39a174f830d"
+    },
+    {
+      "name": "bounded-reclaim-batch-test-registration.json",
+      "archive": "raw/bounded-reclaim-batch-test-registration.json.gz",
+      "uncompressed_bytes": 4955,
+      "uncompressed_sha256": "5a01cfea4cf2e8877be7dd41e9b8ca82375ccc3b419eb3cc1133f708794b1ab4"
+    },
+    {
+      "name": "bounded-reclaim-batch-tests.json",
+      "archive": "raw/bounded-reclaim-batch-tests.json.gz",
+      "uncompressed_bytes": 361100,
+      "uncompressed_sha256": "977e6d6c44be984e1efff0b9ff5aaa648b9c86c6fd91ac39a16ec45e699fd368"
+    },
+    {
+      "name": "bounded-reclaim-batch-test.log",
+      "archive": "raw/bounded-reclaim-batch-test.log.gz",
+      "uncompressed_bytes": 401172,
+      "uncompressed_sha256": "16422abe9b08336be8406f4a2531dee8802680dcc7b0e8aecd7577c4ab15b10f"
+    },
+    {
+      "name": "bounded-reclaim-release-build.log",
+      "archive": "raw/bounded-reclaim-release-build.log.gz",
+      "uncompressed_bytes": 148330,
+      "uncompressed_sha256": "d699c53d27a6b296a0b49fdc4ff327ffd9e74ab2c536d0a39e0e533282397baf"
+    },
+    {
+      "name": "mature-route-diagnosis-gc32/proof.json",
+      "archive": "raw/mature-route-diagnosis-gc32--proof.json.gz",
+      "uncompressed_bytes": 16427,
+      "uncompressed_sha256": "21c99a4fa7552c4378a4d7f5aae8bf38e3bb6f2154613171c4b1b223a225d0c5"
+    },
+    {
+      "name": "mature-diagnostic-worker-gc8-provenance.json",
+      "archive": "raw/mature-diagnostic-worker-gc8-provenance.json.gz",
+      "uncompressed_bytes": 2417,
+      "uncompressed_sha256": "31fef09c586d482df06ec85dea8cebcf81db15cf5bf0f39af0c6e0aac4d38990"
+    },
+    {
+      "name": "mature-diagnostic-worker-provenance.json",
+      "archive": "raw/mature-diagnostic-worker-provenance.json.gz",
+      "uncompressed_bytes": 2417,
+      "uncompressed_sha256": "f48707131642f66684424d16934c14e4ed4700d84c86214288420f12a0642813"
+    },
+    {
+      "name": "diagnose-mature-mutation-route.py",
+      "archive": "raw/diagnose-mature-mutation-route.py.gz",
+      "uncompressed_bytes": 3131,
+      "uncompressed_sha256": "27bc21cb7f5767dbbb76610f0308c9dcb23aabd836360994f7fc0113fa94b55e"
+    },
+    {
+      "name": "build-mature-diagnostic-worker.py",
+      "archive": "raw/build-mature-diagnostic-worker.py.gz",
+      "uncompressed_bytes": 3078,
+      "uncompressed_sha256": "b52470902e001dfac8c42f670ee5a7527dd29571facb4a28fdfa56378183c77a"
+    },
+    {
+      "name": "bounded-reclaim-smoke/report.json",
+      "archive": "raw/bounded-reclaim-smoke--report.json.gz",
+      "uncompressed_bytes": 2162,
+      "uncompressed_sha256": "6e0c82a3cb9b738e2f0c4ba536a4b2c33f2b548a08c7e71907f1c2cec8c2d24f"
+    },
+    {
+      "name": "bounded-reclaim-smoke/registration.json",
+      "archive": "raw/bounded-reclaim-smoke--registration.json.gz",
+      "uncompressed_bytes": 762,
+      "uncompressed_sha256": "67806700dc5dd685c38a465c105a7a090089df9cae35cde84074b5b8fb66cdc6"
+    },
+    {
+      "name": "bounded-reclaim-smoke/trace.json",
+      "archive": "raw/bounded-reclaim-smoke--trace.json.gz",
+      "uncompressed_bytes": 652397,
+      "uncompressed_sha256": "2383e8bbef34736bba27cc56ad599758efce42c24504996d626639fcb8b8e6ab"
+    }
+  ],
+  "smoke": {
+    "families": 13,
+    "operations": 886,
+    "full_results_checked": true
+  },
+  "test_build_note": "An unused diagnostic-only publication-allocation metric was removed after the Debug core compile. Tests cover the identical reclamation behavior; final Release smoke uses the metric-free final source."
+}

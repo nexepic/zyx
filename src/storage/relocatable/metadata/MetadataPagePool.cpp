@@ -499,7 +499,7 @@ namespace graph::storage {
 		MetadataPagePoolHeader updated = pool->second.header;
 		updated.allocated_frames |= 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
 		allocations_since_reconciliation_ = std::min<uint32_t>(
-				allocations_since_reconciliation_ + 1U, 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT);
+				allocations_since_reconciliation_ + 1U, PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES);
 		PoolState updatedPool{updated};
 		writePoolLocked(updatedPool);
 		pool->second = std::move(updatedPool);
@@ -622,7 +622,7 @@ namespace graph::storage {
 							static_cast<uint8_t>(std::countr_zero(freeFrames) + RSS_PAGE_POOL_FIRST_DATA_FRAME);
 					pool->second.header.allocated_frames |= 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
 					allocations_since_reconciliation_ = std::min<uint32_t>(
-							allocations_since_reconciliation_ + 1U, 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT);
+							allocations_since_reconciliation_ + 1U, PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES);
 					allocations.push_back(
 							{PhysicalPageRef{pool->second.header.physical_slot, frame, generation},
 							 reportsCreatedPool ? createdPoolSlot : std::optional<PhysicalSlotId>{}});
@@ -1113,7 +1113,7 @@ namespace graph::storage {
                 debug::PerfTrace::addValue("native_metadata.reclaim.free_frames_before_gc", free);
                 debug::PerfTrace::addValue("native_metadata.reclaim.forced", force);
             }
-			if (!force && allocations_since_reconciliation_ < 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+			if (!force && allocations_since_reconciliation_ < PUBLICATION_RECLAIM_ALLOCATION_BATCH_FRAMES) {
                 uint64_t available = 0U;
                 for (const auto &[slot, pool] : pools_) {
                     if ((emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot.value()) ||
@@ -1138,6 +1138,7 @@ namespace graph::storage {
 	void MetadataPagePoolAllocator::reconcileReachabilityLocked(std::span<const Superblock> protectedSuperblocks,
 																bool resetPageId, bool reclaimUnreachable,
 																bool persistReclaimedFrames) {
+		debug::ScopedPerfTimer timer("native_metadata.reclaim.full_reconciliation");
 		if (protectedSuperblocks.empty()) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata reachability reconciliation requires a current Superblock");
