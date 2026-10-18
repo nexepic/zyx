@@ -2823,7 +2823,7 @@ namespace graph::storage {
 			initial.generation = Generation(1U);
 			initial.checkpoint_lsn = LogSequenceNumber(1U);
 			initial.flags = 0U;
-			static_cast<void>(SuperblockCodec::encode(initial));
+			SuperblockCodec::validate(initial);
             auto owner = query::execution::detail::ProcessResourceDomains::defaultOwner();
             auto domain = owner->domain(nativeOpenedFileIdentity(data->io()->getWriteFd()) + ":" +
                                         std::to_string(initial.database_id.value()));

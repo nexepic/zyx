@@ -41,7 +41,7 @@ namespace graph::storage {
 				size_t maximumBytes = MAXIMUM_CHARGED_BYTES,
                 std::shared_ptr<std::pmr::memory_resource> memoryOwner = {})
             : snapshot_(snapshot), maximum_bytes_(maximumBytes), memory_owner_(std::move(memoryOwner)) {
-			static_cast<void>(SuperblockCodec::encode(snapshot_));
+			SuperblockCodec::validate(snapshot_);
 			if (maximumBytes > MAXIMUM_CHARGED_BYTES) throw std::invalid_argument("metadata cache exceeds its byte limit");
 		}
 

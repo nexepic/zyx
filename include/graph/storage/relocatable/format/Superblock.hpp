@@ -115,6 +115,9 @@ namespace graph::storage {
 
 	class SuperblockCodec {
 	public:
+		// Validate an in-memory descriptor without creating checksummed file bytes.
+		// Disk decoding and publication still use the complete codec below.
+		static void validate(const Superblock &superblock);
 		[[nodiscard]] static std::array<std::byte, RSS_SUPERBLOCK_BYTES> encode(const Superblock &superblock);
 		[[nodiscard]] static Superblock decode(std::span<const std::byte> bytes);
 

@@ -206,6 +206,10 @@ namespace graph::storage {
 
 	Superblock::Superblock() = default;
 
+	void SuperblockCodec::validate(const Superblock &superblock) {
+		validateSuperblock(superblock);
+	}
+
 	std::array<std::byte, RSS_SUPERBLOCK_BYTES> SuperblockCodec::encode(const Superblock &superblock) {
 		validateSuperblock(superblock);
 		std::array<std::byte, RSS_SUPERBLOCK_BYTES> bytes{};

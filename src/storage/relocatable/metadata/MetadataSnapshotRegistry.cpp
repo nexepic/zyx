@@ -133,7 +133,7 @@ namespace graph::storage {
 	MetadataSnapshotPin MetadataSnapshotRegistry::openSnapshot() const {
 		std::shared_lock lock(state_->publication_mutex);
 		const Superblock snapshot = state_->bootstrap->recover();
-		static_cast<void>(SuperblockCodec::encode(snapshot));
+		SuperblockCodec::validate(snapshot);
 		// Allocate before registration so an allocation failure cannot leak a pin.
 		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), snapshot, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{
@@ -162,7 +162,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable current snapshot pin requires this registry's active writer and durable root");
 		}
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		// Allocate before registration so an allocation failure cannot leak a pin.
 		auto readContext = std::allocate_shared<MetadataPageReadContext>(utils::OwnedPmrAllocator<MetadataPageReadContext>(state_->control_owner), current, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, state_->memory_owner);
 		{

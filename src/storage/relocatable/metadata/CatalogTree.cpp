@@ -887,7 +887,7 @@ namespace graph::storage {
 			throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
 								  "relocatable Catalog page and Superblock files must share one StorageIO");
 		}
-		static_cast<void>(SuperblockCodec::encode(current));
+		SuperblockCodec::validate(current);
 		const uint8_t invalidPublication =
 				static_cast<uint8_t>(!checkpointLsn.isValid()) |
 				static_cast<uint8_t>(checkpointLsn <= current.checkpoint_lsn) |
@@ -974,7 +974,7 @@ namespace graph::storage {
 	}
 
 	std::optional<CatalogEntry> CatalogTree::findOptional(const Superblock &superblock, SegmentId segmentId) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (!segmentId.isValid()) {
 			throwCatalogTreeError(FormatError::FERR_INVALID_STATE,
 								  "relocatable Catalog lookup requires a valid Segment ID");
@@ -1030,7 +1030,7 @@ namespace graph::storage {
 	}
 
 	CatalogEntry CatalogTree::find(const Superblock &superblock, SegmentId segmentId) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		MetadataPageId rootIdentity;
         const auto rootReference = catalogRootReference(pages_, superblock, &rootIdentity);
 		const uint8_t invalidLookup = static_cast<uint8_t>(!segmentId.isValid()) |
@@ -1084,7 +1084,7 @@ namespace graph::storage {
 
 	void CatalogTree::visit(const Superblock &superblock,
 							const std::function<void(const CatalogEntry &)> &visitor) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (!visitor) {
 			throwCatalogTreeError(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Catalog traversal requires an entry visitor");

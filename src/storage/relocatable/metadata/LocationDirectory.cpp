@@ -1327,7 +1327,7 @@ namespace graph::storage {
 	LocationDirectoryRangeCursor LocationDirectory::openRangeCursor(
 			const Superblock &superblock, const MetadataDirectoryType directoryType, const uint64_t lowerInclusive,
 			const uint64_t upperInclusive, const CancellationCheckpoint *cancellation) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (!isLocationDirectoryType(directoryType) || lowerInclusive == 0U || lowerInclusive > upperInclusive) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 									"relocatable location range cursor requires a valid type and logical range");
@@ -2246,7 +2246,7 @@ namespace graph::storage {
 	std::optional<LocationLeafEntry> LocationDirectory::findOptional(const Superblock &superblock,
 																	 MetadataDirectoryType directoryType,
 																	 uint64_t logicalId) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (logicalId == 0U) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE, "relocatable location lookup requires an ID");
 		}
@@ -2317,7 +2317,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable entity range absence proof requires a valid nonempty Node or Edge range");
 		}
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		const PhysicalPageRef rootReference = rootFor(pages_, superblock, directoryType);
 		if (!rootReference.isValid()) {
 			return;
@@ -2402,7 +2402,7 @@ namespace graph::storage {
 
 	bool LocationDirectory::visitUntil(const Superblock &superblock, MetadataDirectoryType directoryType,
 									   const std::function<bool(const LocationLeafEntry &)> &visitor) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (!visitor) { // ZYX_COV_EXCL_LINE: public traversal wrappers reject an empty visitor before delegation.
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 										"relocatable location directory traversal requires a visitor");
@@ -2469,7 +2469,7 @@ namespace graph::storage {
 									   uint64_t afterLogicalId, size_t maximumMetadataPages,
 									   const std::function<bool(const LocationLeafEntry &)> &visitor,
 									   size_t *visitedMetadataPages) const {
-		static_cast<void>(SuperblockCodec::encode(superblock));
+		SuperblockCodec::validate(superblock);
 		if (!visitor || maximumMetadataPages == 0U) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 										"relocatable resumable location traversal requires a page bound and visitor");

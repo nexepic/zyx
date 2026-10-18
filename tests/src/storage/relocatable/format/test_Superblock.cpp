@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include "graph/debug/PerfTrace.hpp"
 
 #include "graph/storage/relocatable/format/Superblock.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
@@ -340,6 +341,58 @@ TEST(RelocatableSuperblockTest, PersistsTheTypedPageDirectoryBootstrapFlag) {
 	superblock.flags |= 1U << 31U;
 	expectFormatError([&] { static_cast<void>(SuperblockCodec::encode(superblock)); },
 					  FormatError::FERR_RESERVED_BITS);
+}
+
+TEST(RelocatableSuperblockTest, DescriptorValidationDoesNotSerializeOrChecksum) {
+	const Superblock superblock = validSuperblock(7, 50);
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	EXPECT_NO_THROW(SuperblockCodec::validate(superblock));
+	const auto validation = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(validation.contains("storage.checksum.bytes"));
+	const auto bytes = SuperblockCodec::encode(superblock);
+	const auto encoding = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+	ASSERT_TRUE(encoding.contains("storage.checksum.bytes"));
+	EXPECT_GT(encoding.at("storage.checksum.bytes").totalValue, 0);
+	EXPECT_EQ(SuperblockCodec::decode(bytes), superblock);
+}
+
+TEST(RelocatableSuperblockTest, DescriptorValidationRejectsEveryMalformedRoot) {
+	const std::array roots{
+		&Superblock::catalog_root, &Superblock::page_directory_root, &Superblock::extent_directory_root,
+		&Superblock::allocator_root, &Superblock::node_entity_directory_root,
+		&Superblock::edge_entity_directory_root, &Superblock::entity_property_directory_root,
+		&Superblock::index_root_directory_root, &Superblock::vector_location_directory_root,
+		&Superblock::vector_manifest_directory_root, &Superblock::large_value_manifest_directory_root,
+		&Superblock::state_directory_root, &Superblock::retire_queue_root};
+	for (const auto root : roots) {
+		auto superblock = validSuperblock(7, 50);
+		superblock.*root = PhysicalPageRef{};
+		EXPECT_NO_THROW(SuperblockCodec::validate(superblock));
+		(superblock.*root).frame_index = 1;
+		expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
+		superblock.*root = pageRef(10, 1, std::numeric_limits<uint64_t>::max());
+		expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
+	}
+}
+
+TEST(RelocatableSuperblockTest, DescriptorValidationPreservesLifecycleAndReserveFences) {
+	auto superblock = validSuperblock(7, 50);
+	superblock.flags = ~RSS_SUPERBLOCK_KNOWN_FLAGS;
+	expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_RESERVED_BITS);
+	superblock = validSuperblock(7, 50);
+	superblock.metadata_emergency_reserve.physical_slot = PhysicalSlotId(2);
+	expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
+	superblock = validSuperblock(7, 50);
+	superblock.data_region_offset += 1;
+	expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
+	superblock = validSuperblock(7, 50);
+	superblock.database_id = DatabaseId{};
+	expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
+	superblock = validSuperblock(7, 50);
+	superblock.generation = Generation{};
+	expectFormatError([&] { SuperblockCodec::validate(superblock); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST(RelocatableSuperblockTest, RejectsInvalidInMemoryValues) {
