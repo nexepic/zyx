@@ -1708,6 +1708,9 @@ TEST_F(RelocatableStorageBackendTest, IntegrityLargeValueEvidenceFitsTheUnchange
     materializeNativeDatabase();
     auto options = backendOptions();
     options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    // Preserve the original >1000-page RAW pressure, even when production ROW
+    // placement compresses this repetitive body. Do not weaken the page bound.
+    options.adaptive_property_row_chunks = false;
     ASSERT_EQ(options.maximum_integrity_workspace_bytes, 8U * 1024U * 1024U);
     RelocatableStorageBackend backend(options); backend.open();
     // Match the documented budget-family baseline: 10,000 indexed thin
