@@ -2,10 +2,18 @@
   "status": "registered_before_independent_evaluation",
   "source": "648e60ff",
   "reason": "User requests short development checks; development implementation and targeted regression complete. Evaluate previously unstarted independent final read/write families without repeating failed dynamic source.",
-  "driver_sha256": "0f69eeb93d9938e6228e9a37d61648c3e44f8ffdf2b1dad9b70655b71aa2c0a1",
+  "driver_sha256": "8180e3702eddd16751339144aa3ab04b712e0cdca3f8885b3e6ed09cf9438df0",
   "dynamic_timeout": "retained; not success; unchanged source not rerun",
   "maintenance": "previous accepted versioned evidence retained; no duplicate as precondition",
   "thresholds_changed": false,
   "resources_changed": false,
-  "development_smoke_acceptance": false
+  "development_smoke_acceptance": false,
+  "startup_correction": "First launch failed before measurements: module search path. Explicit /tmp harness path added before any case.",
+  "excluded_startup_case": {
+    "scale": "medium",
+    "profile": "scan",
+    "round": 1,
+    "engine": "control",
+    "reason": "Final smoke rerun overlapped first control process for about10seconds; preserve raw, exclude entire process from final acceptance. One replacement after all other cases and no concurrent tests; no performance-driven repeats."
+  }
 }
