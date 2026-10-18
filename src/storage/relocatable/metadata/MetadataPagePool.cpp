@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include "graph/debug/PerfTrace.hpp"
 #include <bit>
 #include <functional>
 #include <iterator>
@@ -497,6 +498,8 @@ namespace graph::storage {
 		const uint8_t frame = static_cast<uint8_t>(std::countr_zero(freeFrames) + RSS_PAGE_POOL_FIRST_DATA_FRAME);
 		MetadataPagePoolHeader updated = pool->second.header;
 		updated.allocated_frames |= 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		allocations_since_reconciliation_ = std::min<uint32_t>(
+				allocations_since_reconciliation_ + 1U, 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT);
 		PoolState updatedPool{updated};
 		writePoolLocked(updatedPool);
 		pool->second = std::move(updatedPool);
@@ -618,6 +621,8 @@ namespace graph::storage {
 					const uint8_t frame =
 							static_cast<uint8_t>(std::countr_zero(freeFrames) + RSS_PAGE_POOL_FIRST_DATA_FRAME);
 					pool->second.header.allocated_frames |= 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+					allocations_since_reconciliation_ = std::min<uint32_t>(
+							allocations_since_reconciliation_ + 1U, 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT);
 					allocations.push_back(
 							{PhysicalPageRef{pool->second.header.physical_slot, frame, generation},
 							 reportsCreatedPool ? createdPoolSlot : std::optional<PhysicalSlotId>{}});
@@ -1079,7 +1084,7 @@ namespace graph::storage {
 	}
 
 	void MetadataPagePoolAllocator::reclaimUnreachable(const Superblock &current,
-													   std::span<const Superblock> activeSnapshots) {
+													   std::span<const Superblock> activeSnapshots, bool force) {
 		static_cast<void>(SuperblockCodec::encode(current));
 		std::vector<Superblock> protectedSuperblocks;
 		protectedSuperblocks.reserve(activeSnapshots.size() + 1U);
@@ -1098,9 +1103,32 @@ namespace graph::storage {
 		std::unique_lock lock(mutex_);
 		try {
 			requireHealthyLocked();
+			debug::PerfTrace::addValue("native_metadata.reclaim.pending_allocations", allocations_since_reconciliation_);
+            if (debug::PerfTrace::areValuesEnabled()) {
+                uint64_t free = 0U;
+                for (const auto &[slot, pool] : pools_) {
+                    if ((emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot.value()) || snapshot_protected_pool_slots_.contains(slot)) continue;
+                    free += RSS_PAGE_POOL_DATA_FRAME_COUNT - std::popcount(pool.header.allocated_frames);
+                }
+                debug::PerfTrace::addValue("native_metadata.reclaim.free_frames_before_gc", free);
+                debug::PerfTrace::addValue("native_metadata.reclaim.forced", force);
+            }
+			if (!force && allocations_since_reconciliation_ < 8U * RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+                uint64_t available = 0U;
+                for (const auto &[slot, pool] : pools_) {
+                    if ((emergency_reserve_.isValid() && slot == emergency_reserve_.physical_slot.value()) ||
+                        snapshot_protected_pool_slots_.contains(slot)) continue;
+                    available += RSS_PAGE_POOL_DATA_FRAME_COUNT - std::popcount(pool.header.allocated_frames);
+                }
+                // Never defer into a capacity shortage. Small/space-constrained
+                // files keep eager reclamation; no extra pool is preallocated.
+                debug::PerfTrace::addValue("native_metadata.reclaim.available_frames", available);
+                if (available >= 2U * RSS_PAGE_POOL_DATA_FRAME_COUNT) return;
+            }
 			// This runs after the new Superblock is durable. A later publication's
 			// mandatory data fence persists these reusable-frame header updates.
 			reconcileReachabilityLocked(protectedSuperblocks, false, true, false);
+			allocations_since_reconciliation_ = 0U;
 		} catch (...) {
 			poisoned_ = true;
 			throw;

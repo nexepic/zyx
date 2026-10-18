@@ -181,7 +181,7 @@ namespace graph::storage {
 
 	void MetadataSnapshotRegistry::reclaimAfterPublication(const MetadataWriteGuard &guard,
 														   MetadataPagePoolAllocator &allocator,
-														   const Superblock &current) const {
+														   const Superblock &current, bool force) const {
 		if (!guard.isValid() || guard.state_.get() != state_.get()) {
 			throwSnapshotRegistryError(FormatError::FERR_INVALID_STATE,
 									   "relocatable metadata reclamation requires this registry's active writer guard");
@@ -190,7 +190,7 @@ namespace graph::storage {
 			throwSnapshotRegistryError(FormatError::FERR_INVALID_STATE,
 									   "relocatable metadata reclamation requires the newest durable Superblock");
 		}
-		allocator.reclaimUnreachable(current, activeSuperblocks(*state_));
+		allocator.reclaimUnreachable(current, activeSuperblocks(*state_), force);
 	}
 
 	bool MetadataSnapshotRegistry::anyActiveSnapshot(

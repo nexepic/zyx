@@ -1,0 +1,66 @@
+{
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "this_request_completed": 2,
+  "selected_tests": 970,
+  "selected_modules": 48,
+  "full_suite_executed": false,
+  "new_tests": 7,
+  "source_sha256": {
+    "include/graph/storage/relocatable/metadata/MetadataPagePool.hpp": "488f790c601455226ded0f1d5d604d5db5b3d2baa9b6545cdbe1494b6b6aedf4",
+    "include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp": "cd94eb0494d68378c3a62104fd2637983985fde1a272d3c8a31b600ad1d7466c",
+    "src/storage/relocatable/metadata/MetadataPagePool.cpp": "329bd706bd04e6b58765081711aed644b85a1b3b3acde61505470d386b27d61b",
+    "src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp": "fee8125afc334a04262ac3e0a9626211ca62745a353357858c91189fd48c204d",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "f938962e3af0ec8b150dc152a43001236d4fc87ab5195e619ce371ffd0cae7c9",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "d78c17d5507c5637d9f5b802aee951de14380dd12b5fb079cb4c2da011c5185a",
+    "tests/src/storage/relocatable/metadata/test_MetadataPublicationReclaimBatch.cpp": "54294826349dac8b5811c8853393fa1679ca57a5d902372e0fb70e88fc787aa7",
+    "tests/src/storage/relocatable/backend/test_RelocatableBoundProgramAdmission.cpp": "606d8bc2915fa94d94ee801d998f4f1e13b91efe538f2e44eae1f17ac70d1edd"
+  },
+  "files": [
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/run-selected.py",
+      "archive": "raw/run-selected.py.gz",
+      "sha256": "ad9a599d4faea02c39b5f15d7a04c41cd8a5f20e2186904581ebc222a191870a"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/tests.log",
+      "archive": "raw/tests.log.gz",
+      "sha256": "8b0d28072a1ec8e9e6626437f1e9833e4b7dae833e3d3e14c744657fbc5a3047"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/tests.xml",
+      "archive": "raw/tests.xml.gz",
+      "sha256": "6bd93cbdebc50d46f4242fd7c6255e35b1e2be0967bd8972852a13dbc8fd2f0d"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/provenance.json",
+      "archive": "raw/provenance.json.gz",
+      "sha256": "51d01d7f68a51cbf8760c820a612ee658348c87e96ed1a0460f729f522825488"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/test-summary.json",
+      "archive": "raw/test-summary.json.gz",
+      "sha256": "6e109540b069a0ca58713c4ed4a8f09e8a2ef7dd6e495cc1fc53db95969bc4be"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/release-build.log",
+      "archive": "raw/release-build.log.gz",
+      "sha256": "c2ed93ffd93c840755c0e91392ae593b1b52de9b7aaf6c208123feaceb1dde2e"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/prepare-window.py",
+      "archive": "raw/prepare-window.py.gz",
+      "sha256": "c4235f527f0592bfda4bd6263cb1508f59064fcca926ccdd549143ebe89999cc"
+    }
+  ],
+  "release_binaries": {
+    "zyx-compare-bench": "6107ecf689883d648095c4ed3777c142dc31dd386e070852ab2379e8e3790035",
+    "zyx-workload-contract-worker": "3718d671f004e74fdefce70a733875d0d47f20fd76e152da728e8b5aa926e4e2"
+  },
+  "performance_acceptance": "pending; no old or partial samples relabelled as success",
+  "resource_limits_increased": false,
+  "format_or_driver_abi_changed": false,
+  "executor_recreation": "Transient diagnostics lost; final module tests rerun from preserved source and archived here. Old timeout raw archive preserved; closed transient database no longer available.",
+  "kuzu_goal_achieved": false
+}

@@ -7486,7 +7486,13 @@ namespace graph::query::execution {
 				}
 			}
 
-			const size_t batchCapacity = std::min(DEFAULT_PROPERTY_BATCH_ROWS, state.shared.bounds.maximum_rows);
+			// Reserve only a fraction of the working allowance for pending row
+            // carriers. Split retries must retain their unprocessed siblings;
+            // filling a tiny budget with carriers can starve even one payload.
+            const size_t carrierCapacity = std::max<size_t>(1U,
+                state.shared.materialized_budget.available() / 8U / sizeof(LogicalPlanReadRow));
+            const size_t batchCapacity = std::min({DEFAULT_PROPERTY_BATCH_ROWS,
+                state.shared.bounds.maximum_rows, carrierCapacity});
 			if (batchCapacity == 0U) {
 				return std::nullopt;
 			}
@@ -16831,17 +16837,41 @@ namespace graph::query::execution {
 			}
 		}
 
-		void bindInjectedProgram(const logical::LogicalOperator &root, ExecutionState &state, const LogicalPlanReadRow &row) {
-			if (!state.shared.snapshot.bindingSchemaIdentity()) return;
-			detail::BudgetMemoryResource memory(state.shared.materialized_budget);
-			std::pmr::vector<std::string_view> names(&memory);
-			for (const auto &[name, value] : row.values) { checkGuardNow(state); names.push_back(name); }
-			std::ranges::sort(names);
-			state.shared.bound_program.emplace(root, state.shared.snapshot, state.shared.materialized_budget,
-				[&] { checkGuardNow(state); }, detail::BoundProgramLimits{}, std::pmr::get_default_resource(),
-				std::span<const std::string_view>(names));
-			debug::PerfTrace::addValue("logical_plan.bound_inputs.imported_programs", 1);
-		}
+		template<class Bind>
+        void bindProgramWithHeadroom(ExecutionSharedState &shared, Bind bind) {
+            shared.bound_program.reset();
+            const size_t before = shared.materialized_budget.used();
+            // Binding is optional acceleration. Retain at least seven eighths
+            // of the remaining working budget for sources, carriers and output.
+            const size_t allowance = shared.materialized_budget.available() / 8U;
+            try {
+                bind();
+                const size_t bytes = shared.materialized_budget.used() - before;
+                if (bytes <= allowance) {
+                    debug::PerfTrace::addValue("logical_plan.bound_program.admitted_bytes", bytes);
+                    return;
+                }
+            } catch (const MaterializedByteLimitExceeded &) {
+                // Partial descriptors unwind before the charged row path runs.
+            } catch (const detail::ResourceAdmissionDenied &) {
+            }
+            shared.bound_program.reset();
+            debug::PerfTrace::addValue("logical_plan.bound_program.quota_fallbacks", 1);
+        }
+
+        void bindInjectedProgram(const logical::LogicalOperator &root, ExecutionState &state, const LogicalPlanReadRow &row) {
+            if (!state.shared.snapshot.bindingSchemaIdentity()) return;
+            bindProgramWithHeadroom(state.shared, [&] {
+                detail::BudgetMemoryResource memory(state.shared.materialized_budget);
+                std::pmr::vector<std::string_view> names(&memory);
+                for (const auto &[name, value] : row.values) { checkGuardNow(state); names.push_back(name); }
+                std::ranges::sort(names);
+                state.shared.bound_program.emplace(root, state.shared.snapshot, state.shared.materialized_budget,
+                    [&] { checkGuardNow(state); }, detail::BoundProgramLimits{}, std::pmr::get_default_resource(),
+                    std::span<const std::string_view>(names));
+            });
+            if (state.shared.bound_program) debug::PerfTrace::addValue("logical_plan.bound_inputs.imported_programs", 1);
+        }
 
 		[[nodiscard]] LogicalPlanReadRuntimeStats
 		executeOnSnapshot(storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
@@ -16863,7 +16893,9 @@ namespace graph::query::execution {
 				// Token/physical binding requires an authenticated reader domain.
 				// Readers without that capability retain the charged semantic row adapter.
 				if (snapshot.bindingSchemaIdentity())
-					shared.bound_program.emplace(root, snapshot, shared.materialized_budget, [&] { checkGuardNow(state); });
+                    bindProgramWithHeadroom(shared, [&] {
+                        shared.bound_program.emplace(root, snapshot, shared.materialized_budget, [&] { checkGuardNow(state); });
+                    });
 				static_cast<void>(visitOperator(root, state, [&](LogicalPlanReadRow row) {
 					if (state.task.stats.rows_emitted ==
 						bounds.maximum_rows) { // ZYX_COV_EXCL_LINE: this visitor returns false with the
