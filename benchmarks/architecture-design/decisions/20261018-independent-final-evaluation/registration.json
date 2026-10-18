@@ -14,7 +14,7 @@
     "profile": "scan",
     "round": 1,
     "engine": "control",
-    "reason": "Final smoke rerun overlapped first control process for about10seconds; preserve raw, exclude entire process from final acceptance. One replacement after all other cases and no concurrent tests; no performance-driven repeats.",
+    "reason": "Final smoke rerun overlapped first control process for about10seconds. Cancelled that startup before completion, retained raw and cleanup hashes, accepted zero timing samples. Replaced once after all development tests ended and before any substantive campaign case completed; no performance-driven repeat.",
     "status": "cancelled_before_completion_zero_accepted_samples",
     "cleanup": "All owned dataset/database files hashed then removed after process exit; other raw and log preserved."
   }
