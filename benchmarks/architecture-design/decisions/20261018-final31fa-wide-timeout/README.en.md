@@ -1,0 +1,1 @@
+The first full wide family on31fa exhausted the original1800-second budget during SET in the128-field/32KiB combination. This is not acceptance or a latency sample. Dynamic and performance did not start. The endpoint remains local with hash/provenance in proof.json. No raised limit or unchanged failed-family retry.

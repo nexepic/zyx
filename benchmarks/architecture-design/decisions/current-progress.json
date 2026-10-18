@@ -160,12 +160,13 @@
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
     "pending_revalidation_ids": [
+      "S6.1",
       "S5.5",
       "S6.3"
     ],
     "implementation": "Direct Superblock validation, existing-codec ROW compression, bounded authenticated route results, publication route-set reuse and bounded reclamation batching implemented.56necessary modules811tests plus886smokeoperations pass. Full required correctness running on frozen31fa candidate; no acceptance increase.",
-    "final_window": "/workspace/zyx-resume-evaluation-20261018/window",
-    "source_commit": "31a05a5718a8d832ab877db42b85aaa18e78d840",
+    "final_window": "/workspace/zyx-resume-evaluation-20261018/final31fa-window",
+    "source_commit": "31faef71179c295bbfd5b204be6c87b3a2481040",
     "source_revalidation": {
       "id": "S6.1",
       "score_increase": false,
@@ -175,8 +176,8 @@
     },
     "pending_user_resource_decision": "4GiB remains unapplied. Native full wide/large-value case actually times out at1800seconds, not an observed file-capacity failure; do not infer a failure from logical RAW bytes.",
     "working_source_commit": "31faef71179c295bbfd5b204be6c87b3a2481040",
-    "final_window_status": "frozen31fa_full_wide_large_then_dynamic_three_independent_rounds_running_original_limits",
-    "latest_checkpoint": "20261018-bounded-reclaim-batch/proof.json",
+    "final_window_status": "blocked_by_actual31fa_full_wide1800second_deadline_failure_zero_performance_processes_started",
+    "latest_checkpoint": "20261018-final31fa-wide-timeout/proof.json",
     "latest_targeted_tests": {
       "modules": 56,
       "tests": 811,
@@ -186,7 +187,7 @@
       "evidence": "20261018-bounded-reclaim-batch/proof.json"
     },
     "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
-    "pending_repair": "Full wide_large and dynamic correctness first; then final read/write/resource gates, including reclamation steady-state revalidation under unchanged caps.",
+    "pending_repair": "Validate optional authenticated route-branch reuse against mature private endpoint and necessary modules; keep original full-rewrite capacity for quota-denial fallback. Freeze only after material mechanism gain. Required full correctness and final resource/performance gates remain pending.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -285,7 +286,8 @@
         "71a6bb0a",
         "31a05a57"
       ]
-    }
+    },
+    "working_source_status": "uncommitted_route_branch_reuse_prototype_compiling_not_yet_validated"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
