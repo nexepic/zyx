@@ -160,34 +160,37 @@
     "status": "in_progress",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
     "pending_revalidation_ids": [
-      "S6.1",
       "S5.5",
       "S6.3"
     ],
-    "implementation": "Direct Superblock validation, existing-codec ROW compression, bounded authenticated route results, publication route-set reuse and bounded reclamation batching implemented.56necessary modules811tests plus886smokeoperations pass. Full required correctness running on frozen31fa candidate; no acceptance increase.",
-    "final_window": "/workspace/zyx-resume-evaluation-20261018/final31fa-window",
-    "source_commit": "31faef71179c295bbfd5b204be6c87b3a2481040",
+    "implementation": "Immutable authenticated route leaves/radix nodes are shared when unchanged; forced refresh/evacuation still rewrites all.60necessary modules847distinct tests verified after targeted28-test fixture isolation rerun;13family886smoke pass. No full unit suite. New full required correctness running.",
+    "final_window": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window",
+    "source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
     "source_revalidation": {
       "id": "S6.1",
       "score_increase": false,
-      "source": "31faef71179c295bbfd5b204be6c87b3a2481040",
-      "evidence": "20261018-bounded-reclaim-batch/proof.json",
-      "scope": "56necessary modules811tests and886smokeoperations pass; no full unit suite. Final correctness/performance/steady resource gates pending."
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "evidence": "20261018-immutable-route-branch-reuse/proof.json",
+      "scope": "60necessary modules; first847tests846passed/1counter-fixture isolation failure. Original fixture isolated28alreadypass. Reset fixture counters, retain2/1assertions, affected28pass.847distinct tests verified through targeted rerun; full60not repeated.13family886smoke pass."
     },
     "pending_user_resource_decision": "4GiB remains unapplied. Native full wide/large-value case actually times out at1800seconds, not an observed file-capacity failure; do not infer a failure from logical RAW bytes.",
-    "working_source_commit": "31faef71179c295bbfd5b204be6c87b3a2481040",
-    "final_window_status": "blocked_by_actual31fa_full_wide1800second_deadline_failure_zero_performance_processes_started",
-    "latest_checkpoint": "20261018-final31fa-wide-timeout/proof.json",
+    "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "final_window_status": "registered_no_performance_process_started_awaiting_six_full_required_correctness_cases",
+    "latest_checkpoint": "20261018-immutable-route-branch-reuse/proof.json",
     "latest_targeted_tests": {
-      "modules": 56,
-      "tests": 811,
-      "passed": 811,
-      "full_suite": false,
-      "source": "31faef71179c295bbfd5b204be6c87b3a2481040",
-      "evidence": "20261018-bounded-reclaim-batch/proof.json"
+      "modules": 60,
+      "distinct_tests_verified": 847,
+      "first_pass_tests": 847,
+      "first_pass_passed": 846,
+      "targeted_fixture_rerun_tests": 28,
+      "targeted_fixture_rerun_passed": 28,
+      "full_unit_suite": false,
+      "full60modules_repeated": false,
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "evidence": "20261018-immutable-route-branch-reuse/proof.json"
     },
     "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
-    "pending_repair": "Validate optional authenticated route-branch reuse against mature private endpoint and necessary modules; keep original full-rewrite capacity for quota-denial fallback. Freeze only after material mechanism gain. Required full correctness and final resource/performance gates remain pending.",
+    "pending_repair": "Complete frozen c287 full wide/dynamic correctness, then finalO6/read/write/remaining correctness and resource gates under original limits. No further implementation changes planned before actual acceptance outcome.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -287,7 +290,7 @@
         "31a05a57"
       ]
     },
-    "working_source_status": "uncommitted_route_branch_reuse_prototype_compiling_not_yet_validated"
+    "working_source_status": "committed_and_frozen_full_required_correctness_running"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
