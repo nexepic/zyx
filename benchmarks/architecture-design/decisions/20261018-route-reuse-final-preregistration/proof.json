@@ -189,6 +189,12 @@
       "archive": "raw/route-reuse-final-window--premeasurement-registration-check.json-corrected-before-performance.gz",
       "uncompressed_bytes": 518,
       "uncompressed_sha256": "825a9aa0a9905de16d1afa39b7c0d8158d5a506db3cb95c8a4431d4ebf6af0bb"
+    },
+    {
+      "name": "prepare-route-reuse-final-window.py",
+      "archive": "raw/prepare-route-reuse-final-window.py-corrected-before-performance.gz",
+      "uncompressed_bytes": 4134,
+      "uncompressed_sha256": "e897d4cecb0a1d62d0d0f12f7ceffde6c0fc7ea5db48047c964b3bf809984de8"
     }
   ],
   "premeasurement_registration_correction": {
