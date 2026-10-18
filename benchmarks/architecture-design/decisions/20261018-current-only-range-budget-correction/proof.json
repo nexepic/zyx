@@ -1,0 +1,75 @@
+{
+  "status": "registered_before_any_additional_candidate_range_process",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "registration": {
+    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "status": "registered_before_candidate_range_supplement",
+    "scope": "Only candidate property_range_indexed has unstable base process P95; control base P50/P95 ranges are below5%, neither source is near the relative protection gate. Original shared control-cost execution estimate skipped both sources. Preserve all those skips. Add source-specific cost admission only for two not-yet-run candidate supplemental slots, not a retry of failed measured processes.",
+    "engine": "current",
+    "scale": "medium",
+    "profile": "indexed",
+    "workloads": [
+      "property_range_indexed"
+    ],
+    "rounds": [
+      4,
+      5
+    ],
+    "samples": 100,
+    "warmups": 3,
+    "maximum_seconds_per_process": 1800,
+    "maximum_total_seconds_original_profile_and_source": 3600,
+    "already_spent_current_indexed_seconds": 40.56739454600756,
+    "source_specific_expected_case_seconds": 102.1204764,
+    "estimator": "103 times maximum observed candidate base process P95 milliseconds/1000, plus30seconds. Admission estimate only; original hard process and cumulative profile caps remain enforced.",
+    "selection": {
+      "scale": "medium",
+      "profile": "indexed",
+      "workload": "property_range_indexed",
+      "control_p50_range_fraction": 0.014409121842145465,
+      "near_gate": false,
+      "p95_change_fraction": -0.969749325011302,
+      "near_p95_gate": false,
+      "control_p95_range_fraction": 0.043823339688620636,
+      "current_p95_range_fraction": 0.07042259032813063,
+      "unstable_tail": true
+    },
+    "parent_boundary": "write-tail-boundary.json (existing engine-free rest-contract hook, after all write processes, before any remaining-contract worker)",
+    "case_script": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-harness/zyx-final-name-batch-extended-read.py",
+    "case_sha256": "026eabf799345f4f672cd1c09c6715582fa9ffe596c37f40ecc2c56615f898c4",
+    "new_metrics_thresholds_caps_or_production_changes": false,
+    "no_control_range_repeat": true,
+    "no_historical_skip_overwrite": true,
+    "automatic_acceptance": false,
+    "coordinator_sha256": "bb89e3acf892c8ff08b2c72e893816cce386fe3f5d4c292c99c2273af58e2d86"
+  },
+  "records": [
+    {
+      "source": "/workspace/zyx-resume-evaluation-20261018/run-current-only-range-supplement.py",
+      "archive": "raw/run-current-only-range-supplement.py.gz",
+      "bytes": 4347,
+      "sha256": "bb89e3acf892c8ff08b2c72e893816cce386fe3f5d4c292c99c2273af58e2d86"
+    },
+    {
+      "source": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/current-only-range-supplement-registration.json",
+      "archive": "raw/current-only-range-supplement-registration.json.gz",
+      "bytes": 2159,
+      "sha256": "debae079413b8d76a87c843f8b0f3c65c7a810df059f8bd5bf5255644d997616"
+    },
+    {
+      "source": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/write-tail-amendment.json",
+      "archive": "raw/write-tail-amendment.json.gz",
+      "bytes": 301,
+      "sha256": "4868fecff0b76a782a93e106d6c991b5941b8e6ce097e12801ef8812e74810f3"
+    },
+    {
+      "source": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/pre-current-only-range-extended-read-comparison.json",
+      "archive": "raw/pre-current-only-range-extended-read-comparison.json.gz",
+      "bytes": 66305,
+      "sha256": "fb6629adae41d3e0dea8b399fde1eb8fe6ff3c623fc47a46528d75110688d029"
+    }
+  ],
+  "preparation_correction": "Initial estimate assertion used milliseconds as seconds and rejected admission before any range query; divide by1000 before successful preregistration. No engine result affected."
+}
