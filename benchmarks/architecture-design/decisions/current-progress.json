@@ -173,7 +173,7 @@
       "evidence": "20261018-immutable-route-branch-reuse/proof.json",
       "scope": "60necessary modules; first847tests846passed/1counter-fixture isolation failure. Original fixture isolated28alreadypass. Reset fixture counters, retain2/1assertions, affected28pass.847distinct tests verified through targeted rerun; full60not repeated.13family886smoke pass."
     },
-    "pending_user_resource_decision": "4GiB remains unapplied. Native full wide/large-value case actually times out at1800seconds, not an observed file-capacity failure; do not infer a failure from logical RAW bytes.",
+    "pending_user_resource_decision": "4GiB amendment remains unapplied and is not gating current work: first c287 fullwide passes with944766976-byte closed file under2GiB. Earlier actual1800-second failures remain failures.",
     "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
     "final_window_status": "registered_no_performance_process_started_awaiting_six_full_required_correctness_cases",
     "latest_checkpoint": "20261018-immutable-route-branch-reuse/proof.json",
@@ -189,7 +189,7 @@
       "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
       "evidence": "20261018-immutable-route-branch-reuse/proof.json"
     },
-    "full_maintenance_preflight": "final3processO6complete_full13windows_resource_checkpoint_passed_no_duplicate_untimedrun",
+    "full_maintenance_preflight": "Historical accepted-source O6 evidence only; frozen c287 must revalidate after all six full wide/dynamic correctness cases. New-source O6 has not started.",
     "pending_repair": "Complete frozen c287 full wide/dynamic correctness, then finalO6/read/write/remaining correctness and resource gates under original limits. No further implementation changes planned before actual acceptance outcome.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
@@ -290,7 +290,32 @@
         "31a05a57"
       ]
     },
-    "working_source_status": "committed_and_frozen_full_required_correctness_running"
+    "working_source_status": "committed_and_frozen_full_required_correctness_running",
+    "current_required_correctness_checkpoint": {
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "completed_cases": 3,
+      "total_cases": 6,
+      "round1_wide": {
+        "operations": 16103,
+        "full_results_checked": true,
+        "elapsed_seconds": 1463.8816093399982
+      },
+      "round1_dynamic": {
+        "entities": 10000,
+        "operations": 66769,
+        "full_results_checked": true,
+        "elapsed_seconds": 1206.3978921240014
+      },
+      "formal_performance_samples": 0,
+      "acceptance_increase": false,
+      "deadline_amendment_applied": false,
+      "round2_wide": {
+        "operations": 16103,
+        "full_results_checked": true,
+        "elapsed_seconds": 1488.9716859450018
+      },
+      "checkpoint_only_live_status": "route-reuse-contract-status.json"
+    }
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
