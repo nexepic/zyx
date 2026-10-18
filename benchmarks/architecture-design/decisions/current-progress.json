@@ -173,7 +173,7 @@
     },
     "pending_user_resource_decision": "4GiB unanswered and unapplied. Corrected false inference from RAW logical bytes: unchanged full wide cohort runs under original2GiB; physical size/dedup must be measured, not assumed.",
     "working_source_commit": "648e60ff_restored_exactly",
-    "final_window_status": "actual_1800s_dynamic_timeout_last_create8347;integrated_matrix_not_started",
+    "final_window_status": "independent_final_read_write_evaluation_running;historical_dynamic_timeout_retained",
     "latest_checkpoint": "20261017-bounded-property-name-batches/proof.json",
     "latest_targeted_tests": {
       "modules": 15,
@@ -207,7 +207,7 @@
     "final_window_order": "Independent final read/write evaluation may proceed; retain actual dynamic timeout without unchanged-source retries or treating smoke as full acceptance.",
     "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
     "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
-    "final_performance_window": "stopped_not_full_matrix_no_threshold_waiver",
+    "final_performance_window": "running_independent_families_no_threshold_waiver",
     "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
     "latest_repair_evidence": "20261018-bounded-publication-and-binding/proof.json",
     "latest_timeout_evidence": "20261018-publication-dynamic-timeout/proof.json",
@@ -222,7 +222,9 @@
       "latest_all_smoke_operations": 886,
       "latest_all_smoke_seconds": 9.686,
       "acceptance_score_increase": false
-    }
+    },
+    "latest_development_evidence": "20261018-development-short-checks/proof.json",
+    "latest_evaluation_registration": "20261018-independent-final-evaluation/registration.json"
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",
