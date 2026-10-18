@@ -66,6 +66,93 @@ TEST_F(MetadataPageReadContextTest, ReusesDecodedPagesOnlyInsideAnActiveScope) {
 	EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_cache_hits").totalValue, 1);
 }
 
+TEST_F(MetadataPageReadContextTest, RouteKeysIncludeThePhysicalRootAndLogicalIdentity) {
+	auto context = std::make_shared<MetadataPageReadContext>(root);
+	MetadataPageReadContext::Scope scope(context, *io);
+	const PhysicalPageRef firstRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef secondRoot{PhysicalSlotId(11U), 1U, Generation(1U)};
+	const PhysicalPageRef first{PhysicalSlotId(20U), 1U, Generation(1U)};
+	const PhysicalPageRef second{PhysicalSlotId(21U), 1U, Generation(1U)};
+	context->putMetadataRoute(firstRoot, MetadataPageId(7U), first, root);
+	context->putMetadataRoute(secondRoot, MetadataPageId(7U), second, root);
+	EXPECT_EQ(context->findMetadataRoute(firstRoot, MetadataPageId(7U), root), first);
+	EXPECT_EQ(context->findMetadataRoute(secondRoot, MetadataPageId(7U), root), second);
+	EXPECT_FALSE(context->findMetadataRoute(firstRoot, MetadataPageId(8U), root));
+}
+
+TEST_F(MetadataPageReadContextTest, RouteReuseRequiresTheSameDatabaseLayoutAndVisibilityFence) {
+	auto context = std::make_shared<MetadataPageReadContext>(root);
+	MetadataPageReadContext::Scope scope(context, *io);
+	const PhysicalPageRef routeRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef target{PhysicalSlotId(20U), 1U, Generation(1U)};
+	context->putMetadataRoute(routeRoot, MetadataPageId(7U), target, root);
+	for (size_t field = 0U; field < 4U; ++field) {
+		auto foreign = root;
+		if (field == 0U) foreign.database_id = DatabaseId(456U);
+		if (field == 1U) foreign.data_region_offset += RSS_SEGMENT_SIZE;
+		if (field == 2U) foreign.generation = Generation(2U);
+		if (field == 3U) foreign.checkpoint_lsn = LogSequenceNumber(2U);
+		EXPECT_FALSE(context->findMetadataRoute(routeRoot, MetadataPageId(7U), foreign));
+		context->putMetadataRoute(routeRoot, MetadataPageId(8U), target, foreign);
+		EXPECT_FALSE(context->findMetadataRoute(routeRoot, MetadataPageId(8U), root));
+	}
+	auto candidate = root;
+	candidate.catalog_root = PhysicalPageRef{PhysicalSlotId(30U), 1U, Generation(2U)};
+	EXPECT_EQ(context->findMetadataRoute(routeRoot, MetadataPageId(7U), candidate), target);
+}
+
+TEST_F(MetadataPageReadContextTest, RouteEntriesRejectInvalidOrFutureFramesAndHonorZeroBudget) {
+	const PhysicalPageRef routeRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef target{PhysicalSlotId(20U), 1U, Generation(1U)};
+	auto context = std::make_shared<MetadataPageReadContext>(root);
+	{
+		MetadataPageReadContext::Scope scope(context, *io);
+		context->putMetadataRoute({}, MetadataPageId(7U), target, root);
+		context->putMetadataRoute(routeRoot, {}, target, root);
+		context->putMetadataRoute(routeRoot, MetadataPageId(7U), {}, root);
+		auto future = target; future.generation = Generation(2U);
+		context->putMetadataRoute(routeRoot, MetadataPageId(7U), future, root);
+		future = routeRoot; future.generation = Generation(2U);
+		context->putMetadataRoute(future, MetadataPageId(7U), target, root);
+		EXPECT_EQ(context->size(), 0U);
+	}
+	context = std::make_shared<MetadataPageReadContext>(root, 0U);
+	MetadataPageReadContext::Scope scope(context, *io);
+	context->putMetadataRoute(routeRoot, MetadataPageId(7U), target, root);
+	EXPECT_FALSE(context->findMetadataRoute(routeRoot, MetadataPageId(7U), root));
+	EXPECT_EQ(context->chargedBytes(), 0U);
+}
+
+TEST_F(MetadataPageReadContextTest, RouteAndCodecEntriesShareTheOriginalBoundsAndRecoverAfterEviction) {
+	auto context = std::make_shared<MetadataPageReadContext>(root);
+	MetadataPageReadContext::Scope scope(context, *io);
+	const PhysicalPageRef routeRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef target{PhysicalSlotId(20U), 1U, Generation(1U)};
+	for (uint64_t id = 1U; id <= 256U; ++id) context->putMetadataRoute(routeRoot, MetadataPageId(id), target, root);
+	EXPECT_EQ(context->size(), MetadataPageReadContext::MAXIMUM_ROUTE_ENTRIES);
+	MetadataRadixPage page;
+	for (uint64_t id = 1U; id <= 256U; ++id) {
+		context->put(PhysicalPageRef{PhysicalSlotId(1000U + id), 1U, Generation(1U)}, page);
+		EXPECT_LE(context->size(), MetadataPageReadContext::MAXIMUM_ENTRIES);
+		EXPECT_LE(context->chargedBytes(), MetadataPageReadContext::MAXIMUM_CHARGED_BYTES);
+	}
+	context->putMetadataRoute(routeRoot, MetadataPageId(999U), target, root);
+	EXPECT_EQ(context->findMetadataRoute(routeRoot, MetadataPageId(999U), root), target);
+}
+
+TEST_F(MetadataPageReadContextTest, DirectWritesInvalidateResolvedRoutesButStatisticsResetDoesNot) {
+	auto context = std::make_shared<MetadataPageReadContext>(root);
+	MetadataPageReadContext::Scope scope(context, *io);
+	const PhysicalPageRef routeRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef target{PhysicalSlotId(20U), 1U, Generation(1U)};
+	context->putMetadataRoute(routeRoot, MetadataPageId(7U), target, root);
+	io->resetStats();
+	EXPECT_EQ(context->findMetadataRoute(routeRoot, MetadataPageId(7U), root), target);
+	const std::byte byte{1U}; io->writeAt(0U, &byte, 1U);
+	EXPECT_FALSE(context->findMetadataRoute(routeRoot, MetadataPageId(7U), root));
+	EXPECT_EQ(context->size(), 0U);
+}
+
 TEST_F(MetadataPageReadContextTest, InvalidatesAfterDirectWritesAndDiagnosticResetsDoNotResetTheEpoch) {
 	MetadataPageFile pages(io, root);
 	const auto ref = writeRadix(pages, 1U);
@@ -183,6 +270,33 @@ CatalogLeafPage oneCatalogPage() {
     return page;
 }
 }
+TEST_F(MetadataPageReadContextTest, RouteAllocationsUseTheCacheGrantAndOptionalDenialFallsBack) {
+	auto memory = metadataReadGrant(4096U);
+	std::weak_ptr<graph::query::execution::detail::PrepaidMemoryResource> lifetime = memory;
+	auto context = std::allocate_shared<MetadataPageReadContext>(graph::utils::OwnedPmrAllocator<MetadataPageReadContext>(memory),
+		root, MetadataPageReadContext::MAXIMUM_CHARGED_BYTES, memory);
+	const size_t before = memory->used();
+	const PhysicalPageRef routeRoot{PhysicalSlotId(10U), 1U, Generation(1U)};
+	const PhysicalPageRef target{PhysicalSlotId(20U), 1U, Generation(1U)};
+	{
+		MetadataPageReadContext::Scope scope(context, *io);
+		const size_t bytes = memory->capacity() - memory->used();
+		auto release = [memory, bytes](void *value) { memory->deallocate(value, bytes); };
+		std::unique_ptr<void, decltype(release)> pressure(memory->allocate(bytes), release);
+		EXPECT_NO_THROW(context->putMetadataRoute(routeRoot, MetadataPageId(7U), target, root));
+		EXPECT_FALSE(context->findMetadataRoute(routeRoot, MetadataPageId(7U), root));
+		pressure.reset();
+		context->putMetadataRoute(routeRoot, MetadataPageId(7U), target, root);
+		EXPECT_EQ(context->findMetadataRoute(routeRoot, MetadataPageId(7U), root), target);
+		EXPECT_GT(memory->used(), before);
+		EXPECT_LE(memory->used(), memory->capacity());
+	}
+	context.reset();
+	EXPECT_EQ(memory->used(), 0U);
+	memory.reset();
+	EXPECT_TRUE(lifetime.expired());
+}
+
 TEST_F(MetadataPageReadContextTest, DecodedEntryBuffersAndEscapedCopiesRetainTheirActualGrant) {
     auto memory = metadataReadGrant(64U * 1024U);
     std::weak_ptr<graph::query::execution::detail::PrepaidMemoryResource> lifetime = memory;

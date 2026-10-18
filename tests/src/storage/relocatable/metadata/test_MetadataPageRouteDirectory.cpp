@@ -28,6 +28,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
@@ -99,6 +100,8 @@ protected:
 	}
 
 	void TearDown() override {
+		graph::debug::PerfTrace::setValueCollectionEnabled(false);
+		graph::debug::PerfTrace::reset();
 		io.reset();
 		if (file && file->is_open()) {
 			file->close();
@@ -159,6 +162,106 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, ResolvesCompleteRoutesAcrossMu
 	EXPECT_EQ(results[0], routes[1].physical_reference);
 	EXPECT_EQ(results[1], routes[0].physical_reference);
 	EXPECT_EQ(results[2], routes[1].physical_reference);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, AuthenticatedTargetsServeRepeatedPointAndDuplicateBatchReads) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const std::vector routes{route(1U, 1000U, 1U, 1U), route(2U, 1001U, 1U, 1U)};
+	const auto root = directory.buildFromCompleteRouteSet(batch, routes);
+	auto context = std::make_shared<MetadataPageReadContext>(batch.candidate());
+	MetadataPageReadContext::Scope scope(context, *io);
+	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(1U)), routes[0].physical_reference);
+	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(2U)), routes[1].physical_reference);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	io->resetStats();
+	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(1U)), routes[0].physical_reference);
+	const std::array ids{MetadataPageId(2U), MetadataPageId(1U), MetadataPageId(2U)};
+	std::array<PhysicalPageRef, 3U> found{};
+	directory.findMany(batch.candidate(), root, ids, found);
+	EXPECT_EQ(found[0], routes[1].physical_reference);
+	EXPECT_EQ(found[1], routes[0].physical_reference);
+	EXPECT_EQ(found[2], routes[1].physical_reference);
+	EXPECT_EQ(io->stats().read_bytes, 0U);
+	const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(counters.contains("native_graph.read.resolved_metadata_route_cache_hits"));
+	EXPECT_EQ(counters.at("native_graph.read.resolved_metadata_route_cache_hits").totalValue, 4);
+	EXPECT_FALSE(counters.contains("native_graph.read.decoded_metadata_cache_hits"));
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, CachedTargetsDoNotHideCorruptionAfterAnIoWrite) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const auto root = directory.buildFromCompleteRouteSet(batch, std::array{route(1U, 1000U, 1U, 1U)});
+	auto context = std::make_shared<MetadataPageReadContext>(batch.candidate());
+	MetadataPageReadContext::Scope scope(context, *io);
+	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(1U)), pageRef(1000U, 1U, 1U));
+	const std::byte corrupt{0U};
+	io->writeAt(pages.pageOffset(root), &corrupt, 1U);
+	EXPECT_THROW(directory.find(batch.candidate(), root, MetadataPageId(1U)), FormatException);
+	const std::array ids{MetadataPageId(1U)};
+	std::array<PhysicalPageRef, 1U> found{};
+	EXPECT_THROW(directory.findMany(batch.candidate(), root, ids, found), FormatException);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RouteRootsAndVisibilityFencesRemainIndependentWithAWarmCache) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const auto first = directory.buildFromCompleteRouteSet(batch, std::array{route(1U, 1000U, 1U, 1U)});
+	const auto second = directory.buildFromCompleteRouteSet(batch, std::array{route(1U, 2000U, 1U, 1U)});
+	auto context = std::make_shared<MetadataPageReadContext>(batch.candidate());
+	MetadataPageReadContext::Scope scope(context, *io);
+	EXPECT_EQ(directory.find(batch.candidate(), first, MetadataPageId(1U)), pageRef(1000U, 1U, 1U));
+	EXPECT_EQ(directory.find(batch.candidate(), second, MetadataPageId(1U)), pageRef(2000U, 1U, 1U));
+	for (const bool staleGeneration : {false, true}) {
+		auto stale = batch.candidate();
+		stale.checkpoint_lsn = LogSequenceNumber(1U);
+		if (staleGeneration) stale.generation = Generation(1U);
+		EXPECT_THROW(directory.find(stale, first, MetadataPageId(1U)), FormatException);
+		const std::array ids{MetadataPageId(1U)};
+		std::array<PhysicalPageRef, 1U> found{};
+		EXPECT_THROW(directory.findMany(stale, first, ids, found), FormatException);
+	}
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, PartialCacheHitsStillValidateEveryMissingAndInvalidRequest) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const auto root = directory.buildFromCompleteRouteSet(batch, std::array{route(1U, 1000U, 1U, 1U)});
+	auto context = std::make_shared<MetadataPageReadContext>(batch.candidate());
+	MetadataPageReadContext::Scope scope(context, *io);
+	static_cast<void>(directory.find(batch.candidate(), root, MetadataPageId(1U)));
+	std::array<PhysicalPageRef, 2U> found{};
+	for (const auto missing : {MetadataPageId{}, MetadataPageId(99U)}) {
+		const std::array ids{MetadataPageId(1U), missing};
+		EXPECT_THROW(directory.findMany(batch.candidate(), root, ids, found), FormatException);
+	}
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, ZeroCacheBudgetPreservesAuthenticatedUncachedLookup) {
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const auto root = directory.buildFromCompleteRouteSet(batch, std::array{route(1U, 1000U, 1U, 1U)});
+	auto context = std::make_shared<MetadataPageReadContext>(batch.candidate(), 0U);
+	MetadataPageReadContext::Scope scope(context, *io);
+	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(1U)), pageRef(1000U, 1U, 1U));
+	const std::array ids{MetadataPageId(1U), MetadataPageId(1U)};
+	std::array<PhysicalPageRef, 2U> found{};
+	directory.findMany(batch.candidate(), root, ids, found);
+	EXPECT_EQ(found[0], found[1]);
+	EXPECT_EQ(context->size(), 0U);
+	EXPECT_EQ(context->chargedBytes(), 0U);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, BatchResolvesSharedRouteLeafWithTwoPageReads) {
@@ -1364,7 +1467,12 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RefreshesAnIsolatedBootstrapHe
 	ASSERT_EQ(refreshBootstrapHeaderForEvacuation(pages, refresh, published, sourceHeader.physical_slot, sourceFrame),
 			  1U);
 	ASSERT_TRUE(refresh.bootstrapRouteRefreshRequested());
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
 	const PhysicalPageRef replacementHeader = directory.publishNextBootstrap(refresh, {});
+	const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(counters.contains("native_graph.route.publication_base_traversals"));
+	EXPECT_EQ(counters.at("native_graph.route.publication_base_traversals").totalValue, 1);
 	EXPECT_NE(replacementHeader.physical_slot, sourceHeader.physical_slot);
 	const PageDirectoryBootstrap replacement = pages.readPageDirectoryBootstrap(replacementHeader);
 	EXPECT_EQ(directory.find(refresh.candidate(), replacement.metadata_page_directory_root, MetadataPageId(99U)),

@@ -20,6 +20,7 @@
 
 #include "graph/storage/relocatable/metadata/CatalogRadix.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/utils/OwnedAssociativeContainers.hpp"
 
@@ -30,6 +31,7 @@ namespace graph::storage {
 		template<class Visitor>
 		void visitBatchBaseRoutes(MetadataPageFile &pages, const MetadataWriteBatch &batch,
 								 PhysicalPageRef root, Visitor &&visitor) {
+			debug::PerfTrace::addValue("native_graph.route.publication_base_traversals", 1);
 			MetadataPageRouteDirectory directory(pages);
 			if (batch.metadataRoutePruningRequested()) {
 				// Resolve logical children through the still-published bootstrap.
@@ -245,6 +247,7 @@ namespace graph::storage {
 
 	utils::OwnedStdVector<MetadataPageRoute>
 	MetadataPageRouteDirectory::collectRoutesFromPhysicalDirectoryRoots(const Superblock &superblock) const {
+		debug::ScopedPerfTimer timer("native_graph.route.collect_physical_roots");
 		struct Root final {
 			PhysicalPageRef reference;
 			MetadataDirectoryType directory_type;
@@ -380,6 +383,7 @@ namespace graph::storage {
 	}
 
 	size_t MetadataPageRouteDirectory::nextBootstrapFrameCount(const MetadataWriteBatch &batch) const {
+		debug::ScopedPerfTimer timer("native_graph.route.count_bootstrap_frames");
 		if (!batch.candidate().usesPageDirectoryBootstrap() || !batch.candidate().page_directory_root.isValid()) {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
 								  "metadata PageId route preflight requires an existing bootstrap header");
@@ -423,6 +427,7 @@ namespace graph::storage {
 
 	std::vector<MetadataPageRoute>
 	MetadataPageRouteDirectory::collectRoutesFromRouteBranch(const Superblock &superblock, PhysicalPageRef root) const {
+		debug::ScopedPerfTimer timer("native_graph.route.collect_route_branch");
 		validateReference(root, superblock, "metadata PageId route branch has an invalid root reference");
 		std::set<std::pair<uint64_t, uint8_t>> bootstrapFrames;
 		std::set<std::pair<uint64_t, uint8_t>> targetFrames;
@@ -567,6 +572,7 @@ namespace graph::storage {
 
 	PhysicalPageRef MetadataPageRouteDirectory::publishNextBootstrap(MetadataWriteBatch &batch,
 																 PhysicalPageRef dataRoot) {
+		debug::ScopedPerfTimer timer("native_graph.route.publish_bootstrap");
 		if (!batch.candidate().usesPageDirectoryBootstrap() || !batch.candidate().page_directory_root.isValid()) {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
 									"metadata PageId route publication requires an existing bootstrap header");
@@ -582,7 +588,6 @@ namespace graph::storage {
 		if (dataRoot.isValid()) {
 			replacement.data_page_directory_root = dataRoot;
 		}
-		replacement.metadata_page_directory_root = buildNextRouteBranch(batch, previous.metadata_page_directory_root);
 		std::map<uint64_t, PhysicalPageRef> routes;
 		visitBatchBaseRoutes(pages_, batch, previous.metadata_page_directory_root, [&](const MetadataPageRoute &route) {
 			routes.emplace(route.page_id.value(), route.physical_reference);
@@ -595,6 +600,10 @@ namespace graph::storage {
 		for (const auto &[pageId, reference]: routes) {
 			complete.push_back({MetadataPageId(pageId), reference});
 		}
+		// Route-branch pages are physical bootstrap plumbing, so building them
+		// does not add routed targets. Reuse this validated complete set for the
+		// logical root identities instead of collecting the published trees twice.
+		replacement.metadata_page_directory_root = buildFromCompleteRouteSet(batch, complete);
 		assignLogicalRoots(replacement, batch.candidate(), complete);
 		const PhysicalPageRef reference = batch.allocatePage();
 		pages_.writePageDirectoryBootstrap(reference, replacement);
@@ -660,9 +669,16 @@ namespace graph::storage {
 					"metadata PageId route batch requires a root, valid identities, and bounded equal spans");
 		}
 		if (pageIds.empty()) return;
+		auto *context = MetadataPageReadContext::current(*pages_.storageIO(), superblock);
 		std::array<size_t, RSS_CATALOG_RADIX_FANOUT> order{};
-		for (size_t index = 0U; index < pageIds.size(); ++index) order[index] = index;
-		std::sort(order.begin(), order.begin() + pageIds.size(),
+		size_t missing = 0U;
+		for (size_t index = 0U; index < pageIds.size(); ++index) {
+			const auto cached = context ? context->findMetadataRoute(root, pageIds[index], superblock) : std::nullopt;
+			if (cached) results[index] = *cached;
+			else order[missing++] = index;
+		}
+		if (missing == 0U) return;
+		std::sort(order.begin(), order.begin() + missing,
 				[&](size_t left, size_t right) { return pageIds[left].value() < pageIds[right].value(); });
 		const MetadataRadixPage rootPage = pages_.readMetadataRadix(root);
 		if (rootPage.kind != CatalogRadixPageKind::CRPK_ROOT ||
@@ -719,7 +735,13 @@ namespace graph::storage {
 				begin = next;
 			}
 		};
-		resolve(resolve, rootPage, 0U, pageIds.size());
+		resolve(resolve, rootPage, 0U, missing);
+		if (context != nullptr) {
+			for (size_t index = 0U; index < missing; ++index) {
+				const size_t position = order[index];
+				context->putMetadataRoute(root, pageIds[position], results[position], superblock);
+			}
+		}
 	}
 
 	PhysicalPageRef MetadataPageRouteDirectory::find(const Superblock &superblock, PhysicalPageRef root,
@@ -727,6 +749,10 @@ namespace graph::storage {
 		if (!root.isValid() || !pageId.isValid()) {
 			throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 									"metadata PageId route lookup requires a root and an identity");
+		}
+		auto *context = MetadataPageReadContext::current(*pages_.storageIO(), superblock);
+		if (context != nullptr) {
+			if (const auto cached = context->findMetadataRoute(root, pageId, superblock)) return *cached;
 		}
 		MetadataRadixPage node = pages_.readMetadataRadix(root);
 		if (node.kind != CatalogRadixPageKind::CRPK_ROOT ||
@@ -758,6 +784,8 @@ namespace graph::storage {
                     [](const MetadataPageRoute &entry, uint64_t id) { return entry.page_id.value() < id; });
                 if (route != leaf->routes.end() && route->page_id == pageId) {
                     validateRoute(*route, superblock);
+                    if (context != nullptr)
+                        context->putMetadataRoute(root, pageId, route->physical_reference, superblock);
                     return route->physical_reference;
                 }
 				throwRouteDirectoryError(FormatError::FERR_INVALID_STATE, "metadata PageId route is missing");

@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <list>
 #include <iterator>
 #include <limits>
@@ -30,12 +31,14 @@ namespace graph::storage {
     struct MetadataPageRouteLeafPage;
     struct PageDirectoryBootstrap;
 
-	// Only immutable, unresolved codec results belong here. Logical child
-	// resolution and caller-specific owner/visibility checks remain outside.
+	// Immutable codec results and authenticated route targets share one bound.
+	// Caller-specific data-page owner and visibility checks remain outside.
 	class MetadataPageReadContext final {
+		struct CachedRoute { PhysicalPageRef target; };
 	public:
 		static constexpr size_t MAXIMUM_ENTRIES = 128U;
 		static constexpr size_t MAXIMUM_CHARGED_BYTES = 1024U * 1024U;
+		static constexpr size_t MAXIMUM_ROUTE_ENTRIES = MAXIMUM_ENTRIES / 4U;
 
 		explicit MetadataPageReadContext(Superblock snapshot,
 				size_t maximumBytes = MAXIMUM_CHARGED_BYTES,
@@ -82,6 +85,26 @@ namespace graph::storage {
 		}
 		[[nodiscard]] bool authenticates(const Superblock &context) const { return context == snapshot_; }
 
+		// Route trees depend on the immutable root and visibility fence, not on
+		// unrelated COW candidate roots. The physical route root is part of the key.
+		[[nodiscard]] bool authenticatesRouteFence(const Superblock &view) const {
+			return view.database_id == snapshot_.database_id &&
+				view.data_region_offset == snapshot_.data_region_offset &&
+				view.generation == snapshot_.generation && view.checkpoint_lsn == snapshot_.checkpoint_lsn;
+		}
+		[[nodiscard]] std::optional<PhysicalPageRef> findMetadataRoute(PhysicalPageRef root,
+				MetadataPageId id, const Superblock &view) {
+			if (!root.isValid() || !id.isValid() || !authenticatesRouteFence(view)) return std::nullopt;
+			const auto route = find<CachedRoute>(root, id.value());
+			return route ? std::optional<PhysicalPageRef>(route->target) : std::nullopt;
+		}
+		void putMetadataRoute(PhysicalPageRef root, MetadataPageId id, PhysicalPageRef target,
+				const Superblock &view) {
+			if (!root.isValid() || !id.isValid() || !target.isValid() ||
+				!authenticatesRouteFence(view) || target.generation > snapshot_.generation) return;
+			put(root, CachedRoute{target}, 0U, id.value());
+		}
+
         template<typename Page>
         [[nodiscard]] std::shared_ptr<const Page> findView(PhysicalPageRef reference) {
             std::lock_guard lock(mutex_);
@@ -95,13 +118,15 @@ namespace graph::storage {
         }
 
 		template<typename Page>
-		[[nodiscard]] std::optional<Page> find(PhysicalPageRef reference) {
+		[[nodiscard]] std::optional<Page> find(PhysicalPageRef reference, uint64_t logicalId = 0U) {
 			std::lock_guard lock(mutex_);
 			synchronizeWrites();
             if (!cache_) return std::nullopt;
-			const auto found = cache_->entries.find(key<Page>(reference));
+			const auto found = cache_->entries.find(key<Page>(reference, logicalId));
 			if (found == cache_->entries.end()) return std::nullopt;
-			debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
+			if constexpr (std::is_same_v<Page, CachedRoute>)
+				debug::PerfTrace::addValue("native_graph.read.resolved_metadata_route_cache_hits", 1);
+			else debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
             utils::OwnedAllocationScope allocation(utils::OwnedAllocationScope::active()
                 ? utils::OwnedAllocationScope::owner() : memory_owner_);
             try {
@@ -114,15 +139,13 @@ namespace graph::storage {
                 if (utils::OwnedAllocationScope::owner() != memory_owner_) throw;
                 // A cache copy may need a second payload allocation. Drop this
                 // optional entry so the caller can decode one admitted copy.
-                charged_bytes_ -= found->second.charge;
-                cache_->order.erase(found->second.position);
-                cache_->entries.erase(found);
+                eraseEntry(found->first);
                 return std::nullopt;
             }
 		}
 
 		template<typename Page>
-		void put(PhysicalPageRef reference, const Page &page, size_t variableBytes = 0U) {
+		void put(PhysicalPageRef reference, const Page &page, size_t variableBytes = 0U, uint64_t logicalId = 0U) {
 			std::lock_guard lock(mutex_);
 			synchronizeWrites();
 			// Future/private COW images are never admitted to the published context.
@@ -132,7 +155,7 @@ namespace graph::storage {
 			if (fixed > maximum_bytes_ || variableBytes > maximum_bytes_ - fixed) return;
             // Coordinated caches admit only the audited native codec pages.
             // Unknown page types retain the uncoordinated embedding contract.
-            if constexpr (!(std::is_same_v<Page, CatalogLeafPage> || std::is_same_v<Page, CatalogRadixPage> ||
+			if constexpr (!(std::is_same_v<Page, CachedRoute> || std::is_same_v<Page, CatalogLeafPage> || std::is_same_v<Page, CatalogRadixPage> ||
                             std::is_same_v<Page, AllocatorLeafPage> || std::is_same_v<Page, LocationLeafPage> ||
                             std::is_same_v<Page, MetadataPageRouteLeafPage> || std::is_same_v<Page, PageDirectoryBootstrap>)) {
                 if (memory_owner_) return;
@@ -158,14 +181,18 @@ namespace graph::storage {
                     }
                 }
             }
-			const Key identity = key<Page>(reference);
+			const Key identity = key<Page>(reference, logicalId);
 			if (cache_->entries.contains(identity)) return;
+			// Reserve most entries for codec pages. A streaming route miss must not
+			// replace the hot routing prefix; ordinary shared LRU eviction and writes
+			// make room again. Both kinds still share the original byte/entry limits.
+			if constexpr (std::is_same_v<Page, CachedRoute>) {
+				if (cache_->route_entries >= MAXIMUM_ROUTE_ENTRIES) return;
+			}
 			while (!cache_->order.empty() &&
 				(cache_->entries.size() == MAXIMUM_ENTRIES || charge > maximum_bytes_ - charged_bytes_)) {
 				const auto found = cache_->entries.find(cache_->order.front());
-				charged_bytes_ -= found->second.charge;
-				cache_->entries.erase(found);
-				cache_->order.pop_front();
+				eraseEntry(found->first);
 				debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_evictions", 1);
 			}
             utils::OwnedAllocationScope allocation(memory_owner_);
@@ -176,14 +203,13 @@ namespace graph::storage {
                     try { cache_->entries.emplace(identity, Entry{std::move(copy), charge, std::prev(cache_->order.end())}); }
                     catch (...) { cache_->order.pop_back(); throw; }
                     charged_bytes_ += charge;
+                    if constexpr (std::is_same_v<Page, CachedRoute>) ++cache_->route_entries;
                     return;
                 } catch (const query::execution::detail::ResourceAdmissionDenied &) {
                     if (reclaimRawPage()) continue;
                     if (cache_->order.empty()) return;
                     const auto oldest = cache_->entries.find(cache_->order.front());
-                    charged_bytes_ -= oldest->second.charge;
-                    cache_->entries.erase(oldest);
-                    cache_->order.pop_front();
+                    eraseEntry(oldest->first);
                 }
             }
 		}
@@ -196,13 +222,15 @@ namespace graph::storage {
 		struct Key {
 			PhysicalPageRef reference;
 			std::type_index type;
+			uint64_t logical_id = 0U;
 			bool operator==(const Key &) const = default;
 		};
 		struct KeyHash {
 			size_t operator()(const Key &key) const noexcept {
 				return std::hash<uint64_t>{}(key.reference.physical_slot.value()) ^
 					(std::hash<uint64_t>{}(key.reference.generation.value()) << 1U) ^
-					(static_cast<size_t>(key.reference.frame_index) << 3U) ^ key.type.hash_code();
+					(static_cast<size_t>(key.reference.frame_index) << 3U) ^ key.type.hash_code() ^
+					(std::hash<uint64_t>{}(key.logical_id) << 2U);
 			}
 		};
 		// Hits move the existing node without allocating or extending either limit.
@@ -212,7 +240,16 @@ namespace graph::storage {
             size_t charge;
             std::pmr::list<Key>::iterator position;
         };
-		template<typename Page> static Key key(PhysicalPageRef ref) { return {ref, typeid(Page)}; }
+		template<typename Page> static Key key(PhysicalPageRef ref, uint64_t logicalId = 0U) {
+			return {ref, typeid(Page), logicalId};
+		}
+		void eraseEntry(Key identity) {
+			const auto found = cache_->entries.find(identity);
+			charged_bytes_ -= found->second.charge;
+			if (identity.type == typeid(CachedRoute)) --cache_->route_entries;
+			cache_->order.erase(found->second.position);
+			cache_->entries.erase(found);
+		}
 		void synchronizeWrites() {
 			const uint64_t epoch = io_->dataMutationEpoch();
 			if (epoch != mutation_epoch_ || epoch == std::numeric_limits<uint64_t>::max()) {
@@ -232,6 +269,7 @@ namespace graph::storage {
             explicit PayloadCache(std::pmr::memory_resource *resource) : entries(resource), order(resource) {}
             std::pmr::unordered_map<Key, Entry, KeyHash> entries;
             std::pmr::list<Key> order;
+            size_t route_entries = 0U;
         };
         // Some standard libraries allocate sentinel/proxy nodes even for empty
         // containers. Snapshot controls must never depend on CACHE headroom.

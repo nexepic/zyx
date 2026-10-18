@@ -1,0 +1,149 @@
+{
+  "status": "necessary_tests_and_byte_equivalence_verified_full_acceptance_pending",
+  "base_commit": "7f224694b8d8310b125d002e8b9536dbeef416b6",
+  "accepted_progress": {
+    "accepted": 31,
+    "total": 34,
+    "percent": 91.2
+  },
+  "modules": 53,
+  "distinct_tests_passed": 790,
+  "new_route_cache_tests": 11,
+  "full_unit_suite_run": false,
+  "smoke": {
+    "families": 13,
+    "operations": 886,
+    "full_results_checked": true,
+    "whole_run_budget_seconds": 120
+  },
+  "cache_bounds_unchanged": {
+    "charged_bytes": 1048576,
+    "total_entries": 128,
+    "route_entry_sub_limit": 32
+  },
+  "route_key": [
+    "StorageIO_scope_identity",
+    "database_id",
+    "data_region_offset",
+    "generation",
+    "checkpoint_lsn",
+    "physical_route_root",
+    "MetadataPageId"
+  ],
+  "positive_authenticated_routes_only": true,
+  "every_StorageIO_mutation_epoch_invalidates_all_entries": true,
+  "data_page_owner_generation_checks_not_skipped": true,
+  "sequential_read_scope_behavior_unchanged": true,
+  "future_candidate_routes_not_admitted": true,
+  "private_cache_admission_denial_falls_back": true,
+  "publication_uses_one_complete_route_collection": true,
+  "no_format_driver_abi_time_or_resource_gate_change": true,
+  "paired_mature_update": {
+    "source_endpoint_sha256": "3d0851a42d5164827e91b5cb8f9a91896a00fd1b83ef90912fba14ba5c29d848",
+    "closed_output_database_sha256_both": "6a1c0c21f17521f499f0be500d225bb8c115adab0564a73fe14967709a253d97",
+    "read_bytes": [
+      37023744,
+      35418112
+    ],
+    "write_bytes": [
+      2222720,
+      2222720
+    ],
+    "scope": "instrumented exact-value and byte-equivalence check only; no duration comparison or formal performance acceptance"
+  },
+  "initial_expanded_module_failure": "The old integrity fixture requires>1000RAWpages. Automatic ROW compression produced198pages, while integrity itself passed. Explicitly disable adaptive placement for this fixture, keep>1000 assertion and8MiB budget; then all790pass. Initial failure retained.",
+  "source_files": [
+    {
+      "path": "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp",
+      "sha256": "da8bcf87e30f285a13a77581d90b5e0e007bfea7b3e71b5138df82955c4ede23"
+    },
+    {
+      "path": "src/storage/relocatable/metadata/MetadataPageRouteDirectory.cpp",
+      "sha256": "453cace6edf615b6270de122c90523f8ba2fbe9be670643bb554664198e4147b"
+    },
+    {
+      "path": "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp",
+      "sha256": "9ea8e1a14b7756c87d7297735bc63736ebc6b07afebe015ed7b5266fad123dec"
+    },
+    {
+      "path": "tests/src/storage/relocatable/metadata/test_MetadataPageRouteDirectory.cpp",
+      "sha256": "a2ac6489154a8258a155ea22507fbe7f9422afb08a542adc5aa8c30be5ed7bef"
+    },
+    {
+      "path": "tests/src/storage/relocatable/backend/test_RelocatableQueryResources.cpp",
+      "sha256": "18e4112822c8ad23300e15460c07c6f1f7c6130b177a78dc737117faba2796ec"
+    }
+  ],
+  "binaries": {
+    "zyx-workload-contract-worker": "b8bf15a67042fbb399a653042f6b8da13f67abf248328f5ed316e197b9082904",
+    "zyx-compare-bench": "c9bddee0fbab71a5351930a28616cf78785e6c68c66b33d11ae28cf36242777e"
+  },
+  "records": [
+    {
+      "name": "build-route-publication-reuse-tests.py",
+      "archive": "raw/build-route-publication-reuse-tests.py.gz",
+      "uncompressed_sha256": "e52b4f591180146aba9cbd7f78d40cc1cbc4afea350cdd3e66f9e46a853ae6e8",
+      "uncompressed_bytes": 2959
+    },
+    {
+      "name": "route-publication-reuse-test-registration.json",
+      "archive": "raw/route-publication-reuse-test-registration.json.gz",
+      "uncompressed_sha256": "4975e9b3ff4feb77868e3883f37bb789cf0b658e2df26726a4a3eca9ee2a36cd",
+      "uncompressed_bytes": 4708
+    },
+    {
+      "name": "route-publication-reuse-tests.json",
+      "archive": "raw/route-publication-reuse-tests.json.gz",
+      "uncompressed_sha256": "91106d7cb40c805adb23533c44d379a0c823f55015938d2e6f1865912a1f529e",
+      "uncompressed_bytes": 351992
+    },
+    {
+      "name": "first-resolved-route-cache-tests.json",
+      "archive": "raw/first-resolved-route-cache-tests.json.gz",
+      "uncompressed_sha256": "adb2f19237c80cb51c37cdb5a4f1d9408dff33c371c63b7406ad03df50b42895",
+      "uncompressed_bytes": 352264
+    },
+    {
+      "name": "mature-route-diagnosis-byte-reference/proof.json",
+      "archive": "raw/mature-route-diagnosis-byte-reference--proof.json.gz",
+      "uncompressed_sha256": "3f40e31003d872bc8f4938ce9a72d64262b25a4ccd87b0dc9e4fa4472d31960a",
+      "uncompressed_bytes": 15793
+    },
+    {
+      "name": "mature-route-diagnosis-publication-reuse/proof.json",
+      "archive": "raw/mature-route-diagnosis-publication-reuse--proof.json.gz",
+      "uncompressed_sha256": "6bc610715dfdc01ac0f0fc69b0a5d7c076b857f6aee091171d198a4e72dd8c8f",
+      "uncompressed_bytes": 16348
+    },
+    {
+      "name": "diagnose-mature-mutation-route.py",
+      "archive": "raw/diagnose-mature-mutation-route.py.gz",
+      "uncompressed_sha256": "27bc21cb7f5767dbbb76610f0308c9dcb23aabd836360994f7fc0113fa94b55e",
+      "uncompressed_bytes": 3131
+    },
+    {
+      "name": "mature-diagnostic-worker-provenance.json",
+      "archive": "raw/mature-diagnostic-worker-provenance.json.gz",
+      "uncompressed_sha256": "31fef09c586d482df06ec85dea8cebcf81db15cf5bf0f39af0c6e0aac4d38990",
+      "uncompressed_bytes": 2417
+    },
+    {
+      "name": "route-publication-reuse-smoke/report.json",
+      "archive": "raw/route-publication-reuse-smoke--report.json.gz",
+      "uncompressed_sha256": "42cd2d3fe4065c486254a9599f36e108170d0e70ce504a49f496547a1db07061",
+      "uncompressed_bytes": 2162
+    },
+    {
+      "name": "route-publication-reuse-smoke/registration.json",
+      "archive": "raw/route-publication-reuse-smoke--registration.json.gz",
+      "uncompressed_sha256": "95ab57ae7e7d8f6fde5e1b4bb70b625de8a8b54233935c7276d42ac75b6f4981",
+      "uncompressed_bytes": 762
+    },
+    {
+      "name": "route-publication-reuse-smoke/family-progress.jsonl",
+      "archive": "raw/route-publication-reuse-smoke--family-progress.jsonl.gz",
+      "uncompressed_sha256": "ed05bd645e8939ecafaf5659b82603d0944fdf42f31dd80b2212b91a464d0fc5",
+      "uncompressed_bytes": 1552
+    }
+  ]
+}
