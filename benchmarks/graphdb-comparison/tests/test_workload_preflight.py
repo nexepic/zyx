@@ -6,11 +6,34 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from runner.workload_preflight import compare_rows, cypher, typed
+from runner.workload_preflight import ContractFamilyProgress, compare_rows, cypher, typed
 from dataset.generate import SCALES, generate_graph, write_dataset
 
 
 class WorkloadPreflightTest(unittest.TestCase):
+    def test_smoke_budget_is_shared_across_families(self):
+        now = [0.0]
+        with tempfile.TemporaryDirectory() as directory:
+            progress = ContractFamilyProgress(Path(directory), ("point", "scan"),
+                                              clock=lambda: now[0], profile="smoke")
+            now[0] = 100
+            progress.append("point")
+            self.assertEqual(progress.remaining(), 20)
+            now[0] = 120
+            with self.assertRaises(TimeoutError):
+                progress.append("scan")
+
+    def test_contract_retains_per_family_budget(self):
+        now = [0.0]
+        with tempfile.TemporaryDirectory() as directory:
+            progress = ContractFamilyProgress(Path(directory), ("point", "scan"), clock=lambda: now[0])
+            now[0] = 1799
+            progress.append("point")
+            self.assertEqual(progress.remaining(), 1800)
+            now[0] = 3599
+            with self.assertRaises(TimeoutError):
+                progress.remaining()
+
     def test_full_oracle_rejects_correct_count_wrong_values_types_and_multiplicity(self):
         for actual in ([[typed(2)]], [[typed("1")]], [[typed(True)]], [[typed(1)], [typed(1)]]):
             with self.assertRaises(AssertionError):

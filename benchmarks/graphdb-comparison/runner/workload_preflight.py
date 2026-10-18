@@ -29,20 +29,26 @@ _active_family_progress = None
 
 
 class ContractFamilyProgress(list):
-    """Enforce the registered 30-minute stop per workload family, not per bundle."""
-    def __init__(self, output: Path, names=NATIVE_FAMILY_ORDER, clock=time.monotonic):
+    """Smoke has a 120-second total budget; contract retains 1800 seconds per family."""
+    def __init__(self, output: Path, names=NATIVE_FAMILY_ORDER, clock=time.monotonic, profile="contract"):
         super().__init__()
         self.output, self.names, self.clock = output, names, clock
         self.started = clock()
+        self.run_started = self.started
+        if profile not in {"smoke", "contract"}:
+            raise ValueError("unknown preflight profile")
+        self.profile = profile
+        self.limit = 120 if profile == "smoke" else 1800
 
     @property
     def current_family(self):
         return self.names[len(self)] if len(self) < len(self.names) else "completed"
 
     def remaining(self):
-        remaining = 1800 - (self.clock() - self.started)
+        origin = self.run_started if self.profile == "smoke" else self.started
+        remaining = self.limit - (self.clock() - origin)
         if remaining <= 0:
-            raise TimeoutError(f"contract family {self.current_family} exceeded its 30-minute limit")
+            raise TimeoutError(f"{self.profile} family {self.current_family} exceeded its {self.limit}-second budget")
         return remaining
 
     def append(self, name):
@@ -217,6 +223,8 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42, family=None
         raise ValueError("evidence output must be a fresh private directory")
     output.mkdir(parents=True)
     registration = {"profile": profile, "seed": seed, "performance_timing": False,
+                    "budget_seconds": 120 if profile == "smoke" else 1800,
+                    "budget_scope": "whole_run" if profile == "smoke" else "per_family",
                     "worker_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                     "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     "resources": {"threads": 1, "query_materialization_bytes": 67108864,
@@ -228,7 +236,7 @@ def run_native(binary: Path, output: Path, profile="smoke", seed=42, family=None
     unsupported = []
     rng = random.Random(seed)
     users = [{"id": i, "country": f"country-{i % 8}", "score": i % 7, "age": 18 + i % 53} for i in range(count)]
-    families = ContractFamilyProgress(output, (family,) if family else NATIVE_FAMILY_ORDER)
+    families = ContractFamilyProgress(output, (family,) if family else NATIVE_FAMILY_ORDER, profile=profile)
     _active_family_progress = families
     families.sampling_phase = "setup"
     with tempfile.TemporaryDirectory(prefix="zyx-contract-") as directory:
@@ -475,7 +483,7 @@ def run_kuzu(output: Path, seed=42, profile="smoke", family=None):
     users = [{"id": i, "country": f"country-{i % 8}", "score": i % 7, "age": 18 + i % 53} for i in range(count)]
     trace = []
     retainer = object.__new__(NativeWorker); retainer.evidence = output
-    families = ContractFamilyProgress(output, (family,) if family else KUZU_FAMILY_ORDER)
+    families = ContractFamilyProgress(output, (family,) if family else KUZU_FAMILY_ORDER, profile=profile)
     _active_family_progress = families
     families.sampling_phase = "setup"
     with tempfile.TemporaryDirectory(prefix="kuzu-contract-") as directory:
@@ -698,11 +706,14 @@ def main():
     parser.add_argument("--profile", choices=("smoke", "contract"), default="smoke")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--kuzu", action="store_true", help="also execute real Kuzu equivalent smoke workloads")
+    parser.add_argument("--family", choices=NATIVE_FAMILY_ORDER, help="run only the affected correctness family")
     args = parser.parse_args()
-    native = run_native(args.native_worker, args.output, args.profile, args.seed)
+    if args.kuzu and args.family in {"dynamic", "budget"}:
+        parser.error("selected family is unsupported by Kuzu; run native only")
+    native = run_native(args.native_worker, args.output, args.profile, args.seed, args.family)
     reports = [native]
     if args.kuzu:
-        reports.append(run_kuzu(args.output / "kuzu", args.seed, args.profile))
+        reports.append(run_kuzu(args.output / "kuzu", args.seed, args.profile, args.family))
     print(json.dumps(reports, indent=2))
 
 
