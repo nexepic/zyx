@@ -52,6 +52,12 @@ public:
 		const uint64_t firstNew = std::min<uint64_t>(candidate.logical_chunk_ends.front(), RSS_LARGE_VALUE_EXTENT_32K_BYTES);
 		if (newBytes > oldBytes && newBytes - oldBytes > oldBytes / 20U) return base;
 		if (dataPages(firstNew) >= dataPages(firstOld)) return base;
+		// The existing immutable-chunk codec keeps canonical bytes and offsets.
+		// Try bounded LZ4 only when RAW fallback is permitted: incompressible
+		// chunks retain their original representation and page-count bound.
+#if ZYX_HAS_LZ4
+		if (candidate.allow_raw_fallback) candidate.codec = LargeValueCodec::LVC_LZ4;
+#endif
 		return candidate;
 	}
 private:

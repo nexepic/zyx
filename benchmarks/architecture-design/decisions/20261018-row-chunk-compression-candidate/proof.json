@@ -1,0 +1,140 @@
+{
+  "status": "frozen_candidate_necessary_tests_pass_full_contract_and_performance_gates_pending",
+  "captured_utc": "2026-10-18T10:48:06.890625+00:00",
+  "base_commit": "71a6bb0a863e12a949f5a12ee4ad31066bbeadbb",
+  "accepted_progress": {
+    "accepted": 31,
+    "total": 34,
+    "percent": 91.2
+  },
+  "affected_modules": 49,
+  "tests_passed": 680,
+  "new_compression_tests": 3,
+  "full_unit_suite_run": false,
+  "smoke": {
+    "families": 13,
+    "operations": 886,
+    "exact_results_verified": true,
+    "whole_run_budget_seconds": 120,
+    "performance_samples": 0
+  },
+  "diagnostic_operations_per_source": 578,
+  "old_readonly_consumers_exact_new_compressed_values_passed": 2,
+  "existing_codec": "LZ4_when_available;otherwise_RAW",
+  "minimum_savings_percent_unchanged": 5,
+  "raw_fallback_required_for_automatic_codec_selection": true,
+  "explicit_codec_and_cut_policy_preserved": true,
+  "placement_admission_unchanged": "existing_general_page_cost_gate;at_most5percent_RAW_page_cost_increase;smaller_first_use_chunk",
+  "file_format_driver_abi_query_memory_file_and_time_budgets_unchanged": true,
+  "no_performance_gate_waiver_or_acceptance": true,
+  "source_files": [
+    {
+      "path": "include/graph/storage/relocatable/property/PropertyRowChunkPolicy.hpp",
+      "sha256": "69f213d9bd19c2dd1ceca8145ff374d74d006d3e8645993f4ff49de4aab25317"
+    },
+    {
+      "path": "include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp",
+      "sha256": "c2a1f1a3dd42aaa107b68e3b86cf46728c1ac5377993e477e66bf26bf522ecfe"
+    },
+    {
+      "path": "tests/src/storage/relocatable/property/test_LargeValueChunkBoundaries.cpp",
+      "sha256": "d899332d92e621a38d931be4555606c5c8063126da2c34468d0a3eb2b566602b"
+    }
+  ],
+  "binaries": {
+    "zyx-workload-contract-worker": "d025993d8329bcb103ebf2eb2c8217b4ec8baac507181dcb106496a2ebf4aad7",
+    "zyx-compare-bench": "bb7e481a49888b80f0639bb225ea62b3c5f714995cb6f553b03b92a301e951d1"
+  },
+  "records": [
+    {
+      "name": "build-row-compression-tests.py",
+      "archive": "raw/build-row-compression-tests.py.gz",
+      "uncompressed_sha256": "bf7aed28f1813f8405542e23bc658ec3bb0985859cdc03a71bfa193a804d84d1",
+      "uncompressed_bytes": 2766
+    },
+    {
+      "name": "row-compression-test-registration.json",
+      "archive": "raw/row-compression-test-registration.json.gz",
+      "uncompressed_sha256": "a29924838e3255efa28495f42410750fecdf024baefdb523fef3783478dcb568",
+      "uncompressed_bytes": 4375
+    },
+    {
+      "name": "row-compression-test-link.json",
+      "archive": "raw/row-compression-test-link.json.gz",
+      "uncompressed_sha256": "dc4ea1982616efac035012ecfc43fb68675f9cc41d9367eddb7378f21b9413dc",
+      "uncompressed_bytes": 6689
+    },
+    {
+      "name": "row-compression-tests.json",
+      "archive": "raw/row-compression-tests.json.gz",
+      "uncompressed_sha256": "b28117ae119cd45bea834f9d5f2e8e4ea542b78972364a7b95ba3df1e76fa10a",
+      "uncompressed_bytes": 303660
+    },
+    {
+      "name": "row-compression-reader-compatibility.json",
+      "archive": "raw/row-compression-reader-compatibility.json.gz",
+      "uncompressed_sha256": "3428ea1131f8c63013730c0761c46abaf11832c1778ce1ec5c53022e232ce6e9",
+      "uncompressed_bytes": 875
+    },
+    {
+      "name": "check-row-compression-reader-compatibility.py",
+      "archive": "raw/check-row-compression-reader-compatibility.py.gz",
+      "uncompressed_sha256": "ad099b31b49ac810456cecc78d4ca24a47e164fe100577dbdf619728fd439d86",
+      "uncompressed_bytes": 1836
+    },
+    {
+      "name": "row-compression-mechanism-comparison.json",
+      "archive": "raw/row-compression-mechanism-comparison.json.gz",
+      "uncompressed_sha256": "023ea1692296a2b05c57bc4f8a4c0cf5882d6f576d3e03789bef44b9470e0737",
+      "uncompressed_bytes": 9206
+    },
+    {
+      "name": "row-compression-smoke/report.json",
+      "archive": "raw/row-compression-smoke--report.json.gz",
+      "uncompressed_sha256": "b824d79277216a863e5454c8cc42fd4dccbee94148b30d20dd7ffaa5bba3627c",
+      "uncompressed_bytes": 2162
+    },
+    {
+      "name": "row-compression-smoke/registration.json",
+      "archive": "raw/row-compression-smoke--registration.json.gz",
+      "uncompressed_sha256": "03c8b5ea223cb51d542c525be7d559862fffe0a548e104f71d9fef6ee77902dd",
+      "uncompressed_bytes": 762
+    },
+    {
+      "name": "row-compression-smoke/family-progress.jsonl",
+      "archive": "raw/row-compression-smoke--family-progress.jsonl.gz",
+      "uncompressed_sha256": "1f9ad290d47bf3e4c3cd59a8c91ba232252d5b79c4730cf9ff9c8bbdf404eaf2",
+      "uncompressed_bytes": 1549
+    },
+    {
+      "name": "property-path-diagnosis-after-row-compression/completed.json",
+      "archive": "raw/property-path-diagnosis-after-row-compression--completed.json.gz",
+      "uncompressed_sha256": "56cec46d18e623b6a066b1240aab09d4a04494cc9038596fca9b542a04fc87e7",
+      "uncompressed_bytes": 348
+    },
+    {
+      "name": "property-path-diagnosis-after-row-compression/operations.jsonl",
+      "archive": "raw/property-path-diagnosis-after-row-compression--operations.jsonl.gz",
+      "uncompressed_sha256": "2a570b8ad0f86cbd4c591502f6f76728e3c572db3ed5383d2b89275263d632f8",
+      "uncompressed_bytes": 3829739
+    },
+    {
+      "name": "diagnostic-worker-provenance.json",
+      "archive": "raw/diagnostic-worker-provenance.json.gz",
+      "uncompressed_sha256": "8f61b732b5aa982f613e46353c774b2b00600c2e815205ac6575f0840547c5d9",
+      "uncompressed_bytes": 2375
+    },
+    {
+      "name": "build-diagnostic-worker.py",
+      "archive": "raw/build-diagnostic-worker.py.gz",
+      "uncompressed_sha256": "09fcfca1b2d7d578079e3e967889741b2aa08fccb4f35f261cd96c6158853924",
+      "uncompressed_bytes": 2617
+    },
+    {
+      "name": "diagnose-property-paths.py",
+      "archive": "raw/diagnose-property-paths.py.gz",
+      "uncompressed_sha256": "5ca7ebfb564ca396a15c6e547f8c115158574a034545a15611eda40286674ba0",
+      "uncompressed_bytes": 3733
+    }
+  ]
+}
