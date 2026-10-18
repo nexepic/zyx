@@ -1,0 +1,200 @@
+{
+  "status": "preregistered_no_performance_process_started",
+  "source": "31faef71179c295bbfd5b204be6c87b3a2481040",
+  "full_required_correctness": "running_first_case",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "no_prior_source_samples_pooled": true,
+  "memory_hook_checks": "non-engine checks passed; zero performance samples",
+  "semantic_and_resource_gates_unchanged": true,
+  "old_control_failures_retained_without_unchanged_retry": true,
+  "records": [
+    {
+      "name": "final31fa-harness/build-readonly-check.py",
+      "archive": "raw/final31fa-harness--build-readonly-check.py.gz",
+      "uncompressed_bytes": 939,
+      "uncompressed_sha256": "c2b46b15f0fc8f82240a3a78893d1b1f33ff1755b2ce1e7ea0c2d44b71e82850"
+    },
+    {
+      "name": "final31fa-harness/frozen-workload-preflight.py",
+      "archive": "raw/final31fa-harness--frozen-workload-preflight.py.gz",
+      "uncompressed_bytes": 48489,
+      "uncompressed_sha256": "b3d61cb3fe4bc9df8308d425e9bdf3e9274549113fce5df3ac97c150ecd65f18"
+    },
+    {
+      "name": "final31fa-harness/native_process_memory.py",
+      "archive": "raw/final31fa-harness--native_process_memory.py.gz",
+      "uncompressed_bytes": 1320,
+      "uncompressed_sha256": "ef40f9dfc167fbda5f051cb8bda40a8e05c2a7ba0c034aed3e00a3a44970d482"
+    },
+    {
+      "name": "final31fa-harness/report-zyx-final-name-batch-extended-reads.py",
+      "archive": "raw/final31fa-harness--report-zyx-final-name-batch-extended-reads.py.gz",
+      "uncompressed_bytes": 2590,
+      "uncompressed_sha256": "380e841d9bc22e4e1466193abb5a448a0d6e863c65f9055505af1793d8d16bf0"
+    },
+    {
+      "name": "final31fa-harness/report-zyx-final-name-batch-extended-writes.py",
+      "archive": "raw/final31fa-harness--report-zyx-final-name-batch-extended-writes.py.gz",
+      "uncompressed_bytes": 2622,
+      "uncompressed_sha256": "a4e1de4d38eac47c90a64c657827027aea435805bfc0234a5aab2d82eb088a95"
+    },
+    {
+      "name": "final31fa-harness/report-zyx-final-name-batch-maintenance.py",
+      "archive": "raw/final31fa-harness--report-zyx-final-name-batch-maintenance.py.gz",
+      "uncompressed_bytes": 3439,
+      "uncompressed_sha256": "6cb1dcf0b77e8f0c4d985c27c0fb7b5b67fff407e4c0689099e85d733bfc9913"
+    },
+    {
+      "name": "final31fa-harness/report-zyx-final-name-batch-reads.py",
+      "archive": "raw/final31fa-harness--report-zyx-final-name-batch-reads.py.gz",
+      "uncompressed_bytes": 4280,
+      "uncompressed_sha256": "c5c8f762f8c68d3c4e9af86d2e5fa9cf5c1ae9b63d36ff979f85a4dedd35d48f"
+    },
+    {
+      "name": "final31fa-harness/report-zyx-final-name-batch-writes.py",
+      "archive": "raw/final31fa-harness--report-zyx-final-name-batch-writes.py.gz",
+      "uncompressed_bytes": 2551,
+      "uncompressed_sha256": "3a0a6b14361eaebd2ebb425de4ae2b938f72fb292da1c363b60110ec18767c7d"
+    },
+    {
+      "name": "final31fa-harness/run-zyx-final-name-batch-acceptance.py",
+      "archive": "raw/final31fa-harness--run-zyx-final-name-batch-acceptance.py.gz",
+      "uncompressed_bytes": 4131,
+      "uncompressed_sha256": "aeae25a09bf7e2bf271e49719ffae23f005867754074407db07d91cce00d0355"
+    },
+    {
+      "name": "final31fa-harness/run-zyx-final-name-batch-contract-campaign.py",
+      "archive": "raw/final31fa-harness--run-zyx-final-name-batch-contract-campaign.py.gz",
+      "uncompressed_bytes": 7181,
+      "uncompressed_sha256": "0d98914fe633553a91733873314270a265586bdf3edda919486ddbd6a633785d"
+    },
+    {
+      "name": "final31fa-harness/run-zyx-final-name-batch-write-campaign.py",
+      "archive": "raw/final31fa-harness--run-zyx-final-name-batch-write-campaign.py.gz",
+      "uncompressed_bytes": 2684,
+      "uncompressed_sha256": "e74071bee6e0b1e3519c62b27962129bf77156fde4e54e815f8462d27341f758"
+    },
+    {
+      "name": "final31fa-harness/run-zyx-name-batch-dynamic-first.py",
+      "archive": "raw/final31fa-harness--run-zyx-name-batch-dynamic-first.py.gz",
+      "uncompressed_bytes": 2775,
+      "uncompressed_sha256": "211710f451e4343cbfe6b44e631c529127497e8f552a0c7290b4c2d2670faa5b"
+    },
+    {
+      "name": "final31fa-harness/validate-zyx-name-batch-inputs.py",
+      "archive": "raw/final31fa-harness--validate-zyx-name-batch-inputs.py.gz",
+      "uncompressed_bytes": 2547,
+      "uncompressed_sha256": "d96c5c7a22f1753d5c7e3a8215d42ff20aafec4e5cbb5927a2d17aeb606acaf0"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-five-owned-case.py",
+      "archive": "raw/final31fa-harness--zyx-final-five-owned-case.py.gz",
+      "uncompressed_bytes": 2931,
+      "uncompressed_sha256": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-bounded-extensions-before-tail-fix.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-bounded-extensions-before-tail-fix.py.gz",
+      "uncompressed_bytes": 5743,
+      "uncompressed_sha256": "fbc5710475878a2a66f3728f7b6accf5ffbe2a45f87178acc80a9a6c2917ce30"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-bounded-extensions.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-bounded-extensions.py.gz",
+      "uncompressed_bytes": 5382,
+      "uncompressed_sha256": "456ff27a9b1c9428dac588bdfc12475ea9d07d65cab1c85cb35e5217e3c2d86b"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-bounded-write-extensions-before-tail-fix.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-bounded-write-extensions-before-tail-fix.py.gz",
+      "uncompressed_bytes": 4021,
+      "uncompressed_sha256": "980363ec67bf05af20e9a3879f7683b295edada4b63b1a711dd5ae3966547597"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-bounded-write-extensions.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-bounded-write-extensions.py.gz",
+      "uncompressed_bytes": 3604,
+      "uncompressed_sha256": "09aa84d71066472e806225ab42310d97ff7643ef2cee7358a82becff138c3241"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-contract-case.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-contract-case.py.gz",
+      "uncompressed_bytes": 7594,
+      "uncompressed_sha256": "77b80c0d3797635f79e334f79e95d193d3bbb4a764df1d3cab7a4db09e9c373d"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-extended-read.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-extended-read.py.gz",
+      "uncompressed_bytes": 3004,
+      "uncompressed_sha256": "13809eeaa6301af774f0a74c373e6f2f138e24074b079cfae397340a507c85f3"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-window.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-window.py.gz",
+      "uncompressed_bytes": 13324,
+      "uncompressed_sha256": "a560975570523f054029e774a52ca27bb37d6b13dd3eac3a2ddfc45e36885f9e"
+    },
+    {
+      "name": "final31fa-harness/zyx-final-name-batch-write-case.py",
+      "archive": "raw/final31fa-harness--zyx-final-name-batch-write-case.py.gz",
+      "uncompressed_bytes": 9991,
+      "uncompressed_sha256": "9eac30eb30449167625cc530eadc2be9920f71e75a956b529259d30388472edc"
+    },
+    {
+      "name": "final31fa-window/registration.json",
+      "archive": "raw/final31fa-window--registration.json.gz",
+      "uncompressed_bytes": 27347,
+      "uncompressed_sha256": "a59ca4765407801e6b5d1f27f0644ab92086cd0dc263538c800c3e6756564299"
+    },
+    {
+      "name": "final31fa-window/path-adaptation.json",
+      "archive": "raw/final31fa-window--path-adaptation.json.gz",
+      "uncompressed_bytes": 5438,
+      "uncompressed_sha256": "b98ebfae4946649bf5d4e73d0ea9cde111469c80568c88493cccb01cdd80cd72"
+    },
+    {
+      "name": "bounded-reclaim-freeze.json",
+      "archive": "raw/bounded-reclaim-freeze.json.gz",
+      "uncompressed_bytes": 956,
+      "uncompressed_sha256": "0249f416a21ad11dd74b0af812cff71d414d920af98120595fed2a5ae5278677"
+    },
+    {
+      "name": "run-bounded-reclaim-contracts.py",
+      "archive": "raw/run-bounded-reclaim-contracts.py.gz",
+      "uncompressed_bytes": 2595,
+      "uncompressed_sha256": "d8c4097dd6f6cffc2c6e22b54a2722242df55e24f6e36b452eb42ce6362dbd1e"
+    },
+    {
+      "name": "run-bounded-reclaim-contract-case.py",
+      "archive": "raw/run-bounded-reclaim-contract-case.py.gz",
+      "uncompressed_bytes": 3612,
+      "uncompressed_sha256": "76ced5927b4be86800a3ba6c1f4f2bffda427d4a3672b1a5171062ef28f916c1"
+    },
+    {
+      "name": "prepare-final-31fa-harness.py",
+      "archive": "raw/prepare-final-31fa-harness.py.gz",
+      "uncompressed_bytes": 2615,
+      "uncompressed_sha256": "cf43194c9d142b5acfc9379baa988fa20fa303f2d94554bdda311f645ba5217e"
+    },
+    {
+      "name": "integrate-final-memory-capture.py",
+      "archive": "raw/integrate-final-memory-capture.py.gz",
+      "uncompressed_bytes": 3718,
+      "uncompressed_sha256": "f3460adc7a7be3931f5dc324a64222f3deed136fec8f6e26c2c2ddaf27cfc86f"
+    },
+    {
+      "name": "register-final31fa-window.py",
+      "archive": "raw/register-final31fa-window.py.gz",
+      "uncompressed_bytes": 3061,
+      "uncompressed_sha256": "2f5238436d876b1f196bb10d563985e3448bad3b57781d8646b5b91842daf5d0"
+    },
+    {
+      "name": "run-final31fa-evaluation.py",
+      "archive": "raw/run-final31fa-evaluation.py.gz",
+      "uncompressed_bytes": 4457,
+      "uncompressed_sha256": "1d58da1b1fcb0477c74739f49943b6d525e7b79199562ead82fc689774510eec"
+    }
+  ]
+}
