@@ -1,0 +1,129 @@
+{
+  "source": "648e60ff1804816c2654c1ef97edf7281ec8a2e4",
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "this_request_completed": 2,
+  "formal_measurements_started": false,
+  "files": [
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/registration.json",
+      "archive": "raw/00-registration.json.gz",
+      "sha256": "01eaad9b21cb0ac377c0438e0c4ba49a01c268edd9d1ff633a7da1e010202007"
+    },
+    {
+      "path": "/tmp/zyx-optimization-publication-freeze-20261018/manifest.json",
+      "archive": "raw/01-manifest.json.gz",
+      "sha256": "022552efd856fc7d556c2c6e02eab303e051e08ab303730c26461538419e2523"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/report-zyx-final-name-batch-extended-reads.py",
+      "archive": "raw/02-report-zyx-final-name-batch-extended-reads.py.gz",
+      "sha256": "9f57cf588b78a409c2caf983dd5a6315313ae999b68e2077c60e9732a4248f00"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/report-zyx-final-name-batch-extended-writes.py",
+      "archive": "raw/03-report-zyx-final-name-batch-extended-writes.py.gz",
+      "sha256": "7c43e47976cf636f482cc3fbb6a0af133efbbcc575f142afb8b078cfa9ae4888"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/report-zyx-final-name-batch-maintenance.py",
+      "archive": "raw/04-report-zyx-final-name-batch-maintenance.py.gz",
+      "sha256": "96edc51d7d6664108e67811e0570f258ea5b25b0d484d9b632323a77c68dfe23"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/report-zyx-final-name-batch-reads.py",
+      "archive": "raw/05-report-zyx-final-name-batch-reads.py.gz",
+      "sha256": "8e0c28571f16ceeb28f56df575d6606d5d59c666db70cfd4100155c81e180ed4"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/report-zyx-final-name-batch-writes.py",
+      "archive": "raw/06-report-zyx-final-name-batch-writes.py.gz",
+      "sha256": "04f2dc307b41a828950136e5354b62f82080c5c87bfd6b2d2b72b571a73a7e74"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/run-zyx-final-name-batch-acceptance.py",
+      "archive": "raw/07-run-zyx-final-name-batch-acceptance.py.gz",
+      "sha256": "065fee63ffcc61b7b0f704b1640b3faa740de5a29e93d982ad4682eda4a54719"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/run-zyx-final-name-batch-contract-campaign.py",
+      "archive": "raw/08-run-zyx-final-name-batch-contract-campaign.py.gz",
+      "sha256": "b788ce6787b4ff47218f5cff189d322c25e5e62f20b804366ec37e372bec84ca"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/run-zyx-final-name-batch-write-campaign.py",
+      "archive": "raw/09-run-zyx-final-name-batch-write-campaign.py.gz",
+      "sha256": "95695b1fbdc487a2f428c45fe276df7c40870a7f37437656f85d563b206949c7"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/run-zyx-name-batch-dynamic-first.py",
+      "archive": "raw/10-run-zyx-name-batch-dynamic-first.py.gz",
+      "sha256": "15d7514db3ba220f79576832cf16d1d814cfd64f8b77e3f8b669a20e530ceee8"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/validate-zyx-name-batch-inputs.py",
+      "archive": "raw/11-validate-zyx-name-batch-inputs.py.gz",
+      "sha256": "5927ea33cce333f60c82a006a28b90a3539b7c16183457568c0bed676c5c6c76"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-five-owned-case.py",
+      "archive": "raw/12-zyx-final-five-owned-case.py.gz",
+      "sha256": "81df1ad5f008b3ed8d5b9ccb0fb07a7c16388dfbf126341dc82fa645fbf430d9"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-bounded-extensions.py",
+      "archive": "raw/13-zyx-final-name-batch-bounded-extensions.py.gz",
+      "sha256": "94cb6f18921d5f11aa338b755df963da8b04fd081df406ff5a6b298102b26cb0"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-bounded-write-extensions.py",
+      "archive": "raw/14-zyx-final-name-batch-bounded-write-extensions.py.gz",
+      "sha256": "f8dbdd25190a3b78ac93df36d733335c44c0116416d4c5c93e14091db667c24a"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-contract-case.py",
+      "archive": "raw/15-zyx-final-name-batch-contract-case.py.gz",
+      "sha256": "c517b9fdbd42f922ac1dc8e0d679bbb3bd5d4aa565582a2d24489a02ad216d17"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-extended-read.py",
+      "archive": "raw/16-zyx-final-name-batch-extended-read.py.gz",
+      "sha256": "81ed39833f594dfffc87fb38d551d94fe76a7df3266600765d030a9d8a011b46"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-window.py",
+      "archive": "raw/17-zyx-final-name-batch-window.py.gz",
+      "sha256": "54d64221b328a84e2ce86b23efca0a02af35447680338a799b3d30b2f0282a47"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/harness/zyx-final-name-batch-write-case.py",
+      "archive": "raw/18-zyx-final-name-batch-write-case.py.gz",
+      "sha256": "d7d99a359577ec4bccbc10f11efd4e3f774dec3363160f11f10a24e223031ca7"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/consumer-readonly-validation/holdout.json",
+      "archive": "raw/19-holdout.json.gz",
+      "sha256": "7b659f654331a2276aaa20e473963140e02f674a2947f06dba04ddc754d58214"
+    },
+    {
+      "path": "/tmp/zyx-final-five-publication-window-20261018/consumer-readonly-validation/medium.json",
+      "archive": "raw/20-medium.json.gz",
+      "sha256": "be34c89ef362a37cd81517e69d8babee8a7cc750e6f8b2954e550913f08ecf6b"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/readonly-check-provenance.json",
+      "archive": "raw/21-readonly-check-provenance.json.gz",
+      "sha256": "f8e3d63d3927d02fa0ea72ad93cb6d7d801d6aa403ffdeafbc34e935a70c53b7"
+    },
+    {
+      "path": "/workspace/zyx-optimization-artifacts/20261018-final-publication/build-readonly-check.py",
+      "archive": "raw/22-build-readonly-check.py.gz",
+      "sha256": "61e3683f8eab9cf55f23261d34562af00d0817833845114e0ca1beea865160dc"
+    }
+  ],
+  "original_caps_preserved": true,
+  "old_samples_pooled": false,
+  "old_control_timeouts_reused": false,
+  "kuzu_goal_achieved": false
+}
