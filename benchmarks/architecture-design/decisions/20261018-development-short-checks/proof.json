@@ -1,0 +1,54 @@
+{
+  "full_suite": false,
+  "unit_modules": 2,
+  "unit_tests_passed": 10,
+  "native_all_smoke_families": 13,
+  "native_all_smoke_operations": 886,
+  "dynamic_operations": 84,
+  "dynamic_seconds": 0.397624,
+  "performance_acceptance": false,
+  "accepted_progress": 31,
+  "percent": 91.2,
+  "raw": [
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-dynamic-registration.json.gz",
+      "raw_sha256": "84e3943eaf06bfac63b976b0893e54bc6ee1f34bd7c6e9ba52d5f85b4a9362eb"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-dynamic-report.json.gz",
+      "raw_sha256": "ec58d7997ce7c95c774100aa6f6ccbf2dec863ac7dace43150c7b4dcca4b5894"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-dynamic-family-progress.jsonl.gz",
+      "raw_sha256": "9df9ac43acb66c8f017140343785ff87bd418e9816f4f6b362b580b23f52092a"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-dynamic-trace.json.gz",
+      "raw_sha256": "51f4d1859d7d0e040d19955d1c4c82bb4798555aaef7f52b1a00a4135f44a8c3"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-dynamic-partial-trace.json.gz",
+      "raw_sha256": "51f4d1859d7d0e040d19955d1c4c82bb4798555aaef7f52b1a00a4135f44a8c3"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-final-smoke-registration.json.gz",
+      "raw_sha256": "1ed2f164c9ebc148fd04a38c120a4bb094eee03a63bdf29c4a50f9fe9ac0c283"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-final-smoke-report.json.gz",
+      "raw_sha256": "ca69f1279d3b457077ab9e93fc9e47f758387660838d8ae3f209c158e50c41d0"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-final-smoke-family-progress.jsonl.gz",
+      "raw_sha256": "fbb2719f2617cb4f0e49219d9230c815ed3e8819c6ffce37dc1b59fc431dca2d"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-final-smoke-trace.json.gz",
+      "raw_sha256": "52ee0c6281c9fa266980f42b244d667f58a1a61f95c666f70e5aae9b435f6958"
+    },
+    {
+      "path": "benchmarks/architecture-design/decisions/20261018-development-short-checks/20261018-dev-final-smoke-partial-trace.json.gz",
+      "raw_sha256": "52ee0c6281c9fa266980f42b244d667f58a1a61f95c666f70e5aae9b435f6958"
+    }
+  ]
+}
