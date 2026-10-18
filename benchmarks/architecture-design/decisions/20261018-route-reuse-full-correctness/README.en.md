@@ -1,0 +1,1 @@
+All three full wide and three full dynamic rounds pass for frozen c287 under unchanged1800s/2GiB/6GiB/64MiB limits. Full result validation; correctness only, zero formal performance samples, no increase over31/34. Reports and pre-close memory scope are retained; close memory peaks are not covered. Full traces/inputs remain local pending archival after active performance cases.

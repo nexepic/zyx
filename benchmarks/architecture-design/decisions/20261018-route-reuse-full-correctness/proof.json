@@ -1,0 +1,302 @@
+{
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "all_six_completed": true,
+  "cases": [
+    {
+      "status": "completed_full_correctness",
+      "family": "wide_large",
+      "round": 1,
+      "operations": 16103,
+      "full_results_checked": true,
+      "elapsed_seconds": 1463.8816093399982,
+      "formal_performance_samples": 0
+    },
+    {
+      "status": "completed_full_correctness",
+      "family": "dynamic",
+      "round": 1,
+      "operations": 66769,
+      "full_results_checked": true,
+      "elapsed_seconds": 1206.3978921240014,
+      "formal_performance_samples": 0
+    },
+    {
+      "status": "completed_full_correctness",
+      "family": "wide_large",
+      "round": 2,
+      "operations": 16103,
+      "full_results_checked": true,
+      "elapsed_seconds": 1488.9716859450018,
+      "formal_performance_samples": 0
+    },
+    {
+      "status": "completed_full_correctness",
+      "family": "dynamic",
+      "round": 2,
+      "operations": 66769,
+      "full_results_checked": true,
+      "elapsed_seconds": 1223.2353895649976,
+      "formal_performance_samples": 0
+    },
+    {
+      "status": "completed_full_correctness",
+      "family": "wide_large",
+      "round": 3,
+      "operations": 16103,
+      "full_results_checked": true,
+      "elapsed_seconds": 1493.459636743999,
+      "formal_performance_samples": 0
+    },
+    {
+      "status": "completed_full_correctness",
+      "family": "dynamic",
+      "round": 3,
+      "operations": 66769,
+      "full_results_checked": true,
+      "elapsed_seconds": 1174.5638541270018,
+      "formal_performance_samples": 0
+    }
+  ],
+  "formal_performance_samples": 0,
+  "accepted": 31,
+  "total": 34,
+  "percent": 91.2,
+  "limits": {
+    "family_seconds": 1800,
+    "file_bytes": 2147483648,
+    "AS_bytes": 6442450944,
+    "query_bytes": 67108864
+  },
+  "memory_scope": "Native VmHWM through final validation before close; close memory peak not covered. File bytes recorded before and after close.",
+  "trace_and_inputs": "Retained locally under route-reuse-contracts; bulk archive deferred until no performance case is active.",
+  "records": [
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/family-progress.jsonl",
+      "archive": "raw/round-1-wide_large-family-progress.jsonl.gz",
+      "bytes": 120,
+      "sha256": "d2edaf9f3b907b60c14c8407e8d68be2617c62c773e6b25bb96e426c0550dadb"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/observed-progress.json",
+      "archive": "raw/round-1-wide_large-observed-progress.json.gz",
+      "bytes": 306,
+      "sha256": "26b21a8543d177cc1c6f8da8ce951a9a31c4f902b47b796f59e67abd3d211b9c"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/native-process-memory-at-close.json",
+      "archive": "raw/round-1-wide_large-native-process-memory-at-close.json.gz",
+      "bytes": 284,
+      "sha256": "31b9b296aaa6e009321731ed8f5b3ccb91579f260dc19790ff28b14decaffcef"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/case-outcome.json",
+      "archive": "raw/round-1-wide_large-case-outcome.json.gz",
+      "bytes": 216,
+      "sha256": "31df5a669991edbd7ba3d5c26b15ca9c5be5ef2a1319c1f331a87fc32f2c8f0e"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/report.json",
+      "archive": "raw/round-1-wide_large-report.json.gz",
+      "bytes": 704,
+      "sha256": "1cf9c7a5c0b298b383313e5a71ebb83c718e2913db3e309d0516303184777722"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/wide_large/registration.json",
+      "archive": "raw/round-1-wide_large-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/family-progress.jsonl",
+      "archive": "raw/round-1-dynamic-family-progress.jsonl.gz",
+      "bytes": 117,
+      "sha256": "756b7f6269e6f6688f1b60341d443b7d81e1fa33f8fa94cda0a25604cee7d3cc"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/observed-progress.json",
+      "archive": "raw/round-1-dynamic-observed-progress.json.gz",
+      "bytes": 213,
+      "sha256": "5bec9db4c65570edd774ce745c4503476608111b52b71d4c7480e747de7c984f"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/native-process-memory-at-close.json",
+      "archive": "raw/round-1-dynamic-native-process-memory-at-close.json.gz",
+      "bytes": 283,
+      "sha256": "b6a2faac21981e1136360e766be84a64f402e934a51888037d672d5e2fbb9128"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/case-outcome.json",
+      "archive": "raw/round-1-dynamic-case-outcome.json.gz",
+      "bytes": 213,
+      "sha256": "6d6e0ceb81ea0aac516fa88fb6ddbd29efb5bbe1754c65ff0cdaf5d4e1ab789c"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/report.json",
+      "archive": "raw/round-1-dynamic-report.json.gz",
+      "bytes": 698,
+      "sha256": "e7e8b2a7639eccbefcd80fe1b9ed494ca33853d6627778588ecdf885e481bffd"
+    },
+    {
+      "source": "route-reuse-contracts/round-1/current/dynamic/registration.json",
+      "archive": "raw/round-1-dynamic-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/family-progress.jsonl",
+      "archive": "raw/round-2-wide_large-family-progress.jsonl.gz",
+      "bytes": 120,
+      "sha256": "5e314e6ff3c4b5948c16f9548d2dc875ea70230f1664f3063c69cd67c25d5b04"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/observed-progress.json",
+      "archive": "raw/round-2-wide_large-observed-progress.json.gz",
+      "bytes": 306,
+      "sha256": "ee382fd815aee556149ac560c49eed8ed54356797eaed4bf1be916bd3473c338"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/native-process-memory-at-close.json",
+      "archive": "raw/round-2-wide_large-native-process-memory-at-close.json.gz",
+      "bytes": 284,
+      "sha256": "0766cf2b7853d9c91b006e4afb9aa37595d51d728e24190aa512757e21af017d"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/case-outcome.json",
+      "archive": "raw/round-2-wide_large-case-outcome.json.gz",
+      "bytes": 216,
+      "sha256": "0a41c790c680d8a4794809f5cb6c5d873b495a7dfe1f6a8449e7530a0e8d71b7"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/report.json",
+      "archive": "raw/round-2-wide_large-report.json.gz",
+      "bytes": 704,
+      "sha256": "1cf9c7a5c0b298b383313e5a71ebb83c718e2913db3e309d0516303184777722"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/wide_large/registration.json",
+      "archive": "raw/round-2-wide_large-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/family-progress.jsonl",
+      "archive": "raw/round-2-dynamic-family-progress.jsonl.gz",
+      "bytes": 117,
+      "sha256": "6302ead32055a8d060505092c7adbd3f3c0a48332c39b70c19af955020178b3d"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/observed-progress.json",
+      "archive": "raw/round-2-dynamic-observed-progress.json.gz",
+      "bytes": 213,
+      "sha256": "dfb12e97bf0adca19ef48d944303a9116f79b40e10a99fa567f1330be4de9881"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/native-process-memory-at-close.json",
+      "archive": "raw/round-2-dynamic-native-process-memory-at-close.json.gz",
+      "bytes": 283,
+      "sha256": "fa205df8f03c6d0a9ae1def2cd47c75ac74387e602c4a57e71ba5970e88c3a1a"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/case-outcome.json",
+      "archive": "raw/round-2-dynamic-case-outcome.json.gz",
+      "bytes": 213,
+      "sha256": "a37b24d63b7b3382b13801c3fd5dd091ac300cce8a3424d14ded18eb8c669320"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/report.json",
+      "archive": "raw/round-2-dynamic-report.json.gz",
+      "bytes": 698,
+      "sha256": "e7e8b2a7639eccbefcd80fe1b9ed494ca33853d6627778588ecdf885e481bffd"
+    },
+    {
+      "source": "route-reuse-contracts/round-2/current/dynamic/registration.json",
+      "archive": "raw/round-2-dynamic-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/family-progress.jsonl",
+      "archive": "raw/round-3-wide_large-family-progress.jsonl.gz",
+      "bytes": 120,
+      "sha256": "d981eb13db73e7d362590a659f896e304d13c159f40725dcd7af5c9d22944850"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/observed-progress.json",
+      "archive": "raw/round-3-wide_large-observed-progress.json.gz",
+      "bytes": 306,
+      "sha256": "5747c9e324ab6b590a25634dbb6df6f8a9daa8d2dd8893b0c25e60a200aa10d2"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/native-process-memory-at-close.json",
+      "archive": "raw/round-3-wide_large-native-process-memory-at-close.json.gz",
+      "bytes": 284,
+      "sha256": "0766cf2b7853d9c91b006e4afb9aa37595d51d728e24190aa512757e21af017d"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/case-outcome.json",
+      "archive": "raw/round-3-wide_large-case-outcome.json.gz",
+      "bytes": 215,
+      "sha256": "f66253fa22dcba7d8a197e98d04657d63ac4ac020adfb873ac1fc51d6d544add"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/report.json",
+      "archive": "raw/round-3-wide_large-report.json.gz",
+      "bytes": 704,
+      "sha256": "1cf9c7a5c0b298b383313e5a71ebb83c718e2913db3e309d0516303184777722"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/wide_large/registration.json",
+      "archive": "raw/round-3-wide_large-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/family-progress.jsonl",
+      "archive": "raw/round-3-dynamic-family-progress.jsonl.gz",
+      "bytes": 116,
+      "sha256": "d07957064dd05c27de0e17bc1651b7c854c6945f4c52b9bbf6a8aef9b60363b1"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/observed-progress.json",
+      "archive": "raw/round-3-dynamic-observed-progress.json.gz",
+      "bytes": 213,
+      "sha256": "954edb74872db56c24f0a8d6c5234c07dedb789da5d2b0b2310422dc3d014062"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/native-process-memory-at-close.json",
+      "archive": "raw/round-3-dynamic-native-process-memory-at-close.json.gz",
+      "bytes": 283,
+      "sha256": "14798bfe84cdb9926f5564848b935280926cdc2bcf5bcbd3c274e17575cc0b77"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/case-outcome.json",
+      "archive": "raw/round-3-dynamic-case-outcome.json.gz",
+      "bytes": 213,
+      "sha256": "0e010b7c01ea240ac2a4c90ba5a17acc747c058deecc49423b0551b51f91eb70"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/report.json",
+      "archive": "raw/round-3-dynamic-report.json.gz",
+      "bytes": 698,
+      "sha256": "e7e8b2a7639eccbefcd80fe1b9ed494ca33853d6627778588ecdf885e481bffd"
+    },
+    {
+      "source": "route-reuse-contracts/round-3/current/dynamic/registration.json",
+      "archive": "raw/round-3-dynamic-registration.json.gz",
+      "bytes": 770,
+      "sha256": "c8e69d7b1ffbe3bfdf2997658a6ab6e637c281248dea2153812adff95b07ee25"
+    },
+    {
+      "source": "route-reuse-contract-status.json",
+      "archive": "raw/route-reuse-contract-status.json.gz",
+      "bytes": 1312,
+      "sha256": "d5be44b9518ef4bb8e4735bb18b727c8a228ede01147800d4b3774a35cc99004"
+    },
+    {
+      "source": "route-reuse-freeze.json",
+      "archive": "raw/route-reuse-freeze.json.gz",
+      "bytes": 952,
+      "sha256": "3a717d81d2e8a2a1f0a93e7c26955416f68c9273faf834f63848bca1744589d8"
+    }
+  ]
+}
