@@ -177,6 +177,33 @@
       "archive": "raw/prepare-route-reuse-final-window.py.gz",
       "uncompressed_bytes": 4098,
       "uncompressed_sha256": "8147d8cda883c1dda5367274f244105d8b2f0b906ba85f84f353cadfac152bf4"
+    },
+    {
+      "name": "route-reuse-final-window/registration.json",
+      "archive": "raw/route-reuse-final-window--registration.json-corrected-before-performance.gz",
+      "uncompressed_bytes": 27931,
+      "uncompressed_sha256": "d22424edca300d32a9da600463cbac5c773973ffb1b1e2913afe25dbf646e1b3"
+    },
+    {
+      "name": "route-reuse-final-window/premeasurement-registration-check.json",
+      "archive": "raw/route-reuse-final-window--premeasurement-registration-check.json-corrected-before-performance.gz",
+      "uncompressed_bytes": 518,
+      "uncompressed_sha256": "825a9aa0a9905de16d1afa39b7c0d8158d5a506db3cb95c8a4431d4ebf6af0bb"
     }
-  ]
+  ],
+  "premeasurement_registration_correction": {
+    "status": "passed_before_any_performance_process",
+    "scope": "Window orchestration registration references only; canonical per-case actual_format/worker_sha256 are separate registrations.",
+    "required_top_level_registration_keys": [
+      "binaries",
+      "control_frozen_worker",
+      "current_frozen_worker",
+      "frozen_harness",
+      "maintenance_orders",
+      "source_commit"
+    ],
+    "missing": [],
+    "maintenance_orders_equal_existing_orders": true,
+    "no_changed_sampling_resource_or_success_thresholds": true
+  }
 }
