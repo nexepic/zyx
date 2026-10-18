@@ -173,9 +173,9 @@
       "evidence": "20261018-immutable-route-branch-reuse/proof.json",
       "scope": "60necessary modules; first847tests846passed/1counter-fixture isolation failure. Original fixture isolated28alreadypass. Reset fixture counters, retain2/1assertions, affected28pass.847distinct tests verified through targeted rerun; full60not repeated.13family886smoke pass."
     },
-    "pending_user_resource_decision": "4GiB amendment remains unapplied and is not gating current work: first c287 fullwide passes with944766976-byte closed file under2GiB. Earlier actual1800-second failures remain failures.",
+    "pending_user_resource_decision": "4GiB proposal not applied or needed for the six passing full cases; all use original2GiB cap.",
     "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
-    "final_window_status": "registered_no_performance_process_started_awaiting_six_full_required_correctness_cases",
+    "final_window_status": "full_required_correctness_passed_registered_maintenance_running",
     "latest_checkpoint": "20261018-immutable-route-branch-reuse/proof.json",
     "latest_targeted_tests": {
       "modules": 60,
@@ -189,7 +189,7 @@
       "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
       "evidence": "20261018-immutable-route-branch-reuse/proof.json"
     },
-    "full_maintenance_preflight": "Historical accepted-source O6 evidence only; frozen c287 must revalidate after all six full wide/dynamic correctness cases. New-source O6 has not started.",
+    "full_maintenance_preflight": "Frozen c287 O6 currently running after all six required full correctness passes; no new-source maintenance acceptance inferred.",
     "pending_repair": "Complete frozen c287 full wide/dynamic correctness, then finalO6/read/write/remaining correctness and resource gates under original limits. No further implementation changes planned before actual acceptance outcome.",
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
@@ -217,7 +217,7 @@
     "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
     "latest_repair_evidence": "20261018-row-chunk-compression-candidate/proof.json",
     "latest_timeout_evidence": "20261018-publication-dynamic-timeout/proof.json",
-    "pending_user_time_budget_decision": "Dynamic-only3600-second proposal remains unapplied; inner-family and parent-budget corrections prepared and checked, no approval inferred.",
+    "pending_user_time_budget_decision": "3600-second dynamic proposal not applied or needed for three passing full dynamic cases; original1800-second family deadline preserved.",
     "development_verification": {
       "profile": "smoke",
       "whole_run_budget_seconds": 120,
@@ -290,31 +290,72 @@
         "31a05a57"
       ]
     },
-    "working_source_status": "committed_and_frozen_full_required_correctness_running",
+    "working_source_status": "committed_frozen_six_full_correctness_passed",
     "current_required_correctness_checkpoint": {
       "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
-      "completed_cases": 3,
+      "completed_cases": 6,
       "total_cases": 6,
-      "round1_wide": {
-        "operations": 16103,
-        "full_results_checked": true,
-        "elapsed_seconds": 1463.8816093399982
-      },
-      "round1_dynamic": {
-        "entities": 10000,
-        "operations": 66769,
-        "full_results_checked": true,
-        "elapsed_seconds": 1206.3978921240014
-      },
+      "all_six_completed": true,
+      "cases": [
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 1,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1463.8816093399982,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 1,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1206.3978921240014,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 2,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1488.9716859450018,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 2,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1223.2353895649976,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 3,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1493.459636743999,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 3,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1174.5638541270018,
+          "formal_performance_samples": 0
+        }
+      ],
       "formal_performance_samples": 0,
       "acceptance_increase": false,
       "deadline_amendment_applied": false,
-      "round2_wide": {
-        "operations": 16103,
-        "full_results_checked": true,
-        "elapsed_seconds": 1488.9716859450018
-      },
-      "checkpoint_only_live_status": "route-reuse-contract-status.json"
+      "evidence": "20261018-route-reuse-full-correctness/proof.json"
     }
   },
   "S5.4": "accepted_resource_fault_matrix",
