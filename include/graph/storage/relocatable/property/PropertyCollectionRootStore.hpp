@@ -265,7 +265,8 @@ namespace graph::storage {
 				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
 				std::span<const uint32_t> keyTokens,
 				std::span<std::optional<PropertyCollectionRootEntry>> results,
-				bool columnBatch = true, const SelectedPropertyReadAdmission *admission = nullptr);
+				bool columnBatch = true, const SelectedPropertyReadAdmission *admission = nullptr,
+				const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink = nullptr);
 		// Cursor-preserving counterpart used by indexed candidate streams. It keeps
 		// the owner-directory route across adjacent batches while returning the
 		// selected values and root counts required by the same validation pass.

@@ -466,6 +466,17 @@ namespace graph::storage {
 			}
 			return columns;
 		}
+		// Optional synchronous cell producer. IDs are strictly increasing/nonzero;
+		// ordinals refer to input IDs/keys, not physical page order. Omitted cells
+		// are missing; an engaged NULL is stored NULL. No callback borrow escapes.
+		// A failed production must be discarded before any consumer effects.
+		using PropertyCellSink = std::function<void(size_t, size_t, std::optional<PropertyValue>)>;
+		[[nodiscard]] virtual bool supportsNodePropertyCellBatches() const { return false; }
+		virtual void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t>,
+			std::span<const std::string_view>, const PropertyCellSink &,
+			const std::function<void(size_t)> &) const {
+			throw std::logic_error("logical graph reader does not support direct Property cells");
+		}
 		// Readers advertising admission invoke it before selected entry payload
 		// reads/copies. Native storage reports canonical token + value wire bytes;
 		// these are source scratch estimates, not decoded object capacity or RSS.

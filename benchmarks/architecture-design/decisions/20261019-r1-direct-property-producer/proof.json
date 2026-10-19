@@ -1,0 +1,25 @@
+{
+  "task": "R1.1",
+  "classification": "foundational batch producer capability",
+  "api": "LogicalGraphReadSnapshot::readNodePropertyCellsSortedWithAdmission",
+  "native_path": "existing authenticated PropertyCollectionRootScanCursor; per-owner decoded cells, no owner\u00d7token matrix",
+  "format_or_durability_changes": false,
+  "legacy_matrix_api_preserved": true,
+  "direct_owner": "DirectPropertyColumns; PMR primitive arrays, string offsets/bytes, charged complex payload, snapshot and batch identities, seal-after-success",
+  "gather": "sort/unique source lookup; duplicate/original input ordinals preserved",
+  "tests": {
+    "modules": 5,
+    "first_total": 100,
+    "first_passed": 99,
+    "first_failed": 1,
+    "failure_reason": "new fixture opened read-only before creating NULL test data",
+    "fixture_correction": "OPEN_EXISTING_FILE; assertions unchanged",
+    "targeted_final": 4,
+    "targeted_passed": 4,
+    "distinct_cases_verified_after_targeted_followup": 100,
+    "full_unit_suite": false
+  },
+  "extra_failure_guard": "failed/cancelled construction cannot seal; no partial consumer effects",
+  "performance_samples": 0,
+  "performance_admission": "R1.3/R7, not claimed here"
+}

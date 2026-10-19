@@ -96,6 +96,14 @@ namespace graph::storage {
 				return native_reads_.readNodePropertyColumnsSorted(snapshot_.metadataSnapshot(), nodeIds, keys, &read_session_);
 			}
 			[[nodiscard]] bool supportsPropertyReadAdmission() const override { return true; }
+			[[nodiscard]] bool supportsNodePropertyCellBatches() const override { return true; }
+			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+				std::span<const std::string_view> keys, const PropertyCellSink &sink,
+				const std::function<void(size_t)> &admission) const override {
+				if (!admission) throw std::invalid_argument("direct Property cells require admission");
+				native_reads_.readNodePropertyCellsSorted(snapshot_.metadataSnapshot(), ids, keys,
+					sink, &read_session_, &admission);
+			}
 			[[nodiscard]] std::vector<std::vector<PropertyValue>>
 			readNodePropertyColumnsSortedWithAdmission(std::span<const uint64_t> nodeIds,
 					std::span<const std::string_view> keys, const std::function<void(size_t)> &admission) const override {

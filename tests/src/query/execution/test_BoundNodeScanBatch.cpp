@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "query/execution/BoundNodeScanBatch.hpp"
 #include "query/execution/BoundNodeColumnPredicates.hpp"
+#include "query/execution/DirectPropertyColumns.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 
 namespace graph::query::execution::detail {
@@ -79,5 +80,64 @@ TEST(BoundNodeScanBatchTest, MalformedSourcesAndChangedSchemaAreRejectedBeforeCo
 	EXPECT_EQ(budget.used(), baseline);
 	const std::array<uint64_t, 2U> ids{1U, 2U}; BoundNodeScanBatch batch(program, snapshot, keys, columns, ids, budget, [] {});
 	++snapshot.identity->catalog_tokens[0]; EXPECT_THROW(static_cast<void>(batch.entity(0U)), std::runtime_error);
+}
+
+TEST(DirectPropertyColumnsTest, ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence) {
+	ScanBatchSnapshot snapshot; MaterializedByteBudget budget(65536U);
+	{
+		DirectPropertyColumns columns(snapshot, 6U, 2U, budget);
+		EXPECT_THROW(static_cast<void>(columns.rowId(0)), std::out_of_range);
+		columns.append(0, 0, PropertyValue(7), [] {});
+		columns.append(1, 0, PropertyValue(2.5), [] {});
+		columns.append(2, 0, PropertyValue(true), [] {});
+		columns.append(3, 0, PropertyValue(std::string(1000, 'x')), [] {});
+		columns.append(4, 0, PropertyValue(), [] {});
+		columns.append(5, 1, PropertyValue(std::vector<PropertyValue>{PropertyValue(8)}), [] {});
+		columns.seal();
+		EXPECT_EQ(std::get<int64_t>(columns.cell(0, columns.rowId(0)).data), 7);
+		EXPECT_EQ(std::get<double>(columns.cell(0, columns.rowId(1)).data), 2.5);
+		EXPECT_TRUE(std::get<bool>(columns.cell(0, columns.rowId(2)).data));
+		EXPECT_EQ(std::get<std::string_view>(columns.cell(0, columns.rowId(3)).data), std::string(1000, 'x'));
+		EXPECT_EQ(columns.cell(0, columns.rowId(4)).state, ColumnCellState::CCS_NULL);
+		EXPECT_EQ(columns.cell(0, columns.rowId(5)).state, ColumnCellState::CCS_MISSING);
+		EXPECT_EQ(columns.copyValue(1, columns.rowId(5), [](size_t) {}, [] {}),
+			PropertyValue(std::vector<PropertyValue>{PropertyValue(8)}));
+		EXPECT_GT(budget.used(), 1000U);
+	}
+	EXPECT_EQ(budget.used(), 0U);
+}
+
+TEST(DirectPropertyColumnsTest, RejectsDuplicateCellsForeignRowsAndChangedSnapshots) {
+	ScanBatchSnapshot snapshot; MaterializedByteBudget budget(65536U);
+	DirectPropertyColumns first(snapshot, 1, 1, budget), second(snapshot, 1, 1, budget);
+	first.append(0, 0, PropertyValue(1), [] {});
+	{
+		DirectPropertyColumns malformed(snapshot, 1, 1, budget);
+		malformed.append(0, 0, PropertyValue(1), [] {});
+		EXPECT_THROW(malformed.append(0, 0, PropertyValue(2), [] {}), std::invalid_argument);
+		EXPECT_THROW(malformed.seal(), std::logic_error);
+	}
+	first.seal(); second.seal();
+	EXPECT_THROW(static_cast<void>(second.cell(0, first.rowId(0))), std::invalid_argument);
+	EXPECT_THROW(first.append(0, 0, PropertyValue(3), [] {}), std::invalid_argument);
+	const auto old = first.rowId(0); first.invalidate();
+	EXPECT_THROW(static_cast<void>(first.cell(0, old)), std::invalid_argument);
+	++snapshot.identity->catalog_tokens[0];
+	EXPECT_THROW(static_cast<void>(second.cell(0, second.rowId(0))), std::invalid_argument);
+}
+
+TEST(DirectPropertyColumnsTest, PressureAndCancellationDiscardPrivateConstructionAndRefund) {
+	ScanBatchSnapshot snapshot; MaterializedByteBudget budget(8192U);
+	EXPECT_THROW((DirectPropertyColumns(snapshot, UINT32_MAX, 1, budget)), MaterializedByteLimitExceeded);
+	EXPECT_EQ(budget.used(), 0U);
+	{
+		DirectPropertyColumns columns(snapshot, 1, 1, budget);
+		size_t calls = 0;
+		EXPECT_THROW(columns.append(0, 0, PropertyValue(std::string(1000, 'x')),
+			[&] { if (++calls == 3) throw std::runtime_error("cancelled"); }), std::runtime_error);
+		EXPECT_THROW(static_cast<void>(columns.rowId(0)), std::out_of_range);
+		EXPECT_THROW(columns.seal(), std::logic_error);
+	}
+	EXPECT_EQ(budget.used(), 0U);
 }
 }
