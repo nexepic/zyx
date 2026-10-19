@@ -1,0 +1,8 @@
+{
+  "source_parent": "be10f801",
+  "exit_code": 1,
+  "expected": "failure before typed-key-slot fix",
+  "source_parent_full": "be10f80196a6cd4430002cad39eff6027bdb9b62",
+  "source_sha256": "49298cec33728fcddcdf1109be5c660c11dd3bc924cad4a46c1e6c13ac1491bc",
+  "scope": "one parent runtime component with current support library and tests; not before performance binary"
+}

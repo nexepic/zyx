@@ -1,0 +1,8 @@
+{
+ "parent": "be10f801", "plan":"cow-performance-20261019",
+ "scope_ids":["R1.3","R2.3","R3.2","R4.3","R5.1"],
+ "work":["typed sort-adapter quota failure and metadata accounting", "borrow point-route decoded radix images with existing authentication", "hold real materialized reservation across pure field transition lifetime", "coherent pin pressure and retirement backlog in explicit compaction observation", "bounded adjacency candidate identity/master/continuation protocol validation"],
+ "tests":"affected modules only; preserve intermediate failures",
+ "exclusions":"No full unit suite, formal timing/Kuzu rerun, native hybrid format activation or early R7 acceptance",
+ "acceptance":"Complete these five scoped advances; top-level items retain pending lifecycle/performance gates"
+}
