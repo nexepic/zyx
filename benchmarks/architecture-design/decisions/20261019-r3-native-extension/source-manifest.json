@@ -1,0 +1,11 @@
+{
+  "parent": "dcac8dcfb63baf1e08d8f8c26aecbdcf709c85e6",
+  "code_checkpoint": "ce0fee49d3b1a09488434ff6e49fbde9203ddf85",
+  "files": {
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md": "2bb77ddfb2c2bacc491200e635a5bcaec07b4d823cba9cb1cc427119f99ec184",
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md": "c11f714be227e14a079f5af372ea70a688e83a902253767bbff065e1e7b6dcd9",
+    "benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp": "f3adaadeb293351f4f9367716ae4e281d3e5f1d392af384bc17ae7c45e05a413",
+    "include/graph/storage/relocatable/property/HybridPropertyExtension.hpp": "5976732dc9ffe69e321983a6a0ff46fd5f2610b02bdd239b1ff58a9e658b7768",
+    "tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp": "8e4025697ac693b6131bbc6336d796be8fcb5e152cf99d3529cdb5684a2fa82a"
+  }
+}

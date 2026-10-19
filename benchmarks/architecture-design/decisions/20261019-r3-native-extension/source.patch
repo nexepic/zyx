@@ -1,0 +1,453 @@
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+index 2ae1306b..30b0f18e 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+@@ -86,3 +86,11 @@ The descriptor is a separate physical metadata-pool frame. It has no routed Meta
+ An already-open handle authenticates the descriptor when acquiring a new metadata snapshot too; failure releases that new pin instead of allowing subsequent snapshots to continue through ROW after open-time validation. Descriptor reads use the file view's construction-time database ID, avoiding a race with writer rebinding of the mutable routing Superblock. The fixed charged PROFILE registry records `native_graph.read.metadata_decodes.hybrid_descriptor` (current-thread cumulative decode attempts). Resource caps are unchanged; registry/staging bounds derive from actual entry count.
+ 
+ The 4096-membership ceiling applies to one explicit conversion plan, not the lifetime capacity of a converted group. The group header records the actual count in its declared u32 field; ordinary writes must retain existing dynamic-property support and checked count arithmetic. Conversion/reverse-conversion still refuses work above its bounded plan, rather than truncating, silently splitting publication, or treating 4096 as a permanent schema limit.
++
++## Extension envelope preparation
++
++The uninstalled R3.2 extension codec uses a 48-byte ZYHE (`0x4548595A`) envelope, version 1: magic u32 at 0, version u16 at 4, owner kind u8 at 6, mode u8 at 7 (1=inline, 2=LargeValue reference), native owner ID u64 at 8, token u32 at 16, body bytes u32 at 20, semantic generation u64 at 24, reserved-zero 32..47. Inline mode contains exactly one existing canonical PropertyValue; missing has no extension/selector, while NULL has the canonical NULL value. Authenticate outer owner/token and extension<=group<=descriptor<=snapshot; a referenced logical generation must not exceed extension generation.
++
++Large mode reuses the existing LargeValueRefCodec and `application/vnd.zyx.entity-property-root` media, with the owner-neutral payload constrained to exactly one token/value. Both directory token and entry token must match the outer token; multiple fields, trailing data, wrong kind/media or future identity reject. Existing LargeValueStore must authenticate manifest, chunks and content hash before supplying bytes; this envelope decoder does not authenticate content by itself. Do not create a separate whole-row copy or treat an arbitrary same-media row as one field. Equal one-field payloads may share immutable contents across owners through existing deduplication and exact retirement rules.
++
++The complete extension record must fit the actual destination limit and at most 3952 bytes (4032 owner payload minus 64 slotted header minus 16 slot bytes). A packed B+Tree key also needs its ordered owner/token prefix, packed framing, page header/slots and internal separator capacity; the future map planner must lower its record limit accordingly, never assume a 3952-byte record fits a B+Tree key. Charge the 48-byte envelope and any additional directory/value framing in total native costs. Destination and canonical encoding workspace use caller-owned PMR; reference media capacity and decoded value/directory allocations require separate retained reservations. The charged conversion plan can emit only actual inline-extension members, rejecting column-source members and oversized values. This codec does not install variable-map routing, allocate data IDs, publish large values or remove nonempty-root guards.
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+index 5bf3b843..76e2e755 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+@@ -85,3 +85,11 @@ R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用
+ 已打开句柄取得新 metadata snapshot 时也认证描述符；失败必须释放刚取得的 pin，不能只在首次 open 验证后让新快照静默沿 ROW 继续。描述符读取使用文件 view 构造时固定的 database ID，避免与 writer 对 mutable routing Superblock 的 rebind 竞争。PROFILE 固定计费 registry 记录 `native_graph.read.metadata_decodes.hybrid_descriptor`（当前线程累计解码尝试数）；未增加资源上限，registry/staging 上界按实际条目数派生。
+ 
+ 4096 个字段归属仅限制一次显式转换计划，不是转换后组的永久容量上限。组头用既定 u32 字段记录实际数量；普通写入必须保留现有动态属性能力，并检查计数运算溢出。正向／反向转换超过计划工作上限时仍应拒绝，不能截断、静默拆分发布，也不能把 4096 解释成永久模式限制。
++
++## Extension 信封准备
++
++尚未安装路由的 R3.2 extension codec 使用 48 字节 ZYHE（`0x4548595A`）信封，版本 1：magic u32 位于 0，version u16 位于 4，owner kind u8 位于 6，mode u8 位于 7（1=inline，2=LargeValue 引用），原生 owner ID u64 位于 8，token u32 位于 16，body 字节数 u32 位于 20，语义代数 u64 位于 24，32..47 保留为零。inline body 恰好为一个现有规范 PropertyValue；缺失时没有 extension／selector，NULL 则保存规范 NULL。认证外层 owner/token，要求 extension<=group<=descriptor<=snapshot，引用的逻辑代数不得超过 extension。
++
++大值模式复用现有 LargeValueRefCodec 和 `application/vnd.zyx.entity-property-root` media，但无 owner 的内容必须恰好包含一个 token/value；目录 token 和字段 token 均须匹配外层。多字段、尾随数据、错误 kind/media、未来身份都拒绝。现有 LargeValueStore 必须先认证 manifest、chunk 和内容 hash，再提供数据；信封 decoder 本身不认证内容。不能再复制整行，也不能把任意同 media 的整行当作单字段。相同单字段内容允许沿用现有跨 owner 不可变内容去重及精确退役规则。
++
++完整 extension 记录必须满足真实目标上限，且至多 3952 字节（4032 字节 owner payload 减去 64 字节 slotted header 和 16 字节槽位）。若放入 packed B+Tree key，还要容纳 owner/token 有序前缀、packed framing、页头／槽位和内部 separator；后续 map planner 必须据此降低记录上限，不能假定 3952 字节记录能直接放入 B+Tree key。真实成本须计入 48 字节信封及额外目录／值编码开销。目标缓冲区和规范编码工作区使用调用方 PMR；引用 media 容量及字段／目录解码须分别持有预约。已计费转换计划只能输出实际 inline-extension 成员，拒绝 COLUMN 来源和超限值。此 codec 不安装 variable map 路由、不分配 data ID、不发布大值，也不移除非空根保护。
+diff --git a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+index 7f41a4d7..0036c810 100644
+--- a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
++++ b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+@@ -7,6 +7,7 @@
+ #include "graph/query/execution/MaterializedByteBudget.hpp"
+ #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
+ #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
+ 
+ namespace zyx::benchmark::subblock {
+ // Bounded conversion planning over immutable, caller-owned, authenticated ROW
+@@ -160,6 +161,18 @@ public:
+         record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
+         record.words = source.words; record.encode(output);
+     }
++    [[nodiscard]] std::pmr::vector<std::byte> encodeNativeInlineExtension(uint64_t owner, uint32_t token,
++        size_t nativeRecordLimit, std::pmr::memory_resource &outputMemory) const {
++        const auto end = members_.begin() + member_count_;
++        const auto found = std::lower_bound(members_.begin(), end, std::pair(owner, token),
++            [](const Member &member, const auto &key) {
++                return std::pair(member.owner, member.token) < key;
++            });
++        require(found != end && found->owner == owner && found->token == token &&
++            found->source == Source::HPS_EXTENSION && found->value);
++        return graph::storage::HybridPropertyExtensionView::encodeInline({nativeGroup().owner_kind, owner}, token,
++            graph::storage::Generation(group_.generation), *found->value, nativeRecordLimit, outputMemory);
++    }
+ 
+     // Reverse projection visits only actual owner fields in token order. Heap
+     // values are borrowed without copying; primitive cells are reconstructed
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyExtension.hpp b/include/graph/storage/relocatable/property/HybridPropertyExtension.hpp
+new file mode 100644
+index 00000000..e6d08235
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyExtension.hpp
+@@ -0,0 +1,192 @@
++/**
++ * @file HybridPropertyExtension.hpp
++ * @brief Single-field extension envelopes for the isolated hybrid candidate.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include <functional>
++#include <memory_resource>
++#include <optional>
++#include <span>
++#include <vector>
++#include "graph/storage/relocatable/allocation/SlottedPage.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
++#include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
++
++namespace graph::storage {
++constexpr uint32_t RSS_HYBRID_EXTENSION_MAGIC = 0x4548595AU; // ZYHE
++constexpr size_t RSS_HYBRID_EXTENSION_HEADER_BYTES = 48;
++constexpr size_t RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES =
++    RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
++enum class HybridPropertyExtensionMode : uint8_t { HPEM_INLINE = 1, HPEM_LARGE_REFERENCE = 2 };
++
++// This is an uninstalled candidate envelope, not a file writer or graph API.
++// Inline bodies contain exactly one existing canonical PropertyValue. Large
++// bodies reuse the existing owner-neutral Property payload/media, constrained
++// to exactly one token/value by decodeLargePayload. Never accept a whole row
++// merely because it has the same LargeValue media type. Actual LargeValueStore
++// reads must authenticate reference/manifest/content before calling that method.
++class HybridPropertyExtensionView final {
++public:
++    HybridPropertyExtensionView(const HybridPropertyExtensionView &) = delete;
++    HybridPropertyExtensionView &operator=(const HybridPropertyExtensionView &) = delete;
++    HybridPropertyExtensionView(HybridPropertyExtensionView &&) noexcept = default;
++    HybridPropertyExtensionView &operator=(HybridPropertyExtensionView &&) noexcept = default;
++    // Reference decode constructs a bounded media string. Admission is mandatory
++    // for that branch and reports absolute requested then observed capacity bytes;
++    // the caller keeps its reservation until the returned view is destroyed.
++    using ReferenceAdmission = std::function<void(size_t)>;
++
++    [[nodiscard]] static HybridPropertyExtensionView open(std::span<const std::byte> bytes,
++        EntityPropertyKey expectedOwner, uint32_t expectedToken, Generation groupGeneration,
++        Generation descriptorGeneration, Generation visibleGeneration,
++        const ReferenceAdmission &referenceAdmission = {}) {
++        using namespace hybrid_property_detail;
++        require(bytes.size() >= RSS_HYBRID_EXTENSION_HEADER_BYTES &&
++            bytes.size() <= RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, "hybrid extension record width is invalid");
++        require(LittleEndianCodec::readU32(bytes, 0) == RSS_HYBRID_EXTENSION_MAGIC &&
++            LittleEndianCodec::readU16(bytes, 4) == RSS_HYBRID_RECORD_VERSION,
++            "hybrid extension magic or version mismatch");
++        const EntityPropertyKey owner{EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])),
++            LittleEndianCodec::readU64(bytes, 8)};
++        const auto token = LittleEndianCodec::readU32(bytes, 16);
++        const auto generation = Generation(LittleEndianCodec::readU64(bytes, 24));
++        const auto mode = HybridPropertyExtensionMode(std::to_integer<uint8_t>(bytes[7]));
++        require(owner.isValid() && owner == expectedOwner && token && token == expectedToken &&
++            generation.isValid() && generation <= groupGeneration && groupGeneration <= descriptorGeneration &&
++            descriptorGeneration <= visibleGeneration && LittleEndianCodec::readU32(bytes, 20) ==
++                bytes.size() - RSS_HYBRID_EXTENSION_HEADER_BYTES,
++            "hybrid extension owner, token, generation or payload length mismatch");
++        zero(bytes, 32, RSS_HYBRID_EXTENSION_HEADER_BYTES);
++        HybridPropertyExtensionView result(bytes.subspan(RSS_HYBRID_EXTENSION_HEADER_BYTES), owner, token, generation, mode);
++        if (mode == HybridPropertyExtensionMode::HPEM_INLINE) {
++            size_t offset = 0;
++            result.shape_ = CanonicalPropertyValueCodec::inspectNext(result.payload_, offset);
++            require(offset == result.payload_.size(), "hybrid extension contains multiple canonical values");
++        } else if (mode == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE) {
++            require(bool(referenceAdmission), "hybrid large reference requires retained-buffer admission");
++            require(result.payload_.size() >= RSS_LARGE_VALUE_REF_HEADER_BYTES &&
++                result.payload_.size() <= RSS_LARGE_VALUE_REF_HEADER_BYTES + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES,
++                "hybrid large reference width is invalid");
++            // This charges the bounded media allocation before the existing
++            // reference decoder can allocate. The decoded reference is retained
++            // in the result; the callback's account remains caller-owned.
++            referenceAdmission(sizeof(LargeValueRef) + RSS_LARGE_VALUE_MAX_MEDIA_TYPE_BYTES + 1);
++            result.reference_ = LargeValueRefCodec::decode(result.payload_);
++            const auto &reference = *result.reference_;
++            require(reference.kind == LargeValueKind::LVK_BYTES &&
++                reference.media_type == RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE &&
++                reference.generation <= generation && reference.logical_bytes >=
++                    RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + 8U + 4U + CanonicalPropertyValueCodec::HEADER_BYTES,
++                "hybrid extension references an incompatible or future LargeValue");
++            referenceAdmission(sizeof(LargeValueRef) + reference.media_type.capacity() + 1);
++        } else require(false, "unknown hybrid extension mode");
++        return result;
++    }
++    // Input is borrowed, immutable and pinned for this view's full lifetime.
++    // Explicitly prohibit temporary-to-view accessor calls at escape boundaries.
++    [[nodiscard]] std::span<const std::byte> payload() const & { return payload_; }
++    std::span<const std::byte> payload() const && = delete;
++    [[nodiscard]] const std::optional<LargeValueRef> &reference() const & { return reference_; }
++    const std::optional<LargeValueRef> &reference() const && = delete;
++    [[nodiscard]] HybridPropertyExtensionMode mode() const { return mode_; }
++    [[nodiscard]] EntityPropertyKey owner() const { return owner_; }
++    [[nodiscard]] uint32_t token() const { return token_; }
++    [[nodiscard]] Generation semanticGeneration() const { return generation_; }
++    [[nodiscard]] const CanonicalPropertyValueCodec::DecodeShape &shape() const & { return shape_; }
++    const CanonicalPropertyValueCodec::DecodeShape &shape() const && = delete;
++
++    [[nodiscard]] PropertyValue decodeInline(
++        const std::function<void(const CanonicalPropertyValueCodec::DecodeShape &)> &admission,
++        const std::function<void()> &checkpoint = {}) const {
++        hybrid_property_detail::require(mode_ == HybridPropertyExtensionMode::HPEM_INLINE && bool(admission),
++            "hybrid inline decode requires inline mode and value admission");
++        size_t offset = 0;
++        auto result = CanonicalPropertyValueCodec::decodeNextWithAdmission(payload_, offset, admission, checkpoint);
++        hybrid_property_detail::require(offset == payload_.size(), "hybrid inline value has trailing bytes");
++        return result;
++    }
++    [[nodiscard]] PropertyCollectionRootEntry decodeLargePayload(std::span<const std::byte> authenticatedPayload,
++        const std::function<void(const CanonicalPropertyValueCodec::DecodeShape &)> &valueAdmission,
++        const SelectedPropertyReadAdmission &slotsAdmission) const {
++        hybrid_property_detail::require(mode_ == HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE &&
++            reference_ && authenticatedPayload.size() == reference_->logical_bytes &&
++            bool(valueAdmission) && bool(slotsAdmission), "hybrid LargeValue decode lacks identity or admission");
++        // Reject whole-row counts before the directory decoder can allocate a
++        // count-sized vector. Then reuse its canonical directory validation.
++        hybrid_property_detail::require(authenticatedPayload.size() >=
++            RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES &&
++            LittleEndianCodec::readU32(authenticatedPayload, 8) == 1,
++            "hybrid LargeValue must contain exactly one field");
++        const auto locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(authenticatedPayload, &slotsAdmission);
++        hybrid_property_detail::require(locations.size() == 1 && locations[0].key_token == token_ &&
++            authenticatedPayload.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES ==
++                LittleEndianCodec::readU32(authenticatedPayload, 12),
++            "hybrid LargeValue token does not match its extension");
++        const auto entry = authenticatedPayload.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES +
++            locations[0].offset, locations[0].length);
++        hybrid_property_detail::require(entry.size() >= 4 && LittleEndianCodec::readU32(entry, 0) == token_,
++            "hybrid LargeValue entry token does not match its directory");
++        size_t offset = 4;
++        auto value = CanonicalPropertyValueCodec::decodeNextWithAdmission(entry, offset, valueAdmission);
++        hybrid_property_detail::require(offset == entry.size(), "hybrid LargeValue field has trailing bytes");
++        return {token_, std::move(value)};
++    }
++
++    // Destination allocation and canonical map-ordering workspace use the
++    // caller's actual PMR resource. No encoded whole-row temporary is created.
++    [[nodiscard]] static std::pmr::vector<std::byte> encodeInline(EntityPropertyKey owner, uint32_t token,
++        Generation generation, const PropertyValue &value, size_t nativeRecordLimit, std::pmr::memory_resource &memory) {
++        const auto size = CanonicalPropertyValueCodec::encodedSize(value);
++        validateOutput(owner, token, generation, size, nativeRecordLimit);
++        std::pmr::vector<std::byte> result(&memory);
++        result.reserve(RSS_HYBRID_EXTENSION_HEADER_BYTES + size);
++        result.resize(RSS_HYBRID_EXTENSION_HEADER_BYTES);
++        writeHeader(result, owner, token, generation, HybridPropertyExtensionMode::HPEM_INLINE, size);
++        CanonicalPropertyValueCodec::append(result, value);
++        return result;
++    }
++    // encodedReference comes from the existing LargeValueRefCodec. Its bytes
++    // are copied once into the charged destination; open() validates the full
++    // existing checksum/identity envelope, with the caller retaining admission.
++    [[nodiscard]] static std::pmr::vector<std::byte> encodeReference(EntityPropertyKey owner, uint32_t token,
++        Generation generation, std::span<const std::byte> encodedReference, size_t nativeRecordLimit,
++        std::pmr::memory_resource &memory, const ReferenceAdmission &referenceAdmission) {
++        validateOutput(owner, token, generation, encodedReference.size(), nativeRecordLimit);
++        std::pmr::vector<std::byte> result(&memory);
++        result.resize(RSS_HYBRID_EXTENSION_HEADER_BYTES + encodedReference.size());
++        writeHeader(result, owner, token, generation, HybridPropertyExtensionMode::HPEM_LARGE_REFERENCE, encodedReference.size());
++        std::copy(encodedReference.begin(), encodedReference.end(), result.begin() + RSS_HYBRID_EXTENSION_HEADER_BYTES);
++        static_cast<void>(open(result, owner, token, generation, generation, generation, referenceAdmission));
++        return result;
++    }
++private:
++    HybridPropertyExtensionView(std::span<const std::byte> payload, EntityPropertyKey owner, uint32_t token,
++        Generation generation, HybridPropertyExtensionMode mode)
++        : payload_(payload), owner_(owner), token_(token), generation_(generation), mode_(mode) {}
++    static void validateOutput(EntityPropertyKey owner, uint32_t token, Generation generation,
++        size_t payloadBytes, size_t nativeRecordLimit) {
++        hybrid_property_detail::require(owner.isValid() && token && generation.isValid() &&
++            nativeRecordLimit <= RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES &&
++            nativeRecordLimit >= RSS_HYBRID_EXTENSION_HEADER_BYTES &&
++            payloadBytes <= nativeRecordLimit - RSS_HYBRID_EXTENSION_HEADER_BYTES,
++            "hybrid extension exceeds native record capacity or has invalid identity");
++    }
++    static void writeHeader(std::span<std::byte> bytes, EntityPropertyKey owner, uint32_t token,
++        Generation generation, HybridPropertyExtensionMode mode, size_t payloadBytes) {
++        LittleEndianCodec::writeU32(bytes, 0, RSS_HYBRID_EXTENSION_MAGIC);
++        LittleEndianCodec::writeU16(bytes, 4, RSS_HYBRID_RECORD_VERSION);
++        bytes[6] = std::byte(uint8_t(owner.owner_kind)); bytes[7] = std::byte(uint8_t(mode));
++        LittleEndianCodec::writeU64(bytes, 8, owner.entity_id); LittleEndianCodec::writeU32(bytes, 16, token);
++        LittleEndianCodec::writeU32(bytes, 20, uint32_t(payloadBytes));
++        LittleEndianCodec::writeU64(bytes, 24, generation.value());
++    }
++    std::span<const std::byte> payload_;
++    EntityPropertyKey owner_;
++    uint32_t token_;
++    Generation generation_;
++    HybridPropertyExtensionMode mode_;
++    CanonicalPropertyValueCodec::DecodeShape shape_{};
++    std::optional<LargeValueRef> reference_;
++};
++} // namespace graph::storage
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp
+new file mode 100644
+index 00000000..430928eb
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp
+@@ -0,0 +1,186 @@
++#include <gtest/gtest.h>
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
++#include "../../../../../benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp"
++
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++using graph::query::execution::MaterializedByteLimitExceeded;
++namespace {
++const EntityPropertyKey OWNER{EntityPropertyOwnerKind::EPOK_NODE, 65};
++constexpr uint32_t TOKEN = 9;
++auto encode(const PropertyValue &value, std::pmr::memory_resource &resource) {
++    return HybridPropertyExtensionView::encodeInline(OWNER, TOKEN, Generation(5), value,
++        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, resource);
++}
++auto open(std::span<const std::byte> bytes, const HybridPropertyExtensionView::ReferenceAdmission &admission = {}) {
++    return HybridPropertyExtensionView::open(bytes, OWNER, TOKEN, Generation(7), Generation(8), Generation(9), admission);
++}
++auto largePayload(uint32_t token = TOKEN, size_t fields = 1) {
++    std::vector<PropertyCollectionRootEntry> entries;
++    for (size_t i = 0; i < fields; ++i) entries.push_back({uint32_t(token + i), PropertyValue(std::string(8192, 'x'))});
++    return EntityPropertyLargeValuePayloadCodec::encode(entries);
++}
++LargeValueRef reference(size_t bytes) {
++    LargeValueRef result; result.value_id = LargeValueId(11); result.generation = Generation(3);
++    result.logical_bytes = bytes; result.content_hash[0] = std::byte{1};
++    result.kind = LargeValueKind::LVK_BYTES; result.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
++    return result;
++}
++auto encodedReference(const LargeValueRef &ref, std::pmr::memory_resource &resource) {
++    const auto bytes = LargeValueRefCodec::encode(ref);
++    return HybridPropertyExtensionView::encodeReference(OWNER, TOKEN, Generation(5), bytes,
++        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES, resource, [](size_t) {});
++}
++TEST(HybridPropertyExtensionTest, InlineValuesRoundTripCanonicalTypesAndBorrowBytesWithoutWholeRowCopies) {
++    std::vector<PropertyValue> values{PropertyValue{}, PropertyValue(true), PropertyValue(INT64_MIN),
++        PropertyValue(-0.0), PropertyValue(std::bit_cast<double>(UINT64_C(0x7ff8000000000042))),
++        PropertyValue(std::string(200, 'a')), PropertyValue(PropertyValue::Bytes(100, std::byte{0x42})),
++        PropertyValue(std::vector<PropertyValue>{PropertyValue{}, PropertyValue(7), PropertyValue("nested")}),
++        PropertyValue(PropertyValue::MapType{{"b", PropertyValue(8)}, {"a", PropertyValue("value")}})};
++    MaterializedByteBudget memory(65536);
++    for (const auto &value : values) {
++        auto bytes = encode(value, memory); const auto view = open(bytes);
++        EXPECT_EQ(view.owner(), OWNER); EXPECT_EQ(view.token(), TOKEN); EXPECT_EQ(view.semanticGeneration(), Generation(5));
++        EXPECT_EQ(view.payload().data(), bytes.data() + 48); EXPECT_FALSE(view.reference());
++        EXPECT_EQ(view.mode(), HybridPropertyExtensionMode::HPEM_INLINE);
++        size_t calls = 0; auto decoded = view.decodeInline([&](const auto &shape) {
++            EXPECT_EQ(shape.encoded_bytes, view.shape().encoded_bytes); ++calls;
++        });
++        EXPECT_EQ(calls, 1U);
++        std::vector<std::byte> before, after;
++        CanonicalPropertyValueCodec::append(before, value); CanonicalPropertyValueCodec::append(after, decoded);
++        EXPECT_EQ(before, after); EXPECT_EQ(view.payload().size(), before.size());
++        EXPECT_GT(memory.used(), 0U);
++    }
++    EXPECT_EQ(memory.used(), 0U);
++}
++TEST(HybridPropertyExtensionTest, WrongIdentityVisibilityModeReservedAndCanonicalTrailingDataReject) {
++    MaterializedByteBudget memory(65536); const auto original = encode(PropertyValue("value"), memory);
++    for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(7), size_t(8), size_t(16),
++        size_t(20), size_t(24), size_t(32), size_t(47), size_t(48)}) {
++        auto bytes = original; bytes[offset] ^= std::byte{0x80}; EXPECT_THROW(open(bytes), FormatException) << offset;
++    }
++    EXPECT_THROW(HybridPropertyExtensionView::open(original, {EntityPropertyOwnerKind::EPOK_EDGE, 65}, TOKEN,
++        Generation(7), Generation(8), Generation(9)), FormatException);
++    EXPECT_THROW(HybridPropertyExtensionView::open(original, OWNER, TOKEN + 1,
++        Generation(7), Generation(8), Generation(9)), FormatException);
++    for (auto generations : {std::array<uint64_t,3>{4,8,9}, {7,6,9}, {7,8,7}})
++        EXPECT_THROW(HybridPropertyExtensionView::open(original, OWNER, TOKEN,
++            Generation(generations[0]), Generation(generations[1]), Generation(generations[2])), FormatException);
++    auto trailing = original; trailing.push_back(std::byte{});
++    LittleEndianCodec::writeU32(trailing, 20, uint32_t(trailing.size() - 48)); EXPECT_THROW(open(trailing), FormatException);
++    for (size_t n = 0; n < original.size(); ++n)
++        EXPECT_THROW(open(std::span(original).first(n)), FormatException) << n;
++}
++TEST(HybridPropertyExtensionTest, NativeUsableRecordLimitAndAccountFailurePrecedeDestinationAllocation) {
++    MaterializedByteBudget memory(65536), tiny(1);
++    const size_t textBytes = RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES - 48 - CanonicalPropertyValueCodec::encodedSize(PropertyValue(std::string{}));
++    { auto exact = encode(PropertyValue(std::string(textBytes, 'x')), memory);
++      EXPECT_EQ(exact.size(), RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES); EXPECT_NO_THROW(open(exact)); }
++    EXPECT_THROW(encode(PropertyValue(std::string(textBytes + 1, 'x')), memory), FormatException);
++    EXPECT_EQ(memory.used(), 0U);
++    EXPECT_THROW(encode(PropertyValue(1), tiny), MaterializedByteLimitExceeded); EXPECT_EQ(tiny.used(), 0U);
++    EXPECT_THROW(HybridPropertyExtensionView::encodeInline(OWNER, TOKEN, Generation(5), PropertyValue(1),
++        RSS_HYBRID_EXTENSION_MAX_RECORD_BYTES + 1, memory), FormatException);
++    EXPECT_EQ(memory.used(), 0U);
++}
++TEST(HybridPropertyExtensionTest, ValueAdmissionRefusalDoesNotChangeBorrowedSourceAndCanRetry) {
++    MaterializedByteBudget memory(65536); auto bytes = encode(PropertyValue(std::string(200, 'x')), memory);
++    const auto saved = bytes; const auto view = open(bytes);
++    EXPECT_THROW(view.decodeInline([](const auto &) { throw std::runtime_error("refused"); }), std::runtime_error);
++    EXPECT_EQ(bytes, saved);
++    EXPECT_EQ(view.decodeInline([](const auto &) {}), PropertyValue(std::string(200, 'x')));
++    EXPECT_THROW(view.decodeInline({}), FormatException);
++}
++TEST(HybridPropertyExtensionTest, LargeReferenceReusesExistingCodecAndExactlyOneTokenValuePayload) {
++    MaterializedByteBudget memory(65536); const auto payload = largePayload(); auto ref = reference(payload.size());
++    const auto bytes = encodedReference(ref, memory); size_t referenceCharge = 0;
++    const auto view = open(bytes, [&](size_t n) { referenceCharge = n; });
++    ASSERT_TRUE(view.reference()); EXPECT_EQ(*view.reference(), ref); EXPECT_GT(referenceCharge, sizeof(LargeValueRef));
++    size_t values = 0, slots = 0;
++    const auto entry = view.decodeLargePayload(payload, [&](const auto &shape) {
++        EXPECT_GE(shape.maximum_heap_request_bytes, 8192U); ++values;
++    }, [&](size_t n) { slots = n; });
++    EXPECT_EQ(entry.key_token, TOKEN); EXPECT_EQ(entry.value, PropertyValue(std::string(8192, 'x')));
++    EXPECT_EQ(values, 1U); EXPECT_GT(slots, 0U);
++    EXPECT_THROW(view.decodeInline([](const auto &) {}), FormatException);
++    EXPECT_THROW(open(bytes), FormatException);
++    EXPECT_THROW(open(bytes, [](size_t) { throw std::runtime_error("reference refused"); }), std::runtime_error);
++    EXPECT_NO_THROW(open(bytes, [](size_t) {}));
++}
++TEST(HybridPropertyExtensionTest, WholeRowsWrongTokensTrailingDataAndWrongLargeMediaNeverBecomeOneField) {
++    MaterializedByteBudget memory(65536);
++    for (auto payload : {largePayload(TOKEN, 2), largePayload(TOKEN + 1, 1)}) {
++        auto bytes = encodedReference(reference(payload.size()), memory); const auto view = open(bytes, [](size_t) {});
++        size_t decoded = 0;
++        EXPECT_THROW(view.decodeLargePayload(payload, [&](const auto &) { ++decoded; }, [](size_t) {}), FormatException);
++        EXPECT_EQ(decoded, 0U);
++    }
++    auto payload = largePayload(); payload.push_back(std::byte{});
++    auto bytes = encodedReference(reference(payload.size()), memory); const auto view = open(bytes, [](size_t) {});
++    EXPECT_THROW(view.decodeLargePayload(payload, [](const auto &) {}, [](size_t) {}), FormatException);
++    for (unsigned bad = 0; bad < 3; ++bad) {
++        auto ref = reference(8192);
++        if (bad == 0) ref.media_type = "application/octet-stream";
++        if (bad == 1) ref.kind = LargeValueKind::LVK_UTF8_TEXT;
++        if (bad == 2) ref.generation = Generation(6);
++        EXPECT_THROW(encodedReference(ref, memory), FormatException) << bad;
++    }
++}
++TEST(HybridPropertyExtensionTest, RealDecodeAccountsRefundReferenceDirectoryAndValueRefusalBeforeRetry) {
++    using graph::query::execution::MaterializedByteReservation;
++    MaterializedByteBudget output(65536), refused(4096), accepted(65536);
++    const auto payload = largePayload(); const auto bytes = encodedReference(reference(payload.size()), output);
++    const auto before = bytes;
++    EXPECT_THROW(([&] {
++        MaterializedByteReservation referenceCharge(&refused), directoryCharge(&refused), valueCharge(&refused);
++        const auto view = open(bytes, [&](size_t n) { referenceCharge.set(n); });
++        static_cast<void>(view.decodeLargePayload(payload,
++            [&](const auto &shape) { valueCharge.set(shape.maximum_heap_request_bytes); },
++            [&](size_t n) { directoryCharge.set(n); }));
++    }()), MaterializedByteLimitExceeded);
++    EXPECT_EQ(refused.used(), 0U); EXPECT_EQ(bytes, before);
++    {
++        MaterializedByteReservation referenceCharge(&accepted), directoryCharge(&accepted), valueCharge(&accepted);
++        const auto view = open(bytes, [&](size_t n) { referenceCharge.set(n); });
++        const auto entry = view.decodeLargePayload(payload,
++            [&](const auto &shape) { valueCharge.set(shape.maximum_heap_request_bytes); },
++            [&](size_t n) { directoryCharge.set(n); });
++        EXPECT_EQ(entry.value, PropertyValue(std::string(8192, 'x')));
++        EXPECT_GT(accepted.used(), 8192U);
++    }
++    EXPECT_EQ(accepted.used(), 0U);
++}
++TEST(HybridPropertyExtensionTest, BoundedGroupPlanEncodesOnlyActualExtensionMembersAgainstOutputAccount) {
++    using namespace zyx::benchmark::subblock;
++    std::vector<PropertyCollectionRoot> rows{{65, graph::Node::typeId,
++        {{9, PropertyValue("sparse")}, {10, PropertyValue(std::string(8192, 'x'))}}}};
++    MaterializedByteBudget planning(1024 * 1024), output(65536), tiny(1);
++    {
++        ReservedGroupConversion plan(planning, rows, OwnerKind::HPK_NODE, 2, 5, 3952);
++        const auto charge = planning.used();
++        { const auto bytes = plan.encodeNativeInlineExtension(65, 9, 3952, output);
++          const auto view = open(bytes); EXPECT_EQ(view.decodeInline([](const auto &) {}), PropertyValue("sparse")); }
++        EXPECT_EQ(output.used(), 0U);
++        EXPECT_THROW(plan.encodeNativeInlineExtension(65, 10, 3952, output), FormatException);
++        EXPECT_THROW(plan.encodeNativeInlineExtension(65, 9, 3952, tiny), MaterializedByteLimitExceeded);
++        EXPECT_THROW(plan.encodeNativeInlineExtension(65, 11, 3952, output), std::invalid_argument);
++        EXPECT_EQ(planning.used(), charge); EXPECT_EQ(output.used(), 0U); EXPECT_EQ(tiny.used(), 0U);
++        EXPECT_EQ(rows[0].entries[0].value, PropertyValue("sparse"));
++    }
++    EXPECT_EQ(planning.used(), 0U);
++    rows.clear();
++    for (uint64_t owner = 65; owner < 113; ++owner)
++        rows.push_back({owner, graph::Node::typeId, {{9, PropertyValue(7)}}});
++    {
++        ReservedGroupConversion plan(planning, rows, OwnerKind::HPK_NODE, 2, 5, 3952);
++        ASSERT_EQ(plan.columns().size(), 1U);
++        EXPECT_THROW(plan.encodeNativeInlineExtension(65, 9, 3952, output), std::invalid_argument);
++        EXPECT_EQ(output.used(), 0U);
++    }
++    EXPECT_EQ(planning.used(), 0U);
++}
++static_assert(!std::is_copy_constructible_v<HybridPropertyExtensionView>);
++} // namespace
