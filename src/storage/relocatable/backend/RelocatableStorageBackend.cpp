@@ -7928,6 +7928,7 @@ namespace graph::storage {
 	LargeValueReachabilityReclaimReport
 	RelocatableStorageBackend::reclaimUnreachableLargeValues(const LargeValueReachabilityReclaimOptions &options,
 															 const MetadataPublishOptions &publishOptions) {
+        debug::PerfTrace::addValue("native_graph.write.maintenance_reclaim_calls", 1);
 		requireOpen();
 		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim unreachable LargeValues");

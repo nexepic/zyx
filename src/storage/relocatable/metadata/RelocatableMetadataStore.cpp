@@ -184,6 +184,7 @@ namespace graph::storage {
 	NativeGraphLogicalIdLease
 	RelocatableMetadataStore::reserveNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount,
 														   const MetadataPublishOptions &options) {
+        debug::PerfTrace::addValue("native_graph.write.id_reservation_calls", 1);
 		if (read_only_ || (nodeCount == 0U && edgeCount == 0U)) {
 			throw FormatException(
 					FormatError::FERR_INVALID_HEADER,
@@ -225,6 +226,9 @@ namespace graph::storage {
 		// same-generation route context for the next graph publication.
 		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
+        // Optional diagnostics cannot turn an acknowledged publication into failure.
+        try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
+        catch (...) {}
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
         // The lease mutex excludes intervening registrations; these maps use
         // equal std allocators and transfer their prepared nodes without allocation.
@@ -237,6 +241,7 @@ namespace graph::storage {
 	NativeGraphLogicalIdReservation
 	RelocatableMetadataStore::acquireNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount,
 														   uint64_t minimumLeaseBlockSize) {
+        debug::PerfTrace::addValue("native_graph.write.id_reservation_calls", 1);
 		if (read_only_ || (nodeCount == 0U && edgeCount == 0U) || minimumLeaseBlockSize == 0U ||
 			minimumLeaseBlockSize == std::numeric_limits<uint64_t>::max()) {
 			throw FormatException(
@@ -277,6 +282,7 @@ namespace graph::storage {
             outstanding_edge_id_leases_.merge(prepared.edges);
         };
 		if (remainingNodes == 0U && remainingEdges == 0U) {
+            debug::PerfTrace::addValue("native_graph.write.id_lease_cache_hits", 1);
             auto prepared = prepareOutstanding(result);
             registerPrepared(prepared);
 			return result;
@@ -306,6 +312,9 @@ namespace graph::storage {
         auto prepared = prepareOutstanding(result);
         prepareBootstrapRoutes(batch);
         batch.publish(bootstrap_);
+        // Optional diagnostics cannot turn an acknowledged publication into failure.
+        try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
+        catch (...) {}
         snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate(), false);
         if (requestedNodes != 0U) available_node_ids_ = nextAvailableNodes;
         if (requestedEdges != 0U) available_edge_ids_ = nextAvailableEdges;
@@ -3467,6 +3476,7 @@ namespace graph::storage {
 	std::vector<CatalogEntry>
 	RelocatableMetadataStore::findCurrentPropertyPagePools(const MetadataSnapshotPin &snapshot,
 														   uint64_t poolOwnerId) const {
+        debug::PerfTrace::addValue("native_graph.write.property_pool_catalog_scans", 1);
 		if (!snapshots_.owns(snapshot) || poolOwnerId == 0U) {
 			throw FormatException(
 					FormatError::FERR_INVALID_STATE,
