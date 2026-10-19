@@ -790,3 +790,37 @@ TEST_F(MetadataPageReadContextTest, RadixViewsWithZeroCacheAndFutureReferencesRe
     EXPECT_THROW(pages.readMetadataRadixUnresolvedView(wrong), FormatException);
     EXPECT_EQ(context->size(), 0U);
 }
+
+#include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
+TEST_F(MetadataPageReadContextTest, PointLocationLookupBorrowsRootAndChildWithoutCachedRadixCopies) {
+ const PhysicalPageRef rootRef{PhysicalSlotId(1),1,Generation(1)},childRef{PhysicalSlotId(1),2,Generation(1)},leafRef{PhysicalSlotId(1),3,Generation(1)};
+ // Construct the unused writer allocator against an empty, aligned prefix
+ // before writing synthetic read-only radix frames; they are not a complete
+ // recoverable metadata pool. The reader must never request allocation.
+ const std::byte zero{};io->writeAt(root.data_region_offset-1,&zero,1);
+ MetadataPagePoolAllocator allocator(io,root);
+ root.page_directory_root=rootRef;
+ MetadataPageFile pages(io,root);
+ MetadataRadixPage top;top.page_id=MetadataPageId(1);top.kind=CatalogRadixPageKind::CRPK_ROOT;top.directory_type=MetadataDirectoryType::MDT_PAGE;
+ top.level=1;top.generation=Generation(1);top.committed_lsn=LogSequenceNumber(1);top.children[0]=childRef;
+ auto child=top;child.page_id=MetadataPageId(2);child.kind=CatalogRadixPageKind::CRPK_INTERNAL;child.level=0;child.children[0]=leafRef;
+ pages.writeMetadataRadix(rootRef,top);pages.writeMetadataRadix(childRef,child);
+ LocationLeafPage leaf;leaf.page_id=MetadataPageId(3);leaf.generation=Generation(1);leaf.committed_lsn=LogSequenceNumber(1);
+ leaf.entries.push_back({1,SegmentId(20),Generation(1),1,1,0});pages.writeLocationLeaf(leafRef,leaf);
+ LocationDirectory directory(pages,allocator);
+ auto context=std::make_shared<MetadataPageReadContext>(root);
+ MetadataPageReadContext::Scope scope(context,*io);
+ EXPECT_TRUE(directory.findPageOptional(root,PageId(1)));
+ graph::debug::PerfTrace::setValueCollectionEnabled(true);
+ for(size_t i=0;i<10;++i){EXPECT_TRUE(directory.findPageOptional(root,PageId(1)));EXPECT_FALSE(directory.findPageOptional(root,PageId(2)));}
+ const auto trace=graph::debug::PerfTrace::snapshotAndReset();
+ RecordProperty("point_lookups",20);
+ RecordProperty("borrowed_fixed_bytes",std::to_string(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue));
+ RecordProperty("copied_fixed_bytes",trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes") ? std::to_string(trace.at("native_graph.read.decoded_metadata_copy_fixed_bytes").totalValue) : "0");
+ EXPECT_FALSE(trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes"));
+ EXPECT_GE(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue,40U*sizeof(MetadataRadixPage));
+ EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
+ auto wrong=root;wrong.generation=Generation(0);
+ EXPECT_THROW(directory.findPageOptional(wrong,PageId(1)),FormatException);
+}

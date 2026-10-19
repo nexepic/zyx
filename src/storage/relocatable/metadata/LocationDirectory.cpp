@@ -2255,32 +2255,32 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		// Reuse the root just authenticated above: readRoot would resolve it again.
-		CatalogRadixPage node = pages_.readMetadataRadixUnresolved(rootReference);
-		if (node.kind != CatalogRadixPageKind::CRPK_ROOT || node.directory_type != directoryType) {
+		auto node = pages_.readMetadataRadixUnresolvedView(rootReference);
+		if (node->kind != CatalogRadixPageKind::CRPK_ROOT || node->directory_type != directoryType) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 					"relocatable location Superblock root has an invalid directory type");
 		}
-		validateVisible(node.generation, node.committed_lsn, superblock,
+		validateVisible(node->generation, node->committed_lsn, superblock,
 				"relocatable location root is newer than its Superblock");
 		const uint64_t ordinal = leafOrdinal(logicalId);
 		for (;;) {
-			if (node.kind == CatalogRadixPageKind::CRPK_ROOT) {
+			if (node->kind == CatalogRadixPageKind::CRPK_ROOT) {
 				uint64_t quotient = ordinal;
-				for (uint16_t level = 0U; level <= node.level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
+				for (uint16_t level = 0U; level <= node->level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
 				if (quotient != 0U) {
 					// Even an out-of-domain miss must reject a foreign route context.
-					pages_.resolveMetadataRadixChildren(node, superblock, {}, {});
+					pages_.resolveMetadataRadixChildren(*node, superblock, {}, {});
 					return std::nullopt;
 				}
 			}
-			const std::array<uint32_t, 1U> indices{CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.level)};
+			const std::array<uint32_t, 1U> indices{CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node->level)};
 			std::array<PhysicalPageRef, 1U> references{};
-			pages_.resolveMetadataRadixChildren(node, superblock, indices, references);
+			pages_.resolveMetadataRadixChildren(*node, superblock, indices, references);
 			const PhysicalPageRef reference = references.front();
 			if (!reference.isValid()) {
 				return std::nullopt;
 			}
-			if (node.level == 0U) {
+			if (node->level == 0U) {
 				const auto leaf = pages_.readLocationLeafView(reference);
 				if (leaf->directory_type != directoryType) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -2295,13 +2295,13 @@ namespace graph::storage {
 				}
 				return *position;
 			}
-			CatalogRadixPage child = pages_.readMetadataRadixUnresolved(reference);
-			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
-				child.level + 1U != node.level) {
+			auto child = pages_.readMetadataRadixUnresolvedView(reference);
+			if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL || child->directory_type != directoryType ||
+				child->level + 1U != node->level) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location directory has an invalid radix route");
 			}
-			validateVisible(child.generation, child.committed_lsn, superblock,
+			validateVisible(child->generation, child->committed_lsn, superblock,
 							"relocatable location internal page is newer than its Superblock");
 			node = std::move(child);
 		}
