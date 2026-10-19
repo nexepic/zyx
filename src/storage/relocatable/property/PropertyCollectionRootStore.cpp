@@ -1734,10 +1734,9 @@ namespace graph::storage {
 				existingLocations.emplace(location->key, *location);
 			}
 		}
-		std::vector<SegmentId> currentPropertyPools;
-		for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
-			currentPropertyPools.push_back(pool.segment_id);
-		}
+        // Existing-owner updates/no-ops/deletes need only their authenticated
+        // source page. Discover pools once, lazily, if a new owner needs placement.
+        std::optional<std::vector<SegmentId>> currentPropertyPools;
 		std::vector<EntityPropertyRootMutationPlan> plans;
 		plans.reserve(roots.size());
 		// A pinned snapshot is immutable. New roots with equal encoded sizes therefore
@@ -1746,7 +1745,7 @@ namespace graph::storage {
 		EntityPropertyBatchPageCache pageCache;
 		uint64_t nextLargeValueId = snapshot.superblock().next_large_value_id;
 		for (const PropertyCollectionRoot &root: roots) {
-			const EntityPropertyRootMutationPlan plan =
+			EntityPropertyRootMutationPlan plan =
 					planEntityRootReplacementWithLargeValueId(snapshot, root, options, LargeValueId(nextLargeValueId),
 																						 &existingLocations, &placementCache, &currentPropertyPools, &pageCache);
 			if (!plan.large_values.empty()) {
@@ -1756,7 +1755,9 @@ namespace graph::storage {
 					++nextLargeValueId;
 				}
 			}
-			plans.push_back(plan);
+			debug::PerfTrace::addValue("native_graph.write.property_plan_owned_payload_bytes",
+                static_cast<int64_t>(plan.replacement_payload.size() + plan.encoded_root.size()));
+            plans.push_back(std::move(plan));
 		}
 
 		// Every plan above is built against the same pinned snapshot. Several owner
@@ -1788,12 +1789,14 @@ namespace graph::storage {
 			if (absorbedPlans.contains(ordinal)) {
 				continue;
 			}
-			const EntityPropertyRootMutationPlan &candidate = plans[ordinal];
+			EntityPropertyRootMutationPlan &candidate = plans[ordinal];
 			if (candidate.page_replacement.has_value()) {
 				const auto group = mutationsByPage.find(candidate.page_replacement->expected_location.page_id.value());
 				// ZYX_COV_EXCL_NEXT: every replacement was inserted above, and non-front members are already absorbed.
 				if (group != mutationsByPage.end() && group->second.size() > 1U && group->second.front() == ordinal) {
-					EntityPropertyRootMutationPlan merged = candidate;
+					debug::PerfTrace::addValue("native_graph.write.property_plan_coalesced_members",
+                        static_cast<int64_t>(group->second.size()));
+                    EntityPropertyRootMutationPlan merged = candidate;
 					NativeGraphPropertyPageReplacementRequest request = *candidate.page_replacement;
 					request.upserted_properties.clear();
 					request.erased_properties.clear();
@@ -1804,7 +1807,7 @@ namespace graph::storage {
 					merged.reused_large_values.clear();
 					std::vector<EntityPropertyRootMutationPlan> overflowPlans;
 					for (const size_t memberOrdinal: group->second) {
-						const EntityPropertyRootMutationPlan &member = plans[memberOrdinal];
+						EntityPropertyRootMutationPlan &member = plans[memberOrdinal];
 						const NativeGraphPropertyPageReplacementRequest &memberRequest = *member.page_replacement;
 						const uint8_t inconsistentSource =
 								static_cast<uint8_t>(
@@ -1843,8 +1846,8 @@ namespace graph::storage {
 								const SlottedSlotReference slot = page.insert(stored);
 								request.upserted_properties.push_back(
 										{member.key, request.expected_location.page_id, slot.slot_id, slot.generation});
-								merged.large_values.insert(merged.large_values.end(), member.large_values.begin(),
-														   member.large_values.end());
+								merged.large_values.insert(merged.large_values.end(), std::make_move_iterator(member.large_values.begin()),
+														   std::make_move_iterator(member.large_values.end()));
 								merged.reused_large_values.insert(merged.reused_large_values.end(),
 																  member.reused_large_values.begin(),
 																  member.reused_large_values.end());
@@ -1853,7 +1856,7 @@ namespace graph::storage {
 								if (error.error() != FormatError::FERR_INVALID_STATE || existing.has_value()) {
 									throw;
 								}
-								EntityPropertyRootMutationPlan overflow = member;
+								EntityPropertyRootMutationPlan overflow = std::move(member);
 								overflow.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 								overflow.page_replacement.reset();
 								overflow.replacement_payload.clear();
@@ -1884,13 +1887,13 @@ namespace graph::storage {
 							page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
 							request.relocated_properties.push_back(member.key);
 							if (memberOrdinal == ordinal) {
-								merged.large_values.insert(merged.large_values.end(), member.large_values.begin(),
-														   member.large_values.end());
+								merged.large_values.insert(merged.large_values.end(), std::make_move_iterator(member.large_values.begin()),
+														   std::make_move_iterator(member.large_values.end()));
 								merged.reused_large_values.insert(merged.reused_large_values.end(),
 																  member.reused_large_values.begin(),
 																  member.reused_large_values.end());
 							} else {
-								EntityPropertyRootMutationPlan destination = member;
+								EntityPropertyRootMutationPlan destination = std::move(member);
 								destination.page_replacement.reset();
 								destination.replacement_payload.clear();
 								destination.replacement_free_bytes = 0U;
@@ -1920,9 +1923,17 @@ namespace graph::storage {
 					continue;
 				}
 			}
-			coalesced.push_back(candidate);
+			coalesced.push_back(std::move(candidate));
 		}
-		return coalesced;
+        debug::PerfTrace::addValue("native_graph.write.property_plan_owners", static_cast<int64_t>(roots.size()));
+        for (const auto &plan : coalesced) {
+            if (plan.page_replacement) {
+                debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_images", 1);
+                debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_payload_bytes",
+                    static_cast<int64_t>(plan.replacement_payload.size()));
+            }
+        }
+        return coalesced;
 	}
 
 	EntityPropertyRootMutationPlan PropertyCollectionRootStore::planEntityRootReplacementWithLargeValueId(
@@ -1930,7 +1941,7 @@ namespace graph::storage {
 			const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId,
 			const std::map<EntityPropertyKey, EntityPropertyLocation> *existingLocations,
 			std::map<size_t, std::optional<SlottedPagePlacement>> *placementCache,
-			const std::vector<SegmentId> *currentPropertyPools, EntityPropertyBatchPageCache *pageCache) const {
+			std::optional<std::vector<SegmentId>> *currentPropertyPools, EntityPropertyBatchPageCache *pageCache) const {
 		validateOptions(options);
 		const PropertyCollectionRoot root = canonicalEntityRoot(inputRoot);
 		const EntityPropertyKey key = entityKeyForRoot(root);
@@ -2106,14 +2117,15 @@ namespace graph::storage {
 			return plan;
 		}
 
-		std::vector<SegmentId> pools;
-		if (currentPropertyPools != nullptr) {
-			pools = *currentPropertyPools;
-		} else {
-			for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
-				pools.push_back(pool.segment_id);
-			}
-		}
+        std::optional<std::vector<SegmentId>> localPools;
+        auto &poolCache = currentPropertyPools ? *currentPropertyPools : localPools;
+        if (!poolCache) {
+            std::vector<SegmentId> discovered;
+            for (const CatalogEntry &pool : metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id))
+                discovered.push_back(pool.segment_id);
+            poolCache.emplace(std::move(discovered));
+        }
+        const auto &pools = *poolCache;
 		if (pools.empty()) {
 			plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 			plan.encoded_root = encoded;

@@ -231,7 +231,7 @@ namespace graph::storage {
 				const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId,
 				const std::map<EntityPropertyKey, EntityPropertyLocation> *existingLocations = nullptr,
 				std::map<size_t, std::optional<SlottedPagePlacement>> *placementCache = nullptr,
-				const std::vector<SegmentId> *currentPropertyPools = nullptr,
+				std::optional<std::vector<SegmentId>> *currentPropertyPools = nullptr,
 				EntityPropertyBatchPageCache *pageCache = nullptr) const;
 		SlottedPagePool &pages_;
 		LargeValueStore *large_values_ = nullptr;

@@ -2017,6 +2017,7 @@ namespace graph::storage {
 	}
 
 	NativeGraphWriteCommitResult NativeGraphWriteTransaction::commit(const MetadataPublishOptions &publishOptions) {
+        debug::PerfTrace::addValue("native_graph.write.graph_commit_calls", 1);
 		debug::ScopedPerfTimer timer("native_graph.commit");
 		requireActive("commit");
 		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
