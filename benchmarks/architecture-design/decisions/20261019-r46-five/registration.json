@@ -1,0 +1,15 @@
+{
+  "plan": "cow-performance-20261019",
+  "parent": "89f1254928947c8b6fd32cbd8fc2917d2b7f55e9",
+  "scope": ["R4.1", "R4.2", "R6.1", "R6.2", "R6.3"],
+  "dependency_basis": "Existing COW and R1/R2 interfaces are ready. Identity/resources/correctness follow each stage under section 5; this batch does not implement or claim future R3/R5 candidate integration.",
+  "deliverables": {
+    "R4.1": "Move owned mutation payloads through existing per-page coalescing; count requested owners, coalesced source pages and emitted page images; map write amplification and bounded/global exceptions.",
+    "R4.2": "Necessary publication fault, pinned snapshot, reclamation/backpressure and mature-file checks without changing durability.",
+    "R6.1": "Charge bounded observation metadata, protect direct batches/borrowed images/output lifetimes and existing sort/DISTINCT spill.",
+    "R6.2": "Query-local PROFILE physical-work counters and honest EXPLAIN access/adapter descriptions with units/scopes; preserve result and side-effect semantics.",
+    "R6.3": "Resource refusal/cancellation/physical-readonly fault checks, observation responsibility split, platform execution scope and future-format obligations."
+  },
+  "exclusions": ["new persistent layout", "new adjacency carrier", "new cache", "new spill algorithm", "durability relaxation", "formal timing before R7", "full unit suite"],
+  "admission": "Foundation/correctness/observability evidence only. R4.3 and all R7 performance gates remain unaccepted."
+}

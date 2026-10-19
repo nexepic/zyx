@@ -1,0 +1,1058 @@
+{
+  "distinct_latest_cases": 263,
+  "single_263_case_run": false,
+  "cases": {
+    "PerfTraceTest.DistinctPagePinsDeduplicateThreadsAndSeparateIoOffsetAndGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.DistinctPagePinsReportBoundWithoutThrowingOrCountingDuplicateAsOverflow": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.DefaultDisabled": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.SetEnabledToggle": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddDurationWhenDisabled": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddDurationWithEmptyKey": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddDurationWithValidKey": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddDurationBatchRecordsTotalWithExplicitCallCount": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddValueWithValidKey": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ValueOnlyCollectionSkipsDurationTimers": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.AddValueWhenValueCollectionDisabledIsIgnored": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ResetClearsData": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.SnapshotAndResetClearsData": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ScopedPerfTimerRecordsWhenEnabled": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ScopedPerfTimerOwnsDynamicKey": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ScopedPerfTimerSkipsWhenDisabledOrEmpty": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.ConcurrentAddsAreMergedAcrossWorkerShards": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.SaturatesDurationsAndBatchCountsInsteadOfWrapping": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.SaturatesSignedValuesAtBothBoundsAndAllowsOpposingUpdates": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.SaturatesWorkerShardAggregation": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceTest.MaximumValuePreservesNegativeValuesMergesThreadsAndResets": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceScopedObserverTest.NestedObserversAreInclusiveAndDoNotEnableGlobalCollection": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceScopedObserverTest.OtherThreadsAndExistingGlobalValuesStaySeparate": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "PerfTraceScopedObserverTest.ExceptionRestoresObserverAndPagePinsRemainGloballyOwned": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ExplainRejectsMalformedAndOverBoundPrebuiltPlanTrees": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ExplainCapsRenderedIndentForDeepPrebuiltPlanTrees": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ExplainIsSnapshotFreeAndMayInspectAWriteInReadOnlyMode": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerReadPlanAndAddsOneSummaryRow": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ProfileDispatchesItsInnerCreatePlanThroughOneAtomicBatch": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "QueryEngineLogicalBackendBoundaryTest.ProfileUsesTheLogicalTransactionOverlayInsteadOfTheBaseBackend": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DirectPropertyColumnsTest.ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DirectPropertyColumnsTest.RejectsDuplicateCellsForeignRowsAndChangedSnapshots": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DirectPropertyColumnsTest.PressureAndCancellationDiscardPrivateConstructionAndRefund": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DirectPropertyColumnsTest.StringAndMixedTypePredicatesMatchLegacyScalarOrdering": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.CompleteTupleGroupingDistinctAndNumericStateMatchLegacy": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.StringAndNumericPredicatesFeedGroupedCountsWithoutRows": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.DistinctPreservesTypesNullAndEmbeddedStringBytes": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.AccumulationPreservesPhysicalScanOrder": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "LogicalPlanDirectColumnAggregateTest.GuardAdmissionTypedExceptionDuringProductionIsNeverRetried": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementCandidateWriteFailureKeepsOldRouteAndFrameReusable": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementCandidateShortWriteKeepsOldRouteAndFrameReusable": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementDoesNotRewriteItsPublishedSourceOwner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlWriteFailureRetainsSourceAndReusesCandidate": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlShortWriteRetainsThePreviousCompleteRecord": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementPrePublicationSyncFailureRetainsTheOldRoute": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlDiskFullRetainsTheOldRoute": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationCandidateWriteFailureKeepsSourceAndDestinationReusable": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationDoesNotRewriteItsPublishedSourceOwner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationControlWriteFailureRetainsSourceAndReusesDestination": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationControlShortWriteRetainsTheSourceRoute": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationDestinationControlDiskFullRetainsTheSourceRoute": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReachableOwnerChecksumCorruptionFailsClosedOnReopen": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileReportsDirectWorkWithoutConsumingGlobalTrace": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileWritesOnceAndRetainsPublicationPhaseCounts": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileAdmissionPrecedesMutationAndRefundsBeforeRetry": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalReadonlyProfileAndExplainNeverUseScratchOrPublish": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileCoalescesSharedOwnerUpdatesAndNoOpsKeepOldPins": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileOutputAndFailureRefundTheSameQueryAccount": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileGuardFailureInsideObservationRefundsAndRestoresThreadState": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalProfileUsesBoundedExistingEstimatesAndMarksUnsupportedRootsUnavailable": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableStorageBackendTest.RowChunkFaultMatrixRetainsOldPinsAndRecoversOnlyCompleteGraphs": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalReadOnlyRowChunkReadersPreserveValuesAndNeverWriteTheFile": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalReadonlyOpenDoesNotPrepayAWriteCapabilityGrant": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.PhysicalReadonlyOpeningCannotReclaimLiveScratchOrDeclareItHealthy": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.PrePublicationSyncFailureDuringCompoundGraphRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphPropertyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphLabelSetCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphAdjacencyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphScalarIndexCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.DiskFullDuringCompoundGraphMetadataCandidateRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.PostPublicationSyncFailureDuringCompoundGraphReportsUncertainDurabilityAndReopensCompleteGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.TornInactiveSuperblockDuringCompoundGraphPublicationRetainsTheOldGenerationAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.RecoversOldEntityAndIndexWhenDerivedPublicationIsInterruptedBeforeSuperblock": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphWritePlannerDurabilityTest.RecoversNewEntityAndIndexWhenDerivedPublicationIsInterruptedAfterSuperblock": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.ExternalizesOversizedLogicalPropertiesInTheNativeGraphGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.PublishesLargeValueScalarIndexAndVectorStateInOneNativeGraphGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.PublishesScalarAdjacencyAndContentIndexesIntoDistinctFramesOfOneSharedPool": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RebuildsContentIndexFreshWhenSharedPoolDemandExceedsItsRemainingFrames": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RebuildsTheLargeValueContentIndexFreshWhenItsCurrentPoolHasNoFrameCapacity": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RebuildsGlobalAdjacencyFreshBeforeTheCompetingLargeValueContentIndex": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.PublishesCompressedLargeValueReferencesWithTheirOwningProperty": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.ReusesSharedLargeValueDataPoolAcrossGraphPublicationsAndReopen": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.ReusesPublishedSharedPoolsForSeveralValuesInOneLaterPublication": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.PacksMultipleFreshLargeValuesIntoSharedPoolsInOnePublication": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RecoversOldGenerationWhenSharedFreshPoolPublicationStopsBeforeSuperblock": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RecoversSharedFreshPoolsWhenPublicationStopsAfterSuperblock": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RecoversNoPartialEntityLargeValueOrScalarIndexStateBeforeSuperblockPublication": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RecoversNoPartialEntityLargeValueScalarIndexOrVectorStateBeforeSuperblockPublication": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.PostSuperblockInterruptionReopensTheCompleteLargeValueScalarIndexAndVectorGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RecoversOneCompleteEntityLargeValueAndScalarIndexStateAfterSuperblockPublication": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.ReusesSeveralSnapshotVerifiedContentsWithoutAllocatingAnotherLargeValue": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RejectsExternalMutationOfReservedContentIndex": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "NativeGraphLargeValueMutationTest.RollbackOfWidePropertyReplacementPreservesPublishedValueAndGeneration": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalAdvancesOnlyThroughCompleteOwnerEvidence": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRetainsStateValuesThroughPinnedManifestReferences": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnotherOwnerMediaType": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRoutesWithMismatchedRecordIdentity": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateReferencesWithAnInvalidValueKind": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToStateRecords": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDataPoolsOutsideTheSharedNamespace": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestPoolsOutsideTheSharedNamespace": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsSealedLargeValuePoolsWithoutAnOwner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetiredLargeValuePoolsWithoutAnOwner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRetiresSharedDataPoolOnlyAfterItsLastCurrentValueBecomesUnreachable": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsCurrentPoolsBeyondItsBoundBeforePublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsOverlappingManifestDataPageRanges": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsInsufficientCheckpointLsnRangeBeforePublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerPublishesContentIndexDeletionAtTheSuperblockBoundary": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRetainsUnclassifiedMediaAndRejectsZeroBounds": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerUsesRegisteredTypedMediaOwnershipScanner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsMalformedOwnershipScannersBeforeScanningMetadata": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStoresFromAnotherMetadataCoordinator": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsUntrustedScannerClaimsAcrossMediaAndBounds": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerScansInlineEntityPropertyRootsForBothEntityKinds": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRoutesWithMismatchedOwners": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRootsWithMismatchedOwnerType": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyRouteOutsidePropertyPage": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsStateRouteOutsideStatePage": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedOwners": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyLargeValueReferencesWithMismatchedType": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEntityPropertyReferencesWithInvalidTypeOrMedia": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerAppliesTheSharedOwnerLocationBoundToPropertyRoots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsEveryInvalidPolicyBeforeOpeningMetadata": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsManifestRouteAndDataPageBoundsBeforePublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerRejectsRetirementBudgetBeforePublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerBatchesPoolLifecyclePublications": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValuePoolBatchReleaseWaitsForPinnedReaders": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerResumesEmptyPoolCleanupAfterValuePublication": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.RetiredPoolBatchValidatesEveryMemberBeforeReleasingAnySlot": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataStoreTest.LargeValueReclaimerPreservesAnEmptyIndexPoolReactivatedByValueRetirement": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.TruncatesOnlyReleasedTailSlotsAfterSnapshotsDrainAndReopens": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.RefusesFallbackOnlyStorageWithoutRiskingTheFileTail": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.NativeTruncateFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.NativePreTruncateSyncFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.NativePostTruncateSyncFailureReportsUncertainDurabilityAndReopensSafely": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableTailTruncationTest.TruncatesAReleasedExtentTailAfterMixedPageAndExtentRelocationThenReopens": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.ReusesDecodedPagesOnlyInsideAnActiveScope": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteKeysIncludeThePhysicalRootAndLogicalIdentity": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteReuseRequiresTheSameDatabaseLayoutAndVisibilityFence": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteEntriesRejectInvalidOrFutureFramesAndHonorZeroBudget": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteAndCodecEntriesShareTheOriginalBoundsAndRecoverAfterEviction": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.DirectWritesInvalidateResolvedRoutesButStatisticsResetDoesNot": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.InvalidatesAfterDirectWritesAndDiagnosticResetsDoNotResetTheEpoch": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.BoundsBytesAndEvictsWithoutChangingReadResults": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.ZeroBudgetRetainsTheUncachedPath": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RestoresNestedScopesAndRejectsAnotherIoIdentity": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.DoesNotCacheFutureCandidateFramesAndStillRejectsInvalidHints": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.ScopeIsThreadLocalWhileOneSnapshotCanBeReadByTwoThreads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteAllocationsUseTheCacheGrantAndOptionalDenialFallsBack": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.DecodedEntryBuffersAndEscapedCopiesRetainTheirActualGrant": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.SharedQuotaDropsOptionalCacheCopiesAndRetriesTheAuthenticatedDecode": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.UnsupportedHeapOwningPagesDoNotEvictOrBypassACoordinatedCache": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.CapturedScopeOwnerSurvivesCreationAndNestedBindingsRestoreTheirPredecessor": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.ImmutableRouteViewsDoNotClonePayloadWhenTheArenaIsFull": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.UncachedRouteViewNeedsOnlyItsDecodedPayloadAllocation": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RouteViewsRemainImmutableAcrossMutableCopiesAndEpochInvalidation": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.CatalogAndLocationViewsShareImmutableEntriesUnderArenaPressure": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.ExhaustedCacheCannotPreventEmptyContextAndOptionalCacheCanRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.PrivateCatalogCopyUsesTheCallerWhileCacheCreditIsExhausted": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.PrivateCopyDenialPreservesTheSharedEntryAndAvoidsARedecode": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RepeatedRootHitsSurviveStreamingColdPagesWithinTheSameBudget": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.BorrowedPageHitsRefreshRecencyWithoutAllocating": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.DecoderAdmissionCanReclaimAnUnpinnedPageFromTheSameCacheGrant": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.DecoderAdmissionDoesNotEvictPagesFundedByAnotherGrant": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsShareHitsAndSurviveInvalidationWithoutStaleLookup": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsMeasureBorrowedAndCopiedFixedBytesSeparately": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsWithZeroCacheAndFutureReferencesRemainAuthenticated": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.BatchedAllocationsAlsoTriggerPublicationReclamation": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.DeferredReclamationAuthenticatesAndPreservesPinnedCatalogRoots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.DeferredCallStillRejectsFutureSnapshotBeforeThreshold": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.RecoveryReclaimsDeferredUnpublishedFrames": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "RelocatableMetadataPagePoolTest.LowFreeHeadroomReclaimsBeforeAllocationBatchThreshold": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.PlannersRejectForeignSnapshotsInvalidOptionsAndRoots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.ConstructorsRejectForeignMetadataDomains": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.DecodeAndMovedCursorRejectForeignState": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.SelectiveReadsPreserveOwnerAndMissingValueContracts": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.MaterializedBytesDistinguishSelectedFullAndMissingReads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.ReadsRejectUnusableTypedPropertyPayloads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.ReadsRejectLargeValuePayloadOwnedByAnotherEntity": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.SelectiveReadsSupportCanonicalLargeValuePayloads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.BatchPlannerRejectsLargeValueIdentityExhaustionWithoutPublishing": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.PlannerPreservesNoOpsAndSplitsCoalescingOverflow": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.PlannerMovesGrowingRootWhenSharedPageCannotFit": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageUpdatesAgainstExistingRoots": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.ReusesPublishedLargeValueForAnOversizedPropertyRoot": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.EmptyRootForAnUnknownOwnerIsANoOp": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.BatchRelocationRetiresAnEmptiedSourcePageAtomically": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsMalformedRelocationSources": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.NewPoolPreparationRejectsChangedMetadataAndMalformedPlans": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.ExistingPagePreparationRejectsChangedPlansAndPayloads": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.MaterializerRejectsAmbiguousLargeValueReachability": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.RetirementAndLargeValuePreparationRejectInvalidCombinations": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.SelectedLargeValueFieldSkipsUnrequestedLaterChunks": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.LargeValueCursorAdmissionRejectsBeforeSelectedRangeDecode": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.CountCursorAdmitsOwnedPageAndSlotBeforeDecodeAndRetries": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.FullCursorAdmitsPageAndSlotCopiesAndPreservesRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.SelectedCountCursorAdmitsFallbackPageAndSlotBeforeRetry": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "PropertyCollectionRootStoreValidationTest.TokenEnumerationRejectsWrongOwnersAndReferencesBeforeAdmission": {
+      "passed": true,
+      "evidence": "necessary-final-245.json"
+    },
+    "DriverAbiResultCursorTest.StreamsScalarRowWithColumnMetadataAndTypedGetters": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ResultAccessorsValidateNullAndOutOfRangeInputs": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.StringPointersRemainStableUntilNextOrFree": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ReadsMixedValueListElements": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ExecuteWithScalarParams": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ExecuteWithDoubleAndNullParams": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ParamsCreateAndFreeValidateNullInputs": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ParamsSettersRejectNullInputs": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ParamsSetStringAndFloatListsRoundTripThroughResults": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ParamsListSettersValidateNullAndEmptyInputs": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ResultListAccessorsValidateErrorsAndConversions": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.TypeMismatchReturnsStructuredError": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ScalarTypeMismatchesReportGotTypeNames": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ListAndMapValuesReportTypeMismatches": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.DbExecuteValidatesInvalidArguments": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.DbExecuteInvalidCypherReportsErrorWithOptionalErrorOutput": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ResultAndValueRefAccessorsRejectInvalidColumnsTypesAndStaleRefs": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    },
+    "DriverAbiResultCursorTest.ProfilePhysicalWorkIsDiscoverableThroughTheExistingMapAbi": {
+      "passed": true,
+      "evidence": "profile-abi-final-99.json"
+    }
+  }
+}
