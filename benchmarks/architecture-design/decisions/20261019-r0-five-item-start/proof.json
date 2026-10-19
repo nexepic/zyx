@@ -1,0 +1,86 @@
+{
+  "plan": "cow-performance-20261019",
+  "scope": [
+    "R0.1",
+    "R0.2",
+    "R0.3",
+    "R1.1",
+    "R1.2"
+  ],
+  "scope_locked_before_engine_changes": true,
+  "start_commit": "02380c0d32c92f1b1fa1b83d648e37945d0793d1",
+  "production_baseline": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "production_diff_empty": true,
+  "hardware_verified_equal": {
+    "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "allowed_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "binary_and_input_checks": [
+    {
+      "path": "/workspace/zyx-resume-evaluation-20261018/frozen-route-reuse-binaries/zyx-compare-bench",
+      "sha256": "ab7011c8584d437b54f911d1a824c1e26e6dc5bedbdf84c82b0dafb959dc828c"
+    },
+    {
+      "path": "/workspace/zyx-resume-evaluation-20261018/frozen-route-reuse-binaries/zyx-workload-contract-worker",
+      "sha256": "8cf994e2e48e151c8e3a8b395047460b537555c10234c490c882ce6dd0fec63e"
+    },
+    {
+      "path": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/prepared-inputs/medium/current.zyx",
+      "sha256": "857d476301c2f29a13bc5199be89986611e24ec14b30dcf7b4f6c2f548b4f93a"
+    },
+    {
+      "path": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window/prepared-inputs/holdout/current.zyx",
+      "sha256": "c001facab908fefeabd496cecc377e4b1aea26ef1505bc8ab2dc3023398bbd1e"
+    }
+  ],
+  "source_manifest_sha256": "5a5879ceb55d8232561364c9f4c480038bb6dd20422500b8711b7ecfdb83df56",
+  "baseline_policy": "Reuse already completed source-identical formal read/write/resource baseline; no new latency sampling. Frozen before binaries remain available for final R7 comparison.",
+  "baseline_evidence": [
+    "20261018-route-reuse-base-read-checkpoint/proof.json",
+    "20261018-route-reuse-read-write-results/proof.json",
+    "20261018-route-reuse-final-admission/proof.json"
+  ],
+  "resources": {
+    "query_bytes": 67108864,
+    "AS_bytes": 6442450944,
+    "file_bytes": 2147483648,
+    "family_seconds": 1800,
+    "query_threads": 1,
+    "warmups": 3,
+    "measurements": 10,
+    "independent_processes": 3
+  },
+  "primary_metrics": [
+    "numeric/string scan and count",
+    "single/multiple-key group-by",
+    "COUNT DISTINCT"
+  ],
+  "protection": [
+    "point and gather",
+    "full entities",
+    "type/null/dynamic semantics",
+    "sort/DISTINCT spill",
+    "small writes and snapshots"
+  ],
+  "gates": {
+    "primary_p50_reduction": 0.1,
+    "protected_regression": 0.05,
+    "resource_growth_requires_decision": 0.05
+  },
+  "sampling_policy": "Preserve original preregistered per-process distributions, uncertainty/supplementation and time budgets; formal performance admission only at R7. No repeat-until-pass.",
+  "task_classification": {
+    "R0.1": "source/capability audit",
+    "R0.2": "baseline and preregistration",
+    "R0.3": "mechanism and interface decisions",
+    "R1.1": "foundational producer identity/ownership capability; semantic/lifetime admission",
+    "R1.2": "foundational continuous filter/aggregate capability; semantic/lifetime admission; speedup evaluated by R1.3/R7"
+  },
+  "new_performance_claim": false
+}

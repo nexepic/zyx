@@ -12,7 +12,7 @@ projectOrder: 1
 
 # COW Graph Database Performance Refactoring Plan
 
-Updated: 2026-10-19. Plan ID: `cow-performance-20261019`. **This is the sole active optimization entry point. R0–R7 has 24 deliverables, with 0/24 accepted. This revision changes the plan only; it completes no new engine implementation.**
+Updated: 2026-10-19. Plan ID: `cow-performance-20261019`. **This is the sole active optimization entry point. R0–R7 has 24 deliverables, with 3/24 accepted (12.5%). R0.1–R0.3 completed source audit, baseline verification, and interface decisions; R1.1/R1.2 are in progress.**
 
 The objective is to reduce positioning, decoding, conversion, materialization, and metadata work per query/update while preserving existing public capabilities. Retain the engine and make evidence-backed structural changes within it; do not replace the entire backend or promise to outperform Kuzu on every workload.
 
@@ -173,7 +173,7 @@ The main sequence is R0 → R1 → R2 → R3 → R4 → R5 → R6 → R7. Identi
 
 | Stage | Three independent deliverables and completion conditions | Accepted |
 |---|---|---:|
-| R0 Starting point/contracts | **R0.1** Source/capability/adapter audit; **R0.2** Comparable baseline and preregistered sampling, resources, success/protection metrics; **R0.3** Call paths/mechanism counters and interface/format decision register with owners for correctness-critical questions | 0/3 |
+| R0 Starting point/contracts | **R0.1** Source/capability/adapter audit; **R0.2** Comparable baseline and preregistered sampling, resources, success/protection metrics; **R0.3** Call paths/mechanism counters and interface/format decision register with owners for correctness-critical questions 3/3 |
 | R1 Batch execution | **R1.1** Storage producers, identity, ownership; **R1.2** Continuous numeric/string filters and actual aggregation; **R1.3** Other consumers or explicit bounded adapters, semantic protection, and R7 performance review | 0/3 |
 | R2 Metadata reads | **R2.1** Actual paths/repeated-work attribution; **R2.2** Authentication/positioning/cursor reuse and invalidation tests; **R2.3** Point/scan/gather work and R7 performance admission | 0/3 |
 | R3 Property sub-blocks | **R3.1** Byte layout, parameters, cost/lifecycle decision; **R3.2** Full-lifecycle prototype and same-executor comparison; **R3.3** Admitted production integration, format update, and R7 read/write/space admission | 0/3 |
@@ -182,9 +182,11 @@ The main sequence is R0 → R1 → R2 → R3 → R4 → R5 → R6 → R7. Identi
 | R6 Engineering/resources | **R6.1** New-path budgets, result lifetime, existing spill compatibility; **R6.2** EXPLAIN/PROFILE and physical-work observability; **R6.3** Resource/cancellation/read-only faults, responsibility cleanup, and recorded platform-validation scope | 0/3 |
 | R7 Final acceptance | **R7.1** Frozen final candidate, affected modules, full-size correctness; **R7.2** Comparable read/write/resources/steady-state and Kuzu comparison, per-task admission; **R7.3** Final capability/format/decision updates, evidence cleanup, remaining-gap report | 0/3 |
 
-**Total: 0/24 (0%).** States are not started, in progress, implemented/pending admission, accepted, and blocked. Count each evidenced deliverable once. This page is the only manually maintained progress table; machine summaries must be derived. The old 34/34 in `decisions/current-progress.json` is explicitly historical and supplies no new denominator.
+**Total: 3/24 (12.5%).** States are not started, in progress, implemented/pending admission, accepted, and blocked. Count each evidenced deliverable once. This page is the only manually maintained progress table; machine summaries must be derived. The old 34/34 in `decisions/current-progress.json` is explicitly historical and supplies no new denominator.
 
 Resolve correctness-critical interfaces/codecs/protocols before their production implementation; performance decisions may wait until the final window. Candidates must be selectable/buildable in isolation for comparison and cannot become the sole default production format before admission. Reject failed candidates and retain existing production paths. Comparison work may complete while production tasks remain blocked. A rejection decision does not substitute for mandatory production capability; do not shrink the denominator to reach 100%. Explicit scope amendments require user agreement.
+
+This round is limited to R0.1/R0.2/R0.3/R1.1/R1.2. R0 evidence is in `benchmarks/architecture-design/decisions/20261019-r0-five-item-start/`. R1.1/R1.2 are preregistered foundational capabilities; R1.3/R7 still determines performance benefit.
 
 ## 6. Validation and admission
 
