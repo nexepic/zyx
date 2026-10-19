@@ -1030,6 +1030,7 @@ namespace graph::storage {
 		friend class LargeValueStore;
 		friend class RelocatableIntegrityScanner;
 		friend class RelocatableMetadataStoreVectorTestAccess;
+        friend class HybridPropertyDescriptorStoreTestAccess;
 		friend class RelocatableStorageBackend;
 
 	public:

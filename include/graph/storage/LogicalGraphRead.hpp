@@ -336,7 +336,7 @@ namespace graph::storage {
 		// Each graph-visible root is represented by its physical slot, frame, and
 		// generation. Keep the storage width derived from that contract instead of
 		// repeating a total that silently becomes stale when the root set evolves.
-		static constexpr size_t GRAPH_STATE_ROOT_COUNT = 7U;
+		static constexpr size_t GRAPH_STATE_ROOT_COUNT = 8U;
 		static constexpr size_t GRAPH_STATE_TOKENS_PER_ROOT = 3U;
 		static constexpr size_t GRAPH_STATE_TOKEN_COUNT = GRAPH_STATE_ROOT_COUNT * GRAPH_STATE_TOKENS_PER_ROOT;
 

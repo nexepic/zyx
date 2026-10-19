@@ -164,6 +164,7 @@ namespace graph::storage {
 				static_cast<uint8_t>(current.node_entity_directory_root == base.node_entity_directory_root) &
 				static_cast<uint8_t>(current.edge_entity_directory_root == base.edge_entity_directory_root) &
 				static_cast<uint8_t>(current.entity_property_directory_root == base.entity_property_directory_root) &
+                static_cast<uint8_t>(current.hybrid_property_descriptor_root == base.hybrid_property_descriptor_root) &
 				static_cast<uint8_t>(current.index_root_directory_root == base.index_root_directory_root) &
 				static_cast<uint8_t>(current.vector_location_directory_root == base.vector_location_directory_root) &
 				static_cast<uint8_t>(current.vector_manifest_directory_root == base.vector_manifest_directory_root) &
@@ -1663,7 +1664,8 @@ namespace graph::storage {
 	}
 
 	bool NativeGraphWriteTransaction::rebaseAdjacencyOnly(MetadataSnapshotPin &current) {
-		if (!current.isValid() || next_vector_id_ != snapshot_.superblock().next_logical_vector_id ||
+		if (!current.isValid() || current.superblock().hybrid_property_descriptor_root != snapshot_.superblock().hybrid_property_descriptor_root ||
+            next_vector_id_ != snapshot_.superblock().next_logical_vector_id ||
 			!scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
 			!vector_bootstraps_.empty() || !vector_deltas_.empty()) {
 			return false;

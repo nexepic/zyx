@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/detail/PropertyDecodeWorkspace.hpp"
 
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
@@ -332,6 +333,8 @@ namespace graph::storage {
 		const MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const Superblock &superblock = snapshot.superblock();
 		RelocatableIntegrityReport report{superblock.generation, superblock.checkpoint_lsn};
+        if (superblock.hybrid_property_descriptor_root.isValid())
+            static_cast<void>(metadata_.pages_.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
 		ScanMap<uint64_t, CatalogEntry> catalog;
 		metadata_.catalog_.visit(superblock, [this, &superblock, &report, &catalog](const CatalogEntry &entry) {
 			requireIntegrity(catalog.emplace(entry.segment_id.value(), entry).second,

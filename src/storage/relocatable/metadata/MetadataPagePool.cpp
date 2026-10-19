@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
@@ -1360,6 +1361,11 @@ namespace graph::storage {
 
 		for (const Superblock &superblock: protectedSuperblocks) {
 			pages.rebindSuperblock(superblock);
+            if (superblock.hybrid_property_descriptor_root.isValid()) {
+                std::set<std::pair<uint64_t, uint8_t>> descriptorReferences;
+                markReference(superblock.hybrid_property_descriptor_root, descriptorReferences);
+                static_cast<void>(pages.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
+            }
 			std::set<uint64_t> logicalPageIds;
 			activeLogicalPageIds = &logicalPageIds;
 			const auto reconcileRoot = [&](MetadataDirectoryType directoryType, PhysicalPageRef physicalRoot) {
@@ -1749,6 +1755,14 @@ namespace graph::storage {
 				}
 			}
 		};
+
+        if (superblock.hybrid_property_descriptor_root.isValid()) {
+            const auto reference = superblock.hybrid_property_descriptor_root;
+            if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second)
+                throwCatalogPoolError(FormatError::FERR_INVALID_STATE, "hybrid descriptor aliases another metadata frame");
+            static_cast<void>(pages.readHybridPropertyDescriptor(reference, superblock));
+            reachableSlots.insert(reference.physical_slot.value());
+        }
 
 		struct RootDescriptor {
 			PhysicalPageRef reference;

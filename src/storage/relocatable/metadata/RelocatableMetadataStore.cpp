@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/utils/OwnedVector.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
@@ -128,6 +129,8 @@ namespace graph::storage {
         if (controlOwner) scratch.emplace(controlOwner);
 		pool_ownership_.restoreCatalogOwnership(current);
 		pool_ownership_.verifyAfterOpen(current);
+        if (current.hybrid_property_descriptor_root.isValid())
+            static_cast<void>(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current));
 	}
 
 	RelocatableMetadataStore::~RelocatableMetadataStore() = default;

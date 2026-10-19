@@ -14,9 +14,11 @@
 
 namespace graph::storage {
 
-// Candidate codec only. No current Superblock root, writer or allocator may
-// publish this frame until the complete format/root/fence/lifecycle update is
-// installed. In particular this is not a generic State record or a radix root.
+// Isolated metadata prototype only: ordinary format builds reject this root.
+// MetadataPageFile currently admits empty descriptors and rejects nonempty
+// routing until the complete native property lifecycle is installed. This codec
+// can represent nonempty roots for byte/identity checks, not production admission.
+// This is not a generic State record or a routed radix root.
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC = 0x4858595AU; // ZYXH
 constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC = 0x4458595AU; // ZYXD
 constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = 1;
