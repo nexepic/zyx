@@ -7,6 +7,7 @@
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyExtension.hpp"
 
 namespace zyx::benchmark::subblock {
 // Bounded conversion planning over immutable, caller-owned, authenticated ROW
@@ -159,6 +160,18 @@ public:
             source.identity.group, source.identity.token, Generation(source.identity.generation)};
         record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
         record.words = source.words; record.encode(output);
+    }
+    [[nodiscard]] std::pmr::vector<std::byte> encodeNativeInlineExtension(uint64_t owner, uint32_t token,
+        size_t nativeRecordLimit, std::pmr::memory_resource &outputMemory) const {
+        const auto end = members_.begin() + member_count_;
+        const auto found = std::lower_bound(members_.begin(), end, std::pair(owner, token),
+            [](const Member &member, const auto &key) {
+                return std::pair(member.owner, member.token) < key;
+            });
+        require(found != end && found->owner == owner && found->token == token &&
+            found->source == Source::HPS_EXTENSION && found->value);
+        return graph::storage::HybridPropertyExtensionView::encodeInline({nativeGroup().owner_kind, owner}, token,
+            graph::storage::Generation(group_.generation), *found->value, nativeRecordLimit, outputMemory);
     }
 
     // Reverse projection visits only actual owner fields in token order. Heap
