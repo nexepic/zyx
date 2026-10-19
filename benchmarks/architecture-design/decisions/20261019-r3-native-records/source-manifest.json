@@ -1,0 +1,14 @@
+{
+  "parent": "bd5f906cc75f5beb24f41410d37f7f703b0b8398",
+  "code_checkpoint": "b28cb0bfff308eb100f98e9f90a7e37baf302c3f",
+  "files": {
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md": "0543393f50fbf4f2806070c36d1fa3ae4a19b2222072039b03caf353e617b983",
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md": "31e7599f39e317c3bd790cd2de89ff59c220b3b834387dca98f5d47537d31a07",
+    "benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp": "e9c045a79974f8e867bede924d8b260bebacf019704c744205f2fd9893e237ac",
+    "benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp": "63521f851c204df545a028e2419d4c0a2e339cce9527b66c69a201c607a8565c",
+    "include/graph/storage/relocatable/property/HybridPropertyRecords.hpp": "93f6c364ffe883d7e40803c01808c6bb4261544b527330368ad4a4d6f9ea4785",
+    "tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp": "0c6c8938381a0b342307eaccde0ae333b2b4b8c0eab36f87f481f2bcc13a7dc8",
+    "tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp": "f9ad34ceaae464667ffab494fbe6b2611a33b392f949584c9f29a15ef9838a77",
+    "tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp": "080307711fcd36ad50b6de5e3d03e4cb05a882d49f02c4bae9d01c0afe89562c"
+  }
+}

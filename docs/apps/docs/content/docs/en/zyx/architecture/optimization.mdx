@@ -12,7 +12,7 @@ projectOrder: 1
 
 # COW Graph Database Performance Refactoring Plan
 
-Updated: 2026-10-19. Plan ID: `cow-performance-20261019`. **This is the sole active optimization entry point. R0–R7 has 24 deliverables, with 13/24 accepted (54.2%). This batch advances R1.3/R2.3/R3.2/R4.3/R5.1; full native lifecycles remain in progress; R1.3/R2.3, R4.3 and other performance gates remain pending R7.**
+Updated: 2026-10-19. Plan ID: `cow-performance-20261019`. **This is the sole active optimization entry point. R0–R7 has 24 deliverables, with 13/24 accepted (54.2%). The fixed current batch is R3.2/R3.3/R5.1/R5.2/R5.3; these five remain incomplete. R1.3/R2.3, R4.3 and other performance gates remain pending R7.**
 
 The objective is to reduce positioning, decoding, conversion, materialization, and metadata work per query/update while preserving existing public capabilities. Retain the engine and make evidence-backed structural changes within it; do not replace the entire backend or promise to outperform Kuzu on every workload.
 
@@ -263,3 +263,5 @@ Each admission record includes task IDs, before/after source/binary identity, hy
 | Verification | `apps/compare_benchmark/main.cpp`; `benchmarks/graphdb-comparison/runner/`; `tests/src/query/`, `tests/src/storage/` |
 
 Read these existing records under `benchmarks/architecture-design/decisions/`: `20261014-a1-design-contract/` (identity/batch semantics), `20261014-a3-layout-contract/` (property authority/cost), `20261014-a4-adjacency-fault-contract/` (fault responsibility), `20261014-a5-isolation-contract/` and `20261014-s5-bounded-blind-rebase/` (isolation), `20261013-a7-format-boundary/` (format), `20261016-s53-budget-and-spill-acceptance/` (implemented resources/spill), and `20261018-immutable-route-branch-reuse/` (implemented publication reuse). Their historical progress is inactive. Explicitly supersede still-applicable contracts in new decisions rather than silently bypassing them in code.
+
+R3.2 typed field-record preparation: `HybridPropertyRecords.hpp` defines bounded 64-byte group and 72/576-byte column codecs with native entity-ID limits, exact identities, generation/liveness checks and zeroed absent/NULL payloads. The charged conversion plan emits those native payloads without publishing roots. The 4096-membership ceiling remains a conversion-work bound; group counts retain the declared u32 wire range. Evidence: `benchmarks/architecture-design/decisions/20261019-r3-native-records/`, four necessary modules, 48/48 passing in each default and isolated build. This is payload preparation, not native field-page persistence or complete R3.2. Nonempty-root guards, admission requirements and 13/24 remain unchanged. No formal performance window ran.
