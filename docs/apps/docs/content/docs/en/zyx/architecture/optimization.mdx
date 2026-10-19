@@ -204,6 +204,9 @@ Final necessary run: 245 passing cases; final PROFILE/ABI changes: 99 affected c
 
 R3.2 advances five implementation substeps: 64-slot column records, group headers, the 192-byte descriptor, membership/locator/directory encoding, and the complete-cost evidence conversion gate. Evidence: `benchmarks/architecture-design/decisions/20261019-r3-codec-five/`. All 20 targeted checks and 10,000 deterministic mutations pass; ASan/UBSan pass with unsupported leak detection disabled, preserving the initial LeakSanitizer process failure. This is an isolated in-memory payload experiment; the gate consumes synthetic/caller evidence, with no native estimator or file writer. R3.2 remains in progress and the total stays 13/24: five substeps are not five accepted stage deliverables. Next follow the R3.1 native format/root/fence/lifecycle, actual allocation and same-executor ROW comparison obligations before R3.3 or any performance claim.
 
+R3.2 shared-directory prerequisites now reuse existing key-only B+Tree ordered-prefix/value-suffix maps, with explicit EMPTY layout retained by compound native transactions and fresh rebuilds, avoiding larger generic entries. All 178 cases in nine necessary modules pass, covering old pins/reopen, duplicate prefixes, pool exhaustion/rebuild, whole-tree retirement and three A/B interruptions; evidence: `benchmarks/architecture-design/decisions/20261019-r3-native-directories/`. This is generic native-map capability only, with no persisted hybrid descriptor/column format. R3.2 remains in progress and progress stays 13/24.
+
+
 ## 6. Validation and admission
 
 ### 6.1 Baselines, sampling, and workloads

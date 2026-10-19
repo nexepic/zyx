@@ -730,8 +730,12 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::stageScalarIndexUpsert(BTreePageStore &index, uint64_t indexId,
-															 std::span<const std::byte> key, uint64_t value) {
+															 std::span<const std::byte> key, uint64_t value, BTreeLeafValueLayout leafValueLayout) {
 		requireActive("stage a scalar Index upsert");
+		if ((leafValueLayout != BTreeLeafValueLayout::BLVL_U64 && leafValueLayout != BTreeLeafValueLayout::BLVL_EMPTY) ||
+			(leafValueLayout == BTreeLeafValueLayout::BLVL_EMPTY && value != 0U)) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph staged Index has an invalid leaf value/layout");
+		}
 		if (indexId == 0U || isReservedInternalIndexId(indexId) || !index.usesMetadataStore(*context_->metadata)) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native graph staged scalar Index upsert requires a non-reserved Index in this metadata domain");
@@ -749,11 +753,11 @@ namespace graph::storage {
 				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
 				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
 		if (existing == scalar_index_mutations_.end() || existing->index_id != indexId) {
-			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt});
+			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt, leafValueLayout});
 		}
-		if (existing->index != &index) {
+		if (existing->index != &index || existing->leaf_value_layout != leafValueLayout) {
 			fail(FormatError::FERR_INVALID_STATE,
-				 "native graph staged scalar Index mutation changed its page-store identity");
+				 "native graph staged scalar Index mutation changed its page-store identity or leaf layout");
 		}
 		if (existing->retirement_plan.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
@@ -765,8 +769,11 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::stageScalarIndexErase(BTreePageStore &index, uint64_t indexId,
-															std::span<const std::byte> key) {
+															std::span<const std::byte> key, BTreeLeafValueLayout leafValueLayout) {
 		requireActive("stage a scalar Index erase");
+		if (leafValueLayout != BTreeLeafValueLayout::BLVL_U64 && leafValueLayout != BTreeLeafValueLayout::BLVL_EMPTY) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph staged Index has an invalid leaf layout");
+		}
 		if (indexId == 0U || isReservedInternalIndexId(indexId) || !index.usesMetadataStore(*context_->metadata)) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native graph staged scalar Index erase requires a non-reserved Index in this metadata domain");
@@ -784,11 +791,11 @@ namespace graph::storage {
 				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
 				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
 		if (existing == scalar_index_mutations_.end() || existing->index_id != indexId) {
-			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt});
+			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt, leafValueLayout});
 		}
-		if (existing->index != &index) {
+		if (existing->index != &index || existing->leaf_value_layout != leafValueLayout) {
 			fail(FormatError::FERR_INVALID_STATE,
-				 "native graph staged scalar Index mutation changed its page-store identity");
+				 "native graph staged scalar Index mutation changed its page-store identity or leaf layout");
 		}
 		if (existing->retirement_plan.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
@@ -1863,14 +1870,15 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE, "native graph staged scalar Index operation stream is empty");
 			}
 			staged.plan =
-					staged.index->planScalarIndexTransactionMutation(snapshot_, staged.index_id, staged.operations);
+					staged.index->planScalarIndexTransactionMutation(
+						snapshot_, staged.index_id, staged.operations, true, false, staged.leaf_value_layout);
 			candidates.push_back({staged.index,
 					[&staged]() -> const std::vector<IndexTreeMutationPoolRequest> & {
 						return staged.plan->pool_requests;
 					},
 					[this, &staged] {
 						staged.plan = staged.index->planScalarIndexTransactionMutation(
-								snapshot_, staged.index_id, staged.operations, false, true);
+								snapshot_, staged.index_id, staged.operations, false, true, staged.leaf_value_layout);
 					}});
 		}
 		if (global_adjacency_plan_.has_value()) {

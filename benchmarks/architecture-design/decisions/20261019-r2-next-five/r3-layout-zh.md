@@ -4,7 +4,7 @@
 
 ## 固定参数和字节布局
 
-整数 little endian；保留字节为零。未知模式/类型、溢出、长度矛盾、重复/无序键及归属矛盾均拒绝。磁盘编码不使用 C++ sizeof/填充。以下字节不含现有认证页/slot framing。R3.2 审计 registry 后，在写任何实验文件前一并分配 codec/page-kind/version 标识，不能悄悄塞进当前格式。
+记录体整数为 little endian；有序 B+Tree 键前缀使用无符号 big endian，保持既有字典序比较器的 owner/group/token 数值顺序；保留字节为零。未知模式/类型、溢出、长度矛盾、重复/无序键及归属矛盾均拒绝。磁盘编码不使用 C++ sizeof/填充。以下字节不含现有认证页/slot framing。R3.2 审计 registry 后，在写任何实验文件前一并分配 codec/page-kind/version 标识，不能悄悄塞进当前格式。
 
 | 参数 | 固定候选及理由 |
 |---|---|
@@ -33,6 +33,8 @@ map 使用已有 B+Tree framing，R3.2 实测全部成本；16/28 字节只是 p
 R3.2 在任何文件编码前，同时分配新 Superblock 字段 offset/format version 和 metadata page-kind，配套所有 reader/writer/搬迁/integrity。首次转换和后续字段修改均替换描述符、推进额外图 fence，即使 B+Tree PageId 稳定且只改物理映射也如此。故意保留保守冲突；当前七根 fence 不含物理目录，不能替代此显式成员。
 
 selector、列 presence、extension 存在性精确一致；无 selector 是缺失，存储 NULL 有 selector。extension 不留完整第二份行。点读验证所访问归属，完整 integrity 双向枚举发现孤儿/重复/错 owner/group/type；不在每次点读扫描全图。当前列类型不成为永久 schema。
+
+R3.2 物理映射实现定案：复用既有 key-only B+Tree entry，以有序逻辑键前缀加 canonical 值后缀编码。owner selector 为 12+4 字节，列定位为 12+16，组定位为 8+16；这些仍是 packed framing/restart/内部分隔符/填充前的下界，值后缀参与压缩和成本计算。逻辑前缀唯一性独立于完整原生键唯一性：点读匹配项并前看一项，同前缀第二个值即拒绝，跨叶也不能漏检。类型化所有者须验证完整 integrity，并把事务内最终修改归并成每前缀一次 erase-old/insert-new；不能从同一旧快照多次未归并替换。内部 B+Tree child 仍为 U64；原生复合变更和 fresh rebuild 显式保留 EMPTY 叶布局。`FixedBTreeMap` 仅提供通用定宽编码/查找，不安装 hybrid 根、不解释定位目标、不定义图 fence。extension 变长值 framing 仍需独立类型化 codec，不能认为定宽 helper 已实现它。实验测试仅使用通用 index 命名空间及既有格式，未持久化 hybrid 描述符/列根，也未执行生产转换。
 
 ## 访问、修改和完整成本
 

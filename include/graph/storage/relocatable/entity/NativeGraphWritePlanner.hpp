@@ -175,12 +175,15 @@ namespace graph::storage {
 		void replaceEdgeProperty(PropertyCollectionRoot root);
 		void eraseNode(uint64_t nodeId);
 		void eraseEdge(uint64_t edgeId);
+		// Explicit EMPTY supports fixed prefix/value shared maps without changing
+		// generic leaf values or silently reinterpreting an existing U64 tree.
 		// Stage logical scalar-index operations. One Index is replayed through one
 		// transaction-local B+Tree overlay, then published with graph state under
 		// the same snapshot and Superblock generation.
 		void stageScalarIndexUpsert(BTreePageStore &index, uint64_t indexId, std::span<const std::byte> key,
-									uint64_t value);
-		void stageScalarIndexErase(BTreePageStore &index, uint64_t indexId, std::span<const std::byte> key);
+									uint64_t value, BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
+		void stageScalarIndexErase(BTreePageStore &index, uint64_t indexId, std::span<const std::byte> key,
+				BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 		// First publication reserves only fresh Index pages and makes the new root
 		// visible with this graph transaction. Large DDL builds use the external
 		// sorter path rather than retaining an unbounded entry set here.
@@ -231,6 +234,7 @@ namespace graph::storage {
 			std::vector<BTreeScalarIndexOperation> operations;
 			std::optional<BTreeStructuralMutationPlan> plan;
 			std::optional<BTreeTreeRetirementPlan> retirement_plan;
+			BTreeLeafValueLayout leaf_value_layout = BTreeLeafValueLayout::BLVL_U64;
 		};
 		struct StagedInitialScalarIndexMutation {
 			BTreePageStore *index = nullptr;
