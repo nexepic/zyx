@@ -1,0 +1,16 @@
+{
+  "first": {
+    "exit_code": 1,
+    "gtest_cases_passed": 20,
+    "report": "sanitized-tests.json",
+    "post_test_failure": "LeakSanitizer fatal: does not work under ptrace; environment limitation"
+  },
+  "final": {
+    "exit_code": 0,
+    "gtest_cases_passed": 20,
+    "report": "address-undefined-tests.json",
+    "ASAN_OPTIONS": "detect_leaks=0",
+    "UBSAN_OPTIONS": "halt_on_error=1"
+  },
+  "scope": "ASan memory-access and UBSan checks; leak detection unavailable, not claimed"
+}

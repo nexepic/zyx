@@ -1,0 +1,5 @@
+{
+  "benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp": "a42f81b9d834caa9e7d2cc07cd15ca2304b876958bc8b012aa0ec197b8629da9",
+  "benchmarks/architecture-design/property-subblock/CMakeLists.txt": "84624a70153e164b98dc6dcd0c683220f2dd3cb1a1f23527ce8a40a1d46bcf23",
+  "tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp": "a5ed237cd91d335e1ab03f5d0e37b4ff4498acbbd4a12df2bbabf5b5d256d71a"
+}

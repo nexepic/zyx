@@ -1,0 +1,9 @@
+{
+  "plan": "cow-performance-20261019",
+  "parent": "6fa1d4e5a2c39f678b8cf5e10ee493616069800b",
+  "parent_item": "R3.2",
+  "scope": ["64-slot column codec", "group header codec", "192-byte descriptor codec", "membership and locator codecs", "complete-cost conversion gate"],
+  "acceptance": "Exact fixed wire bytes, identity and malformed-input rejection, occupancy boundaries, overflow-safe resource and cost gates; affected codec tests only",
+  "exclusions": "No native file persistence, page-kind allocation, Superblock change, graph routing, lifecycle acceptance, production switch or performance claim",
+  "progress_rule": "Five implementation steps within R3.2; no additional accepted top-level item until complete native lifecycle and same-executor comparison"
+}

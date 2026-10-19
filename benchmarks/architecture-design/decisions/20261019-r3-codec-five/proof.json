@@ -1,0 +1,38 @@
+{
+  "parent": "6fa1d4e5a2c39f678b8cf5e10ee493616069800b",
+  "plan": "cow-performance-20261019",
+  "progress_derived": {
+    "accepted": 13,
+    "total": 24,
+    "percent": 54.2
+  },
+  "parent_item": "R3.2",
+  "parent_state": "in progress",
+  "implemented_substeps": 5,
+  "new_top_level_acceptances": 0,
+  "tests": {
+    "normal_final": {
+      "cases": 20,
+      "failures": 0,
+      "report": "final-tests.json"
+    },
+    "deterministic_column_mutations": 10000,
+    "asan_ubsan_final": {
+      "cases": 20,
+      "failures": 0,
+      "process_exit": 0,
+      "leaks_checked": false,
+      "report": "address-undefined-tests.json"
+    },
+    "initial_sanitizer_process_exit": 1,
+    "cmake_ctest_reproduction": "passed"
+  },
+  "platform": "Linux x86_64, Clang 19.1.7, GTest 1.15.0",
+  "production_format_changed": false,
+  "native_file_writer_connected": false,
+  "native_cost_estimator_implemented": false,
+  "native_lifecycle_accepted": false,
+  "formal_performance_run": false,
+  "performance_claim": null,
+  "source_manifest": "source-manifest.json"
+}
