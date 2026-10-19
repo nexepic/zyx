@@ -1,0 +1,411 @@
+{
+  "tests": 35,
+  "failures": 1,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T08:38:37Z",
+  "time": "0.025s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyRecordsTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:38:37Z",
+      "time": "0.002s",
+      "testsuite": [
+        {
+          "name": "CanonicalPrimitiveLayoutsPreserveRawBitsAndNullVersusMissing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "NativeIdDomainRejectsZeroOverflowAndFinalGroupPhantomSlot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "GroupCountUsesWireRangeWhileConversionKeepsItsSeparateWorkBound",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "RetainedColumnsAllowBirthAndDeathOnlyOnAbsentCells",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 82,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "CorrectBytesDoNotAuthorizeWrongGroupTokenKindTypeOrGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 93,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "MalformedHeadersMasksCountsAndNoncanonicalPayloadFailClosed",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyRecordsTest"
+        },
+        {
+          "name": "EveryTruncatedWidthAndOversizedRecordRejectWithoutReadingOutsideInput",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyRecords.cpp",
+          "line": 142,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0.001s",
+          "classname": "HybridPropertyRecordsTest"
+        }
+      ]
+    },
+    {
+      "name": "HybridPropertyExtensionTest",
+      "tests": 7,
+      "failures": 1,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:38:37Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "InlineValuesRoundTripCanonicalTypesAndBorrowBytesWithoutWholeRowCopies",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 36,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "WrongIdentityVisibilityModeReservedAndCanonicalTrailingDataReject",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 59,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "NativeUsableRecordLimitAndAccountFailurePrecedeDestinationAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest",
+          "failures": [
+            {
+              "failure": "unknown file\nC++ exception with description \"hybrid extension exceeds native record capacity or has invalid identity\" thrown in the test body.\n",
+              "type": ""
+            }
+          ]
+        },
+        {
+          "name": "ValueAdmissionRefusalDoesNotChangeBorrowedSourceAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 89,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "LargeReferenceReusesExistingCodecAndExactlyOneTokenValuePayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "WholeRowsWrongTokensTrailingDataAndWrongLargeMediaNeverBecomeOneField",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        },
+        {
+          "name": "BoundedGroupPlanEncodesOnlyActualExtensionMembersAgainstOutputAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyExtension.cpp",
+          "line": 132,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "HybridPropertyExtensionTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockGroupConversionTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:38:37Z",
+      "time": "0.022s",
+      "testsuite": [
+        {
+          "name": "Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0.001s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 50,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0.002s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 77,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "MaximumMembershipsAndPropertylessOwnersStayBounded",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0.016s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 124,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 138,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 151,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        },
+        {
+          "name": "ParentAccountOwnsThePlanAndFailureRefundsBothCounters",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockGroupConversion.cpp",
+          "line": 162,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockGroupConversionTest"
+        }
+      ]
+    },
+    {
+      "name": "PropertySubblockFieldTransitionTest",
+      "tests": 13,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:38:37Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "NoopRetainsColumnAndSemanticGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 16,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "SetChangesExactlyOneWordAndAdvancesOnlyChangedColumn",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "NullRemainsPresentWhileRemoveDemotesAtFortySeven",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 33,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "TypeChangeDemotesOneFieldWithoutNumericCoercionOrPayloadCopy",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 45,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "RemovalAboveThresholdRetainsColumnAndZeroesPayload",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 55,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "OwnerBirthDeathAreSingleSlotChangesAndPreserveOthers",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 64,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "NullAndMissingNoopsRemainDistinctAndNoPromotionIsProvided",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "BitsPreserveSignedZeroNaNPayloadAndBooleanWidth",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 83,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "InvalidIdentityGenerationBoundsAndBudgetPublishNothing",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 97,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "UnchangedColumnMayPrecedeCurrentGroupAndDescriptorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "CurrentGroupLiveProtectsDeletedOwnersWithoutRewritingAbsentColumns",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "ColumnSnapshotRejectsIdentityRootsAndFutureDescriptor",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 134,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        },
+        {
+          "name": "NoopEqualityMatchesActualRowPropertyValueForAllPrimitivePairs",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_PropertySubblockFieldTransition.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:38:37Z",
+          "time": "0s",
+          "classname": "PropertySubblockFieldTransitionTest"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "default": {
+    "hybrid_option": false,
+    "build_type": "Debug",
+    "coverage": true,
+    "platform": "Linux x86_64",
+    "new_header_instantiated_by": "necessary tests and conversion planner; production field routing is not installed",
+    "files": {
+      "/workspace/zyx-r3-extension-20261019/default-final/records-test": "341ffc35519f2af52600121683d26ee2c7014e3fa3d83deb19a618c1e7564819",
+      "/workspace/zyx/buildDir/libzyx_core.a": "451b936550bc944a2686475ecd3916d485a1b93bc3071f2f01e3c10ed84845a2"
+    }
+  },
+  "candidate": {
+    "hybrid_option": true,
+    "build_type": "Debug",
+    "coverage": true,
+    "platform": "Linux x86_64",
+    "new_header_instantiated_by": "necessary tests and conversion planner; production field routing is not installed",
+    "files": {
+      "/workspace/zyx-r3-extension-20261019/candidate-final/records-test": "16ccff2ecd1d6267eeab9d6279d0d505a989d48543a6e198b00f23f92c8325ad",
+      "/workspace/zyx-build-r3-native/libzyx_core.a": "2dea00145ff2b5dc0ae14871bc24a8d04231685ff97ce4ddceb1b99aa5facb45"
+    }
+  }
+}
