@@ -12,11 +12,11 @@ projectOrder: 1
 
 # Release Follow-ups and Acceptance Navigation
 
-Updated: 2026-10-11. The old Stage/C chronological ledger is archived. This page is not a performance implementation plan and does not use the old 34% or historical test counts to describe the current working tree.
+Updated: 2026-10-19. The old Stage/C chronological ledger is archived. This page is not a performance implementation plan and does not use the old 34% or historical test counts to describe the current working tree.
 
 ## Current entry points
 
-- **Architecture/performance**: [Architecture and General Performance Implementation Plan](optimization), A1–A7/O1–O8 through 34 deliverables in S0–S6. Only that page owns progress. Completed old P0–P7 scope does not complete the new plan.
+- **Architecture/performance**: [COW Graph Database Performance Refactoring Plan](optimization), following R0–R7. Only that page owns new-plan progress. Archived S0–S6 acceptance of 34/34 does not complete the new plan or establish Kuzu parity.
 - **Format/correctness**: [Native single-file specification](native-single-file-storage-plan), retaining file, COW, identity, publication, and reclamation invariants.
 - **Public capabilities**: [Capability acceptance matrix](native-capability-acceptance-matrix), retaining owners and named evidence; historical checkpoints are not release approval.
 - **Measurement**: [Benchmarks](benchmarks), requiring environment, data, source, and sample provenance.
@@ -27,7 +27,7 @@ Updated: 2026-10-11. The old Stage/C chronological ledger is archived. This page
 |---|---|
 | Capabilities/consumers | Preserve Cypher, QueryBuilder, GDS/Leiden, Vector, Driver ABI, and bindings. Recheck affected matrix entries; do not mark every historical outstanding item complete |
 | Recovery/resources | Format/write changes need atomic publication, reopen, failed recovery, old snapshots, relocation, and safe reclamation evidence; performance tests do not substitute |
-| Platforms/tools | Preserve macOS/Linux/Windows portability. This round requires macOS execution only; the user tests other platforms later. Missing sanitizer, binding, or release-environment evidence remains unverified |
+| Platforms/tools | Preserve macOS/Linux/Windows portability. The current formal reference ran on Linux x86_64; record macOS/Windows validation scope separately for subsequent changes. Missing sanitizer, binding, or release-environment evidence remains unverified |
 | Coverage/full tests | No full unit suite or coverage gate in this round. Any separate release acceptance scope is determined separately and does not block authorized module optimization |
 | Legacy audit | Do not restore retired implementations. Demonstrate replacements for any surviving public consumer/specification source before removal; documentation cleanup does not authorize code/test deletion |
 
@@ -35,4 +35,4 @@ This page creates no new completion percentage and does not declare historical u
 
 ## Archive
 
-Historical bilingual files are in `benchmarks/architecture-design/archive/20261009-superseded-plans/` and `20261011-completed-optimization/`, with SHA-256 manifests, for audit only. The latter retains completed P0–P7 and old storage stage records. The new plan exclusively owns architecture/performance order, necessary tests, budgets and progress.
+Historical bilingual files are in `benchmarks/architecture-design/archive/20261009-superseded-plans/` and `20261011-completed-optimization/`, with SHA-256 manifests, for audit only. The latter retains completed P0–P7 and old storage stage records; `20261019-completed-s0-s6/` retains completed S0–S6 and related documents before this cleanup. The new plan exclusively owns architecture/performance order, necessary tests, budgets and progress.

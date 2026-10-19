@@ -1,0 +1,544 @@
+{
+  "accepted_ids": [
+    "S0.1",
+    "S0.2",
+    "S1.1",
+    "S1.2",
+    "S1.3",
+    "S1.4",
+    "S1.5",
+    "S1.6",
+    "S1.7",
+    "S2.1",
+    "S2.2",
+    "S2.3",
+    "S2.4",
+    "S3.1",
+    "S3.2",
+    "S3.3",
+    "S3.4",
+    "S4.1",
+    "S4.2",
+    "S4.3",
+    "S5.2",
+    "S5.1",
+    "S5.4",
+    "S6.3",
+    "S5.3",
+    "S6.1",
+    "S0.4",
+    "S6.4",
+    "S0.3",
+    "S5.5",
+    "S4.4",
+    "S2.5",
+    "S3.5",
+    "S6.2"
+  ],
+  "accepted": 34,
+  "total": 34,
+  "percent": 100,
+  "stages": {
+    "S0": {
+      "accepted": 4,
+      "total": 4,
+      "percent": 100
+    },
+    "S1": {
+      "accepted": 7,
+      "total": 7,
+      "percent": 100
+    },
+    "S2": {
+      "accepted": 5,
+      "total": 5,
+      "percent": 100
+    },
+    "S3": {
+      "accepted": 5,
+      "total": 5,
+      "percent": 100
+    },
+    "S4": {
+      "accepted": 4,
+      "total": 4,
+      "percent": 100
+    },
+    "S5": {
+      "accepted": 5,
+      "total": 5,
+      "percent": 100
+    },
+    "S6": {
+      "accepted": 4,
+      "total": 4,
+      "percent": 100
+    }
+  },
+  "S3.1": "accepted",
+  "commit_push": "required_for_every_accepted_progress_increase",
+  "S1.1": "accepted_design",
+  "S1.6": "accepted_design",
+  "S1.5": "accepted_design",
+  "S1.4": "accepted_design",
+  "S1.3": "accepted_design",
+  "S0.2": "accepted_workload_contract",
+  "S2.1": "accepted",
+  "milestone": "34_of_34_documented_deliverables_complete_Kuzu_overall_parity_not_achieved",
+  "S2.2": "accepted",
+  "S2.3": "accepted",
+  "S2.4": "accepted",
+  "S3.2": "accepted",
+  "S3.3": "accepted",
+  "S3.4": "accepted",
+  "S4.1": "accepted",
+  "S4.2": "accepted",
+  "S4.3": "accepted",
+  "S5.2": "accepted",
+  "S5.1": "accepted_bounded_protocol",
+  "continuation": {
+    "objective": "complete_all_34_items",
+    "baseline_accepted": 21,
+    "target_accepted": 34,
+    "completed_ids": [
+      "S0.1",
+      "S0.2",
+      "S1.1",
+      "S1.2",
+      "S1.3",
+      "S1.4",
+      "S1.5",
+      "S1.6",
+      "S1.7",
+      "S2.1",
+      "S2.2",
+      "S2.3",
+      "S2.4",
+      "S3.1",
+      "S3.2",
+      "S3.3",
+      "S3.4",
+      "S4.1",
+      "S4.2",
+      "S4.3",
+      "S5.2",
+      "S5.1",
+      "S5.4",
+      "S6.3",
+      "S5.3",
+      "S6.1",
+      "S0.4",
+      "S6.4",
+      "S0.3",
+      "S5.5",
+      "S4.4",
+      "S2.5",
+      "S3.5",
+      "S6.2"
+    ],
+    "status": "completed",
+    "performance_window": "completed_after_implementation"
+  },
+  "current_request": {
+    "requested_additional_items": 5,
+    "baseline_accepted": 29,
+    "target_accepted": 34,
+    "target_percent": 100,
+    "candidate_ids": [
+      "S2.5",
+      "S3.5",
+      "S4.4",
+      "S5.5",
+      "S6.2"
+    ],
+    "completed_ids": [
+      "S2.5",
+      "S3.5",
+      "S4.4",
+      "S5.5",
+      "S6.2"
+    ],
+    "completed": 5,
+    "status": "completed_after_authorized_publication",
+    "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
+    "pending_revalidation_ids": [],
+    "implementation": "Frozen c287 implementation complete.847distinct necessary-module tests verified after targeted fixture rerun;39current full contracts pass; final read/write/O6 and targeted resource/recovery checks complete. No full unit suite.",
+    "final_window": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window",
+    "source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "source_revalidation": {
+      "id": "S6.1",
+      "score_increase": false,
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "evidence": "20261018-immutable-route-branch-reuse/proof.json",
+      "scope": "60necessary modules; first847tests846passed/1counter-fixture isolation failure. Original fixture isolated28alreadypass. Reset fixture counters, retain2/1assertions, affected28pass.847distinct tests verified through targeted rerun; full60not repeated.13family886smoke pass."
+    },
+    "pending_user_resource_decision": "None;original2GiBfile/6GiBAS/64MiBquery limits retained.4GiBproposal never applied.",
+    "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "final_window_status": "completed_all_frozen_source_cases_with_explicit_comparator_failures",
+    "latest_checkpoint": "20261018-route-reuse-final-admission/proof.json",
+    "latest_targeted_tests": {
+      "modules": 60,
+      "distinct_tests_verified": 847,
+      "first_pass_tests": 847,
+      "first_pass_passed": 846,
+      "targeted_fixture_rerun_tests": 28,
+      "targeted_fixture_rerun_passed": 28,
+      "full_unit_suite": false,
+      "full60modules_repeated": false,
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "evidence": "20261018-immutable-route-branch-reuse/proof.json"
+    },
+    "full_maintenance_preflight": "Three13window rounds/full oracles pass;1.2565%file growth. Original closed one deferred route retained; private normal-maintenance diagnosis converges to zero. Strict extra zero-at-close assertion failure disclosed.",
+    "pending_repair": null,
+    "metadata_cleanup_targeted_tests": {
+      "modules_first": 42,
+      "tests_first": 1018,
+      "passed_first": 1017,
+      "failed_first": 1,
+      "followup_modules": 3,
+      "followup_passed": 93,
+      "distinct_passing_after_targeted_followup": 1018,
+      "full_suite": false
+    },
+    "route_pruning_targeted_tests": {
+      "modules": 42,
+      "tests": 1019,
+      "passed": 1019,
+      "additional_module_tests": 4,
+      "additional_distinct": 2,
+      "total_distinct_passed": 1021,
+      "full_suite": false
+    },
+    "final_window_order": "Stop on first required-family failure; retain failed endpoint for diagnosis. Do not rerun a failed unchanged source/family. Start final performance evaluation only after necessary full-size correctness succeeds.",
+    "frozen_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "source_freeze_manifest": "20261018-route-reuse-final-preregistration/proof.json",
+    "final_performance_window": "completed;10210read/3890write samples,3000O6batches; old source samples excluded",
+    "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
+    "latest_repair_evidence": "20261018-row-chunk-compression-candidate/proof.json",
+    "latest_timeout_evidence": "20261018-publication-dynamic-timeout/proof.json",
+    "pending_user_time_budget_decision": "None;original1800sfamily retained.3600sfamily proposal never applied.",
+    "development_verification": {
+      "profile": "smoke",
+      "whole_run_budget_seconds": 120,
+      "family_selection": "--family",
+      "full_contract": "final_acceptance_or_performance_evaluation_only",
+      "latest_dynamic_operations": 84,
+      "latest_dynamic_seconds": 0.398,
+      "latest_all_smoke_operations": 886,
+      "latest_all_smoke_seconds": 9.686,
+      "acceptance_score_increase": false
+    },
+    "latest_development_evidence": "20261018-development-short-checks/proof.json",
+    "latest_evaluation_registration": "20261018-independent-final-evaluation/registration.json",
+    "benchmark_tail_policy": {
+      "module": "runner/acceptance_sampling.py",
+      "tests_passed": 43,
+      "new_tests": 13,
+      "P95_selection_omission_fixed_before_supplement": true,
+      "threshold_or_budget_changes": false
+    },
+    "restored_inputs": {
+      "medium": "six_exact_counts_pass_both_native_consumers_same_file_hash",
+      "holdout": "six_exact_counts_pass_both_native_consumers_same_file_hash",
+      "producer_preparation_failures_retained": true
+    },
+    "full_point_correctness": "All9point contracts across current/control/Kuzu pass; current source c287.",
+    "full_wide_correctness": {
+      "source": "648e60ff",
+      "status": "actual_1800second_deadline_timeout",
+      "completed": false,
+      "evidence": "20261018-resumed-final-evaluation/proof.json"
+    },
+    "superblock_validation_repair": {
+      "status": "committed_efebaf84;39modules567tests_and886smoke_passed",
+      "sites": 29,
+      "modules_registered": 39,
+      "new_tests": 3,
+      "direct_validator_reuses_existing_encode_decode_field_checks": true,
+      "disk_crc_publication_file_format_driver_abi_unchanged": true,
+      "formal_performance_samples": 0,
+      "evidence": "20261018-superblock-descriptor-validation/proof.json"
+    },
+    "row_compression_candidate": {
+      "source": "31a05a5718a8d832ab877db42b85aaa18e78d840",
+      "status": "historical_source_superseded_by_c287_final_validation",
+      "modules": 49,
+      "tests_passed": 680,
+      "old_readonly_consumers_exact_values_passed": 2,
+      "unchanged_limits": {
+        "family_seconds": 1800,
+        "file_bytes": 2147483648,
+        "AS_bytes": 6442450944,
+        "query_bytes": 67108864
+      },
+      "acceptance_score_increase": false
+    },
+    "push_status": {
+      "status": "authorized_final_payload_publication_verified",
+      "rejected_action": "git push origin HEAD:work for efebaf84",
+      "historical_rejected_attempt_commits": [
+        "efebaf84",
+        "71a6bb0a",
+        "31a05a57"
+      ],
+      "scope": "Full final code/evidence payload explicitly authorized and published before this acceptance checkpoint.",
+      "historical_rejection_reason": "Reviewer requires explicit authorization for this concrete remote write and its code/evidence payload. Approval question pending; no push retried.",
+      "authorization": "User explicitly authorized all24local final commits through d6f48819 and the prepared34/34acceptance update on2026-10-19 Asia/Shanghai.",
+      "verified_implementation_remote_head": "d6f48819d8a8fa7ee89da0dc6ec0b5a87ca97895"
+    },
+    "working_source_status": "committed_frozen_six_full_correctness_passed",
+    "current_required_correctness_checkpoint": {
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "completed_cases": 6,
+      "total_cases": 6,
+      "all_six_completed": true,
+      "cases": [
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 1,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1463.8816093399982,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 1,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1206.3978921240014,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 2,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1488.9716859450018,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 2,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1223.2353895649976,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "wide_large",
+          "round": 3,
+          "operations": 16103,
+          "full_results_checked": true,
+          "elapsed_seconds": 1493.459636743999,
+          "formal_performance_samples": 0
+        },
+        {
+          "status": "completed_full_correctness",
+          "family": "dynamic",
+          "round": 3,
+          "operations": 66769,
+          "full_results_checked": true,
+          "elapsed_seconds": 1174.5638541270018,
+          "formal_performance_samples": 0
+        }
+      ],
+      "formal_performance_samples": 0,
+      "acceptance_increase": false,
+      "deadline_amendment_applied": false,
+      "evidence": "20261018-route-reuse-full-correctness/proof.json"
+    },
+    "latest_harness_repair_evidence": "20261018-maintenance-retention-repair/proof.json",
+    "latest_maintenance_evidence": "20261018-route-reuse-maintenance-checkpoint/proof.json",
+    "current_base_read_checkpoint": {
+      "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+      "independent_processes": 45,
+      "all_full_oracles_passed": true,
+      "valid_samples": 2010,
+      "process_workload_distributions": 201,
+      "compared_workloads": 23,
+      "evidence": "20261018-route-reuse-base-read-checkpoint/proof.json",
+      "acceptance_increase": false
+    },
+    "historical_freeze_before_c287": {
+      "source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+      "manifest": "20261017-final-steady-integrated-window/freeze-manifest.json"
+    },
+    "local_proposed_acceptance": {
+      "ids": [
+        "S2.5",
+        "S3.5",
+        "S6.2"
+      ],
+      "proposed_accepted": 34,
+      "proposed_percent": 100,
+      "applied": true,
+      "blocker": null
+    },
+    "resource_admission": "Bounded7–11%whole-process preparation peak cost explicitly admitted under originalcaps; scanpeak55–57%lower.12shortattribution processes do not replace identical-input formal results.",
+    "latest_source_recovery": "16same-processrounds/96contractexecutions;32crash/readonly/recovery cycles and4fault modes pass. Existing long sourcehistoricalsoak preserved; not repeated as newfullsuite.",
+    "publication_receipt": "20261018-route-reuse-final-admission/publication-receipt.json"
+  },
+  "S5.4": "accepted_resource_fault_matrix",
+  "S6.3": "accepted_bounded_resource_recovery_soak",
+  "request_history": [
+    {
+      "requested_additional_items": 5,
+      "baseline_accepted": 22,
+      "target_accepted": 27,
+      "target_percent": 79.4,
+      "candidate_ids": [
+        "S5.3",
+        "S5.4",
+        "S5.5",
+        "S6.1",
+        "S6.3"
+      ],
+      "completed_ids": [
+        "S5.4",
+        "S6.3"
+      ],
+      "status": "in_progress",
+      "overall_goal_accepted_target": 34,
+      "component_evidence": [
+        "20261015-protected-integrity-workspace",
+        "20261015-file-capacity-and-scratch-outcomes",
+        "20261015-optional-transaction-state",
+        "20261015-maintenance-workspace-and-heap-model",
+        "20261015-partitioned-distinct-query-account",
+        "20261015-protected-scratch-cleanup",
+        "20261015-admitted-mutation-payloads",
+        "20261015-overlay-nested-payloads",
+        "20261015-predecode-shape-admission",
+        "20261015-move-owned-source-materialization",
+        "20261015-scoped-source-and-maintenance-decode",
+        "20261015-source-name-admission",
+        "20261015-normalized-patch-payloads",
+        "20261015-guarded-source-copies",
+        "20261015-native-plan-object-ownership",
+        "20261015-owned-ir-scalar-strings",
+        "20261015-owned-expression-objects-and-controls",
+        "20261015-owned-property-literals",
+        "20261015-optional-bounded-plan-cache",
+        "20261015-owned-expression-vectors-and-list-inputs",
+        "20261015-owned-plan-item-and-string-containers",
+        "20261015-owned-property-predicate-containers",
+        "20261015-owned-map-case-and-in-containers",
+        "20261015-owned-write-items-and-expression-maps",
+        "20261015-owned-output-variable-and-column-copies",
+        "20261015-owned-index-schema-and-atomic-retirement",
+        "20261015-streamed-schema-direction-batches",
+        "20261015-query-parameter-copy-and-codebook-deferral",
+        "20261015-owned-constraint-and-schema-list-backing",
+        "20261015-owned-btree-keys-and-page-adoption",
+        "20261015-owned-btree-arrays-and-cursors",
+        "20261016-pre-admitted-string-result-rows",
+        "20261016-owned-schema-query-results",
+        "20261016-ddl-write-workspaces-and-result-lifetimes",
+        "20261016-owned-catalog-keys-and-schema-encoding",
+        "20261016-s54-resource-fault-acceptance",
+        "20261016-owned-btree-stream-callbacks",
+        "20261016-owned-shortest-path-state",
+        "20261016-s63-resource-recovery-soak",
+        "20261016-owned-gds-projection-catalog-and-procedure-results",
+        "20261016-owned-gds-algorithm-workspaces"
+      ]
+    },
+    {
+      "requested_additional_items": 5,
+      "baseline_accepted": 24,
+      "target_accepted": 29,
+      "target_percent": 85.3,
+      "candidate_ids": [
+        "S5.3",
+        "S6.1",
+        "S0.3",
+        "S0.4",
+        "S6.4"
+      ],
+      "completed_ids": [
+        "S5.3",
+        "S6.1",
+        "S0.4",
+        "S6.4",
+        "S0.3"
+      ],
+      "status": "completed",
+      "overall_goal_accepted_target": 34,
+      "scope_rule": "Only documented acceptance; one final performance window after implementation and selected regression. No generic container or compiler rewrite.",
+      "pending_revalidation_ids": [],
+      "completed": 5,
+      "selection_history": [
+        {
+          "candidate_ids": [
+            "S5.3",
+            "S6.1",
+            "S0.3",
+            "S0.4",
+            "S5.5"
+          ],
+          "amendment": "Replace unaccepted S5.5 with the documented optional-decision/final-documentation delivery S6.4. Keep S5.5 mandatory and unaccepted; no threshold change."
+        }
+      ],
+      "completion_evidence": "20261016-s03-complete-versioned-baseline/proof.json"
+    }
+  ],
+  "S5.3": "accepted_revalidated",
+  "S6.1": "accepted_revalidated",
+  "last_certified_checkpoint": {
+    "accepted": 34,
+    "total": 34,
+    "percent": 100,
+    "production_source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "latest_deliveries": [
+      "S2.5",
+      "S3.5",
+      "S6.2"
+    ],
+    "evidence": "20261018-route-reuse-final-admission/proof.json",
+    "publication_receipt": "20261018-route-reuse-final-admission/publication-receipt.json",
+    "verified_implementation_remote_commit": "d6f48819d8a8fa7ee89da0dc6ec0b5a87ca97895",
+    "performance_acceptance": true,
+    "accepted_scope": "All34fixed documented deliverables; original latency gates and resource caps retained. Explicit bounded preparation RSS cost and unavailable comparator outcomes preserved.",
+    "Kuzu_overall_parity_achieved": false,
+    "performance_baseline_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8"
+  },
+  "S0.4": "accepted_diagnostic_report_with_explicit_limits",
+  "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot",
+  "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits",
+  "S5.5": "accepted_O6_sustained_cost_and_bounded_resource_contract_with_explicit_comparison_limits",
+  "S4.4": "accepted_graph_read_edge_write_and_bounded_space_contract",
+  "S2.5": {
+    "status": "accepted_after_authorized_publication",
+    "evidence": "20261018-route-reuse-final-admission/proof.json",
+    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
+  },
+  "S3.5": {
+    "status": "accepted_after_authorized_publication",
+    "evidence": "20261018-route-reuse-final-admission/proof.json",
+    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
+  },
+  "S6.2": {
+    "status": "accepted_after_authorized_publication",
+    "evidence": "20261018-route-reuse-final-admission/proof.json",
+    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
+  },
+  "certified_checkpoint_history": [
+    {
+      "accepted": 31,
+      "percent": 91.2,
+      "production_source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+      "latest_delivery": "S4.4",
+      "evidence": "20261017-s44-graph-access-acceptance/proof.json",
+      "performance_acceptance": false,
+      "accepted_scope": "S4.4 graph read/edge-write/space plus previously acceptedS5.5; property-write tails and integrated gates remain pending; no threshold waiver.",
+      "source_revalidation_evidence": "20261017-steady-slot-history/proof.json",
+      "performance_baseline_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8"
+    }
+  ]
+}

@@ -540,5 +540,12 @@
       "source_revalidation_evidence": "20261017-steady-slot-history/proof.json",
       "performance_baseline_source": "d09fc467e39202cf8e673cf20eeaf75812a08ff8"
     }
-  ]
+  ],
+  "scope": "historical_completed_S0_S6_only",
+  "superseded_as_active_plan_by": "cow-performance-20261019",
+  "active_plan_documents": [
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx"
+  ],
+  "historical_snapshot": "../archive/20261019-completed-s0-s6/current-progress.json"
 }

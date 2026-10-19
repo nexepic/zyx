@@ -14,9 +14,9 @@ projectOrder: 1
 
 > 本文保留现行单文件格式规则和明确标注的设计目标，不再是独立实施清单。后续任务、准入和进度唯一以[架构调整与通用性能实施方案](optimization)为准。旧 Stage/P/C 流水记录已移出文档站；旧百分比、测试数量和“未开始”描述不代表当前工作树。
 
-更新：2026-10-11。继续使用 COW/A-B 发布；不引入 WAL。本页中的 PageId、owner、generation、快照、字节编码、发布与回收不变量继续有效。A2/A3/A4/A5 可以在新方案规定的设计和验收后改变相应布局或接口，必须先修订本页具体条款并版本化，不能默默放宽当前 reader 校验。
+更新：2026-10-19。继续使用 COW/A-B 发布；不引入 WAL。本页中的 PageId、owner、generation、快照、字节编码、发布与回收不变量继续有效。R3/R4/R5 可以在新方案规定的设计和验收后改变相应布局或接口，必须先修订本页具体条款并版本化，不能默默放宽当前 reader 校验。
 
-状态区别：第 2 节“不相交写事务”是 A5 待完善目标；第 10 节按键局部更新和大型集合拆分是 A2/A3 待验证目标，当前实现仍有完整 owner 集合编码。第 14 节 key-only 是现行格式，不再是对未来格式的永久限制。其他功能是否完成以源码和能力矩阵为准，不以本文的目标语气推定。
+状态区别：第 2 节通用“不相交写事务”仍是目标；已有受限 blind patch rebase 不等于通用冲突放宽。第 10 节字段暂存接口已有实现，物理局部更新和大型集合拆分按 R3 验证，当前仍有完整 owner 集合编码。第 14 节 key-only 是现行格式，不再是对未来格式的永久限制。其他功能是否完成以源码和能力矩阵为准，不以本文的目标语气推定。
 
 版本值以 `RSS_FORMAT_VERSION`、Superblock 与对应 codec 的当前源码为准，它们属于不同版本空间；不在此复制会过期的数字。
 
@@ -37,7 +37,7 @@ projectOrder: 1
 - 不保留 migration checkpoint、cutover、legacy backup 或 `.migration` sidecar。
 - 不为代码、图片、音频、PDF 等业务场景创建专用物理存储引擎。
 - 不为 Catalog、Property、Vector 分别维护相互隔离且不能互相复用的物理 free list。
-- 不向临时格式叠加无界兼容分支；按新方案 A7 明确版本与拒绝策略，原有 Stage 0 不再是执行入口。
+- 不向临时格式叠加无界兼容分支；按新方案的格式演进合同明确版本与拒绝策略，原有 Stage 0 不再是执行入口。
 
 ## 2. 总体目标
 
@@ -143,7 +143,7 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 
 私有 extent 在 I/O 前按完整 128 KiB 物理段准入：每会话 128 MiB、每个已打开文件身份的 `maximum_database_query_scratch_bytes`（默认 1 GiB）、每进程 2 GiB。硬链接和符号链接别名共享已打开文件身份。最多允许 64 个域、每域 64 个活跃 scratch 会话；资源准入不等待。资源锁会在进入元数据发布门锁前释放。成功持久回收后返还 extent 额度；不确定的 I/O 保留孤儿占用，直到独占、归属验证的可写恢复完成。损坏的 payload 或公开目录引用会阻止回收。Metadata COW extent 有独立归属，不包含在此私有 extent 配额中。
 
-完整性扫描把 sealed 私有 scratch 报告为需要所有者静止或可写恢复。物理只读打开不执行清理。这些磁盘边界和 Sort 测试不代表全局内存归属、输出生命周期、分区算子或 S5.3/S5.4 已完成验收。
+完整性扫描把 sealed 私有 scratch 报告为需要所有者静止或可写恢复。物理只读打开不执行清理。排序、分区 DISTINCT/UNION、共享预算及故障合同已在上一轮验收；聚合状态和哈希连接仍无通用 spill。见 `benchmarks/architecture-design/decisions/20261016-s53-budget-and-spill-acceptance/`，后续变更按 R6 保护这些能力。
 
 ## 5. Bootstrap、根目录和 Page Directory
 
@@ -665,13 +665,13 @@ value 区分；缺少整对记录表示旧文件的统计不可用，而只存�
 
 ## 14. Graph Adjacency
 
-> 以下 key-only、空 payload 和单树条款规定现行文件格式。其对未来方案的永久限制由新方案 A4 取代：允许比较覆盖树与分段派生邻接，但须先完成一致性、损坏处理、快照、原子维护和回收设计。派生覆盖字段不天然等于第二份权威；现行 reader 的主记录回查在替代协议验收前仍保留。
+> 以下 key-only、空 payload 和单树条款规定现行文件格式。其对未来方案的永久限制由新方案 R5 取代：允许比较覆盖树与分段派生邻接，但须先完成一致性、损坏处理、快照、原子维护和回收设计。派生覆盖字段不天然等于第二份权威；现行 reader 的主记录回查在替代协议验收前仍保留。
 
 普通图 adjacency 与 Vector ANN adjacency 是相互独立的数据结构。普通图 adjacency 使用一棵全局内建 Packed B+Tree；Vector adjacency 继续使用第 15 节的 Vector 专用方案。
 
 ### 14.0 规范性实现边界
 
-普通图在持久化层只能有一种 adjacency 表示：保留的全局、key-only Packed B+Tree。这是格式不变量，而不是 planner 偏好。解释现行格式的 reader/writer 必须保持以下约束；未来版本按 A4/A7 变更：
+普通图在持久化层只能有一种 adjacency 表示：保留的全局、key-only Packed B+Tree。这是格式不变量，而不是 planner 偏好。解释现行格式的 reader/writer 必须保持以下约束；未来版本按 R5 及格式合同变更：
 
 - 格式保留的 `RSS_GLOBAL_ADJACENCY_INDEX_ID` 是唯一的普通图 adjacency `IndexId`；它通过 snapshot-pinned Index Root Directory 解析唯一 adjacency root，绝不向用户或 secondary index 分配；
 - Node record 不拥有 adjacency root 或 adjacency key，Edge record 不拥有邻居 link、物理 page 位置或重复的 adjacency payload；
@@ -679,11 +679,11 @@ value 区分；缺少整对记录表示旧文件的统计不可用，而只存�
 - B+Tree page 只包含路由/separator 数据或 key-only adjacency entry，绝不混合存放 Node 或 Edge record；
 - page relocation 只修改逻辑 `PageId` 的 Page Directory route；绝不重写 Edge、Node、cursor continuation 或 parent child reference。
 
-per-Node chain、per-Node root、Base/Delta/Tombstone 层级、adjacency tail page 和 Edge-to-Edge 双向链表均为已退役设计。不恢复这些旧实现作为 fallback 或兼容 reader。新的分段布局不是恢复旧代码；是否替换或新增访问路径由 A4 原型和 A7 版本方案决定，必须定义 codec、root、publication、reclamation、integrity 与准入条件。
+per-Node chain、per-Node root、Base/Delta/Tombstone 层级、adjacency tail page 和 Edge-to-Edge 双向链表均为已退役设计。不恢复这些旧实现作为 fallback 或兼容 reader。新的分段布局不是恢复旧代码；是否替换或新增访问路径由 R5 原型和格式演进合同决定，必须定义 codec、root、publication、reclamation、integrity 与准入条件。
 
 ### 14.0.1 结构决策记录
 
-“全局 Packed B+Tree”只描述普通图 adjacency 的访问路径；它不表示把 Node 和 Edge record 混放进 B+Tree page，也不表示 Edge record 直接成为 B+Tree leaf value。下表记录现行格式选择；未来变更须经过 A4/A7 准入：
+“全局 Packed B+Tree”只描述普通图 adjacency 的访问路径；它不表示把 Node 和 Edge record 混放进 B+Tree page，也不表示 Edge record 直接成为 B+Tree leaf value。下表记录现行格式选择；未来变更须经过 R5 及格式合同 准入：
 
 | 方案 | 决策 | 原因 |
 |---|---|---|
@@ -691,7 +691,7 @@ per-Node chain、per-Node root、Base/Delta/Tombstone 层级、adjacency tail pa
 | 分别维护 outgoing/incoming tree | 不采用 | `direction` prefix 已给出两个有序 access range；拆成两棵 tree 只会增加 root-directory、COW 与回收状态，不能减少一次 Edge mutation 必需的两条 key。 |
 | per-Node root 或 per-Node B+Tree | 不采用 | 会重新引入长期稀疏 root/tail page、更多 root publication，以及超级节点专用结构；小度数 Node 无法共享编码空间。 |
 | Edge 双向链表或 Edge chain | 不采用 | 插入/删除会改写 Node head 和相邻 Edge，扩大事务写集合，并使 relocation、快照和完整性校验耦合到关系之间的物理链接。 |
-| 在 adjacency leaf 中嵌入 Edge record 或覆盖性 Edge payload | 不采用 | 现行协议没有独立可信的覆盖读取合同，增加 payload 仍需回查，并增加写入成本；A4 将重新设计和验证派生覆盖协议，不再将所有覆盖数据一概视为第二份权威。 |
+| 在 adjacency leaf 中嵌入 Edge record 或覆盖性 Edge payload | 不采用 | 现行协议没有独立可信的覆盖读取合同，增加 payload 仍需回查，并增加写入成本；R5 将重新设计和验证派生覆盖协议，不再将所有覆盖数据一概视为第二份权威。 |
 
 因此，B+Tree leaf 可以同时装下多个 Node 的 **adjacency key range**，但不会装下这些 Node 或 Edge 的实体 record。一次 expansion 先流式读取 `EdgeId`，仅在查询确实需要 endpoint、type、state 或 Property 时，才从同一 snapshot 的 Edge Entity Store 解析相应 record。这个二阶段读取是有意的：它将顺序 adjacency 扫描与实体 materialization 的成本分离，并避免将不需要的 Edge 字段带入每个 index entry。
 
@@ -718,7 +718,7 @@ adjacency 树是二级访问路径，逻辑 schema 为：
 (ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-`AdjacencyDirection` 是持久化的带前缀 enum；未知值在所有平台上都必须 fail closed。NodeId 和 EdgeId 是正 64-bit 逻辑 ID。routing NodeId 必然属于 key，但空 value 是规范要求：tree 不保存另一端 endpoint，也不把 relationship type/state 作为 Edge payload 存储。当前格式 writer 不能添加 covering value。A4/A7 可以定义新版本或具有独立 identity 的派生访问路径，必须明确 lifecycle，不能静默改变该 key 的解释。
+`AdjacencyDirection` 是持久化的带前缀 enum；未知值在所有平台上都必须 fail closed。NodeId 和 EdgeId 是正 64-bit 逻辑 ID。routing NodeId 必然属于 key，但空 value 是规范要求：tree 不保存另一端 endpoint，也不把 relationship type/state 作为 Edge payload 存储。当前格式 writer 不能添加 covering value。R5 及格式合同可以定义新版本或具有独立 identity 的派生访问路径，必须明确 lifecycle，不能静默改变该 key 的解释。
 
 comparator 按 `direction`、无符号 `NodeId`、无符号 `EdgeId` 定义 canonical ordering。同一 `(direction, NodeId)` 的 entry 因而形成一个连续 range，并按确定顺序排列。prefix compression 会消除该范围内重复的 direction/NodeId 字节。多个低阶 Node 共享一个 leaf，不允许一个 Node 或 direction 独占 4 KiB tail page。超级节点可连续跨越任意数量的 leaf，不存在 per-Node size limit。
 
@@ -750,7 +750,7 @@ degree/count 等只依赖 adjacency 的操作可以只统计 entry，不读取 E
 
 创建一条 Edge 时，必须基于同一 pinned generation 规划 Edge record、Entity Map entry、`ADJ_OUT` insert 和 `ADJ_IN` insert。两个 key mutation 通过同一个 B+Tree COW overlay 应用，所有 replacement page、replacement adjacency root、metadata root 和 inactive A/B Superblock 在一次 commit 中发布。崩溃后只能看到完整 old generation 或完整 new generation，禁止只看到一个方向。
 
-A5 的目标是区分物理根发布与逻辑冲突：根据当前根验证最终态依赖并有界安全重建。这不是当前普通事务的完整保证；普通事务仍比较图根 fence，不相交修改也可能冲突。新隔离/冲突协议实现并测试前，不得直接删除 fence。
+R4 的目标是区分物理根发布与逻辑冲突：根据当前根验证最终态依赖并有界安全重建。这不是当前普通事务的完整保证；普通事务仍比较图根 fence，不相交修改也可能冲突。新隔离/冲突协议实现并测试前，不得直接删除 fence。
 
 删除一条 Edge 时，先解析权威旧 endpoint，再通过同一 overlay erase 两个精确 adjacency key，同时删除 Edge record 和 Entity Map entry，并原子发布结果。普通图删除不追加逻辑 Tombstone。COW 退休 page 进入公共 generation-aware Retire Queue，只有旧 snapshot 释放后才能复用。
 
@@ -762,7 +762,7 @@ Bulk ingest 为每条已校验 Edge 生成两个 key，按 canonical comparator 
 
 删除使用普通 Packed B+Tree underflow 处理。Sibling redistribution 或 merge 在 candidate COW image 中完成；空 leaf 和折叠的 internal root 通过公共 page reclamation path 退休。Page occupancy policy 使用 codec 提供的 byte count，而不是固定 entry count。正确性不依赖后台全树 compact；若实际 byte occupancy 低于策略，可执行有界 maintenance rebuild，并一次发布 replacement root、snapshot-safe 地退休 old tree。
 
-当前生产实现使用全局 Packed B+Tree。后续 buffer 或分段布局由 A4/A5/A7 决定，必须涵盖 cursor、原子可见性、有界资源、恢复和回收。write buffer 不是已批准的任务，也不得恢复旧 per-Node delta 实现作为 fallback。
+当前生产实现使用全局 Packed B+Tree。后续 buffer 或分段布局由 R4/R5 及格式合同决定，必须涵盖 cursor、原子可见性、有界资源、恢复和回收。write buffer 不是已批准的任务，也不得恢复旧 per-Node delta 实现作为 fallback。
 
 ### 14.6 Integrity 要求
 
@@ -904,46 +904,18 @@ storage/relocatable/maintenance/
 
 `RelocatableMetadataStore.cpp` 等超大聚合文件应按上述职责拆分；transaction coordinator 只负责协调 root changes，不直接实现每种 page codec。
 
-## 18. 当前验证与实施导航
+## 18. 当前实现与验证导航
 
-后续执行 [S0–S6 方案](optimization)。只运行受影响模块的必要单元测试，当前验证 macOS、保持跨平台实现；不执行全量单元测试，不设置覆盖率门禁，不提交或推送代码。格式与写入修改仍必须验证对应的原子发布、旧快照、重开、故障恢复、完整性和回收，不因取消覆盖率门禁而省略。
+后续实施统一见 [COW 图数据库性能重构实施方案](optimization)的 R0–R7；旧 S0–S6 已按原范围完成。仅运行必要的受影响模块测试，格式/写入变化仍需原子发布、旧快照、重开、故障、完整性及回收验证。实际平台与源码身份随证据记录，当前参考为 Linux x86_64，不沿用旧 macOS-only 执行约束。
 
-公开能力和消费者保留要求见[能力验收矩阵](native-capability-acceptance-matrix)，发布范围见[发布事项](native-remaining-work-roadmap)。历史测试记录只证明当时源码；未验证能力不能因文档清理被标为完成。
+生产邻接保持 17 字节键的全局树与权威 Edge 记录。有序源节点批次复用绑定快照的 NativeReadSession，仅对缺失记录做目录批量读取，恢复邻接顺序并检查端点；捕获记录及缓冲持续计费。首次访问仍需主记录认证，冷遍历 IO 未被覆盖索引消除。覆盖树/共享分段实验没有生产准入；未来切换按 R5 完成协议、版本及全生命周期验证。
+
+已实现有界属性名批量解析、不可变元数据路由分支复用、发布回收批次合并和行属性压缩选择。这些是现有基础，不能按旧中间记录重新列为待实现。具体准入见 `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`；不以历史测试数量证明后续改动正确。
+
+原生文件长度上限默认 1 TiB，完整性和回收工作区上限各默认 8 MiB（实现入口 `RelocatableStorageBackendOptions`）。文件上限针对逻辑长度，非物理占用或维护预留保证；别名可写句柄遵循相同配置。工作区与长期积压是不同指标，不得由工作区有界推断旧版本保留量有界。受保护 scratch 清理与资源退款继续遵守已实现的恢复合同。
+
+公开消费者见[能力矩阵](native-capability-acceptance-matrix)，独立发布边界见[发布事项](native-remaining-work-roadmap)。此页的目标段落不等于已实现；以当前代码、具名测试和带源码身份的验收确定能力。
 
 ## 19. 历史记录
 
-覆盖前的完整规范（含旧第 18–23 节、阶段台账和中间性能百分比）以及已完成的 P0–P7 优化方案，原样保存在 `benchmarks/architecture-design/archive/20261011-completed-optimization/zh/`。上级 `manifest.json` 提供来源和 SHA-256。更早的替代方案在 `20261009-superseded-plans/`。这些只供追溯，不是待实施路线；原始 benchmark 证据继续保留。
-
-### 当前获准的批量遍历路径（2026-10-14）
-
-生产路径保留 17 字节键的全局邻接树和权威 Edge 记录。对于有序的源节点批次，适配器有界收集 Edge ID，从绑定当前快照的 `NativeReadSession` 捕获已验证主记录，仅将缓存缺失项交给类型化 Entity 目录批量读取。输出恢复原邻接顺序，每次回调前均检查端点，缓存命中也不例外。即使回调导致有界会话缓存淘汰，已捕获的记录仍然有效。内存准入包括捕获记录矩阵、缺失 ID 缓冲、临时主记录批次和游标缓冲；压力可缩小逻辑批次。
-
-持久化 codec、保留索引身份、根和 Driver ABI 不变。首次遇到的边仍验证主记录，冷遍历的主记录 IO 并未消除。查询会话不能跨元数据代际复用。对于已缓存页面上的外部破坏，在后续认证加载或显式完整性验证时发现，而不是每次重读已缓存主记录。
-
-覆盖 u64 叶值/共享拓扑载体和共享分段块实验候选暂不接入生产：原生载体可读取并保持旧快照，但尚无图的原子路由、双向变更与可达性退休集成，也未证明端到端优化阈值达标。通过这些门槛前保留现有布局。候选细节和正确性证据记录在 `benchmarks/architecture-design/decisions/20261014-s4-candidate-comparison`。最终计时与稳态读写/空间验收仍属于独立的 S4.4 工作。
-
-2026-10-15 实现说明：`RelocatableStorageBackendOptions::maximum_integrity_workspace_bytes` 默认 8 MiB，控制每次完整性检查的 MAINTENANCE 额度。检查可以明确因资源准入失败而退出，不写入数据库；调用方可在数据库/进程类别上限内选择更大的有限额度。扫描作用域使用调用方拥有的缓冲区，保留脏页命中的可见性，并绕过解码缓存准入。数据库和进程默认维护保留量均为 16 MiB。这尚未约束全部维护任务或持久退休积压。
-
-2026-10-15 文件准入：原生 `maximum_database_file_bytes` 默认 1 TiB，在可写句柄打开期间不可更改。同一物理数据库的并行可写别名必须配置相同上限；只读句柄可检查更大的文件，不会提高可写上限。每个完整 I/O 范围均先检查容量，包括批量写入及私有 scratch。容量拒绝仍遵守既有的原子发布与恢复语义；旧快照及不可达 LargeValue 仍可能要求显式有界回收后才能复用写入空间。该上限约束文件逻辑长度，不保证维护保留空间或文件系统实际分配量。
-
-2026-10-15：`maximum_reclaim_workspace_bytes` 默认 8 MiB，控制三种显式回收入口及每次后台维护执行的 MAINTENANCE 额度；必须为正数。后台申请失败时先延后，归还额度后重试，申请在发布锁外完成。该额度覆盖拥有资源的工作表/退休计划和页副本，尚不覆盖全部公共容器及嵌套 codec/schema 负载。
-
-2026-10-15：`maximum_reclaim_workspace_bytes` 也用于 scratch release/finish 的受保护清理。清理在发布锁外准入，不消耗已满的 CACHE 额度；没有片段时不申请工作区。准入失败可以在归还维护额度后用相同句柄重试，实际 IO 不确定性仍须恢复。
-
-2026-10-15 嵌套写负载检查点：普通暂存和规范化批次/增量在私有标准负载复制前准入，转移保留 WRITE 租约，消费输入在工作区退款前释放。最终 63 项相关模块测试及 583 个独立故障/堆/恢复案例通过，反证构建证明了提前退款漏洞。overlay/undo 嵌套数据、快照源物化及其他私有工作区仍需补齐。**没有新增阶段验收：22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-admitted-mutation-payloads/`。
-
-2026-10-15 overlay 负载检查点：保留 Node/Edge 与 undo 副本提前准入嵌套 WRITE 缓冲区；替换工作区排序借用指针，移除中间深拷贝，回滚直接交换 owner。103 项相关测试及 579 个独立故障/堆案例通过，含 12 个 overlay 所有权观测阶段。源物化、规范化/API 及其他私有工作区仍需补齐。**没有整阶段验收：22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-overlay-nested-payloads/`。
-
-2026-10-15 解码前基础：无分配完整规范形状检查后调用可选准入入口；解码字符串移动到 owner，map 键顺序校验借用输入。113 项定向模块测试及 113 个独立故障/结构/堆案例通过，包括禁止所有 C++ 堆分配时检查/取消/拒绝 1,025 个值。编码形状计数不等于解码堆容量，原生源/规范化负载所有权及其他工作区仍待补齐。**仍为 22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-predecode-shape-admission/`。
-
-2026-10-15 标量源读取检查点：完整 Node/Edge 读取移动本地拥有的记录，重复检查用有归属的 PMR 哈希表借用输出名称，并保留快照分配上下文。151 项模块测试及 103 个独立故障/codec/复制案例通过。反证构建证明每个实体的大字符串分配由两次变一次，这是分配计数而非性能计时。源/规范化负载及其他工作区所有权仍待补齐。**仍为 22/34（64.7%）**。证据：`benchmarks/architecture-design/decisions/20261015-move-owned-source-materialization/`。
-
-2026-10-15 计划对象与缓存归属：原生编译/命中计划节点共享 QUERY 账户，缓存对象/索引/文本接入 CACHE；索引借用一份拥有的查询文本。590 项相关模块及 12 项生命周期测试通过，最终索引版本 100 个独立案例通过；历史索引版本另有 868 案例和 32 轮恢复证据。内部 IR 载荷等仍待治理。**仍为 22/34（64.7%），无新增阶段验收。** Evidence: `benchmarks/architecture-design/decisions/20261015-native-plan-object-ownership/`.
-
-有界属性名批量解析已实现，保持31/34（91.2%），本轮2/5。15个必要模块281项测试通过，其中12个新用例覆盖连续/稀疏Token、正反向映射损坏、旧快照、返回值内存归属及两类额度拒绝回退；未跑全量单测。现有失败端点只读诊断中，64字段查询BTree解码561→87，范围根下降70→13；四次查询精确类型/值一致，文件哈希不变、零写入。这是机制证据，不是端到端性能验收。每次最多预取16个缺失名，仅复用既有快照缓存；连续Token段共用游标，稀疏间隙重新定位，整批认证后才缓存。未新增持久缓存、提高额度或改变格式/DriverABI；损坏和取消不被回退吞掉。S2.5/S3.5/S6.2继续等待冻结验收，Kuzu目标未达到。 Evidence: `benchmarks/architecture-design/decisions/20261017-bounded-property-name-batches/`.
-
-
-有界发布与绑定修复：保持 **31/34（91.2%），本轮2/5**。最终源码的 **48个相关模块970个独立用例全部通过**，包含七个新用例；未跑全量单测。普通图写入和逻辑ID预留发布，在已有至少两池可分配空闲帧时，可将认证元数据回收合并到不足八池帧数的分配窗口；延后帧保持占用，显式清理和恢复仍立即回收。可选绑定描述符和待处理属性行载体各按可用工作预算的八分之一准入；类型化绑定配额拒绝先退款，再走既有受预算约束的行适配器，必要的行/源准入检查不变。此前64ee完整动态场景实际达到1800秒上限，保留50400条操作记录（最后CREATE id7544），不算成功或性能比值。执行环境重建后，丢失的临时诊断不冒称仍有原始证据；最终模块测试已重新执行并归档。新冻结版本的端到端验收仍待完成，资源上限和性能门槛不变，Kuzu目标未达到。证据：`benchmarks/architecture-design/decisions/20261018-bounded-publication-and-binding/`；实际超时：`benchmarks/architecture-design/decisions/20261017-property-name-batch-dynamic-timeout/`。
-
-
-2026-10-18验收阻塞：冻结648e60ff的完整动态场景在CREATE id8347时达到原1800秒上限，55750条已记录操作中0操作错误，但未完成；综合矩阵未启动。已拒绝一个缺少充分端到端收益证据的发布上下文缓存实验，生产源码及两个Release二进制精确恢复到970项测试通过的版本。进度保持31/34（91.2%），本轮2/5。已准备具体修订：仅将动态属性正确性家族的单进程时限改为3600秒，保留10000实体、每个受支持引擎三个独立轮次、其他场景1800秒时限、资源上限及10%/5%门槛。正在等待用户明确批准，尚未实施；不追加相同条件源码重跑，不宣称超越Kuzu。证据：`benchmarks/architecture-design/decisions/20261018-publication-dynamic-timeout/`；修订及未采用实验：`benchmarks/architecture-design/decisions/20261018-dynamic-time-budget-decision/`。
+本次清理前的完整规范与 S0–S6 过程记录原样保存在 `benchmarks/architecture-design/archive/20261019-completed-s0-s6/zh/`，上级 manifest 保存 SHA-256。更早记录在 `20261011-completed-optimization/` 和 `20261009-superseded-plans/`。这些是审计历史，不是实施入口；旧的待批准、待测试和中间百分比不再表示当前状态。
