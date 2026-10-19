@@ -8,6 +8,7 @@
 #include <vector>
 #include <gtest/gtest.h>
 #include "CypherParserImpl.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "query/execution/LogicalPlanUnwindRuntimeTestFixture.hpp"
 
 using namespace graph;
@@ -57,4 +58,19 @@ TEST(LogicalPlanSortGrowthTest, PreservesStableNullOrderingAndOwnedPayloadsAcros
    ASSERT_EQ(result.getRows()[index].at("body").asPrimitive(),PropertyValue(bodies[source]));
   }
  }
+}
+
+TEST(LogicalPlanSortGrowthTest, SortKeyQuotaFailureIsTypedAndASeparateLargerExecutionCanRetry) {
+ NoGraphBackend backend; LogicalPlanReadRuntime runtime(backend);
+ graph::parser::cypher::CypherParserImpl parser;
+ std::string query="UNWIND [2,1] AS x RETURN x ORDER BY x";
+ for(size_t i=1;i<32;++i) query+=", x";
+ auto plan=parser.parseToLogical(query);
+ auto limited=bounds(); limited.maximum_materialized_bytes=4096;
+ EXPECT_THROW((void)runtime.executeToQueryResult(*plan.root,limited),MaterializedByteLimitExceeded);
+ limited.maximum_materialized_bytes=1024U*1024U;
+ auto result=runtime.executeToQueryResult(*plan.root,limited);
+ ASSERT_EQ(result.rowCount(),2U);
+ EXPECT_EQ(result.getRows()[0].at("x").asPrimitive(),PropertyValue(1));
+ EXPECT_EQ(result.getRows()[1].at("x").asPrimitive(),PropertyValue(2));
 }

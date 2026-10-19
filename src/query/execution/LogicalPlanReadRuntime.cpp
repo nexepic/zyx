@@ -11895,6 +11895,7 @@ namespace graph::query::execution {
 			metadata.set(checkedSizeMul(items.size(), sizeof(const expressions::Expression *), "Top-K metadata overflowed"));
 			std::vector<const expressions::Expression *> candidates;
 			candidates.reserve(items.size());
+			metadata.set(checkedSizeMul(candidates.capacity(), sizeof(const expressions::Expression *), "Top-K metadata overflowed"));
 			for (const auto &item : items) candidates.push_back(item.expression.get());
 			std::optional<detail::BoundExpressionInputs> inputs;
 			if (state.shared.bound_program)
@@ -15901,8 +15902,7 @@ namespace graph::query::execution {
 						if (keySlotBytes > state.shared.bounds.maximum_materialized_bytes -
 												   std::min(rows.bytes(), state.shared.bounds.maximum_materialized_bytes) ||
 							keySlotBytes > state.shared.materialized_budget.available()) {
-							throw std::runtime_error(
-									"logical-plan Sort key slots exceeded its materialized byte bound");
+							throw MaterializedByteLimitExceeded();
 						}
 						keySlots.set(keySlotBytes);
 						size_t additionalEnrichmentBytes = 0U;
@@ -15918,7 +15918,7 @@ namespace graph::query::execution {
 							if (extraSlots > state.shared.bounds.maximum_materialized_bytes -
 									std::min(retainedBytes, state.shared.bounds.maximum_materialized_bytes) ||
 								extraSlots > state.shared.materialized_budget.available()) {
-								throw std::runtime_error("logical-plan Sort key slots exceeded its materialized byte bound");
+								throw MaterializedByteLimitExceeded();
 							}
 							keySlotBytes = checkedSizeAdd(keySlotBytes, extraSlots,
 								"logical-plan Sort key-slot size overflowed");
