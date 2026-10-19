@@ -211,14 +211,23 @@ namespace graph::storage {
 	}
 
 	uint64_t MetadataSnapshotRegistry::activeSnapshotCount() const {
-		std::lock_guard lock(state_->snapshots_mutex);
-		uint64_t count = 0;
-		for (const auto &[generation, snapshot]: state_->snapshots) {
-			static_cast<void>(generation);
-			count += snapshot.second;
-		}
-		return count;
-	}
+        return snapshotPressure().active_snapshot_count;
+    }
+
+    MetadataSnapshotPressure MetadataSnapshotRegistry::snapshotPressure(const MetadataSnapshotPin *exclude) const {
+        if (exclude && !owns(*exclude))
+            throw std::invalid_argument("snapshot pressure exclusion must be a live pin from this registry");
+        const auto excluded = exclude ? exclude->superblock().generation : Generation{};
+        std::lock_guard lock(state_->snapshots_mutex);
+        MetadataSnapshotPressure result;
+        for (const auto &[generation, snapshot] : state_->snapshots) {
+            const uint64_t count = snapshot.second - static_cast<uint64_t>(excluded.value() == generation);
+            if (!count) continue;
+            result.active_snapshot_count += count;
+            if (!result.oldest_generation.isValid()) result.oldest_generation = Generation(generation);
+        }
+        return result;
+    }
 
 	bool MetadataSnapshotRegistry::owns(const MetadataSnapshotPin &snapshot) const {
 		return snapshot.isValid() && snapshot.state_.get() == state_.get();

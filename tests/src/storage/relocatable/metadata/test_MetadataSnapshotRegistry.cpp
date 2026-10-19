@@ -415,3 +415,19 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, FullPayloadArenaCannotBlockSepar
     EXPECT_EQ(payload->used(), 0U);
     EXPECT_EQ(controls->used(), 0U);
 }
+
+TEST_F(RelocatableMetadataSnapshotRegistryTest, PressureSampleExcludesOneObserverAndTracksOldestUntilRelease) {
+ SuperblockFile bootstrap(io);bootstrap.initializeNew(superblock(1,1));
+ MetadataSnapshotRegistry registry(bootstrap),foreign(bootstrap);
+ auto old=registry.openSnapshot();
+ {auto writer=registry.beginWrite();bootstrap.publish(superblock(2,2));}
+ auto observer=registry.openSnapshot();auto user=registry.openSnapshot();
+ auto pressure=registry.snapshotPressure(&observer);
+ EXPECT_EQ(pressure.active_snapshot_count,2U);EXPECT_EQ(pressure.oldest_generation,Generation(1));
+ EXPECT_THROW(foreign.snapshotPressure(&observer),std::invalid_argument);
+ old.release();pressure=registry.snapshotPressure(&observer);
+ EXPECT_EQ(pressure.active_snapshot_count,1U);EXPECT_EQ(pressure.oldest_generation,Generation(2));
+ user.release();pressure=registry.snapshotPressure(&observer);
+ EXPECT_EQ(pressure.active_snapshot_count,0U);EXPECT_FALSE(pressure.oldest_generation.isValid());
+ observer.release();EXPECT_THROW(registry.snapshotPressure(&observer),std::invalid_argument);
+}

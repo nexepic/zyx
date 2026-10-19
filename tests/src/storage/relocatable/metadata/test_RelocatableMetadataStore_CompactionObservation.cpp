@@ -104,6 +104,10 @@ TEST_F(RelocatableMetadataStoreTest, CompactionObservationTracksRelocatedSourceU
 	const RelocatableCompactionObservation pending = store->observeCompactionState();
 	EXPECT_EQ(pending.sealed_segments, 2U);
 	EXPECT_EQ(pending.pending_relocation_sources, 1U);
+	EXPECT_EQ(pending.retire_queue_entries, 1U);
+	EXPECT_TRUE(pending.oldest_retired_generation.isValid());
+	EXPECT_EQ(pending.oldest_snapshot_generation, sourceSnapshot.superblock().generation);
+	EXPECT_EQ(pending.snapshot_generation_lag, pending.generation.value()-sourceSnapshot.superblock().generation.value());
 	EXPECT_EQ(pending.retainedGenerationCount(), 1U);
 	expectFormatError(
 			[&] {
@@ -117,5 +121,8 @@ TEST_F(RelocatableMetadataStoreTest, CompactionObservationTracksRelocatedSourceU
 			store->releaseRelocatedCatalogSource(request.segment_id, Generation(2U), LogSequenceNumber(4U)));
 	const RelocatableCompactionObservation released = store->observeCompactionState();
 	EXPECT_EQ(released.pending_relocation_sources, 0U);
+	EXPECT_EQ(released.retire_queue_entries, 0U);
+	EXPECT_FALSE(released.oldest_retired_generation.isValid());
+	EXPECT_FALSE(released.oldest_snapshot_generation.isValid());
 	EXPECT_EQ(released.retainedGenerationCount(), 0U);
 }
