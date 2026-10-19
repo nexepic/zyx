@@ -1,0 +1,501 @@
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+index 9b06246e..2ae1306b 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md
+@@ -84,3 +84,5 @@ Isolated metadata prototype: `ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` defaults
+ The descriptor is a separate physical metadata-pool frame. It has no routed MetadataPageId, is outside the twelve logical bootstrap roots, and is not State/radix. Recovery, read-only discovery, reachability, old-pin protection and conservative directory cloning visit it explicitly. Local evacuation encountering this extra physical frame keeps the existing conservative fallback. Relocation replaces physical generation/LSN while retaining semantic generation. Clearing its root reclaims through existing pin/reachability rules, without a retirement sidecar. Both builds carry the eighth fence member (zero for default files), with distinct 31/32 format tokens. Changes cannot masquerade as ID-only reservation or blind adjacency rebase. Publication retains data fence → inactive A/B → superblock fence. Full costs must count the actual 4 KiB descriptor frame, 128 KiB reserved pools and pinned old frames, not only 192/224 bytes. Replace nonempty-root guards only together with full field reader/writer/integrity/retirement support. Evidence: `20261019-r3-native-root/`.
+ 
+ An already-open handle authenticates the descriptor when acquiring a new metadata snapshot too; failure releases that new pin instead of allowing subsequent snapshots to continue through ROW after open-time validation. Descriptor reads use the file view's construction-time database ID, avoiding a race with writer rebinding of the mutable routing Superblock. The fixed charged PROFILE registry records `native_graph.read.metadata_decodes.hybrid_descriptor` (current-thread cumulative decode attempts). Resource caps are unchanged; registry/staging bounds derive from actual entry count.
++
++The 4096-membership ceiling applies to one explicit conversion plan, not the lifetime capacity of a converted group. The group header records the actual count in its declared u32 field; ordinary writes must retain existing dynamic-property support and checked count arithmetic. Conversion/reverse-conversion still refuses work above its bounded plan, rather than truncating, silently splitting publication, or treating 4096 as a permanent schema limit.
+diff --git a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+index c8b3637e..5bf3b843 100644
+--- a/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
++++ b/benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md
+@@ -83,3 +83,5 @@ R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用
+ 描述符是 metadata pool 中独立的物理 frame，不分配 routed MetadataPageId，不加入 12 根 logical bootstrap 列表，也不伪装为 State/radix。元数据池恢复、只读发现、可达性、旧 pin 保护和保守整树搬迁显式访问它；局部搬迁遇到额外物理 frame 时保留原来的保守 fallback。搬迁更换 physical generation/LSN 并保留 semantic generation。清除 root 后按现有 pin/reachability 协议回收，不另加退役 sidecar。第八根 fence 在两种构建均存在（默认文件根为零），format token 区分 31/32；该根变化不能被误认成 ID-only 预留或盲邻接 rebase。文件发布仍使用既有 data fence → inactive A/B → superblock fence。完整成本必须计算实际 4 KiB 描述符 frame、128 KiB 保留池及旧 pin 占用，不能仅计 192/224 字节。非空根保护只能与完整字段 reader/writer/integrity/retirement 一起替换。证据：`20261019-r3-native-root/`。
+ 
+ 已打开句柄取得新 metadata snapshot 时也认证描述符；失败必须释放刚取得的 pin，不能只在首次 open 验证后让新快照静默沿 ROW 继续。描述符读取使用文件 view 构造时固定的 database ID，避免与 writer 对 mutable routing Superblock 的 rebind 竞争。PROFILE 固定计费 registry 记录 `native_graph.read.metadata_decodes.hybrid_descriptor`（当前线程累计解码尝试数）；未增加资源上限，registry/staging 上界按实际条目数派生。
++
++4096 个字段归属仅限制一次显式转换计划，不是转换后组的永久容量上限。组头用既定 u32 字段记录实际数量；普通写入必须保留现有动态属性能力，并检查计数运算溢出。正向／反向转换超过计划工作上限时仍应拒绝，不能截断、静默拆分发布，也不能把 4096 解释成永久模式限制。
+diff --git a/benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp b/benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp
+index 9984d02a..ccb6cc4a 100644
+--- a/benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp
++++ b/benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp
+@@ -119,7 +119,9 @@ struct GroupHeader {
+     void validate() const {
+         require(valid(kind) && mode == GroupMode::HPG_HYBRID);
+         validLive(group, live);
+-        require(generation && live && memberships <= 4096 && columns <= memberships / 48);
++        // 4096 bounds an explicit conversion, not subsequent dynamic writes.
++        // The persisted count uses its declared u32 range.
++        require(generation && live && columns <= memberships / 48);
+         // Every column has >=48 present live slots. Empty field sets are legal
+         // during conversion of property-less live owners, not empty groups.
+         require(columns == 0 || std::popcount(live) >= 48);
+diff --git a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+index 6422c188..7f41a4d7 100644
+--- a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
++++ b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+@@ -6,6 +6,7 @@
+ #include "graph/core/Edge.hpp"
+ #include "graph/query/execution/MaterializedByteBudget.hpp"
+ #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
+ 
+ namespace zyx::benchmark::subblock {
+ // Bounded conversion planning over immutable, caller-owned, authenticated ROW
+@@ -132,6 +133,34 @@ public:
+     std::span<const Column> columns() const && = delete;
+     [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
+ 
++    // Emit the native typed payload, never the laboratory magic. The output
++    // buffer remains caller-owned/admitted. No PageId is allocated here and no
++    // root is published; that belongs to the single metadata coordinator.
++    [[nodiscard]] graph::storage::HybridPropertyGroupRecord nativeGroup() const {
++        using namespace graph::storage;
++        HybridPropertyGroupRecord result{
++            group_.kind == OwnerKind::HPK_NODE ? EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE,
++            HybridPropertyGroupMode::HPGM_HYBRID, group_.group, Generation(group_.generation),
++            group_.live, group_.memberships, group_.columns};
++        result.validate(); return result;
++    }
++    void encodeNativeColumn(size_t ordinal, std::span<std::byte> output) const {
++        using namespace graph::storage;
++        require(ordinal < column_count_);
++        const auto &source = columns_[ordinal];
++        HybridPropertyColumnRecord record;
++        // Existing conversion reservation includes one temporary Column and
++        // 4096 stack bytes. Native encoding must fit that existing allowance.
++        static_assert(sizeof(record) <= sizeof(Column));
++        record.identity = {nativeGroup().owner_kind,
++            source.identity.scalar_kind == ScalarKind::HPS_INT64 ? HybridPropertyScalarKind::HPSK_INT64 :
++                source.identity.scalar_kind == ScalarKind::HPS_DOUBLE ? HybridPropertyScalarKind::HPSK_DOUBLE :
++                    HybridPropertyScalarKind::HPSK_BOOL,
++            source.identity.group, source.identity.token, Generation(source.identity.generation)};
++        record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
++        record.words = source.words; record.encode(output);
++    }
++
+     // Reverse projection visits only actual owner fields in token order. Heap
+     // values are borrowed without copying; primitive cells are reconstructed
+     // from column bits. The synchronous visitor owns any copy/encoding charge.
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp b/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp
+new file mode 100644
+index 00000000..1bec6dd7
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyRecords.hpp
+@@ -0,0 +1,189 @@
++/**
++ * @file HybridPropertyRecords.hpp
++ * @brief Bounded typed records for the isolated hybrid-property format.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include <algorithm>
++#include <array>
++#include <bit>
++#include <span>
++#include "graph/storage/relocatable/format/Format.hpp"
++#include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
++
++namespace graph::storage {
++
++// Payload codecs only. No native pool kind or graph routing is admitted by
++// these definitions. Nonempty descriptor guards remain until atomic lifecycle
++// support is complete. Existing ROW records never pass through these codecs.
++constexpr uint32_t RSS_HYBRID_COLUMN_MAGIC = 0x4348595AU; // ZYHC
++constexpr uint32_t RSS_HYBRID_GROUP_MAGIC = 0x4748595AU; // ZYHG
++constexpr uint16_t RSS_HYBRID_RECORD_VERSION = 1;
++constexpr size_t RSS_HYBRID_GROUP_CAPACITY = 64;
++constexpr size_t RSS_HYBRID_RECORD_HEADER_BYTES = 64;
++constexpr uint64_t RSS_HYBRID_MAX_ENTITY_ID = (UINT64_C(1) << 63U) - 1U;
++constexpr uint64_t RSS_HYBRID_MAX_GROUP_ID = 1 + (RSS_HYBRID_MAX_ENTITY_ID - 1) / 64;
++
++enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3 };
++enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1 };
++
++namespace hybrid_property_detail {
++inline void require(bool value, const char *message) {
++    if (!value) throw FormatException(FormatError::FERR_INVALID_HEADER, message);
++}
++inline bool validKind(EntityPropertyOwnerKind kind) {
++    return kind == EntityPropertyOwnerKind::EPOK_NODE || kind == EntityPropertyOwnerKind::EPOK_EDGE;
++}
++inline void validateGroup(uint64_t group, uint64_t live) {
++    require(group && group <= RSS_HYBRID_MAX_GROUP_ID, "hybrid group exceeds native entity ID domain");
++    // The final native group has 63 IDs, not 64: 2^63 is not a valid entity ID.
++    require(group != RSS_HYBRID_MAX_GROUP_ID || !(live & (UINT64_C(1) << 63U)),
++        "hybrid final group contains an invalid native entity ID");
++}
++inline void zero(std::span<const std::byte> bytes, size_t begin, size_t end) {
++    require(std::all_of(bytes.begin() + begin, bytes.begin() + end,
++        [](std::byte value) { return value == std::byte{}; }), "hybrid record reserved bytes are nonzero");
++}
++inline void header(std::span<const std::byte> bytes, uint32_t magic) {
++    require(bytes.size() >= RSS_HYBRID_RECORD_HEADER_BYTES, "truncated hybrid record header");
++    if (LittleEndianCodec::readU32(bytes, 0) != magic)
++        throw FormatException(FormatError::FERR_INVALID_MAGIC, "hybrid record magic mismatch");
++    if (LittleEndianCodec::readU16(bytes, 4) != RSS_HYBRID_RECORD_VERSION)
++        throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported hybrid record version");
++}
++} // namespace hybrid_property_detail
++
++[[nodiscard]] inline uint64_t hybridPropertyGroupFor(EntityPropertyKey owner) {
++    hybrid_property_detail::require(owner.isValid(), "invalid hybrid property owner");
++    return 1 + (owner.entity_id - 1) / RSS_HYBRID_GROUP_CAPACITY;
++}
++[[nodiscard]] inline unsigned hybridPropertySlotFor(EntityPropertyKey owner) {
++    hybrid_property_detail::require(owner.isValid(), "invalid hybrid property owner");
++    return unsigned((owner.entity_id - 1) % RSS_HYBRID_GROUP_CAPACITY);
++}
++
++struct HybridPropertyGroupRecord {
++    EntityPropertyOwnerKind owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
++    HybridPropertyGroupMode mode = HybridPropertyGroupMode::HPGM_HYBRID;
++    uint64_t group_id = 0;
++    Generation semantic_generation{};
++    uint64_t live = 0;
++    uint32_t memberships = 0, columns = 0;
++    constexpr bool operator==(const HybridPropertyGroupRecord &) const = default;
++
++    void validate() const {
++        using namespace hybrid_property_detail;
++        require(validKind(owner_kind) && mode == HybridPropertyGroupMode::HPGM_HYBRID,
++            "invalid hybrid group namespace or mode");
++        validateGroup(group_id, live);
++        require(semantic_generation.isValid() && live && columns <= memberships / 48U &&
++            (!columns || std::popcount(live) >= 48), "invalid hybrid group identity or counts");
++        // The 4096 conversion bound is not a lifetime membership limit.
++    }
++    [[nodiscard]] std::array<std::byte, 64> encode() const {
++        validate(); std::array<std::byte, 64> bytes{};
++        LittleEndianCodec::writeU32(bytes, 0, RSS_HYBRID_GROUP_MAGIC);
++        LittleEndianCodec::writeU16(bytes, 4, RSS_HYBRID_RECORD_VERSION);
++        bytes[6] = std::byte(uint8_t(owner_kind)); bytes[7] = std::byte(uint8_t(mode));
++        LittleEndianCodec::writeU64(bytes, 8, group_id);
++        LittleEndianCodec::writeU64(bytes, 16, semantic_generation.value());
++        LittleEndianCodec::writeU64(bytes, 24, live);
++        LittleEndianCodec::writeU32(bytes, 32, memberships);
++        LittleEndianCodec::writeU32(bytes, 36, columns);
++        return bytes;
++    }
++    [[nodiscard]] static HybridPropertyGroupRecord decode(std::span<const std::byte> bytes,
++        EntityPropertyOwnerKind expectedKind, uint64_t expectedGroup, Generation descriptorGeneration,
++        Generation visibleGeneration) {
++        using namespace hybrid_property_detail;
++        header(bytes, RSS_HYBRID_GROUP_MAGIC);
++        require(bytes.size() == 64, "hybrid group record has unexpected width"); zero(bytes, 40, 64);
++        HybridPropertyGroupRecord result{EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])),
++            HybridPropertyGroupMode(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
++            Generation(LittleEndianCodec::readU64(bytes, 16)), LittleEndianCodec::readU64(bytes, 24),
++            LittleEndianCodec::readU32(bytes, 32), LittleEndianCodec::readU32(bytes, 36)};
++        result.validate();
++        require(result.owner_kind == expectedKind && result.group_id == expectedGroup &&
++            descriptorGeneration.isValid() && descriptorGeneration <= visibleGeneration &&
++            result.semantic_generation <= descriptorGeneration, "hybrid group does not belong to its snapshot");
++        return result;
++    }
++};
++
++struct HybridPropertyColumnIdentity {
++    EntityPropertyOwnerKind owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
++    HybridPropertyScalarKind scalar_kind = HybridPropertyScalarKind::HPSK_INT64;
++    uint64_t group_id = 0;
++    uint32_t token = 0;
++    Generation semantic_generation{};
++    constexpr bool operator==(const HybridPropertyColumnIdentity &) const = default;
++};
++struct HybridPropertyColumnRecord {
++    HybridPropertyColumnIdentity identity;
++    uint64_t presence = 0, nulls = 0, live = 0;
++    // IEEE/integer bits, not native scalar serialization. +0/-0 and NaN
++    // encoding are lossless; write no-op equality remains PropertyValue's job.
++    std::array<uint64_t, 64> words{};
++    constexpr bool operator==(const HybridPropertyColumnRecord &) const = default;
++    [[nodiscard]] size_t wireSize() const {
++        return identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL ? 72U : 576U;
++    }
++    void validate() const {
++        using namespace hybrid_property_detail;
++        require(validKind(identity.owner_kind) && (identity.scalar_kind == HybridPropertyScalarKind::HPSK_INT64 ||
++            identity.scalar_kind == HybridPropertyScalarKind::HPSK_DOUBLE ||
++            identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL), "invalid hybrid column namespace or scalar");
++        validateGroup(identity.group_id, live);
++        require(identity.token && identity.semantic_generation.isValid() && !(presence & ~live) &&
++            !(nulls & ~presence) && std::popcount(presence) >= 48, "invalid hybrid column identity or bitmaps");
++        for (unsigned slot = 0; slot < 64; ++slot) {
++            require(((presence & ~nulls) & (UINT64_C(1) << slot)) || !words[slot],
++                "absent or NULL hybrid column payload is nonzero");
++            require(identity.scalar_kind != HybridPropertyScalarKind::HPSK_BOOL || words[slot] <= 1U,
++                "hybrid bool column value is not canonical");
++        }
++    }
++    void encode(std::span<std::byte> bytes) const {
++        validate(); hybrid_property_detail::require(bytes.size() == wireSize(), "hybrid column output width mismatch");
++        std::fill(bytes.begin(), bytes.end(), std::byte{});
++        LittleEndianCodec::writeU32(bytes, 0, RSS_HYBRID_COLUMN_MAGIC);
++        LittleEndianCodec::writeU16(bytes, 4, RSS_HYBRID_RECORD_VERSION);
++        bytes[6] = std::byte(uint8_t(identity.owner_kind)); bytes[7] = std::byte(uint8_t(identity.scalar_kind));
++        LittleEndianCodec::writeU64(bytes, 8, identity.group_id); LittleEndianCodec::writeU32(bytes, 16, identity.token);
++        LittleEndianCodec::writeU16(bytes, 20, 64); LittleEndianCodec::writeU16(bytes, 22, uint16_t(wireSize() - 64));
++        LittleEndianCodec::writeU64(bytes, 24, identity.semantic_generation.value());
++        LittleEndianCodec::writeU64(bytes, 32, presence); LittleEndianCodec::writeU64(bytes, 40, nulls);
++        LittleEndianCodec::writeU64(bytes, 48, live);
++        if (identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL) {
++            uint64_t bits = 0; for (unsigned slot = 0; slot < 64; ++slot) bits |= words[slot] << slot;
++            LittleEndianCodec::writeU64(bytes, 64, bits);
++        } else for (unsigned slot = 0; slot < 64; ++slot) LittleEndianCodec::writeU64(bytes, 64 + slot * 8, words[slot]);
++    }
++    [[nodiscard]] static HybridPropertyColumnRecord decode(std::span<const std::byte> bytes,
++        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
++        Generation descriptorGeneration, Generation visibleGeneration) {
++        using namespace hybrid_property_detail;
++        header(bytes, RSS_HYBRID_COLUMN_MAGIC);
++        HybridPropertyColumnRecord result;
++        result.identity = {EntityPropertyOwnerKind(std::to_integer<uint8_t>(bytes[6])),
++            HybridPropertyScalarKind(std::to_integer<uint8_t>(bytes[7])), LittleEndianCodec::readU64(bytes, 8),
++            LittleEndianCodec::readU32(bytes, 16), Generation(LittleEndianCodec::readU64(bytes, 24))};
++        require(result.identity == expected && bytes.size() == result.wireSize() &&
++            LittleEndianCodec::readU16(bytes, 20) == 64 &&
++            LittleEndianCodec::readU16(bytes, 22) == result.wireSize() - 64, "hybrid column identity or width mismatch");
++        zero(bytes, 56, 64);
++        result.presence = LittleEndianCodec::readU64(bytes, 32); result.nulls = LittleEndianCodec::readU64(bytes, 40);
++        result.live = LittleEndianCodec::readU64(bytes, 48);
++        for (unsigned slot = 0; slot < 64; ++slot)
++            result.words[slot] = result.identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL ?
++                (LittleEndianCodec::readU64(bytes, 64) >> slot) & 1U : LittleEndianCodec::readU64(bytes, 64 + slot * 8);
++        result.validate(); group.validate();
++        require(group.owner_kind == result.identity.owner_kind && group.group_id == result.identity.group_id &&
++            group.columns && group.memberships >= uint32_t(std::popcount(result.presence)) &&
++            !(result.presence & ~group.live) && result.identity.semantic_generation <= group.semantic_generation &&
++            group.semantic_generation <= descriptorGeneration && descriptorGeneration.isValid() &&
++            descriptorGeneration <= visibleGeneration, "hybrid column does not belong to its visible group");
++        return result;
++    }
++};
++} // namespace graph::storage
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp
+new file mode 100644
+index 00000000..b13d3ee1
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp
+@@ -0,0 +1,156 @@
++#include <gtest/gtest.h>
++#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
++
++using namespace graph::storage;
++namespace {
++HybridPropertyGroupRecord group() {
++    return {EntityPropertyOwnerKind::EPOK_EDGE, HybridPropertyGroupMode::HPGM_HYBRID,
++        3, Generation(9), UINT64_MAX, 64, 1};
++}
++HybridPropertyColumnRecord column(HybridPropertyScalarKind kind = HybridPropertyScalarKind::HPSK_INT64) {
++    HybridPropertyColumnRecord result;
++    result.identity = {EntityPropertyOwnerKind::EPOK_EDGE, kind, 3, 17, Generation(7)};
++    result.live = UINT64_MAX; result.presence = (UINT64_C(1) << 48) - 1;
++    result.nulls = UINT64_C(1) << 4;
++    for (unsigned i = 0; i < 48; ++i) if (i != 4)
++        result.words[i] = kind == HybridPropertyScalarKind::HPSK_BOOL ? i % 2 : UINT64_MAX - i;
++    return result;
++}
++auto encoded(const HybridPropertyColumnRecord &record) {
++    std::vector<std::byte> bytes(record.wireSize()); record.encode(bytes); return bytes;
++}
++auto decode(std::span<const std::byte> bytes, const HybridPropertyColumnRecord &record,
++    const HybridPropertyGroupRecord &header = group()) {
++    return HybridPropertyColumnRecord::decode(bytes, record.identity, header, Generation(11), Generation(13));
++}
++TEST(HybridPropertyRecordsTest, CanonicalPrimitiveLayoutsPreserveRawBitsAndNullVersusMissing) {
++    for (auto scalar : {HybridPropertyScalarKind::HPSK_INT64, HybridPropertyScalarKind::HPSK_DOUBLE,
++        HybridPropertyScalarKind::HPSK_BOOL}) {
++        auto record = column(scalar);
++        if (scalar == HybridPropertyScalarKind::HPSK_DOUBLE) {
++            record.words[0] = UINT64_C(0x8000000000000000); // negative zero
++            record.words[1] = UINT64_C(0x7ff8000000000042); // NaN payload
++        }
++        const auto bytes = encoded(record);
++        EXPECT_EQ(decode(bytes, record), record);
++        EXPECT_EQ(bytes[0], std::byte{'Z'}); EXPECT_EQ(bytes[3], std::byte{'C'});
++        EXPECT_EQ(bytes.size(), scalar == HybridPropertyScalarKind::HPSK_BOOL ? 72U : 576U);
++        EXPECT_EQ(LittleEndianCodec::readU64(bytes, 8), 3U);
++        EXPECT_EQ(LittleEndianCodec::readU32(bytes, 16), 17U);
++        EXPECT_EQ(LittleEndianCodec::readU16(bytes, 20), 64U);
++        EXPECT_EQ(LittleEndianCodec::readU64(bytes, 24), 7U);
++        EXPECT_EQ(LittleEndianCodec::readU64(bytes, 40), UINT64_C(1) << 4);
++        EXPECT_EQ(decode(bytes, record).words[4], 0U);
++        EXPECT_EQ(decode(bytes, record).words[48], 0U);
++    }
++}
++TEST(HybridPropertyRecordsTest, NativeIdDomainRejectsZeroOverflowAndFinalGroupPhantomSlot) {
++    for (auto kind : {EntityPropertyOwnerKind::EPOK_NODE, EntityPropertyOwnerKind::EPOK_EDGE}) {
++        EXPECT_EQ(hybridPropertyGroupFor({kind, 1}), 1U);
++        EXPECT_EQ(hybridPropertySlotFor({kind, 64}), 63U);
++        EXPECT_EQ(hybridPropertyGroupFor({kind, 65}), 2U);
++        EXPECT_EQ(hybridPropertyGroupFor({kind, RSS_HYBRID_MAX_ENTITY_ID}), RSS_HYBRID_MAX_GROUP_ID);
++        EXPECT_EQ(hybridPropertySlotFor({kind, RSS_HYBRID_MAX_ENTITY_ID}), 62U);
++        for (uint64_t id : {UINT64_C(0), UINT64_C(1) << 63, UINT64_MAX}) {
++            EXPECT_THROW(hybridPropertyGroupFor({kind, id}), FormatException);
++            EXPECT_THROW(hybridPropertySlotFor({kind, id}), FormatException);
++        }
++    }
++    EXPECT_THROW(hybridPropertyGroupFor({EntityPropertyOwnerKind(0), 1}), FormatException);
++    auto header = group(); header.group_id = RSS_HYBRID_MAX_GROUP_ID;
++    EXPECT_THROW(header.encode(), FormatException);
++    header.live >>= 1; EXPECT_NO_THROW(header.encode());
++    header.group_id++; EXPECT_THROW(header.encode(), FormatException);
++    auto record = column(); record.identity.group_id = RSS_HYBRID_MAX_GROUP_ID;
++    EXPECT_THROW(encoded(record), FormatException);
++    record.live >>= 1; EXPECT_NO_THROW(encoded(record));
++}
++TEST(HybridPropertyRecordsTest, GroupCountUsesWireRangeWhileConversionKeepsItsSeparateWorkBound) {
++    auto header = group();
++    for (uint32_t count : {4096U, 4097U, UINT32_MAX}) {
++        header.memberships = count; header.columns = count / 48;
++        const auto bytes = header.encode();
++        EXPECT_EQ(HybridPropertyGroupRecord::decode(bytes, header.owner_kind, 3, Generation(11), Generation(13)), header);
++        header.columns++;
++        EXPECT_THROW(header.encode(), FormatException);
++    }
++    header = group(); header.live = 0; EXPECT_THROW(header.encode(), FormatException);
++    header = group(); header.live = (UINT64_C(1) << 47) - 1; EXPECT_THROW(header.encode(), FormatException);
++    header = group(); header.memberships = 47; EXPECT_THROW(header.encode(), FormatException);
++    header = group(); header.mode = HybridPropertyGroupMode(2); EXPECT_THROW(header.encode(), FormatException);
++}
++TEST(HybridPropertyRecordsTest, RetainedColumnsAllowBirthAndDeathOnlyOnAbsentCells) {
++    const auto record = column(); const auto bytes = encoded(record);
++    auto header = group(); header.live &= ~(UINT64_C(1) << 63);
++    EXPECT_EQ(decode(bytes, record, header), record);
++    header.live = record.presence; EXPECT_EQ(decode(bytes, record, header), record);
++    header.live &= ~UINT64_C(1); EXPECT_THROW(decode(bytes, record, header), FormatException);
++    auto older = record; older.live = record.presence;
++    EXPECT_EQ(decode(encoded(older), older, group()), older);
++    older.presence &= ~UINT64_C(1); older.words[0] = 0;
++    EXPECT_THROW(encoded(older), FormatException); // 47 requires field demotion
++}
++TEST(HybridPropertyRecordsTest, CorrectBytesDoNotAuthorizeWrongGroupTokenKindTypeOrGeneration) {
++    const auto record = column(); const auto bytes = encoded(record);
++    for (unsigned field = 0; field < 5; ++field) {
++        auto other = record;
++        if (field == 0) other.identity.owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
++        if (field == 1) other.identity.scalar_kind = HybridPropertyScalarKind::HPSK_DOUBLE;
++        if (field == 2) other.identity.group_id++;
++        if (field == 3) other.identity.token++;
++        if (field == 4) other.identity.semantic_generation = Generation(8);
++        EXPECT_THROW(decode(bytes, other), FormatException) << field;
++    }
++    for (unsigned field = 0; field < 6; ++field) {
++        auto header = group();
++        if (field == 0) header.semantic_generation = Generation(6);
++        if (field == 1) header.semantic_generation = Generation(12);
++        if (field == 2) header.owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
++        if (field == 3) header.group_id++;
++        if (field == 4) header.columns = 0;
++        if (field == 5) header.memberships = 47;
++        EXPECT_THROW(decode(bytes, record, header), FormatException) << field;
++    }
++    EXPECT_THROW(HybridPropertyColumnRecord::decode(bytes, record.identity, group(), Generation(11), Generation(10)), FormatException);
++    EXPECT_THROW(HybridPropertyColumnRecord::decode(bytes, record.identity, group(), Generation{}, Generation(13)), FormatException);
++    const auto groupBytes = group().encode();
++    EXPECT_THROW(HybridPropertyGroupRecord::decode(groupBytes, EntityPropertyOwnerKind::EPOK_NODE, 3, Generation(11), Generation(13)), FormatException);
++    EXPECT_THROW(HybridPropertyGroupRecord::decode(groupBytes, group().owner_kind, 4, Generation(11), Generation(13)), FormatException);
++    EXPECT_THROW(HybridPropertyGroupRecord::decode(groupBytes, group().owner_kind, 3, Generation(8), Generation(13)), FormatException);
++}
++TEST(HybridPropertyRecordsTest, MalformedHeadersMasksCountsAndNoncanonicalPayloadFailClosed) {
++    const auto record = column(); const auto original = encoded(record);
++    for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(7), size_t(20), size_t(22),
++        size_t(56), size_t(63), size_t(64 + 4 * 8), size_t(64 + 63 * 8)}) {
++        auto bytes = original; bytes[offset] ^= std::byte{0x80};
++        EXPECT_THROW(decode(bytes, record), FormatException) << offset;
++    }
++    for (size_t offset : {size_t(32), size_t(40), size_t(48)}) {
++        auto bytes = original; LittleEndianCodec::writeU64(bytes, offset, offset == 40 ? UINT64_MAX : 0);
++        EXPECT_THROW(decode(bytes, record), FormatException) << offset;
++    }
++    auto boolRecord = column(HybridPropertyScalarKind::HPSK_BOOL);
++    auto boolBytes = encoded(boolRecord); boolBytes[64] |= std::byte{0x10};
++    EXPECT_THROW(decode(boolBytes, boolRecord), FormatException); // NULL bit has payload
++    boolRecord.words[0] = 2; EXPECT_THROW(encoded(boolRecord), FormatException);
++    auto groupBytes = group().encode();
++    for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(7), size_t(40), size_t(63)}) {
++        auto bytes = groupBytes; bytes[offset] ^= std::byte{0x80};
++        EXPECT_THROW(HybridPropertyGroupRecord::decode(bytes, group().owner_kind, 3, Generation(11), Generation(13)), FormatException);
++    }
++}
++TEST(HybridPropertyRecordsTest, EveryTruncatedWidthAndOversizedRecordRejectWithoutReadingOutsideInput) {
++    for (auto kind : {HybridPropertyScalarKind::HPSK_INT64, HybridPropertyScalarKind::HPSK_BOOL}) {
++        const auto record = column(kind); auto bytes = encoded(record);
++        for (size_t n = 0; n < bytes.size(); ++n)
++            EXPECT_THROW(decode(std::span(bytes).first(n), record), FormatException) << n;
++        bytes.push_back(std::byte{}); EXPECT_THROW(decode(bytes, record), FormatException);
++    }
++    const auto bytes = group().encode();
++    for (size_t n = 0; n < bytes.size(); ++n)
++        EXPECT_THROW(HybridPropertyGroupRecord::decode(std::span(bytes).first(n), group().owner_kind, 3,
++            Generation(11), Generation(13)), FormatException) << n;
++    std::array<std::byte, 65> oversized{}; std::copy(bytes.begin(), bytes.end(), oversized.begin());
++    EXPECT_THROW(HybridPropertyGroupRecord::decode(oversized, group().owner_kind, 3, Generation(11), Generation(13)), FormatException);
++}
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp b/tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp
+index 8395b74b..f720c0cc 100644
+--- a/tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp
++++ b/tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp
+@@ -124,7 +124,9 @@ TEST(PropertySubblockCandidateTest, GroupRejectsInvalidCountsModesEmptyAndSparse
+     GroupHeader group; group.live = UINT64_MAX;
+     EXPECT_NO_THROW(group.encode());
+     group.memberships = 4097;
+-    EXPECT_THROW(group.encode(), std::invalid_argument);
++    EXPECT_EQ(GroupHeader::decode(group.encode(), group.kind, group.group, group.generation).memberships, 4097U);
++    group.memberships = UINT32_MAX;
++    EXPECT_EQ(GroupHeader::decode(group.encode(), group.kind, group.group, group.generation).memberships, UINT32_MAX);
+     group.memberships = 47; group.columns = 1;
+     EXPECT_THROW(group.encode(), std::invalid_argument);
+     group.memberships = 48; EXPECT_NO_THROW(group.encode());
+diff --git a/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp b/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
+index c1900953..d93233d0 100644
+--- a/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
++++ b/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
+@@ -74,6 +74,42 @@ TEST(PropertySubblockGroupConversionTest, DynamicMixedNullMissingAndLargeFieldsK
+             EXPECT_EQ(member.source, Source::HPS_EXTENSION);
+     checkRoundTrip(plan, source);
+ }
++TEST(PropertySubblockGroupConversionTest, NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount) {
++    auto source = rows(64, 3);
++    for (size_t i = 0; i < source.size(); ++i) {
++        source[i].entries[1].value = PropertyValue(i == 0 ? -0.0 : double(i));
++        source[i].entries[2].value = i == 4 ? PropertyValue{} : PropertyValue(bool(i % 2));
++    }
++    source[1].entries[1].value = PropertyValue(std::bit_cast<double>(UINT64_C(0x7ff8000000000042)));
++    MaterializedByteBudget budget(1024 * 1024);
++    {
++        ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 3, 3968);
++        const auto charge = budget.used(); const auto header = plan.nativeGroup();
++        ASSERT_EQ(header.columns, 3U); EXPECT_EQ(header.memberships, 192U);
++        const auto groupBytes = header.encode();
++        EXPECT_NE(groupBytes, plan.group().encode()); // distinct typed native tag
++        EXPECT_EQ(HybridPropertyGroupRecord::decode(groupBytes, header.owner_kind, 1, Generation(3), Generation(3)), header);
++        for (size_t ordinal = 0; ordinal < plan.columns().size(); ++ordinal) {
++            const auto &column = plan.columns()[ordinal];
++            std::array<std::byte, 576> output{};
++            auto bytes = std::span(output).first(column.wireSize());
++            plan.encodeNativeColumn(ordinal, bytes);
++            HybridPropertyColumnIdentity expected{header.owner_kind,
++                ordinal == 0 ? HybridPropertyScalarKind::HPSK_INT64 : ordinal == 1 ?
++                    HybridPropertyScalarKind::HPSK_DOUBLE : HybridPropertyScalarKind::HPSK_BOOL,
++                1, uint32_t(ordinal + 1), Generation(3)};
++            const auto decoded = HybridPropertyColumnRecord::decode(bytes, expected, header, Generation(3), Generation(3));
++            EXPECT_EQ(decoded.words, column.words); EXPECT_EQ(decoded.nulls, column.nulls);
++            EXPECT_EQ(decoded.presence, column.presence);
++            EXPECT_EQ(budget.used(), charge);
++        }
++        std::array<std::byte, 72> tooSmall{};
++        EXPECT_THROW(plan.encodeNativeColumn(0, tooSmall), FormatException);
++        EXPECT_THROW(plan.encodeNativeColumn(3, tooSmall), std::invalid_argument);
++        EXPECT_EQ(budget.used(), charge); checkRoundTrip(plan, source);
++    }
++    EXPECT_EQ(budget.used(), 0U);
++}
+ TEST(PropertySubblockGroupConversionTest, MaximumMembershipsAndPropertylessOwnersStayBounded) {
+     auto source = rows(64, 64); MaterializedByteBudget budget(1024 * 1024);
+     { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
