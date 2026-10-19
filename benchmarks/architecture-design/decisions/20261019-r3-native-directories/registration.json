@@ -1,0 +1,7 @@
+{
+ "parent_item": "R3.2",
+ "parent": "9f7733ed",
+ "scope": "Use existing key-only B+Tree framing for fixed prefix/value map records, validate unique logical prefixes, and preserve explicit leaf layout through compound native graph mutation/rebuild",
+ "gates": "Necessary fixed-map, native graph scalar/index, adjacency and B+Tree modules only; no final timing",
+ "acceptance_boundary": "Generic native shared-map prerequisite only; not hybrid property graph routing or R3.2 lifecycle acceptance"
+}

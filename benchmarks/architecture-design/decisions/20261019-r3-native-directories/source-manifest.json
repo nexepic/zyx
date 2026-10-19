@@ -1,0 +1,6 @@
+{
+  "include/graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp": "42fb10f205f3298ef8b77172a8673e5d78aab7a625ccf4464b9471715370d1ca",
+  "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "b2f72d9e173c58a68ce9c06fcc9955e4865aab3b41cabe64e5dc692313e2f7bc",
+  "include/graph/storage/relocatable/index/FixedBTreeMap.hpp": "1ba3032658791f3941ca15385c0c8b959e6e01a570b847eb0c7aff0e5175d98d",
+  "tests/src/storage/relocatable/property/test_PropertySubblockDirectories.cpp": "c1c1302104eddbd53d99509087a65b287a285e42e898e424c1d07f319402f368"
+}

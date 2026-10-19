@@ -1,0 +1,15 @@
+{
+  "parent": "9f7733edadcf969e2b07195c49e166ea52f5d7df",
+  "parent_item": "R3.2",
+  "state": "in progress",
+  "accepted_top_level_items": 13,
+  "total": 24,
+  "final_cases": 178,
+  "failed_cases": 0,
+  "full_suite": false,
+  "formal_performance_run": false,
+  "native_hybrid_property_format_installed": false,
+  "native_shared_map_prerequisite_implemented": true,
+  "platform": "Linux x86_64",
+  "source_manifest": "source-manifest.json"
+}
