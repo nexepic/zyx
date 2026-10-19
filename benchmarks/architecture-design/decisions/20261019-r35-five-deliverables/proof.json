@@ -1,5 +1,5 @@
 {
-  "code_checkpoint": "24595ba8bd1427b711304006c2b34c7549df721a",
+  "code_checkpoint": "5057dd7f91da34ce0efeb7258366d806906147af",
   "fixed_deliverables": [
     "R3.2",
     "R3.3",
@@ -11,7 +11,8 @@
   "state": "in progress",
   "implemented_at_checkpoint": [
     "existing native fixed-map canonical logical-prefix mutation",
-    "bounded admitted ROW group classification and reverse projection"
+    "bounded admitted ROW group classification and reverse projection",
+    "in-memory authenticated native descriptor frame codec; no file writer/root activation"
   ],
   "native_hybrid_format_installed": false,
   "native_graph_conversion_installed": false,
@@ -20,10 +21,12 @@
   "formal_performance_run": false,
   "full_suite": false,
   "platform": "Linux x86_64",
-  "final_cases": 53,
+  "final_cases": 58,
   "final_failures": 0,
   "progress_source": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
   "accepted_top_level_items": 13,
   "total": 24,
-  "completion_percent": 54.2
+  "completion_percent": 54.2,
+  "final_raw_result": "final-58.json",
+  "final_test_scope": "test-scope-58.json"
 }

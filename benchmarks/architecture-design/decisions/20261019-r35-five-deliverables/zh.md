@@ -9,3 +9,5 @@
 最终四个受影响模块、六个 suite 共 53 项通过。`final-53.json` 是最终原始结果；`planning-final-51.json` 是添加账户/状态保护前的检查点。首轮 45 项中两项 fixture 预期与既有合同不符：no-op 事务应拒绝空 commit，inactive commit 抛 FormatException；保留 first JSON，修正测试而非放宽原生合同。新 group planner 的首编误用了 PropertyValue 私有 data，改用公开 getVariant，保留编译失败日志。没有运行全量单测或正式性能/Kuzu 窗口，仅验证 Linux x86_64。
 
 下一步仍必须完成 R3.1 原生格式/root/fence/reader/writer/integrity/relocation/retirement 的完整原子接入。固定值后缀是 key 的一部分，不能用禁止改 key 的 InitialTreeValueBinder 回填 locator；应由同一次发布中的内部 metadata 协调器先分配数据 PageId，再规划目录，最终八个树根身份确定后写 descriptor。不得另行提交 ID 或沿用七根 fence。完成 R3.2 后才可将获准方案接入 R3.3，随后完成 R5 三项和统一 R7 准入；本检查点不缩减任何交付条件。
+
+追加的原生描述符 codec 检查点：192 字节逻辑 payload 加 32 字节物理认证头，数据库/物理根代际/语义代际/LSN/八根独立身份及全页 CRC/保留位均验证；逐字节损坏和合法校验和下的错误身份拒绝。搬迁保留语义代际、更新物理代际。详情纳入 R3.1 决策文件。仅内存 byte buffer，没有文件 writer、Superblock/root 激活或完整生命周期。追加后五个必要模块、七个 suite 最终 58 项通过，原始结果 `final-58.json`、范围 `test-scope-58.json`；此前 53 项是更早检查点。本轮五项完成数仍为 0。

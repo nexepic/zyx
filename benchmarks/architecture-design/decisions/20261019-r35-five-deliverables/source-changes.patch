@@ -265,6 +265,155 @@ index 00000000..e4c7bda1
 +    }
 +};
 +} // namespace graph::storage
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+new file mode 100644
+index 00000000..51f3c992
+--- /dev/null
++++ b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+@@ -0,0 +1,143 @@
++/**
++ * @file HybridPropertyDescriptor.hpp
++ * @brief Authenticated metadata frame for the bounded hybrid-property candidate.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include <algorithm>
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <span>
++#include "graph/storage/relocatable/format/Format.hpp"
++#include "graph/utils/ChecksumUtils.hpp"
++
++namespace graph::storage {
++
++// Candidate codec only. No current Superblock root, writer or allocator may
++// publish this frame until the complete format/root/fence/lifecycle update is
++// installed. In particular this is not a generic State record or a radix root.
++constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC = 0x4858595AU; // ZYXH
++constexpr uint32_t RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC = 0x4458595AU; // ZYXD
++constexpr uint16_t RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION = 1;
++constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES = 32;
++constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES = 192;
++constexpr size_t RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT = 8;
++
++enum class HybridPropertyRootOrdinal : uint8_t {
++    HPRO_NODE_OWNER = 0, HPRO_NODE_COLUMN, HPRO_NODE_EXTENSION, HPRO_NODE_GROUP,
++    HPRO_EDGE_OWNER, HPRO_EDGE_COLUMN, HPRO_EDGE_EXTENSION, HPRO_EDGE_GROUP,
++};
++struct HybridPropertyTreeRoot {
++    PageId page_id{};
++    Generation generation{};
++    constexpr bool operator==(const HybridPropertyTreeRoot &) const = default;
++};
++struct HybridPropertyDescriptor {
++    DatabaseId database_id{};
++    Generation semantic_generation{};
++    // Owner/column/extension/group roots for Node, followed by Edge. Existing
++    // ROW routing remains solely in entity_property_directory_root.
++    std::array<HybridPropertyTreeRoot, RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT> roots{};
++    constexpr bool operator==(const HybridPropertyDescriptor &) const = default;
++};
++struct HybridPropertyDescriptorPage {
++    Generation generation{}; // physical COW frame identity, including relocation
++    LogSequenceNumber committed_lsn{};
++    HybridPropertyDescriptor descriptor;
++    constexpr bool operator==(const HybridPropertyDescriptorPage &) const = default;
++};
++
++class HybridPropertyDescriptorCodec final {
++    [[noreturn]] static void fail(FormatError error, const char *message) { throw FormatException(error, message); }
++    static void require(bool valid, const char *message) {
++        if (!valid) fail(FormatError::FERR_INVALID_HEADER, message);
++    }
++    static uint32_t crc(std::span<const std::byte> bytes) {
++        return utils::calculateCrc(bytes.data(), bytes.size());
++    }
++    static void validate(const HybridPropertyDescriptorPage &page) {
++        require(page.generation.isValid() && page.generation.value() <= (UINT64_MAX >> 5U) &&
++            page.committed_lsn.isValid(), "hybrid descriptor frame has no representable publication identity");
++        const auto &descriptor = page.descriptor;
++        require(descriptor.database_id.isValid() && descriptor.semantic_generation.isValid() &&
++            descriptor.semantic_generation <= page.generation, "hybrid descriptor has an invalid semantic identity");
++        for (const auto &root : descriptor.roots)
++            require(root.page_id.isValid() == root.generation.isValid() &&
++                root.generation <= descriptor.semantic_generation, "hybrid descriptor has a partial or future tree root");
++        for (size_t i = 0; i < descriptor.roots.size(); ++i)
++            for (size_t j = 0; j < i; ++j)
++                require(!descriptor.roots[i].page_id.isValid() || descriptor.roots[i].page_id != descriptor.roots[j].page_id,
++                    "hybrid descriptor aliases distinct namespace roots");
++    }
++public:
++    using Bytes = std::array<std::byte, RSS_PAGE_SIZE>;
++    [[nodiscard]] static Bytes encode(const HybridPropertyDescriptorPage &page) {
++        validate(page); Bytes result{};
++        LittleEndianCodec::writeU32(result, 0, RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC);
++        LittleEndianCodec::writeU16(result, 4, RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION);
++        LittleEndianCodec::writeU16(result, 6, RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES);
++        LittleEndianCodec::writeU64(result, 8, page.generation.value());
++        LittleEndianCodec::writeU64(result, 16, page.committed_lsn.value());
++        auto body = std::span<std::byte>(result).subspan(RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES,
++            RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES);
++        LittleEndianCodec::writeU32(body, 0, RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC);
++        LittleEndianCodec::writeU16(body, 4, RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION);
++        LittleEndianCodec::writeU64(body, 8, page.descriptor.semantic_generation.value());
++        LittleEndianCodec::writeU64(body, 16, page.descriptor.database_id.value());
++        for (size_t i = 0; i < page.descriptor.roots.size(); ++i) {
++            LittleEndianCodec::writeU64(body, 64 + i * 16, page.descriptor.roots[i].page_id.value());
++            LittleEndianCodec::writeU64(body, 72 + i * 16, page.descriptor.roots[i].generation.value());
++        }
++        LittleEndianCodec::writeU32(result, 24,
++            crc(std::span<const std::byte>(result).subspan(RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES)));
++        LittleEndianCodec::writeU32(result, 28,
++            crc(std::span<const std::byte>(result).first(RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES)));
++        return result;
++    }
++    // The containing native metadata reader supplies its pinned database/root
++    // and visible LSN/generation. A valid checksum is insufficient identity.
++    [[nodiscard]] static HybridPropertyDescriptorPage decode(std::span<const std::byte> bytes,
++        DatabaseId expectedDatabase, Generation expectedPhysicalGeneration,
++        Generation visibleGeneration, LogSequenceNumber visibleLsn) {
++        if (bytes.size() < RSS_PAGE_SIZE) fail(FormatError::FERR_BUFFER_TOO_SMALL, "hybrid descriptor frame is truncated");
++        require(bytes.size() == RSS_PAGE_SIZE, "hybrid descriptor frame has unexpected width");
++        std::array<std::byte, RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_HEADER_BYTES> header{};
++        std::copy_n(bytes.begin(), header.size(), header.begin());
++        const auto expectedHeaderCrc = LittleEndianCodec::readU32(header, 28);
++        LittleEndianCodec::writeU32(header, 28, 0);
++        if (crc(header) != expectedHeaderCrc) fail(FormatError::FERR_CHECKSUM_MISMATCH, "hybrid descriptor header checksum mismatch");
++        if (LittleEndianCodec::readU32(bytes, 0) != RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC)
++            fail(FormatError::FERR_INVALID_MAGIC, "hybrid descriptor frame magic mismatch");
++        if (LittleEndianCodec::readU16(bytes, 4) != RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION)
++            fail(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported hybrid descriptor frame version");
++        require(LittleEndianCodec::readU16(bytes, 6) == header.size(), "hybrid descriptor frame header width mismatch");
++        if (crc(bytes.subspan(header.size())) != LittleEndianCodec::readU32(bytes, 24))
++            fail(FormatError::FERR_CHECKSUM_MISMATCH, "hybrid descriptor payload checksum mismatch");
++        const auto body = bytes.subspan(header.size(), RSS_HYBRID_PROPERTY_DESCRIPTOR_BYTES);
++        if (LittleEndianCodec::readU32(body, 0) != RSS_HYBRID_PROPERTY_DESCRIPTOR_MAGIC)
++            fail(FormatError::FERR_INVALID_MAGIC, "hybrid descriptor payload magic mismatch");
++        if (LittleEndianCodec::readU16(body, 4) != RSS_HYBRID_PROPERTY_DESCRIPTOR_VERSION)
++            fail(FormatError::FERR_UNSUPPORTED_VERSION, "unsupported hybrid descriptor payload version");
++        if (LittleEndianCodec::readU16(body, 6) != 0 ||
++            !std::all_of(body.begin() + 24, body.begin() + 64, [](std::byte value) { return value == std::byte{}; }) ||
++            !std::all_of(bytes.begin() + header.size() + body.size(), bytes.end(),
++                [](std::byte value) { return value == std::byte{}; }))
++            fail(FormatError::FERR_RESERVED_BITS, "hybrid descriptor has nonzero reserved bytes");
++        HybridPropertyDescriptorPage result;
++        result.generation = Generation(LittleEndianCodec::readU64(bytes, 8));
++        result.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, 16));
++        result.descriptor.semantic_generation = Generation(LittleEndianCodec::readU64(body, 8));
++        result.descriptor.database_id = DatabaseId(LittleEndianCodec::readU64(body, 16));
++        for (size_t i = 0; i < result.descriptor.roots.size(); ++i)
++            result.descriptor.roots[i] = {PageId(LittleEndianCodec::readU64(body, 64 + i * 16)),
++                Generation(LittleEndianCodec::readU64(body, 72 + i * 16))};
++        validate(result);
++        require(expectedDatabase.isValid() && expectedPhysicalGeneration.isValid() && visibleGeneration.isValid() &&
++            visibleLsn.isValid() && result.descriptor.database_id == expectedDatabase &&
++            result.generation == expectedPhysicalGeneration && result.generation <= visibleGeneration &&
++            result.committed_lsn <= visibleLsn, "hybrid descriptor does not belong to its pinned root and database");
++        return result;
++    }
++};
++} // namespace graph::storage
 diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
 index d25d1b5c..438412b6 100644
 --- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
@@ -277,6 +426,100 @@ index d25d1b5c..438412b6 100644
 +			// Rollback is also the staging-allocation-failure path. Borrow the
 +			// already retained ranges instead of allocating a second reservation.
 +			context_->metadata->abandonNativeGraphLogicalIdReservation(node_id_ranges_, edge_id_ranges_);
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp
+new file mode 100644
+index 00000000..4913c0d1
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp
+@@ -0,0 +1,88 @@
++#include <gtest/gtest.h>
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
++using namespace graph::storage;
++namespace {
++HybridPropertyDescriptorPage sample() {
++    HybridPropertyDescriptorPage page;
++    page.generation = Generation(9); page.committed_lsn = LogSequenceNumber(17);
++    page.descriptor.database_id = DatabaseId(0x0102030405060708ULL);
++    page.descriptor.semantic_generation = Generation(7);
++    for (size_t i = 0; i < page.descriptor.roots.size(); ++i)
++        page.descriptor.roots[i] = {PageId(101 + i), Generation(3 + i % 4)};
++    return page;
++}
++auto decode(std::span<const std::byte> bytes) {
++    return HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9),
++        Generation(12), LogSequenceNumber(20));
++}
++void reseal(HybridPropertyDescriptorCodec::Bytes &bytes) {
++    LittleEndianCodec::writeU32(bytes, 24, graph::utils::calculateCrc(bytes.data() + 32, bytes.size() - 32));
++    LittleEndianCodec::writeU32(bytes, 28, 0);
++    LittleEndianCodec::writeU32(bytes, 28, graph::utils::calculateCrc(bytes.data(), 32));
++}
++TEST(HybridPropertyDescriptorTest, Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip) {
++    const auto page = sample(); const auto bytes = HybridPropertyDescriptorCodec::encode(page);
++    EXPECT_EQ(bytes.size(), RSS_PAGE_SIZE); EXPECT_EQ(decode(bytes), page);
++    EXPECT_EQ(bytes[0], std::byte{'Z'}); EXPECT_EQ(bytes[1], std::byte{'Y'});
++    EXPECT_EQ(bytes[2], std::byte{'X'}); EXPECT_EQ(bytes[3], std::byte{'H'});
++    EXPECT_EQ(bytes[32 + 0], std::byte{'Z'}); EXPECT_EQ(bytes[32 + 3], std::byte{'D'});
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 8), 7U);
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 16), 0x0102030405060708ULL);
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 64), 101U);
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 176), 108U);
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 32 + 184), 6U);
++    EXPECT_TRUE(std::all_of(bytes.begin() + 224, bytes.end(), [](auto byte) { return byte == std::byte{}; }));
++    auto empty = page; empty.descriptor.roots = {};
++    EXPECT_EQ(decode(HybridPropertyDescriptorCodec::encode(empty)), empty);
++}
++TEST(HybridPropertyDescriptorTest, ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility) {
++    const auto bytes = HybridPropertyDescriptorCodec::encode(sample());
++    EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, DatabaseId(2), Generation(9), Generation(12), LogSequenceNumber(20)), FormatException);
++    EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(8), Generation(12), LogSequenceNumber(20)), FormatException);
++    EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(8), LogSequenceNumber(20)), FormatException);
++    EXPECT_THROW(HybridPropertyDescriptorCodec::decode(bytes, sample().descriptor.database_id, Generation(9), Generation(12), LogSequenceNumber(16)), FormatException);
++    for (size_t offset : {size_t(8), size_t(16), size_t(32 + 8), size_t(32 + 16), size_t(32 + 72)}) {
++        auto wrong = bytes; LittleEndianCodec::writeU64(wrong, offset, UINT64_MAX); reseal(wrong);
++        EXPECT_THROW(decode(wrong), FormatException) << offset;
++    }
++}
++TEST(HybridPropertyDescriptorTest, PartialFutureAndAliasedRootReferencesFailClosed) {
++    for (size_t index = 0; index < RSS_HYBRID_PROPERTY_DESCRIPTOR_ROOT_COUNT; ++index) {
++        auto page = sample(); page.descriptor.roots[index].generation = Generation{};
++        EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
++        page = sample(); page.descriptor.roots[index].page_id = PageId{};
++        EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
++        page = sample(); page.descriptor.roots[index].generation = Generation(8);
++        EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
++    }
++    auto page = sample(); page.descriptor.roots[7] = page.descriptor.roots[0];
++    EXPECT_THROW(HybridPropertyDescriptorCodec::encode(page), FormatException);
++    auto bytes = HybridPropertyDescriptorCodec::encode(sample());
++    LittleEndianCodec::writeU64(bytes, 32 + 176, 101); reseal(bytes);
++    EXPECT_THROW(decode(bytes), FormatException);
++}
++TEST(HybridPropertyDescriptorTest, ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted) {
++    const auto original = HybridPropertyDescriptorCodec::encode(sample());
++    for (size_t offset : {size_t(0), size_t(4), size_t(6), size_t(32), size_t(36), size_t(38),
++        size_t(56), size_t(95), size_t(224), size_t(4095)}) {
++        auto bytes = original; bytes[offset] ^= std::byte{0x40}; reseal(bytes);
++        EXPECT_THROW(decode(bytes), FormatException) << offset;
++    }
++}
++TEST(HybridPropertyDescriptorTest, EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration) {
++    const auto original = HybridPropertyDescriptorCodec::encode(sample());
++    for (size_t offset = 0; offset < original.size(); ++offset) {
++        auto damaged = original; damaged[offset] ^= std::byte{1};
++        EXPECT_THROW(decode(damaged), FormatException) << offset;
++    }
++    auto relocated = sample(); relocated.generation = Generation(10); relocated.committed_lsn = LogSequenceNumber(18);
++    const auto bytes = HybridPropertyDescriptorCodec::encode(relocated);
++    const auto result = HybridPropertyDescriptorCodec::decode(bytes, relocated.descriptor.database_id,
++        Generation(10), Generation(12), LogSequenceNumber(20));
++    EXPECT_EQ(result.descriptor, sample().descriptor); EXPECT_EQ(result, relocated);
++    EXPECT_THROW(decode(bytes), FormatException); // old physical root cannot accept new frame
++    EXPECT_THROW(decode(std::span(original).first(4095)), FormatException);
++    std::array<std::byte, 4097> tooWide{};
++    EXPECT_THROW(decode(tooWide), FormatException);
++}
++} // namespace
 diff --git a/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp b/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
 new file mode 100644
 index 00000000..c1900953

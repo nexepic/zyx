@@ -75,3 +75,5 @@ no-op 按 canonical 类型/值判断，不产生属性/索引替换。NULL↔mis
 R3.2 同步更新全部 reader/writer/descriptor/map/page-kind/version、root 校验、integrity、搬迁、allocator 可达性和 retire。沿用新文件/旧版本拒绝策略，不加 sidecar/迁移。生命周期未贯通不能进 R3.3；保留同执行器下隔离 ROW 对照。
 
 必测 R3.2：47/48/64 占用边界，稀疏/独有字段、随机交错形状、多标签、持续变型/降级、删除后稀疏、>4096 成员、宽行/大值、无序重复邻居 gather、no-op/NULL/merge/replace/remove、旧/新快照/重开、合法 checksum 身份错配、各发布 fence 故障、配额拒绝、搬迁/复用/退休。精确校验 ID/类型/值/重复和完整原生成本。失败可以完成比较项 R3.2，不能完成生产项 R3.3；R7 延迟/写入/资源/稳态门槛不变。
+
+R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用 32 字节物理头（0 ZYXH magic u32，4 version u16=1，6 header bytes u16=32，8 physical generation u64，16 committed LSN u64，24 payload CRC32，28 header CRC32），其后为上述 192 字节 payload（magic ZYXD、version 1），其余 4096 字节页尾必须为零。payload CRC 覆盖 offset 32 至页尾，header CRC 覆盖 32 字节头且计算时自身字段归零。区分搬迁的物理代际与属性语义代际，要求 semantic<=physical<=snapshot、committed LSN 可见、database 与预期物理根代际精确匹配；物理代际还须能由 Superblock 的 59 位 packed reference 表示。八个非空命名空间根不能共用 PageId，部分零或未来根拒绝。当前仅测试内存 byte buffer；尚无 Superblock 字段/格式切换、文件 writer 或 allocator/reclaimer 接入，不得据此持久化 hybrid 文件或验收 R3.2。
