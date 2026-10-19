@@ -1,0 +1,234 @@
+{
+  "tests": 19,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T05:30:14Z",
+  "time": "0.973s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:30:14Z",
+      "time": "0.865s",
+      "testsuite": [
+        {
+          "name": "PhysicalProfileReportsDirectWorkWithoutConsumingGlobalTrace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 13,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:14Z",
+          "time": "0.147s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileWritesOnceAndRetainsPublicationPhaseCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 41,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:14Z",
+          "time": "0.134s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileAdmissionPrecedesMutationAndRefundsBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 57,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:14Z",
+          "time": "0.089s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileCoalescesSharedOwnerUpdatesAndNoOpsKeepOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 94,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.21s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileOutputAndFailureRefundTheSameQueryAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 122,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.087s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileGuardFailureInsideObservationRefundsAndRestoresThreadState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.071s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileUsesBoundedExistingEstimatesAndMarksUnsupportedRootsUnavailable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 172,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.123s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableTailTruncationTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:30:15Z",
+      "time": "0.092s",
+      "testsuite": [
+        {
+          "name": "TruncatesOnlyReleasedTailSlotsAfterSnapshotsDrainAndReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 106,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.014s",
+          "classname": "RelocatableTailTruncationTest"
+        },
+        {
+          "name": "RefusesFallbackOnlyStorageWithoutRiskingTheFileTail",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 136,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.01s",
+          "classname": "RelocatableTailTruncationTest"
+        },
+        {
+          "name": "NativeTruncateFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 150,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.013s",
+          "classname": "RelocatableTailTruncationTest"
+        },
+        {
+          "name": "NativePreTruncateSyncFailureLeavesTheReleasedTailIntactAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 188,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.014s",
+          "classname": "RelocatableTailTruncationTest"
+        },
+        {
+          "name": "NativePostTruncateSyncFailureReportsUncertainDurabilityAndReopensSafely",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 226,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.011s",
+          "classname": "RelocatableTailTruncationTest"
+        },
+        {
+          "name": "TruncatesAReleasedExtentTailAfterMixedPageAndExtentRelocationThenReopens",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/maintenance\/test_RelocatableTailTruncation.cpp",
+          "line": 267,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.027s",
+          "classname": "RelocatableTailTruncationTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableMetadataPagePoolTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:30:15Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "DeferredPublicationRetainsFramesUntilBoundedAllocationThreshold",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.009s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "BatchedAllocationsAlsoTriggerPublicationReclamation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 40,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "DeferredReclamationAuthenticatesAndPreservesPinnedCatalogRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 47,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.003s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "DeferredCallStillRejectsFutureSnapshotBeforeThreshold",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "RecoveryReclaimsDeferredUnpublishedFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 66,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0.001s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        },
+        {
+          "name": "LowFreeHeadroomReclaimsBeforeAllocationBatchThreshold",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/metadata\/test_MetadataPublicationReclaimBatch.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:30:15Z",
+          "time": "0s",
+          "classname": "RelocatableMetadataPagePoolTest"
+        }
+      ]
+    }
+  ]
+}

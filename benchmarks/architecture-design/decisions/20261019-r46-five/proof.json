@@ -1,0 +1,129 @@
+{
+  "plan": "cow-performance-20261019",
+  "parent": "89f1254928947c8b6fd32cbd8fc2917d2b7f55e9",
+  "candidate_code_commit": "ea8edffdfe18b12513df9cce70f1b20984c07df8",
+  "scope": [
+    "R4.1",
+    "R4.2",
+    "R6.1",
+    "R6.2",
+    "R6.3"
+  ],
+  "accepted_this_batch": [
+    "R4.1",
+    "R4.2",
+    "R6.1",
+    "R6.2",
+    "R6.3"
+  ],
+  "classification": "Preregistered foundational implementation, correctness, resources and observability, not formal performance admission",
+  "dependency_basis": "Ready existing COW/R1/R2 interfaces; common contracts apply throughout implementation; future R3/R5 paths must add affected validation",
+  "progress_derived_from_active_docs": [
+    {
+      "language": "zh",
+      "accepted": 13,
+      "denominator": 24
+    },
+    {
+      "language": "en",
+      "accepted": 13,
+      "denominator": 24
+    }
+  ],
+  "necessary_modules": 20,
+  "verification": {
+    "first_run": {
+      "file": "first-166.json",
+      "tests": 166,
+      "passed": 163,
+      "failed": 3
+    },
+    "final_necessary": {
+      "file": "necessary-final-245.json",
+      "tests": 245,
+      "passed": 245
+    },
+    "final_affected": {
+      "file": "profile-abi-final-99.json",
+      "tests": 99,
+      "passed": 99
+    },
+    "latest_distinct_cases": 263,
+    "single_263_case_run": false,
+    "full_unit_suite": false,
+    "checks": [
+      "Query-local nested/thread separation",
+      "Exact direct filter and aggregate counts",
+      "Eight-owner one-page COW plus old pin/reopen",
+      "ID and ordinary publication fence counts",
+      "Pre-mutation metadata refusal",
+      "Guard/error refunds and owning output",
+      "Existing Driver ABI map discovery",
+      "Native publication/evacuation/reclamation/backpressure/tail faults",
+      "Existing native sort/DISTINCT/UNION spill",
+      "MDX YAML/GFM compilation and doc links",
+      "Test file bounds and git whitespace checks"
+    ]
+  },
+  "source_evidence": "source-manifest.json",
+  "case_evidence": "latest-case-results.json",
+  "metrics": {
+    "fixture": "Instrumented correctness fixture, not latency comparison",
+    "group": {
+      "source_rows": 64,
+      "source_rejected": 0,
+      "attached_filter_rejected": 32,
+      "aggregate_input": 32,
+      "selected_fraction": 0.5
+    },
+    "update": {
+      "owners": 8,
+      "coalesced_members": 8,
+      "replacement_requests": 1,
+      "payload_bytes": 4032,
+      "observed_property_pool_catalog_scans": 0
+    },
+    "create": {
+      "graph_commit_attempts": 1,
+      "id_lease_publications": 1,
+      "data_fences": 2,
+      "superblock_fences": 2,
+      "observed_property_pool_catalog_scans": 2
+    }
+  },
+  "format_change": false,
+  "durability_change": false,
+  "limits_raised": false,
+  "new_cache": false,
+  "formal_performance_window": false,
+  "speedup_claim": false,
+  "remaining_performance_gates": [
+    "R1.3",
+    "R2.3",
+    "R4.3",
+    "R7"
+  ],
+  "platform_executed": "Linux x86_64 / Clang 19",
+  "platforms_not_executed": [
+    "macOS",
+    "Windows",
+    "WASM"
+  ],
+  "ownership": "Fixed admitted observation/report; parent QUERY account retains results; PROFILE never activates allocating duration labels or global page-pin storage",
+  "artifact_provenance": "Built from exact manifest source bytes before commits; embedded build Git labels are not used as source identity",
+  "private_artifacts": "/workspace/zyx-r46-five-20261019; no user databases or frozen before binaries replaced",
+  "local_build_artifacts": {
+    "core_library": {
+      "path": "/workspace/zyx/buildDir/libzyx_core.a",
+      "sha256": "3a02a27ddde683f132bdb549bd37ccaa7b3f8269c119975eeb89ba38b23e5cb0"
+    },
+    "final_necessary_binary": {
+      "path": "/workspace/zyx-r46-five-20261019/final/r46-five-tests",
+      "sha256": "29ccdf6fbd58e0dc3b7af7cea4f7689db0193f5b4bfe9a3903c24a700e012fe3"
+    },
+    "final_profile_abi_binary": {
+      "path": "/workspace/zyx-r46-five-20261019/profile-budget-final/r46-five-tests",
+      "sha256": "9933c099ffff6cd38fca91e2a90d58a9b7a1730dc1d7cd9081f31a01dc768574"
+    }
+  }
+}

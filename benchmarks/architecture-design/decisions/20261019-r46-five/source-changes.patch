@@ -1,0 +1,735 @@
+diff --git a/cmake/SourceSets.cmake b/cmake/SourceSets.cmake
+index 15ac533e..34336537 100644
+--- a/cmake/SourceSets.cmake
++++ b/cmake/SourceSets.cmake
+@@ -508,0 +509 @@ set(ZYX_NATIVE_TEST_SOURCES
++    "${PROJECT_SOURCE_DIR}/tests/src/debug/test_PerfTraceScopedObserver.cpp"
+diff --git a/include/graph/debug/PerfTrace.hpp b/include/graph/debug/PerfTrace.hpp
+index e2ede0a1..a8ecdad8 100644
+--- a/include/graph/debug/PerfTrace.hpp
++++ b/include/graph/debug/PerfTrace.hpp
+@@ -43,0 +44,18 @@ namespace graph::debug {
++        // Synchronous thread-local observation. No global toggle/reset and no
++        // allocation: the caller owns bounded storage and a noexcept receiver.
++        class ScopedObserver final {
++        public:
++            using Receiver = void (*)(void *, std::string_view, int64_t, bool) noexcept;
++            ScopedObserver(void *owner, Receiver receiver) noexcept
++                : owner_(owner), receiver_(receiver), previous_(active_) { active_ = this; }
++            ~ScopedObserver() { active_ = previous_; }
++            ScopedObserver(const ScopedObserver &) = delete;
++            ScopedObserver &operator=(const ScopedObserver &) = delete;
++        private:
++            friend class PerfTrace;
++            void *owner_;
++            Receiver receiver_;
++            ScopedObserver *previous_;
++            inline static thread_local ScopedObserver *active_ = nullptr;
++        };
++
+diff --git a/include/graph/query/execution/MaterializedByteBudget.hpp b/include/graph/query/execution/MaterializedByteBudget.hpp
+index bcfbbd08..3dbb9124 100644
+--- a/include/graph/query/execution/MaterializedByteBudget.hpp
++++ b/include/graph/query/execution/MaterializedByteBudget.hpp
+@@ -15,0 +16 @@
++#include "graph/debug/PerfTrace.hpp"
+@@ -73 +74 @@ namespace graph::query::execution {
+-            const size_t bytes = lease.bytes(); parent_->absorb(std::move(lease)); used_bytes_ += bytes;
++            const size_t bytes = lease.bytes(); parent_->absorb(std::move(lease)); used_bytes_ += bytes; observePeak();
+@@ -97 +98 @@ namespace graph::query::execution {
+-			used_bytes_ = total;
++			used_bytes_ = total; observePeak();
+@@ -99,0 +101,9 @@ namespace graph::query::execution {
++        void observePeak() noexcept {
++            if (used_bytes_ <= peak_bytes_) return;
++            peak_bytes_ = used_bytes_;
++            try {
++                debug::PerfTrace::addValue("logical_plan.materialized_budget_peak_bytes",
++                    static_cast<int64_t>((std::min)(peak_bytes_, static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
++            } catch (...) { /* Optional diagnostics cannot invalidate admitted storage. */ }
++        }
++
+@@ -115,0 +126 @@ namespace graph::query::execution {
++        size_t peak_bytes_ = 0U;
+diff --git a/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp b/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
+index c0d0960c..ee010de2 100644
+--- a/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
++++ b/include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp
+@@ -234 +234 @@ namespace graph::storage {
+-				const std::vector<SegmentId> *currentPropertyPools = nullptr,
++				std::optional<std::vector<SegmentId>> *currentPropertyPools = nullptr,
+diff --git a/src/debug/PerfTrace.cpp b/src/debug/PerfTrace.cpp
+index 1129983b..db983853 100644
+--- a/src/debug/PerfTrace.cpp
++++ b/src/debug/PerfTrace.cpp
+@@ -103 +103,2 @@ namespace graph::debug {
+-		return gCollector.durationEnabled.load(std::memory_order_relaxed);
++		// PROFILE values must not activate allocating duration-timer labels.
++        return gCollector.durationEnabled.load(std::memory_order_relaxed);
+@@ -111 +112 @@ namespace graph::debug {
+-		return gCollector.valueEnabled.load(std::memory_order_relaxed);
++		return ScopedObserver::active_ != nullptr || gCollector.valueEnabled.load(std::memory_order_relaxed);
+@@ -115 +116 @@ namespace graph::debug {
+-		if (!isEnabled() || key.empty()) {
++		if ((!isEnabled() && ScopedObserver::active_ == nullptr) || key.empty()) {
+@@ -118,0 +120,4 @@ namespace graph::debug {
++        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
++            if (observer->receiver_) observer->receiver_(observer->owner_, key, static_cast<int64_t>((std::min)(durationNs, static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))), true);
++        if (!gCollector.durationEnabled.load(std::memory_order_relaxed)) return;
++
+@@ -127 +132 @@ namespace graph::debug {
+-		if (!isEnabled() || key.empty() || calls == 0) {
++		if ((!isEnabled() && ScopedObserver::active_ == nullptr) || key.empty() || calls == 0) {
+@@ -130,0 +136,4 @@ namespace graph::debug {
++        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
++            if (observer->receiver_) observer->receiver_(observer->owner_, key, static_cast<int64_t>((std::min)(durationNs, static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))), true);
++        if (!gCollector.durationEnabled.load(std::memory_order_relaxed)) return;
++
+@@ -142,0 +152,4 @@ namespace graph::debug {
++        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
++            if (observer->receiver_) observer->receiver_(observer->owner_, key, value, false);
++        if (!gCollector.valueEnabled.load(std::memory_order_relaxed)) return;
++
+@@ -152 +165,2 @@ namespace graph::debug {
+-		if (!areValuesEnabled()) return;
++		// Local PROFILE observation never changes global page-pin ownership.
++        if (!gCollector.valueEnabled.load(std::memory_order_relaxed)) return;
+diff --git a/src/query/api/LogicalProfileObservation.hpp b/src/query/api/LogicalProfileObservation.hpp
+new file mode 100644
+index 00000000..cfc3276c
+--- /dev/null
++++ b/src/query/api/LogicalProfileObservation.hpp
+@@ -0,0 +1,159 @@
++#pragma once
++
++#include <array>
++#include <algorithm>
++#include <limits>
++#include <string_view>
++#include "graph/debug/PerfTrace.hpp"
++#include "graph/query/api/QueryResult.hpp"
++#include "graph/query/QueryContext.hpp"
++#include "graph/query/logical/LogicalOperator.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++
++namespace graph::query::detail {
++inline std::string_view logicalExecutionContract(logical::LogicalOpType type) noexcept {
++    using T = logical::LogicalOpType;
++    switch (type) {
++        case T::LOP_NODE_SCAN: return "runtime selects index/label/full scan; direct cells when eligible, otherwise bounded rows; estimates unavailable before snapshot";
++        case T::LOP_FILTER: return "literal supported predicates may consume direct cells; residual expressions retain bounded evaluator";
++        case T::LOP_AGGREGATE: return "eligible property aggregates consume direct cells; complex expressions use bounded owning adapter; no general group spill";
++        case T::LOP_SORT: return "bounded owning keys; Top-K when eligible, otherwise memory/internal-file sort subject to scratch permission";
++        case T::LOP_JOIN: return "bounded owning build rows and keys; no hash-join spill";
++        case T::LOP_TRAVERSAL:
++        case T::LOP_VAR_LENGTH_TRAVERSAL: return "bounded topology continuation and property gather; authoritative Edge checks retained";
++        case T::LOP_UNWIND:
++        case T::LOP_CALL_SUBQUERY:
++        case T::LOP_CALL_PROCEDURE: return "bounded owning adapter preserves correlation, multiplicity and side effects";
++        default: return "bound runtime operator; actual work is available only after PROFILE execution";
++    }
++}
++
++// One synchronous query, fixed metric registry, no process trace reset/toggle.
++// Unavailable metrics are omitted; zero observed work remains explicit zero.
++struct LogicalProfileMetric { std::string_view key; bool duration = false; bool peak = false; };
++class LogicalProfileObservation final {
++    using Metric = LogicalProfileMetric;
++    inline static constexpr auto metrics_ = std::to_array<Metric>({
++        {"logical_plan.direct_property.batches"}, {"logical_plan.direct_property.rows"},
++        {"logical_plan.direct_property.rejected"}, {"logical_plan.aggregate.direct_input_rows"}, {"logical_plan.aggregate.direct_filter_rejected"},
++        {"logical_plan.index_candidate.materialized_bytes"}, {"logical_plan.batch.rows"}, {"logical_plan.batch.materialized_bytes"},
++        {"logical_plan.consumer_adapter.sort.calls"}, {"logical_plan.consumer_adapter.join.calls"},
++        {"logical_plan.consumer_adapter.optional.calls"}, {"logical_plan.consumer_adapter.subquery.calls"},
++        {"logical_plan.consumer_adapter.unwind.calls"}, {"logical_plan.consumer_adapter.expand.calls"},
++        {"logical_plan.consumer_adapter.variable_expand.calls"}, {"logical_plan.consumer_adapter.csv.calls"},
++        {"logical_plan.consumer_adapter.union.calls"}, {"logical_plan.sort.spilled"},
++        {"logical_plan.sort.topk_input_rows"}, {"logical_plan.sort.topk_retained_rows"},
++        {"logical_plan.materialized_budget_peak_bytes", false, true},
++        {"native_graph.read.property_selected_decode"},
++        {"native_graph.read.directory_range_cursor_metadata_pages"},
++        {"native_graph.read.directory_range_cursor_root_descents"},
++        {"native_graph.read.decoded_metadata_cache_hits"},
++        {"native_graph.read.decoded_metadata_copy_fixed_bytes"},
++        {"native_graph.read.decoded_metadata_borrow_fixed_bytes"},
++        {"storage.checksum.bytes"}, {"storage.buffer_pool.physical_read_bytes"},
++        {"storage_io.file_size_calls"}, {"storage_io.completed_write_bytes"},
++        {"storage_io.completed_write_calls"},
++        {"native_graph.write.property_pool_catalog_scans"}, {"native_graph.write.property_plan_owners"},
++        {"native_graph.write.property_plan_owned_payload_bytes"},
++        {"native_graph.write.property_plan_coalesced_members"},
++        {"native_graph.write.property_plan_replacement_images"},
++        {"native_graph.write.property_plan_replacement_payload_bytes"},
++        {"native_graph.write.id_reservation_calls"}, {"native_graph.write.id_reservation_publications"}, {"native_graph.write.id_lease_cache_hits"}, {"native_graph.write.graph_commit_calls"},
++        {"native_graph.write.maintenance_reclaim_calls"}, {"storage_io.sync.data_fence"}, {"storage_io.sync.superblock_fence"},
++        {"storage_io.sync.data_fence", true}, {"storage_io.sync.superblock_fence", true},
++        {"native_graph.write.metadata.publication", true}
++    });
++    struct Sample { int64_t value = 0; bool seen = false; };
++    static void receive(void *owner, std::string_view key, int64_t value, bool duration) noexcept {
++        auto &self = *static_cast<LogicalProfileObservation *>(owner);
++        for (size_t i = 0; i < metrics_.size(); ++i) {
++            const auto &metric = metrics_[i];
++            if (metric.key != key || metric.duration != duration) continue;
++            auto &sample = self.samples_[i];
++            if (metric.peak) sample.value = sample.seen ? (std::max)(sample.value, value) : value;
++            else {
++                const auto max = (std::numeric_limits<int64_t>::max)();
++                const auto min = (std::numeric_limits<int64_t>::min)();
++                sample.value = value > 0 && sample.value > max - value ? max :
++                    value < 0 && sample.value < min - value ? min : sample.value + value;
++            }
++            sample.seen = true;
++        }
++    }
++    std::optional<execution::MaterializedByteBudget> budget_;
++    execution::MaterializedByteReservation charge_;
++    std::array<Sample, metrics_.size()> samples_{};
++    std::optional<std::array<int64_t, 3>> estimate_;
++    // Last member: stop observation before destroying charged metadata.
++    debug::PerfTrace::ScopedObserver observer_;
++public:
++    LogicalProfileObservation(const QueryContext &context, size_t maximumBytes)
++        : observer_(this, receive) {
++        if (context.resource_account) budget_.emplace(maximumBytes, context.resource_account, std::pmr::new_delete_resource());
++        else budget_.emplace(maximumBytes);
++        charge_ = execution::MaterializedByteReservation(&*budget_);
++        charge_.set(stagingBytes());
++    }
++    void estimate(uint64_t lower, uint64_t expected, uint64_t upper) noexcept {
++        if (lower > expected || expected > upper || upper > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)())) return;
++        estimate_ = std::array<int64_t,3>{static_cast<int64_t>(lower), static_cast<int64_t>(expected), static_cast<int64_t>(upper)};
++    }
++    [[nodiscard]] bool hasEstimate() const noexcept { return estimate_.has_value(); }
++    [[nodiscard]] PropertyValue estimatedRows() const {
++        return estimate_ ? PropertyValue((*estimate_)[1]) : PropertyValue();
++    }
++    [[nodiscard]] PropertyValue selectedFraction() const {
++        const auto rows = value("logical_plan.direct_property.rows");
++        return rows > 0 ? PropertyValue(static_cast<double>(rows - value("logical_plan.direct_property.rejected") - value("logical_plan.aggregate.direct_filter_rejected")) / static_cast<double>(rows)) : PropertyValue();
++    }
++    [[nodiscard]] int64_t value(std::string_view key) const noexcept {
++        for (size_t i = 0; i < metrics_.size(); ++i)
++            if (!metrics_[i].duration && metrics_[i].key == key) return samples_[i].value;
++        return 0;
++    }
++    [[nodiscard]] std::string_view path() const noexcept {
++        if (value("logical_plan.direct_property.batches")) return "direct_property_batches";
++        if (value("logical_plan.index_candidate.materialized_bytes")) return "indexed_candidates_with_residual_evaluation";
++        if (value("logical_plan.batch.rows")) return "bounded_property_row_adapter";
++        return "other_or_no_property_input";
++    }
++    [[nodiscard]] static size_t stagingBytes() {
++        using namespace utils::detail;
++        size_t bytes = addStandardHeapBytes(sizeof(LogicalProfileObservation),
++            standardFreshUnorderedMapHeapUpper<std::string, PropertyValue>(metrics_.size()));
++        for (const auto &metric : metrics_)
++            bytes = addStandardHeapBytes(bytes, standardFreshStringHeapUpper(metric.key.size() + 3U));
++        bytes = addStandardHeapBytes(bytes, standardFreshUnorderedMapHeapUpper<std::string, ResultValue>(10U));
++        for (const auto key : {"phase", "total_time_ms", "calls", "actual_output_rows",
++                "access_path", "physical_work", "physical_work_scope", "estimates_available", "estimated_root_rows", "direct_selected_fraction"})
++            bytes = addStandardHeapBytes(bytes, standardFreshStringHeapUpper(std::string_view(key).size()));
++        bytes = addStandardHeapBytes(bytes, 3U * standardFreshStringHeapUpper(256U));
++        return addStandardHeapBytes(bytes, 64U * standardContainerProxyBytes());
++    }
++    void publishColumns(QueryResult &result) {
++        // Keep original columns/order, append discoverable PROFILE fields.
++        // Borrow names until setColumnViews has built its admitted owning copy.
++        std::pmr::vector<std::string_view> columns(&*budget_);
++        columns.reserve(result.getColumns().size() + 10U);
++        for (const auto &name : result.getColumns()) columns.push_back(name);
++        for (const auto name : {"phase", "total_time_ms", "calls", "actual_output_rows",
++                "access_path", "physical_work", "physical_work_scope", "estimates_available",
++                "estimated_root_rows", "direct_selected_fraction"})
++            if (std::find(columns.begin(), columns.end(), name) == columns.end()) columns.push_back(name);
++        result.setColumnViews(columns);
++    }
++    [[nodiscard]] PropertyValue report() {
++        // Full fixed-registry staging was admitted before execution. Result
++        // ingestion owns its retained charge before this staging is destroyed.
++        PropertyValue::MapType values;
++        values.reserve(metrics_.size());
++        for (size_t i = 0; i < metrics_.size(); ++i) {
++            if (!samples_[i].seen) continue;
++            std::string name(metrics_[i].key);
++            if (metrics_[i].duration) name += ".ns";
++            values.emplace(std::move(name), PropertyValue(samples_[i].value));
++        }
++        return PropertyValue(std::move(values));
++    }
++};
++} // namespace graph::query::detail
+diff --git a/src/query/api/QueryEngine.cpp b/src/query/api/QueryEngine.cpp
+index 94d6b4d8..5fb87144 100644
+--- a/src/query/api/QueryEngine.cpp
++++ b/src/query/api/QueryEngine.cpp
+@@ -31,0 +32 @@
++#include "LogicalProfileObservation.hpp"
+@@ -337 +338,2 @@ namespace graph::query {
+-						   {"details", PropertyValue(current.op->toString())}});
++						   {"details", PropertyValue(current.op->toString() +
++                            " | " + std::string(detail::logicalExecutionContract(current.op->getType())))}});
+@@ -358 +360 @@ namespace graph::query {
+-													 const QueryContext &context) {
++													 const QueryContext &context, detail::LogicalProfileObservation &observation) {
+@@ -366,0 +369 @@ namespace graph::query {
++            observation.publishColumns(result);
+@@ -370 +373,8 @@ namespace graph::query {
+-					   {"calls", PropertyValue(int64_t{1})}});
++					   {"calls", PropertyValue(int64_t{1})},
++                       {"actual_output_rows", PropertyValue(static_cast<int64_t>(result.rowCount()))},
++                       {"access_path", PropertyValue(std::string(observation.path()))},
++                       {"physical_work", observation.report()},
++                       {"physical_work_scope", PropertyValue("current thread; cumulative except max of local budget peaks (not query total/RSS); inclusive ns timers; absent=unavailable; buffer reads are not device IO; estimates may precede execution snapshot")},
++                       {"estimates_available", PropertyValue(observation.hasEstimate())},
++                       {"estimated_root_rows", observation.estimatedRows()},
++                       {"direct_selected_fraction", observation.selectedFraction()}});
+@@ -724,2 +734,8 @@ namespace graph::query {
+-			const auto started = std::chrono::steady_clock::now();
+-			return addLogicalProfileSummary(executeLogicalRoot(), started, logicalContext);
++			detail::LogicalProfileObservation observation(logicalContext, logicalReadOptions_.bounds.maximum_materialized_bytes);
++            if (auto statisticsBackend = std::dynamic_pointer_cast<storage::LogicalGraphStatisticsBackend>(logicalBackend_)) {
++                BackendLogicalStatisticsProvider statistics(*statisticsBackend, executionRoot, false);
++                if (const auto estimate = statistics.estimate(executionRoot))
++                    observation.estimate(estimate->lower_bound, estimate->expected_rows, estimate->upper_bound);
++            }
++            const auto started = std::chrono::steady_clock::now();
++			return addLogicalProfileSummary(executeLogicalRoot(), started, logicalContext, observation);
+@@ -812,2 +828,3 @@ namespace graph::query {
+-		const auto started = std::chrono::steady_clock::now();
+-		return addLogicalProfileSummary(executeOverlayRoot(), started, logicalContext);
++		detail::LogicalProfileObservation observation(logicalContext, logicalReadOptions_.bounds.maximum_materialized_bytes);
++        const auto started = std::chrono::steady_clock::now();
++		return addLogicalProfileSummary(executeOverlayRoot(), started, logicalContext, observation);
+diff --git a/src/query/execution/LogicalPlanReadRuntime.cpp b/src/query/execution/LogicalPlanReadRuntime.cpp
+index e2645cb0..4121400a 100644
+--- a/src/query/execution/LogicalPlanReadRuntime.cpp
++++ b/src/query/execution/LogicalPlanReadRuntime.cpp
+@@ -13294 +13294,2 @@ namespace graph::query::execution {
+-								for (const auto ordinal : ordinals) {
++								size_t filterRejected = 0U;
++                                for (const auto ordinal : ordinals) {
+@@ -13313 +13314 @@ namespace graph::query::execution {
+-									if (!passesFilter) continue;
++									if (!passesFilter) { ++filterRejected; continue; }
+@@ -13361 +13362,2 @@ namespace graph::query::execution {
+-								return true;
++								debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(filterRejected));
++                                return true;
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index cee30223..697e6c63 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -7930,0 +7931 @@ namespace graph::storage {
++        debug::PerfTrace::addValue("native_graph.write.maintenance_reclaim_calls", 1);
+diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+index 214fe330..af56bd57 100644
+--- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
++++ b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+@@ -2019,0 +2020 @@ namespace graph::storage {
++        debug::PerfTrace::addValue("native_graph.write.graph_commit_calls", 1);
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+index dfdaeada..808b0785 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+@@ -186,0 +187 @@ namespace graph::storage {
++        debug::PerfTrace::addValue("native_graph.write.id_reservation_calls", 1);
+@@ -227,0 +229,3 @@ namespace graph::storage {
++        // Optional diagnostics cannot turn an acknowledged publication into failure.
++        try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
++        catch (...) {}
+@@ -239,0 +244 @@ namespace graph::storage {
++        debug::PerfTrace::addValue("native_graph.write.id_reservation_calls", 1);
+@@ -279,0 +285 @@ namespace graph::storage {
++            debug::PerfTrace::addValue("native_graph.write.id_lease_cache_hits", 1);
+@@ -308,0 +315,3 @@ namespace graph::storage {
++        // Optional diagnostics cannot turn an acknowledged publication into failure.
++        try { debug::PerfTrace::addValue("native_graph.write.id_reservation_publications", 1); }
++        catch (...) {}
+@@ -3469,0 +3479 @@ namespace graph::storage {
++        debug::PerfTrace::addValue("native_graph.write.property_pool_catalog_scans", 1);
+diff --git a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+index e61218bc..678760a6 100644
+--- a/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
++++ b/src/storage/relocatable/property/PropertyCollectionRootStore.cpp
+@@ -1737,4 +1737,3 @@ namespace graph::storage {
+-		std::vector<SegmentId> currentPropertyPools;
+-		for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
+-			currentPropertyPools.push_back(pool.segment_id);
+-		}
++        // Existing-owner updates/no-ops/deletes need only their authenticated
++        // source page. Discover pools once, lazily, if a new owner needs placement.
++        std::optional<std::vector<SegmentId>> currentPropertyPools;
+@@ -1749 +1748 @@ namespace graph::storage {
+-			const EntityPropertyRootMutationPlan plan =
++			EntityPropertyRootMutationPlan plan =
+@@ -1759 +1758,3 @@ namespace graph::storage {
+-			plans.push_back(plan);
++			debug::PerfTrace::addValue("native_graph.write.property_plan_owned_payload_bytes",
++                static_cast<int64_t>(plan.replacement_payload.size() + plan.encoded_root.size()));
++            plans.push_back(std::move(plan));
+@@ -1791 +1792 @@ namespace graph::storage {
+-			const EntityPropertyRootMutationPlan &candidate = plans[ordinal];
++			EntityPropertyRootMutationPlan &candidate = plans[ordinal];
+@@ -1796 +1797,3 @@ namespace graph::storage {
+-					EntityPropertyRootMutationPlan merged = candidate;
++					debug::PerfTrace::addValue("native_graph.write.property_plan_coalesced_members",
++                        static_cast<int64_t>(group->second.size()));
++                    EntityPropertyRootMutationPlan merged = candidate;
+@@ -1807 +1810 @@ namespace graph::storage {
+-						const EntityPropertyRootMutationPlan &member = plans[memberOrdinal];
++						EntityPropertyRootMutationPlan &member = plans[memberOrdinal];
+@@ -1846,2 +1849,2 @@ namespace graph::storage {
+-								merged.large_values.insert(merged.large_values.end(), member.large_values.begin(),
+-														   member.large_values.end());
++								merged.large_values.insert(merged.large_values.end(), std::make_move_iterator(member.large_values.begin()),
++														   std::make_move_iterator(member.large_values.end()));
+@@ -1856 +1859 @@ namespace graph::storage {
+-								EntityPropertyRootMutationPlan overflow = member;
++								EntityPropertyRootMutationPlan overflow = std::move(member);
+@@ -1887,2 +1890,2 @@ namespace graph::storage {
+-								merged.large_values.insert(merged.large_values.end(), member.large_values.begin(),
+-														   member.large_values.end());
++								merged.large_values.insert(merged.large_values.end(), std::make_move_iterator(member.large_values.begin()),
++														   std::make_move_iterator(member.large_values.end()));
+@@ -1893 +1896 @@ namespace graph::storage {
+-								EntityPropertyRootMutationPlan destination = member;
++								EntityPropertyRootMutationPlan destination = std::move(member);
+@@ -1923 +1926 @@ namespace graph::storage {
+-			coalesced.push_back(candidate);
++			coalesced.push_back(std::move(candidate));
+@@ -1925 +1928,9 @@ namespace graph::storage {
+-		return coalesced;
++        debug::PerfTrace::addValue("native_graph.write.property_plan_owners", static_cast<int64_t>(roots.size()));
++        for (const auto &plan : coalesced) {
++            if (plan.page_replacement) {
++                debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_images", 1);
++                debug::PerfTrace::addValue("native_graph.write.property_plan_replacement_payload_bytes",
++                    static_cast<int64_t>(plan.replacement_payload.size()));
++            }
++        }
++        return coalesced;
+@@ -1933 +1944 @@ namespace graph::storage {
+-			const std::vector<SegmentId> *currentPropertyPools, EntityPropertyBatchPageCache *pageCache) const {
++			std::optional<std::vector<SegmentId>> *currentPropertyPools, EntityPropertyBatchPageCache *pageCache) const {
+@@ -2109,8 +2120,9 @@ namespace graph::storage {
+-		std::vector<SegmentId> pools;
+-		if (currentPropertyPools != nullptr) {
+-			pools = *currentPropertyPools;
+-		} else {
+-			for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
+-				pools.push_back(pool.segment_id);
+-			}
+-		}
++        std::optional<std::vector<SegmentId>> localPools;
++        auto &poolCache = currentPropertyPools ? *currentPropertyPools : localPools;
++        if (!poolCache) {
++            std::vector<SegmentId> discovered;
++            for (const CatalogEntry &pool : metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id))
++                discovered.push_back(pool.segment_id);
++            poolCache.emplace(std::move(discovered));
++        }
++        const auto &pools = *poolCache;
+diff --git a/tests/src/api/test_DriverAbi_ResultCursor.cpp b/tests/src/api/test_DriverAbi_ResultCursor.cpp
+index 4b505e3f..3c1430da 100644
+--- a/tests/src/api/test_DriverAbi_ResultCursor.cpp
++++ b/tests/src/api/test_DriverAbi_ResultCursor.cpp
+@@ -751,0 +752,32 @@ TEST_F(DriverAbiResultCursorTest, ResultAndValueRefAccessorsRejectInvalidColumns
++
++TEST_F(DriverAbiResultCursorTest, ProfilePhysicalWorkIsDiscoverableThroughTheExistingMapAbi) {
++    zyx_driver_result_t *result = nullptr;
++    ASSERT_EQ(zyx_driver_db_execute(db, "PROFILE RETURN 7 AS value", nullptr, &result, &error), ZYX_DRIVER_OK);
++    struct Release { zyx_driver_result_t *result; ~Release() { zyx_driver_result_free(result); } } release{result};
++    ASSERT_NE(result, nullptr);
++    uint32_t metricsColumn = zyx_driver_result_column_count(result);
++    uint32_t rowsColumn = metricsColumn;
++    for (uint32_t column = 0; column < zyx_driver_result_column_count(result); ++column) {
++        const std::string name = zyx_driver_result_column_name(result, column);
++        if (name == "physical_work") metricsColumn = column;
++        if (name == "actual_output_rows") rowsColumn = column;
++    }
++    ASSERT_LT(metricsColumn, zyx_driver_result_column_count(result));
++    ASSERT_LT(rowsColumn, zyx_driver_result_column_count(result));
++    EXPECT_STREQ(zyx_driver_result_column_name(result, 0), "value");
++    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
++    int64_t value = 0;
++    ASSERT_EQ(zyx_driver_result_get_int64(result, 0, &value, &error), ZYX_DRIVER_OK);
++    EXPECT_EQ(value, 7);
++    EXPECT_EQ(zyx_driver_result_value_type(result, metricsColumn), ZYX_DRIVER_VALUE_NULL);
++    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
++    ASSERT_EQ(zyx_driver_result_get_int64(result, rowsColumn, &value, &error), ZYX_DRIVER_OK);
++    EXPECT_EQ(value, 1);
++    EXPECT_EQ(zyx_driver_result_value_type(result, metricsColumn), ZYX_DRIVER_VALUE_MAP);
++    zyx_driver_value_ref_t metrics{};
++    ASSERT_EQ(zyx_driver_result_get_value(result, metricsColumn, &metrics, &error), ZYX_DRIVER_OK);
++    uint32_t entries = 0;
++    ASSERT_EQ(zyx_driver_value_ref_map_count(&metrics, &entries, &error), ZYX_DRIVER_OK);
++    EXPECT_GT(entries, 0U);
++    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_DONE);
++}
+diff --git a/tests/src/debug/test_PerfTraceScopedObserver.cpp b/tests/src/debug/test_PerfTraceScopedObserver.cpp
+new file mode 100644
+index 00000000..8d5d12b1
+--- /dev/null
++++ b/tests/src/debug/test_PerfTraceScopedObserver.cpp
+@@ -0,0 +1,59 @@
++#include <gtest/gtest.h>
++#include <array>
++#include <thread>
++#include <stdexcept>
++#include "graph/debug/PerfTrace.hpp"
++using graph::debug::PerfTrace;
++namespace {
++struct Counts {
++    int64_t values = 0, durations = 0;
++    static void receive(void *owner, std::string_view key, int64_t value, bool duration) noexcept {
++        if (key != "local") return;
++        auto &self = *static_cast<Counts *>(owner);
++        (duration ? self.durations : self.values) += value;
++    }
++};
++}
++TEST(PerfTraceScopedObserverTest, NestedObserversAreInclusiveAndDoNotEnableGlobalCollection) {
++    PerfTrace::setEnabled(false); PerfTrace::reset();
++    Counts parent, child;
++    {
++        PerfTrace::ScopedObserver outer(&parent, Counts::receive);
++        EXPECT_TRUE(PerfTrace::areValuesEnabled()); EXPECT_FALSE(PerfTrace::isEnabled());
++        PerfTrace::addValue("local", 2);
++        {
++            PerfTrace::ScopedObserver inner(&child, Counts::receive);
++            PerfTrace::addValue("local", 3); PerfTrace::addDuration("local", 7);
++        }
++        PerfTrace::addValue("local", 5);
++    }
++    EXPECT_EQ(parent.values, 10); EXPECT_EQ(child.values, 3);
++    EXPECT_EQ(parent.durations, 7); EXPECT_EQ(child.durations, 7);
++    EXPECT_FALSE(PerfTrace::areValuesEnabled()); EXPECT_FALSE(PerfTrace::isEnabled());
++    EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
++}
++TEST(PerfTraceScopedObserverTest, OtherThreadsAndExistingGlobalValuesStaySeparate) {
++    PerfTrace::setEnabled(true); PerfTrace::reset(); PerfTrace::addValue("local", 100);
++    Counts local;
++    {
++        PerfTrace::ScopedObserver scope(&local, Counts::receive);
++        std::thread other([] { PerfTrace::addValue("local", 1000); }); other.join();
++        PerfTrace::addValue("local", 2);
++    }
++    EXPECT_EQ(local.values, 2);
++    const auto global = PerfTrace::snapshotAndReset();
++    EXPECT_EQ(global.at("local").totalValue, 1102);
++    EXPECT_TRUE(PerfTrace::isEnabled()); PerfTrace::setEnabled(false);
++}
++TEST(PerfTraceScopedObserverTest, ExceptionRestoresObserverAndPagePinsRemainGloballyOwned) {
++    PerfTrace::setEnabled(false); PerfTrace::reset(); Counts counts;
++    EXPECT_THROW(([&] {
++        PerfTrace::ScopedObserver scope(&counts, Counts::receive);
++        PerfTrace::addValue("local", 1);
++        PerfTrace::addPagePin(&counts, 4096, 1);
++        throw std::runtime_error("stop");
++    }()), std::runtime_error);
++    EXPECT_EQ(counts.values, 1);
++    EXPECT_FALSE(PerfTrace::areValuesEnabled());
++    EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
++}
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatablePhysicalProfile.cpp b/tests/src/storage/relocatable/backend/test_RelocatablePhysicalProfile.cpp
+new file mode 100644
+index 00000000..91a7e0d8
+--- /dev/null
++++ b/tests/src/storage/relocatable/backend/test_RelocatablePhysicalProfile.cpp
+@@ -0,0 +1,195 @@
++#include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
++#include "graph/query/api/QueryEngine.hpp"
++#include "graph/query/QueryGuard.hpp"
++#include "graph/debug/PerfTrace.hpp"
++#include <map>
++
++using namespace relocatable_storage_backend_test;
++namespace {
++const PropertyValue::MapType &work(const graph::query::QueryResult &result) {
++    return std::get<PropertyValue::MapType>(result.getRows().back().at("physical_work").asPrimitive().getVariant());
++}
++int64_t number(const PropertyValue &value) { return std::get<int64_t>(value.getVariant()); }
++void recordWork(const graph::query::QueryResult &result) {
++    std::map<std::string, int64_t> ordered;
++    for (const auto &[key, value] : work(result)) ordered.emplace(key, number(value));
++    std::string json = "{";
++    for (const auto &[key, value] : ordered) {
++        if (json.size() > 1U) json += ",";
++        json += "\"" + key + "\":" + std::to_string(value);
++    }
++    ::testing::Test::RecordProperty("physical_work_observations", json + "}");
++}
++}
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileReportsDirectWorkWithoutConsumingGlobalTrace) {
++    materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open();
++    auto engine = database.getQueryEngine();
++    engine->execute("UNWIND range(0,63) AS x CREATE (:PhysicalProfile {rank:x,bucket:x%3,active:x%2=0})");
++    graph::debug::PerfTrace::setEnabled(false);
++    graph::debug::PerfTrace::setValueCollectionEnabled(true); graph::debug::PerfTrace::reset();
++    struct Reset { ~Reset() { graph::debug::PerfTrace::setEnabled(false); graph::debug::PerfTrace::reset(); } } reset;
++    graph::debug::PerfTrace::addValue("sentinel", 123);
++    graph::debug::PerfTrace::addValue("logical_plan.direct_property.rows", 12345);
++    const auto result = engine->execute("PROFILE MATCH (n:PhysicalProfile) WHERE n.active = true RETURN n.bucket AS bucket,count(DISTINCT n.rank) AS count");
++    ASSERT_EQ(result.rowCount(), 4U);
++    EXPECT_EQ(number(result.getRows().back().at("actual_output_rows").asPrimitive()), 3);
++    EXPECT_EQ(result.getRows().back().at("access_path").asPrimitive(), PropertyValue("direct_property_batches"));
++    const auto &metrics = work(result); recordWork(result);
++    EXPECT_EQ(number(metrics.at("logical_plan.direct_property.rows")), 64);
++    EXPECT_EQ(number(metrics.at("logical_plan.direct_property.rejected")), 0);
++    EXPECT_EQ(number(metrics.at("logical_plan.aggregate.direct_filter_rejected")), 32);
++    EXPECT_EQ(std::get<double>(result.getRows().back().at("direct_selected_fraction").asPrimitive().getVariant()), 0.5);
++    EXPECT_EQ(number(metrics.at("logical_plan.aggregate.direct_input_rows")), 32);
++    EXPECT_GT(number(metrics.at("storage.checksum.bytes")), 0);
++    EXPECT_GT(number(metrics.at("logical_plan.materialized_budget_peak_bytes")), 0);
++    const auto global = graph::debug::PerfTrace::snapshotAndReset();
++    EXPECT_EQ(global.at("sentinel").totalValue, 123);
++    EXPECT_EQ(global.at("logical_plan.direct_property.rows").totalValue, 12409);
++    EXPECT_TRUE(graph::debug::PerfTrace::areValuesEnabled());
++    database.close();
++    EXPECT_EQ(number(work(result).at("logical_plan.direct_property.rows")), 64);
++}
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileWritesOnceAndRetainsPublicationPhaseCounts) {
++    materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open();
++    auto engine = database.getQueryEngine();
++    graph::debug::PerfTrace::setEnabled(false);
++    const auto result = engine->execute("PROFILE CREATE (:PhysicalWrite {rank:1}) RETURN 7 AS answer");
++    ASSERT_EQ(result.rowCount(), 2U);
++    const auto &metrics = work(result); recordWork(result);
++    EXPECT_GE(number(metrics.at("native_graph.write.graph_commit_calls")), 1);
++    EXPECT_GE(number(metrics.at("native_graph.write.id_reservation_calls")), 1);
++    EXPECT_GE(number(metrics.at("storage_io.sync.data_fence")), 1);
++    EXPECT_EQ(number(metrics.at("storage_io.sync.data_fence")), number(metrics.at("storage_io.sync.superblock_fence")));
++    EXPECT_GT(number(metrics.at("storage_io.completed_write_bytes")), 0);
++    EXPECT_EQ(engine->execute("MATCH (n:PhysicalWrite) RETURN count(*) AS count").getRows()[0].at("count").asPrimitive(), PropertyValue(1));
++    EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
++    database.close();
++}
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileAdmissionPrecedesMutationAndRefundsBeforeRetry) {
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    graph::query::LogicalReadExecutionOptions reads; reads.bounds.maximum_materialized_bytes = 512;
++    graph::query::QueryEngine small(backend, reads);
++    const auto before = backend->currentNativeLogicalGraphMutationFence();
++    EXPECT_THROW((void)small.execute("PROFILE CREATE (:MustNotPublish) RETURN 1 AS value"), std::exception);
++    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), before);
++    EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
++    graph::query::QueryEngine retry(backend);
++    EXPECT_EQ(retry.execute("PROFILE RETURN 9 AS value").getRows()[0].at("value").asPrimitive(), PropertyValue(9));
++    backend->close();
++}
++TEST_F(RelocatableStorageBackendTest, PhysicalReadonlyProfileAndExplainNeverUseScratchOrPublish) {
++    materializeNativeDatabase();
++    auto options = backendOptions();
++    RelocatableStorageBackend initial(options); initial.open(); initial.close();
++    options.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    const auto bytes = std::filesystem::file_size(data_path_);
++    const auto fence = backend->currentNativeLogicalGraphMutationFence();
++    backend->resetIoStats(); graph::query::QueryEngine engine(backend);
++    const auto explained = engine.execute("EXPLAIN MATCH (n) RETURN n");
++    ASSERT_GT(explained.rowCount(), 0U);
++    bool contract = false;
++    for (const auto &row : explained.getRows())
++        contract |= row.at("details").toString().find("runtime selects index/label/full scan") != std::string::npos;
++    EXPECT_TRUE(contract);
++    const auto result = engine.execute("PROFILE RETURN 4 AS value");
++    EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue(4));
++    EXPECT_FALSE(work(result).contains("storage_io.completed_write_bytes"));
++    EXPECT_EQ(backend->ioStats().data.write_bytes, 0U);
++    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), fence);
++    backend->close(); EXPECT_EQ(std::filesystem::file_size(data_path_), bytes);
++}
++
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileCoalescesSharedOwnerUpdatesAndNoOpsKeepOldPins) {
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    std::vector<LogicalGraphNodeCreateRequest> inputs;
++    for (size_t i = 0; i < 8; ++i)
++        inputs.push_back({{"Coalesced"}, {{"rank", PropertyValue(0)}, {"body", PropertyValue("unchanged")}}});
++    const auto ids = backend->createLogicalNodes(inputs);
++    auto old = backend->openLogicalGraphReadSnapshot();
++    graph::query::QueryEngine engine(backend, backend);
++    const auto result = engine.execute("PROFILE MATCH (n:Coalesced) SET n.rank = n.rank + 1 RETURN n.rank AS rank");
++    ASSERT_EQ(result.rowCount(), 9U);
++    const auto &metrics = work(result); recordWork(result);
++    EXPECT_EQ(number(metrics.at("native_graph.write.property_plan_owners")), 8);
++    EXPECT_EQ(number(metrics.at("native_graph.write.property_plan_coalesced_members")), 8);
++    EXPECT_EQ(number(metrics.at("native_graph.write.property_plan_replacement_images")), 1);
++    EXPECT_FALSE(metrics.contains("native_graph.write.property_pool_catalog_scans"));
++    for (size_t i = 0; i < 8; ++i) EXPECT_EQ(result.getRows()[i].at("rank").asPrimitive(), PropertyValue(1));
++    for (const auto id : ids) EXPECT_EQ(old->readNodeProperty(id, "rank"), PropertyValue(0));
++    const auto noOp = engine.execute("PROFILE MATCH (n:Coalesced) SET n.rank = 1 RETURN n.rank AS rank");
++    EXPECT_FALSE(work(noOp).contains("native_graph.write.property_plan_replacement_images"));
++    EXPECT_FALSE(work(noOp).contains("native_graph.write.property_pool_catalog_scans"));
++    old.reset(); backend->close(); backend->open();
++    auto current = backend->openLogicalGraphReadSnapshot();
++    for (const auto id : ids) {
++        EXPECT_EQ(current->readNodeProperty(id, "rank"), PropertyValue(1));
++        EXPECT_EQ(current->readNodeProperty(id, "body"), PropertyValue("unchanged"));
++    }
++}
++
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileOutputAndFailureRefundTheSameQueryAccount) {
++    using namespace graph::query::execution::detail;
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    graph::query::QueryEngine engine(backend);
++    auto account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, 1024U*1024U);
++    graph::query::QueryContext context; context.resource_account = account;
++    {
++        auto result = engine.execute("PROFILE RETURN 'owned' AS value", context);
++        EXPECT_GT(account->used(), 0U);
++        backend->close();
++        EXPECT_EQ(result.getRows()[0].at("value").asPrimitive(), PropertyValue("owned"));
++        EXPECT_TRUE(result.getRows().back().contains("physical_work"));
++    }
++    EXPECT_EQ(account->used(), 0U);
++    backend->open();
++    // A semantic failure after observation begins must restore thread state and
++    // release all query metadata before a subsequent execution.
++    EXPECT_THROW((void)engine.execute("PROFILE RETURN 1/0 AS value", context), std::exception);
++    EXPECT_EQ(account->used(), 0U);
++    EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
++    EXPECT_EQ(engine.execute("PROFILE RETURN 5 AS value", context).getRows()[0].at("value").asPrimitive(), PropertyValue(5));
++}
++
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileGuardFailureInsideObservationRefundsAndRestoresThreadState) {
++    using namespace graph::query::execution::detail;
++    materializeNativeDatabase();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    auto backend = std::make_shared<RelocatableStorageBackend>(options); backend->open();
++    graph::query::QueryEngine engine(backend);
++    auto account = std::make_shared<ResourceAccount>(backend->queryResourceDomain(), ResourceClass::RCK_QUERY, 1024U*1024U);
++    graph::debug::PerfTrace::setEnabled(false);
++    bool sampledInside = false;
++    graph::query::QueryGuard guard(0, 1, [&] {
++        // Baseline and pre-execution checks see zero. Inject resident pressure
++        // only after the per-query observer is active, without timing/sleeps.
++        sampledInside |= graph::debug::PerfTrace::areValuesEnabled();
++        return sampledInside ? size_t{2U*1024U*1024U} : size_t{0};
++    });
++    graph::query::QueryContext context; context.resource_account = account; context.guard = &guard;
++    const auto fence = backend->currentNativeLogicalGraphMutationFence();
++    EXPECT_THROW((void)engine.execute("PROFILE MATCH (n) RETURN count(*) AS count", context),
++        graph::query::QueryMemoryExceededException);
++    EXPECT_TRUE(sampledInside); EXPECT_EQ(account->used(), 0U);
++    EXPECT_FALSE(graph::debug::PerfTrace::areValuesEnabled());
++    EXPECT_EQ(backend->currentNativeLogicalGraphMutationFence(), fence);
++    context.guard = nullptr;
++    EXPECT_EQ(engine.execute("PROFILE RETURN 6 AS value", context).getRows()[0].at("value").asPrimitive(), PropertyValue(6));
++}
++TEST_F(RelocatableStorageBackendTest, PhysicalProfileUsesBoundedExistingEstimatesAndMarksUnsupportedRootsUnavailable) {
++    materializeNativeDatabase(); graph::Database database(data_path_.string()); database.open();
++    auto engine = database.getQueryEngine(); engine->execute("CREATE (:Estimated {rank:1}),(:Estimated {rank:2})");
++    const auto scan = engine->execute("PROFILE MATCH (n:Estimated) RETURN n.rank AS rank");
++    ASSERT_EQ(scan.rowCount(), 3U);
++    EXPECT_EQ(scan.getRows().back().at("estimates_available").asPrimitive(), PropertyValue(true));
++    EXPECT_EQ(scan.getRows().back().at("estimated_root_rows").asPrimitive(), PropertyValue(2));
++    const auto aggregate = engine->execute("PROFILE MATCH (n:Estimated) RETURN count(*) AS count");
++    EXPECT_EQ(aggregate.getRows().back().at("estimates_available").asPrimitive(), PropertyValue(false));
++    EXPECT_EQ(aggregate.getRows().back().at("estimated_root_rows").asPrimitive(), PropertyValue());
++}

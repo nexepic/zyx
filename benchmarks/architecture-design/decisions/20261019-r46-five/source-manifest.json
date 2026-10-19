@@ -1,0 +1,22 @@
+{
+  "parent": "89f1254928947c8b6fd32cbd8fc2917d2b7f55e9",
+  "candidate_code_commit": "ea8edffdfe18b12513df9cce70f1b20984c07df8",
+  "source_sha256": {
+    "cmake/SourceSets.cmake": "25c1d635dd46f537d54b9887654ddbc6bfe2d2aa28920366c36b2e2eccdaf875",
+    "include/graph/debug/PerfTrace.hpp": "b1a6d00254e4753dc5cb2dd105e27d246f0f5b09267615a9311ba76f91cedb49",
+    "include/graph/query/execution/MaterializedByteBudget.hpp": "3ba54199f7561596ccb012d46d2556af8a1ae2132f2165907ae6a5a3749e95f6",
+    "include/graph/storage/relocatable/property/PropertyCollectionRootStore.hpp": "9cd31ed71bcf0381bc377e9db4123f43cd0a96b1e7c78bac7a729c1cd320b4b8",
+    "src/debug/PerfTrace.cpp": "7951eb00d353bfaffdead2eb779f8a310fe6b10490ce0f8a34f74e9ca8b5ae94",
+    "src/query/api/LogicalProfileObservation.hpp": "59309949aa59d7d69d99c9e09f3a851099ce5e05eb66710bd15dfec755826172",
+    "src/query/api/QueryEngine.cpp": "4b4acb643257ec26e663bc41ffc2254bdc1ddf7452a816d6068c78f369214179",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "49298cec33728fcddcdf1109be5c660c11dd3bc924cad4a46c1e6c13ac1491bc",
+    "src/storage/relocatable/backend/RelocatableStorageBackend.cpp": "e356bd36587fc5f5099ab480061f9d3f2520e4a791815c742183cbd03d313f00",
+    "src/storage/relocatable/entity/NativeGraphWritePlanner.cpp": "31fabd26f1c32a359e9c16017293602390a2fae8744fa7b5dd043f057c3bfefb",
+    "src/storage/relocatable/metadata/RelocatableMetadataStore.cpp": "79ef9b906a3184a99abb069b232d4c48a07c180533140552c9a6ed11ea260475",
+    "src/storage/relocatable/property/PropertyCollectionRootStore.cpp": "2d146f95918cb19c3fd89818b6004e6fdeeabf5f7d84c459f4445bd8dd7e16f7",
+    "tests/src/api/test_DriverAbi_ResultCursor.cpp": "02cff6a46890e46f38032ddbbb0a3111af7a6ac3f6aa720066bea2432136d31b",
+    "tests/src/debug/test_PerfTraceScopedObserver.cpp": "3f6e9b617e4bcb86dd07a14368bf4c54cabe04e32775721bed844a863b12f0fb",
+    "tests/src/storage/relocatable/backend/test_RelocatablePhysicalProfile.cpp": "77fc1521a137b028934cd59b911b689d86ad14c0ace57ea34bc0d76fa780ec47"
+  },
+  "patch_sha256": "4dffc15bb8109a6263bd9b72e33afe0897fa5bad33e25b51fa3a8104897d7b3c"
+}

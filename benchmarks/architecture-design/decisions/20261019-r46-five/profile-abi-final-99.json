@@ -1,0 +1,1103 @@
+{
+  "tests": 99,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T05:42:11Z",
+  "time": "5.135s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "DriverAbiResultCursorTest",
+      "tests": 18,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:11Z",
+      "time": "1.13s",
+      "testsuite": [
+        {
+          "name": "StreamsScalarRowWithColumnMetadataAndTypedGetters",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 56,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.067s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ResultAccessorsValidateNullAndOutOfRangeInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 113,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.061s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "StringPointersRemainStableUntilNextOrFree",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 165,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.062s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ReadsMixedValueListElements",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 196,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.069s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ExecuteWithScalarParams",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 236,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.061s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ExecuteWithDoubleAndNullParams",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 274,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:11Z",
+          "time": "0.061s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ParamsCreateAndFreeValidateNullInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 316,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.05s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ParamsSettersRejectNullInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 327,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.057s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ParamsSetStringAndFloatListsRoundTripThroughResults",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 366,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.107s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ParamsListSettersValidateNullAndEmptyInputs",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 425,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.059s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ResultListAccessorsValidateErrorsAndConversions",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 510,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.065s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "TypeMismatchReturnsStructuredError",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 568,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.06s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ScalarTypeMismatchesReportGotTypeNames",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.058s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ListAndMapValuesReportTypeMismatches",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 619,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.059s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "DbExecuteValidatesInvalidArguments",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 649,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.046s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "DbExecuteInvalidCypherReportsErrorWithOptionalErrorOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 674,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.061s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ResultAndValueRefAccessorsRejectInvalidColumnsTypesAndStaleRefs",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 690,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.058s",
+          "classname": "DriverAbiResultCursorTest"
+        },
+        {
+          "name": "ProfilePhysicalWorkIsDiscoverableThroughTheExistingMapAbi",
+          "file": "\/workspace\/zyx\/tests\/src\/api\/test_DriverAbi_ResultCursor.cpp",
+          "line": 753,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.059s",
+          "classname": "DriverAbiResultCursorTest"
+        }
+      ]
+    },
+    {
+      "name": "PerfTraceTest",
+      "tests": 21,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0.04s",
+      "testsuite": [
+        {
+          "name": "DistinctPagePinsDeduplicateThreadsAndSeparateIoOffsetAndGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 21,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "DistinctPagePinsReportBoundWithoutThrowingOrCountingDuplicateAsOverflow",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 41,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.038s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "DefaultDisabled",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 55,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "SetEnabledToggle",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 60,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddDurationWhenDisabled",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 69,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddDurationWithEmptyKey",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 78,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddDurationWithValidKey",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddDurationBatchRecordsTotalWithExplicitCallCount",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 101,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddValueWithValidKey",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ValueOnlyCollectionSkipsDurationTimers",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 128,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "AddValueWhenValueCollectionDisabledIsIgnored",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 145,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ResetClearsData",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "SnapshotAndResetClearsData",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 163,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ScopedPerfTimerRecordsWhenEnabled",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 174,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ScopedPerfTimerOwnsDynamicKey",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 187,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ScopedPerfTimerSkipsWhenDisabledOrEmpty",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 198,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "ConcurrentAddsAreMergedAcrossWorkerShards",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "SaturatesDurationsAndBatchCountsInsteadOfWrapping",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 237,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "SaturatesSignedValuesAtBothBoundsAndAllowsOpposingUpdates",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 250,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "SaturatesWorkerShardAggregation",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        },
+        {
+          "name": "MaximumValuePreservesNegativeValuesMergesThreadsAndResets",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTrace.cpp",
+          "line": 291,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceTest"
+        }
+      ]
+    },
+    {
+      "name": "PerfTraceScopedObserverTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "NestedObserversAreInclusiveAndDoNotEnableGlobalCollection",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTraceScopedObserver.cpp",
+          "line": 17,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceScopedObserverTest"
+        },
+        {
+          "name": "OtherThreadsAndExistingGlobalValuesStaySeparate",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTraceScopedObserver.cpp",
+          "line": 35,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceScopedObserverTest"
+        },
+        {
+          "name": "ExceptionRestoresObserverAndPagePinsRemainGloballyOwned",
+          "file": "\/workspace\/zyx\/tests\/src\/debug\/test_PerfTraceScopedObserver.cpp",
+          "line": 48,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "PerfTraceScopedObserverTest"
+        }
+      ]
+    },
+    {
+      "name": "QueryEngineLogicalBackendBoundaryTest",
+      "tests": 6,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0.003s",
+      "testsuite": [
+        {
+          "name": "ExplainRejectsMalformedAndOverBoundPrebuiltPlanTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 647,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.001s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ExplainCapsRenderedIndentForDeepPrebuiltPlanTrees",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 686,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ExplainIsSnapshotFreeAndMayInspectAWriteInReadOnlyMode",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 714,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileDispatchesItsInnerReadPlanAndAddsOneSummaryRow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 900,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileDispatchesItsInnerCreatePlanThroughOneAtomicBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 914,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        },
+        {
+          "name": "ProfileUsesTheLogicalTransactionOverlayInsteadOfTheBaseBackend",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/api\/test_QueryEngineLogicalBackend.cpp",
+          "line": 931,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "QueryEngineLogicalBackendBoundaryTest"
+        }
+      ]
+    },
+    {
+      "name": "DirectPropertyColumnsTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 85,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "RejectsDuplicateCellsForeignRowsAndChangedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "PressureAndCancellationDiscardPrivateConstructionAndRefund",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "StringAndMixedTypePredicatesMatchLegacyScalarOrdering",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 143,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectColumnAggregateTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "CompleteTupleGroupingDistinctAndNumericStateMatchLegacy",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "StringAndNumericPredicatesFeedGroupedCountsWithoutRows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 613,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "DistinctPreservesTypesNullAndEmbeddedStringBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 629,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 646,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "AccumulationPreservesPhysicalScanOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 665,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 691,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.003s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 709,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.009s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "GuardAdmissionTypedExceptionDuringProductionIsNeverRetried",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 734,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 8,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:12Z",
+      "time": "0.927s",
+      "testsuite": [
+        {
+          "name": "PhysicalProfileReportsDirectWorkWithoutConsumingGlobalTrace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.151s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.aggregate.direct_filter_rejected\":32,\"logical_plan.aggregate.direct_input_rows\":32,\"logical_plan.direct_property.batches\":1,\"logical_plan.direct_property.rejected\":0,\"logical_plan.direct_property.rows\":64,\"logical_plan.materialized_budget_peak_bytes\":143360,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":8056,\"native_graph.read.decoded_metadata_cache_hits\":833,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":2802264,\"native_graph.read.directory_range_cursor_metadata_pages\":2,\"native_graph.read.directory_range_cursor_root_descents\":1,\"native_graph.read.property_selected_decode\":64,\"storage.buffer_pool.physical_read_bytes\":12288,\"storage.checksum.bytes\":291456,\"storage_io.file_size_calls\":90}"
+        },
+        {
+          "name": "PhysicalProfileWritesOnceAndRetainsPublicationPhaseCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:12Z",
+          "time": "0.124s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.materialized_budget_peak_bytes\":14605,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":19912,\"native_graph.read.decoded_metadata_cache_hits\":1583,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":4749856,\"native_graph.write.graph_commit_calls\":1,\"native_graph.write.id_reservation_calls\":1,\"native_graph.write.id_reservation_publications\":1,\"native_graph.write.property_plan_owned_payload_bytes\":54,\"native_graph.write.property_plan_owners\":1,\"native_graph.write.property_pool_catalog_scans\":2,\"storage.buffer_pool.physical_read_bytes\":167936,\"storage.checksum.bytes\":3050304,\"storage_io.completed_write_bytes\":539329,\"storage_io.completed_write_calls\":101,\"storage_io.file_size_calls\":775,\"storage_io.sync.data_fence\":2,\"storage_io.sync.superblock_fence\":2}"
+        },
+        {
+          "name": "PhysicalProfileAdmissionPrecedesMutationAndRefundsBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.081s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalReadonlyProfileAndExplainNeverUseScratchOrPublish",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 82,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.074s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileCoalescesSharedOwnerUpdatesAndNoOpsKeepOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.205s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.materialized_budget_peak_bytes\":20125,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":49000,\"native_graph.read.decoded_metadata_cache_hits\":3172,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":10569648,\"native_graph.read.directory_range_cursor_metadata_pages\":12,\"native_graph.read.directory_range_cursor_root_descents\":6,\"native_graph.write.graph_commit_calls\":1,\"native_graph.write.property_plan_coalesced_members\":8,\"native_graph.write.property_plan_owned_payload_bytes\":32256,\"native_graph.write.property_plan_owners\":8,\"native_graph.write.property_plan_replacement_images\":1,\"native_graph.write.property_plan_replacement_payload_bytes\":4032,\"storage.buffer_pool.physical_read_bytes\":40960,\"storage.checksum.bytes\":1645568,\"storage_io.completed_write_bytes\":45696,\"storage_io.completed_write_calls\":19,\"storage_io.file_size_calls\":448,\"storage_io.sync.data_fence\":1,\"storage_io.sync.superblock_fence\":1}"
+        },
+        {
+          "name": "PhysicalProfileOutputAndFailureRefundTheSameQueryAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.09s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileGuardFailureInsideObservationRefundsAndRestoresThreadState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.081s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileUsesBoundedExistingEstimatesAndMarksUnsupportedRootsUnavailable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.117s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeGraphWritePlannerDurabilityTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:13Z",
+      "time": "0.285s",
+      "testsuite": [
+        {
+          "name": "DiskFullDuringCompoundGraphCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 223,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.022s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "PrePublicationSyncFailureDuringCompoundGraphRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 298,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.027s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "DiskFullDuringCompoundGraphPropertyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 381,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.025s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "DiskFullDuringCompoundGraphLabelSetCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 453,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.025s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "DiskFullDuringCompoundGraphAdjacencyCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 528,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.023s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "DiskFullDuringCompoundGraphScalarIndexCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 600,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.025s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "DiskFullDuringCompoundGraphMetadataCandidateRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 683,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.023s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "PostPublicationSyncFailureDuringCompoundGraphReportsUncertainDurabilityAndReopensCompleteGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 773,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.033s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "TornInactiveSuperblockDuringCompoundGraphPublicationRetainsTheOldGenerationAndCanRetryAfterReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 842,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:13Z",
+          "time": "0.031s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "RecoversOldEntityAndIndexWhenDerivedPublicationIsInterruptedBeforeSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 895,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "0.023s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        },
+        {
+          "name": "RecoversNewEntityAndIndexWhenDerivedPublicationIsInterruptedAfterSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_Durability.cpp",
+          "line": 938,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "0.022s",
+          "classname": "NativeGraphWritePlannerDurabilityTest"
+        }
+      ]
+    },
+    {
+      "name": "NativeGraphLargeValueMutationTest",
+      "tests": 19,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T05:42:14Z",
+      "time": "2.731s",
+      "testsuite": [
+        {
+          "name": "ExternalizesOversizedLogicalPropertiesInTheNativeGraphGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 243,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "0.072s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "PublishesLargeValueScalarIndexAndVectorStateInOneNativeGraphGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 325,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "0.044s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "PublishesScalarAdjacencyAndContentIndexesIntoDistinctFramesOfOneSharedPool",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 380,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "0.089s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RebuildsContentIndexFreshWhenSharedPoolDemandExceedsItsRemainingFrames",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 443,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:14Z",
+          "time": "1.265s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RebuildsTheLargeValueContentIndexFreshWhenItsCurrentPoolHasNoFrameCapacity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 550,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:15Z",
+          "time": "0.362s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RebuildsGlobalAdjacencyFreshBeforeTheCompetingLargeValueContentIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 602,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:15Z",
+          "time": "0.448s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "PublishesCompressedLargeValueReferencesWithTheirOwningProperty",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 666,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.014s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "ReusesSharedLargeValueDataPoolAcrossGraphPublicationsAndReopen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 693,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.071s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "ReusesPublishedSharedPoolsForSeveralValuesInOneLaterPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 771,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.054s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "PacksMultipleFreshLargeValuesIntoSharedPoolsInOnePublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 819,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.045s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RecoversOldGenerationWhenSharedFreshPoolPublicationStopsBeforeSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 874,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.018s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RecoversSharedFreshPoolsWhenPublicationStopsAfterSuperblock",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 913,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.054s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RecoversNoPartialEntityLargeValueOrScalarIndexStateBeforeSuperblockPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 957,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.015s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RecoversNoPartialEntityLargeValueScalarIndexOrVectorStateBeforeSuperblockPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 988,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.019s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "PostSuperblockInterruptionReopensTheCompleteLargeValueScalarIndexAndVectorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 1030,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.053s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RecoversOneCompleteEntityLargeValueAndScalarIndexStateAfterSuperblockPublication",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 1073,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.043s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "ReusesSeveralSnapshotVerifiedContentsWithoutAllocatingAnotherLargeValue",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 1114,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.035s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RejectsExternalMutationOfReservedContentIndex",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 1166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.003s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        },
+        {
+          "name": "RollbackOfWidePropertyReplacementPreservesPublishedValueAndGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/entity\/test_NativeGraphWritePlanner_LargeValue.cpp",
+          "line": 1181,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T05:42:16Z",
+          "time": "0.017s",
+          "classname": "NativeGraphLargeValueMutationTest"
+        }
+      ]
+    }
+  ]
+}
