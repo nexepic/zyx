@@ -1,5 +1,7 @@
 # Frozen-source final admission review
 
+Published checkpoint (2026-10-19): the user explicitly authorized the complete payload and acceptance update. Implementation payload `d6f48819` was pushed and remotely verified before applying this **34/34 (100%)** checkpoint. The review below is the immutable pre-publication account; see `publication-receipt.json` and `../current-progress.json` for current publication state.
+
 Production source is frozen at `c28794a7c92434e809f9bbb17d48e8c457a70263`; subsequent commits contain evidence and harness/docs only. Local technical review is complete. Official progress remains **31/34 (91.2%)** because publication is required before any increase. S2.5, S3.5 and S6.2 are proposed for acceptance after explicit authorization for the complete Git payload and successful publication. An earlier push was rejected by automatic approval review; no new permission is assumed.
 
 The final matrix accounts for 117 unique slots: 93 actual independent processes, 87 full passes, five failures and one timeout; six unsupported slots, six retained historical failure slots and twelve skips following unchanged failures. All 39 required current-source contracts pass, including six external full wide/dynamic cases counted once. Control aggregate/wide/mixed actually fail or time out; control maintenance/dynamic historical failures remain. Kuzu wide/mixed/snapshot actually fail buffer allocation. None becomes a successful latency or protection result.
