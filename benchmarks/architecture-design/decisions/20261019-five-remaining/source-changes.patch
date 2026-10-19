@@ -1,0 +1,455 @@
+diff --git a/benchmarks/architecture-design/property-subblock/ReservedFieldTransition.hpp b/benchmarks/architecture-design/property-subblock/ReservedFieldTransition.hpp
+new file mode 100644
+index 00000000..740e3d99
+--- /dev/null
++++ b/benchmarks/architecture-design/property-subblock/ReservedFieldTransition.hpp
+@@ -0,0 +1,32 @@
++#pragma once
++#include "PropertySubblockFieldTransition.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++
++namespace zyx::benchmark::subblock {
++// A synchronous query-owned plan: the caller's budget must outlive it. It cannot
++// be copied/moved to an uncharged holder. This binds the pure kernel to actual
++// account admission; canonical extension bodies and future native publication
++// buffers still require their own reservations.
++class ReservedFieldTransition final {
++    using Reservation = graph::query::execution::MaterializedByteReservation;
++    Reservation reservation_;
++    FieldTransition transition_;
++    static Reservation reserve(graph::query::execution::MaterializedByteBudget &budget) {
++        Reservation reservation(&budget);
++        // Include the holder and worst-case named-return temporary overlap even
++        // when the compiler does not elide the pure kernel's return copy.
++        reservation.set(sizeof(ReservedFieldTransition) + sizeof(FieldTransition));
++        return reservation;
++    }
++public:
++    ReservedFieldTransition(graph::query::execution::MaterializedByteBudget &budget,
++        const Column &source,unsigned slot,FieldCell value,uint64_t live,uint64_t generation,size_t nativeLimit)
++        : reservation_(reserve(budget)), transition_(planFieldChange(source,slot,value,live,generation,
++            sizeof(FieldTransition),nativeLimit)) {}
++    ReservedFieldTransition(const ReservedFieldTransition &) = delete;
++    ReservedFieldTransition &operator=(const ReservedFieldTransition &) = delete;
++    [[nodiscard]] const FieldTransition &get() const & noexcept { return transition_; }
++    const FieldTransition &get() const && = delete;
++    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
++};
++}
+diff --git a/include/graph/storage/AdjacencyTopologyContract.hpp b/include/graph/storage/AdjacencyTopologyContract.hpp
+new file mode 100644
+index 00000000..e7004efa
+--- /dev/null
++++ b/include/graph/storage/AdjacencyTopologyContract.hpp
+@@ -0,0 +1,62 @@
++#pragma once
++#include <array>
++#include <span>
++#include "graph/storage/LogicalGraphRead.hpp"
++
++namespace graph::storage {
++struct AdjacencyTopologyIdentity {
++    uint64_t database_id=0,snapshot_generation=0,node_id=0,after_edge_id=0;
++    LogicalGraphReadDirection direction=LogicalGraphReadDirection::LGRD_OUTGOING;
++    uint64_t expected_first_edge_id=0; // exact logical continuation; zero for lower-bound/initial scan
++    bool operator==(const AdjacencyTopologyIdentity &) const = default;
++};
++struct AdjacencyTopologyCandidate { uint64_t edge_id=0,neighbor_id=0,type_token=0; };
++// Bounded verification boundary for future covering/segmented producers. Main
++// Edge remains authoritative. Verify the COMPLETE private batch before any
++// type filter or consumer side effect. Native producers must additionally bind
++// the live pin/store provenance and authenticate their on-disk routes.
++class VerifiedAdjacencyTopologyBatch final {
++    std::array<EntityRef,64> entries_{};
++    size_t count_=0;
++    AdjacencyTopologyIdentity identity_;
++    VerifiedAdjacencyTopologyBatch() = default;
++public:
++    [[nodiscard]] std::span<const EntityRef> entries() const & noexcept { return {entries_.data(),count_}; }
++    [[nodiscard]] AdjacencyTopologyIdentity identity() const noexcept { return identity_; }
++    std::span<const EntityRef> entries() const && = delete;
++    template<class Lookup,class Checkpoint>
++    [[nodiscard]] static VerifiedAdjacencyTopologyBatch verify(
++        const AdjacencyTopologyIdentity &identity,const AdjacencyTopologyIdentity &expected,
++        std::span<const AdjacencyTopologyCandidate> candidates,Lookup &&master,Checkpoint &&checkpoint) {
++        if (!identity.database_id || !identity.snapshot_generation || !identity.node_id ||
++            identity != expected || candidates.size()>64 ||
++            (identity.direction!=LogicalGraphReadDirection::LGRD_OUTGOING &&
++             identity.direction!=LogicalGraphReadDirection::LGRD_INCOMING))
++            throw std::invalid_argument("adjacency batch identity, snapshot, or bound mismatch");
++        if (identity.expected_first_edge_id &&
++            (identity.expected_first_edge_id<=identity.after_edge_id || candidates.empty() ||
++             candidates.front().edge_id!=identity.expected_first_edge_id))
++            throw std::runtime_error("adjacency batch did not resume at its exact continuation");
++        VerifiedAdjacencyTopologyBatch result;
++        result.identity_=identity;
++        uint64_t previous=identity.after_edge_id;
++        for (const auto &candidate:candidates) {
++            checkpoint();
++            if (!candidate.edge_id || !candidate.neighbor_id || candidate.edge_id<=previous)
++                throw std::runtime_error("adjacency batch has invalid or duplicate/nonmonotonic Edge identity");
++            const EntityRef authoritative=master(candidate.edge_id);
++            const bool outgoing=identity.direction==LogicalGraphReadDirection::LGRD_OUTGOING;
++            if (!authoritative.is_edge || authoritative.entity_id!=candidate.edge_id ||
++                !authoritative.source_node_id || !authoritative.target_node_id ||
++                (outgoing ? authoritative.source_node_id : authoritative.target_node_id)!=identity.node_id ||
++                (outgoing ? authoritative.target_node_id : authoritative.source_node_id)!=candidate.neighbor_id ||
++                authoritative.type_token!=candidate.type_token)
++                throw std::runtime_error("adjacency candidate disagrees with authoritative Edge");
++            result.entries_[result.count_++]=authoritative;
++            previous=candidate.edge_id;
++        }
++        checkpoint();
++        return result;
++    }
++};
++} // namespace graph::storage
+diff --git a/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp b/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
+index 1fd84504..cee054dd 100644
+--- a/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp
+@@ -74,0 +75,5 @@ namespace graph::storage {
++	struct MetadataSnapshotPressure {
++		uint64_t active_snapshot_count = 0;
++		Generation oldest_generation{}; // zero when no other active pin
++	};
++
+@@ -107,0 +113,2 @@ namespace graph::storage {
++		// One registry-lock sample, optionally excluding the observer's own pin.
++		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index 17cea592..cb2cac30 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -322,0 +323,4 @@ namespace graph::storage {
++		Generation oldest_snapshot_generation{}; // observer pin excluded; registry sample
++		uint64_t snapshot_generation_lag = 0; // generation distance, not elapsed time
++		uint64_t retire_queue_entries = 0; // records, not bytes or distinct generations
++		Generation oldest_retired_generation{}; // zero for empty queue
+diff --git a/src/query/execution/LogicalPlanReadRuntime.cpp b/src/query/execution/LogicalPlanReadRuntime.cpp
+index 4121400a..39e3bddb 100644
+--- a/src/query/execution/LogicalPlanReadRuntime.cpp
++++ b/src/query/execution/LogicalPlanReadRuntime.cpp
+@@ -11897,0 +11898 @@ namespace graph::query::execution {
++			metadata.set(checkedSizeMul(candidates.capacity(), sizeof(const expressions::Expression *), "Top-K metadata overflowed"));
+@@ -15904,2 +15905 @@ namespace graph::query::execution {
+-							throw std::runtime_error(
+-									"logical-plan Sort key slots exceeded its materialized byte bound");
++							throw MaterializedByteLimitExceeded();
+@@ -15921 +15921 @@ namespace graph::query::execution {
+-								throw std::runtime_error("logical-plan Sort key slots exceeded its materialized byte bound");
++								throw MaterializedByteLimitExceeded();
+diff --git a/src/storage/relocatable/metadata/LocationDirectory.cpp b/src/storage/relocatable/metadata/LocationDirectory.cpp
+index 0dbe149f..477c1698 100644
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -2258,2 +2258,2 @@ namespace graph::storage {
+-		CatalogRadixPage node = pages_.readMetadataRadixUnresolved(rootReference);
+-		if (node.kind != CatalogRadixPageKind::CRPK_ROOT || node.directory_type != directoryType) {
++		auto node = pages_.readMetadataRadixUnresolvedView(rootReference);
++		if (node->kind != CatalogRadixPageKind::CRPK_ROOT || node->directory_type != directoryType) {
+@@ -2263 +2263 @@ namespace graph::storage {
+-		validateVisible(node.generation, node.committed_lsn, superblock,
++		validateVisible(node->generation, node->committed_lsn, superblock,
+@@ -2267 +2267 @@ namespace graph::storage {
+-			if (node.kind == CatalogRadixPageKind::CRPK_ROOT) {
++			if (node->kind == CatalogRadixPageKind::CRPK_ROOT) {
+@@ -2269 +2269 @@ namespace graph::storage {
+-				for (uint16_t level = 0U; level <= node.level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
++				for (uint16_t level = 0U; level <= node->level; ++level) quotient /= RSS_CATALOG_RADIX_FANOUT;
+@@ -2272 +2272 @@ namespace graph::storage {
+-					pages_.resolveMetadataRadixChildren(node, superblock, {}, {});
++					pages_.resolveMetadataRadixChildren(*node, superblock, {}, {});
+@@ -2276 +2276 @@ namespace graph::storage {
+-			const std::array<uint32_t, 1U> indices{CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node.level)};
++			const std::array<uint32_t, 1U> indices{CatalogRadixPageCodec::childIndexForLeafOrdinal(ordinal, node->level)};
+@@ -2278 +2278 @@ namespace graph::storage {
+-			pages_.resolveMetadataRadixChildren(node, superblock, indices, references);
++			pages_.resolveMetadataRadixChildren(*node, superblock, indices, references);
+@@ -2283 +2283 @@ namespace graph::storage {
+-			if (node.level == 0U) {
++			if (node->level == 0U) {
+@@ -2298,3 +2298,3 @@ namespace graph::storage {
+-			CatalogRadixPage child = pages_.readMetadataRadixUnresolved(reference);
+-			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
+-				child.level + 1U != node.level) {
++			auto child = pages_.readMetadataRadixUnresolvedView(reference);
++			if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL || child->directory_type != directoryType ||
++				child->level + 1U != node->level) {
+@@ -2304 +2304 @@ namespace graph::storage {
+-			validateVisible(child.generation, child.committed_lsn, superblock,
++			validateVisible(child->generation, child->committed_lsn, superblock,
+diff --git a/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp b/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
+index 66913ab2..41e18cc1 100644
+--- a/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
++++ b/src/storage/relocatable/metadata/MetadataSnapshotRegistry.cpp
+@@ -214,8 +214,17 @@ namespace graph::storage {
+-		std::lock_guard lock(state_->snapshots_mutex);
+-		uint64_t count = 0;
+-		for (const auto &[generation, snapshot]: state_->snapshots) {
+-			static_cast<void>(generation);
+-			count += snapshot.second;
+-		}
+-		return count;
+-	}
++        return snapshotPressure().active_snapshot_count;
++    }
++
++    MetadataSnapshotPressure MetadataSnapshotRegistry::snapshotPressure(const MetadataSnapshotPin *exclude) const {
++        if (exclude && !owns(*exclude))
++            throw std::invalid_argument("snapshot pressure exclusion must be a live pin from this registry");
++        const auto excluded = exclude ? exclude->superblock().generation : Generation{};
++        std::lock_guard lock(state_->snapshots_mutex);
++        MetadataSnapshotPressure result;
++        for (const auto &[generation, snapshot] : state_->snapshots) {
++            const uint64_t count = snapshot.second - static_cast<uint64_t>(excluded.value() == generation);
++            if (!count) continue;
++            result.active_snapshot_count += count;
++            if (!result.oldest_generation.isValid()) result.oldest_generation = Generation(generation);
++        }
++        return result;
++    }
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+index 808b0785..63c81856 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+@@ -4091 +4090,0 @@ namespace graph::storage {
+-		const uint64_t activeSnapshots = snapshots_.activeSnapshotCount();
+@@ -4092,0 +4092 @@ namespace graph::storage {
++		const auto pressure = snapshots_.snapshotPressure(&snapshot);
+@@ -4096 +4096,4 @@ namespace graph::storage {
+-		observation.active_snapshot_count = activeSnapshots;
++		observation.active_snapshot_count = pressure.active_snapshot_count;
++		observation.oldest_snapshot_generation = pressure.oldest_generation;
++		if (pressure.oldest_generation.isValid() && pressure.oldest_generation < observation.generation)
++			observation.snapshot_generation_lag = observation.generation.value() - pressure.oldest_generation.value();
+@@ -4102,0 +4106,3 @@ namespace graph::storage {
++			++observation.retire_queue_entries;
++			if (!observation.oldest_retired_generation.isValid() || entry.retired_generation < observation.oldest_retired_generation)
++				observation.oldest_retired_generation = entry.retired_generation;
+diff --git a/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp b/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp
+index e1630553..4bddc6ff 100644
+--- a/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp
++++ b/tests/src/query/execution/test_LogicalPlanSortGrowth.cpp
+@@ -10,0 +11 @@
++#include "graph/query/execution/MaterializedByteBudget.hpp"
+@@ -60,0 +62,15 @@ TEST(LogicalPlanSortGrowthTest, PreservesStableNullOrderingAndOwnedPayloadsAcros
++
++TEST(LogicalPlanSortGrowthTest, SortKeyQuotaFailureIsTypedAndASeparateLargerExecutionCanRetry) {
++ NoGraphBackend backend; LogicalPlanReadRuntime runtime(backend);
++ graph::parser::cypher::CypherParserImpl parser;
++ std::string query="UNWIND [2,1] AS x RETURN x ORDER BY x";
++ for(size_t i=1;i<32;++i) query+=", x";
++ auto plan=parser.parseToLogical(query);
++ auto limited=bounds(); limited.maximum_materialized_bytes=4096;
++ EXPECT_THROW((void)runtime.executeToQueryResult(*plan.root,limited),MaterializedByteLimitExceeded);
++ limited.maximum_materialized_bytes=1024U*1024U;
++ auto result=runtime.executeToQueryResult(*plan.root,limited);
++ ASSERT_EQ(result.rowCount(),2U);
++ EXPECT_EQ(result.getRows()[0].at("x").asPrimitive(),PropertyValue(1));
++ EXPECT_EQ(result.getRows()[1].at("x").asPrimitive(),PropertyValue(2));
++}
+diff --git a/tests/src/storage/relocatable/adjacency/test_AdjacencyTopologyContract.cpp b/tests/src/storage/relocatable/adjacency/test_AdjacencyTopologyContract.cpp
+new file mode 100644
+index 00000000..d3945ca2
+--- /dev/null
++++ b/tests/src/storage/relocatable/adjacency/test_AdjacencyTopologyContract.cpp
+@@ -0,0 +1,77 @@
++#include <gtest/gtest.h>
++#include "graph/storage/AdjacencyTopologyContract.hpp"
++
++using namespace graph::storage;
++namespace {
++AdjacencyTopologyIdentity identity(){return {1,2,10,0,LogicalGraphReadDirection::LGRD_OUTGOING};}
++TEST(AdjacencyTopologyContractTest, VerifiesParallelAndSelfLoopEdgesBeforeConsumersAndOwnsOutput) {
++    std::array candidates{AdjacencyTopologyCandidate{1,20,3},AdjacencyTopologyCandidate{2,20,3},AdjacencyTopologyCandidate{3,10,0}};
++    size_t lookups=0,checkpoints=0;
++    auto batch=VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,[&](uint64_t id){++lookups;return EntityRef{id,true,10,id==3?10U:20U,id==3?0U:3U};},[&]{++checkpoints;});
++    EXPECT_EQ(lookups,3U); EXPECT_EQ(checkpoints,4U); candidates[0].neighbor_id=99;
++    EXPECT_EQ(batch.identity(),identity());
++    ASSERT_EQ(batch.entries().size(),3U); EXPECT_EQ(batch.entries()[0].target_node_id,20U);
++    EXPECT_EQ(batch.entries()[1].entity_id,2U); EXPECT_EQ(batch.entries()[2].target_node_id,10U);
++}
++TEST(AdjacencyTopologyContractTest, RejectsWrongEndpointTypeOrOrphanEvenWhenConsumerWouldFilterIt) {
++    const std::array candidates{AdjacencyTopologyCandidate{1,20,3}};
++    for(auto master:{EntityRef{1,true,11,20,3},EntityRef{1,true,10,21,3},EntityRef{1,true,10,20,4},EntityRef{2,true,10,20,3},EntityRef{1,false,10,20,3},EntityRef{1,true,0,20,3}})
++        EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,[&](uint64_t){return master;},[]{}),std::runtime_error);
++    EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,[](uint64_t)->EntityRef{throw std::runtime_error("missing master");},[]{}),std::runtime_error);
++}
++TEST(AdjacencyTopologyContractTest, RejectsDuplicateOrderStaleIdentityAndContinuationBeforeMasterAccess) {
++    size_t calls=0; auto lookup=[&](uint64_t id){++calls;return EntityRef{id,true,10,20,3};};
++    std::array candidates{AdjacencyTopologyCandidate{1,20,3}};
++    for(size_t field=0;field<5;++field){auto wrong=identity();if(field==0)++wrong.database_id;if(field==1)++wrong.snapshot_generation;if(field==2)++wrong.node_id;if(field==3)++wrong.after_edge_id;if(field==4)wrong.direction=LogicalGraphReadDirection::LGRD_INCOMING;
++        EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(wrong,identity(),candidates,lookup,[]{}),std::invalid_argument);}
++    EXPECT_EQ(calls,0U);
++    for(auto ids:{std::array<uint64_t,2>{1,1},std::array<uint64_t,2>{2,1}}){
++        std::array bad{AdjacencyTopologyCandidate{ids[0],20,3},AdjacencyTopologyCandidate{ids[1],20,3}};
++        EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),bad,lookup,[]{}),std::runtime_error);}
++    auto resumed=identity();resumed.after_edge_id=1;
++    EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(resumed,resumed,candidates,lookup,[]{}),std::runtime_error);
++    resumed.expected_first_edge_id=2;
++ const std::array skipped{AdjacencyTopologyCandidate{3,20,3}};
++ EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(resumed,resumed,skipped,lookup,[]{}),std::runtime_error);
++ EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(resumed,resumed,{},lookup,[]{}),std::runtime_error);
++ const std::array exact{AdjacencyTopologyCandidate{2,20,3}};
++ const auto resumedBatch=VerifiedAdjacencyTopologyBatch::verify(resumed,resumed,exact,lookup,[]{});
++ EXPECT_EQ(resumedBatch.entries().size(),1U);
++ std::array<AdjacencyTopologyCandidate,65> tooMany{};
++    EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),tooMany,lookup,[]{}),std::invalid_argument);
++}
++TEST(AdjacencyTopologyContractTest, IncomingAndCancellationPreserveDirectionAndNoPublishedPartialBatch) {
++    auto incoming=identity();incoming.direction=LogicalGraphReadDirection::LGRD_INCOMING;
++    const std::array candidates{AdjacencyTopologyCandidate{1,20,3}};
++    auto verified=VerifiedAdjacencyTopologyBatch::verify(incoming,incoming,candidates,[](uint64_t id){return EntityRef{id,true,20,10,3};},[]{});
++    EXPECT_EQ(verified.entries().front().source_node_id,20U);
++    size_t calls=0;
++    EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,[&](uint64_t id){++calls;return EntityRef{id,true,10,20,3};},[]{throw std::runtime_error("cancel");}),std::runtime_error);
++    EXPECT_EQ(calls,0U);
++}
++}
++
++TEST(AdjacencyTopologyContractTest, LaterCorruptionOrFinalCancellationCannotPublishAnEarlierVerifiedPrefix) {
++ std::array candidates{AdjacencyTopologyCandidate{1,20,3},AdjacencyTopologyCandidate{2,20,3}};
++ std::optional<VerifiedAdjacencyTopologyBatch> published;
++ size_t calls=0;
++ EXPECT_THROW(published.emplace(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,
++     [&](uint64_t id){++calls;return EntityRef{id,true,10,id==2 ? 99U:20U,3};},[]{})),std::runtime_error);
++ EXPECT_EQ(calls,2U);EXPECT_FALSE(published);
++ size_t checkpoints=0;
++ EXPECT_THROW(published.emplace(VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),candidates,
++     [](uint64_t id){return EntityRef{id,true,10,20,3};},[&]{if(++checkpoints==3)throw std::runtime_error("cancel before sealing");})),std::runtime_error);
++ EXPECT_FALSE(published);EXPECT_EQ(checkpoints,3U);
++}
++
++TEST(AdjacencyTopologyContractTest, EmptyTerminalAndFullBoundAreValidButUnknownIdentityFieldsReject) {
++ auto lookup=[](uint64_t id){return EntityRef{id,true,10,20,0};};
++ const auto empty=VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),{},lookup,[]{});
++ EXPECT_TRUE(empty.entries().empty());
++ std::array<AdjacencyTopologyCandidate,64> full{};
++ for(size_t i=0;i<full.size();++i)full[i]={i+1,20,0};
++ const auto verified=VerifiedAdjacencyTopologyBatch::verify(identity(),identity(),full,lookup,[]{});
++ ASSERT_EQ(verified.entries().size(),64U);EXPECT_EQ(verified.entries().back().entity_id,64U);
++ for(size_t field=0;field<4;++field){auto bad=identity();if(field==0)bad.database_id=0;if(field==1)bad.snapshot_generation=0;if(field==2)bad.node_id=0;if(field==3)bad.direction=LogicalGraphReadDirection(255);
++     EXPECT_THROW(VerifiedAdjacencyTopologyBatch::verify(bad,bad,{},lookup,[]{}),std::invalid_argument);}
++}
+diff --git a/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp b/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
+index c0844ed2..6b38c425 100644
+--- a/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
+@@ -792,0 +793,34 @@ TEST_F(MetadataPageReadContextTest, RadixViewsWithZeroCacheAndFutureReferencesRe
++
++#include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
++#include "graph/storage/relocatable/metadata/LocationDirectory.hpp"
++TEST_F(MetadataPageReadContextTest, PointLocationLookupBorrowsRootAndChildWithoutCachedRadixCopies) {
++ const PhysicalPageRef rootRef{PhysicalSlotId(1),1,Generation(1)},childRef{PhysicalSlotId(1),2,Generation(1)},leafRef{PhysicalSlotId(1),3,Generation(1)};
++ // Construct the unused writer allocator against an empty, aligned prefix
++ // before writing synthetic read-only radix frames; they are not a complete
++ // recoverable metadata pool. The reader must never request allocation.
++ const std::byte zero{};io->writeAt(root.data_region_offset-1,&zero,1);
++ MetadataPagePoolAllocator allocator(io,root);
++ root.page_directory_root=rootRef;
++ MetadataPageFile pages(io,root);
++ MetadataRadixPage top;top.page_id=MetadataPageId(1);top.kind=CatalogRadixPageKind::CRPK_ROOT;top.directory_type=MetadataDirectoryType::MDT_PAGE;
++ top.level=1;top.generation=Generation(1);top.committed_lsn=LogSequenceNumber(1);top.children[0]=childRef;
++ auto child=top;child.page_id=MetadataPageId(2);child.kind=CatalogRadixPageKind::CRPK_INTERNAL;child.level=0;child.children[0]=leafRef;
++ pages.writeMetadataRadix(rootRef,top);pages.writeMetadataRadix(childRef,child);
++ LocationLeafPage leaf;leaf.page_id=MetadataPageId(3);leaf.generation=Generation(1);leaf.committed_lsn=LogSequenceNumber(1);
++ leaf.entries.push_back({1,SegmentId(20),Generation(1),1,1,0});pages.writeLocationLeaf(leafRef,leaf);
++ LocationDirectory directory(pages,allocator);
++ auto context=std::make_shared<MetadataPageReadContext>(root);
++ MetadataPageReadContext::Scope scope(context,*io);
++ EXPECT_TRUE(directory.findPageOptional(root,PageId(1)));
++ graph::debug::PerfTrace::setValueCollectionEnabled(true);
++ for(size_t i=0;i<10;++i){EXPECT_TRUE(directory.findPageOptional(root,PageId(1)));EXPECT_FALSE(directory.findPageOptional(root,PageId(2)));}
++ const auto trace=graph::debug::PerfTrace::snapshotAndReset();
++ RecordProperty("point_lookups",20);
++ RecordProperty("borrowed_fixed_bytes",std::to_string(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue));
++ RecordProperty("copied_fixed_bytes",trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes") ? std::to_string(trace.at("native_graph.read.decoded_metadata_copy_fixed_bytes").totalValue) : "0");
++ EXPECT_FALSE(trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes"));
++ EXPECT_GE(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue,40U*sizeof(MetadataRadixPage));
++ EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
++ auto wrong=root;wrong.generation=Generation(0);
++ EXPECT_THROW(directory.findPageOptional(wrong,PageId(1)),FormatException);
++}
+diff --git a/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp b/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
+index 7fbb9b87..3e570b13 100644
+--- a/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataSnapshotRegistry.cpp
+@@ -417,0 +418,16 @@ TEST_F(RelocatableMetadataSnapshotRegistryTest, FullPayloadArenaCannotBlockSepar
++
++TEST_F(RelocatableMetadataSnapshotRegistryTest, PressureSampleExcludesOneObserverAndTracksOldestUntilRelease) {
++ SuperblockFile bootstrap(io);bootstrap.initializeNew(superblock(1,1));
++ MetadataSnapshotRegistry registry(bootstrap),foreign(bootstrap);
++ auto old=registry.openSnapshot();
++ {auto writer=registry.beginWrite();bootstrap.publish(superblock(2,2));}
++ auto observer=registry.openSnapshot();auto user=registry.openSnapshot();
++ auto pressure=registry.snapshotPressure(&observer);
++ EXPECT_EQ(pressure.active_snapshot_count,2U);EXPECT_EQ(pressure.oldest_generation,Generation(1));
++ EXPECT_THROW(foreign.snapshotPressure(&observer),std::invalid_argument);
++ old.release();pressure=registry.snapshotPressure(&observer);
++ EXPECT_EQ(pressure.active_snapshot_count,1U);EXPECT_EQ(pressure.oldest_generation,Generation(2));
++ user.release();pressure=registry.snapshotPressure(&observer);
++ EXPECT_EQ(pressure.active_snapshot_count,0U);EXPECT_FALSE(pressure.oldest_generation.isValid());
++ observer.release();EXPECT_THROW(registry.snapshotPressure(&observer),std::invalid_argument);
++}
+diff --git a/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_CompactionObservation.cpp b/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_CompactionObservation.cpp
+index 58aba9eb..1b134b9d 100644
+--- a/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_CompactionObservation.cpp
++++ b/tests/src/storage/relocatable/metadata/test_RelocatableMetadataStore_CompactionObservation.cpp
+@@ -106,0 +107,4 @@ TEST_F(RelocatableMetadataStoreTest, CompactionObservationTracksRelocatedSourceU
++	EXPECT_EQ(pending.retire_queue_entries, 1U);
++	EXPECT_TRUE(pending.oldest_retired_generation.isValid());
++	EXPECT_EQ(pending.oldest_snapshot_generation, sourceSnapshot.superblock().generation);
++	EXPECT_EQ(pending.snapshot_generation_lag, pending.generation.value()-sourceSnapshot.superblock().generation.value());
+@@ -119,0 +124,3 @@ TEST_F(RelocatableMetadataStoreTest, CompactionObservationTracksRelocatedSourceU
++	EXPECT_EQ(released.retire_queue_entries, 0U);
++	EXPECT_FALSE(released.oldest_retired_generation.isValid());
++	EXPECT_FALSE(released.oldest_snapshot_generation.isValid());
+diff --git a/tests/src/storage/relocatable/property/test_ReservedPropertySubblockTransition.cpp b/tests/src/storage/relocatable/property/test_ReservedPropertySubblockTransition.cpp
+new file mode 100644
+index 00000000..01324d23
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_ReservedPropertySubblockTransition.cpp
+@@ -0,0 +1,42 @@
++#include <gtest/gtest.h>
++#include "../../../../../benchmarks/architecture-design/property-subblock/ReservedFieldTransition.hpp"
++using namespace zyx::benchmark::subblock;
++using namespace graph::query::execution;
++using namespace graph::query::execution::detail;
++namespace {
++std::shared_ptr<ResourceAccount> transitionAccount(size_t bytes) {
++ auto process=std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(bytes));
++ auto database=std::make_shared<DatabaseResourceBudget>(process,ResourceLimits::uniform(bytes));
++ return std::make_shared<ResourceAccount>(database,ResourceClass::RCK_QUERY,bytes);
++}
++Column transitionSource() {
++ Column source;source.live=source.presence=UINT64_MAX;source.words.fill(1);return source;
++}
++TEST(ReservedPropertySubblockTransitionTest, HoldsSharedAccountUntilPlanDiesAndRefundsOnKernelFailure) {
++ auto account=transitionAccount(32768);MaterializedByteBudget budget(32768,account);
++ const auto source=transitionSource();
++ {ReservedFieldTransition plan(budget,source,0,{CellKind::HFC_INT64,2},UINT64_MAX,2,3968);
++ EXPECT_EQ(plan.get().action,FieldAction::HFT_REPLACE_COLUMN);
++ RecordProperty("held_transition_reservation_bytes",std::to_string(plan.retainedCharge()));
++ EXPECT_EQ(budget.used(),plan.retainedCharge());EXPECT_EQ(account->used(),plan.retainedCharge());
++ EXPECT_EQ(source.words[0],1U);}
++ EXPECT_EQ(budget.used(),0U);EXPECT_EQ(account->used(),0U);
++ EXPECT_THROW((ReservedFieldTransition(budget,source,0,{CellKind::HFC_INT64,2},UINT64_MAX,2,575)),std::length_error);
++ EXPECT_EQ(budget.used(),0U);EXPECT_EQ(account->used(),0U);
++ EXPECT_THROW((ReservedFieldTransition(budget,source,64,{},UINT64_MAX,2,3968)),std::invalid_argument);
++ EXPECT_EQ(account->used(),0U);
++}
++TEST(ReservedPropertySubblockTransitionTest, LocalAndParentAdmissionFailBeforeChangeAndAllowRetry) {
++ const auto source=transitionSource();auto account=transitionAccount(32768);
++ MaterializedByteBudget local(1,account);
++ EXPECT_THROW((ReservedFieldTransition(local,source,0,{CellKind::HFC_INT64,2},UINT64_MAX,2,3968)),MaterializedByteLimitExceeded);
++ EXPECT_EQ(account->used(),0U);
++ auto small=transitionAccount(1);MaterializedByteBudget large(32768,small);
++ EXPECT_THROW((ReservedFieldTransition(large,source,0,{CellKind::HFC_INT64,2},UINT64_MAX,2,3968)),ResourceAdmissionDenied);
++ EXPECT_EQ(small->used(),0U);EXPECT_EQ(large.used(),0U);
++ MaterializedByteBudget allowed(32768,account);
++ {ReservedFieldTransition plan(allowed,source,0,{CellKind::HFC_DOUBLE,0},UINT64_MAX,2,3968);
++ EXPECT_EQ(plan.get().action,FieldAction::HFT_DEMOTE_FIELD);EXPECT_GT(account->used(),0U);}
++ EXPECT_EQ(account->used(),0U);EXPECT_EQ(source.words[0],1U);
++}
++}

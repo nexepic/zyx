@@ -1,0 +1,37 @@
+{
+  "parent": "be10f80196a6cd4430002cad39eff6027bdb9b62",
+  "scope_ids": [
+    "R1.3",
+    "R2.3",
+    "R3.2",
+    "R4.3",
+    "R5.1"
+  ],
+  "scoped_advances_completed": 5,
+  "new_top_level_acceptances": 0,
+  "progress_source": "optimization.mdx",
+  "accepted": 13,
+  "total": 24,
+  "percent": 54.2,
+  "final_tests": 170,
+  "final_failures": 0,
+  "initial_tests": 168,
+  "initial_failures": 1,
+  "modules": 14,
+  "suites": 17,
+  "reverse_sort_parent_expected_failures": 1,
+  "point_work": {
+    "lookups": 20,
+    "borrowed_fixed_bytes": 324480,
+    "copied_fixed_bytes": 0,
+    "is_latency": false
+  },
+  "transition_retained_account_bytes": 3224,
+  "full_unit_suite": false,
+  "formal_performance_run": false,
+  "native_hybrid_format_or_candidate_adjacency_enabled": false,
+  "platform": "Linux x86_64",
+  "source_manifest": "source-manifest.json",
+  "code_candidate": "b698c2abc2266ff5a2d0b5186b4e521babdb2799",
+  "source_patch_sha256": "b7a9d9148dee9ce44482dd1ce51768389833d99d75513f3202a50710fcdbd2de"
+}
