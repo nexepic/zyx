@@ -1,0 +1,73 @@
+{
+  "plan": "cow-performance-20261019",
+  "task": "R1.2",
+  "classification": "preregistered foundational continuous filter/aggregate capability",
+  "source_parent_commit": "9aef17ce470419d165c72b9bf253ba2632f6b9dc",
+  "actual_source_manifest": "source-manifest.json",
+  "source_patch_sha256": "c0262dcb082d632b9237d57886d821e25e66bcad227be10537583ac9c7c9f1a8",
+  "interface_reuse": [
+    "DirectPropertyColumns",
+    "BatchEnvelope",
+    "BoundNodeColumnPredicates",
+    "existing AggregateAccumulator and result owner"
+  ],
+  "capabilities": [
+    "native primitive/string production without a PropertyValue matrix",
+    "direct bound scan predicates and pure property-left literal residual comparisons/AND",
+    "complete tuple grouping and typed COUNT DISTINCT",
+    "physical order and duplicates",
+    "owned results after batch/snapshot/backend close",
+    "pre-delivery pressure splitting only",
+    "guard exceptions never retried as pressure",
+    "indexed fallback retains authoritative Filter",
+    "non-NULL presence probes remain for payload-free counts"
+  ],
+  "adapters_retained": [
+    "providers without direct cells",
+    "complex/volatile/correlated filters and expressions",
+    "parameter residual filters not bound onto NodeScan",
+    "complete-entity grouping and COUNT DISTINCT entity",
+    "unsupported consumers reserved for R1.3",
+    "global COUNT(property) with no value-consuming sibling"
+  ],
+  "persistent_format_change": false,
+  "durability_or_isolation_change": false,
+  "tests": {
+    "initial_modules": 10,
+    "initial_total": 257,
+    "initial_passed": 254,
+    "initial_failed": 3,
+    "final_targeted_modules_built": 11,
+    "final_targeted_cases": 75,
+    "final_targeted_passed": 75,
+    "distinct_case_union_verified_through_followup": 266,
+    "not_one_full_union_rerun": true,
+    "full_unit_suite": false
+  },
+  "initial_failures": {
+    "retained_filter": "fixed safe Filter-to-batch forwarding without skipping indexed fallback filtering",
+    "batch_envelope": "fixed real publication through existing identity/selection envelope",
+    "wide_filter_quota": "frozen c287 Runtime recompiled against matching current adapter/test ABI also fails obsolete mandatory-rejection assertions; old monolithic binary passes. Updated semantic empty-output checks and added actual 1KiB rejection. Assertions/errors and control preserved."
+  },
+  "native_exact_oracle": {
+    "nodes": 600,
+    "multiple_batches": true,
+    "filter_fields": [
+      "country",
+      "rank"
+    ],
+    "group_tuple": [
+      "country",
+      "active"
+    ],
+    "aggregates": [
+      "COUNT(*)",
+      "COUNT(DISTINCT rank)",
+      "SUM(rank)"
+    ],
+    "indexed_followup_rows_per_country": 43,
+    "result_lifetime_after_close_checked": true
+  },
+  "performance_samples": 0,
+  "performance_gate": "deferred unchanged to R1.3/R7; no new latency or Kuzu-win claim"
+}

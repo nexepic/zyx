@@ -40,7 +40,8 @@ public:
     DirectPropertyColumns(const storage::LogicalGraphReadSnapshot &snapshot, size_t rows, size_t columns,
         MaterializedByteBudget &budget, std::pmr::memory_resource *upstream = std::pmr::get_default_resource())
         : snapshot_(snapshot), fence_(snapshot.mutationFence()), schema_(snapshot.bindingSchemaIdentity()),
-          budget_(&budget), memory_(budget, upstream), payload_(&budget), columns_(&memory_), rows_(rows) {
+          budget_(&budget), memory_(budget, upstream), payload_(&budget), columns_(&memory_), rows_(rows),
+          token_support_(snapshot.supportsPropertyTokenResolution()) {
         if (!upstream || rows > UINT32_MAX) throw std::invalid_argument("direct columns require bounded rows/allocator");
         columns_.reserve(columns);
         for (size_t c = 0; c < columns; ++c) {
@@ -142,6 +143,14 @@ public:
     [[nodiscard]] size_t size() const noexcept { return rows_; }
     [[nodiscard]] size_t columnCount() const noexcept { return columns_.size(); }
     [[nodiscard]] const MaterializedByteBudget *budgetDomain() const noexcept { return budget_; }
+    [[nodiscard]] BatchRowId borrowVersion() const {
+        if (!sealed_) throw std::logic_error("direct source has no sealed version");
+        return identity_.row(0U);
+    }
+    void validateBorrowVersion(BatchRowId version) const {
+        identity_.validate(version); validateSnapshot();
+        if (!sealed_) throw std::logic_error("direct source has no sealed version");
+    }
     [[nodiscard]] BatchRowId rowId(size_t row) const {
         if (!sealed_ || row >= rows_) throw std::out_of_range("direct row outside sealed batch");
         return identity_.row(static_cast<uint32_t>(row));
@@ -183,7 +192,8 @@ public:
     void invalidate() noexcept { sealed_ = false; identity_.invalidate(); }
 private:
     void validateSnapshot() const {
-        if (snapshot_.mutationFence() != fence_ || snapshot_.bindingSchemaIdentity() != schema_)
+        if (snapshot_.mutationFence() != fence_ || snapshot_.bindingSchemaIdentity() != schema_ ||
+            snapshot_.supportsPropertyTokenResolution() != token_support_)
             throw std::invalid_argument("direct batch snapshot identity changed");
     }
     const storage::LogicalGraphReadSnapshot &snapshot_;
@@ -195,6 +205,7 @@ private:
     std::pmr::vector<Column> columns_;
     size_t rows_;
     BatchIdentity identity_;
+    bool token_support_;
     bool sealed_ = false;
     bool failed_ = false;
 };

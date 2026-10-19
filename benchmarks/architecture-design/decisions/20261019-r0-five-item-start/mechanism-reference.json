@@ -1,0 +1,169 @@
+{
+  "scope": "Single-process diagnostic only, one uninstrumented warm execution then one instrumented execution per query. No formal latency samples or attribution of exact CPU shares. Original resource caps unchanged.",
+  "production_source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "binary_sha256": "e80e3709c90871b8abb672c17322d8d2f3f5a250960aa19216fcc79c91f32f55",
+  "source_database_sha256": "857d476301c2f29a13bc5199be89986611e24ec14b30dcf7b4f6c2f548b4f93a",
+  "trace_array_fields": [
+    "totalNs",
+    "timerCalls",
+    "totalValue",
+    "valueCalls",
+    "maximumValue"
+  ],
+  "records": [
+    {
+      "case": "point",
+      "query": "MATCH (u:User {id: 'user-000001'}) RETURN u.id, u.age, u.country, u.score",
+      "exact_results_checked": true,
+      "counters": {
+        "native_graph.read.property_selected_column_batch_owners": [
+          0,
+          0,
+          2,
+          2,
+          1
+        ],
+        "native_graph.read.metadata_pages_read": [
+          0,
+          0,
+          59,
+          59,
+          1
+        ],
+        "logical_plan.batch.materialized_bytes": [
+          0,
+          0,
+          472,
+          1,
+          472
+        ],
+        "logical_plan.batch.rows": [
+          0,
+          0,
+          1,
+          1,
+          1
+        ],
+        "storage_io.file_size_calls": [
+          0,
+          0,
+          133,
+          133,
+          1
+        ]
+      }
+    },
+    {
+      "case": "label_filter",
+      "query": "MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)",
+      "exact_results_checked": true,
+      "counters": {
+        "native_graph.read.property_selected_column_batch_owners": [
+          0,
+          0,
+          100000,
+          196,
+          512
+        ],
+        "native_graph.read.metadata_pages_read": [
+          0,
+          0,
+          2917,
+          2917,
+          1
+        ],
+        "logical_plan.node_column_filter.typed_columns": [
+          0,
+          0,
+          0,
+          196,
+          0
+        ],
+        "storage_io.file_size_calls": [
+          0,
+          0,
+          17019,
+          17019,
+          1
+        ]
+      }
+    },
+    {
+      "case": "all_nodes_filter",
+      "query": "MATCH (n) WHERE n.score >= 900.0 RETURN count(n)",
+      "exact_results_checked": true,
+      "counters": {
+        "native_graph.read.property_selected_column_batch_owners": [
+          0,
+          0,
+          225000,
+          440,
+          512
+        ],
+        "native_graph.read.metadata_pages_read": [
+          0,
+          0,
+          3914,
+          3914,
+          1
+        ],
+        "logical_plan.node_column_filter.typed_columns": [
+          0,
+          0,
+          430,
+          440,
+          1
+        ],
+        "storage_io.file_size_calls": [
+          0,
+          0,
+          25752,
+          25752,
+          1
+        ]
+      }
+    },
+    {
+      "case": "aggregate",
+      "query": "MATCH (u:User) RETURN u.country, count(*)",
+      "exact_results_checked": true,
+      "counters": {
+        "native_graph.read.property_selected_column_batch_owners": [
+          0,
+          0,
+          100000,
+          196,
+          512
+        ],
+        "native_graph.read.metadata_pages_read": [
+          0,
+          0,
+          2909,
+          2909,
+          1
+        ],
+        "logical_plan.batch.materialized_bytes": [
+          0,
+          0,
+          42700000,
+          196,
+          218624
+        ],
+        "logical_plan.batch.rows": [
+          0,
+          0,
+          100000,
+          196,
+          512
+        ],
+        "storage_io.file_size_calls": [
+          0,
+          0,
+          17001,
+          17001,
+          1
+        ]
+      }
+    }
+  ]
+}

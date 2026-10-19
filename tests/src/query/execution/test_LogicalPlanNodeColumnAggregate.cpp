@@ -560,4 +560,189 @@ TEST(LogicalPlanNodeColumnAggregateTest, NestedInjectedRowsRestoreOuterBindingsA
 	EXPECT_EQ(stats.nodes_scanned, 0U);
 }
 
+
+namespace {
+std::shared_ptr<expressions::Expression> directField(const char *name) {
+    return std::make_shared<expressions::VariableReferenceExpression>("n", name);
+}
+std::vector<std::vector<PropertyValue>> observedCells(const QueryResult &result) {
+    std::vector<std::vector<PropertyValue>> rows;
+    for (const auto &row : result.getRows()) {
+        rows.emplace_back();
+        for (const auto &name : result.getColumns()) rows.back().push_back(row.at(name).asPrimitive());
+    }
+    return rows;
+}
+DirectEdgeGraph groupingGraph() {
+    DirectEdgeGraph graph;
+    graph.nodes.emplace(1, LogicalGraphNode{1, {}, {{"country", PropertyValue("CN")}, {"active", PropertyValue(true)}, {"rank", PropertyValue(1)}}});
+    graph.nodes.emplace(2, LogicalGraphNode{2, {}, {{"country", PropertyValue("CN")}, {"active", PropertyValue(false)}, {"rank", PropertyValue(2)}}});
+    graph.nodes.emplace(3, LogicalGraphNode{3, {}, {{"country", PropertyValue("CN")}, {"active", PropertyValue(true)}, {"rank", PropertyValue(1)}}});
+    graph.nodes.emplace(4, LogicalGraphNode{4, {}, {{"country", PropertyValue("US")}, {"active", PropertyValue(true)}, {"rank", PropertyValue(4)}}});
+    graph.nodes.emplace(5, LogicalGraphNode{5, {}, {{"active", PropertyValue(false)}, {"rank", PropertyValue(8)}}});
+    graph.nodes.emplace(6, LogicalGraphNode{6, {}, {{"country", PropertyValue()}, {"active", PropertyValue(false)}, {"rank", PropertyValue()}}});
+    return graph;
+}
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, CompleteTupleGroupingDistinctAndNumericStateMatchLegacy) {
+    std::vector<std::vector<PropertyValue>> expected;
+    for (const bool direct : {false, true}) {
+        auto graph = groupingGraph(); graph.enable_direct_property_cells = direct;
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"),
+            {directField("country"), directField("active")},
+            {{"count", nullptr, "rows"}, {"count", directField("rank"), "distinct", true},
+             {"sum", directField("rank"), "sum"}}, {"country", "active"});
+        ColumnAggregateTraceScope tracing;
+        const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+        ASSERT_EQ(result.rowCount(), 4U);
+        if (!direct) expected = observedCells(result);
+        else {
+            EXPECT_EQ(observedCells(result), expected);
+            EXPECT_GT(graph.direct_property_batches, 0U);
+            EXPECT_EQ(graph.node_property_column_batch_reads, 0U);
+            const auto trace = debug::PerfTrace::snapshotAndReset();
+            ASSERT_TRUE(trace.contains("logical_plan.aggregate.direct_input_rows"));
+            EXPECT_EQ(trace.at("logical_plan.aggregate.direct_input_rows").totalValue, 6);
+            EXPECT_FALSE(trace.contains("logical_plan.batch.rows"));
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, StringAndNumericPredicatesFeedGroupedCountsWithoutRows) {
+    for (const bool direct : {false, true}) {
+        auto graph = groupingGraph(); graph.enable_direct_property_cells = direct;
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        auto scan = std::make_unique<logical::LogicalNodeScan>("n");
+        scan->setPropertyPredicates({{"country", PropertyValue("CN")}});
+        scan->setRangePredicates({{"rank", PropertyValue(1), PropertyValue(2), true, true}});
+        logical::LogicalAggregate aggregate(std::move(scan), {directField("active")}, {{"count", nullptr, "rows"}}, {"active"});
+        const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+        ASSERT_EQ(result.rowCount(), 2U);
+        EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(2));
+        EXPECT_EQ(result.getRows()[1].at("rows").asPrimitive(), PropertyValue(1));
+        if (direct) EXPECT_GT(graph.direct_property_batches, 0U);
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, DistinctPreservesTypesNullAndEmbeddedStringBytes) {
+    for (const bool direct : {false, true}) {
+        DirectEdgeGraph graph; graph.enable_direct_property_cells = direct;
+        const std::vector<PropertyValue> values{PropertyValue(2), PropertyValue(2.0), PropertyValue("2"),
+            PropertyValue(true), PropertyValue(), PropertyValue(std::string("a\0b", 3)), PropertyValue(std::string("a\0b", 3))};
+        for (size_t i = 0; i < values.size(); ++i) graph.nodes.emplace(i + 1, LogicalGraphNode{i + 1, {}, {{"rank", values[i]}}});
+        graph.nodes.emplace(8, LogicalGraphNode{8, {}, {}});
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {},
+            {{"count", directField("rank"), "distinct", true}});
+        const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+        ASSERT_EQ(result.rowCount(), 1U);
+        EXPECT_EQ(result.getRows()[0].at("distinct").asPrimitive(), PropertyValue(5));
+        if (direct) EXPECT_GT(graph.direct_property_batches, 0U);
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics) {
+    for (bool empty : {false, true}) for (bool grouped : {false, true}) {
+        auto graph = groupingGraph(); graph.enable_direct_property_cells = true;
+        if (empty) graph.nodes.clear();
+        DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+        auto scan = std::make_unique<logical::LogicalNodeScan>("n");
+        scan->setPropertyPredicates({{"country", PropertyValue("absent")}});
+        logical::LogicalAggregate aggregate(std::move(scan), grouped ?
+            std::vector<std::shared_ptr<expressions::Expression>>{directField("country")} : std::vector<std::shared_ptr<expressions::Expression>>{},
+            {{"count", directField("rank"), "count", true}, {"sum", directField("rank"), "sum"}});
+        const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+        EXPECT_EQ(result.rowCount(), grouped ? 0U : 1U);
+        if (!grouped) {
+            EXPECT_EQ(result.getRows()[0].at("count").asPrimitive(), PropertyValue(0));
+            EXPECT_EQ(result.getRows()[0].at("sum").asPrimitive(), PropertyValue());
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, AccumulationPreservesPhysicalScanOrder) {
+    auto graph = directGraph(); graph.enable_direct_property_cells = true;
+    graph.nodes.at(1).properties = {{"rank", PropertyValue(1e16)}};
+    graph.nodes.at(2).properties = {{"rank", PropertyValue(-1e16)}};
+    graph.nodes.at(3).properties = {{"rank", PropertyValue(1.0)}};
+    graph.node_ref_scan_order = {3, 1, 2};
+    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {}, {{"sum", directField("rank"), "sum"}});
+    const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+    EXPECT_EQ(result.getRows()[0].at("sum").asPrimitive(), PropertyValue(0.0));
+    EXPECT_GT(graph.direct_property_batches, 0U);
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks) {
+    auto graph = directGraph(); graph.enable_direct_property_cells = true; graph.fail_direct_property_cells = true;
+    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {}, {{"sum", directField("rank"), "sum"}});
+    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, directBounds())), std::runtime_error);
+    EXPECT_EQ(graph.direct_property_batches, 1U);
+    graph.fail_direct_property_cells = false; graph.nodes.at(1).properties = {{"rank", PropertyValue("bad numeric")}};
+    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, directBounds())), std::invalid_argument);
+    EXPECT_EQ(graph.direct_property_batches, 2U);
+    graph.nodes.at(1).properties = {{"rank", PropertyValue(1)}};
+    EXPECT_EQ(runtime.executeToQueryResult(aggregate, directBounds()).getRows()[0].at("sum").asPrimitive(), PropertyValue(6));
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput) {
+    auto graph = directGraph(); graph.enable_direct_property_cells = true;
+    for (auto &[id, node] : graph.nodes) node.properties = {{"country", PropertyValue(std::string(8000, 'x'))}};
+    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {directField("country")},
+        {{"count", nullptr, "rows"}}, {"country"});
+    auto bounds = directBounds(); bounds.maximum_materialized_bytes = 48U * 1024U;
+    ColumnAggregateTraceScope tracing;
+    const auto result = runtime.executeToQueryResult(aggregate, bounds);
+    ASSERT_EQ(result.rowCount(), 1U);
+    EXPECT_EQ(result.getRows()[0].at("rows").asPrimitive(), PropertyValue(3));
+    EXPECT_EQ(result.getRows()[0].at("country").asPrimitive(), PropertyValue(std::string(8000, 'x')));
+    const auto trace = debug::PerfTrace::snapshotAndReset();
+    EXPECT_EQ(trace.at("logical_plan.aggregate.direct_input_rows").totalValue, 3);
+    EXPECT_GT(graph.direct_property_batches, 1U);
+}
+
+
+TEST(LogicalPlanDirectColumnAggregateTest, ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics) {
+    using Op = expressions::BinaryOperatorType;
+    for (const auto operation : {Op::BOP_EQUAL, Op::BOP_NOT_EQUAL, Op::BOP_LESS, Op::BOP_LESS_EQUAL, Op::BOP_GREATER, Op::BOP_GREATER_EQUAL}) {
+        for (const auto &needle : {PropertyValue("CN"), PropertyValue(1), PropertyValue(1.5), PropertyValue()}) {
+            std::vector<std::vector<PropertyValue>> expected;
+            for (const bool direct : {false, true}) {
+                auto graph = groupingGraph(); graph.enable_direct_property_cells = direct;
+                graph.nodes.at(1).properties = {{"rank", PropertyValue("CN")}};
+                graph.nodes.at(2).properties = {{"rank", PropertyValue(1)}};
+                graph.nodes.at(3).properties = {{"rank", PropertyValue(1.5)}};
+                graph.nodes.at(4).properties = {{"rank", PropertyValue(false)}};
+                auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+                    std::make_unique<expressions::VariableReferenceExpression>("n", "rank"), operation,
+                    std::make_unique<expressions::LiteralExpression>(needle));
+                auto filter = std::make_unique<logical::LogicalFilter>(std::make_unique<logical::LogicalNodeScan>("n"), predicate);
+                logical::LogicalAggregate aggregate(std::move(filter), {}, {{"count", directField("rank"), "count", true}});
+                DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+                const auto result = runtime.executeToQueryResult(aggregate, directBounds());
+                if (!direct) expected = observedCells(result);
+                else { EXPECT_EQ(observedCells(result), expected); EXPECT_GT(graph.direct_property_batches, 0U); }
+            }
+        }
+    }
+}
+
+TEST(LogicalPlanDirectColumnAggregateTest, GuardAdmissionTypedExceptionDuringProductionIsNeverRetried) {
+    auto graph = directGraph(); graph.enable_direct_property_cells = true;
+    DirectEdgeBackend backend(graph); LogicalPlanReadRuntime runtime(backend);
+    logical::LogicalAggregate aggregate(std::make_unique<logical::LogicalNodeScan>("n"), {}, {{"sum", directField("rank"), "sum"}});
+    bool fired = false;
+    QueryGuard guard(0, 1, [&] {
+        if (!fired && graph.direct_property_batches != 0U) { fired = true; throw MaterializedByteLimitExceeded(); }
+        return size_t{0U};
+    });
+    QueryContext context; context.guard = &guard;
+    EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(aggregate, directBounds(), context)), MaterializedByteLimitExceeded);
+    EXPECT_TRUE(fired); EXPECT_EQ(graph.direct_property_batches, 1U);
+    EXPECT_EQ(runtime.executeToQueryResult(aggregate, directBounds()).getRows()[0].at("sum").asPrimitive(), PropertyValue(6));
+}
 } // namespace graph::query::execution

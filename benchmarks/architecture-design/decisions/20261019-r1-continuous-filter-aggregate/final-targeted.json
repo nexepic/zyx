@@ -1,0 +1,849 @@
+{
+  "tests": 75,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T04:41:53Z",
+  "time": "2.337s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "BatchEnvelopeTest",
+      "tests": 7,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:53Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "PreservesTypedStatesEntityKindNestedOwnersSelectionOrderAndDuplicates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 38,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "RejectsSourceReuseForeignLayoutsBudgetsSnapshotsAndPrograms",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 74,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "InvalidShapeKindSelectionAndFailedPublicationKeepTheOldCompletePrefix",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 96,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "EntityAppendRollbackAndReaderEpochChangesRejectStaleValues",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 119,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "LegacyNumericBridgeExplicitlyDeclinesExactPresence",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 133,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "EveryMetadataAllocationFailurePreservesPublishedPrefixAndRefundsAdmission",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 147,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        },
+        {
+          "name": "DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BatchEnvelope.cpp",
+          "line": 166,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BatchEnvelopeTest"
+        }
+      ]
+    },
+    {
+      "name": "BoundNodeColumnPredicatesTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:53Z",
+      "time": "0.013s",
+      "testsuite": [
+        {
+          "name": "BindsReorderedColumnsAndIntersectsRangesParametersAndCompositeKeys",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "UnboundedRangesStillRejectMissingAndNullValues",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 39,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "MixedNumericTypesUseExistingVariantOrderingWithoutCoercion",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "InvalidBindingsAndAllocationFailureRefundAllMetadata",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 70,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "CompleteMatrixShapeIsCheckedEvenIfNoRowsRemainSelected",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RuntimeTypedScanPreservesPhysicalOrderProjectionAndOwningResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 99,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RuntimeTypedScanFeedsExistingAggregatesAndMatchesScalarExecution",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 141,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "ReusedLogicalPlanResolvesParametersForEachQueryAndDoesNotCacheAColumnIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "MalformedSourceColumnsFailBeforeFilteringAndCanRetryAfterRepair",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 178,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "ReusedPlanHandlesNullParametersAndChangingPropertyTypes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 193,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        },
+        {
+          "name": "RedundantPredicatesDoNotConsumeTheLastAdmissibleRowBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeColumnPredicates.cpp",
+          "line": 215,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:53Z",
+          "time": "0.011s",
+          "classname": "BoundNodeColumnPredicatesTest"
+        }
+      ]
+    },
+    {
+      "name": "BoundNodeScanBatchTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "TypedFilterAndEntityColumnsPreserveNullOrderAndDuplicates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 25,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "BoundNodeScanBatchTest"
+        },
+        {
+          "name": "MixedTypeFallbackMatchesOriginalScalarVariantOrdering",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 44,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "BoundNodeScanBatchTest"
+        },
+        {
+          "name": "CancellationAtEveryPreparationCheckpointRefundsAllBatchMemory",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 58,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "BoundNodeScanBatchTest"
+        },
+        {
+          "name": "MalformedSourcesAndChangedSchemaAreRejectedBeforeConsumerEffects",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 73,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "BoundNodeScanBatchTest"
+        }
+      ]
+    },
+    {
+      "name": "DirectPropertyColumnsTest",
+      "tests": 4,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "0s",
+      "testsuite": [
+        {
+          "name": "ReceivesMixedCellsWithoutAValueMatrixAndKeepsPresence",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 85,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "RejectsDuplicateCellsForeignRowsAndChangedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 110,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "PressureAndCancellationDiscardPrivateConstructionAndRefund",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 129,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        },
+        {
+          "name": "StringAndMixedTypePredicatesMatchLegacyScalarOrdering",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_BoundNodeScanBatch.cpp",
+          "line": 143,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "DirectPropertyColumnsTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectEdgeRuntimeTest",
+      "tests": 3,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "0.006s",
+      "testsuite": [
+        {
+          "name": "FilterSelectedColumnsPreserveEscapedCachesAndBagOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanFilterSelectedColumns.cpp",
+          "line": 8,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectEdgeRuntimeTest"
+        },
+        {
+          "name": "FilterSelectedColumnsKeepNullAndMissingPredicateSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanFilterSelectedColumns.cpp",
+          "line": 53,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectEdgeRuntimeTest"
+        },
+        {
+          "name": "FilterSelectedColumnsReleaseWideRejectedBatchesAfterFailure",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanFilterSelectedColumns.cpp",
+          "line": 81,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.004s",
+          "classname": "LogicalPlanDirectEdgeRuntimeTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanNodeColumnAggregateTest",
+      "tests": 26,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "0.037s",
+      "testsuite": [
+        {
+          "name": "FiltersAndAggregatesOneColumnWithoutMaterializingInputRows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 26,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "MixedNumericNullAndMissingInputsMatchTheScalarPath",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "FloatingAccumulationUsesPhysicalScanOrderRatherThanSortedLookupOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 72,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "EmptyAndNullParameterInputsStillEmitOneAggregateRow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 87,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "NullParameterCountFastPathEmitsZeroInsteadOfDroppingTheResultRow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "InvalidNumericValuesAndMalformedColumnsFailWithoutPublishingResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 121,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "DistinctAggregatesKeepTheExistingConsumer",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "RowBoundsFailBeforeReturningAPartialAggregateAndPermitRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 149,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "DistinctPredicateAndAggregateColumnsStayBoundAcrossMultipleBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.003s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "IntegerOverflowFailsBothColumnAndScalarConsumersAndAllowsQueryRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 186,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "NumericTypeInferenceIsLocalToEachSourceBatch",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 204,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "ExtremaAndSharedCountConsumeFilteredColumnsAndOwnStringResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 225,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "TypedExtremaPreserveFirstNanAndSignedZeroFromPhysicalScanOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 252,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "WideExtremaRespectSharedBudgetAndRecoverForAnAdmissibleQuery",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 271,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "ReplacingAWideExtremumWithAShortValuePreservesOwningResults",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 287,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "EmptyNullAndMissingExtremaEmitOneNullResultRow",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 304,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "OptionalNumericBuffersYieldToAnOwningExtremumWithoutReplayingOtherAggregates",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 325,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.022s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "AGuardBudgetExceptionDuringExtremumCopyIsNotRetriedAsBufferPressure",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 358,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "CollectionsAndStatisticsConsumeColumnsInPhysicalOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 386,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "PercentileColumnsUseValidatedParametersAndScalarSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 412,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "ExtendedAggregatesSkipMissingValuesAndOwnCollectedPayloads",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 430,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "ExtendedAggregateFailuresPermitFreshExecution",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 446,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.001s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "StandardDeviationUsesOneSharedTypedColumn",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 473,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "DeviationStateSpansIntegerAndDoubleSourceBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 490,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.002s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "NestedExecutionKeepsQueryBudgetsAndTaskStatisticsIndependent",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 513,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        },
+        {
+          "name": "NestedInjectedRowsRestoreOuterBindingsAfterAnInnerFailure",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 536,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanNodeColumnAggregateTest"
+        }
+      ]
+    },
+    {
+      "name": "LogicalPlanDirectColumnAggregateTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "0.015s",
+      "testsuite": [
+        {
+          "name": "CompleteTupleGroupingDistinctAndNumericStateMatchLegacy",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 588,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "StringAndNumericPredicatesFeedGroupedCountsWithoutRows",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 613,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "DistinctPreservesTypesNullAndEmbeddedStringBytes",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 629,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "EmptyInputAndEmptySelectionRetainGlobalAndGroupedSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 646,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "AccumulationPreservesPhysicalScanOrder",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 665,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "SourceAndConsumerErrorsDoNotReplayAndFollowingQueryWorks",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 678,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "PrivatePressureSplitsWithoutDuplicateCountsOrDanglingOutput",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 691,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.003s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "ResidualLiteralComparisonsMatchScalarTypeAndNullSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 709,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.008s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        },
+        {
+          "name": "GuardAdmissionTypedExceptionDuringProductionIsNeverRetried",
+          "file": "\/workspace\/zyx\/tests\/src\/query\/execution\/test_LogicalPlanNodeColumnAggregate.cpp",
+          "line": 734,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0s",
+          "classname": "LogicalPlanDirectColumnAggregateTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 11,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T04:41:54Z",
+      "time": "2.262s",
+      "testsuite": [
+        {
+          "name": "OptionalBindingRefundsDescriptorsAndLeavesSmallBudgetForPresenceProbe",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableBoundProgramAdmission.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.116s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "BindingFallbackDoesNotWaiveMandatoryRowQuotaAndCanRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableBoundProgramAdmission.cpp",
+          "line": 40,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.056s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "BoundNativeAggregatePublishesValidatedEnvelopeAndKeepsSelectionSemantics",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableBoundProgramExecution.cpp",
+          "line": 14,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.121s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "BoundRemainingConsumersPreserveUnwindSortJoinOptionalAndUnionMultiplicity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableBoundProgramExecution.cpp",
+          "line": 88,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.137s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 9,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.181s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableDirectPropertyBatch.cpp",
+          "line": 58,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.285s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CountPropertyUsesPresenceProbeUnderSmallMaterializationBudget",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableLogicalGraphReadSnapshot.cpp",
+          "line": 442,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:54Z",
+          "time": "0.102s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "NativeQueryOutputRetainsItsMemoryDomainAfterClose",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableQueryResources.cpp",
+          "line": 15,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:55Z",
+          "time": "0.114s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "TransactionOverlayOutputUsesTheNativeDomainAndSurvivesRollback",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableQueryResources.cpp",
+          "line": 91,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:55Z",
+          "time": "0.065s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "RepeatedNativeReopenReturnsCacheAndOutputChargesToTheirOwners",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableQueryResources.cpp",
+          "line": 125,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:55Z",
+          "time": "0.912s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableQueryResources.cpp",
+          "line": 154,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T04:41:56Z",
+          "time": "0.169s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    }
+  ]
+}
