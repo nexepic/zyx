@@ -1,0 +1,253 @@
+{
+  "tests": 21,
+  "failures": 0,
+  "disabled": 0,
+  "errors": 0,
+  "timestamp": "2026-10-19T08:04:31Z",
+  "time": "0.994s",
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "HybridPropertyDescriptorStoreTest",
+      "tests": 12,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:04:31Z",
+      "time": "0.106s",
+      "testsuite": [
+        {
+          "name": "DefaultFormatCannotPublishCandidateRoots",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 86,
+          "status": "RUN",
+          "result": "SKIPPED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyDescriptorStoreTest",
+          "skipped": [
+            {
+              "message": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp:87\nchecked by the default format build\n"
+            }
+          ]
+        },
+        {
+          "name": "FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 95,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyDescriptorStoreTest",
+          "graph_fence_format_token": "6218984381118957385",
+          "format_profile": "6"
+        },
+        {
+          "name": "OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 107,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 123,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.011s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 142,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.013s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 155,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.01s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 164,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.02s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "NonemptyUninstalledRootsRejectBeforeFrameAllocation",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 180,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.002s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.004s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 192,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.005s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 212,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.003s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        },
+        {
+          "name": "NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/property\/test_HybridPropertyDescriptorStore.cpp",
+          "line": 222,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.027s",
+          "classname": "HybridPropertyDescriptorStoreTest"
+        }
+      ]
+    },
+    {
+      "name": "RelocatableStorageBackendTest",
+      "tests": 9,
+      "failures": 0,
+      "disabled": 0,
+      "errors": 0,
+      "timestamp": "2026-10-19T08:04:31Z",
+      "time": "0.887s",
+      "testsuite": [
+        {
+          "name": "PhysicalProfileReportsDirectWorkWithoutConsumingGlobalTrace",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 24,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.151s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.aggregate.direct_filter_rejected\":32,\"logical_plan.aggregate.direct_input_rows\":32,\"logical_plan.direct_property.batches\":1,\"logical_plan.direct_property.rejected\":0,\"logical_plan.direct_property.rows\":64,\"logical_plan.materialized_budget_peak_bytes\":143360,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":2066416,\"native_graph.read.decoded_metadata_cache_hits\":833,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":743904,\"native_graph.read.directory_range_cursor_metadata_pages\":2,\"native_graph.read.directory_range_cursor_root_descents\":1,\"native_graph.read.property_selected_decode\":64,\"storage.buffer_pool.physical_read_bytes\":12288,\"storage.checksum.bytes\":291456,\"storage_io.file_size_calls\":90}"
+        },
+        {
+          "name": "PhysicalProfileWritesOnceAndRetainsPublicationPhaseCounts",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 52,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.116s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.materialized_budget_peak_bytes\":14812,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":2207600,\"native_graph.read.decoded_metadata_cache_hits\":1591,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":2579224,\"native_graph.write.graph_commit_calls\":1,\"native_graph.write.id_reservation_calls\":1,\"native_graph.write.id_reservation_publications\":1,\"native_graph.write.property_plan_owned_payload_bytes\":54,\"native_graph.write.property_plan_owners\":1,\"native_graph.write.property_pool_catalog_scans\":2,\"storage.buffer_pool.physical_read_bytes\":167936,\"storage.checksum.bytes\":3050688,\"storage_io.completed_write_bytes\":539329,\"storage_io.completed_write_calls\":101,\"storage_io.file_size_calls\":777,\"storage_io.sync.data_fence\":2,\"storage_io.sync.superblock_fence\":2}"
+        },
+        {
+          "name": "PhysicalProfileAdmissionPrecedesMutationAndRefundsBeforeRetry",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 68,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.079s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalReadonlyProfileAndExplainNeverUseScratchOrPublish",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 82,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.067s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileCoalescesSharedOwnerUpdatesAndNoOpsKeepOldPins",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 105,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:31Z",
+          "time": "0.193s",
+          "classname": "RelocatableStorageBackendTest",
+          "physical_work_observations": "{\"logical_plan.materialized_budget_peak_bytes\":20149,\"native_graph.read.decoded_metadata_borrow_fixed_bytes\":7233080,\"native_graph.read.decoded_metadata_cache_hits\":3172,\"native_graph.read.decoded_metadata_copy_fixed_bytes\":3385568,\"native_graph.read.directory_range_cursor_metadata_pages\":12,\"native_graph.read.directory_range_cursor_root_descents\":6,\"native_graph.write.graph_commit_calls\":1,\"native_graph.write.property_plan_coalesced_members\":8,\"native_graph.write.property_plan_owned_payload_bytes\":32256,\"native_graph.write.property_plan_owners\":8,\"native_graph.write.property_plan_replacement_images\":1,\"native_graph.write.property_plan_replacement_payload_bytes\":4032,\"storage.buffer_pool.physical_read_bytes\":40960,\"storage.checksum.bytes\":1645568,\"storage_io.completed_write_bytes\":45696,\"storage_io.completed_write_calls\":19,\"storage_io.file_size_calls\":448,\"storage_io.sync.data_fence\":1,\"storage_io.sync.superblock_fence\":1}"
+        },
+        {
+          "name": "PhysicalProfileOutputAndFailureRefundTheSameQueryAccount",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 135,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:32Z",
+          "time": "0.086s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileGuardFailureInsideObservationRefundsAndRestoresThreadState",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 160,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:32Z",
+          "time": "0.073s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "PhysicalProfileUsesBoundedExistingEstimatesAndMarksUnsupportedRootsUnavailable",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatablePhysicalProfile.cpp",
+          "line": 185,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:32Z",
+          "time": "0.118s",
+          "classname": "RelocatableStorageBackendTest"
+        },
+        {
+          "name": "LogicalMutationFenceEncodesEveryGraphVisibleRoot",
+          "file": "\/workspace\/zyx\/tests\/src\/storage\/relocatable\/backend\/test_RelocatableStorageBackend.cpp",
+          "line": 1068,
+          "status": "RUN",
+          "result": "COMPLETED",
+          "timestamp": "2026-10-19T08:04:32Z",
+          "time": "0s",
+          "classname": "RelocatableStorageBackendTest"
+        }
+      ]
+    }
+  ]
+}

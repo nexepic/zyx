@@ -1,0 +1,539 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7de45bea..168dc71e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -17,0 +18 @@ option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
++option(ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT "Build isolated hybrid-property format prototype" OFF)
+@@ -83 +84,2 @@ target_include_directories(zyx_core
+-target_compile_definitions(zyx_core PUBLIC COVERAGE_SKIP_ZLIB_ERRORS)
++target_compile_definitions(zyx_core PUBLIC COVERAGE_SKIP_ZLIB_ERRORS
++    ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=$<BOOL:${ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT}>)
+diff --git a/include/graph/storage/LogicalGraphRead.hpp b/include/graph/storage/LogicalGraphRead.hpp
+index db451350..77acccd3 100644
+--- a/include/graph/storage/LogicalGraphRead.hpp
++++ b/include/graph/storage/LogicalGraphRead.hpp
+@@ -339 +339 @@ namespace graph::storage {
+-		static constexpr size_t GRAPH_STATE_ROOT_COUNT = 7U;
++		static constexpr size_t GRAPH_STATE_ROOT_COUNT = 8U;
+diff --git a/include/graph/storage/relocatable/format/Format.hpp b/include/graph/storage/relocatable/format/Format.hpp
+index 78ebc0d0..50449910 100644
+--- a/include/graph/storage/relocatable/format/Format.hpp
++++ b/include/graph/storage/relocatable/format/Format.hpp
+@@ -22,0 +23,5 @@
++// Kept off for ordinary builds; candidate files are deliberately incompatible.
++#ifndef ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++#define ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT 0
++#endif
++
+@@ -24,0 +30,2 @@ namespace graph::storage {
++    constexpr bool RSS_HYBRID_PROPERTY_FORMAT_ENABLED = ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT != 0;
++
+@@ -40 +47 @@ namespace graph::storage {
+-	constexpr uint16_t RSS_FORMAT_VERSION = 5;
++	constexpr uint16_t RSS_FORMAT_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 6 : 5;
+diff --git a/include/graph/storage/relocatable/format/Superblock.hpp b/include/graph/storage/relocatable/format/Superblock.hpp
+index 891789a4..457a097b 100644
+--- a/include/graph/storage/relocatable/format/Superblock.hpp
++++ b/include/graph/storage/relocatable/format/Superblock.hpp
+@@ -29 +29 @@ namespace graph::storage {
+-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = 31;
++	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 32 : 31;
+@@ -31 +31 @@ namespace graph::storage {
+-	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = 336;
++	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 352 : 336;
+@@ -75,0 +76,3 @@ namespace graph::storage {
++        // A physically addressed authenticated descriptor, not a routed radix
++        // directory. Only the isolated format build can persist this root.
++        PhysicalPageRef hybrid_property_descriptor_root{};
+diff --git a/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp b/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
+index 3ca48208..22bce299 100644
+--- a/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
+@@ -33,0 +34,2 @@ namespace graph::storage {
++    struct HybridPropertyDescriptor;
++    struct HybridPropertyDescriptorPage;
+@@ -112,0 +115,6 @@ namespace graph::storage {
++        [[nodiscard]] HybridPropertyDescriptorPage readHybridPropertyDescriptor(PhysicalPageRef reference,
++            const Superblock &snapshot, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
++        // Frame and root must be allocated by the enclosing metadata publication.
++        void prepareHybridPropertyDescriptor(MetadataWriteBatch &batch, const HybridPropertyDescriptor &descriptor) const;
++        void prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch, const Superblock &snapshot) const;
++
+@@ -124,0 +133,3 @@ namespace graph::storage {
++        // Immutable for this file view; descriptor reads must not race with
++        // writer-side rebinding of the mutable routing Superblock.
++        DatabaseId database_id_{};
+diff --git a/include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp b/include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp
+index d0053252..709f5dcb 100644
+--- a/include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataWriteBatch.hpp
+@@ -164,0 +165 @@ namespace graph::storage {
++        void setHybridPropertyDescriptorRoot(PhysicalPageRef root);
+diff --git a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+index cb2cac30..9f98a62c 100644
+--- a/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
++++ b/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp
+@@ -1032,0 +1033 @@ namespace graph::storage {
++        friend class HybridPropertyDescriptorStoreTestAccess;
+diff --git a/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+index 51f3c992..435c8679 100644
+--- a/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
++++ b/include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp
+@@ -17,3 +17,5 @@ namespace graph::storage {
+-// Candidate codec only. No current Superblock root, writer or allocator may
+-// publish this frame until the complete format/root/fence/lifecycle update is
+-// installed. In particular this is not a generic State record or a radix root.
++// Isolated metadata prototype only: ordinary format builds reject this root.
++// MetadataPageFile currently admits empty descriptors and rejects nonempty
++// routing until the complete native property lifecycle is installed. This codec
++// can represent nonempty roots for byte/identity checks, not production admission.
++// This is not a generic State record or a routed radix root.
+diff --git a/src/query/api/LogicalProfileObservation.hpp b/src/query/api/LogicalProfileObservation.hpp
+index cfc3276c..4a8fbedd 100644
+--- a/src/query/api/LogicalProfileObservation.hpp
++++ b/src/query/api/LogicalProfileObservation.hpp
+@@ -47,0 +48 @@ class LogicalProfileObservation final {
++        {"native_graph.read.metadata_decodes.hybrid_descriptor"},
+diff --git a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+index 697e6c63..a4bd6cb9 100644
+--- a/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
++++ b/src/storage/relocatable/backend/RelocatableStorageBackend.cpp
+@@ -285 +285,2 @@ namespace graph::storage {
+-		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = UINT64_C(0x564E4558544C4746);
++		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = RSS_HYBRID_PROPERTY_FORMAT_ENABLED
++            ? UINT64_C(0x564E4558544C4749) : UINT64_C(0x564E4558544C4748);
+@@ -292 +293 @@ namespace graph::storage {
+-						&Superblock::state_directory_root,
++						&Superblock::state_directory_root, &Superblock::hybrid_property_descriptor_root,
+diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+index 438412b6..ee5e4c44 100644
+--- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
++++ b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+@@ -166,0 +167 @@ namespace graph::storage {
++                static_cast<uint8_t>(current.hybrid_property_descriptor_root == base.hybrid_property_descriptor_root) &
+@@ -1666 +1667,2 @@ namespace graph::storage {
+-		if (!current.isValid() || next_vector_id_ != snapshot_.superblock().next_logical_vector_id ||
++		if (!current.isValid() || current.superblock().hybrid_property_descriptor_root != snapshot_.superblock().hybrid_property_descriptor_root ||
++            next_vector_id_ != snapshot_.superblock().next_logical_vector_id ||
+diff --git a/src/storage/relocatable/format/Superblock.cpp b/src/storage/relocatable/format/Superblock.cpp
+index 408b9460..0ba0dba3 100644
+--- a/src/storage/relocatable/format/Superblock.cpp
++++ b/src/storage/relocatable/format/Superblock.cpp
+@@ -57,0 +58 @@ namespace graph::storage {
++        constexpr size_t HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET = 336;
+@@ -140,0 +142,5 @@ namespace graph::storage {
++            validatePageRef(superblock.hybrid_property_descriptor_root);
++            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && superblock.hybrid_property_descriptor_root.isValid()) {
++                throwSuperblockError(FormatError::FERR_UNSUPPORTED_VERSION,
++                    "hybrid property descriptor requires the isolated candidate format");
++            }
+@@ -168,0 +175,2 @@ namespace graph::storage {
++            if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
++                writePageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET, superblock.hybrid_property_descriptor_root);
+@@ -277,0 +286,2 @@ namespace graph::storage {
++        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
++            superblock.hybrid_property_descriptor_root = readPageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET);
+diff --git a/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp b/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
+index f61f6687..0865a59f 100644
+--- a/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
++++ b/src/storage/relocatable/maintenance/RelocatableIntegrityScanner.cpp
+@@ -8,0 +9 @@
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+@@ -334,0 +336,2 @@ namespace graph::storage {
++        if (superblock.hybrid_property_descriptor_root.isValid())
++            static_cast<void>(metadata_.pages_.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
+diff --git a/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp b/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp
+index b512a5d0..f534cfaf 100644
+--- a/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp
++++ b/src/storage/relocatable/metadata/MetadataDirectoryEvacuation.cpp
+@@ -306,0 +307,2 @@ namespace graph::storage {
++        if (current.hybrid_property_descriptor_root.isValid())
++            pages.prepareHybridPropertyDescriptorRelocation(batch, current);
+diff --git a/src/storage/relocatable/metadata/MetadataPageFile.cpp b/src/storage/relocatable/metadata/MetadataPageFile.cpp
+index 35d69589..59de9970 100644
+--- a/src/storage/relocatable/metadata/MetadataPageFile.cpp
++++ b/src/storage/relocatable/metadata/MetadataPageFile.cpp
+@@ -8,0 +9 @@
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+@@ -104 +105 @@ namespace graph::storage {
+-		io_(std::move(io)), superblock_(superblock) {
++		io_(std::move(io)), superblock_(superblock), database_id_(superblock.database_id) {
+@@ -625,0 +627,48 @@ namespace graph::storage {
++    HybridPropertyDescriptorPage MetadataPageFile::readHybridPropertyDescriptor(PhysicalPageRef reference,
++        const Superblock &snapshot, BufferPoolReadHint hint) const {
++        validateReadHint(hint);
++        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != database_id_ ||
++            snapshot.data_region_offset != data_region_offset_ || reference != snapshot.hybrid_property_descriptor_root)
++            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor snapshot belongs to another format or file");
++        const auto bytes = readPage(reference, hint);
++        debug::PerfTrace::addValue("native_graph.read.metadata_decodes.hybrid_descriptor", 1);
++        auto page = HybridPropertyDescriptorCodec::decode(bytes, snapshot.database_id, reference.generation,
++            snapshot.generation, snapshot.checkpoint_lsn);
++        // The metadata prototype admits empty descriptors only until all native
++        // group/source readers and writers are installed together. Never let a
++        // partial candidate silently fall through to ROW on reopen.
++        if (std::ranges::any_of(page.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
++            throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property routing is not installed");
++        return page;
++    }
++
++    void MetadataPageFile::prepareHybridPropertyDescriptor(MetadataWriteBatch &batch,
++        const HybridPropertyDescriptor &descriptor) const {
++        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != database_id_ ||
++            batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
++            descriptor.semantic_generation != batch.generation() ||
++            batch.candidate().hybrid_property_descriptor_root != batch.current().hybrid_property_descriptor_root)
++            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor publication has a foreign or stale semantic identity");
++        if (std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
++            throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property publication is not installed");
++        const HybridPropertyDescriptorPage page{batch.generation(), batch.checkpointLsn(), descriptor};
++        // Validate/encode before allocating a frame or changing the candidate root.
++        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
++        const auto reference = batch.allocatePage();
++        writePage(reference, bytes);
++        batch.setHybridPropertyDescriptorRoot(reference);
++    }
++
++    void MetadataPageFile::prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch,
++        const Superblock &snapshot) const {
++        if (batch.current() != snapshot || snapshot.database_id != database_id_ ||
++            batch.candidate().hybrid_property_descriptor_root != snapshot.hybrid_property_descriptor_root)
++            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor relocation has a foreign publication base");
++        auto page = readHybridPropertyDescriptor(snapshot.hybrid_property_descriptor_root, snapshot);
++        page.generation = batch.generation(); page.committed_lsn = batch.checkpointLsn();
++        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
++        const auto reference = batch.allocatePage();
++        writePage(reference, bytes);
++        batch.setHybridPropertyDescriptorRoot(reference);
++    }
++
+diff --git a/src/storage/relocatable/metadata/MetadataPagePool.cpp b/src/storage/relocatable/metadata/MetadataPagePool.cpp
+index 1b5fe3e8..e04de278 100644
+--- a/src/storage/relocatable/metadata/MetadataPagePool.cpp
++++ b/src/storage/relocatable/metadata/MetadataPagePool.cpp
+@@ -8,0 +9 @@
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+@@ -1362,0 +1364,5 @@ namespace graph::storage {
++            if (superblock.hybrid_property_descriptor_root.isValid()) {
++                std::set<std::pair<uint64_t, uint8_t>> descriptorReferences;
++                markReference(superblock.hybrid_property_descriptor_root, descriptorReferences);
++                static_cast<void>(pages.readHybridPropertyDescriptor(superblock.hybrid_property_descriptor_root, superblock));
++            }
+@@ -1752,0 +1759,8 @@ namespace graph::storage {
++        if (superblock.hybrid_property_descriptor_root.isValid()) {
++            const auto reference = superblock.hybrid_property_descriptor_root;
++            if (!visitedPages.emplace(reference.physical_slot.value(), reference.frame_index).second)
++                throwCatalogPoolError(FormatError::FERR_INVALID_STATE, "hybrid descriptor aliases another metadata frame");
++            static_cast<void>(pages.readHybridPropertyDescriptor(reference, superblock));
++            reachableSlots.insert(reference.physical_slot.value());
++        }
++
+diff --git a/src/storage/relocatable/metadata/MetadataWriteBatch.cpp b/src/storage/relocatable/metadata/MetadataWriteBatch.cpp
+index 056b2b7e..ba9ead50 100644
+--- a/src/storage/relocatable/metadata/MetadataWriteBatch.cpp
++++ b/src/storage/relocatable/metadata/MetadataWriteBatch.cpp
+@@ -616,0 +617,8 @@ namespace graph::storage {
++    void MetadataWriteBatch::setHybridPropertyDescriptorRoot(PhysicalPageRef root) {
++        if (root != PhysicalPageRef{})
++            validateOwnedRoot(root, "hybrid property descriptor root is not owned by its metadata batch");
++        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && root.isValid())
++            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid property format is disabled");
++        candidate_.hybrid_property_descriptor_root = root;
++    }
++
+diff --git a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+index 63c81856..3fd190d7 100644
+--- a/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
++++ b/src/storage/relocatable/metadata/RelocatableMetadataStore.cpp
+@@ -8,0 +9 @@
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
+@@ -130,0 +132,2 @@ namespace graph::storage {
++        if (current.hybrid_property_descriptor_root.isValid())
++            static_cast<void>(pages_.readHybridPropertyDescriptor(current.hybrid_property_descriptor_root, current));
+@@ -165 +168,7 @@ namespace graph::storage {
+-	MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const { return snapshots_.openSnapshot(); }
++    MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const {
++        auto snapshot = snapshots_.openSnapshot();
++        if (snapshot.superblock().hybrid_property_descriptor_root.isValid())
++            static_cast<void>(pages_.readHybridPropertyDescriptor(snapshot.superblock().hybrid_property_descriptor_root,
++                snapshot.superblock()));
++        return snapshot;
++    }
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend.cpp b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend.cpp
+index 42b4c39d..e05b5527 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableStorageBackend.cpp
+@@ -1078,0 +1079 @@ TEST_F(RelocatableStorageBackendTest, LogicalMutationFenceEncodesEveryGraphVisib
++        &superblock.hybrid_property_descriptor_root,
+diff --git a/tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp
+new file mode 100644
+index 00000000..34282608
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_HybridPropertyDescriptorStore.cpp
+@@ -0,0 +1,266 @@
++#include <gtest/gtest.h>
++#include <cerrno>
++#include "graph/storage/PwriteHelper.hpp"
++#include "query/api/LogicalProfileObservation.hpp"
++#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
++#include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
++#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
++#include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
++#include "graph/storage/relocatable/metadata/MetadataDirectoryEvacuation.hpp"
++#include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
++#ifdef _WIN32
++#include <windows.h>
++#endif
++
++namespace graph::storage {
++// Exercises the metadata-owned publication, not a new standalone graph API.
++class HybridPropertyDescriptorStoreTestAccess {
++public:
++    enum class Action { HDA_REPLACE, HDA_RELOCATE, HDA_CLEAR, HDA_CLONE };
++    static Superblock publish(RelocatableMetadataStore &store, Action action = Action::HDA_REPLACE,
++        const MetadataPublishOptions &options = {}) {
++        auto writer = store.beginWrite();
++        const auto current = store.bootstrap_.recover();
++        MetadataWriteBatch batch(store.metadata_page_pool_, current,
++            LogSequenceNumber(current.checkpoint_lsn.value() + 1));
++        if (action == Action::HDA_CLEAR) batch.setHybridPropertyDescriptorRoot({});
++        else if (action == Action::HDA_RELOCATE) store.pages_.prepareHybridPropertyDescriptorRelocation(batch, current);
++        else if (action == Action::HDA_CLONE) cloneMetadataDirectoryRootsForEvacuation(store.pages_, batch, current);
++        else store.pages_.prepareHybridPropertyDescriptor(batch, {current.database_id, batch.generation(), {}});
++        store.publishBatch(batch, writer, options);
++        return batch.candidate();
++    }
++    static HybridPropertyDescriptorPage read(RelocatableMetadataStore &store, const MetadataSnapshotPin &pin) {
++        return store.pages_.readHybridPropertyDescriptor(pin.superblock().hybrid_property_descriptor_root, pin.superblock());
++    }
++    static void rejectUninstalledRoots(RelocatableMetadataStore &store) {
++        auto writer = store.beginWrite(); const auto current = store.bootstrap_.recover();
++        MetadataWriteBatch batch(store.metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1));
++        HybridPropertyDescriptor descriptor{current.database_id, batch.generation(), {}};
++        descriptor.roots[0] = {PageId(111), batch.generation()};
++        EXPECT_THROW(store.pages_.prepareHybridPropertyDescriptor(batch, descriptor), FormatException);
++        EXPECT_EQ(batch.allocatedPageCount(), 0U);
++        EXPECT_EQ(batch.candidate().hybrid_property_descriptor_root, current.hybrid_property_descriptor_root);
++    }
++    static void overwriteForCorruptionTest(RelocatableMetadataStore &store, const Superblock &snapshot,
++        const HybridPropertyDescriptorPage &page) {
++        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
++        const auto reference = snapshot.hybrid_property_descriptor_root;
++        store.io_->writeAt({store.pages_.pageOffset(reference), reference.generation.value()}, bytes.data(), bytes.size());
++        store.io_->sync();
++    }
++};
++} // namespace graph::storage
++using namespace graph::storage;
++namespace {
++using Access = HybridPropertyDescriptorStoreTestAccess;
++using Action = Access::Action;
++#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++NativeGraphWritePlannerOptions options() {
++    NativeGraphWritePlannerOptions result;
++    result.first_slot = PhysicalSlotId(40); result.last_slot = PhysicalSlotId(80);
++    result.entity_pool_owner_id = 901;
++    result.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
++    return result;
++}
++#endif
++class HybridPropertyDescriptorStoreTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
++    file_handle_t native_handle_ = INVALID_FILE_HANDLE;
++    void releaseStores() {
++        vector_manifests_.reset(); vector_pages_.reset(); properties_.reset(); labels_.reset();
++        btree_pages_.reset(); slotted_pages_.reset(); entities_.reset(); metadata_.reset(); io_.reset();
++    }
++protected:
++    void useNativeIo() {
++        releaseStores(); file_->flush(); native_handle_ = portable_open_rw(path_.string().c_str());
++        ASSERT_NE(native_handle_, INVALID_FILE_HANDLE);
++        io_ = std::make_shared<StorageIO>(file_, native_handle_, native_handle_); reopenNativeStores();
++    }
++    void TearDown() override {
++        releaseStores();
++        if (native_handle_ != INVALID_FILE_HANDLE) EXPECT_EQ(portable_close_rw(native_handle_), 0);
++        graph::storage::test::NativeGraphWritePlannerTestFixture::TearDown();
++    }
++};
++
++TEST_F(HybridPropertyDescriptorStoreTest, DefaultFormatCannotPublishCandidateRoots) {
++    if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED) GTEST_SKIP() << "checked by the default format build";
++    const auto before = metadata_->openSnapshot().superblock(); const auto bytes = io_->fileSize();
++    EXPECT_EQ(RSS_SUPERBLOCK_VERSION, 31); EXPECT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 336U);
++    EXPECT_THROW(Access::publish(*metadata_), FormatException);
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
++    auto invalid = before; invalid.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
++    EXPECT_THROW(SuperblockCodec::encode(invalid), FormatException);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, FenceIncludesDescriptorEvenWhenOtherGraphRootsAreUnchanged) {
++    auto before = metadata_->openSnapshot().superblock(); auto after = before;
++    after.hybrid_property_descriptor_root = {PhysicalSlotId(2), 1, Generation(1)};
++    const auto oldFence = RelocatableStorageBackend::makeLogicalGraphMutationFence(before);
++    const auto newFence = RelocatableStorageBackend::makeLogicalGraphMutationFence(after);
++    EXPECT_NE(oldFence, newFence);
++    RecordProperty("graph_fence_format_token", std::to_string(newFence.format_token));
++    RecordProperty("format_profile", std::to_string(RSS_FORMAT_VERSION));
++    EXPECT_EQ(newFence.graph_state_tokens[21], 2U);
++    EXPECT_EQ(newFence.graph_state_tokens[22], 1U);
++    EXPECT_EQ(newFence.graph_state_tokens[23], 1U);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, OtherFormatBootstrapWithItsOwnValidChecksumsIsRejected) {
++    // Both documented layouts have identical root-free fields apart from
++    // version, header width, reserve offset and checksums.
++    Superblock current; current.database_id = DatabaseId(9);
++    current.generation = Generation(1); current.checkpoint_lsn = LogSequenceNumber(1);
++    auto bytes = SuperblockCodec::encode(current);
++    const uint16_t foreignVersion = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 31 : 32;
++    const uint16_t foreignHeader = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 336 : 352;
++    LittleEndianCodec::writeU16(bytes, 4, foreignVersion);
++    LittleEndianCodec::writeU16(bytes, 6, foreignHeader);
++    LittleEndianCodec::writeU32(bytes, 112, graph::utils::calculateCrc(bytes.data() + foreignHeader, bytes.size() - foreignHeader));
++    LittleEndianCodec::writeU32(bytes, 116, 0);
++    LittleEndianCodec::writeU32(bytes, 116, graph::utils::calculateCrc(bytes.data(), foreignHeader));
++    EXPECT_THROW(SuperblockCodec::decode(bytes), FormatException);
++}
++#if ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT
++TEST_F(HybridPropertyDescriptorStoreTest, NativePublicationRetainsOldPinAndReopensWithoutDuplicatingRowRouting) {
++    const auto first = Access::publish(*metadata_); auto old = metadata_->openSnapshot();
++    ASSERT_EQ(RSS_SUPERBLOCK_VERSION, 32); ASSERT_EQ(RSS_SUPERBLOCK_HEADER_BYTES, 352U);
++    const auto bytes = SuperblockCodec::encode(first); EXPECT_EQ(SuperblockCodec::decode(bytes), first);
++    EXPECT_EQ(LittleEndianCodec::readU64(bytes, 336), first.hybrid_property_descriptor_root.physical_slot.value());
++    const auto oldDescriptor = Access::read(*metadata_, old);
++    const auto second = Access::publish(*metadata_); auto fresh = metadata_->openSnapshot();
++    EXPECT_NE(first.hybrid_property_descriptor_root, second.hybrid_property_descriptor_root);
++    EXPECT_EQ(Access::read(*metadata_, old), oldDescriptor);
++    EXPECT_EQ(Access::read(*metadata_, fresh).descriptor.semantic_generation, second.generation);
++    EXPECT_EQ(first.entity_property_directory_root, second.entity_property_directory_root);
++    EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
++    old.release(); fresh.release(); reopenNativeStores();
++    auto recovered = metadata_->openSnapshot(); EXPECT_EQ(recovered.superblock(), second);
++    EXPECT_EQ(Access::read(*metadata_, recovered).descriptor.semantic_generation, second.generation);
++    auto readOnly = RelocatableMetadataStore::openReadOnly(io_); auto readPin = readOnly->openSnapshot();
++    EXPECT_EQ(Access::read(*readOnly, readPin).descriptor.semantic_generation, second.generation);
++    EXPECT_THROW(Access::publish(*readOnly), FormatException);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, DescriptorRelocationAndConservativeDirectoryClonePreserveSemanticIdentity) {
++    Access::publish(*metadata_); auto original = metadata_->openSnapshot();
++    const auto descriptor = Access::read(*metadata_, original).descriptor;
++    Access::publish(*metadata_, Action::HDA_RELOCATE); auto relocated = metadata_->openSnapshot();
++    EXPECT_EQ(Access::read(*metadata_, relocated).descriptor, descriptor);
++    EXPECT_NE(original.superblock().hybrid_property_descriptor_root, relocated.superblock().hybrid_property_descriptor_root);
++    Access::publish(*metadata_, Action::HDA_CLONE); auto cloned = metadata_->openSnapshot();
++    EXPECT_EQ(Access::read(*metadata_, cloned).descriptor, descriptor);
++    EXPECT_EQ(Access::read(*metadata_, original).descriptor, descriptor);
++    EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
++    original.release(); relocated.release(); cloned.release(); reopenNativeStores();
++    auto recovered = metadata_->openSnapshot(); EXPECT_EQ(Access::read(*metadata_, recovered).descriptor, descriptor);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, ClearRetainsPinnedDescriptorUntilReclamationAndReopenHasNoRoot) {
++    Access::publish(*metadata_); auto old = metadata_->openSnapshot(); const auto original = Access::read(*metadata_, old);
++    const auto cleared = Access::publish(*metadata_, Action::HDA_CLEAR);
++    EXPECT_EQ(cleared.hybrid_property_descriptor_root, PhysicalPageRef{});
++    metadata_->collectMetadataGarbage(); EXPECT_EQ(Access::read(*metadata_, old), original);
++    old.release(); metadata_->collectMetadataGarbage(); reopenNativeStores();
++    EXPECT_EQ(metadata_->openSnapshot().superblock().hybrid_property_descriptor_root, PhysicalPageRef{});
++    EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
++}
++TEST_F(HybridPropertyDescriptorStoreTest, EachBootstrapInterruptionRecoversOneCompleteDescriptorGeneration) {
++    Access::publish(*metadata_);
++    for (auto failure : {BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE,
++        BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE, BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE}) {
++        const auto before = metadata_->openSnapshot().superblock();
++        MetadataPublishOptions publishOptions; publishOptions.bootstrap_failpoint = failure;
++        EXPECT_THROW(Access::publish(*metadata_, Action::HDA_REPLACE, publishOptions), std::exception);
++        reopenNativeStores(); auto recovered = metadata_->openSnapshot();
++        const auto current = recovered.superblock();
++        EXPECT_TRUE(current.generation == before.generation || current.generation.value() == before.generation.value() + 1);
++        const auto page = Access::read(*metadata_, recovered);
++        EXPECT_EQ(page.generation, current.hybrid_property_descriptor_root.generation);
++        EXPECT_EQ(page.descriptor.semantic_generation, current.generation);
++        EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
++    }
++}
++TEST_F(HybridPropertyDescriptorStoreTest, NonemptyUninstalledRootsRejectBeforeFrameAllocation) {
++    const auto before = metadata_->openSnapshot().superblock(); const auto bytes = io_->fileSize();
++    Access::rejectUninstalledRoots(*metadata_);
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before); EXPECT_EQ(io_->fileSize(), bytes);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, DescriptorChangesCannotBeMisclassifiedAsIdOnlyOrBlindAdjacencyAdvance) {
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto transaction = planner.beginTransaction(); const auto id = transaction.createNode({});
++    Access::publish(*metadata_);
++    EXPECT_FALSE(transaction.commit().committed());
++    auto current = metadata_->openSnapshot(); EXPECT_FALSE(metadata_->findNodePageLocationOptional(current, id));
++}
++TEST_F(HybridPropertyDescriptorStoreTest, ChecksummedWrongIdentitiesAndUnsupportedRoutingRejectOnReadOnlyOpen) {
++    Access::publish(*metadata_); auto snapshot = metadata_->openSnapshot();
++    const auto superblock = snapshot.superblock(); const auto original = Access::read(*metadata_, snapshot);
++    for (unsigned mutation = 0; mutation < 3; ++mutation) {
++        auto damaged = original;
++        if (mutation == 0) damaged.descriptor.database_id = DatabaseId(999);
++        if (mutation == 1) damaged.generation = Generation(original.generation.value() + 1);
++        if (mutation == 2) damaged.descriptor.roots[0] = {PageId(111), original.descriptor.semantic_generation};
++        Access::overwriteForCorruptionTest(*metadata_, superblock, damaged);
++        EXPECT_THROW(Access::read(*metadata_, snapshot), FormatException);
++        const auto pins = metadata_->activeSnapshotCount();
++        EXPECT_THROW(metadata_->openSnapshot(), FormatException);
++        EXPECT_EQ(metadata_->activeSnapshotCount(), pins);
++        io_->resetStats();
++        EXPECT_THROW(RelocatableMetadataStore::openReadOnly(io_), FormatException);
++        EXPECT_EQ(io_->stats().write_calls, 0U);
++        Access::overwriteForCorruptionTest(*metadata_, superblock, original);
++        EXPECT_EQ(Access::read(*metadata_, snapshot), original);
++    }
++}
++TEST_F(HybridPropertyDescriptorStoreTest, SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry) {
++    Access::publish(*metadata_);
++    graph::query::QueryContext context;
++    graph::query::detail::LogicalProfileObservation observation(context, 1024 * 1024);
++    auto snapshot = metadata_->openSnapshot();
++    const auto report = observation.report();
++    const auto &metrics = std::get<graph::PropertyValue::MapType>(report.getVariant());
++    ASSERT_TRUE(metrics.contains("native_graph.read.metadata_decodes.hybrid_descriptor"));
++    EXPECT_EQ(std::get<int64_t>(metrics.at("native_graph.read.metadata_decodes.hybrid_descriptor").getVariant()), 1);
++}
++TEST_F(HybridPropertyDescriptorStoreTest, NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState) {
++    ASSERT_NO_FATAL_FAILURE(useNativeIo()); Access::publish(*metadata_);
++    for (unsigned fault = 0; fault < 3; ++fault) {
++        const auto before = metadata_->openSnapshot().superblock();
++        if (fault == 0) {
++            StorageIO::ScopedNativeWriteHookForTesting refusal([](file_handle_t fd, const void *data, size_t bytes, pwrite_off_t offset) {
++                if (bytes == RSS_PAGE_SIZE && LittleEndianCodec::readU32(
++                    {static_cast<const std::byte *>(data), bytes}, 0) == RSS_HYBRID_PROPERTY_DESCRIPTOR_FRAME_MAGIC) {
++#ifdef _WIN32
++                    SetLastError(ERROR_DISK_FULL);
++#else
++                    errno = ENOSPC;
++#endif
++                    return static_cast<pwrite_ssize_t>(-1);
++                }
++                return portable_pwrite(fd, data, bytes, offset);
++            });
++            EXPECT_THROW(Access::publish(*metadata_), std::exception);
++        } else {
++            unsigned calls = 0;
++            StorageIO::ScopedNativeSyncHookForTesting refusal([&](file_handle_t fd) {
++                if (calls++ == fault - 1) {
++#ifdef _WIN32
++                    SetLastError(ERROR_DISK_FULL);
++#else
++                    errno = ENOSPC;
++#endif
++                    return -1;
++                }
++                return portable_fsync(fd);
++            });
++            EXPECT_THROW(Access::publish(*metadata_), std::exception);
++            EXPECT_GE(calls, fault);
++        }
++        reopenNativeStores(); auto recovered = metadata_->openSnapshot();
++        const auto current = recovered.superblock();
++        if (fault < 2) EXPECT_EQ(current, before);
++        else EXPECT_TRUE(current.generation == before.generation || current.generation.value() == before.generation.value() + 1);
++        EXPECT_EQ(Access::read(*metadata_, recovered).descriptor.semantic_generation, current.generation);
++        EXPECT_NO_THROW(RelocatableIntegrityScanner(io_, *metadata_).scan());
++        recovered.release(); EXPECT_NO_THROW(Access::publish(*metadata_));
++    }
++}
++#endif
++} // namespace
