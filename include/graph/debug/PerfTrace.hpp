@@ -41,6 +41,24 @@ namespace graph::debug {
 
 		using Snapshot = std::unordered_map<std::string, Entry>;
 
+        // Synchronous thread-local observation. No global toggle/reset and no
+        // allocation: the caller owns bounded storage and a noexcept receiver.
+        class ScopedObserver final {
+        public:
+            using Receiver = void (*)(void *, std::string_view, int64_t, bool) noexcept;
+            ScopedObserver(void *owner, Receiver receiver) noexcept
+                : owner_(owner), receiver_(receiver), previous_(active_) { active_ = this; }
+            ~ScopedObserver() { active_ = previous_; }
+            ScopedObserver(const ScopedObserver &) = delete;
+            ScopedObserver &operator=(const ScopedObserver &) = delete;
+        private:
+            friend class PerfTrace;
+            void *owner_;
+            Receiver receiver_;
+            ScopedObserver *previous_;
+            inline static thread_local ScopedObserver *active_ = nullptr;
+        };
+
 		// Maintains the legacy all-tracing toggle for callers that collect both durations and values.
 		static void setEnabled(bool enabled);
 		[[nodiscard]] static bool isEnabled();

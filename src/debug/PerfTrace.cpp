@@ -100,7 +100,8 @@ namespace graph::debug {
 	}
 
 	bool PerfTrace::isEnabled() {
-		return gCollector.durationEnabled.load(std::memory_order_relaxed);
+		// PROFILE values must not activate allocating duration-timer labels.
+        return gCollector.durationEnabled.load(std::memory_order_relaxed);
 	}
 
 	void PerfTrace::setValueCollectionEnabled(const bool enabled) {
@@ -108,13 +109,17 @@ namespace graph::debug {
 	}
 
 	bool PerfTrace::areValuesEnabled() {
-		return gCollector.valueEnabled.load(std::memory_order_relaxed);
+		return ScopedObserver::active_ != nullptr || gCollector.valueEnabled.load(std::memory_order_relaxed);
 	}
 
 	void PerfTrace::addDuration(const std::string_view key, const uint64_t durationNs) {
-		if (!isEnabled() || key.empty()) {
+		if ((!isEnabled() && ScopedObserver::active_ == nullptr) || key.empty()) {
 			return;
 		}
+
+        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
+            if (observer->receiver_) observer->receiver_(observer->owner_, key, static_cast<int64_t>((std::min)(durationNs, static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))), true);
+        if (!gCollector.durationEnabled.load(std::memory_order_relaxed)) return;
 
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
@@ -124,9 +129,13 @@ namespace graph::debug {
 	}
 
 	void PerfTrace::addDurationBatch(const std::string_view key, const uint64_t durationNs, const uint64_t calls) {
-		if (!isEnabled() || key.empty() || calls == 0) {
+		if ((!isEnabled() && ScopedObserver::active_ == nullptr) || key.empty() || calls == 0) {
 			return;
 		}
+
+        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
+            if (observer->receiver_) observer->receiver_(observer->owner_, key, static_cast<int64_t>((std::min)(durationNs, static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))), true);
+        if (!gCollector.durationEnabled.load(std::memory_order_relaxed)) return;
 
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
@@ -140,6 +149,10 @@ namespace graph::debug {
 			return;
 		}
 
+        for (auto *observer = ScopedObserver::active_; observer; observer = observer->previous_)
+            if (observer->receiver_) observer->receiver_(observer->owner_, key, value, false);
+        if (!gCollector.valueEnabled.load(std::memory_order_relaxed)) return;
+
 		auto &shard = currentThreadShard();
 		std::lock_guard<std::mutex> lock(shard.mutex);
 		auto &entry = shard.data[std::string(key)];
@@ -149,7 +162,8 @@ namespace graph::debug {
 	}
 
 	void PerfTrace::addPagePin(const void *ioIdentity, uint64_t offset, uint64_t generation) noexcept {
-		if (!areValuesEnabled()) return;
+		// Local PROFILE observation never changes global page-pin ownership.
+        if (!gCollector.valueEnabled.load(std::memory_order_relaxed)) return;
 		std::lock_guard<std::mutex> lock(gCollector.pagePinMutex);
 		const Collector::PagePinKey key{ioIdentity, offset, generation};
 		if (gCollector.pagePins.contains(key)) return;

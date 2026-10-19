@@ -506,6 +506,7 @@ set(ZYX_NATIVE_TEST_SOURCES
     "${PROJECT_SOURCE_DIR}/tests/src/cli/test_ImportCommand.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/cli/test_Repl.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/debug/test_PerfTrace.cpp"
+    "${PROJECT_SOURCE_DIR}/tests/src/debug/test_PerfTraceScopedObserver.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/log/test_Log.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineLogicalBackend.cpp"
     "${PROJECT_SOURCE_DIR}/tests/src/query/api/test_QueryEngineCacheIdentity.cpp"
