@@ -897,6 +897,42 @@ namespace graph::storage {
 		return result;
 	}
 
+	void PageBackedLogicalGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+		std::span<const uint64_t> ids, std::span<const std::string_view> keys,
+		const LogicalGraphReadSnapshot::PropertyCellSink &sink, NativeReadSession *session,
+		const SelectedPropertyReadAdmission *admission) const {
+		validateNamedPropertyColumnRequest(ids, keys);
+		if (!sink) throw std::invalid_argument("direct named Property cells require a sink");
+		std::optional<NativeReadSession> local;
+		auto &active = activeSession(snapshot, session, local);
+		std::vector<std::pair<uint32_t, size_t>> resolved; resolved.reserve(keys.size());
+		for (size_t column = 0; column < keys.size(); ++column) {
+			const auto cached = active.propertyToken(keys[column]);
+			const auto token = cached ? *cached : names_.resolvePropertyToken(snapshot, keys[column]);
+			if (!cached) active.putPropertyToken(keys[column], token);
+			if (token && *token != 0U) resolved.emplace_back(*token, column);
+		}
+		std::ranges::sort(resolved);
+		std::vector<uint32_t> tokens;
+		for (const auto &[token, column] : resolved)
+			if (tokens.empty() || tokens.back() != token) tokens.push_back(token);
+		if (tokens.empty()) return;
+		pages_.readNodePropertyCellsSorted(snapshot, ids, tokens,
+			[&](size_t row, size_t column, std::optional<PropertyValue> value) {
+				const auto token = tokens.at(column);
+				auto first = std::lower_bound(resolved.begin(), resolved.end(), token,
+					[](const auto &entry, uint32_t key) { return entry.first < key; });
+				const auto end = std::upper_bound(first, resolved.end(), token,
+					[](uint32_t key, const auto &entry) { return key < entry.first; });
+				for (auto it = first; it != end; ++it) {
+					const bool last = it + 1 == end;
+					if (!last && value && admission)
+						(*admission)(CanonicalPropertyValueCodec::encodedSize(*value) + sizeof(uint32_t));
+					sink(row, it->second, last ? std::move(value) : value);
+				}
+			}, &active, admission);
+	}
+
 	PropertyValue PageBackedLogicalGraphReadAdapter::readEdgeProperty(const MetadataSnapshotPin &snapshot,
 																			 uint64_t edgeId, const std::string_view key,
 																			 NativeReadSession *session) const {

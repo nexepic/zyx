@@ -1230,10 +1230,11 @@ namespace graph::storage {
 			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
 			const std::span<const uint32_t> keyTokens,
 			const std::span<std::optional<PropertyCollectionRootEntry>> results,
-			const bool columnBatch, const SelectedPropertyReadAdmission *admission) {
+			const bool columnBatch, const SelectedPropertyReadAdmission *admission,
+			const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> *sink) {
 			validateSnapshot(snapshot);
 		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
-			results.size() != keys.size() * keyTokens.size()) {
+			(sink ? (!*sink || !results.empty()) : results.size() != keys.size() * keyTokens.size())) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Property scan batch requires a rectangular owner/token result shape");
 		}
@@ -1312,8 +1313,15 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Property scan batch decoder changed its column cardinality");
 			}
-			std::move(decoded.begin(), decoded.end(), results.begin() +
-											static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
+			if (sink) {
+				for (size_t token = 0U; token < decoded.size(); ++token) {
+					if (cancellation_) cancellation_->check();
+					(*sink)(ownerIndex, token, std::move(decoded[token]));
+				}
+			} else {
+				std::move(decoded.begin(), decoded.end(), results.begin() +
+					static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
+			}
 		}
 		// Keep the established one-page owned cursor cache across batches;
 		// never retain a buffer-pool pin beyond this read. Only the final page

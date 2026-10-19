@@ -518,6 +518,24 @@ namespace graph::storage {
 		return columns;
 	}
 
+	void PageBackedGraphReadAdapter::readNodePropertyCellsSorted(const MetadataSnapshotPin &snapshot,
+		std::span<const uint64_t> ids, std::span<const uint32_t> tokens,
+		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
+		NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
+		if (!sink) throw std::invalid_argument("direct Property cells require a sink");
+		std::vector<EntityPropertyKey> keys; keys.reserve(ids.size());
+		for (const auto id : ids) keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
+		std::optional<NativeReadSession> localSession;
+		auto &active = selectNativeReadSession(snapshot, session, localSession);
+		const std::function<void(size_t, size_t, std::optional<PropertyCollectionRootEntry>)> emit =
+			[&](size_t owner, size_t column, std::optional<PropertyCollectionRootEntry> entry) {
+				sink(owner, column, entry ? std::optional<PropertyValue>(std::move(entry->value)) : std::nullopt);
+			};
+		active.propertyCursor(properties_, snapshot).readEntityPropertiesOptionalSorted(
+			snapshot, keys, tokens, {}, true, admission, &emit);
+		debug::PerfTrace::addValue("native_graph.read.direct_property_batches", 1);
+	}
+
 	std::pair<std::vector<std::vector<std::optional<PropertyValue>>>,
 				std::vector<std::optional<size_t>>>
 	PageBackedGraphReadAdapter::readNodePropertyColumnsAndCountsSorted(
