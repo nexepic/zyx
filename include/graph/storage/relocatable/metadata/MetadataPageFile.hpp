@@ -130,6 +130,9 @@ namespace graph::storage {
 		std::shared_ptr<StorageIO> io_;
 		Superblock superblock_{};
 		uint64_t data_region_offset_ = 0;
+        // Immutable for this file view; descriptor reads must not race with
+        // writer-side rebinding of the mutable routing Superblock.
+        DatabaseId database_id_{};
 	};
 
 } // namespace graph::storage

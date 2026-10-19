@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <cerrno>
 #include "graph/storage/PwriteHelper.hpp"
+#include "query/api/LogicalProfileObservation.hpp"
 #include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
@@ -198,12 +199,25 @@ TEST_F(HybridPropertyDescriptorStoreTest, ChecksummedWrongIdentitiesAndUnsupport
         if (mutation == 2) damaged.descriptor.roots[0] = {PageId(111), original.descriptor.semantic_generation};
         Access::overwriteForCorruptionTest(*metadata_, superblock, damaged);
         EXPECT_THROW(Access::read(*metadata_, snapshot), FormatException);
+        const auto pins = metadata_->activeSnapshotCount();
+        EXPECT_THROW(metadata_->openSnapshot(), FormatException);
+        EXPECT_EQ(metadata_->activeSnapshotCount(), pins);
         io_->resetStats();
         EXPECT_THROW(RelocatableMetadataStore::openReadOnly(io_), FormatException);
         EXPECT_EQ(io_->stats().write_calls, 0U);
         Access::overwriteForCorruptionTest(*metadata_, superblock, original);
         EXPECT_EQ(Access::read(*metadata_, snapshot), original);
     }
+}
+TEST_F(HybridPropertyDescriptorStoreTest, SnapshotAuthenticationIsCapturedByTheChargedProfileRegistry) {
+    Access::publish(*metadata_);
+    graph::query::QueryContext context;
+    graph::query::detail::LogicalProfileObservation observation(context, 1024 * 1024);
+    auto snapshot = metadata_->openSnapshot();
+    const auto report = observation.report();
+    const auto &metrics = std::get<graph::PropertyValue::MapType>(report.getVariant());
+    ASSERT_TRUE(metrics.contains("native_graph.read.metadata_decodes.hybrid_descriptor"));
+    EXPECT_EQ(std::get<int64_t>(metrics.at("native_graph.read.metadata_decodes.hybrid_descriptor").getVariant()), 1);
 }
 TEST_F(HybridPropertyDescriptorStoreTest, NativeDiskFullDataFenceAndUncertainRootFenceRecoverCompleteState) {
     ASSERT_NO_FATAL_FAILURE(useNativeIo()); Access::publish(*metadata_);
