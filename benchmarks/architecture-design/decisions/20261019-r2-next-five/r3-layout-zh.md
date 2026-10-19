@@ -58,6 +58,14 @@ no-op 按 canonical 类型/值判断，不产生属性/索引替换。NULL↔mis
 
 64 owner 共享 int 字段下界：576 子块+64×16 selector+28 列 locator+64 group header+24 组 locator=1716 字节，尚未计 framing/整页/全部原生元数据。独有字段不建列。A3 的 2224/4744 和 2296/4016 是其他编码观察，不能当完整分配对比。共享成员树可能抵消列节省，必须照实记录，不能为基准强制列模式。
 
+## 快照存活与字段转换合同
+
+当前 owner 存活以组头为权威。未修改列保留其最后编码代际的 live 掩码；它与当前组 live 只能在缺失单元上不同。列 presence 必须同时属于编码时 live 和当前组 live，NULL 属于 presence。某 owner 在该字段中缺失时，其创建/删除不应改写无关列；删除有该字段的 owner 则必须原子删除 presence/selector，死 owner 仍有值即损坏。不能要求所有列的 live 或代际等于最新组头。
+
+验证 `列语义代际 <= 组代际 <= 描述符语义代际 <= 快照可见代际`，身份非零且被选 Node/Edge 命名空间的 owner/column/group 根存在。另行认证期望 owner/group/token 及原生 PageId/slot-generation。未变列保留旧语义代际；任何实际 hybrid 字段/归属变化仍须替换描述符并推进额外图 fence。不扩展现有逻辑 ID 范围：当前 EntityPropertyKey 仅允许正数至 2^63−1；payload 实验的通用 uint64 运算不是扩大原生范围。
+
+标量 SET/no-op/REMOVE 只转换目标字段。同类型变化且 present 至少 48 槽时只替换该列，NULL 属于 present 并把 payload 清零；低于 48 或非 NULL 类型变化则只把该字段降级为最多 64 个实际单元。不自动提升 extension/ROW。传入的 opaque extension 值由调用方持有，直到独立准入的原生 extension writer 处理；标记不是持久化大值引用。no-op 比较必须与既有 ROW 的 `PropertyValue::operator==` 一致：int/double 不混同，double +0 等于 -0，NaN 不等于自身；实际替换仍保留 IEEE 原始位。codec 字节 round-trip 相同不等于写入 no-op。进入前须从实际账户预约固定转换暂存，并持有到结果释放；输出不得超过原生 slotted 可用 payload 或 4096 字节上限。规划失败不改 source、索引或已发布根。纯转换内核不能替代原生反向转换、真实 extension 归属和全局 integrity。
+
 ## 生命周期与格式义务
 
 复用事务内字段暂存，精确计算归属/索引/引用变化，预留 ID/容量，构建变化数据及描述符/路由/allocator/retire。保持 data fence → 非当前 A/B → superblock fence → 确认。校验语义属性 fence，保持 overlay/read-your-writes、当前冲突和 blind-rebase 范围，不重放副作用语句。

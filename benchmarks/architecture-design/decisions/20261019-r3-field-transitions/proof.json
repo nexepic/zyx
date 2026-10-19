@@ -1,0 +1,20 @@
+{
+  "parent": "ba8cf295105832464d084966a290621d9af1559e",
+  "parent_item": "R3.2",
+  "state": "in progress",
+  "new_top_level_acceptances": 0,
+  "accepted": 13,
+  "total": 24,
+  "normal_cases": 33,
+  "sanitized_cases": 33,
+  "normal_failures": 0,
+  "sanitized_failures": 0,
+  "initial_cases": 29,
+  "initial_failures": 1,
+  "leaks_checked": false,
+  "full_suite": false,
+  "formal_performance_run": false,
+  "native_hybrid_property_format_installed": false,
+  "real_account_reservation_implemented": false,
+  "source_manifest": "source-manifest.json"
+}

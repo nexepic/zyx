@@ -16,7 +16,7 @@ subprocess.run(["cmake", "-S", str(root / "benchmarks/architecture-design/proper
 subprocess.run(["cmake", "--build", str(build), "--config", "Debug"], check=True)
 subprocess.run(["ctest", "--test-dir", str(build), "-C", "Debug", "--output-on-failure"], check=True)
 (build / "scope.json").write_text(json.dumps({
-    "parent_item": "R3.2", "test_suite": "PropertySubblockCandidateTest",
+    "parent_item": "R3.2", "test_suites": ["PropertySubblockCandidateTest", "PropertySubblockFieldTransitionTest"],
     "production_format_changed": False, "full_lifecycle_accepted": False,
     "formal_performance_run": False
 }, indent=2) + "\n")
