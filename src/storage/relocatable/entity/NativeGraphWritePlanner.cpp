@@ -3688,10 +3688,9 @@ namespace graph::storage {
 
 	void NativeGraphWriteTransaction::rollback() {
 		if (state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
-			NativeGraphLogicalIdReservation logicalIds;
-			logicalIds.node_ranges = node_id_ranges_;
-			logicalIds.edge_ranges = edge_id_ranges_;
-			context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
+			// Rollback is also the staging-allocation-failure path. Borrow the
+			// already retained ranges instead of allocating a second reservation.
+			context_->metadata->abandonNativeGraphLogicalIdReservation(node_id_ranges_, edge_id_ranges_);
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		}
