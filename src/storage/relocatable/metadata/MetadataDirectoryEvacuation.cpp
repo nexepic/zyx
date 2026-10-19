@@ -304,6 +304,8 @@ namespace graph::storage {
 			(batch.*directory.set_root)(cloneMetadataDirectoryPage(pages, batch, current, directory.root,
 																		 directory.directory_type, true, 0U, 0U, visited, visitedPageIds));
 		}
+        if (current.hybrid_property_descriptor_root.isValid())
+            pages.prepareHybridPropertyDescriptorRelocation(batch, current);
 		if (!current.usesPageDirectoryBootstrap()) {
 			if (current.page_directory_root.isValid()) {
 				batch.setPageDirectoryRoot(cloneMetadataDirectoryPage(

@@ -614,6 +614,14 @@ namespace graph::storage {
 		candidate_.entity_property_directory_root = root;
 	}
 
+    void MetadataWriteBatch::setHybridPropertyDescriptorRoot(PhysicalPageRef root) {
+        if (root != PhysicalPageRef{})
+            validateOwnedRoot(root, "hybrid property descriptor root is not owned by its metadata batch");
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && root.isValid())
+            throw FormatException(FormatError::FERR_UNSUPPORTED_VERSION, "hybrid property format is disabled");
+        candidate_.hybrid_property_descriptor_root = root;
+    }
+
 	void MetadataWriteBatch::setIndexRootDirectoryRoot(PhysicalPageRef root) {
 		validateOwnedRoot(root, "relocatable metadata batch has an invalid Index Root Directory root");
 		candidate_.index_root_directory_root = root;

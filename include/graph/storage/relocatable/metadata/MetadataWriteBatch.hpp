@@ -162,6 +162,7 @@ namespace graph::storage {
 		void setNodeEntityDirectoryRoot(PhysicalPageRef root);
 		void setEdgeEntityDirectoryRoot(PhysicalPageRef root);
 		void setEntityPropertyDirectoryRoot(PhysicalPageRef root);
+        void setHybridPropertyDescriptorRoot(PhysicalPageRef root);
 		void setIndexRootDirectoryRoot(PhysicalPageRef root);
 		void setVectorLocationDirectoryRoot(PhysicalPageRef root);
 		void setVectorManifestDirectoryRoot(PhysicalPageRef root);

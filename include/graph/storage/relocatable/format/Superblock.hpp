@@ -26,9 +26,9 @@ namespace graph::storage {
 	// Version 30 removes retired Property and direct Vector-adjacency roots.
 	// Earlier layouts are deliberately unsupported rather than silently
 	// migrated or reinterpreted.
-	constexpr uint16_t RSS_SUPERBLOCK_VERSION = 31;
+	constexpr uint16_t RSS_SUPERBLOCK_VERSION = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 32 : 31;
 	constexpr uint32_t RSS_SUPERBLOCK_BYTES = RSS_PAGE_SIZE;
-	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = 336;
+	constexpr uint32_t RSS_SUPERBLOCK_HEADER_BYTES = RSS_HYBRID_PROPERTY_FORMAT_ENABLED ? 352 : 336;
 	// Crash injection must leave this checksum untouched so a torn inactive
 	// Superblock can never validate as a complete metadata generation.
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_CRC_OFFSET = 116;
@@ -73,6 +73,9 @@ namespace graph::storage {
 		PhysicalPageRef edge_entity_directory_root{};
 		// Stage 5 owns Property identity directly through (EntityKind, EntityId).
 		PhysicalPageRef entity_property_directory_root{};
+        // A physically addressed authenticated descriptor, not a routed radix
+        // directory. Only the isolated format build can persist this root.
+        PhysicalPageRef hybrid_property_descriptor_root{};
 		PhysicalPageRef index_root_directory_root{};
 		PhysicalPageRef vector_location_directory_root{};
 		PhysicalPageRef vector_manifest_directory_root{};

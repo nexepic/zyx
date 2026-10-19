@@ -282,14 +282,15 @@ namespace graph::storage {
 
 	namespace {
 
-		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = UINT64_C(0x564E4558544C4746);
+		constexpr uint64_t RSS_LOGICAL_GRAPH_FENCE_FORMAT_TOKEN = RSS_HYBRID_PROPERTY_FORMAT_ENABLED
+            ? UINT64_C(0x564E4558544C4749) : UINT64_C(0x564E4558544C4748);
 		using LogicalGraphFenceRootMember = PhysicalPageRef Superblock::*;
 		constexpr std::array<LogicalGraphFenceRootMember, LogicalGraphMutationFence::GRAPH_STATE_ROOT_COUNT>
 				RSS_LOGICAL_GRAPH_FENCE_ROOT_MEMBERS = {
 						&Superblock::node_entity_directory_root,	 &Superblock::edge_entity_directory_root,
 						&Superblock::entity_property_directory_root, &Superblock::large_value_manifest_directory_root,
 						&Superblock::vector_location_directory_root, &Superblock::vector_manifest_directory_root,
-						&Superblock::state_directory_root,
+						&Superblock::state_directory_root, &Superblock::hybrid_property_descriptor_root,
 		};
 
 		[[noreturn]] void failVectorTraining(FormatError error, const char *message) {

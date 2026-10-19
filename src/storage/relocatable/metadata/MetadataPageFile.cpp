@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include "graph/storage/relocatable/property/HybridPropertyDescriptor.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageReadContext.hpp"
@@ -622,6 +623,54 @@ namespace graph::storage {
 		if (readContext != nullptr) readContext->put(reference, bootstrap);
 		return bootstrap;
 	}
+
+    HybridPropertyDescriptorPage MetadataPageFile::readHybridPropertyDescriptor(PhysicalPageRef reference,
+        const Superblock &snapshot, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != superblock_.database_id ||
+            snapshot.data_region_offset != data_region_offset_ || reference != snapshot.hybrid_property_descriptor_root)
+            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor snapshot belongs to another format or file");
+        const auto bytes = readPage(reference, hint);
+        debug::PerfTrace::addValue("native_graph.read.metadata_decodes.hybrid_descriptor", 1);
+        auto page = HybridPropertyDescriptorCodec::decode(bytes, snapshot.database_id, reference.generation,
+            snapshot.generation, snapshot.checkpoint_lsn);
+        // The metadata prototype admits empty descriptors only until all native
+        // group/source readers and writers are installed together. Never let a
+        // partial candidate silently fall through to ROW on reopen.
+        if (std::ranges::any_of(page.descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
+            throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property routing is not installed");
+        return page;
+    }
+
+    void MetadataPageFile::prepareHybridPropertyDescriptor(MetadataWriteBatch &batch,
+        const HybridPropertyDescriptor &descriptor) const {
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != superblock_.database_id ||
+            batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != superblock_.database_id ||
+            descriptor.semantic_generation != batch.generation() ||
+            batch.candidate().hybrid_property_descriptor_root != batch.current().hybrid_property_descriptor_root)
+            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor publication has a foreign or stale semantic identity");
+        if (std::ranges::any_of(descriptor.roots, [](const auto &root) { return root.page_id.isValid(); }))
+            throwMetadataPageError(FormatError::FERR_UNSUPPORTED_VERSION, "nonempty hybrid property publication is not installed");
+        const HybridPropertyDescriptorPage page{batch.generation(), batch.checkpointLsn(), descriptor};
+        // Validate/encode before allocating a frame or changing the candidate root.
+        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
+        const auto reference = batch.allocatePage();
+        writePage(reference, bytes);
+        batch.setHybridPropertyDescriptorRoot(reference);
+    }
+
+    void MetadataPageFile::prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch,
+        const Superblock &snapshot) const {
+        if (batch.current() != snapshot || snapshot.database_id != superblock_.database_id ||
+            batch.candidate().hybrid_property_descriptor_root != snapshot.hybrid_property_descriptor_root)
+            throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor relocation has a foreign publication base");
+        auto page = readHybridPropertyDescriptor(snapshot.hybrid_property_descriptor_root, snapshot);
+        page.generation = batch.generation(); page.committed_lsn = batch.checkpointLsn();
+        const auto bytes = HybridPropertyDescriptorCodec::encode(page);
+        const auto reference = batch.allocatePage();
+        writePage(reference, bytes);
+        batch.setHybridPropertyDescriptorRoot(reference);
+    }
 
 	void MetadataPageFile::writePage(PhysicalPageRef reference,
 									 const std::array<std::byte, RSS_PAGE_SIZE> &bytes) const {

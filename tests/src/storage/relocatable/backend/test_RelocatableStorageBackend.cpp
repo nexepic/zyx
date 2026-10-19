@@ -1076,6 +1076,7 @@ TEST_F(RelocatableStorageBackendTest, LogicalMutationFenceEncodesEveryGraphVisib
 			&superblock.vector_location_directory_root,
 			&superblock.vector_manifest_directory_root,
 			&superblock.state_directory_root,
+        &superblock.hybrid_property_descriptor_root,
 	};
 	for (size_t index = 0U; index < roots.size(); ++index) {
 		*roots[index] = {PhysicalSlotId(101U + index), static_cast<uint8_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + index),

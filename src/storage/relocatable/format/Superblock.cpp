@@ -55,6 +55,7 @@ namespace graph::storage {
 		constexpr size_t ENTITY_PROPERTY_DIRECTORY_ROOT_OFFSET = 296;
 		constexpr size_t LARGE_VALUE_MANIFEST_DIRECTORY_ROOT_OFFSET = 312;
 		constexpr size_t NEXT_LARGE_VALUE_ID_OFFSET = 328;
+        constexpr size_t HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET = 336;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_BYTES = 32;
 		constexpr size_t PAYLOAD_RESERVED_OFFSET = METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES;
@@ -138,6 +139,11 @@ namespace graph::storage {
 			validatePageRef(superblock.node_entity_directory_root);
 			validatePageRef(superblock.edge_entity_directory_root);
 			validatePageRef(superblock.entity_property_directory_root);
+            validatePageRef(superblock.hybrid_property_descriptor_root);
+            if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED && superblock.hybrid_property_descriptor_root.isValid()) {
+                throwSuperblockError(FormatError::FERR_UNSUPPORTED_VERSION,
+                    "hybrid property descriptor requires the isolated candidate format");
+            }
 			validatePageRef(superblock.index_root_directory_root);
 			validatePageRef(superblock.vector_location_directory_root);
 			validatePageRef(superblock.vector_manifest_directory_root);
@@ -166,6 +172,8 @@ namespace graph::storage {
 			writePageRef(bytes, NODE_ENTITY_DIRECTORY_ROOT_OFFSET, superblock.node_entity_directory_root);
 			writePageRef(bytes, EDGE_ENTITY_DIRECTORY_ROOT_OFFSET, superblock.edge_entity_directory_root);
 			writePageRef(bytes, ENTITY_PROPERTY_DIRECTORY_ROOT_OFFSET, superblock.entity_property_directory_root);
+            if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+                writePageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET, superblock.hybrid_property_descriptor_root);
 			writePageRef(bytes, INDEX_ROOT_DIRECTORY_ROOT_OFFSET, superblock.index_root_directory_root);
 			LittleEndianCodec::writeU64(bytes, NEXT_LOGICAL_PAGE_ID_OFFSET, superblock.next_logical_page_id);
 			LittleEndianCodec::writeU64(bytes, NEXT_LOGICAL_SEGMENT_ID_OFFSET, superblock.next_logical_segment_id);
@@ -275,6 +283,8 @@ namespace graph::storage {
 		superblock.node_entity_directory_root = readPageRef(bytes, NODE_ENTITY_DIRECTORY_ROOT_OFFSET);
 		superblock.edge_entity_directory_root = readPageRef(bytes, EDGE_ENTITY_DIRECTORY_ROOT_OFFSET);
 		superblock.entity_property_directory_root = readPageRef(bytes, ENTITY_PROPERTY_DIRECTORY_ROOT_OFFSET);
+        if constexpr (RSS_HYBRID_PROPERTY_FORMAT_ENABLED)
+            superblock.hybrid_property_descriptor_root = readPageRef(bytes, HYBRID_PROPERTY_DESCRIPTOR_ROOT_OFFSET);
 		superblock.index_root_directory_root = readPageRef(bytes, INDEX_ROOT_DIRECTORY_ROOT_OFFSET);
 		superblock.next_logical_page_id = LittleEndianCodec::readU64(bytes, NEXT_LOGICAL_PAGE_ID_OFFSET);
 		superblock.next_logical_segment_id = LittleEndianCodec::readU64(bytes, NEXT_LOGICAL_SEGMENT_ID_OFFSET);

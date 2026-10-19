@@ -31,6 +31,8 @@
 namespace graph::storage {
 
 	class MetadataWriteBatch;
+    struct HybridPropertyDescriptor;
+    struct HybridPropertyDescriptorPage;
 
 	class MetadataPageFile final {
 	public:
@@ -109,6 +111,12 @@ namespace graph::storage {
 		readPageDirectoryBootstrap(PhysicalPageRef reference,
 								   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		[[nodiscard]] const std::shared_ptr<StorageIO> &storageIO() const { return io_; }
+
+        [[nodiscard]] HybridPropertyDescriptorPage readHybridPropertyDescriptor(PhysicalPageRef reference,
+            const Superblock &snapshot, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        // Frame and root must be allocated by the enclosing metadata publication.
+        void prepareHybridPropertyDescriptor(MetadataWriteBatch &batch, const HybridPropertyDescriptor &descriptor) const;
+        void prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch, const Superblock &snapshot) const;
 
 	private:
 		[[nodiscard]] BufferPoolPageKey pageKey(PhysicalPageRef reference) const;
