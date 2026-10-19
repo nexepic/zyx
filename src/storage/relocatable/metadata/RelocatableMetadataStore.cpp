@@ -165,7 +165,13 @@ namespace graph::storage {
 		return std::unique_ptr<RelocatableMetadataStore>(new RelocatableMetadataStore(std::move(io), current, true, std::move(memoryOwner), std::move(controlOwner), std::move(leaseMemoryOwner)));
 	}
 
-	MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const { return snapshots_.openSnapshot(); }
+    MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const {
+        auto snapshot = snapshots_.openSnapshot();
+        if (snapshot.superblock().hybrid_property_descriptor_root.isValid())
+            static_cast<void>(pages_.readHybridPropertyDescriptor(snapshot.superblock().hybrid_property_descriptor_root,
+                snapshot.superblock()));
+        return snapshot;
+    }
 
 	void RelocatableMetadataStore::refreshAfterExternalPublication() {
 		if (read_only_) {

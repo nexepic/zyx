@@ -102,7 +102,7 @@ namespace graph::storage {
 	} // namespace
 
 	MetadataPageFile::MetadataPageFile(std::shared_ptr<StorageIO> io, const Superblock &superblock) :
-		io_(std::move(io)), superblock_(superblock) {
+		io_(std::move(io)), superblock_(superblock), database_id_(superblock.database_id) {
 		if (!io_) {
 			throw std::invalid_argument("relocatable MetadataPageFile requires StorageIO");
 		}
@@ -627,7 +627,7 @@ namespace graph::storage {
     HybridPropertyDescriptorPage MetadataPageFile::readHybridPropertyDescriptor(PhysicalPageRef reference,
         const Superblock &snapshot, BufferPoolReadHint hint) const {
         validateReadHint(hint);
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != superblock_.database_id ||
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || snapshot.database_id != database_id_ ||
             snapshot.data_region_offset != data_region_offset_ || reference != snapshot.hybrid_property_descriptor_root)
             throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor snapshot belongs to another format or file");
         const auto bytes = readPage(reference, hint);
@@ -644,8 +644,8 @@ namespace graph::storage {
 
     void MetadataPageFile::prepareHybridPropertyDescriptor(MetadataWriteBatch &batch,
         const HybridPropertyDescriptor &descriptor) const {
-        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != superblock_.database_id ||
-            batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != superblock_.database_id ||
+        if (!RSS_HYBRID_PROPERTY_FORMAT_ENABLED || batch.candidate().database_id != database_id_ ||
+            batch.candidate().data_region_offset != data_region_offset_ || descriptor.database_id != database_id_ ||
             descriptor.semantic_generation != batch.generation() ||
             batch.candidate().hybrid_property_descriptor_root != batch.current().hybrid_property_descriptor_root)
             throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor publication has a foreign or stale semantic identity");
@@ -661,7 +661,7 @@ namespace graph::storage {
 
     void MetadataPageFile::prepareHybridPropertyDescriptorRelocation(MetadataWriteBatch &batch,
         const Superblock &snapshot) const {
-        if (batch.current() != snapshot || snapshot.database_id != superblock_.database_id ||
+        if (batch.current() != snapshot || snapshot.database_id != database_id_ ||
             batch.candidate().hybrid_property_descriptor_root != snapshot.hybrid_property_descriptor_root)
             throwMetadataPageError(FormatError::FERR_INVALID_STATE, "hybrid descriptor relocation has a foreign publication base");
         auto page = readHybridPropertyDescriptor(snapshot.hybrid_property_descriptor_root, snapshot);

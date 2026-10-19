@@ -45,6 +45,7 @@ class LogicalProfileObservation final {
         {"logical_plan.sort.topk_input_rows"}, {"logical_plan.sort.topk_retained_rows"},
         {"logical_plan.materialized_budget_peak_bytes", false, true},
         {"native_graph.read.property_selected_decode"},
+        {"native_graph.read.metadata_decodes.hybrid_descriptor"},
         {"native_graph.read.directory_range_cursor_metadata_pages"},
         {"native_graph.read.directory_range_cursor_root_descents"},
         {"native_graph.read.decoded_metadata_cache_hits"},
