@@ -6,6 +6,7 @@
 #include "graph/core/Edge.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyRecords.hpp"
 
 namespace zyx::benchmark::subblock {
 // Bounded conversion planning over immutable, caller-owned, authenticated ROW
@@ -131,6 +132,34 @@ public:
     [[nodiscard]] std::span<const Column> columns() const & noexcept { return {columns_.data(), column_count_}; }
     std::span<const Column> columns() const && = delete;
     [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
+
+    // Emit the native typed payload, never the laboratory magic. The output
+    // buffer remains caller-owned/admitted. No PageId is allocated here and no
+    // root is published; that belongs to the single metadata coordinator.
+    [[nodiscard]] graph::storage::HybridPropertyGroupRecord nativeGroup() const {
+        using namespace graph::storage;
+        HybridPropertyGroupRecord result{
+            group_.kind == OwnerKind::HPK_NODE ? EntityPropertyOwnerKind::EPOK_NODE : EntityPropertyOwnerKind::EPOK_EDGE,
+            HybridPropertyGroupMode::HPGM_HYBRID, group_.group, Generation(group_.generation),
+            group_.live, group_.memberships, group_.columns};
+        result.validate(); return result;
+    }
+    void encodeNativeColumn(size_t ordinal, std::span<std::byte> output) const {
+        using namespace graph::storage;
+        require(ordinal < column_count_);
+        const auto &source = columns_[ordinal];
+        HybridPropertyColumnRecord record;
+        // Existing conversion reservation includes one temporary Column and
+        // 4096 stack bytes. Native encoding must fit that existing allowance.
+        static_assert(sizeof(record) <= sizeof(Column));
+        record.identity = {nativeGroup().owner_kind,
+            source.identity.scalar_kind == ScalarKind::HPS_INT64 ? HybridPropertyScalarKind::HPSK_INT64 :
+                source.identity.scalar_kind == ScalarKind::HPS_DOUBLE ? HybridPropertyScalarKind::HPSK_DOUBLE :
+                    HybridPropertyScalarKind::HPSK_BOOL,
+            source.identity.group, source.identity.token, Generation(source.identity.generation)};
+        record.presence = source.presence; record.nulls = source.nulls; record.live = source.live;
+        record.words = source.words; record.encode(output);
+    }
 
     // Reverse projection visits only actual owner fields in token order. Heap
     // values are borrowed without copying; primitive cells are reconstructed

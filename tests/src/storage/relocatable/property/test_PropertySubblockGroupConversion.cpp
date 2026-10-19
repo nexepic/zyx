@@ -74,6 +74,42 @@ TEST(PropertySubblockGroupConversionTest, DynamicMixedNullMissingAndLargeFieldsK
             EXPECT_EQ(member.source, Source::HPS_EXTENSION);
     checkRoundTrip(plan, source);
 }
+TEST(PropertySubblockGroupConversionTest, NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount) {
+    auto source = rows(64, 3);
+    for (size_t i = 0; i < source.size(); ++i) {
+        source[i].entries[1].value = PropertyValue(i == 0 ? -0.0 : double(i));
+        source[i].entries[2].value = i == 4 ? PropertyValue{} : PropertyValue(bool(i % 2));
+    }
+    source[1].entries[1].value = PropertyValue(std::bit_cast<double>(UINT64_C(0x7ff8000000000042)));
+    MaterializedByteBudget budget(1024 * 1024);
+    {
+        ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 3, 3968);
+        const auto charge = budget.used(); const auto header = plan.nativeGroup();
+        ASSERT_EQ(header.columns, 3U); EXPECT_EQ(header.memberships, 192U);
+        const auto groupBytes = header.encode();
+        EXPECT_NE(groupBytes, plan.group().encode()); // distinct typed native tag
+        EXPECT_EQ(HybridPropertyGroupRecord::decode(groupBytes, header.owner_kind, 1, Generation(3), Generation(3)), header);
+        for (size_t ordinal = 0; ordinal < plan.columns().size(); ++ordinal) {
+            const auto &column = plan.columns()[ordinal];
+            std::array<std::byte, 576> output{};
+            auto bytes = std::span(output).first(column.wireSize());
+            plan.encodeNativeColumn(ordinal, bytes);
+            HybridPropertyColumnIdentity expected{header.owner_kind,
+                ordinal == 0 ? HybridPropertyScalarKind::HPSK_INT64 : ordinal == 1 ?
+                    HybridPropertyScalarKind::HPSK_DOUBLE : HybridPropertyScalarKind::HPSK_BOOL,
+                1, uint32_t(ordinal + 1), Generation(3)};
+            const auto decoded = HybridPropertyColumnRecord::decode(bytes, expected, header, Generation(3), Generation(3));
+            EXPECT_EQ(decoded.words, column.words); EXPECT_EQ(decoded.nulls, column.nulls);
+            EXPECT_EQ(decoded.presence, column.presence);
+            EXPECT_EQ(budget.used(), charge);
+        }
+        std::array<std::byte, 72> tooSmall{};
+        EXPECT_THROW(plan.encodeNativeColumn(0, tooSmall), FormatException);
+        EXPECT_THROW(plan.encodeNativeColumn(3, tooSmall), std::invalid_argument);
+        EXPECT_EQ(budget.used(), charge); checkRoundTrip(plan, source);
+    }
+    EXPECT_EQ(budget.used(), 0U);
+}
 TEST(PropertySubblockGroupConversionTest, MaximumMembershipsAndPropertylessOwnersStayBounded) {
     auto source = rows(64, 64); MaterializedByteBudget budget(1024 * 1024);
     { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
