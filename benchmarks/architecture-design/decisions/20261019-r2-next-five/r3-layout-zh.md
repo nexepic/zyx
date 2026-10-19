@@ -1,0 +1,67 @@
+# R3.1 有界属性子块候选定案
+
+此处在 R3.2 编码前关闭一个候选，不是生产准入。生产继续保留现行 ROW 及可用回退。复用 20261014-a3-layout-contract 的归属和成本证据，不恢复其已拒绝的整容器 carrier；已有行 chunk、字段暂存、独立大值和计费不重复算成果。
+
+## 固定参数和字节布局
+
+整数 little endian；保留字节为零。未知模式/类型、溢出、长度矛盾、重复/无序键及归属矛盾均拒绝。磁盘编码不使用 C++ sizeof/填充。以下字节不含现有认证页/slot framing。R3.2 审计 registry 后，在写任何实验文件前一并分配 codec/page-kind/version 标识，不能悄悄塞进当前格式。
+
+| 参数 | 固定候选及理由 |
+|---|---|
+| 逻辑组 | Node/Edge 分开；64 连续逻辑 ID，group=1+(id−1)/64，slot=(id−1)%64。标签不决定布局；只评此已有候选，不参数海选 |
+| 物理/更新单元 | 现有 4096 字节认证 COW 页；共享 slotted pool 打包记录，不每列独占页/segment |
+| 压缩块 | 基线不新增压缩；每字段最多 64 个原始值为独立子块，已有大值压缩独立 |
+| 列准入 | 非 NULL 值同为 int64/double/bool，至少 48 个 live slot 有该字段。混型/稀疏走 extension/ROW；NULL 属于 present |
+| 转换 | 显式、有界；类型/占用条件不满足时只降级该字段，不整组重排，不在后续写自动重新晋升 |
+| 工作上限 | 一次转换最多 64 owner、4096 个实际 owner/token 成员、1 MiB 规划/暂存字节，且受实际 QUERY/WRITE 账户限制。单记录含 header ≤4096 字节且不超过扣除 framing 后的原生 slot 可用容量；超出用认证独立大值引用 |
+| 稀疏回退 | 不建空列描述符；完整成本准入失败或超上限保持 ROW。删除不压缩/复用逻辑 ID |
+
+列记录为 64 字节 header 加按 slot 索引的值。offset：0 magic u32；4 version u16；6 Node/Edge kind u8；7 scalar type u8；8 group ID u64；16 token u32；20 capacity u16 (=64)；22 payload bytes u16；24 semantic generation u64；32 presence u64；40 NULL bitmap u64；48 live bitmap u64；56 reserved-zero u64。presence⊆live，NULL⊆presence；缺失/NULL 的 payload slot 为零。int/double payload 512 字节，总计 576；bool 位 payload 8 字节，总计 72。沿用 canonical 标量语义，包括 int/double 区分和 NaN 规则；同时认证 group/token/kind、物理页与 slot generation。
+
+组 header 64 字节：0..7 magic/version/kind/mode；8..15 group ID；16..23 semantic generation；24..31 live bitmap；32 actual membership count u32；36 admitted column count u32；40..63 reserved zero。不嵌入所有可能 token。
+
+每个 Node/Edge 命名空间使用三张共享有序 map，不按 owner/字段各建树：
+
+1. owner 枚举：键 owner u64+token u32，值 source u8+reserved-zero[3]，每实际字段 payload 16 字节，另计 B+Tree framing/填充。source=COLUMN/EXTENSION 是唯一语义归属选择器；ROW 继续已有实际字段枚举。
+2. 列目录：键 group u64+token u32；值 stable PageId u64+slot u16+reserved u16+slot-generation u32，共 28 字节 payload。每获准字段/组一条 locator，owner 项通过 group/token 推导，不重复 locator。
+3. extension：键 owner u64+token u32，一份 canonical 字段或认证独立 LargeValue 引用；共享页打包。认证 body 含 owner/token，含 framing 不超记录上限；复用已有 canonical 大字段/media 合同，不自造未认证 blob。
+
+map 使用已有 B+Tree framing，R3.2 实测全部成本；16/28 字节只是 payload 下界。组 header 目录是每命名空间第四张共享 map，键 group u64，值使用列目录相同的 16 字节 slot locator，额外计 O(G) 成本。
+
+明确选择新增 Superblock 物理元数据根 hybrid_property_descriptor_root，并作为额外图语义 fence 成员。它指向认证的 192 字节描述符 payload：0 magic u32；4 version u16；6 zero flags u16；8 semantic generation u64；16 database ID u64；24..63 reserved zero；八个 B+Tree 根引用均为 stable PageId u64+expected root generation u64，offset 64/80/96/112 为 Node owner/column/extension/group-header，128/144/160/176 为 Edge 对应根。空树两个字段均为零，部分零拒绝；描述符 generation 必须对 Superblock 可见。组 mode 只存在组 header。ROW 继续通过现有 entity_property_directory_root 路由，不在描述符重复 ROW 根。
+
+R3.2 在任何文件编码前，同时分配新 Superblock 字段 offset/format version 和 metadata page-kind，配套所有 reader/writer/搬迁/integrity。首次转换和后续字段修改均替换描述符、推进额外图 fence，即使 B+Tree PageId 稳定且只改物理映射也如此。故意保留保守冲突；当前七根 fence 不含物理目录，不能替代此显式成员。
+
+selector、列 presence、extension 存在性精确一致；无 selector 是缺失，存储 NULL 有 selector。extension 不留完整第二份行。点读验证所访问归属，完整 integrity 双向枚举发现孤儿/重复/错 owner/group/type；不在每次点读扫描全图。当前列类型不成为永久 schema。
+
+## 访问、修改和完整成本
+
+F 为实际字段，C 获准列，G 分配组，X 例外字段，h 共享树高度。空间 O(F+C+G+X)，C≤F、X≤F，不为缺失字段分配 O(E×K) 成员项。
+
+| 操作 | 读取对象 | COW/发布对象 |
+|---|---|---|
+| 单 owner/字段 | group/mode、selector、选中列目录/子块或 extension、页/catalog 路由及所需大值 | 无；树下降可能多于 ROW，点读延迟仍须保护 |
+| 完整 owner | owner 前缀范围的实际键、选中源和请求的大值；ROW 用当前 root | 无；按实际字段/相关页工作，不扫组/全库所有 token |
+| N owner、f 字段 | 批定位 group/membership，各访问组的 f 子块及匹配 extension，恢复原始/重复 ordinal | 无；ROW/candidate 使用同一 R1 执行器 |
+| 已有标量 SET | 选中源/selector、相关索引、页映射 | 变化数据页和必要 O(h) 路径；逻辑 slot 身份不变时不重写无变化 selector/locator；仅物理映射变化仍推进语义 fence |
+| 新增/REMOVE/变型 | 选中归属；降级时最多该字段 64 个值 | 受影响 selector、源/目录、组计数、索引、allocator、精确 retire；配额拒绝原子保留旧图 |
+| 整 map 替换 | 实际新旧键与变化索引，沿用事务输入准入 | 变化字段/路径，不整组重写；不保证接受无上限用户输入 |
+| 删除/回收 | owner 实际字段/关联图记录、成员和 bitmap | 变化路径/计数/索引，移除空列/组及精确退役，等 pin 后物理复用 |
+
+no-op 按 canonical 类型/值判断，不产生属性/索引替换。NULL↔missing、int↔double、merge/replace 各自转换。无变化索引和无关大值复用。普通单字段操作最多降级一个字段；暂存不够则原子拒绝。ROW 回退保留现有限制，不冒充所有数据均已细粒度更新。
+
+转换前保守估计 candidate/ROW 的完整原生分配：实际填充下向上取整数据页、map framing/路由、枚举、type/presence/live、描述符、catalog/allocator/Page Directory/metadata route、大值 manifest/content index、受影响查询索引、retire queue、转换期间旧版本。计入实际保留 128 KiB pool 空间和未填充帧，不能假设 31 帧全满。只有证明相同才抵消共享未变成本；转换 scratch 单独计费。
+
+准入条件：候选稳态 live 分配至少比 ROW 小 10%，且旧+新峰值保留在原资源/文件额度内；无法计算则拒绝转换。R3.2 对照真实分配，低估任何组件使估计器失效并修正。这是字节资格条件，不是 R7 延迟准入。
+
+64 owner 共享 int 字段下界：576 子块+64×16 selector+28 列 locator+64 group header+24 组 locator=1716 字节，尚未计 framing/整页/全部原生元数据。独有字段不建列。A3 的 2224/4744 和 2296/4016 是其他编码观察，不能当完整分配对比。共享成员树可能抵消列节省，必须照实记录，不能为基准强制列模式。
+
+## 生命周期与格式义务
+
+复用事务内字段暂存，精确计算归属/索引/引用变化，预留 ID/容量，构建变化数据及描述符/路由/allocator/retire。保持 data fence → 非当前 A/B → superblock fence → 确认。校验语义属性 fence，保持 overlay/read-your-writes、当前冲突和 blind-rebase 范围，不重放副作用语句。
+
+发布前失败仍以旧图为权威；不确定确认通过重开选根解决。旧 pin 保留完整旧 selector/route/大值引用。退休依据跨 owner 精确可达性，不以 candidate 引用差集证明全局无引用。反向转换、字段降级、删除、搬迁、物理复用、长 pin/背压和尾裁剪使用同一协议。
+
+R3.2 同步更新全部 reader/writer/descriptor/map/page-kind/version、root 校验、integrity、搬迁、allocator 可达性和 retire。沿用新文件/旧版本拒绝策略，不加 sidecar/迁移。生命周期未贯通不能进 R3.3；保留同执行器下隔离 ROW 对照。
+
+必测 R3.2：47/48/64 占用边界，稀疏/独有字段、随机交错形状、多标签、持续变型/降级、删除后稀疏、>4096 成员、宽行/大值、无序重复邻居 gather、no-op/NULL/merge/replace/remove、旧/新快照/重开、合法 checksum 身份错配、各发布 fence 故障、配额拒绝、搬迁/复用/退休。精确校验 ID/类型/值/重复和完整原生成本。失败可以完成比较项 R3.2，不能完成生产项 R3.3；R7 延迟/写入/资源/稳态门槛不变。

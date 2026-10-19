@@ -71,6 +71,10 @@ namespace graph::storage {
 		[[nodiscard]] MetadataRadixPage
 		readMetadataRadixUnresolved(PhysicalPageRef reference,
 									BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+        // Immutable unresolved image; callers still validate route identity/visibility.
+        [[nodiscard]] DecodedMetadataPageView<MetadataRadixPage>
+        readMetadataRadixUnresolvedView(PhysicalPageRef reference,
+                BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		// A page-local metadata move is permitted only for a current typed route
 		// target. Bootstrap plumbing stays physical and is never accepted here.
 		[[nodiscard]] bool supportsRoutedMetadataPageRelocation(PhysicalPageRef source, MetadataPageId expectedPageId,

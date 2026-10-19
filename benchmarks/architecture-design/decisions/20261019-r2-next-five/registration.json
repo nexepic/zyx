@@ -1,0 +1,16 @@
+{
+  "plan": "cow-performance-20261019",
+  "before_commit": "27d93bc4051e2fa5419098026b36154e1500063b",
+  "items": ["R1.3", "R2.1", "R2.2", "R2.3", "R3.1"],
+  "scope": "Consumer adapter census and semantic checks; existing immutable radix cache views in location range cursors; read-work attribution; bounded property layout decision only",
+  "exclusions": ["new persistent codec", "new cache", "new spill algorithms", "WAL", "durability changes", "full unit suite", "formal latency admission before R7"],
+  "acceptance": {
+    "R1.3": "Implementation and semantic evidence; performance review remains R7",
+    "R2.1": "Actual source paths, scopes and duplicate-work attribution",
+    "R2.2": "Immutable view integration, authentication, invalidation and bounded fallback tests",
+    "R2.3": "Record point/scan/gather mechanism work; formal performance admission remains R7",
+    "R3.1": "Close candidate byte layout, parameters, costs and lifecycle before codec implementation"
+  },
+  "formal_measurement": "No new latency runs in this batch. R7 retains the original frozen baseline, resource limits and gates.",
+  "platform": "Linux x86_64 execution; portable C++ only; macOS/Windows execution not claimed"
+}

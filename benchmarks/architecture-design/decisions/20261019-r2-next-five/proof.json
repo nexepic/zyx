@@ -1,0 +1,93 @@
+{
+  "plan": "cow-performance-20261019",
+  "parent": "27d93bc4051e2fa5419098026b36154e1500063b",
+  "scope": [
+    "R1.3",
+    "R2.1",
+    "R2.2",
+    "R2.3",
+    "R3.1"
+  ],
+  "accepted_this_batch": [
+    "R2.1",
+    "R2.2",
+    "R3.1"
+  ],
+  "implemented_pending_R7": [
+    "R1.3",
+    "R2.3"
+  ],
+  "phase_work_complete": true,
+  "all_five_accepted": false,
+  "progress_derived_from_active_docs": [
+    {
+      "language": "zh",
+      "accepted": 8,
+      "denominator": 24
+    },
+    {
+      "language": "en",
+      "accepted": 8,
+      "denominator": 24
+    }
+  ],
+  "tests": {
+    "necessary_modules": 12,
+    "distinct_latest_passing_cases": 183,
+    "single_183_case_run": false,
+    "full_unit_suite": false,
+    "first_run": "necessary-modules-first-182.json",
+    "first_run_tests": 182,
+    "first_run_passed": 173,
+    "first_run_failures": 9,
+    "fixture_correction": "Warm snapshot-context control image explicitly; retain original one-data-frame/miss/residency assertions",
+    "final_affected_run": "affected-module-final-22.json",
+    "final_affected_tests": 22,
+    "final_affected_passed": 22,
+    "latest_results": "latest-case-results.json",
+    "earlier_real_failure": "alias-first-failure.json",
+    "real_fix": "Mutable pool-control cache images bind to snapshot publication context; actual pool identity checks retained"
+  },
+  "performance": {
+    "formal_window_run": false,
+    "speedup_claim": false,
+    "admission": "R1.3/R2.3 pending R7; existing budgets and gates unchanged"
+  },
+  "format_change": false,
+  "durability_change": false,
+  "new_cache": false,
+  "platform_executed": "Linux x86_64",
+  "evidence": {
+    "consumers_paths": [
+      "en.md",
+      "zh.md"
+    ],
+    "layout": [
+      "r3-layout-en.md",
+      "r3-layout-zh.md"
+    ],
+    "source": "source-manifest.json"
+  },
+  "verification": [
+    "Affected modules only",
+    "Changed MDX YAML/GFM compile",
+    "Documentation links",
+    "git diff --check",
+    "Bilingual stage counts",
+    "Modified test files <=2000 lines"
+  ],
+  "local_artifacts": {
+    "core": {
+      "path": "/workspace/zyx/buildDir/libzyx_core.a",
+      "sha256": "3055adc97bbbcc9816a129e9c096de5429ebcb0b29c5478e05397997fde4fc37"
+    },
+    "module_binary": {
+      "path": "/workspace/zyx-r2-five-20261019/final/r2-five-tests",
+      "sha256": "53beb879127b5b83e46236b0f8c684686198e1d66a384cc36dcd5c52681fd341"
+    },
+    "final_fixture_binary": {
+      "path": "/workspace/zyx-r2-five-20261019/fixture-fixed/r2-five-tests",
+      "sha256": "b1bbadec871b50bc305eca4a00602981c8fcb9d09318adf0df3a2e01e5bf1d28"
+    }
+  }
+}

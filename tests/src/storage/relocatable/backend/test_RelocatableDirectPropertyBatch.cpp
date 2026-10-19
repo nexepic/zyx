@@ -102,3 +102,45 @@ TEST_F(RelocatableStorageBackendTest, NativeDirectFilterGroupAndDistinctReturnEx
     EXPECT_EQ(result.rowCount(), 2U);
     EXPECT_EQ(result.getRows()[0].at("country").asPrimitive(), PropertyValue("CN"));
 }
+
+TEST_F(RelocatableStorageBackendTest, DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth) {
+    const auto fixture = materializeNativeGraphFixture();
+    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+    RelocatableStorageBackend reader(options), writer(options); reader.open(); writer.open();
+    auto old = reader.openLogicalGraphReadSnapshot();
+    const std::array<std::string_view, 2> keys{"alpha", "rank"};
+    const auto read = [&](LogicalGraphReadSnapshot &snapshot, const std::vector<uint64_t> &ids) {
+        std::map<std::pair<size_t, size_t>, PropertyValue> result;
+        snapshot.readNodePropertyCellsSortedWithAdmission(ids, keys,
+            [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+                if (value) EXPECT_TRUE(result.emplace(std::pair{row,column}, std::move(*value)).second);
+            }, [](size_t) {});
+        return result;
+    };
+    EXPECT_EQ(read(*old, {fixture.person_node_id}).at({0,0}), PropertyValue(42));
+    const auto bytes = std::filesystem::file_size(data_path_);
+    std::vector<LogicalGraphNodeCreateRequest> requests;
+    for (int64_t i = 0; i < 64; ++i) {
+        std::string body(65536U, 'x'); body.replace(0, 8, std::to_string(i));
+        requests.push_back({{"Growing"}, {{"rank", PropertyValue(i)}, {"body", PropertyValue(body)}}});
+    }
+    std::vector<uint64_t> created;
+    ASSERT_NO_THROW(created = writer.createLogicalNodes(requests));
+    ASSERT_EQ(created.size(), 64U);
+    EXPECT_GT(std::filesystem::file_size(data_path_), bytes);
+    const std::vector<uint64_t> gather{fixture.person_node_id, created.back()};
+    std::map<std::pair<size_t,size_t>, PropertyValue> oldValues;
+    ASSERT_NO_THROW(oldValues = read(*old, gather));
+    EXPECT_EQ(oldValues.at({0,0}), PropertyValue(42));
+    EXPECT_FALSE(oldValues.contains({1,1}));
+    std::unique_ptr<LogicalGraphReadSnapshot> current;
+    ASSERT_NO_THROW(current = reader.openLogicalGraphReadSnapshot());
+    std::map<std::pair<size_t,size_t>, PropertyValue> currentValues;
+    ASSERT_NO_THROW(currentValues = read(*current, gather));
+    EXPECT_EQ(currentValues.at({0,0}), PropertyValue(42));
+    EXPECT_EQ(currentValues.at({1,1}), PropertyValue(63));
+    current.reset(); old.reset(); writer.close(); reader.close();
+    RelocatableStorageBackend reopened(options); reopened.open();
+    auto fresh = reopened.openLogicalGraphReadSnapshot();
+    EXPECT_EQ(read(*fresh, gather), currentValues);
+}

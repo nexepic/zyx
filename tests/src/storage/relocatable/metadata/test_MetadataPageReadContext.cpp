@@ -735,3 +735,58 @@ TEST_F(MetadataPageReadContextTest, DecoderAdmissionDoesNotEvictPagesFundedByAno
  context.reset(); io->disableBufferPool();
  EXPECT_EQ(decoded->used(), 0U); EXPECT_EQ(raw->used(), 0U);
 }
+
+// A view owns an immutable decoded image, not a raw buffer-pool pin. Invalidating
+// the lookup cache must leave an already borrowed image alive and unchanged.
+TEST_F(MetadataPageReadContextTest, RadixViewsShareHitsAndSurviveInvalidationWithoutStaleLookup) {
+    MetadataPageFile pages(io, root);
+    const auto ref = writeRadix(pages, 1U);
+    auto context = std::make_shared<MetadataPageReadContext>(root);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
+    const auto held = pages.readMetadataRadixUnresolvedView(ref);
+    const auto shared = pages.readMetadataRadixUnresolvedView(ref);
+    EXPECT_EQ(held.get(), shared.get());
+    EXPECT_FALSE(held->logical_children_resolved);
+    auto replacement = *held;
+    replacement.page_id = MetadataPageId(77U);
+    pages.writeMetadataRadix(ref, replacement);
+    const auto fresh = pages.readMetadataRadixUnresolvedView(ref);
+    EXPECT_EQ(fresh->page_id, MetadataPageId(77U));
+    EXPECT_EQ(held->page_id, MetadataPageId(1U));
+    EXPECT_NE(fresh.get(), held.get());
+    const std::byte bad{0}; io->writeAt(pages.pageOffset(ref), &bad, 1U);
+    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref), FormatException);
+    EXPECT_EQ(held->page_id, MetadataPageId(1U));
+    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref, static_cast<BufferPoolReadHint>(255U)), FormatException);
+}
+
+TEST_F(MetadataPageReadContextTest, RadixViewsMeasureBorrowedAndCopiedFixedBytesSeparately) {
+    MetadataPageFile pages(io, root);
+    const auto ref = writeRadix(pages, 1U);
+    auto context = std::make_shared<MetadataPageReadContext>(root);
+    MetadataPageReadContext::Scope scope(context, *io);
+    static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    for (size_t i = 0; i < 10U; ++i) static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
+    auto trace = graph::debug::PerfTrace::snapshotAndReset();
+    EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 10U * sizeof(MetadataRadixPage));
+    EXPECT_FALSE(trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes"));
+    EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
+    for (size_t i = 0; i < 10U; ++i) static_cast<void>(pages.readMetadataRadixUnresolved(ref));
+    trace = graph::debug::PerfTrace::snapshotAndReset();
+    EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_copy_fixed_bytes").totalValue, 10U * sizeof(MetadataRadixPage));
+    EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
+}
+
+TEST_F(MetadataPageReadContextTest, RadixViewsWithZeroCacheAndFutureReferencesRemainAuthenticated) {
+    MetadataPageFile pages(io, root);
+    const auto ref = writeRadix(pages, 1U, 2U);
+    auto context = std::make_shared<MetadataPageReadContext>(root, 0U);
+    MetadataPageReadContext::Scope scope(context, *io);
+    EXPECT_EQ(pages.readMetadataRadixUnresolvedView(ref)->generation, Generation(2U));
+    EXPECT_EQ(context->size(), 0U);
+    auto wrong = ref; wrong.generation = Generation(1U);
+    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(wrong), FormatException);
+    EXPECT_EQ(context->size(), 0U);
+}

@@ -1237,7 +1237,12 @@ namespace graph::storage {
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
 		const std::array<std::byte, RSS_PAGE_SIZE> poolPage =
-				readTypedPage(*io_, poolOffset, pool.generation, "relocatable shared page-pool envelope is truncated");
+				// Pool control records can allocate more frames without changing the
+                // pool incarnation. Another handle cannot invalidate this IO's
+                // cache: bind the mutable image to the durable snapshot context.
+                // Decode below still authenticates the actual pool generation.
+                readTypedPage(*io_, poolOffset, snapshot.superblock().generation,
+                    "relocatable shared page-pool envelope is truncated");
 		std::array<std::byte, RSS_ENVELOPE_BYTES> envelopeBytes{};
 		std::copy_n(poolPage.begin(), envelopeBytes.size(), envelopeBytes.begin());
 		const SegmentEnvelope envelope = SegmentEnvelopeCodec::decode(envelopeBytes);
@@ -1328,7 +1333,9 @@ namespace graph::storage {
 		}
 		const uint64_t poolOffset =
 				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
-		const BufferPoolPageKey poolKey{poolOffset, pool.generation.value()};
+		// Unlike immutable data pages, pool allocation bits may advance within
+        // one pool generation. Keep cache images isolated by snapshot context.
+        const BufferPoolPageKey poolKey{poolOffset, snapshot.superblock().generation.value()};
         // The pool control header is mutable even while snapshot-visible data
         // pages are immutable. Copy its bounded image under the cache lock;
         // only the immutable data page below may escape with a read pin.
