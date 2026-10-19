@@ -29,6 +29,7 @@
 #include <vector>
 #include "CypherParserImpl.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "LogicalProfileObservation.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
@@ -334,7 +335,8 @@ namespace graph::query {
 				}
 				operatorName += logical::toString(current.op->getType());
 				result.addRow({{"operator", PropertyValue(std::move(operatorName))},
-						   {"details", PropertyValue(current.op->toString())}});
+						   {"details", PropertyValue(current.op->toString() +
+                            " | " + std::string(detail::logicalExecutionContract(current.op->getType())))}});
 
 				const std::vector<logical::LogicalOperator *> children = current.op->getChildren();
 				if (current.depth == std::numeric_limits<size_t>::max()) {
@@ -355,7 +357,7 @@ namespace graph::query {
 
 		[[nodiscard]] QueryResult addLogicalProfileSummary(QueryResult result,
 													 const std::chrono::steady_clock::time_point started,
-													 const QueryContext &context) {
+													 const QueryContext &context, detail::LogicalProfileObservation &observation) {
 			context.checkGuard();
 			const double elapsedMs = std::chrono::duration<double, std::milli>(
 														std::chrono::steady_clock::now() - started)
@@ -364,10 +366,18 @@ namespace graph::query {
 				throw std::runtime_error("logical PROFILE recorded an invalid elapsed duration");
 			}
 			result.setDuration(elapsedMs);
+            observation.publishColumns(result);
 			// Match the legacy PROFILE shape: regular result rows remain intact and
 			// the final row carries the execution summary.
 			result.addRow({{"phase", PropertyValue("logical_plan")}, {"total_time_ms", PropertyValue(elapsedMs)},
-					   {"calls", PropertyValue(int64_t{1})}});
+					   {"calls", PropertyValue(int64_t{1})},
+                       {"actual_output_rows", PropertyValue(static_cast<int64_t>(result.rowCount()))},
+                       {"access_path", PropertyValue(std::string(observation.path()))},
+                       {"physical_work", observation.report()},
+                       {"physical_work_scope", PropertyValue("current thread; cumulative except max of local budget peaks (not query total/RSS); inclusive ns timers; absent=unavailable; buffer reads are not device IO; estimates may precede execution snapshot")},
+                       {"estimates_available", PropertyValue(observation.hasEstimate())},
+                       {"estimated_root_rows", observation.estimatedRows()},
+                       {"direct_selected_fraction", observation.selectedFraction()}});
 			return result;
 		}
 
@@ -721,8 +731,14 @@ namespace graph::query {
 			if (!profilePlan) {
 				return executeLogicalRoot();
 			}
-			const auto started = std::chrono::steady_clock::now();
-			return addLogicalProfileSummary(executeLogicalRoot(), started, logicalContext);
+			detail::LogicalProfileObservation observation(logicalContext, logicalReadOptions_.bounds.maximum_materialized_bytes);
+            if (auto statisticsBackend = std::dynamic_pointer_cast<storage::LogicalGraphStatisticsBackend>(logicalBackend_)) {
+                BackendLogicalStatisticsProvider statistics(*statisticsBackend, executionRoot, false);
+                if (const auto estimate = statistics.estimate(executionRoot))
+                    observation.estimate(estimate->lower_bound, estimate->expected_rows, estimate->upper_bound);
+            }
+            const auto started = std::chrono::steady_clock::now();
+			return addLogicalProfileSummary(executeLogicalRoot(), started, logicalContext, observation);
             });
 		}
 
@@ -809,8 +825,9 @@ namespace graph::query {
 		if (!profilePlan) {
 			return executeOverlayRoot();
 		}
-		const auto started = std::chrono::steady_clock::now();
-		return addLogicalProfileSummary(executeOverlayRoot(), started, logicalContext);
+		detail::LogicalProfileObservation observation(logicalContext, logicalReadOptions_.bounds.maximum_materialized_bytes);
+        const auto started = std::chrono::steady_clock::now();
+		return addLogicalProfileSummary(executeOverlayRoot(), started, logicalContext, observation);
         });
 	}
 

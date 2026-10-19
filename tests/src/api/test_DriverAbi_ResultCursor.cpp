@@ -749,3 +749,35 @@ TEST_F(DriverAbiResultCursorTest, ResultAndValueRefAccessorsRejectInvalidColumns
 
     zyx_driver_result_free(result);
 }
+
+TEST_F(DriverAbiResultCursorTest, ProfilePhysicalWorkIsDiscoverableThroughTheExistingMapAbi) {
+    zyx_driver_result_t *result = nullptr;
+    ASSERT_EQ(zyx_driver_db_execute(db, "PROFILE RETURN 7 AS value", nullptr, &result, &error), ZYX_DRIVER_OK);
+    struct Release { zyx_driver_result_t *result; ~Release() { zyx_driver_result_free(result); } } release{result};
+    ASSERT_NE(result, nullptr);
+    uint32_t metricsColumn = zyx_driver_result_column_count(result);
+    uint32_t rowsColumn = metricsColumn;
+    for (uint32_t column = 0; column < zyx_driver_result_column_count(result); ++column) {
+        const std::string name = zyx_driver_result_column_name(result, column);
+        if (name == "physical_work") metricsColumn = column;
+        if (name == "actual_output_rows") rowsColumn = column;
+    }
+    ASSERT_LT(metricsColumn, zyx_driver_result_column_count(result));
+    ASSERT_LT(rowsColumn, zyx_driver_result_column_count(result));
+    EXPECT_STREQ(zyx_driver_result_column_name(result, 0), "value");
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    int64_t value = 0;
+    ASSERT_EQ(zyx_driver_result_get_int64(result, 0, &value, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(value, 7);
+    EXPECT_EQ(zyx_driver_result_value_type(result, metricsColumn), ZYX_DRIVER_VALUE_NULL);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    ASSERT_EQ(zyx_driver_result_get_int64(result, rowsColumn, &value, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(value, 1);
+    EXPECT_EQ(zyx_driver_result_value_type(result, metricsColumn), ZYX_DRIVER_VALUE_MAP);
+    zyx_driver_value_ref_t metrics{};
+    ASSERT_EQ(zyx_driver_result_get_value(result, metricsColumn, &metrics, &error), ZYX_DRIVER_OK);
+    uint32_t entries = 0;
+    ASSERT_EQ(zyx_driver_value_ref_map_count(&metrics, &entries, &error), ZYX_DRIVER_OK);
+    EXPECT_GT(entries, 0U);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_DONE);
+}

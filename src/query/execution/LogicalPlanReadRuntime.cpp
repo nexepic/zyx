@@ -13291,7 +13291,8 @@ namespace graph::query::execution {
 										else appendDistinctPropertyValue(key, PropertyValue(value));
 									}, cell.data);
 								};
-								for (const auto ordinal : ordinals) {
+								size_t filterRejected = 0U;
+                                for (const auto ordinal : ordinals) {
 									checkGuard(state);
 									if (ordinal >= columns.size()) throw std::logic_error("direct aggregate ordinal changed");
 									if (!selection.includes(ordinal)) continue;
@@ -13310,7 +13311,7 @@ namespace graph::query::execution {
 										const bool match = std::visit([&](auto value) { return detail::columnPredicateMatchesBorrowed(value, predicate, text); }, cell.data);
 										if (!match) { passesFilter = false; break; }
 									}
-									if (!passesFilter) continue;
+									if (!passesFilter) { ++filterRejected; continue; }
 									if (inputRows == state.shared.bounds.maximum_rows) throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 									++inputRows; const auto row = columns.rowId(ordinal);
 									size_t groupIndex = 0;
@@ -13358,7 +13359,8 @@ namespace graph::query::execution {
 									}
 									debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", 1);
 								}
-								return true;
+								debug::PerfTrace::addValue("logical_plan.aggregate.direct_filter_rejected", static_cast<int64_t>(filterRejected));
+                                return true;
 							}});
 						aggregateColumnReceiver->filterOwner = directFilter;
 					}

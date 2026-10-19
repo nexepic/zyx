@@ -13,6 +13,7 @@
 #include "graph/utils/UnmanagedAllocationResource.hpp"
 #include <stdexcept>
 #include <utility>
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::query::execution {
 	// Optional execution kernels may decline admission without swallowing an
@@ -70,7 +71,7 @@ namespace graph::query::execution {
         [[nodiscard]] bool transfersReservations() const noexcept { return release_sink_ != nullptr; }
         void adoptCharged(detail::ResourceLease &&lease) noexcept {
             if (!parent_ || !parent_->sameAccount(lease) || lease.bytes() > available()) std::terminate();
-            const size_t bytes = lease.bytes(); parent_->absorb(std::move(lease)); used_bytes_ += bytes;
+            const size_t bytes = lease.bytes(); parent_->absorb(std::move(lease)); used_bytes_ += bytes; observePeak();
         }
 
 	private:
@@ -94,8 +95,17 @@ namespace graph::query::execution {
                 return;
             }
 			if (parent_) parent_->set(total);
-			used_bytes_ = total;
+			used_bytes_ = total; observePeak();
 		}
+
+        void observePeak() noexcept {
+            if (used_bytes_ <= peak_bytes_) return;
+            peak_bytes_ = used_bytes_;
+            try {
+                debug::PerfTrace::addValue("logical_plan.materialized_budget_peak_bytes",
+                    static_cast<int64_t>((std::min)(peak_bytes_, static_cast<size_t>((std::numeric_limits<int64_t>::max)()))));
+            } catch (...) { /* Optional diagnostics cannot invalidate admitted storage. */ }
+        }
 
 		void *do_allocate(size_t bytes,size_t alignment) override {
 			replace(0U,bytes);
@@ -113,6 +123,7 @@ namespace graph::query::execution {
 		std::optional<detail::ResourceLease> parent_;
 		size_t maximum_bytes_;
 		size_t used_bytes_ = 0U;
+        size_t peak_bytes_ = 0U;
 		std::pmr::memory_resource *upstream_;
 	};
 
