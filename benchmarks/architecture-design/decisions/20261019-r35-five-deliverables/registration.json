@@ -1,0 +1,14 @@
+{
+  "parent": "8b85d3368b8c05a1dfaaa611358b5169f95305b3",
+  "fixed_deliverables": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "scope_record": "Fixed in the user-facing plan before implementation; current checkpoint addresses R3.2 prerequisites only.",
+  "acceptance": "The active optimization.mdx contracts remain unchanged; helper implementations are not top-level acceptances.",
+  "formal_timing": "One final R7 window after all required implementations are frozen.",
+  "full_suite": false
+}

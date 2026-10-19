@@ -1,0 +1,555 @@
+diff --git a/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+new file mode 100644
+index 00000000..6422c188
+--- /dev/null
++++ b/benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp
+@@ -0,0 +1,159 @@
++#pragma once
++#include <algorithm>
++#include <functional>
++#include "PropertySubblockFieldTransition.hpp"
++#include "graph/core/Node.hpp"
++#include "graph/core/Edge.hpp"
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
++
++namespace zyx::benchmark::subblock {
++// Bounded conversion planning over immutable, caller-owned, authenticated ROW
++// roots. This is not a persisted native layout: extension values remain borrowed
++// canonical PropertyValues, never invented LargeValue references. The caller
++// must keep input roots and budget alive and separately charge their storage.
++// No source value is copied or mutated while classifying the group.
++class ReservedGroupConversion final {
++public:
++    static constexpr size_t MAX_MEMBERSHIPS = 4096;
++    static constexpr size_t MAX_COLUMNS = MAX_MEMBERSHIPS / 48;
++    struct Member {
++        uint64_t owner = 0;
++        uint32_t token = 0;
++        const graph::PropertyValue *value = nullptr;
++        Source source = Source::HPS_EXTENSION;
++        uint16_t column = 0;
++    };
++private:
++    graph::query::execution::MaterializedByteReservation reservation_;
++    GroupHeader group_;
++    std::array<Member, MAX_MEMBERSHIPS> members_{};
++    std::array<Column, MAX_COLUMNS> columns_{};
++    size_t member_count_ = 0, column_count_ = 0;
++
++    static auto reserve(graph::query::execution::MaterializedByteBudget &budget) {
++        graph::query::execution::MaterializedByteReservation result(&budget);
++        // Fixed holder plus column construction and bounded sorting stack
++        // allowance. Payload bodies, native publication buffers and roots are
++        // separate owners; this reservation does not pretend to cover them.
++        constexpr size_t charge = sizeof(ReservedGroupConversion) + sizeof(Column) + 4096;
++        static_assert(charge <= 1024 * 1024);
++        result.set(charge); return result;
++    }
++    static std::optional<ScalarKind> primitive(const graph::PropertyValue &value) {
++        if (std::holds_alternative<int64_t>(value.getVariant())) return ScalarKind::HPS_INT64;
++        if (std::holds_alternative<double>(value.getVariant())) return ScalarKind::HPS_DOUBLE;
++        if (std::holds_alternative<bool>(value.getVariant())) return ScalarKind::HPS_BOOL;
++        return {};
++    }
++    static bool isNull(const graph::PropertyValue &value) {
++        return std::holds_alternative<std::monostate>(value.getVariant());
++    }
++    static uint64_t bits(const graph::PropertyValue &value, ScalarKind kind) {
++        if (kind == ScalarKind::HPS_INT64) return std::bit_cast<uint64_t>(std::get<int64_t>(value.getVariant()));
++        if (kind == ScalarKind::HPS_DOUBLE) return std::bit_cast<uint64_t>(std::get<double>(value.getVariant()));
++        return std::get<bool>(value.getVariant());
++    }
++public:
++    ReservedGroupConversion(graph::query::execution::MaterializedByteBudget &budget,
++        std::span<const graph::storage::PropertyCollectionRoot> roots, OwnerKind kind,
++        uint64_t group, uint64_t generation, size_t nativeRecordLimit,
++        const std::function<void()> &checkpoint = {}) : reservation_(reserve(budget)) {
++        require(valid(kind) && !roots.empty() && roots.size() <= 64 && generation);
++        validGroup(group);
++        if (nativeRecordLimit < 64) throw std::length_error("property conversion native group-header bound");
++        group_.kind = kind; group_.group = group; group_.generation = generation;
++        const uint32_t nativeKind = kind == OwnerKind::HPK_NODE ? graph::Node::typeId : graph::Edge::typeId;
++        for (const auto &root : roots) {
++            if (checkpoint) checkpoint();
++            require(root.owner_entity_type == nativeKind && root.owner_entity_id &&
++                root.owner_entity_id <= uint64_t(INT64_MAX) && groupFor(root.owner_entity_id) == group);
++            const uint64_t bit = uint64_t{1} << slotFor(root.owner_entity_id);
++            require(!(group_.live & bit)); group_.live |= bit;
++            if (root.entries.size() > MAX_MEMBERSHIPS - member_count_)
++                throw std::length_error("property conversion membership bound");
++            uint32_t previous = 0;
++            for (const auto &entry : root.entries) {
++                require(entry.key_token > previous); previous = entry.key_token;
++                members_[member_count_++] = {root.owner_entity_id, entry.key_token, &entry.value};
++            }
++        }
++        auto end = members_.begin() + member_count_;
++        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
++            return a.token != b.token ? a.token < b.token : a.owner < b.owner;
++        });
++        for (size_t first = 0; first < member_count_;) {
++            if (checkpoint) checkpoint();
++            size_t last = first + 1;
++            while (last < member_count_ && members_[last].token == members_[first].token) ++last;
++            std::optional<ScalarKind> scalar;
++            bool compatible = last - first >= 48;
++            for (size_t i = first; compatible && i < last; ++i) {
++                const auto &value = *members_[i].value;
++                if (isNull(value)) continue;
++                const auto current = primitive(value);
++                if (!current || (scalar && current != scalar)) compatible = false;
++                else scalar = current;
++            }
++            // An all-NULL new field has no inferred scalar type.
++            if (compatible && scalar) {
++                require(column_count_ < MAX_COLUMNS);
++                Column &column = columns_[column_count_];
++                column.identity = {kind, *scalar, group, members_[first].token, generation};
++                column.live = group_.live;
++                if (column.wireSize() > nativeRecordLimit || column.wireSize() > 4096)
++                    throw std::length_error("property conversion native column bound");
++                for (size_t i = first; i < last; ++i) {
++                    auto &member = members_[i];
++                    const unsigned slot = slotFor(member.owner);
++                    const uint64_t bit = uint64_t{1} << slot;
++                    column.presence |= bit;
++                    if (isNull(*member.value)) column.nulls |= bit;
++                    else column.words[slot] = bits(*member.value, *scalar);
++                    member.source = Source::HPS_COLUMN; member.column = uint16_t(column_count_);
++                }
++                column.validate(); ++column_count_;
++            }
++            first = last;
++        }
++        std::sort(members_.begin(), end, [](const Member &a, const Member &b) {
++            return a.owner != b.owner ? a.owner < b.owner : a.token < b.token;
++        });
++        group_.memberships = uint32_t(member_count_); group_.columns = uint32_t(column_count_);
++        group_.validate(); if (checkpoint) checkpoint();
++    }
++    ReservedGroupConversion(const ReservedGroupConversion &) = delete;
++    ReservedGroupConversion &operator=(const ReservedGroupConversion &) = delete;
++    [[nodiscard]] const GroupHeader &group() const & noexcept { return group_; }
++    const GroupHeader &group() const && = delete;
++    [[nodiscard]] std::span<const Member> members() const & noexcept { return {members_.data(), member_count_}; }
++    std::span<const Member> members() const && = delete;
++    [[nodiscard]] std::span<const Column> columns() const & noexcept { return {columns_.data(), column_count_}; }
++    std::span<const Column> columns() const && = delete;
++    [[nodiscard]] size_t retainedCharge() const noexcept { return reservation_.bytes(); }
++
++    // Reverse projection visits only actual owner fields in token order. Heap
++    // values are borrowed without copying; primitive cells are reconstructed
++    // from column bits. The synchronous visitor owns any copy/encoding charge.
++    // Property-less live owners are valid, dead/out-of-group owners are not.
++    void visitOwner(uint64_t owner, const std::function<void(uint32_t, const graph::PropertyValue &)> &visitor) const {
++        require(owner && owner <= uint64_t(INT64_MAX) && groupFor(owner) == group_.group && visitor &&
++            (group_.live & (uint64_t{1} << slotFor(owner))));
++        auto found = std::lower_bound(members_.begin(), members_.begin() + member_count_, owner,
++            [](const Member &member, uint64_t id) { return member.owner < id; });
++        for (; found != members_.begin() + member_count_ && found->owner == owner; ++found) {
++            if (found->source == Source::HPS_EXTENSION) { visitor(found->token, *found->value); continue; }
++            const auto cell = cellAt(columns_[found->column], slotFor(owner));
++            graph::PropertyValue value;
++            switch (cell.kind) {
++            case CellKind::HFC_NULL: break;
++            case CellKind::HFC_INT64: value = graph::PropertyValue(std::bit_cast<int64_t>(cell.bits)); break;
++            case CellKind::HFC_DOUBLE: value = graph::PropertyValue(std::bit_cast<double>(cell.bits)); break;
++            case CellKind::HFC_BOOL: value = graph::PropertyValue(bool(cell.bits)); break;
++            default: require(false);
++            }
++            visitor(found->token, value);
++        }
++    }
++};
++} // namespace zyx::benchmark::subblock
+diff --git a/include/graph/storage/relocatable/index/FixedBTreeMapMutation.hpp b/include/graph/storage/relocatable/index/FixedBTreeMapMutation.hpp
+new file mode 100644
+index 00000000..e4c7bda1
+--- /dev/null
++++ b/include/graph/storage/relocatable/index/FixedBTreeMapMutation.hpp
+@@ -0,0 +1,96 @@
++/**
++ * @file FixedBTreeMapMutation.hpp
++ * @brief Canonical logical-prefix replacements for a shared native map.
++ * Copyright (c) 2026 Nexepic. Licensed under Apache-2.0.
++ */
++#pragma once
++#include <map>
++#include <memory_resource>
++#include "graph/storage/relocatable/index/FixedBTreeMap.hpp"
++#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
++
++namespace graph::storage {
++
++// One instance owns all changes to an existing index in an enclosing graph transaction.
++// A repeated SET/REMOVE changes final state, never replays two suffix inserts
++// against the same base prefix. Call stage exactly once, after all final values
++// and locator identities have been assigned. The transaction must outlive this
++// synchronous planner. Its PMR resource admits map nodes before allocation.
++template<size_t KeyBytes, size_t ValueBytes>
++class FixedBTreeMapMutation final {
++    using Map = FixedBTreeMap<KeyBytes, ValueBytes>;
++public:
++    using Key = typename Map::Key;
++    using Value = typename Map::Value;
++private:
++    struct Change { std::optional<Value> original, final; };
++    NativeGraphWriteTransaction &transaction_;
++    BTreePageStore &pages_;
++    Map map_;
++    uint64_t index_id_;
++    size_t maximum_keys_;
++    std::pmr::map<Key, Change> changes_;
++    bool staged_ = false;
++
++    void change(const Key &key, std::optional<Value> value,
++        const std::function<void(size_t)> &boundaryAdmission) {
++        if (staged_ || !transaction_.isActive()) throw std::logic_error("fixed map mutation is no longer writable");
++        if (auto existing = changes_.find(key); existing != changes_.end()) {
++            existing->second.final = value;
++            return;
++        }
++        if (changes_.size() == maximum_keys_)
++            throw FormatException(FormatError::FERR_INVALID_STATE, "fixed map mutation exceeds its logical-key bound");
++        auto original = map_.find(transaction_.baseSnapshot(), key, boundaryAdmission);
++        changes_.emplace(key, Change{original, value});
++    }
++public:
++    FixedBTreeMapMutation(NativeGraphWriteTransaction &transaction, BTreePageStore &pages,
++        RelocatableMetadataStore &metadata, uint64_t indexId, size_t maximumKeys,
++        std::pmr::memory_resource &resource)
++        : transaction_(transaction), pages_(pages), map_(indexId, pages, metadata),
++          index_id_(indexId), maximum_keys_(maximumKeys), changes_(&resource) {
++        if (!transaction.isActive() || !indexId || !maximumKeys)
++            throw std::invalid_argument("fixed map mutation requires an active transaction and positive bounds");
++        if (!metadata.ownsSnapshot(transaction.baseSnapshot()) ||
++            !metadata.findIndexRootOptional(transaction.baseSnapshot(), indexId))
++            throw std::invalid_argument("fixed map mutation requires an existing root in its transaction domain");
++    }
++    FixedBTreeMapMutation(const FixedBTreeMapMutation &) = delete;
++    FixedBTreeMapMutation &operator=(const FixedBTreeMapMutation &) = delete;
++    // Native cursor/source buffers and staged transaction buffers remain
++    // separate owners. Pass boundary admission for the selected route; the PMR
++    // resource above accounts this coalescer's retained map nodes only.
++    void set(const Key &key, const Value &value,
++        const std::function<void(size_t)> &boundaryAdmission = {}) { change(key, value, boundaryAdmission); }
++    void erase(const Key &key,
++        const std::function<void(size_t)> &boundaryAdmission = {}) { change(key, {}, boundaryAdmission); }
++    [[nodiscard]] size_t changedPrefixCount() const noexcept {
++        size_t count = 0;
++        for (const auto &[key, value] : changes_) count += value.original != value.final;
++        return count;
++    }
++    // Native staging can allocate. On any failure poison the enclosing graph
++    // transaction by rollback; a caller must never commit a half-staged map.
++    void stage() {
++        if (staged_) throw std::logic_error("fixed map mutation is already staged");
++        staged_ = true;
++        try {
++            for (const auto &[key, value] : changes_) {
++                if (value.original == value.final) continue;
++                if (value.original) {
++                    const auto record = Map::encode(key, *value.original);
++                    transaction_.stageScalarIndexErase(pages_, index_id_, record, BTreeLeafValueLayout::BLVL_EMPTY);
++                }
++                if (value.final) {
++                    const auto record = Map::encode(key, *value.final);
++                    transaction_.stageScalarIndexUpsert(pages_, index_id_, record, 0, BTreeLeafValueLayout::BLVL_EMPTY);
++                }
++            }
++        } catch (...) {
++            transaction_.rollback();
++            throw;
++        }
++    }
++};
++} // namespace graph::storage
+diff --git a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+index d25d1b5c..438412b6 100644
+--- a/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
++++ b/src/storage/relocatable/entity/NativeGraphWritePlanner.cpp
+@@ -3691,4 +3691,3 @@ namespace graph::storage {
+-			NativeGraphLogicalIdReservation logicalIds;
+-			logicalIds.node_ranges = node_id_ranges_;
+-			logicalIds.edge_ranges = edge_id_ranges_;
+-			context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
++			// Rollback is also the staging-allocation-failure path. Borrow the
++			// already retained ranges instead of allocating a second reservation.
++			context_->metadata->abandonNativeGraphLogicalIdReservation(node_id_ranges_, edge_id_ranges_);
+diff --git a/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp b/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
+new file mode 100644
+index 00000000..c1900953
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp
+@@ -0,0 +1,145 @@
++#include <gtest/gtest.h>
++#include <random>
++#include "../../../../../benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp"
++using namespace zyx::benchmark::subblock;
++using namespace graph::storage;
++using graph::PropertyValue;
++using graph::query::execution::MaterializedByteBudget;
++using graph::query::execution::MaterializedByteLimitExceeded;
++namespace {
++std::vector<PropertyCollectionRoot> rows(size_t owners, size_t fields = 1) {
++    std::vector<PropertyCollectionRoot> result;
++    for (size_t owner = 1; owner <= owners; ++owner) {
++        PropertyCollectionRoot root{owner, graph::Node::typeId, {}};
++        for (size_t token = 1; token <= fields; ++token)
++            root.entries.push_back({uint32_t(token), PropertyValue(int64_t(owner * 100 + token))});
++        result.push_back(std::move(root));
++    }
++    return result;
++}
++void checkRoundTrip(const ReservedGroupConversion &plan, const std::vector<PropertyCollectionRoot> &roots) {
++    for (const auto &root : roots) {
++        size_t count = 0;
++        plan.visitOwner(root.owner_entity_id, [&](uint32_t token, const PropertyValue &value) {
++            ASSERT_LT(count, root.entries.size());
++            EXPECT_EQ(token, root.entries[count].key_token);
++            // Canonical bytes also compare NaN payloads and signed zero exactly.
++            std::vector<std::byte> before, after;
++            CanonicalPropertyValueCodec::append(before, root.entries[count].value);
++            CanonicalPropertyValueCodec::append(after, value);
++            EXPECT_EQ(before, after); ++count;
++        });
++        EXPECT_EQ(count, root.entries.size());
++    }
++}
++TEST(PropertySubblockGroupConversionTest, Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip) {
++    for (size_t count : {47U, 48U, 64U}) {
++        auto source = rows(count); std::mt19937 random(734); std::shuffle(source.begin(), source.end(), random);
++        MaterializedByteBudget budget(1024 * 1024);
++        {
++            ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
++            EXPECT_EQ(plan.columns().size(), count < 48 ? 0U : 1U);
++            EXPECT_EQ(plan.members().size(), count); EXPECT_EQ(plan.group().memberships, count);
++            EXPECT_EQ(plan.group().live, count == 64 ? UINT64_MAX : (uint64_t{1} << count) - 1);
++            EXPECT_EQ(budget.used(), plan.retainedCharge());
++            EXPECT_LE(plan.retainedCharge(), 1024U * 1024U); checkRoundTrip(plan, source);
++        }
++        EXPECT_EQ(budget.used(), 0U);
++    }
++}
++TEST(PropertySubblockGroupConversionTest, DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues) {
++    auto source = rows(64, 8);
++    for (size_t i = 0; i < source.size(); ++i) {
++        auto &entries = source[i].entries;
++        entries[1].value = PropertyValue(double(i));
++        entries[2].value = PropertyValue(bool(i % 2));
++        entries[3].value = PropertyValue{}; // all NULL: cannot infer a new type
++        entries[4].value = i == 0 ? PropertyValue(double(3)) : PropertyValue(int64_t(3));
++        entries[5].value = PropertyValue(std::string(8192, char('a' + i % 26)));
++        if (i < 16) entries[6].value = PropertyValue{}; // present NULL qualifies
++        if (i >= 47) entries.erase(entries.begin() + 7); // sparse remains extension
++    }
++    source[0].entries[1].value = PropertyValue(std::bit_cast<double>(UINT64_C(0x7ff8000000000042)));
++    source[1].entries[1].value = PropertyValue(-0.0);
++    MaterializedByteBudget budget(1024 * 1024);
++    ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 3, 3968);
++    ASSERT_EQ(plan.columns().size(), 4U);
++    EXPECT_EQ(plan.columns()[0].identity.token, 1U);
++    EXPECT_EQ(plan.columns()[1].identity.token, 2U);
++    EXPECT_EQ(plan.columns()[2].identity.token, 3U);
++    EXPECT_EQ(plan.columns()[3].identity.token, 7U);
++    EXPECT_EQ(plan.columns()[3].nulls, 65535U);
++    for (const auto &member : plan.members())
++        if (member.token == 4 || member.token == 5 || member.token == 6 || member.token == 8)
++            EXPECT_EQ(member.source, Source::HPS_EXTENSION);
++    checkRoundTrip(plan, source);
++}
++TEST(PropertySubblockGroupConversionTest, MaximumMembershipsAndPropertylessOwnersStayBounded) {
++    auto source = rows(64, 64); MaterializedByteBudget budget(1024 * 1024);
++    { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
++      EXPECT_EQ(plan.members().size(), 4096U); EXPECT_EQ(plan.columns().size(), 64U); checkRoundTrip(plan, source); }
++    source[0].entries.push_back({65, PropertyValue(int64_t(1))});
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968)), std::length_error);
++    EXPECT_EQ(budget.used(), 0U);
++    source = rows(64, 0);
++    ReservedGroupConversion empty(budget, source, OwnerKind::HPK_NODE, 1, 2, 64);
++    EXPECT_TRUE(empty.members().empty()); EXPECT_TRUE(empty.columns().empty()); checkRoundTrip(empty, source);
++}
++TEST(PropertySubblockGroupConversionTest, CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge) {
++    const auto source = rows(64); MaterializedByteBudget tiny(1), budget(1024 * 1024);
++    EXPECT_THROW((ReservedGroupConversion(tiny, source, OwnerKind::HPK_NODE, 1, 2, 3968)), MaterializedByteLimitExceeded);
++    EXPECT_EQ(tiny.used(), 0U);
++    for (size_t stop : {1U, 32U, 65U, 66U}) {
++        size_t seen = 0;
++        EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968,
++            [&] { if (++seen == stop) throw std::runtime_error("cancel conversion"); })), std::runtime_error);
++        EXPECT_EQ(budget.used(), 0U);
++    }
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 1, 2, 575)), std::length_error);
++    EXPECT_EQ(budget.used(), 0U); EXPECT_EQ(source, rows(64));
++    ReservedGroupConversion retry(budget, source, OwnerKind::HPK_NODE, 1, 2, 576); checkRoundTrip(retry, source);
++}
++TEST(PropertySubblockGroupConversionTest, RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens) {
++    auto source = rows(64); MaterializedByteBudget budget(1024 * 1024);
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_EDGE, 1, 2, 3968)), std::invalid_argument);
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 2, 2, 3968)), std::invalid_argument);
++    source[1].owner_entity_id = 1;
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968)), std::invalid_argument);
++    source = rows(64); source[0].entries.push_back({1, PropertyValue(int64_t(2))});
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968)), std::invalid_argument);
++    EXPECT_EQ(budget.used(), 0U);
++    auto edgeSource = rows(48); for (auto &root : edgeSource) root.owner_entity_type = graph::Edge::typeId;
++    ReservedGroupConversion edgePlan(budget, edgeSource, OwnerKind::HPK_EDGE, 1, 2, 3968);
++    EXPECT_EQ(edgePlan.columns()[0].identity.owner_kind, OwnerKind::HPK_EDGE); checkRoundTrip(edgePlan, edgeSource);
++}
++TEST(PropertySubblockGroupConversionTest, NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace) {
++    auto source = rows(1, 0); source[0].owner_entity_id = uint64_t(INT64_MAX);
++    MaterializedByteBudget budget(1024 * 1024);
++    { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, groupFor(uint64_t(INT64_MAX)), 2, 64);
++      checkRoundTrip(plan, source); EXPECT_EQ(plan.group().live, uint64_t{1} << 62);
++      EXPECT_THROW(plan.visitOwner(uint64_t(INT64_MAX) - 1, [](auto, const auto &) {}), std::invalid_argument); }
++    source[0].owner_entity_id = uint64_t(INT64_MAX) + 1;
++    EXPECT_THROW((ReservedGroupConversion(budget, source, OwnerKind::HPK_NODE,
++        groupFor(source[0].owner_entity_id), 2, 64)), std::invalid_argument);
++    EXPECT_EQ(budget.used(), 0U);
++}
++TEST(PropertySubblockGroupConversionTest, ParentAccountOwnsThePlanAndFailureRefundsBothCounters) {
++    using namespace graph::query::execution::detail;
++    const auto makeAccount = [](size_t bytes) {
++        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(bytes));
++        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(bytes));
++        return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, bytes);
++    };
++    const auto source = rows(64);
++    auto refused = makeAccount(1); MaterializedByteBudget denied(1024 * 1024, refused);
++    EXPECT_THROW((ReservedGroupConversion(denied, source, OwnerKind::HPK_NODE, 1, 2, 3968)), ResourceAdmissionDenied);
++    EXPECT_EQ(denied.used(), 0U); EXPECT_EQ(refused->used(), 0U);
++    auto account = makeAccount(1024 * 1024); MaterializedByteBudget budget(1024 * 1024, account);
++    { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
++      EXPECT_EQ(plan.retainedCharge(), account->used()); EXPECT_EQ(budget.used(), account->used()); }
++    EXPECT_EQ(budget.used(), 0U); EXPECT_EQ(account->used(), 0U);
++    auto empty = rows(64, 0);
++    EXPECT_THROW((ReservedGroupConversion(budget, empty, OwnerKind::HPK_NODE, 1, 2, 63)), std::length_error);
++    EXPECT_EQ(account->used(), 0U);
++}
++} // namespace
+diff --git a/tests/src/storage/relocatable/property/test_PropertySubblockMapMutation.cpp b/tests/src/storage/relocatable/property/test_PropertySubblockMapMutation.cpp
+new file mode 100644
+index 00000000..007e7054
+--- /dev/null
++++ b/tests/src/storage/relocatable/property/test_PropertySubblockMapMutation.cpp
+@@ -0,0 +1,119 @@
++#include <gtest/gtest.h>
++#include "graph/query/execution/MaterializedByteBudget.hpp"
++#include "graph/storage/relocatable/index/FixedBTreeMapMutation.hpp"
++#include "storage/relocatable/entity/NativeGraphWritePlannerTestFixture.hpp"
++
++using namespace graph::storage;
++using graph::query::execution::MaterializedByteBudget;
++using graph::query::execution::MaterializedByteLimitExceeded;
++namespace {
++using Map = FixedBTreeMap<8, 8>;
++using Mutation = FixedBTreeMapMutation<8, 8>;
++constexpr uint64_t MAP_ID = 0x48504D555441ULL;
++Map::Key key(uint8_t id) { Map::Key result{}; result.back() = std::byte{id}; return result; }
++Map::Value value(uint8_t id) { Map::Value result{}; result.front() = std::byte{id}; return result; }
++NativeGraphWritePlannerOptions options() {
++    NativeGraphWritePlannerOptions result;
++    result.first_slot = PhysicalSlotId(40); result.last_slot = PhysicalSlotId(80);
++    result.entity_pool_owner_id = 901;
++    result.property_roots = {PhysicalSlotId(40), PhysicalSlotId(80), 902};
++    return result;
++}
++class PropertySubblockMapMutationTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {
++protected:
++    void create() {
++        NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++        auto transaction = planner.beginTransaction();
++        const auto bytes = Map::encode(key(1), value(1));
++        BTreePageEntry entry{{bytes.begin(), bytes.end()}, 0};
++        auto plan = btree_pages_->planInitialTreeMutation(transaction.baseSnapshot(), MAP_ID,
++            std::span(&entry, 1), {}, BTreeLeafValueLayout::BLVL_EMPTY);
++        transaction.stageScalarIndexCreate(*btree_pages_, std::move(plan));
++        ASSERT_TRUE(transaction.commit().committed());
++    }
++};
++TEST_F(PropertySubblockMapMutationTest, RepeatedSetRemoveSetPublishesExactlyOneFinalSuffixAndOldPinSurvives) {
++    create(); auto old = metadata_->openSnapshot();
++    MaterializedByteBudget budget(65536);
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto transaction = planner.beginTransaction();
++    {
++        Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 4, budget);
++        mutation.set(key(1), value(2)); mutation.erase(key(1)); mutation.set(key(1), value(3));
++        mutation.set(key(2), value(4)); mutation.set(key(2), value(5));
++        EXPECT_EQ(mutation.changedPrefixCount(), 2U); EXPECT_GT(budget.used(), 0U);
++        mutation.stage();
++        EXPECT_THROW(mutation.set(key(1), value(9)), std::logic_error);
++        EXPECT_THROW(mutation.stage(), std::logic_error);
++        ASSERT_TRUE(transaction.commit().committed());
++    }
++    EXPECT_EQ(budget.used(), 0U);
++    Map map(MAP_ID, *btree_pages_, *metadata_); auto fresh = metadata_->openSnapshot();
++    EXPECT_EQ(map.find(old, key(1)), value(1)); EXPECT_FALSE(map.find(old, key(2)));
++    EXPECT_EQ(map.find(fresh, key(1)), value(3)); EXPECT_EQ(map.find(fresh, key(2)), value(5));
++    fresh.release(); old.release(); reopenNativeStores();
++    Map reopened(MAP_ID, *btree_pages_, *metadata_); auto recovered = metadata_->openSnapshot();
++    EXPECT_EQ(reopened.find(recovered, key(1)), value(3));
++    EXPECT_EQ(reopened.find(recovered, key(2)), value(5));
++}
++TEST_F(PropertySubblockMapMutationTest, FinalNoOpAndInsertThenEraseDoNotStagePhysicalChanges) {
++    create(); const auto before = metadata_->openSnapshot().superblock();
++    MaterializedByteBudget budget(65536);
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto transaction = planner.beginTransaction();
++    Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 2, budget);
++    mutation.set(key(1), value(2)); mutation.set(key(1), value(1));
++    mutation.set(key(2), value(2)); mutation.erase(key(2));
++    EXPECT_EQ(mutation.changedPrefixCount(), 0U); mutation.stage();
++    // Native transactions deliberately reject empty commits. The coalescer
++    // must leave this contract intact rather than invent a metadata write.
++    EXPECT_THROW(transaction.commit(), FormatException);
++    transaction.rollback();
++    EXPECT_EQ(metadata_->openSnapshot().superblock(), before);
++}
++TEST_F(PropertySubblockMapMutationTest, RejectedNewPrefixKeepsPreviousFinalStateAndRefundsPlanningNodes) {
++    create(); MaterializedByteBudget budget(65536), tooSmall(1);
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto transaction = planner.beginTransaction();
++    {
++        Mutation refused(transaction, *btree_pages_, *metadata_, MAP_ID, 1, tooSmall);
++        EXPECT_THROW(refused.set(key(1), value(2)), MaterializedByteLimitExceeded);
++        EXPECT_EQ(refused.changedPrefixCount(), 0U); EXPECT_EQ(tooSmall.used(), 0U);
++        Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget);
++        mutation.set(key(1), value(2));
++        EXPECT_THROW(mutation.set(key(2), value(3)), FormatException);
++        mutation.set(key(1), value(4)); mutation.stage();
++        ASSERT_TRUE(transaction.commit().committed());
++    }
++    EXPECT_EQ(budget.used(), 0U);
++    Map map(MAP_ID, *btree_pages_, *metadata_); auto snapshot = metadata_->openSnapshot();
++    EXPECT_EQ(map.find(snapshot, key(1)), value(4)); EXPECT_FALSE(map.find(snapshot, key(2)));
++}
++TEST_F(PropertySubblockMapMutationTest, NativeStageFailureRollsBackWholeTransactionRatherThanHalfPublishingMap) {
++    create(); MaterializedByteBudget budget(65536);
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto transaction = planner.beginTransaction();
++    // Deliberate conflicting leaf layout exercises failure after staging began.
++    const auto bytes = Map::encode(key(1), value(1));
++    transaction.stageScalarIndexErase(*btree_pages_, MAP_ID, bytes, BTreeLeafValueLayout::BLVL_U64);
++    Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 2, budget);
++    mutation.set(key(1), value(2)); mutation.set(key(2), value(3));
++    EXPECT_THROW(mutation.stage(), FormatException);
++    EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK);
++    EXPECT_THROW(transaction.commit(), FormatException);
++    auto snapshot = metadata_->openSnapshot(); Map map(MAP_ID, *btree_pages_, *metadata_);
++    EXPECT_EQ(map.find(snapshot, key(1)), value(1)); EXPECT_FALSE(map.find(snapshot, key(2)));
++}
++TEST_F(PropertySubblockMapMutationTest, RejectsAbsentRootsAndInactiveTransactionsBeforePlanningChanges) {
++    MaterializedByteBudget budget(65536);
++    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
++    auto absent = planner.beginTransaction();
++    EXPECT_THROW((Mutation(absent, *btree_pages_, *metadata_, MAP_ID, 1, budget)), std::invalid_argument);
++    absent.rollback(); create(); auto transaction = planner.beginTransaction();
++    Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget);
++    mutation.set(key(1), value(2)); transaction.rollback();
++    EXPECT_THROW(mutation.set(key(1), value(3)), std::logic_error);
++    EXPECT_THROW(mutation.erase(key(1)), std::logic_error);
++    EXPECT_THROW((Mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget)), std::invalid_argument);
++}
++} // namespace
