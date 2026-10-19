@@ -14,9 +14,9 @@ projectOrder: 1
 
 > This page retains current single-file rules and explicitly labeled design targets; it is no longer an independent implementation checklist. The [architecture and performance plan](optimization) exclusively owns tasks, admission and progress. Old Stage/P/C ledgers are archived outside the site; their percentages, test counts and not-started claims do not describe the current tree.
 
-Updated: 2026-10-11. Retain COW/A-B publication; do not introduce WAL. PageId, owner, generation, snapshots, codecs, publication and reclamation invariants remain. A2/A3/A4/A5 may change relevant layouts/interfaces through the new plan's design and acceptance process; amend exact clauses and version affected formats before implementation, never silently relax reader validation.
+Updated: 2026-10-19. Retain COW/A-B publication; do not introduce WAL. PageId, owner, generation, snapshots, codecs, publication and reclamation invariants remain. R3/R4/R5 may change relevant layouts/interfaces through the new plan's design and acceptance process; amend exact clauses and version affected formats before implementation, never silently relax reader validation.
 
-Status distinctions: disjoint writers in Section 2 are an A5 target. Per-key updates and split large collections in Section 10 are A2/A3 targets; current code still encodes complete owner collections. Section 14 key-only adjacency is the current format, not a permanent restriction on future formats. Determine other capability status from code and the capability matrix, not aspirational wording.
+Status distinctions: general disjoint writers in Section 2 remain a target; existing bounded blind-patch rebase is not general conflict relaxation. Field staging in Section 10 already exists, while physical partial updates and large-collection splitting require R3 validation; current code still encodes complete owner collections. Section 14 key-only adjacency is the current format, not a permanent restriction on future formats. Determine other capability status from code and the capability matrix, not aspirational wording.
 
 Read format values from current `RSS_FORMAT_VERSION`, Superblock and local codec source. These are distinct version spaces; this page does not duplicate stale version numbers.
 
@@ -37,7 +37,7 @@ Read format values from current `RSS_FORMAT_VERSION`, Superblock and local codec
 - Do not keep migration checkpoints, cutover, legacy backups, or `.migration` sidecars.
 - Do not create a domain-specific physical store for code, images, audio, PDFs, or other business payloads.
 - Do not maintain isolated, non-interoperable free lists for Catalog, Property, and Vector storage.
-- Avoid unbounded interim-format compatibility branches; A7 defines versioning and rejection. The old Stage 0 is not an implementation entry.
+- Avoid unbounded interim-format compatibility branches; the format-evolution contract defines versioning and rejection. The old Stage 0 is not an implementation entry.
 
 ## 2. Overall Goals
 
@@ -143,7 +143,7 @@ The current development implementation uses Segment envelope version **5** and S
 
 Private extent admission counts each complete 128 KiB physical segment before IO: 128 MiB per session, `maximum_database_query_scratch_bytes` (default 1 GiB) per opened file identity, and 2 GiB per process. Hard-link and symlink aliases share the opened file identity. There are at most 64 domains and 64 active scratch sessions per domain; admission never waits. Resource locks are released before the metadata publication gate. Successful durable release refunds extent bytes; uncertain IO leaves the allowance charged as an orphan until exclusive authenticated writable recovery completes. Corrupt payloads and public-directory references prevent reclamation. Metadata COW extents are separately owned and are not included in this private-extent quota.
 
-Integrity scanning reports sealed private scratch as requiring owner quiescence or writable recovery. A physical read-only open performs no cleanup. These disk bounds and Sort tests do not complete global memory ownership, output retention, partitioned operators or S5.3/S5.4 acceptance.
+Integrity scanning reports sealed private scratch as requiring owner quiescence or writable recovery. A physical read-only open performs no cleanup. Sort, partitioned DISTINCT/UNION, shared budgets, and resource faults were accepted in the previous cycle; aggregate state and hash join still lack general spill. See `benchmarks/architecture-design/decisions/20261016-s53-budget-and-spill-acceptance/`; R6 protects these capabilities during subsequent changes.
 
 ## 5. Bootstrap, Roots, and Page Directory
 
@@ -666,13 +666,13 @@ The canonical definition owns the authoritative name. A forward B+Tree still sto
 
 ## 14. Graph Adjacency
 
-> The following key-only/empty-payload/single-tree clauses describe current files. A4 supersedes permanent future-policy restrictions: covering trees and segmented derived adjacency may be compared after specifying consistency, corruption handling, snapshots, atomic maintenance and reclamation. Derived payload is not inherently a second authority. Retain existing primary-record rechecks until a replacement protocol passes acceptance.
+> The following key-only/empty-payload/single-tree clauses describe current files. R5 supersedes permanent future-policy restrictions: covering trees and segmented derived adjacency may be compared after specifying consistency, corruption handling, snapshots, atomic maintenance and reclamation. Derived payload is not inherently a second authority. Retain existing primary-record rechecks until a replacement protocol passes acceptance.
 
 Ordinary graph adjacency and Vector ANN adjacency are independent data structures. Ordinary graph adjacency is one global built-in Packed B+Tree; Vector adjacency retains the Vector-specific design in Section 15.
 
 ### 14.0 Normative implementation boundary
 
-The ordinary-graph implementation has exactly one durable adjacency representation: the reserved global, key-only Packed B+Tree. This is a format invariant, not a planner preference. Readers/writers of the current format must preserve the following; future formats follow A4/A7:
+The ordinary-graph implementation has exactly one durable adjacency representation: the reserved global, key-only Packed B+Tree. This is a format invariant, not a planner preference. Readers/writers of the current format must preserve the following; future formats follow R5 and the format contract:
 
 - the format-reserved `RSS_GLOBAL_ADJACENCY_INDEX_ID` is the only ordinary-graph adjacency `IndexId`; it resolves the one adjacency root from the snapshot-pinned Index Root Directory and is never allocatable to a user or secondary index;
 - Node records own no adjacency root or adjacency key, and Edge records own no neighbor link, physical page location, or duplicated adjacency payload;
@@ -680,11 +680,11 @@ The ordinary-graph implementation has exactly one durable adjacency representati
 - B+Tree pages contain only routing/separator data or key-only adjacency entries, never mixed Node or Edge records;
 - a relocation changes only the Page Directory route for a logical `PageId`; it never rewrites an Edge, a Node, a cursor continuation, or a parent child reference.
 
-Per-Node chains, per-Node roots, Base/Delta/Tombstone tiers, adjacency tail pages, and an Edge-to-Edge linked list are retired designs. Do not revive their old implementations as fallbacks or compatibility readers. A new segmented design does not restore old code. A4 experiments and A7 versioning determine replacement versus additional access paths, including codec, root, publication, reclamation, integrity and admission.
+Per-Node chains, per-Node roots, Base/Delta/Tombstone tiers, adjacency tail pages, and an Edge-to-Edge linked list are retired designs. Do not revive their old implementations as fallbacks or compatibility readers. A new segmented design does not restore old code. R5 experiments and the format-evolution contract determine replacement versus additional access paths, including codec, root, publication, reclamation, integrity and admission.
 
 ### 14.0.1 Structural decision record
 
-"Global Packed B+Tree" describes only the ordinary-graph adjacency access path. It neither co-locates Node and Edge records in B+Tree pages nor makes an Edge record a B+Tree leaf value. The following record current-format choices, subject to future A4/A7 admission:
+"Global Packed B+Tree" describes only the ordinary-graph adjacency access path. It neither co-locates Node and Edge records in B+Tree pages nor makes an Edge record a B+Tree leaf value. The following record current-format choices, subject to future admission under R5 and the format contract:
 
 | Option | Decision | Reason |
 |---|---|---|
@@ -692,7 +692,7 @@ Per-Node chains, per-Node roots, Base/Delta/Tombstone tiers, adjacency tail page
 | Separate outgoing and incoming trees | Reject | The `direction` prefix already supplies two ordered access ranges. Splitting the tree only multiplies root-directory, COW, and reclamation state; it cannot remove the two keys required by one Edge mutation. |
 | Per-Node root or per-Node B+Tree | Reject | It recreates permanently sparse roots/tail pages, more root publications, and supernode-specific structures; low-degree Nodes cannot share encoded key space. |
 | Edge doubly linked list or Edge chain | Reject | Insertion and deletion rewrite Node heads and neighboring Edges, expanding the transactional write set and coupling relocation, snapshots, and integrity to physical relationship links. |
-| Embed Edge records or a covering Edge payload in adjacency leaves | Reject | The current protocol lacks independently trusted covering reads: payload still requires primary rechecks and adds writes. A4 reopens the derived-covering protocol; replicated index fields are not inherently a second authority. |
+| Embed Edge records or a covering Edge payload in adjacency leaves | Reject | The current protocol lacks independently trusted covering reads: payload still requires primary rechecks and adds writes. R5 reopens the derived-covering protocol; replicated index fields are not inherently a second authority. |
 
 Consequently, a B+Tree leaf can contain **adjacency key ranges** for several Nodes, but never those Nodes' or Edges' entity records. An expansion streams `EdgeId` values first and resolves a record from the Edge Entity Store in the same snapshot only when the query actually needs its endpoint, type, state, or Properties. This deliberate two-stage read separates sequential adjacency scanning from entity materialization and prevents unnecessary Edge fields from occupying every index entry.
 
@@ -719,7 +719,7 @@ For every live directed Edge, it contains exactly two entries:
 (ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-`AdjacencyDirection` is a persisted prefixed enum; unknown values fail closed on every platform. NodeId and EdgeId are positive 64-bit logical IDs. The routing NodeId is necessarily part of the key, but the empty value is normative: the tree stores neither the other endpoint nor relationship type/state as an Edge payload. Current-format writers must not add a covering value. A4/A7 may define a new version or separately identified derived access path, with explicit lifecycle and no silent reinterpretation of this key.
+`AdjacencyDirection` is a persisted prefixed enum; unknown values fail closed on every platform. NodeId and EdgeId are positive 64-bit logical IDs. The routing NodeId is necessarily part of the key, but the empty value is normative: the tree stores neither the other endpoint nor relationship type/state as an Edge payload. Current-format writers must not add a covering value. R5 and the format contract may define a new version or separately identified derived access path, with explicit lifecycle and no silent reinterpretation of this key.
 
 The comparator defines canonical ordering by `direction`, unsigned `NodeId`, then unsigned `EdgeId`. Entries for one `(direction, NodeId)` therefore form one contiguous range and are deterministically ordered. Prefix compression removes the repeated direction/NodeId bytes within such a range. Multiple low-degree Nodes share each leaf; no Node or direction owns a 4 KiB tail page. A supernode spans as many consecutive leaves as required without a per-Node size limit.
 
@@ -751,7 +751,7 @@ Undirected expansion opens the two bounded ranges independently and combines the
 
 Creating one Edge plans the Edge record, Entity Map entry, `ADJ_OUT` insert, and `ADJ_IN` insert against one pinned generation. It applies both key mutations through one B+Tree COW overlay and publishes all replacement pages, the replacement adjacency root, metadata roots, and the inactive A/B Superblock in one commit. A crash can expose only the complete old generation or the complete new generation; one-direction visibility is forbidden.
 
-Target under A5: distinguish physical root publication from semantic conflicts, validate final-state dependencies against current roots and perform bounded safe rebasing. This is not a current general guarantee: ordinary transactions still compare graph-root fences and can conflict on disjoint changes. Do not remove that fence until replacement isolation/conflict validation is implemented and tested.
+Target under R4: distinguish physical root publication from semantic conflicts, validate final-state dependencies against current roots and perform bounded safe rebasing. This is not a current general guarantee: ordinary transactions still compare graph-root fences and can conflict on disjoint changes. Do not remove that fence until replacement isolation/conflict validation is implemented and tested.
 
 Deleting one Edge resolves its authoritative old endpoints, erases both exact adjacency keys through the same overlay, removes the Edge record and Entity Map entry, and atomically publishes the result. Ordinary graph deletion does not append a logical Tombstone. COW-retired pages enter the common generation-aware Retire Queue and become reusable only after older snapshots drain.
 
@@ -763,7 +763,7 @@ Bulk ingest generates the two keys for every validated Edge, sorts and deduplica
 
 Deletion uses ordinary Packed B+Tree underflow handling. Sibling redistribution or merge occurs in the candidate COW image; empty leaves and collapsed internal roots retire through the common page-reclamation path. Page occupancy policy uses byte counts from the codec, not fixed entry counts. Background whole-tree compaction is not required for correctness, but a bounded maintenance rebuild may repack a tree whose measured byte occupancy falls below policy. It publishes one replacement root and retires the old tree snapshot-safely.
 
-Current production uses the global Packed B+Tree. Future buffering or segmented layouts require A4/A5/A7 decisions covering cursor semantics, atomic visibility, bounded resources, recovery and reclamation. A write buffer is not an approved task, and old per-node delta implementations must not be revived as fallbacks.
+Current production uses the global Packed B+Tree. Future buffering or segmented layouts require R4/R5 and the format contract decisions covering cursor semantics, atomic visibility, bounded resources, recovery and reclamation. A write buffer is not an approved task, and old per-node delta implementations must not be revived as fallbacks.
 
 ### 14.6 Integrity requirements
 
@@ -908,46 +908,18 @@ storage/relocatable/maintenance/
 
 Very large aggregate files such as `RelocatableMetadataStore.cpp` should be split along these responsibilities. The transaction coordinator coordinates root changes; it does not implement every page codec.
 
-## 18. Current verification and implementation navigation
+## 18. Current implementation and verification navigation
 
-Follow the [S0–S6 plan](optimization). Run necessary affected-module tests only, execute on macOS while preserving portability; no full unit suite, coverage gate, commit or push. Format/write changes still require relevant atomic-publication, old-snapshot, reopen, fault-recovery, integrity and reclamation checks. Removing a coverage gate does not remove these contracts.
+Follow R0–R7 in the [COW graph database performance refactoring plan](optimization). Old S0–S6 is complete within its original scope. Run necessary affected-module tests; format/write changes still need atomic publication, old snapshots, reopen, faults, integrity, and reclamation checks. Record actual platforms and source identity. The current reference is Linux x86_64, not the obsolete macOS-only execution constraint.
 
-Public capabilities/consumers are tracked in the [capability matrix](native-capability-acceptance-matrix); release scope is in [release follow-ups](native-remaining-work-roadmap). Historical tests describe their source epoch only. Documentation cleanup does not complete unverified capabilities.
+Production adjacency retains the global 17-byte-key tree and authoritative Edge records. Ordered source batches reuse a snapshot-bound NativeReadSession, batch-fetch missing records, restore adjacency order, and validate endpoints; captured records/buffers remain charged. First access still authenticates the authoritative record; covering indexes have not removed cold-traversal IO. Covering/shared-segmented experiments are not admitted. Future adoption follows R5 protocol, versioning, and full-lifecycle validation.
+
+Bounded property-name batches, immutable metadata route branch reuse, amortized publication reclamation, and row-property compression selection already exist. Do not turn their intermediate historical records into new implementation tasks. Admission is recorded in `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`; historical test counts do not validate later changes.
+
+Native file-length limit defaults to 1 TiB, and integrity/reclamation workspace limits each default to 8 MiB (`RelocatableStorageBackendOptions`). File limits bound logical length, not physical allocation or reserved maintenance space; writable aliases follow the same configuration. Workspace and persistent backlog are distinct: bounded workspace does not imply bounded old-version retention. Protected scratch cleanup/refunds retain the implemented recovery contract.
+
+Public consumers are in the [capability matrix](native-capability-acceptance-matrix); independent release boundaries are in [release follow-ups](native-remaining-work-roadmap). Target paragraphs do not establish implementation. Determine capabilities from code, named tests, and source-identified acceptance.
 
 ## 19. Historical records
 
-The complete previous specification, including old Sections 18–23, stage records and intermediate percentages, plus the completed P0–P7 optimization plan are byte-preserved at `benchmarks/architecture-design/archive/20261011-completed-optimization/en/`. The parent `manifest.json` records provenance and SHA-256. Earlier alternatives are in `20261009-superseded-plans/`. These are audit evidence, not implementation plans; raw benchmark evidence remains available.
-
-### Current admitted batch traversal (2026-10-14)
-
-The production path retains the 17-byte global key-only tree and authoritative Edge records. For a sorted batch of source Nodes, the adapter gathers bounded Edge IDs, captures already verified masters from the snapshot-bound `NativeReadSession`, and reads only missing masters through the typed Entity-directory batch cursor. It restores original adjacency order and validates the endpoint before every callback, including cache hits. Captured records remain valid if a callback evicts the bounded session cache. Admission includes the captured record matrix, missing-ID buffer, temporary master batch and cursor buffers; pressure can reduce the logical batch.
-
-No persisted codec, reserved index identity, root or Driver ABI changes. First encounters still verify masters; this does not eliminate master IO for cold traversal. A query-owned session cannot cross metadata generations. External corruption on an already cached page is discovered on subsequent authenticated loading or explicit integrity verification, rather than by rereading every cached master.
-
-The covered-u64-leaf/shared-topology and shared segmented-block laboratory candidates are rejected for production admission: their native carriers are readable and snapshot-safe, but they have no atomic graph route, dual-direction mutation/reachability retirement integration or demonstrated end-to-end threshold win. Keep the existing layout until those gates pass. Candidate details and correctness evidence are recorded under `benchmarks/architecture-design/decisions/20261014-s4-candidate-comparison`. Final timing and steady-state read/write/space acceptance remain separate S4.4 work.
-
-2026-10-15 implementation note: `RelocatableStorageBackendOptions::maximum_integrity_workspace_bytes` defaults to 8 MiB and controls a per-call MAINTENANCE grant. Integrity verification can explicitly fail resource admission without writing database bytes; callers can choose a larger finite grant within database/process class limits. Scoped scan reads use caller-owned buffers, retain coherent dirty hits, and avoid decoded-cache admission. Default database and process maintenance floors are 16 MiB. This does not bound all maintenance jobs or the durable retirement backlog.
-
-2026-10-15 file admission: native `maximum_database_file_bytes` defaults to 1 TiB and is immutable while a writable handle is open. Simultaneous writable aliases for one physical database must configure identical limits; read-only handles can inspect a larger file without raising the writable ceiling. Capacity is checked before each complete I/O range, including batched writes and private scratch. Ceiling refusals retain the existing atomic-publication/recovery contract; old snapshots and unreachable LargeValues can still require explicit bounded reclamation before write space becomes reusable. The limit is a logical file-length ceiling, not a guarantee of maintenance reserve space or physical filesystem allocation.
-
-2026-10-15: `maximum_reclaim_workspace_bytes` defaults to 8 MiB and must be positive. It controls the MAINTENANCE grant for three explicit reclamation entry points and each background execution. Background admission pressure defers before publication and retries after refund. Owned work tables, retirement plans and page copies use the grant; public containers and nested codec/schema payloads are not comprehensively covered.
-
-2026-10-15: `maximum_reclaim_workspace_bytes` also governs protected scratch release/finish. Admission precedes publication and avoids full CACHE credit; empty cleanup acquires no workspace. Admission rejection permits same-handle retry after maintenance refund; actual indeterminate IO still requires recovery.
-
-2026-10-15 native nested-write checkpoint: ordinary staging and canonical batches/deltas pre-admit private standard payload copies, transfer retained WRITE leases, and free consumed inputs before workspace refunds. Final 63 relevant module tests and 583 isolated fault/heap/recovery cases pass; a counterfactual demonstrates the premature-refund bug. Overlay/undo nested data, snapshot-source materialization and remaining private workspaces still need ownership. **No new stage accepted: 22/34 (64.7%).** Evidence: `benchmarks/architecture-design/decisions/20261015-admitted-mutation-payloads/`.
-
-2026-10-15 overlay payload checkpoint: retained node/edge and undo copies pre-admit nested WRITE buffers; replacement workspaces sort borrowed pointers and avoid an intermediate deep copy, while rollback swaps owners without copying. All 103 relevant tests and 579 isolated fault/heap cases pass, including 12 observed overlay ownership phases. Source materialization, normalization/API and remaining private workspaces still need ownership. **No whole-stage acceptance: 22/34 (64.7%).** Evidence: `benchmarks/architecture-design/decisions/20261015-overlay-nested-payloads/`.
-
-2026-10-15 pre-decode foundation: allocation-free complete canonical shape inspection precedes an opt-in admission callback; decoded strings move into their owner and canonical map-key checks borrow input. All 113 selected module tests and 113 isolated fault/structural/heap cases pass, including scanning/cancelling/rejecting 1,025 values with all C++ heap allocations denied. Wire-shape counts are not decoded heap capacity; native source/normalized payload ownership and other workspaces remain pending. **Still 22/34 (64.7%).** Evidence: `benchmarks/architecture-design/decisions/20261015-predecode-shape-admission/`.
-
-2026-10-15 scalar source checkpoint: full Node/Edge reads move locally owned records; duplicate checks borrow output names in owned PMR hash tables and preserve the snapshot allocation context. All 151 module tests and 103 isolated fault/codec/copy cases pass. A counterfactual proves two large string allocations become one per entity; these are allocation counts, not performance timings. Source/normalized payload ownership and other workspaces remain pending. **Still 22/34 (64.7%).** Evidence: `benchmarks/architecture-design/decisions/20261015-move-owned-source-materialization/`.
-
-2026-10-15 plan/cache ownership: native private operator objects share QUERY accounts; retained cache objects/index/text use CACHE, with one owned query text.590 module and12 lifecycle tests pass; the final index passes100 isolated cases, with868 earlier-index cases and32 recovery cycles recorded separately. Internal IR payloads remain open. **Still22/34 (64.7%), no stage acceptance.** Evidence: `benchmarks/architecture-design/decisions/20261015-native-plan-object-ownership/`.
-
-Bounded property-name batches are implemented; keep31/34(91.2%), this request2/5.281tests in15required modules pass, including12newcases for consecutive/sparse tokens, forward/reverse corruption, old snapshots, escaped ownership and both typedquota fallbacks; no full suite. On the same readonly failing endpoint,64field packed decodes fall561→87andrange descents70→13. Four queries preserve exact typed values, the file hash and zero writes. These are mechanism counters, not end-to-end performance acceptance. Prefetch at most16missing names into the existing snapshot cache; share cursors only for consecutive tokens, restart across gaps and authenticate the whole batch before caching. No new persistent cache, larger limits, format orDriverABIchange; corruption/cancellation propagate. S2.5/S3.5/S6.2await frozen validation;Kuzugoal unmet. Evidence: `benchmarks/architecture-design/decisions/20261017-bounded-property-name-batches/`.
-
-
-Bounded publication and binding repair: **31/34 (91.2%), this request 2/5**. Final source passes **48 selected modules / 970 distinct tests**, including seven new cases; no full unit suite. Ordinary graph and logical-ID publication may coalesce authenticated metadata reclamation for fewer than eight pools of allocations, only while at least two pools of ordinary free frames remain; deferred frames stay allocated and explicit cleanup/recovery remains eager. Binding descriptors and pending property carriers retain at most one eighth of the available working allowance; typed optional-binding quota denial refunds descriptors before the existing charged row adapter runs. Mandatory row/source admission remains unchanged. The previous 64ee full dynamic case actually timed out at 1,800 seconds after 50,400 recorded operations (last CREATE id7544); it is not a success or a ratio. After executor recreation, lost transient diagnostics are not claimed as retained evidence: final module tests were rerun and archived. New frozen end-to-end acceptance remains pending, all resource caps and performance gates unchanged. Kuzu objective remains unmet. Evidence: `benchmarks/architecture-design/decisions/20261018-bounded-publication-and-binding/`; actual timeout: `benchmarks/architecture-design/decisions/20261017-property-name-batch-dynamic-timeout/`.
-
-
-2026-10-18 acceptance blocker: frozen648e60ff full dynamic case reached the original1800second deadline at CREATE id8347, with55750recorded operations and0operation errors; it did not complete and the integrated matrix did not start. A scoped published-context cache experiment lacked sufficient end-to-end evidence and was rejected; production source and both Release binaries were restored exactly to the970-test version. Progress stays31/34(91.2%),thisrequest2/5. A concrete proposal changes only this dynamic correctness family to a3600second case deadline, preserving10000entities,three independent rounds per supported engine,all other1800second cases,resource caps and10%/5% gates. User approval is pending; the change is not applied. No additional unchanged-source run and no claim of Kuzu superiority. Evidence: `benchmarks/architecture-design/decisions/20261018-publication-dynamic-timeout/`; proposal and rejected experiment: `benchmarks/architecture-design/decisions/20261018-dynamic-time-budget-decision/`.
+The complete pre-cleanup specification and S0–S6 history are byte-preserved in `benchmarks/architecture-design/archive/20261019-completed-s0-s6/en/`, with SHA-256 in the parent manifest. Earlier records remain in `20261011-completed-optimization/` and `20261009-superseded-plans/`. These are audit history, not implementation entry points. Their pending approval/testing claims and intermediate percentages are not current status.

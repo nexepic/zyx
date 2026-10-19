@@ -12,11 +12,11 @@ projectOrder: 1
 
 # 发布遗留事项与验收导航
 
-更新：2026-10-11。旧 Stage/C 阶段流水台账已归档，本文不再作为性能实施计划，也不沿用旧 34% 或历史测试数量来描述当前工作树。
+更新：2026-10-19。旧 Stage/C 阶段流水台账已归档，本文不再作为性能实施计划，也不沿用旧 34% 或历史测试数量来描述当前工作树。
 
 ## 当前入口
 
-- **架构与优化**：[架构调整与通用性能实施方案](optimization)，A1–A7、O1–O8，按 S0–S6 的 34 项交付推进。只有该页维护进度；旧 P0–P7 已按旧范围收口，不代表新方案完成。
+- **架构与优化**：[COW 图数据库性能重构实施方案](optimization)，按 R0–R7 推进。只有该页维护新路线进度；旧 S0–S6 的 34/34 已归档，不代表新路线或 Kuzu 性能目标完成。
 - **格式与正确性**：[原生单文件存储规范](native-single-file-storage-plan)，单文件、COW、身份、发布、回收等规范继续有效。
 - **公开能力**：[原生能力验收矩阵](native-capability-acceptance-matrix)，保留逐能力 owner 和测试证据；历史检查点不自动证明最终发布就绪。
 - **测量方法**：[基准文档](benchmarks)，性能结论需带环境、数据、源码和样本来源。
@@ -27,7 +27,7 @@ projectOrder: 1
 |---|---|
 | 能力与消费者 | Cypher、QueryBuilder、GDS/Leiden、Vector、Driver ABI、各语言 binding 的公开行为保持；修改受影响路径时复核对应矩阵，不把旧待办全部误标完成 |
 | 恢复与资源 | 格式/写入变更必须验证原子发布、重开、失败恢复、旧快照、搬迁与安全回收；性能测试不能替代这些合同 |
-| 跨平台与工具 | 保持 macOS/Linux/Windows 可移植；本轮实测仅 macOS，其他平台由用户后续执行。sanitizer、binding 和发布环境证据不足时标未验证 |
+| 跨平台与工具 | 保持 macOS/Linux/Windows 可移植；当前正式参考实测为 Linux x86_64；macOS/Windows 的后续变更需分别记录验证范围。sanitizer、binding 和发布环境证据不足时标未验证 |
 | 覆盖率与全量测试 | 本轮不执行全量单元测试，覆盖率不是门禁；独立发布验收如需调整测试范围，另行确定，不阻塞当前已授权的模块优化 |
 | Legacy 审计 | 已退休实现不恢复；若仍有公开消费者或规范来源，逐项证明替代后才删除，不能因文档清理删除代码/测试 |
 
@@ -35,4 +35,4 @@ projectOrder: 1
 
 ## 归档
 
-历史中英文文件位于 `benchmarks/architecture-design/archive/20261009-superseded-plans/` 与 `20261011-completed-optimization/`，附 SHA-256 清单，仅供追溯。后者保存已完成 P0–P7 及旧存储阶段台账。当前架构与优化的顺序、必要测试、预算和进度统一以新方案为准。
+历史中英文文件位于 `benchmarks/architecture-design/archive/20261009-superseded-plans/` 与 `20261011-completed-optimization/`，附 SHA-256 清单，仅供追溯。后者保存已完成 P0–P7 及旧存储阶段台账；`20261019-completed-s0-s6/` 保存已完成 S0–S6 和本次清理前的相关文档。当前架构与优化的顺序、必要测试、预算和进度统一以新方案为准。

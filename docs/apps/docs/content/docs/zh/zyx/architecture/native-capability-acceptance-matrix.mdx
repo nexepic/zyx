@@ -14,6 +14,8 @@ projectOrder: 1
 
 > 本文是[原生单文件存储重构方案](native-single-file-storage-plan)的 C0 台账。它是验收记录，而不是愿景功能清单。公开契约有具名 native 验收测试时可标为 `NATIVE_COVERED`；`IN_PROGRESS` 只记录尚未闭合的最终门禁；只有 C0 consumer audit 确认仍有实际 legacy owner 或 specification source 时才使用 `HOLD_FOR_PORT`。已物理退休的 fixed-record、segment-chain、外置 WAL 和旧 Vector 实现不再是可保留的 fallback。
 
+2026-10-19 导航更新：本表保留带日期的消费者与合同证据，不是新一轮任务清单。当前优化按 [R0–R7 方案](optimization)推进；已实现基础及剩余缺口见该页第 2 节。历史行中的平台/性能未验收描述需按源码重新核对，不据此重复实现排序、分区 DISTINCT 或资源账户。
+
 ## 状态词汇
 
 | 状态 | 含义 | 删除规则 |

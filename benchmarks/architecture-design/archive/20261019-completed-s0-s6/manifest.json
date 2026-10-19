@@ -1,0 +1,49 @@
+{
+  "archived_at": "2026-10-19",
+  "source_commit": "0427be26001073e3caf66621e1b8e62fd3da84dc",
+  "scope": "Completed S0-S6 evidence; not an active implementation plan",
+  "files": [
+    {
+      "source": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+      "archive": "zh/optimization.mdx",
+      "bytes": 102249,
+      "sha256": "63b56d7b715b67ef057b6e0b2541074d2ed794a93bd90d6e8598efd000db7b50"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/zh/zyx/architecture/native-single-file-storage-plan.mdx",
+      "archive": "zh/native-single-file-storage-plan.mdx",
+      "bytes": 67710,
+      "sha256": "0caa9248116406aa57810cf348ababd1bd1aeb754680ce7ca164aeb663dd1c90"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/zh/zyx/architecture/native-remaining-work-roadmap.mdx",
+      "archive": "zh/native-remaining-work-roadmap.mdx",
+      "bytes": 2721,
+      "sha256": "a4e1c2dd2ee2f0824bbe5b442dca56db818680aba8371e8c9afb6b80c48b25e1"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx",
+      "archive": "en/optimization.mdx",
+      "bytes": 113317,
+      "sha256": "3b70e75c5e941655b9484550e1031d0500935b16b6461d4664cc7e8936755d0a"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/en/zyx/architecture/native-single-file-storage-plan.mdx",
+      "archive": "en/native-single-file-storage-plan.mdx",
+      "bytes": 73410,
+      "sha256": "44c956433767b9ddfe1a0c5b8255dc85858a99629c5db94dd8e634a1768fb969"
+    },
+    {
+      "source": "docs/apps/docs/content/docs/en/zyx/architecture/native-remaining-work-roadmap.mdx",
+      "archive": "en/native-remaining-work-roadmap.mdx",
+      "bytes": 3011,
+      "sha256": "8cb3ad832530b30debc35182123d43b90320b91f67961522dddff5091937caaf"
+    },
+    {
+      "source": "benchmarks/architecture-design/decisions/current-progress.json",
+      "archive": "current-progress.json",
+      "bytes": 19725,
+      "sha256": "88392256abf7ae608ea489ef2529e2824de805f701999c702569248ae378fecb"
+    }
+  ]
+}

@@ -320,7 +320,7 @@ RSS、原生数据库文件大小、读写字节、冻结环境来源，以及 m
 
 ## 优化路线入口
 
-架构调整与性能实施统一见[架构调整与通用性能实施方案](optimization)，按 A1–A7、O1–O8 和 S0–S6 推进。旧 P0–P7 是历史完成记录，不再是后续任务。本页历史 benchmark 只作证据；当前源码需重新确认来源、结果、计时和资源合同。固定同条件 control/current/Kuzu 的二进制来源、数据 manifest、参数、消费方式和缓存模式，报告延迟分位数、内存、文件大小、I/O 和结构计数；不将跨环境数字相除。采用与回归阈值由实施方案统一规定。
+架构调整与性能实施统一见 [COW 图数据库性能重构实施方案](optimization)，按 R0–R7 推进。已完成 S0–S6 和更早 P0–P7 是历史记录，不再是后续任务。本页历史 benchmark 只作证据；当前源码需重新确认来源、结果、计时和资源合同。固定同条件 control/current/Kuzu 的二进制来源、数据 manifest、参数、消费方式和缓存模式，报告延迟分位数、内存、文件大小、I/O 和结构计数；不将跨环境数字相除。采用与回归阈值由实施方案统一规定。
 
 当前工作树在 `LogicalPlanReadRuntime.cpp` 中新增了接入 Filter、Project、Aggregate 和 Sort 的通用表达式批处理修改，并为 `properties(entity)`、`keys(entity)` 和 `entity{.*}` 增加 complete-Entity 预取。历史六个 focused suite 的 `306/306` runtime/executor 定向检查点早于该 complete-Entity correlated-subquery 改动；该改动后的 direct-edge suite 曾通过 `78/78`，但也早于当前 lazy-`EntityRef` Vector procedure 改动。这些检查点还覆盖跨行 NamedPath path reference 批处理、deferred-EntityRef Sort-key 和较早的只读 correlated subquery imported-Property 回归，但尚未在 Vector 改动后重新执行 benchmark。因此，之前记录的 benchmark 不能描述为当前修改的测量结果。该检查点也不代表所有消费者都采用了统一契约：Filter 的 complete-Entity predicate 已有直接定向契约证据，但 procedure/GDS/overlay/maintenance 路径，以及更复杂的 JOIN/OPTIONAL MATCH/UNION 剩余 payload 审计仍未关闭。在消费者审计完成前，端到端性能没有提升只能说明实现迁移仍未完成，不能作为恢复旧架构或添加 benchmark 特例路径的依据。
 

@@ -342,7 +342,7 @@ read/write bytes, fixed environment provenance, and macOS/Linux/Windows acceptan
 
 ## Optimization Roadmap
 
-Follow the [architecture and performance plan](optimization): A1–A7, O1–O8 and S0–S6. Completed P0–P7 is historical evidence, not subsequent work. Existing benchmark records require current-source provenance, result, timing and resource verification. Fix comparable control/current/Kuzu binary provenance, data manifests, parameters, consumption and cache modes; report latency percentiles, memory, file size, I/O and structural counters. Never divide cross-environment results. The implementation plan owns admission and regression thresholds.
+Follow the [COW graph database performance refactoring plan](optimization), R0–R7. Completed S0–S6 and earlier P0–P7 are historical evidence, not subsequent work. Existing benchmark records require current-source provenance, result, timing and resource verification. Fix comparable control/current/Kuzu binary provenance, data manifests, parameters, consumption and cache modes; report latency percentiles, memory, file size, I/O and structural counters. Never divide cross-environment results. The implementation plan owns admission and regression thresholds.
 
 The current working tree contains an additional generic expression batching
 change in `LogicalPlanReadRuntime.cpp` for Filter, Project, Aggregate, and Sort.
