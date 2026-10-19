@@ -1,0 +1,29 @@
+{
+  "code_checkpoint": "24595ba8bd1427b711304006c2b34c7549df721a",
+  "fixed_deliverables": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "completed_of_fixed_five": 0,
+  "state": "in progress",
+  "implemented_at_checkpoint": [
+    "existing native fixed-map canonical logical-prefix mutation",
+    "bounded admitted ROW group classification and reverse projection"
+  ],
+  "native_hybrid_format_installed": false,
+  "native_graph_conversion_installed": false,
+  "native_complete_cost_estimator": false,
+  "native_adjacency_candidates_installed": false,
+  "formal_performance_run": false,
+  "full_suite": false,
+  "platform": "Linux x86_64",
+  "final_cases": 53,
+  "final_failures": 0,
+  "progress_source": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+  "accepted_top_level_items": 13,
+  "total": 24,
+  "completion_percent": 54.2
+}
