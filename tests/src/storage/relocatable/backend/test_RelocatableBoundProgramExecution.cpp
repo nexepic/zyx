@@ -99,6 +99,13 @@ TEST_F(RelocatableStorageBackendTest, BoundRemainingConsumersPreserveUnwindSortJ
 	for (const auto &row : optional.getRows()) { EXPECT_EQ(row.at("r").toString(), "null"); EXPECT_EQ(row.at("m").toString(), "null"); }
 	const auto all = engine->execute("RETURN 1 AS value UNION ALL RETURN 1 AS value"); EXPECT_EQ(all.rowCount(), 2U);
 	const auto distinct = engine->execute("RETURN 1 AS value UNION RETURN 1 AS value"); EXPECT_EQ(distinct.rowCount(), 1U);
+    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
+    for (const auto *name : {"sort", "unwind", "join", "optional", "union"}) {
+        const std::string key = std::string("logical_plan.consumer_adapter.") + name + ".calls";
+        ASSERT_TRUE(counters.contains(key)) << key;
+        EXPECT_GT(counters.at(key).totalValue, 0) << key;
+    }
+
 }
 
 TEST_F(RelocatableStorageBackendTest, BoundMutationReadSidesRefreshValuesAndProcedureExpressionsShareTheBindingBoundary) {

@@ -22,6 +22,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 
@@ -125,6 +126,15 @@ protected:
 		const CatalogEntry pool = metadata_->findCatalog(snapshot_, property_segment_id_);
 		ASSERT_TRUE(metadata_->isPhysicalSlotAllocated(snapshot_, pool.physical_slot));
 		static_cast<void>(pages_->availableFrameCount(snapshot_, property_segment_id_));
+        // Tests below measure a cold property data frame after warm control
+        // metadata. Read-side mutable control images now include the snapshot
+        // publication context; availableFrameCount warms the writer identity.
+        std::array<std::byte, RSS_PAGE_SIZE> control{};
+        const auto controlOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+            snapshot_.superblock().data_region_offset, pool.physical_slot);
+        ASSERT_EQ(io_->readAt(BufferPoolPageKey{controlOffset, snapshot_.superblock().generation.value()},
+            control.data(), control.size()), RSS_PAGE_SIZE);
+
 	}
 
 	void TearDown() override {
@@ -698,4 +708,54 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedColumnBorrowingFallsBackWit
  EXPECT_NO_THROW(cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values, true));
  EXPECT_EQ(values[0], first_root_.entries[0]); EXPECT_EQ(values[3], second_root_.entries[0]);
  EXPECT_FALSE(values[1]); EXPECT_FALSE(values[2]);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges) {
+    struct TraceReset {
+        bool enabled = graph::debug::PerfTrace::areValuesEnabled();
+        ~TraceReset() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); }
+    } reset;
+    graph::debug::PerfTrace::setValueCollectionEnabled(true);
+    const std::array<EntityPropertyKey, 2U> keys{first_key_, second_key_};
+    const std::array<uint32_t, 2U> tokens{3U, 5U};
+    const auto record = [&](const std::string &path) {
+        const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+        std::map<std::string, int64_t> sorted;
+        for (const auto &[key, entry] : trace) if (entry.valueCalls) sorted.emplace(key, entry.totalValue);
+        std::string json = "{";
+        for (const auto &[key, value] : sorted) {
+            if (json.size() > 1U) json += ",";
+            json += "\"" + key + "\":" + std::to_string(value);
+        }
+        RecordProperty(path, json + "}");
+        return trace;
+    };
+    graph::debug::PerfTrace::reset();
+    for (size_t i = 0; i < 2U; ++i) {
+        const auto value = properties_->readEntityPropertyOptional(snapshot_, first_key_, 3U);
+        ASSERT_TRUE(value); EXPECT_EQ(value->value, first_root_.entries[0].value);
+    }
+    record("point_twice");
+    NativeReadSession session;
+    auto &cursor = session.propertyCursor(*properties_, snapshot_);
+    for (size_t i = 0; i < 2U; ++i) {
+        std::array<std::optional<PropertyCollectionRootEntry>, 4U> values;
+        cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
+        ASSERT_TRUE(values[0]); ASSERT_TRUE(values[3]);
+        EXPECT_EQ(values[0]->value, first_root_.entries[0].value);
+        EXPECT_EQ(values[3]->value, second_root_.entries[0].value);
+        EXPECT_FALSE(values[1]); EXPECT_FALSE(values[2]);
+    }
+    const auto scan = record("scan_twice");
+    ASSERT_TRUE(scan.contains("native_graph.read.decoded_metadata_borrow_fixed_bytes"));
+    EXPECT_GT(scan.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 0);
+    for (size_t i = 0; i < 2U; ++i) {
+        std::array<std::optional<EntityPropertyLocation>, 2U> values;
+        metadata_->findEntityPropertyLocationsSorted(snapshot_, keys, values);
+        ASSERT_TRUE(values[0]); ASSERT_TRUE(values[1]);
+        EXPECT_EQ(values[0]->key, first_key_); EXPECT_EQ(values[1]->key, second_key_);
+    }
+    const auto gather = record("gather_locations_twice");
+    ASSERT_TRUE(gather.contains("native_graph.read.decoded_metadata_borrow_fixed_bytes"));
+    EXPECT_GT(gather.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 0);
 }

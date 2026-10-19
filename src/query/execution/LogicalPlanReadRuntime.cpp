@@ -13581,6 +13581,7 @@ namespace graph::query::execution {
 					return true;
 				}
 				case logical::LogicalOpType::LOP_JOIN: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.join.calls", 1);
 					const auto &join = dynamic_cast<const logical::LogicalJoin &>(op);
 					const logical::LogicalOperator *left = join.getLeft();
 					const logical::LogicalOperator *right = join.getRight();
@@ -13717,6 +13718,7 @@ namespace graph::query::execution {
 					return leftCompleted;
 				}
 				case logical::LogicalOpType::LOP_OPTIONAL_MATCH: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.optional.calls", 1);
 					const auto &optional = dynamic_cast<const logical::LogicalOptionalMatch &>(op);
 					const logical::LogicalOperator *input = optional.getInput();
 					const logical::LogicalOperator *pattern = optional.getOptionalPattern();
@@ -13860,6 +13862,7 @@ namespace graph::query::execution {
 					return inputCompleted;
 				}
 				case logical::LogicalOpType::LOP_CALL_SUBQUERY: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.subquery.calls", 1);
 					const auto &subquery = dynamic_cast<const logical::LogicalCallSubquery &>(op);
 					const logical::LogicalOperator *input = subquery.getInput();
 					const logical::LogicalOperator *body = subquery.getSubquery();
@@ -14398,6 +14401,7 @@ namespace graph::query::execution {
 					return childCompleted;
 				}
 				case logical::LogicalOpType::LOP_VAR_LENGTH_TRAVERSAL: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.variable_expand.calls", 1);
 					const auto &traversal = dynamic_cast<const logical::LogicalVarLengthTraversal &>(op);
 					if (traversal.getSourceVar().empty() || !traversal.getEdgeVar().empty() ||
 						traversal.getMinHops() < 0 || traversal.getMaxHops() < traversal.getMinHops()) {
@@ -15262,6 +15266,7 @@ namespace graph::query::execution {
 					});
 				}
 				case logical::LogicalOpType::LOP_UNWIND: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.unwind.calls", 1);
 					const auto &unwind = dynamic_cast<const logical::LogicalUnwind &>(op);
 					if (unwind.getAlias().empty()) {
 						throw std::invalid_argument("logical-plan UNWIND has an empty alias");
@@ -15393,6 +15398,7 @@ namespace graph::query::execution {
 												 : nullptr);
 				}
 				case logical::LogicalOpType::LOP_LOAD_CSV: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.csv.calls", 1);
 					const auto &loadCsv = dynamic_cast<const logical::LogicalLoadCsv &>(op);
 					if (state.shared.context == nullptr) {
 						throw std::runtime_error(
@@ -15720,6 +15726,7 @@ namespace graph::query::execution {
 																								: nullptr);
 				}
 				case logical::LogicalOpType::LOP_UNION: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.union.calls", 1);
 					const auto &unionOperator = dynamic_cast<const logical::LogicalUnion &>(op);
 					const logical::LogicalOperator *left = unionOperator.getLeft();
 					const logical::LogicalOperator *right = unionOperator.getRight();
@@ -15798,6 +15805,7 @@ namespace graph::query::execution {
 					return finishDistinct(visitChild(*left) && visitChild(*right));
 				}
 				case logical::LogicalOpType::LOP_SORT: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.sort.calls", 1);
 					const auto &sort = dynamic_cast<const logical::LogicalSort &>(op);
 					const auto &items = sort.getSortItems();
 					if (items.empty()) {
@@ -16091,6 +16099,7 @@ namespace graph::query::execution {
 					return reachedLimit || childCompleted;
 				}
 				case logical::LogicalOpType::LOP_TRAVERSAL: {
+                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.expand.calls", 1);
 					const auto &traversal = dynamic_cast<const logical::LogicalTraversal &>(op);
 					const std::string &direction = traversal.getDirection();
 					if (direction != "out" && direction != "in" && direction != "both") {

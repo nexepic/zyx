@@ -1,0 +1,738 @@
+{
+  "scope": "Necessary modules, latest case result across two runs; not one 183-case run",
+  "distinct_cases": 183,
+  "cases": {
+    "LogicalPlanBoundedTopKTest.KeepsSmallResultWhenFullSortExceedsTheSameByteBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "LogicalPlanBoundedTopKTest.MatchesStableFullSortForNullsMixedTypesMultipleKeysAndOwnedPayloads": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "LogicalPlanBoundedTopKTest.DoesNotPushLimitAcrossDistinctOrSkip": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "LogicalPlanBoundedTopKTest.HandlesEmptyAndSingletonInputWithoutRequiringUnavailableSortKeys": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "LogicalPlanBoundedTopKTest.EqualUnorderableMapKeysKeepInputOrderBeforeLaterKeys": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.AtomicallyCreatesReadsAndReopensTheFirstSharedPage": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsUnknownDemandReadHintsBeforeRouteLookup": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.KeepsPoolControlAndOwnedPagesUnderTheirDurableGenerationKeys": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsInvalidTypedPrefetchContractsBeforeRouteLookup": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.AuthenticatesBoundedPreparedPublicationFrames": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.CoalescesAdjacentPreparedPublicationValidationReads": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.MaterializesPrivateAppendAndMutationPlansBeforePublication": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.MaterializesAppendUnderAnExistingWriterFence": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsInvalidCrossPoolBatchContractsBeforeStorageMutation": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrCapacityInvalidCrossPoolBatchState": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.MaterializesCrossPoolAndSamePoolPreparedReplacements": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.EvacuatesIndexPageWithoutAnIndexRootBinding": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsAnUnpairedIndexRootBindingBeforeEvacuation": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.OwnsPayloadBeforeMetadataPublication": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.AppendsAnotherPageToTheSamePoolWithoutASecondCatalogSlot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.PreservesEveryDeclaredSharedPoolAndOwnerKindPair": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReplacesPageThroughCowAndRetainsItsOldFrameForSnapshots": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.EvacuatesAPageAcrossPoolsAndReusesTheRetiredSourceFrame": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsStaleOrUnplaceableCrossPoolEvacuationRequests": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconcilesAnUnpublishedCrossPoolEvacuationAfterReopen": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RecoversAPublishedCrossPoolEvacuationBeforeSuperblockSwitch": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RetiresAndReleasesAnEvacuatedEmptyPoolAfterSnapshotsDrain": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsRetirementOfAPoolWithCurrentPages": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReclaimsPublishedCowFramesWhenReopenedWithoutSnapshots": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReusesCowFramesAcrossMoreReplacementsThanOnePoolCanHold": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsDuplicateCurrentDirectoryFramesDuringStartupRecovery": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RecoversPublishedCowReplacementAfterWalPublicationBeforeSuperblock": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementWithoutDiscardingTheCurrentPage": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconcilesInterruptedReplacementDuringStartup": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsUnallocatedCurrentFrameDuringStartupRecovery": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsMismatchedCurrentOwnerDuringStartupRecovery": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsDuplicatePageIdsWithoutChangingThePoolBitmap": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendWhenTheAllocatorOpens": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconcilesAnInterruptedAppendAndReusesItsFrame": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ManuallyReconcilesAFrameWrittenBeforeFailedPublication": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReactivatesAReachableFrameMarkedRetiredBeforeAndDuringStartupRecovery": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsEveryEnvelopeAndPoolHeaderIdentityMismatchDuringRecovery": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsInvalidAppendsAndAFullSharedPool": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReconciliationFailsClosedForCorruptOrMismatchedFrames": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsMalformedRequestsAndDuplicatePageIdsBeforeReuse": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.LeavesPreparedPoolUnreachableWhenPublicationStopsBeforeSuperblock": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsCorruptPoolAndOwnerHeadersWithoutReadingPayload": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RequiresTheMetadataDataStorageHandle": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.SupportsOnlyDeclaredOpenModes": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsIncompleteTypedIndexRootEvacuationBeforeStorageMutation": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.CountsOnlyCurrentSealedSharedPools": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.ReturnsNoAllocationWhenTheRequestedRangeHasNoFreeSlot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsCatalogFreeSpaceAndEnvelopeDisagreementsOnRead": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsValidButInconsistentPoolAndOwnerHeaders": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsTruncatedPoolFramesWithoutConstructingPayloadRanges": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorTest.CrossPoolReplacementPreservesLogicalOwnerAcrossAllocationNamespaces": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementCandidateWriteFailureKeepsOldRouteAndFrameReusable": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementCandidateShortWriteKeepsOldRouteAndFrameReusable": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementDoesNotRewriteItsPublishedSourceOwner": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlWriteFailureRetainsSourceAndReusesCandidate": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlShortWriteRetainsThePreviousCompleteRecord": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementPrePublicationSyncFailureRetainsTheOldRoute": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReplacementControlDiskFullRetainsTheOldRoute": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationCandidateWriteFailureKeepsSourceAndDestinationReusable": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationDoesNotRewriteItsPublishedSourceOwner": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationControlWriteFailureRetainsSourceAndReusesDestination": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationControlShortWriteRetainsTheSourceRoute": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.EvacuationDestinationControlDiskFullRetainsTheSourceRoute": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableSharedPagePoolAllocatorFaultTest.ReachableOwnerChecksumCorruptionFailsClosedOnReopen": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundSemanticsPreserveThreeValuedLogicNaNAndCheckedArithmetic": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundPathsKeepParallelEdgesSelfLoopsAndRelationshipUniqueness": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundBlockingOperatorsRetainDistinctMultiplicityAndNullOrdering": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundImportedEntityRefreshAndNestedResultOwnershipSurviveNewRootsAndClose": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundRemainingConsumersPreserveUnwindSortJoinOptionalAndUnionMultiplicity": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundMutationReadSidesRefreshValuesAndProcedureExpressionsShareTheBindingBoundary": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.BoundCsvUriAndFieldsUseOwningResultsAndTheConfiguredImportRoot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativeDirectFilterGroupAndDistinctReturnExactOwnedResultsAcrossBatches": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.AdjacencyTopologyPagesRemainSnapshotBoundAcrossPublicationAndReopen": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativeColumnsGatherOnlyColdOwnersAndRestoreInterleavedPositions": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.CoordinatedSortJoinAndOptionalQuotaFailuresRefundBeforeRetry": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativePinnedSnapshotFilePressureFailsWithoutPublishingAndReusesSpaceAfterRelease": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativeLogicalReadonlySortSpillsAndPreservesCompleteDescendingCollection": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativeLogicalDistinctSpillsCanonicalKeysAndPreservesFirstOccurrenceOrder": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableStorageBackendTest.NativeUnionDistinctWithScratchPermissionPreservesNullsAndFirstOccurrenceOrder": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.AtomicallyPublishesPageAndExtentLocationsAndReopens": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.PreservesOldSnapshotAndUpdatesOneDirectoryWithoutChangingTheOther": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.GrowsAndReloadsAnInternalRadixPath": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesAndErasesNativeEntityPageLocationsInOneCowRootWithoutLostUpdates": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsNativeEntityPageMappingsWithoutLegacySegmentLocations": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsAContiguousNewEdgeRangeAcrossDirectoryLeaves": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsStrictlyOrderedEdgeLeaseRangesWithInterleavedIdGaps": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RejectsAStreamThatDivergesFromItsDeclaredEdgeRange": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.AppendSessionsRejectMismatchedLocationTypesAndInvalidTypedRanges": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.MovedFromAppendSessionsAreInactive": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.AcceptsAProducerThatPushesMappingsWithoutAnIntermediateVector": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.GrowsTheStreamedEdgeDirectoryRootWithoutMaterializingTheRange": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.PreservesAHigherRootWhenStreamingAReservedLowerEdgeRange": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.PreservesTheExistingSparseSubtreeAcrossMultiLevelStreamedRootGrowth": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ComposesCatalogPageAndEdgeAppendSessionsInOneGeneration": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsSparseEdgePropertyRootsWithoutCollectingAllMappings": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsSparseLargeValueManifestsWithoutCollectingAllMappings": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.StreamsNewPageLocationsAcrossDirectoryLeaves": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ChainsPageAppendSessionsInsideOneMetadataGeneration": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RejectsPageStreamThatDivergesFromItsDeclaredRange": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.AcceptsPageProducerWithoutAnIntermediateVector": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.PreservesExistingPageRoutesAcrossMultiLevelStreamedRootGrowth": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ResumesSparseNodeDirectoryRoutesWithinAnExplicitPageBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.TraversesAndErasesDeepNodeRoutesWithinMetadataPageBounds": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RejectsInvalidEntityRangeAbsenceProofRequests": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesAndErasesPageLocationsInOneCowRootWithoutLostUpdates": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesAndErasesExtentLocationsInOneCowRootWithoutLostUpdates": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesStateLocationsThroughTheirIndependentCowRoot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesVectorLocationsAndManifestsThroughIndependentCowRoots": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ReplacesLargeValueManifestsThroughAnIndependentCowRoot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.SupportsEveryTypedDirectoryLookupAndTraversalWrapper": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ComposesRepeatedTypedDirectoryMutationsWithinOnePublication": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ResumesVectorManifestTraversalWithinAnExplicitMetadataPageBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ResumesLargeValueManifestTraversalWithinAnExplicitMetadataPageBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ResumesLargeValueOwnerDirectoriesWithStableLogicalCursors": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.TraversesEveryTypedDirectoryAndHonorsEarlyStopContracts": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.ResolvesTypedBootstrapRootsWithoutSuperblockPhysicalReferences": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RejectsInvalidMutationsAndHidesRootsBeforeSuperblockPublication": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RecoversRootsPublishedBeforeTheCallerObservesCompletion": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.PublishesAndReclaimsRetireQueueEntriesThroughItsOwnCowRoot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "RelocatableLocationDirectoryTest.RejectsAllStreamedTypedRangeAndSourceBoundariesBeforeAppending": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.ReusesDecodedPagesOnlyInsideAnActiveScope": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteKeysIncludeThePhysicalRootAndLogicalIdentity": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteReuseRequiresTheSameDatabaseLayoutAndVisibilityFence": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteEntriesRejectInvalidOrFutureFramesAndHonorZeroBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteAndCodecEntriesShareTheOriginalBoundsAndRecoverAfterEviction": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.DirectWritesInvalidateResolvedRoutesButStatisticsResetDoesNot": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.InvalidatesAfterDirectWritesAndDiagnosticResetsDoNotResetTheEpoch": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.BoundsBytesAndEvictsWithoutChangingReadResults": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.ZeroBudgetRetainsTheUncachedPath": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RestoresNestedScopesAndRejectsAnotherIoIdentity": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.DoesNotCacheFutureCandidateFramesAndStillRejectsInvalidHints": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.ScopeIsThreadLocalWhileOneSnapshotCanBeReadByTwoThreads": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteAllocationsUseTheCacheGrantAndOptionalDenialFallsBack": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.DecodedEntryBuffersAndEscapedCopiesRetainTheirActualGrant": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.SharedQuotaDropsOptionalCacheCopiesAndRetriesTheAuthenticatedDecode": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.UnsupportedHeapOwningPagesDoNotEvictOrBypassACoordinatedCache": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.CapturedScopeOwnerSurvivesCreationAndNestedBindingsRestoreTheirPredecessor": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.ImmutableRouteViewsDoNotClonePayloadWhenTheArenaIsFull": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.UncachedRouteViewNeedsOnlyItsDecodedPayloadAllocation": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RouteViewsRemainImmutableAcrossMutableCopiesAndEpochInvalidation": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.CatalogAndLocationViewsShareImmutableEntriesUnderArenaPressure": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.ExhaustedCacheCannotPreventEmptyContextAndOptionalCacheCanRetry": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.PrivateCatalogCopyUsesTheCallerWhileCacheCreditIsExhausted": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.PrivateCopyDenialPreservesTheSharedEntryAndAvoidsARedecode": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RepeatedRootHitsSurviveStreamingColdPagesWithinTheSameBudget": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.BorrowedPageHitsRefreshRecencyWithoutAllocating": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.DecoderAdmissionCanReclaimAnUnpinnedPageFromTheSameCacheGrant": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.DecoderAdmissionDoesNotEvictPagesFundedByAnotherGrant": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsShareHitsAndSurviveInvalidationWithoutStaleLookup": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsMeasureBorrowedAndCopiedFixedBytesSeparately": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "MetadataPageReadContextTest.RadixViewsWithZeroCacheAndFutureReferencesRemainAuthenticated": {
+      "passed": true,
+      "evidence": "necessary-modules-first-182.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.PointReadsAdmitOneSharedOwnedFrame": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ReadsSelectedValuesAndCountsThroughOneDirectoryMerge": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ScanCursorRetainsOneDecodedPageWithoutResidentPollution": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.NativeReadSessionReusesOneCursorForOrderedSelectedProperties": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorCountBatchReusesTheOrderedDirectoryAndPageRoute": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorPropagatesCancellationBeforeDirectoryOrPropertyIo": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CursorAdmissionRejectsAndCanRetryWithoutStaleOutput": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.FullPointAdmissionRejectsAndRetriesThroughStoreAndCursor": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CancellationDuringDecodePreventsPublicationAndAllowsSameCursorRetry": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CountOnlyOwnerArraysAdmitBeforeLookupAndRetryWithSameCursor": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CombinedCursorReusesAnAlreadyAuthenticatedPropertyPage": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.CombinedPinnedReadRetainsOwnedImageForSubsequentCalls": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.SelectedColumnBatchBorrowsSlotsAndRetainsOnlyLastPageForRetry": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.SelectedColumnBorrowingFallsBackWithoutAPoolAndRetriesAdmission": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "PropertyCollectionRootStoreCacheTest.PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    },
+    "RelocatableStorageBackendTest.BoundNativeInputsPreserveProjectedPropertiesLocalScopesAndLazyBranches": {
+      "passed": true,
+      "evidence": "affected-module-final-22.json"
+    }
+  }
+}

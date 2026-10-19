@@ -1,0 +1,16 @@
+{
+  "parent": "27d93bc4051e2fa5419098026b36154e1500063b",
+  "changed_native_sources_and_tests": {
+    "include/graph/storage/relocatable/metadata/MetadataPageFile.hpp": "1f0a2dd85a7fbf4843a61d78eb76d9de1be8739c2481199c11a760b42862399b",
+    "include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp": "651f2f2c9ca86fe5f77c9d1f3c8f0b390d40153e6bb308100b18360bd92ad8c4",
+    "src/query/execution/LogicalPlanReadRuntime.cpp": "c0ec31f095d18986d5d5201fb786a68e0d5f73fff84c5147c5d6ae4dfc61b388",
+    "src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": "9e3cddfa0c1f489d14f453dee98471c11c5a8d70d6c4ca117565548a10dbcde0",
+    "src/storage/relocatable/metadata/LocationDirectory.cpp": "ce64c1afa5c5ba7817675408f0ce78cc4d1ae9e8148adbef52190c32889fb62b",
+    "src/storage/relocatable/metadata/MetadataPageFile.cpp": "2c150c769d379b98f2a0cd67e0aee0ed93846b8087016bc511afd815e12d68f2",
+    "tests/src/storage/relocatable/backend/test_RelocatableBoundProgramExecution.cpp": "20a8a9deea89f3a2cb939bccc9f262d39f113a8583f5bb4ecc907e70758dcd6e",
+    "tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp": "1f2eddc3f97e2e8f4920b511b48b99eb24e7b6a3aa500458cca425c576a2daad",
+    "tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp": "92f05fc24f790f292bfa1cfd0599258151570f1d8652881267a3aae352b7a59b",
+    "tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp": "a9eed63b6164daa0fd0b1f71ff1ad297191335287b7a47720c67ad338ce6add1"
+  },
+  "patch_sha256": "6edafee12bed953282ed8382871cb5fbebbf7742fb497ec6b38d18ef53f4212a"
+}

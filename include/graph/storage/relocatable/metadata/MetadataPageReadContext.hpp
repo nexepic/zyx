@@ -114,6 +114,7 @@ namespace graph::storage {
             if (found == cache_->entries.end()) return {};
             debug::PerfTrace::addValue("native_graph.read.decoded_metadata_cache_hits", 1);
             cache_->order.splice(cache_->order.end(), cache_->order, found->second.position);
+            debug::PerfTrace::addValue("native_graph.read.decoded_metadata_borrow_fixed_bytes", sizeof(Page));
             return std::static_pointer_cast<const Page>(found->second.page);
         }
 
@@ -131,6 +132,7 @@ namespace graph::storage {
                 ? utils::OwnedAllocationScope::owner() : memory_owner_);
             try {
                 Page copy = *std::static_pointer_cast<const Page>(found->second.page);
+                debug::PerfTrace::addValue("native_graph.read.decoded_metadata_copy_fixed_bytes", sizeof(Page));
                 cache_->order.splice(cache_->order.end(), cache_->order, found->second.position);
                 return copy;
             }

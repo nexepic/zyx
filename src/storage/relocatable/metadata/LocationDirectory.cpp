@@ -1103,23 +1103,23 @@ namespace graph::storage {
 				return;
 			}
 			checkCancellation();
-			CatalogRadixPage root =
-					pages->readMetadataRadixUnresolved(rootReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			const auto root =
+					pages->readMetadataRadixUnresolvedView(rootReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 			++metadata_pages_read;
 			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_root_descents", 1);
 			debug::PerfTrace::addValue("native_graph.read.root_descents", 1);
 			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
-			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != directory_type ||
-				root.level > RSS_CATALOG_RADIX_MAX_LEVEL) {
+			if (root->kind != CatalogRadixPageKind::CRPK_ROOT || root->directory_type != directory_type ||
+				root->level > RSS_CATALOG_RADIX_MAX_LEVEL) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 										"relocatable location range cursor has an invalid directory root");
 			}
-			validateVisible(root.generation, root.committed_lsn, superblock,
+			validateVisible(root->generation, root->committed_lsn, superblock,
 							"relocatable location range cursor root is newer than its Superblock");
 			// The immutable authenticated root fixes the maximum live route depth.
             // Reserving the format's maximum wastes nine frames for shallow trees.
-            route.reserve(static_cast<size_t>(root.level) + 1U);
-			route.push_back(resolveFrame(root, rootReference, 0U));
+            route.reserve(static_cast<size_t>(root->level) + 1U);
+			route.push_back(resolveFrame(*root, rootReference, 0U));
 		}
 
 		[[nodiscard]] bool referenceIsOnRoute(const PhysicalPageRef reference) const {
@@ -1199,23 +1199,23 @@ namespace graph::storage {
 						continue;
 					}
 
-					CatalogRadixPage child =
-						pages->readMetadataRadixUnresolved(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					const auto child =
+						pages->readMetadataRadixUnresolvedView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
 					++metadata_pages_read;
 					debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
-					if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
-						child.directory_type != directory_type || child.level + 1U != frame.level) {
+					if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL ||
+						child->directory_type != directory_type || child->level + 1U != frame.level) {
 						throwLocationDirectoryError(
 								FormatError::FERR_INVALID_HEADER,
 								"relocatable location range cursor has an invalid internal route");
 					}
-					validateVisible(child.generation, child.committed_lsn, superblock,
+					validateVisible(child->generation, child->committed_lsn, superblock,
 								"relocatable location range cursor internal page is newer than its Superblock");
 					if (route.size() >= static_cast<size_t>(RSS_CATALOG_RADIX_MAX_LEVEL) + 1U) {
 						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location range cursor exceeds the maximum radix depth");
 					}
-					route.push_back(resolveFrame(child, childReference, childOrdinal));
+					route.push_back(resolveFrame(*child, childReference, childOrdinal));
 					descended = true;
 					break;
 				}

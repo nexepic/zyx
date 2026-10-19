@@ -1,0 +1,67 @@
+# R3.1 bounded property subblock decision
+
+This specifies one candidate before R3.2. Production keeps current ROW placement and its usable fallback. Reuse the A3 ownership/cost evidence in 20261014-a3-layout-contract; do not restore its rejected whole-container carrier. Existing row chunks, field staging, independent large-value codecs and accounting are prerequisites, not new accomplishments.
+
+## Fixed parameters and byte layouts
+
+All disk integers are little endian. Reserved bytes are zero. Unknown modes/types, overflow, inconsistent sizes, duplicate/unsorted keys and contradictory membership fail closed. C++ sizeof/padding is never a wire encoding. Sizes below exclude existing authenticated/slotted-page framing. Allocate actual codec/page-kind/version IDs only after auditing the current registry, as part of the complete R3.2 format update before persisting any laboratory file.
+
+| Parameter | Candidate decision |
+|---|---|
+| Logical group | Separate Node/Edge; B=64 consecutive IDs, group=1+(id−1)/64, slot=(id−1)%64. Labels do not control placement. One inherited candidate, no parameter sweep |
+| Physical/update unit | Existing 4096-byte authenticated COW page; pack records into shared slotted pools, no dedicated page/segment per column |
+| Compression | No new compression in the baseline. A column subblock is at most 64 primitive values; existing large-body compression remains independent |
+| Column admission | Uniform non-NULL int64/double/bool, field present in at least 48 live slots. Mixed/sparse fields use extension/ROW. NULL is present, not missing |
+| Conversion | Explicit, bounded; no automatic promotion after demotion. Type/occupancy violation demotes only the affected field, never the whole group |
+| Work ceiling | Conversion ≤64 owners, ≤4096 actual owner/token memberships, ≤1 MiB planning/staging bytes, additionally capped by actual query/write account. Record including its header ≤4096 bytes and within the native slotted page usable-payload limit after framing; larger values use authenticated independent references |
+| Sparse fallback | No empty column descriptor; remain ROW when total-cost admission fails or limits are exceeded. No reuse/compaction of logical IDs |
+
+Column record: 64-byte header plus slot-indexed payload. Header offsets: magic u32 at 0; version u16 at 4; Node/Edge kind u8 at 6; scalar type u8 at 7; group ID u64 at 8; token u32 at 16; capacity u16 at 20 (=64); payload bytes u16 at 22; semantic generation u64 at 24; presence bitmap u64 at 32; NULL bitmap u64 at 40; live bitmap u64 at 48; reserved zero u64 at 56. Presence is a subset of live, NULL a subset of presence. Absent/NULL payload positions are zero. Int/double payload is 512 bytes, total 576; bool bit payload is 8 bytes, total 72. Reuse canonical scalar semantics, including exact int/double distinction and NaN rules. Authenticate group/token/kind plus page/slot generation.
+
+Group header: 64 bytes. magic/version/kind/mode occupy 0..7, group ID 8..15, semantic generation 16..23, live bitmap 24..31, actual membership count u32 at 32, admitted column count u32 at 36, reserved zero 40..63. Never embed every possible token.
+
+Use three shared ordered maps per Node/Edge namespace, not a tree per owner or field:
+
+1. Owner enumeration: key (owner u64, token u32), value (source u8, reserved-zero[3]); 16 payload bytes per actual field before B+Tree framing/fill. Source COLUMN or EXTENSION is the sole ownership selector. ROW continues existing actual-key enumeration.
+2. Column directory: key (group u64, token u32), value (stable PageId u64, slot u16, reserved u16, slot-generation u32); 28 payload bytes before tree framing. One locator per admitted field/group. Owner entries derive group/token and never duplicate that locator.
+3. Extension: key (owner u64, token u32), one canonical field payload or independently authenticated LargeValue reference. Pack fields into shared pages. Include owner/token in authenticated body; obey the 4096-byte record ceiling including framing. Reuse the audited canonical large-field/media contract rather than inventing an unvalidated blob reference.
+
+Map page framing is the existing B+Tree framing and must be measured; payload sizes are lower bounds, not allocated-space claims. The group-header directory is a fourth shared map per namespace, keyed by group u64 with the same 16-byte slot locator used by the column directory. Its O(G) cost is additional.
+
+Choose an explicit new Superblock physical metadata root, hybrid_property_descriptor_root, included as an additional graph semantic fence member. It points to one authenticated 192-byte descriptor payload: magic u32 at 0, version u16 at 4, zero flags u16 at 6, semantic generation u64 at 8, database ID u64 at 16, reserved-zero bytes 24..63; eight B+Tree root references of stable PageId u64 + expected root generation u64 occupy offsets 64,80,96,112 (Node owner/column/extension/group-header) and 128,144,160,176 (Edge equivalents). Empty tree references are both zero; partially zero references are invalid. Descriptor generation must be visible in its Superblock. Per-group mode lives only in the group header. ROW routing continues the existing entity_property_directory_root, with no duplicate ROW root embedded in the descriptor.
+
+R3.2 assigns the new Superblock field offset/format version and metadata-page kind atomically with readers, writers, relocation and integrity before encoding any file. Both initial conversion and later field changes replace the descriptor and advance its graph fence even when B+Tree PageIds stay stable and only physical mappings change. This intentionally preserves conservative conflicts; the current seven-root fence excludes physical directories and cannot substitute for this explicit member.
+
+Selector, column presence and extension existence must agree exactly. Missing selector means absent; stored NULL has a selector. No duplicate authoritative extension row. Point access validates the selected path; full integrity checks both directions for orphan/duplicate/wrong-owner/group/type members. Dynamic type does not become permanent schema.
+
+## Access, update and full costs
+
+Let F be actual fields, C admitted columns, G allocated groups, X exceptional fields and h shared-tree height. Storage is O(F+C+G+X), C≤F, X≤F; never O(E×K) absent membership entries.
+
+| Operation | Required reads | Required COW/publication |
+|---|---|---|
+| One owner/field | Group/mode, selector, selected directory+column or extension, page/catalog routes and selected large body if needed | None; extra descents can hurt point latency and remain protected |
+| Full owner | Owner-prefix range over actual keys, selected sources and requested large bodies; ROW uses current root | None; O(actual fields+pages), not global/group token scan |
+| N owners, f fields | Batched group/membership routes, f subblocks per visited group plus matching extensions; restore original/duplicate ordinals | None; same R1 executor for ROW and candidate |
+| Existing scalar SET | Selected source/selector, relevant indexes and page mappings | Changed data pages and necessary O(h) paths; unchanged selector/locator not rewritten when logical slot identity remains valid. Update semantic fence even if only physical mapping changes |
+| Insert/REMOVE/type change | Selected source/selector; at most 64 values of that field if demotion needed | Affected selectors/source/directory, group counts, indexes, allocator and exact retire records; admission refusal leaves old graph intact |
+| Complete map replacement | Actual old/new keys and changed indexes; apply existing transaction resource admission | Changed fields/routes; no whole-group container rewrite. No guarantee of accepting unlimited user input |
+| Delete/reclaim | Actual owner fields/incident graph records, membership and bitmaps | Changed paths/counts/indexes, remove empty columns/groups, exact retirement; reuse waits for pins |
+
+No-op compares canonical type/value and causes no property/index replacement. NULL↔missing, int↔double, merge versus replace are distinct. Unchanged indexes and unrelated large bodies are reused. Demotion touches one field per ordinary single-field write; if staging cannot fit, reject atomically. ROW fallback retains its existing limitations; it is not proof of universal fine-grained field updates.
+
+Conversion gate: conservatively estimate complete native allocated bytes for candidate and ROW, including data pages rounded at actual fill, map framing/routes, enumeration, type/presence/live data, descriptors, catalog/allocator/Page Directory/metadata routes, large manifests/content index, affected query indexes, retire queue and retained old generation. Charge actual reserved 128 KiB pool capacity, including unfilled frames, not an imaginary fully occupied 31-frame pool. Cancel shared unchanged costs only with proof. Conversion scratch is charged separately.
+
+Require candidate steady live allocation ≥10% below ROW and peak old+new retained allocation within unchanged resource/file caps. Unknown estimate rejects conversion. R3.2 compares actual allocations with estimate; underestimation invalidates the estimator. This is a byte eligibility rule, not R7 latency admission.
+
+Example lower bound, 64 owners sharing one int field: 576 column +64×16 selectors +28 column locator +64 group header +24 group locator =1716 bytes before all framing/pages/native metadata. A singleton never gets a column. A3's 2224/4744 and 2296/4016 observations describe other encodings; do not compare them as complete allocated totals. Shared-tree membership can erase apparent savings; record that outcome without forcing column mode.
+
+## Lifecycle and format obligations
+
+Reuse transaction-local field staging. Compute exact ownership/index/reference changes; reserve IDs/capacity; build changed data and descriptor/routes/allocator/retire metadata. Publish with unchanged data fence → inactive A/B slot → superblock fence → acknowledgment. Validate semantic property fence and preserve overlays/read-your-writes/current conflict and blind-rebase scope. Never replay side-effecting statements.
+
+Prepublication failure keeps old graph authoritative; uncertain acknowledgment requires reopen/root selection. Old pins retain complete old selectors/routes/large references. Retirement follows exact cross-owner reachability, not merely candidate missing-reference lists. Apply the same protocol to reverse conversion, field demotion, delete, relocation, physical reuse, long pins/backpressure and tail truncation.
+
+R3.2 must update all reader/writer/descriptor/map/page-kind/version contracts, root validation, integrity, relocation, allocator reachability and retire handling together. Current new-file/old-version rejection policy applies; no sidecars or migration. An incomplete graph-attached lifecycle cannot enter R3.3. Keep an isolated ROW control under the same executor.
+
+R3.2 matrix: 47/48/64 occupancy threshold; sparse/singleton; random interleaved shapes; multilabel; repeated type churn/demotion; post-delete sparsity; >4096 memberships; wide/large fields; unordered duplicate neighbor gather; no-op/NULL/merge/replace/remove; old/new snapshots/reopen; valid-checksum identity mismatch; each publication fence failure, quota refusal, relocation/reuse/retirement. Check exact IDs/types/values/multiplicity and full native costs. Candidate rejection may complete comparison R3.2, never production R3.3. R7 latency/write/resource/steady-state gates stay unchanged.

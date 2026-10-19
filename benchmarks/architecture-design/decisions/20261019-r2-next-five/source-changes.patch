@@ -1,0 +1,295 @@
+diff --git a/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp b/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
+index 72433c27..3ca48208 100644
+--- a/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataPageFile.hpp
+@@ -73,0 +74,4 @@ namespace graph::storage {
++        // Immutable unresolved image; callers still validate route identity/visibility.
++        [[nodiscard]] DecodedMetadataPageView<MetadataRadixPage>
++        readMetadataRadixUnresolvedView(PhysicalPageRef reference,
++                BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+diff --git a/include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp b/include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp
+index 2ed3d2e7..215ab40c 100644
+--- a/include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp
++++ b/include/graph/storage/relocatable/metadata/MetadataPageReadContext.hpp
+@@ -116,0 +117 @@ namespace graph::storage {
++            debug::PerfTrace::addValue("native_graph.read.decoded_metadata_borrow_fixed_bytes", sizeof(Page));
+@@ -133,0 +135 @@ namespace graph::storage {
++                debug::PerfTrace::addValue("native_graph.read.decoded_metadata_copy_fixed_bytes", sizeof(Page));
+diff --git a/src/query/execution/LogicalPlanReadRuntime.cpp b/src/query/execution/LogicalPlanReadRuntime.cpp
+index a38250c1..e2645cb0 100644
+--- a/src/query/execution/LogicalPlanReadRuntime.cpp
++++ b/src/query/execution/LogicalPlanReadRuntime.cpp
+@@ -13583,0 +13584 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.join.calls", 1);
+@@ -13719,0 +13721 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.optional.calls", 1);
+@@ -13862,0 +13865 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.subquery.calls", 1);
+@@ -14400,0 +14404 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.variable_expand.calls", 1);
+@@ -15264,0 +15269 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.unwind.calls", 1);
+@@ -15395,0 +15401 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.csv.calls", 1);
+@@ -15722,0 +15729 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.union.calls", 1);
+@@ -15800,0 +15808 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.sort.calls", 1);
+@@ -16093,0 +16102 @@ namespace graph::query::execution {
++                    debug::PerfTrace::addValue("logical_plan.consumer_adapter.expand.calls", 1);
+diff --git a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+index afb996c3..babf945a 100644
+--- a/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
++++ b/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp
+@@ -1240 +1240,6 @@ namespace graph::storage {
+-				readTypedPage(*io_, poolOffset, pool.generation, "relocatable shared page-pool envelope is truncated");
++				// Pool control records can allocate more frames without changing the
++                // pool incarnation. Another handle cannot invalidate this IO's
++                // cache: bind the mutable image to the durable snapshot context.
++                // Decode below still authenticates the actual pool generation.
++                readTypedPage(*io_, poolOffset, snapshot.superblock().generation,
++                    "relocatable shared page-pool envelope is truncated");
+@@ -1331 +1336,3 @@ namespace graph::storage {
+-		const BufferPoolPageKey poolKey{poolOffset, pool.generation.value()};
++		// Unlike immutable data pages, pool allocation bits may advance within
++        // one pool generation. Keep cache images isolated by snapshot context.
++        const BufferPoolPageKey poolKey{poolOffset, snapshot.superblock().generation.value()};
+diff --git a/src/storage/relocatable/metadata/LocationDirectory.cpp b/src/storage/relocatable/metadata/LocationDirectory.cpp
+index 1482ec81..0dbe149f 100644
+--- a/src/storage/relocatable/metadata/LocationDirectory.cpp
++++ b/src/storage/relocatable/metadata/LocationDirectory.cpp
+@@ -1106,2 +1106,2 @@ namespace graph::storage {
+-			CatalogRadixPage root =
+-					pages->readMetadataRadixUnresolved(rootReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
++			const auto root =
++					pages->readMetadataRadixUnresolvedView(rootReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+@@ -1112,2 +1112,2 @@ namespace graph::storage {
+-			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != directory_type ||
+-				root.level > RSS_CATALOG_RADIX_MAX_LEVEL) {
++			if (root->kind != CatalogRadixPageKind::CRPK_ROOT || root->directory_type != directory_type ||
++				root->level > RSS_CATALOG_RADIX_MAX_LEVEL) {
+@@ -1117 +1117 @@ namespace graph::storage {
+-			validateVisible(root.generation, root.committed_lsn, superblock,
++			validateVisible(root->generation, root->committed_lsn, superblock,
+@@ -1121,2 +1121,2 @@ namespace graph::storage {
+-            route.reserve(static_cast<size_t>(root.level) + 1U);
+-			route.push_back(resolveFrame(root, rootReference, 0U));
++            route.reserve(static_cast<size_t>(root->level) + 1U);
++			route.push_back(resolveFrame(*root, rootReference, 0U));
+@@ -1202,2 +1202,2 @@ namespace graph::storage {
+-					CatalogRadixPage child =
+-						pages->readMetadataRadixUnresolved(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
++					const auto child =
++						pages->readMetadataRadixUnresolvedView(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+@@ -1206,2 +1206,2 @@ namespace graph::storage {
+-					if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
+-						child.directory_type != directory_type || child.level + 1U != frame.level) {
++					if (child->kind != CatalogRadixPageKind::CRPK_INTERNAL ||
++						child->directory_type != directory_type || child->level + 1U != frame.level) {
+@@ -1212 +1212 @@ namespace graph::storage {
+-					validateVisible(child.generation, child.committed_lsn, superblock,
++					validateVisible(child->generation, child->committed_lsn, superblock,
+@@ -1218 +1218 @@ namespace graph::storage {
+-					route.push_back(resolveFrame(child, childReference, childOrdinal));
++					route.push_back(resolveFrame(*child, childReference, childOrdinal));
+diff --git a/src/storage/relocatable/metadata/MetadataPageFile.cpp b/src/storage/relocatable/metadata/MetadataPageFile.cpp
+index ef0c49cd..35d69589 100644
+--- a/src/storage/relocatable/metadata/MetadataPageFile.cpp
++++ b/src/storage/relocatable/metadata/MetadataPageFile.cpp
+@@ -243,0 +244,10 @@ namespace graph::storage {
++    DecodedMetadataPageView<MetadataRadixPage>
++    MetadataPageFile::readMetadataRadixUnresolvedView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
++        validateReadHint(hint);
++        if (auto *context = MetadataPageReadContext::current(*io_)) {
++            if (auto page = context->findView<MetadataRadixPage>(reference))
++                return DecodedMetadataPageView<MetadataRadixPage>(std::move(page));
++        }
++        return DecodedMetadataPageView<MetadataRadixPage>(readMetadataRadixUnresolved(reference, hint));
++    }
++
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableBoundProgramExecution.cpp b/tests/src/storage/relocatable/backend/test_RelocatableBoundProgramExecution.cpp
+index 684d7845..99a7ff66 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableBoundProgramExecution.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableBoundProgramExecution.cpp
+@@ -101,0 +102,7 @@ TEST_F(RelocatableStorageBackendTest, BoundRemainingConsumersPreserveUnwindSortJ
++    const auto counters = graph::debug::PerfTrace::snapshotAndReset();
++    for (const auto *name : {"sort", "unwind", "join", "optional", "union"}) {
++        const std::string key = std::string("logical_plan.consumer_adapter.") + name + ".calls";
++        ASSERT_TRUE(counters.contains(key)) << key;
++        EXPECT_GT(counters.at(key).totalValue, 0) << key;
++    }
++
+diff --git a/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp b/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
+index 3f474954..f6a4f52d 100644
+--- a/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
++++ b/tests/src/storage/relocatable/backend/test_RelocatableDirectPropertyBatch.cpp
+@@ -104,0 +105,42 @@ TEST_F(RelocatableStorageBackendTest, NativeDirectFilterGroupAndDistinctReturnEx
++
++TEST_F(RelocatableStorageBackendTest, DirectPropertyCellsIsolateOldPinsAcrossAnotherHandlePublicationAndFileGrowth) {
++    const auto fixture = materializeNativeGraphFixture();
++    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
++    RelocatableStorageBackend reader(options), writer(options); reader.open(); writer.open();
++    auto old = reader.openLogicalGraphReadSnapshot();
++    const std::array<std::string_view, 2> keys{"alpha", "rank"};
++    const auto read = [&](LogicalGraphReadSnapshot &snapshot, const std::vector<uint64_t> &ids) {
++        std::map<std::pair<size_t, size_t>, PropertyValue> result;
++        snapshot.readNodePropertyCellsSortedWithAdmission(ids, keys,
++            [&](size_t row, size_t column, std::optional<PropertyValue> value) {
++                if (value) EXPECT_TRUE(result.emplace(std::pair{row,column}, std::move(*value)).second);
++            }, [](size_t) {});
++        return result;
++    };
++    EXPECT_EQ(read(*old, {fixture.person_node_id}).at({0,0}), PropertyValue(42));
++    const auto bytes = std::filesystem::file_size(data_path_);
++    std::vector<LogicalGraphNodeCreateRequest> requests;
++    for (int64_t i = 0; i < 64; ++i) {
++        std::string body(65536U, 'x'); body.replace(0, 8, std::to_string(i));
++        requests.push_back({{"Growing"}, {{"rank", PropertyValue(i)}, {"body", PropertyValue(body)}}});
++    }
++    std::vector<uint64_t> created;
++    ASSERT_NO_THROW(created = writer.createLogicalNodes(requests));
++    ASSERT_EQ(created.size(), 64U);
++    EXPECT_GT(std::filesystem::file_size(data_path_), bytes);
++    const std::vector<uint64_t> gather{fixture.person_node_id, created.back()};
++    std::map<std::pair<size_t,size_t>, PropertyValue> oldValues;
++    ASSERT_NO_THROW(oldValues = read(*old, gather));
++    EXPECT_EQ(oldValues.at({0,0}), PropertyValue(42));
++    EXPECT_FALSE(oldValues.contains({1,1}));
++    std::unique_ptr<LogicalGraphReadSnapshot> current;
++    ASSERT_NO_THROW(current = reader.openLogicalGraphReadSnapshot());
++    std::map<std::pair<size_t,size_t>, PropertyValue> currentValues;
++    ASSERT_NO_THROW(currentValues = read(*current, gather));
++    EXPECT_EQ(currentValues.at({0,0}), PropertyValue(42));
++    EXPECT_EQ(currentValues.at({1,1}), PropertyValue(63));
++    current.reset(); old.reset(); writer.close(); reader.close();
++    RelocatableStorageBackend reopened(options); reopened.open();
++    auto fresh = reopened.openLogicalGraphReadSnapshot();
++    EXPECT_EQ(read(*fresh, gather), currentValues);
++}
+diff --git a/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp b/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
+index 8a983071..c0844ed2 100644
+--- a/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
++++ b/tests/src/storage/relocatable/metadata/test_MetadataPageReadContext.cpp
+@@ -737,0 +738,55 @@ TEST_F(MetadataPageReadContextTest, DecoderAdmissionDoesNotEvictPagesFundedByAno
++
++// A view owns an immutable decoded image, not a raw buffer-pool pin. Invalidating
++// the lookup cache must leave an already borrowed image alive and unchanged.
++TEST_F(MetadataPageReadContextTest, RadixViewsShareHitsAndSurviveInvalidationWithoutStaleLookup) {
++    MetadataPageFile pages(io, root);
++    const auto ref = writeRadix(pages, 1U);
++    auto context = std::make_shared<MetadataPageReadContext>(root);
++    MetadataPageReadContext::Scope scope(context, *io);
++    static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
++    const auto held = pages.readMetadataRadixUnresolvedView(ref);
++    const auto shared = pages.readMetadataRadixUnresolvedView(ref);
++    EXPECT_EQ(held.get(), shared.get());
++    EXPECT_FALSE(held->logical_children_resolved);
++    auto replacement = *held;
++    replacement.page_id = MetadataPageId(77U);
++    pages.writeMetadataRadix(ref, replacement);
++    const auto fresh = pages.readMetadataRadixUnresolvedView(ref);
++    EXPECT_EQ(fresh->page_id, MetadataPageId(77U));
++    EXPECT_EQ(held->page_id, MetadataPageId(1U));
++    EXPECT_NE(fresh.get(), held.get());
++    const std::byte bad{0}; io->writeAt(pages.pageOffset(ref), &bad, 1U);
++    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref), FormatException);
++    EXPECT_EQ(held->page_id, MetadataPageId(1U));
++    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(ref, static_cast<BufferPoolReadHint>(255U)), FormatException);
++}
++
++TEST_F(MetadataPageReadContextTest, RadixViewsMeasureBorrowedAndCopiedFixedBytesSeparately) {
++    MetadataPageFile pages(io, root);
++    const auto ref = writeRadix(pages, 1U);
++    auto context = std::make_shared<MetadataPageReadContext>(root);
++    MetadataPageReadContext::Scope scope(context, *io);
++    static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
++    graph::debug::PerfTrace::setValueCollectionEnabled(true);
++    for (size_t i = 0; i < 10U; ++i) static_cast<void>(pages.readMetadataRadixUnresolvedView(ref));
++    auto trace = graph::debug::PerfTrace::snapshotAndReset();
++    EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 10U * sizeof(MetadataRadixPage));
++    EXPECT_FALSE(trace.contains("native_graph.read.decoded_metadata_copy_fixed_bytes"));
++    EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
++    for (size_t i = 0; i < 10U; ++i) static_cast<void>(pages.readMetadataRadixUnresolved(ref));
++    trace = graph::debug::PerfTrace::snapshotAndReset();
++    EXPECT_EQ(trace.at("native_graph.read.decoded_metadata_copy_fixed_bytes").totalValue, 10U * sizeof(MetadataRadixPage));
++    EXPECT_FALSE(trace.contains("native_graph.read.metadata_decodes.radix"));
++}
++
++TEST_F(MetadataPageReadContextTest, RadixViewsWithZeroCacheAndFutureReferencesRemainAuthenticated) {
++    MetadataPageFile pages(io, root);
++    const auto ref = writeRadix(pages, 1U, 2U);
++    auto context = std::make_shared<MetadataPageReadContext>(root, 0U);
++    MetadataPageReadContext::Scope scope(context, *io);
++    EXPECT_EQ(pages.readMetadataRadixUnresolvedView(ref)->generation, Generation(2U));
++    EXPECT_EQ(context->size(), 0U);
++    auto wrong = ref; wrong.generation = Generation(1U);
++    EXPECT_THROW(pages.readMetadataRadixUnresolvedView(wrong), FormatException);
++    EXPECT_EQ(context->size(), 0U);
++}
+diff --git a/tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp b/tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp
+index e7a9b0fc..b44cd725 100644
+--- a/tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp
++++ b/tests/src/storage/relocatable/property/test_PropertyCollectionRootStoreCache.cpp
+@@ -24,0 +25 @@
++#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+@@ -127,0 +129,9 @@ protected:
++        // Tests below measure a cold property data frame after warm control
++        // metadata. Read-side mutable control images now include the snapshot
++        // publication context; availableFrameCount warms the writer identity.
++        std::array<std::byte, RSS_PAGE_SIZE> control{};
++        const auto controlOffset = PhysicalSegmentAllocator::checkedSlotOffset(
++            snapshot_.superblock().data_region_offset, pool.physical_slot);
++        ASSERT_EQ(io_->readAt(BufferPoolPageKey{controlOffset, snapshot_.superblock().generation.value()},
++            control.data(), control.size()), RSS_PAGE_SIZE);
++
+@@ -701,0 +712,50 @@ TEST_F(PropertyCollectionRootStoreCacheTest, SelectedColumnBorrowingFallsBackWit
++
++TEST_F(PropertyCollectionRootStoreCacheTest, PointScanAndGatherRecordAuthenticatedWorkWithoutPayloadChanges) {
++    struct TraceReset {
++        bool enabled = graph::debug::PerfTrace::areValuesEnabled();
++        ~TraceReset() { graph::debug::PerfTrace::setValueCollectionEnabled(enabled); graph::debug::PerfTrace::reset(); }
++    } reset;
++    graph::debug::PerfTrace::setValueCollectionEnabled(true);
++    const std::array<EntityPropertyKey, 2U> keys{first_key_, second_key_};
++    const std::array<uint32_t, 2U> tokens{3U, 5U};
++    const auto record = [&](const std::string &path) {
++        const auto trace = graph::debug::PerfTrace::snapshotAndReset();
++        std::map<std::string, int64_t> sorted;
++        for (const auto &[key, entry] : trace) if (entry.valueCalls) sorted.emplace(key, entry.totalValue);
++        std::string json = "{";
++        for (const auto &[key, value] : sorted) {
++            if (json.size() > 1U) json += ",";
++            json += "\"" + key + "\":" + std::to_string(value);
++        }
++        RecordProperty(path, json + "}");
++        return trace;
++    };
++    graph::debug::PerfTrace::reset();
++    for (size_t i = 0; i < 2U; ++i) {
++        const auto value = properties_->readEntityPropertyOptional(snapshot_, first_key_, 3U);
++        ASSERT_TRUE(value); EXPECT_EQ(value->value, first_root_.entries[0].value);
++    }
++    record("point_twice");
++    NativeReadSession session;
++    auto &cursor = session.propertyCursor(*properties_, snapshot_);
++    for (size_t i = 0; i < 2U; ++i) {
++        std::array<std::optional<PropertyCollectionRootEntry>, 4U> values;
++        cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
++        ASSERT_TRUE(values[0]); ASSERT_TRUE(values[3]);
++        EXPECT_EQ(values[0]->value, first_root_.entries[0].value);
++        EXPECT_EQ(values[3]->value, second_root_.entries[0].value);
++        EXPECT_FALSE(values[1]); EXPECT_FALSE(values[2]);
++    }
++    const auto scan = record("scan_twice");
++    ASSERT_TRUE(scan.contains("native_graph.read.decoded_metadata_borrow_fixed_bytes"));
++    EXPECT_GT(scan.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 0);
++    for (size_t i = 0; i < 2U; ++i) {
++        std::array<std::optional<EntityPropertyLocation>, 2U> values;
++        metadata_->findEntityPropertyLocationsSorted(snapshot_, keys, values);
++        ASSERT_TRUE(values[0]); ASSERT_TRUE(values[1]);
++        EXPECT_EQ(values[0]->key, first_key_); EXPECT_EQ(values[1]->key, second_key_);
++    }
++    const auto gather = record("gather_locations_twice");
++    ASSERT_TRUE(gather.contains("native_graph.read.decoded_metadata_borrow_fixed_bytes"));
++    EXPECT_GT(gather.at("native_graph.read.decoded_metadata_borrow_fixed_bytes").totalValue, 0);
++}

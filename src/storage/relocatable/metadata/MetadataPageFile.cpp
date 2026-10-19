@@ -241,6 +241,16 @@ namespace graph::storage {
 		return page;
 	}
 
+    DecodedMetadataPageView<MetadataRadixPage>
+    MetadataPageFile::readMetadataRadixUnresolvedView(PhysicalPageRef reference, BufferPoolReadHint hint) const {
+        validateReadHint(hint);
+        if (auto *context = MetadataPageReadContext::current(*io_)) {
+            if (auto page = context->findView<MetadataRadixPage>(reference))
+                return DecodedMetadataPageView<MetadataRadixPage>(std::move(page));
+        }
+        return DecodedMetadataPageView<MetadataRadixPage>(readMetadataRadixUnresolved(reference, hint));
+    }
+
 	bool MetadataPageFile::supportsRoutedMetadataPageRelocation(PhysicalPageRef source, MetadataPageId expectedPageId,
 																		 const Superblock &current) const {
 		if (!source.isValid() || !expectedPageId.isValid() || source.generation > current.generation) {
