@@ -6,6 +6,7 @@
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "query/execution/PrimitiveColumnFilter.hpp"
 #include "query/execution/BatchEnvelope.hpp"
+#include "query/execution/DirectPropertyColumns.hpp"
 
 namespace graph::query::execution::detail {
 
@@ -118,15 +119,32 @@ public:
 				guard(); if (!selection.includes(index)) continue;
 				const auto cell = batch.cell(column, batch.rowId(index));
 				bool matches = false;
-				if (cell.state == ColumnCellState::CCS_VALUE) matches = std::visit([&](auto value) -> bool {
-					using T = decltype(value);
-					if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double> || std::is_same_v<T, bool>)
-						return columnPredicateMatches(PropertyValue(value), predicate);
-					else if constexpr (std::is_same_v<T, const PropertyValue *>)
-						return columnPredicateMatches(*value, predicate);
-					else throw std::invalid_argument("predicate envelope has an unsupported value source");
-				}, cell.data);
+				if (cell.state == ColumnCellState::CCS_VALUE) matches = std::visit([&](auto value) {
+                    return columnPredicateMatchesBorrowed(value, predicate);
+                }, cell.data);
 				if (!matches) selection.reject(index);
+			}
+		}
+		return stats;
+	}
+
+	// Direct native cells never become a row property map or conversion matrix.
+	template<class Guard>
+	[[nodiscard]] ColumnFilterStats filter(const DirectPropertyColumns &columns,
+		SelectionVector &selection, Guard guard) const {
+		if (columns.columnCount() != column_count_ || columns.size() != selection.size())
+			throw std::invalid_argument("direct predicate batch changed its shape");
+		ColumnFilterStats stats; size_t previous = SIZE_MAX;
+		for (const auto &predicate : predicates_) {
+			if (predicate.column != previous) { ++stats.scalar_columns; previous = predicate.column; }
+			for (size_t row = 0; row < columns.size(); ++row) {
+				guard(); if (!selection.includes(row)) continue;
+				const auto cell = columns.cell(predicate.column, columns.rowId(row));
+				bool matches = false;
+				if (cell.state == ColumnCellState::CCS_VALUE) matches = std::visit([&](auto value) {
+                    return columnPredicateMatchesBorrowed(value, predicate);
+                }, cell.data);
+				if (!matches) selection.reject(row);
 			}
 		}
 		return stats;

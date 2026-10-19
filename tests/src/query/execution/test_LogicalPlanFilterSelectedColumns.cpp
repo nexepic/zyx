@@ -100,12 +100,14 @@ TEST(LogicalPlanDirectEdgeRuntimeTest, FilterSelectedColumnsReleaseWideRejectedB
 	bounds.maximum_rows = 128;
 	bounds.maximum_edges_per_node = 128;
 	bounds.maximum_edge_records = 128;
-	// Frozen prior runtime rejects both 16KiB and 32KiB for this wide fixture:
-	// entity caches and columns share the allowance. Preserve those rejections
-	// before checking multi-batch cleanup with a bounded 128KiB working set.
-	EXPECT_THROW(static_cast<void>(runtime.execute(project, bounds, [](const auto &) { return true; })), std::runtime_error);
+	// Recompiled frozen c287 already admits these all-rejected inputs; the old
+	// monolithic binary predates that source. Assert semantic/cleanup behavior,
+	// then force a real quota denial rather than requiring an obsolete failure.
+	EXPECT_EQ(runtime.execute(project, bounds, [](const auto &) { return true; }).rows_emitted, 0U);
 	graph.enable_adjacency_reference_pages = true;
 	bounds.maximum_materialized_bytes = 32 * 1024;
+	EXPECT_EQ(runtime.execute(project, bounds, [](const auto &) { return true; }).rows_emitted, 0U);
+	bounds.maximum_materialized_bytes = 1024;
 	EXPECT_THROW(static_cast<void>(runtime.execute(project, bounds, [](const auto &) { return true; })), std::runtime_error);
 	bounds.maximum_materialized_bytes = 128 * 1024;
 	graph.truncate_node_property_batch = true;

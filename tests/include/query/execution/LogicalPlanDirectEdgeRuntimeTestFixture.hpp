@@ -57,6 +57,9 @@ namespace graph::query::execution::direct_edge_test {
 			std::map<uint64_t, LogicalGraphNode> nodes;
 			std::vector<LogicalGraphEdge> edges;
 			bool enable_native_node_ref_scans = true;
+			bool enable_direct_property_cells = false;
+			bool fail_direct_property_cells = false;
+			size_t direct_property_batches = 0;
 			bool enable_native_topology_pages = false;
 			bool enable_shaped_property_admission = false;
 			bool enable_adjacency_read_admission = false;
@@ -334,6 +337,23 @@ namespace graph::query::execution::direct_edge_test {
 					columns.front().pop_back();
 				}
 				return columns;
+			}
+
+			[[nodiscard]] bool supportsNodePropertyCellBatches() const override { return graph_.enable_direct_property_cells; }
+			void readNodePropertyCellsSortedWithAdmission(std::span<const uint64_t> ids,
+				std::span<const std::string_view> keys, const PropertyCellSink &sink,
+				const std::function<void(size_t)> &admission) const override {
+				++graph_.direct_property_batches;
+				uint64_t previous = 0;
+				for (auto id : ids) { if (!id || id <= previous) throw std::invalid_argument("direct source IDs"); previous = id; }
+				for (size_t row = 0; row < ids.size(); ++row) for (size_t column = 0; column < keys.size(); ++column) {
+					const auto *value = findProperty(graph_.nodes.at(ids[row]).properties, keys[column]);
+					if (value) {
+						admission(sizeof(PropertyValue) + graph::query::execution::detail::propertyHeapBufferBytes(*value));
+						sink(row, column, *value);
+					}
+					if (graph_.fail_direct_property_cells) throw std::runtime_error("direct source damaged");
+				}
 			}
 
 			[[nodiscard]] PropertyValue readEdgeProperty(uint64_t edgeId, std::string_view key) const override {

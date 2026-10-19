@@ -12,7 +12,7 @@ projectOrder: 1
 
 # COW 图数据库性能重构实施方案
 
-更新：2026-10-19。计划标识：`cow-performance-20261019`。**本页是当前优化的唯一实施入口。新路线 R0–R7 共 24 项，已验收 4/24（16.7%）；R0.1–R0.3 与 R1.1 已验收，R1.2 进行中。**
+更新：2026-10-19。计划标识：`cow-performance-20261019`。**本页是当前优化的唯一实施入口。新路线 R0–R7 共 24 项，已验收 5/24（20.8%）；本轮限定的 R0.1–R0.3、R1.1、R1.2 全部完成。性能准入仍由 R1.3/R7 判定。**
 
 目标是在保留现有公开能力的前提下，减少每次查询和更新所需的定位、解码、转换、物化及元数据维护工作。保留现有引擎，进行有证据支持的局部结构性重构；不整体重写 backend，不承诺所有负载超过 Kuzu。
 
@@ -41,9 +41,11 @@ projectOrder: 1
 
 ## 2. 已实现基础、剩余缺口与测量依据
 
-### 2.1 实施起点
+### 2.1 实施起点与当前增量
 
 本次文档审查基于仓库提交 `0427be26001073e3caf66621e1b8e62fd3da84dc`；上一轮正式评测生产源码为 `c28794a7c92434e809f9bbb17d48e8c457a70263`。实施时若源码不同，R0 重新核对，不能照搬下表作为新源码结论。
+
+以下表格记录 R0 冻结的启动状态。当前增量：R1.1/R1.2 已新增直接属性单元生产者，贯通适用的原生扫描、数值/字符串过滤、单/多键聚合和 DISTINCT；复杂消费者及参数残余仍按明确有界适配器保留，R1.3 尚未完成。
 
 | 领域 | 已有基础，必须复用 | 本轮真实缺口 |
 |---|---|---|
@@ -174,7 +176,7 @@ R3.1 必须提交访问/成本表：单实体单字段、完整实体、N 实体
 | 阶段 | 三项独立交付及完成条件 | 已验收 |
 |---|---|---:|
 | R0 起点与合同 | **R0.1** 源码/能力/适配器审计；**R0.2** 同条件基线及正式采样、资源、收益/保护指标预登记；**R0.3** 调用链/机制计数与接口/格式决策清单，正确性关键问题明确归属 | 3/3 |
-| R1 批执行 | **R1.1** 存储批生产者、身份及所有权；**R1.2** 数值/字符串过滤与真实聚合贯通；**R1.3** 其余消费者接入或明确有界适配器、语义保护及 R7 性能复核 | 1/3 |
+| R1 批执行 | **R1.1** 存储批生产者、身份及所有权；**R1.2** 数值/字符串过滤与真实聚合贯通；**R1.3** 其余消费者接入或明确有界适配器、语义保护及 R7 性能复核 | 2/3 |
 | R2 读取元数据 | **R2.1** 实际路径和重复工作归因；**R2.2** 认证/定位/游标复用实现及失效测试；**R2.3** 点查/扫描/gather 工作量与 R7 性能准入 | 0/3 |
 | R3 属性子块 | **R3.1** 字节布局、参数、成本及生命周期决策；**R3.2** 完整生命周期原型和同执行器对照结论；**R3.3** 获准方案生产接入、格式更新及 R7 读写/空间准入 | 0/3 |
 | R4 COW 写入 | **R4.1** 增量页/路径合并及小写实现；**R4.2** 发布、故障、快照、回收和背压验证；**R4.3** 成熟库小事务/批写/持续更新的 R7 准入 | 0/3 |
@@ -182,13 +184,13 @@ R3.1 必须提交访问/成本表：单实体单字段、完整实体、N 实体
 | R6 工程与资源 | **R6.1** 新路径预算、结果生命周期及现有 spill 兼容；**R6.2** EXPLAIN/PROFILE 与物理工作量可观测；**R6.3** 资源/取消/read-only 故障、职责整理及跨平台验证范围记录 | 0/3 |
 | R7 最终验收 | **R7.1** 冻结最终候选、受影响模块及完整规模正确性；**R7.2** 同条件读写/资源/稳态与 Kuzu 对照，逐项准入；**R7.3** 最终能力/格式/决策同步、原始证据清理及剩余差距报告 | 0/3 |
 
-**总计：4/24（16.7%）。** 状态仅为待开始、进行中、实现完成待准入、已验收、阻塞。每项有证据才能计一次；本页是唯一手工进度表，机器摘要只能派生。旧 `decisions/current-progress.json` 的 34/34 明确仅属历史，不沿用其分母。
+**总计：5/24（20.8%）。** 状态仅为待开始、进行中、实现完成待准入、已验收、阻塞。每项有证据才能计一次；本页是唯一手工进度表，机器摘要只能派生。旧 `decisions/current-progress.json` 的 34/34 明确仅属历史，不沿用其分母。
 
 正确性关键接口/codec/协议在相应生产实现前定案；布局是否有收益可留到最终窗口。候选需可隔离选择/构建以完成对照，未准入不得作为唯一默认生产格式。最终不达标时拒绝候选、保留现行生产路径；可以完成比较项，生产项保持阻塞。不能用“决定不采用”替代必做的生产能力，不能缩小分母凑 100%；必要的范围调整须明确提出并经用户确认。
 
 本轮固定五项为 R0.1/R0.2/R0.3/R1.1/R1.2。R0 证据见 `benchmarks/architecture-design/decisions/20261019-r0-five-item-start/`；R1.1/R1.2 事前按基础能力合同验收，性能收益仍由 R1.3/R7 判定，不提前宣称提速。
 
-R1.1 证据：`benchmarks/architecture-design/decisions/20261019-r1-direct-property-producer/`。直接生产者、三态/混型、重复 gather、旧快照、取消与预算合同已验收；R1.2 尚未计分。
+R1.1 证据：`benchmarks/architecture-design/decisions/20261019-r1-direct-property-producer/`。直接生产者、三态/混型、重复 gather、旧快照、取消与预算合同已验收；R1.2 的后续贯通已验收，见 `benchmarks/architecture-design/decisions/20261019-r1-continuous-filter-aggregate/`。最终 75 项定向检查通过；真实存储跨批过滤、联合分组与 DISTINCT 精确结果通过。
 
 ## 6. 验证与准入
 
@@ -227,7 +229,7 @@ R7 冻结后先完成必要正确性，再统一计时。基础热态每场景�
 
 | 工作 | 当前源码定位入口；不是整文件重写清单 |
 |---|---|
-| R1 | `src/query/execution/LogicalPlanReadRuntime.cpp`、`BoundNodeScanBatch.hpp`、`PrimitiveNumericColumns.hpp`、`BatchEnvelope.hpp`；`include/graph/query/execution/` |1/3 |
+| R1 | `src/query/execution/LogicalPlanReadRuntime.cpp`、`DirectPropertyColumns.hpp`、`BoundNodeScanBatch.hpp`、`PrimitiveNumericColumns.hpp`、`BatchEnvelope.hpp`；`include/graph/query/execution/` |
 | R1/R3 | `src/storage/relocatable/entity/PageBackedGraphReadAdapter.cpp`、`PageBackedLogicalGraphReadAdapter.cpp`；`src/storage/relocatable/property/PropertyCollectionRootStore.cpp` |
 | R2 | `include/graph/storage/relocatable/entity/NativeReadSession.hpp`；`src/storage/relocatable/metadata/`；`src/storage/StorageIO.cpp` |
 | R3/R4 | `include/graph/storage/LogicalGraphWrite.hpp`、`src/storage/LogicalGraphTransactionOverlay.cpp`；`src/storage/relocatable/entity/NativeGraphMutationExecutor.cpp`、`NativeGraphWritePlanner.cpp` |

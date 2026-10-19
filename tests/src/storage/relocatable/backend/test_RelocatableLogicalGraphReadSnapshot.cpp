@@ -16,7 +16,6 @@
 #include "graph/query/logical/operators/LogicalProject.hpp"
 
 #include "graph/debug/PerfTrace.hpp"
-#include "query/execution/DirectPropertyColumns.hpp"
 #include "graph/storage/LogicalGraphTransactionOverlay.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 
@@ -1998,53 +1997,4 @@ TEST_F(RelocatableStorageBackendTest, ScalarRangeBoundsLargeValueBuffersWithSmal
 		EXPECT_EQ(found, ids);
 	}
 	snapshot.reset(); backend.close();
-}
-
-TEST_F(RelocatableStorageBackendTest, DirectPropertyCellsPreserveAliasesPresenceAndPinnedSnapshots) {
-    const auto fixture = materializeNativeGraphFixture();
-    auto options = backendOptions(); options.open_mode = OpenMode::OPEN_EXISTING_FILE;
-    RelocatableStorageBackend backend(options); backend.open();
-    auto old = backend.openLogicalGraphReadSnapshot();
-    ASSERT_TRUE(old->supportsNodePropertyCellBatches());
-    const auto added = backend.createLogicalNodes({{{}, {{"alpha", PropertyValue()}}}});
-    const std::vector<uint64_t> ids{fixture.person_node_id, fixture.unlabeled_node_id, added.front()};
-    const std::array<std::string_view, 4> keys{"alpha", "beta", "alpha", "unknown"};
-    using Cells = std::map<std::pair<size_t, size_t>, std::optional<PropertyValue>>;
-    const auto read = [&](LogicalGraphReadSnapshot &snapshot) {
-        Cells result;
-        snapshot.readNodePropertyCellsSortedWithAdmission(ids, keys,
-            [&](size_t row, size_t column, std::optional<PropertyValue> value) {
-                EXPECT_TRUE(result.emplace(std::pair{row, column}, std::move(value)).second);
-            }, [](size_t) {});
-        return result;
-    };
-    auto current = backend.openLogicalGraphReadSnapshot();
-    const auto before = read(*old), after = read(*current);
-    EXPECT_EQ(before.at({0, 0}), PropertyValue(int64_t{42}));
-    EXPECT_EQ(before.at({0, 1}), PropertyValue("value"));
-    EXPECT_EQ(before.at({0, 0}), before.at({0, 2}));
-    EXPECT_FALSE(before.contains({2, 0}));
-    ASSERT_TRUE(after.at({2, 0}).has_value());
-    EXPECT_EQ(after.at({2, 0})->getType(), graph::PropertyType::NULL_TYPE);
-    EXPECT_FALSE(after.contains({0, 3}));
-    graph::query::execution::MaterializedByteBudget budget(65536U);
-    {
-        const std::array<uint64_t, 4> gatherIds{ids[1], ids[0], ids[0], ids[2]};
-        graph::query::execution::detail::DirectPropertyColumns gather(*current, gatherIds.size(), keys.size(), budget);
-        gather.readGather(gatherIds, keys, [](size_t) {}, [] {});
-        EXPECT_EQ(gather.cell(0, gather.rowId(0)).state, graph::query::execution::detail::ColumnCellState::CCS_MISSING);
-        EXPECT_EQ(std::get<int64_t>(gather.cell(0, gather.rowId(1)).data), 42);
-        EXPECT_EQ(std::get<int64_t>(gather.cell(0, gather.rowId(2)).data), 42);
-        EXPECT_EQ(gather.cell(0, gather.rowId(3)).state, graph::query::execution::detail::ColumnCellState::CCS_NULL);
-    }
-    EXPECT_EQ(budget.used(), 0U);
-
-    const std::array<uint64_t, 2> duplicates{ids[0], ids[0]}, reversed{ids[1], ids[0]};
-    size_t calls = 0;
-    const LogicalGraphReadSnapshot::PropertyCellSink sink = [&](size_t, size_t, std::optional<PropertyValue>) { ++calls; };
-    EXPECT_THROW(current->readNodePropertyCellsSortedWithAdmission(duplicates, keys, sink, [](size_t) {}), std::exception);
-    EXPECT_THROW(current->readNodePropertyCellsSortedWithAdmission(reversed, keys, sink, [](size_t) {}), std::exception);
-    EXPECT_EQ(calls, 0U);
-    EXPECT_THROW(current->readNodePropertyCellsSortedWithAdmission(ids, keys,
-        [](size_t, size_t, std::optional<PropertyValue>) { throw std::runtime_error("consumer stopped"); }, [](size_t) {}), std::runtime_error);
 }

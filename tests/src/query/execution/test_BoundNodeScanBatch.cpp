@@ -140,4 +140,29 @@ TEST(DirectPropertyColumnsTest, PressureAndCancellationDiscardPrivateConstructio
 	}
 	EXPECT_EQ(budget.used(), 0U);
 }
+TEST(DirectPropertyColumnsTest, StringAndMixedTypePredicatesMatchLegacyScalarOrdering) {
+    ScanBatchSnapshot snapshot;
+    const std::vector<PropertyValue> values{PropertyValue("CN"), PropertyValue("US"), PropertyValue(std::string("a\0b", 3)),
+        PropertyValue(""), PropertyValue(3), PropertyValue(3.5), PropertyValue(true), PropertyValue()};
+    const std::vector<std::string> names{"value"};
+    const std::vector<std::vector<PropertyValue>> legacy{values};
+    for (const auto &bound : {PropertyValue("CN"), PropertyValue(3), PropertyValue(3.5), PropertyValue()}) {
+        for (int mode = 0; mode < 5; ++mode) {
+            MaterializedByteBudget budget(65536U);
+            DirectPropertyColumns direct(snapshot, values.size(), 1, budget);
+            for (size_t row = 0; row < values.size(); ++row) direct.append(row, 0, values[row], [] {});
+            direct.seal();
+            logical::LogicalNodeScan scan("n");
+            if (mode == 0) scan.setPropertyPredicates({{"value", bound}});
+            else scan.setRangePredicates({{"value", mode < 3 ? bound : PropertyValue(), mode < 3 ? PropertyValue() : bound,
+                mode == 1, mode == 3}});
+            BoundNodeColumnPredicates predicates(scan, {}, names, budget);
+            SelectionVector actual(values.size()), expected(values.size());
+            (void)predicates.filter(direct, actual, [] {});
+            (void)predicates.filter(legacy, expected, budget, [] {});
+            for (size_t row = 0; row < values.size(); ++row) EXPECT_EQ(actual.includes(row), expected.includes(row));
+        }
+    }
+}
+
 }

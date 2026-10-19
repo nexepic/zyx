@@ -2,6 +2,8 @@
 
 #include <limits>
 #include <span>
+#include <optional>
+#include <string_view>
 
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/execution/SelectionVector.hpp"
@@ -37,6 +39,42 @@ struct ColumnPredicate {
 		case ColumnPredicateOp::CPO_NON_NULL: return true;
 	}
 	throw std::invalid_argument("invalid column comparison operation");
+}
+
+// Compare direct borrowed cells without copying string payloads. The optional
+// text view binds a string LiteralExpression whose lifetime is the query plan.
+template<class T>
+[[nodiscard]] inline bool columnPredicateMatchesBorrowed(T value, const ColumnPredicate &predicate,
+    std::optional<std::string_view> textOverride = std::nullopt) {
+    if constexpr (std::is_same_v<T, std::monostate>) return false;
+    else if constexpr (std::is_same_v<T, const PropertyValue *>) {
+        if (textOverride && value->getType() == PropertyType::STRING)
+            return columnPredicateMatchesBorrowed(std::string_view(std::get<std::string>(value->getVariant())), predicate, textOverride);
+        return columnPredicateMatches(*value, predicate);
+    } else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, double> || std::is_same_v<T, bool>)
+        return columnPredicateMatches(PropertyValue(value), predicate);
+    else if constexpr (std::is_same_v<T, std::string_view>) {
+        if (predicate.operation == ColumnPredicateOp::CPO_NON_NULL) return true;
+        if (!predicate.expected) throw std::invalid_argument("borrowed predicate has no constant");
+        if (predicate.expected->getType() == PropertyType::NULL_TYPE) return false;
+        const auto *text = std::get_if<std::string>(&predicate.expected->getVariant());
+        const auto expectedText = textOverride ? textOverride : text ? std::optional<std::string_view>(*text) : std::nullopt;
+        const size_t stringIndex = PropertyValue(std::string{}).getVariant().index();
+        const auto otherIndex = predicate.expected->getVariant().index();
+        const bool less = expectedText ? value < *expectedText : stringIndex < otherIndex;
+        const bool greater = expectedText ? *expectedText < value : otherIndex < stringIndex;
+        const bool equal = expectedText && value == *expectedText;
+        switch (predicate.operation) {
+            case ColumnPredicateOp::CPO_EQUAL: return equal;
+            case ColumnPredicateOp::CPO_NOT_EQUAL: return !equal;
+            case ColumnPredicateOp::CPO_LESS: return less;
+            case ColumnPredicateOp::CPO_GREATER: return greater;
+            case ColumnPredicateOp::CPO_LESS_EQUAL: return !greater;
+            case ColumnPredicateOp::CPO_GREATER_EQUAL: return !less;
+            case ColumnPredicateOp::CPO_NON_NULL: return true;
+        }
+        throw std::invalid_argument("invalid borrowed predicate operation");
+    } else throw std::invalid_argument("predicate envelope has an unsupported value source");
 }
 
 template <typename T>

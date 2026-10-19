@@ -6,13 +6,14 @@
 #include "query/execution/PrimitiveNumericColumns.hpp"
 #include "query/execution/EntityRefColumn.hpp"
 #include "query/execution/DynamicValueArena.hpp"
+#include "query/execution/DirectPropertyColumns.hpp"
 
 namespace graph::query::execution::detail {
-enum class BatchColumnKind { BCK_INTEGER, BCK_DOUBLE, BCK_BOOLEAN, BCK_ENTITY, BCK_DYNAMIC, BCK_LEGACY_VALUE };
+enum class BatchColumnKind { BCK_INTEGER, BCK_DOUBLE, BCK_BOOLEAN, BCK_ENTITY, BCK_DYNAMIC, BCK_LEGACY_VALUE, BCK_DIRECT_VALUE };
 struct DynamicCellView { const DynamicValueArena *arena; DynamicValueId value; };
 struct BatchCellView {
 	ColumnCellState state = ColumnCellState::CCS_NULL;
-	std::variant<std::monostate, int64_t, double, bool, storage::EntityRef, DynamicCellView, const PropertyValue *> data;
+	std::variant<std::monostate, int64_t, double, bool, storage::EntityRef, DynamicCellView, const PropertyValue *, std::string_view> data;
 };
 
 // Internal borrowed payload descriptor. Metadata is copied into the envelope;
@@ -27,6 +28,17 @@ struct BatchColumnSource {
 	void (*validate)(const void *, BatchRowId);
 	BatchCellView (*read)(const void *, BatchRowId, size_t);
 	const storage::LogicalGraphReadSnapshot *entity_snapshot = nullptr;
+
+	static BatchColumnSource direct(const DirectPropertyColumns &source, size_t ordinal) {
+		return {&source, source.budgetDomain(), source.borrowVersion(), source.size(), ordinal, BatchColumnKind::BCK_DIRECT_VALUE, true,
+			[](const void *owner, BatchRowId version) { static_cast<const DirectPropertyColumns *>(owner)->validateBorrowVersion(version); },
+			[](const void *owner, BatchRowId row, size_t column) {
+				const auto cell = static_cast<const DirectPropertyColumns *>(owner)->cell(column, row);
+				BatchCellView result; result.state = cell.state;
+				std::visit([&](auto value) { result.data = value; }, cell.data);
+				return result;
+			}};
+	}
 
 	template<size_t Index, class... Ts>
 	static BatchColumnSource fixed(const FixedWidthBatch<Ts...> &source) {
@@ -146,7 +158,7 @@ private:
 		for (const auto &source : sources) {
 			guard();
 			if (source.kind != BatchColumnKind::BCK_INTEGER && source.kind != BatchColumnKind::BCK_DOUBLE && source.kind != BatchColumnKind::BCK_BOOLEAN &&
-				source.kind != BatchColumnKind::BCK_ENTITY && source.kind != BatchColumnKind::BCK_DYNAMIC && source.kind != BatchColumnKind::BCK_LEGACY_VALUE)
+				source.kind != BatchColumnKind::BCK_ENTITY && source.kind != BatchColumnKind::BCK_DYNAMIC && source.kind != BatchColumnKind::BCK_LEGACY_VALUE && source.kind != BatchColumnKind::BCK_DIRECT_VALUE)
 				throw std::invalid_argument("batch column has an invalid kind");
 			if (!source.owner || !source.validate || !source.read || source.budget != budget_ || source.rows != rows)
 				throw std::invalid_argument("batch column has incompatible owner, budget or row count");
@@ -179,6 +191,10 @@ private:
 			kind == BatchColumnKind::BCK_BOOLEAN ? std::holds_alternative<bool>(cell.data) :
 			kind == BatchColumnKind::BCK_ENTITY ? std::holds_alternative<storage::EntityRef>(cell.data) :
 			kind == BatchColumnKind::BCK_DYNAMIC ? std::holds_alternative<DynamicCellView>(cell.data) :
+			kind == BatchColumnKind::BCK_DIRECT_VALUE ?
+				(std::holds_alternative<int64_t>(cell.data) || std::holds_alternative<double>(cell.data) ||
+				 std::holds_alternative<bool>(cell.data) || std::holds_alternative<std::string_view>(cell.data) ||
+				 std::holds_alternative<const PropertyValue *>(cell.data)) :
 			kind == BatchColumnKind::BCK_LEGACY_VALUE && std::holds_alternative<const PropertyValue *>(cell.data);
 		if (!valid) throw std::invalid_argument("batch column kind disagrees with a cell payload");
 		if (const auto *dynamic = std::get_if<DynamicCellView>(&cell.data); dynamic && (!dynamic->arena || dynamic->arena->state(dynamic->value) != ColumnCellState::CCS_VALUE))

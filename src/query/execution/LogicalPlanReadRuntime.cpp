@@ -104,6 +104,9 @@ namespace graph::query::execution {
 			std::function<bool(std::span<const std::string>,
 				std::span<const std::vector<PropertyValue>>, const SelectionVector &,
 				std::span<const size_t>)> consume;
+			std::function<bool(std::span<const std::string>, const detail::DirectPropertyColumns &,
+				const SelectionVector &, std::span<const size_t>)> consumeDirect{};
+			const logical::LogicalOperator *filterOwner = nullptr;
 		};
 		[[nodiscard]] constexpr bool supportsChargedRowHandoff(logical::LogicalOpType type) {
 			return type == logical::LogicalOpType::LOP_SORT || type == logical::LogicalOpType::LOP_FILTER ||
@@ -11289,6 +11292,65 @@ namespace graph::query::execution {
 							nodeIds.push_back(id);
 							lookupOrdinals[original - begin] = sorted;
 						}
+						if (columnReceiver && columnReceiver->consumeDirect &&
+							state.shared.snapshot.supportsNodePropertyCellBatches()) {
+							std::optional<detail::DirectPropertyColumns> direct;
+							std::optional<detail::BoundColumnLayout> directLayout;
+							std::optional<detail::BatchEnvelope> directEnvelope;
+							detail::BudgetMemoryResource selectionMemory(state.shared.materialized_budget);
+							std::optional<SelectionVector> selected;
+							bool guardFailed = false;
+							const auto directGuard = [&] {
+								try { checkGuardNow(state); } catch (...) { guardFailed = true; throw; }
+							};
+							try {
+								direct.emplace(state.shared.snapshot, nodeIds.size(), keyViews.size(), state.shared.materialized_budget);
+								selected.emplace(nodeIds.size(), &selectionMemory);
+								detail::BoundNodeColumnPredicates predicates(scan, parameterPredicates, propertyKeys, state.shared.materialized_budget);
+								MaterializedByteReservation sourceScratch(&state.shared.materialized_budget);
+								state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(nodeIds, keyViews,
+									[&](size_t row, size_t column, std::optional<PropertyValue> value) {
+										direct->append(row, column, std::move(value), directGuard);
+									}, [&](size_t bytes) {
+										directGuard();
+										sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
+									});
+								direct->seal(); sourceScratch.reset();
+								(void)predicates.filter(*direct, *selected, directGuard);
+								if (state.shared.bound_program) {
+									try {
+										directLayout.emplace(propertyKeys, state.shared.materialized_budget,
+											std::pmr::get_default_resource(), directGuard);
+										detail::BudgetMemoryResource metadataMemory(state.shared.materialized_budget);
+										std::pmr::vector<detail::BatchColumnSource> sources(&metadataMemory);
+										std::pmr::vector<uint32_t> selectedRows(&metadataMemory);
+										std::pmr::vector<uint64_t> originalOrdinals(nodeIds.size(), 0U, &metadataMemory);
+										for (size_t c = 0; c < propertyKeys.size(); ++c) sources.push_back(detail::BatchColumnSource::direct(*direct, c));
+										for (size_t original = 0; original < lookupOrdinals.size(); ++original) {
+											directGuard(); const auto sorted = lookupOrdinals[original]; originalOrdinals[sorted] = original;
+											if (selected->includes(sorted)) selectedRows.push_back(static_cast<uint32_t>(sorted));
+										}
+										directEnvelope.emplace(state.shared.bound_program->root().program, *directLayout,
+											state.shared.snapshot, nodeIds.size(), state.shared.materialized_budget);
+										directEnvelope->publish(propertyKeys, sources, nodeIds.size(), selectedRows, originalOrdinals, directGuard);
+										debug::PerfTrace::addValue("logical_plan.batch_envelope.published", 1);
+									} catch (const MaterializedByteLimitExceeded &) {
+										if (guardFailed) throw;
+										directEnvelope.reset(); directLayout.reset();
+										debug::PerfTrace::addValue("logical_plan.batch_envelope.admission_fallback", 1);
+									}
+								}
+							} catch (const MaterializedByteLimitExceeded &) {
+								if (guardFailed) throw;
+								// Private construction only: there have been no consumer effects.
+								throw NodeColumnBytePressure{};
+							}
+							debug::PerfTrace::addValue("logical_plan.direct_property.batches", 1);
+							debug::PerfTrace::addValue("logical_plan.direct_property.rows", static_cast<int64_t>(direct->size()));
+							debug::PerfTrace::addValue("logical_plan.direct_property.rejected", static_cast<int64_t>(direct->size() - selected->selectedCount()));
+							// Consumer exceptions are outside preparation fallback and never replay.
+							return columnReceiver->consumeDirect(propertyKeys, *direct, *selected, lookupOrdinals);
+						}
 						MaterializedByteReservation rowBytes(&state.shared.materialized_budget);
 						LogicalPlanReadRow row;
 						const auto prepareRow = [&](const storage::EntityRef &reference) {
@@ -12319,7 +12381,8 @@ namespace graph::query::execution {
 							filterScan != nullptr && (!filterScan->getPropertyPredicates().empty() ||
 													  !filterScan->getRangePredicates().empty() ||
 													  filterScan->getCompositeEquality().has_value());
-					if (!hasIndexableScanShape) {
+					const bool forwardsDirectColumns = columnReceiver && columnReceiver->filterOwner == &op;
+					if (!hasIndexableScanShape && !forwardsDirectColumns) {
 						const std::vector<const expressions::Expression *> candidates{filter.getPredicate().get()};
 						const std::vector<const expressions::Expression *> propertyExpressions =
 								selectBatchableExpressions(candidates);
@@ -12345,7 +12408,8 @@ namespace graph::query::execution {
 								return acceptFilteredRow(std::move(row),
 														 MaterializedByteReservation(&state.shared.materialized_budget));
 							},
-							supportsChargedRowHandoff(filterChild.getType()) ? &chargedInput : nullptr);
+							supportsChargedRowHandoff(filterChild.getType()) ? &chargedInput : nullptr,
+							forwardsDirectColumns ? columnReceiver : nullptr);
 				}
 				case logical::LogicalOpType::LOP_PROJECT: {
 					const auto &project = dynamic_cast<const logical::LogicalProject &>(op);
@@ -12811,7 +12875,7 @@ namespace graph::query::execution {
 						aggregateStateBytes.set(nextBytes);
 						aggregateMemoryBytes = nextBytes;
 					};
-					const auto createGroup = [&](std::vector<PropertyValue> values) {
+					const auto createGroup = [&](std::vector<PropertyValue> values, MaterializedByteReservation *prepaid = nullptr) {
 						if (groups.size() == state.shared.bounds.maximum_distinct_rows ||
 							groups.size() == state.shared.bounds.maximum_rows) {
 							throw std::runtime_error("logical-plan Aggregate exceeded its group bound");
@@ -12830,7 +12894,12 @@ namespace graph::query::execution {
 											   aggregations.size() * (sizeof(std::unique_ptr<AggregateAccumulator>) +
 																	  sizeof(std::pmr::unordered_set<std::pmr::string>)),
 											   "logical-plan Aggregate group size overflowed");
-						chargeAggregateBytes(groupBytes);
+						const size_t prepaidBytes = prepaid ? std::min(prepaid->bytes(), groupBytes) : 0U;
+						if (prepaidBytes) {
+							aggregateStateBytes.absorb(prepaid->splitOff(prepaidBytes));
+							aggregateMemoryBytes = checkedSizeAdd(aggregateMemoryBytes, prepaidBytes, "group prepaid size overflowed");
+						}
+						chargeAggregateBytes(groupBytes - prepaidBytes);
 						group.accumulators.reserve(aggregations.size());
 						group.distinct_values.reserve(aggregations.size());
 						for (size_t index = 0U; index < aggregations.size(); ++index)
@@ -12885,9 +12954,15 @@ namespace graph::query::execution {
 					if (groupExpressions.empty()) {
 						static_cast<void>(createGroup({}));
 					}
-					const auto accountAccumulatorRetention = [&](AggregateGroup &group, size_t beforeBytes, size_t afterBytes) {
+					const auto accountAccumulatorRetention = [&](AggregateGroup &group, size_t beforeBytes, size_t afterBytes, MaterializedByteReservation *prepaid = nullptr) {
 						if (afterBytes >= beforeBytes) {
-							chargeAggregateBytes(afterBytes - beforeBytes);
+							const size_t delta = afterBytes - beforeBytes;
+							const size_t transferred = prepaid ? std::min(delta, prepaid->bytes()) : 0U;
+							if (transferred) {
+								aggregateStateBytes.absorb(prepaid->splitOff(transferred));
+								aggregateMemoryBytes = checkedSizeAdd(aggregateMemoryBytes, transferred, "aggregate prepaid size overflowed");
+							}
+							chargeAggregateBytes(delta - transferred);
 							group.accounted_bytes = checkedSizeAdd(group.accounted_bytes, afterBytes - beforeBytes,
 								"logical-plan Aggregate group size overflowed");
 						} else {
@@ -12905,7 +12980,8 @@ namespace graph::query::execution {
 					bool aggregateColumnsBound = false;
 					std::optional<detail::BoundColumnLayout> aggregateInputLayout;
 					const size_t rowCountBinding = std::numeric_limits<size_t>::max();
-					bool columnAggregateEligible = groupExpressions.empty() && !countOnlyAggregate &&
+					bool columnAggregateEligible = !state.shared.snapshot.supportsNodePropertyCellBatches() &&
+						groupExpressions.empty() && !countOnlyAggregate &&
 						state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
 						aggregateChild.getType() == logical::LogicalOpType::LOP_NODE_SCAN;
 					if (columnAggregateEligible) {
@@ -13103,6 +13179,189 @@ namespace graph::query::execution {
 						std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
 						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);
 					}
+					std::pmr::vector<std::string_view> directKeys(&aggregateIndexMemory);
+					std::pmr::vector<size_t> directGroups(&aggregateIndexMemory), directArguments(&aggregateIndexMemory);
+					struct DirectFilterTerm { size_t column; const expressions::LiteralExpression *literal; detail::ColumnPredicateOp operation; };
+					std::pmr::vector<DirectFilterTerm> directTerms(&aggregateIndexMemory);
+					const auto *directFilter = dynamic_cast<const logical::LogicalFilter *>(&aggregateChild);
+					const auto *directInput = directFilter ? &requireOnlyChild(*directFilter) : &aggregateChild;
+					bool directBound = false;
+					bool directEligible = state.shared.allow_deferred_entity_refs && state.shared.snapshot.supportsNativeNodeRefScans() &&
+						state.shared.snapshot.supportsNodePropertyCellBatches() && directInput->getType() == logical::LogicalOpType::LOP_NODE_SCAN;
+					const auto *directScan = directEligible ? &static_cast<const logical::LogicalNodeScan &>(*directInput) : nullptr;
+					const auto directReference = [&](const expressions::Expression *expression) {
+						const auto *ref = dynamic_cast<const expressions::VariableReferenceExpression *>(expression);
+						return ref && directScan && ref->getVariableName() == directScan->getVariable() ? ref : nullptr;
+					};
+					for (const auto &expression : groupExpressions) {
+						const auto *ref = directReference(expression.get());
+						if (!ref || !ref->hasProperty()) directEligible = false;
+					}
+					for (size_t index = 0; index < aggregations.size(); ++index) {
+						const auto &item = aggregations[index]; const auto *ref = directReference(item.argument.get());
+						if (item.argument && (!ref || (!ref->hasProperty() &&
+							(functions[index] != AggregateFunctionType::AGG_COUNT || item.distinct)))) directEligible = false;
+					}
+					for (size_t index = 0; directEligible && index < aggregations.size(); ++index) {
+						const auto &item = aggregations[index]; const auto *ref = directReference(item.argument.get());
+						if (functions[index] != AggregateFunctionType::AGG_COUNT || item.distinct || !ref || !ref->hasProperty()) continue;
+						const auto same = [&](const expressions::Expression *expression) {
+							const auto *other = directReference(expression);
+							return other && other->hasProperty() && other->getPropertyName() == ref->getPropertyName();
+						};
+						const bool needed = std::ranges::any_of(groupExpressions, [&](const auto &expr) { return same(expr.get()); }) ||
+							std::ranges::any_of(aggregations, [&](const auto &sibling) {
+								return (sibling.distinct || aggregateFunctionType(sibling.functionName) != AggregateFunctionType::AGG_COUNT) && same(sibling.argument.get());
+							});
+						if (!needed) directEligible = false;
+					}
+					// Payload-free global COUNT(property) probes remain preferable when
+					// no grouping/value-consuming sibling already needs those fields.
+					if (countOnlyAggregate && std::ranges::any_of(aggregations, [&](const auto &item) {
+						const auto *ref = directReference(item.argument.get()); return ref && ref->hasProperty();
+					})) directEligible = false;
+					if (directEligible) {
+						try {
+							const auto bind = [&](const expressions::Expression *expression) {
+								const auto *ref = directReference(expression);
+								if (!ref || !ref->hasProperty()) return rowCountBinding;
+								const std::string_view name = ref->getPropertyName();
+								auto it = std::ranges::find(directKeys, name);
+								if (it == directKeys.end()) { directKeys.push_back(name); it = directKeys.end() - 1; }
+								return static_cast<size_t>(it - directKeys.begin());
+							};
+							if (directFilter) {
+								const auto collect = [&](const auto &self, const expressions::Expression *expression) -> bool {
+									checkGuard(state);
+									const auto *binary = dynamic_cast<const expressions::BinaryOpExpression *>(expression);
+									if (!binary || !binary->getLeft() || !binary->getRight()) return false;
+									using Op = expressions::BinaryOperatorType;
+									if (binary->getOperator() == Op::BOP_AND) return self(self, binary->getLeft()) && self(self, binary->getRight());
+									const auto *ref = directReference(binary->getLeft());
+									const auto *literal = dynamic_cast<const expressions::LiteralExpression *>(binary->getRight());
+									if (!ref || !ref->hasProperty() || !literal) return false;
+									detail::ColumnPredicateOp operation;
+									switch (binary->getOperator()) {
+										case Op::BOP_EQUAL: operation = detail::ColumnPredicateOp::CPO_EQUAL; break;
+										case Op::BOP_NOT_EQUAL: operation = detail::ColumnPredicateOp::CPO_NOT_EQUAL; break;
+										case Op::BOP_LESS: operation = detail::ColumnPredicateOp::CPO_LESS; break;
+										case Op::BOP_LESS_EQUAL: operation = detail::ColumnPredicateOp::CPO_LESS_EQUAL; break;
+										case Op::BOP_GREATER: operation = detail::ColumnPredicateOp::CPO_GREATER; break;
+										case Op::BOP_GREATER_EQUAL: operation = detail::ColumnPredicateOp::CPO_GREATER_EQUAL; break;
+										default: return false;
+									}
+									directTerms.push_back({bind(binary->getLeft()), literal, operation}); return true;
+								};
+								directEligible = collect(collect, directFilter->getPredicate().get());
+							}
+							for (const auto &expression : groupExpressions) directGroups.push_back(bind(expression.get()));
+							for (const auto &item : aggregations) directArguments.push_back(bind(item.argument.get()));
+						} catch (const MaterializedByteLimitExceeded &) { directEligible = false; }
+					}
+					if (!directEligible) {
+						std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
+						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directGroups);
+						std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directArguments);
+						std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
+					}
+					if (directEligible) {
+						aggregateColumnReceiver.emplace(NodeColumnReceiver{directKeys, {},
+							[&](std::span<const std::string> keys, const detail::DirectPropertyColumns &columns,
+								const SelectionVector &selection, std::span<const size_t> ordinals) {
+								if (!directBound) {
+									const auto resolve = [&](size_t &binding) {
+										if (binding == rowCountBinding) return;
+										const auto found = std::ranges::find(keys, directKeys.at(binding));
+										if (found == keys.end()) throw std::logic_error("direct aggregate column missing");
+										binding = static_cast<size_t>(found - keys.begin());
+									};
+									for (auto &binding : directGroups) resolve(binding);
+									for (auto &binding : directArguments) resolve(binding);
+									for (auto &term : directTerms) resolve(term.column);
+									directBound = true;
+								}
+								const auto appendCellKey = [&](std::pmr::string &key, size_t column, detail::BatchRowId row) {
+									const auto cell = columns.cell(column, row);
+									std::visit([&](auto value) {
+										using T = decltype(value);
+										if constexpr (std::is_same_v<T, std::monostate>) appendDistinctPropertyValue(key, PropertyValue());
+										else if constexpr (std::is_same_v<T, std::string_view>) {
+											key += static_cast<char>(static_cast<uint8_t>(PropertyType::STRING)); appendDistinctString(key, value);
+										} else if constexpr (std::is_same_v<T, const PropertyValue *>) appendDistinctPropertyValue(key, *value);
+										else appendDistinctPropertyValue(key, PropertyValue(value));
+									}, cell.data);
+								};
+								for (const auto ordinal : ordinals) {
+									checkGuard(state);
+									if (ordinal >= columns.size()) throw std::logic_error("direct aggregate ordinal changed");
+									if (!selection.includes(ordinal)) continue;
+									bool passesFilter = true;
+									for (const auto &term : directTerms) {
+										checkGuard(state); const auto cell = columns.cell(term.column, columns.rowId(ordinal));
+										if (cell.state != detail::ColumnCellState::CCS_VALUE) { passesFilter = false; break; }
+										const auto &literal = *term.literal; PropertyValue scalar;
+										std::optional<std::string_view> text; const PropertyValue *expected = &scalar;
+										if (literal.isString()) { scalar = PropertyValue(std::string{}); text = literal.getStringValue(); }
+										else if (literal.isBoolean()) scalar = PropertyValue(literal.getBooleanValue());
+										else if (literal.isInteger()) scalar = PropertyValue(literal.getIntegerValue());
+										else if (literal.isDouble()) scalar = PropertyValue(literal.getDoubleValue());
+										else if (literal.isPropertyValue()) expected = &literal.getPropertyValue();
+										const detail::ColumnPredicate predicate{term.column, term.operation, expected};
+										const bool match = std::visit([&](auto value) { return detail::columnPredicateMatchesBorrowed(value, predicate, text); }, cell.data);
+										if (!match) { passesFilter = false; break; }
+									}
+									if (!passesFilter) continue;
+									if (inputRows == state.shared.bounds.maximum_rows) throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+									++inputRows; const auto row = columns.rowId(ordinal);
+									size_t groupIndex = 0;
+									if (!directGroups.empty()) {
+										std::pmr::string key{&aggregateIndexMemory};
+										for (const auto column : directGroups) appendCellKey(key, column, row);
+										const auto found = groupIndexes.find(key);
+										if (found != groupIndexes.end()) groupIndex = found->second;
+										else {
+											MaterializedByteReservation copies(&state.shared.materialized_budget);
+											copies.set(checkedSizeMul(directGroups.size(), sizeof(PropertyValue), "direct group slots overflowed"));
+											std::vector<PropertyValue> values; values.reserve(directGroups.size());
+											copies.set(checkedSizeMul(values.capacity(), sizeof(PropertyValue), "direct group capacity overflowed"));
+											for (const auto column : directGroups) {
+												const size_t before = copies.bytes();
+												auto value = columns.copyValue(column, row, [&](size_t bytes) {
+													copies.set(checkedSizeAdd(before, bytes, "direct group copy overflowed"));
+												}, [&] { checkGuardNow(state); });
+												copies.set(checkedSizeAdd(before, detail::propertyBufferEstimates(value, [&] { checkGuardNow(state); }).heapBytes, "direct group retained bytes overflowed"));
+												values.push_back(std::move(value));
+											}
+											groupIndex = createGroup(std::move(values), &copies);
+											groupIndexes.emplace(std::move(key), groupIndex);
+										}
+									}
+									auto &group = groups.at(groupIndex);
+									for (size_t index = 0; index < aggregations.size(); ++index) {
+										checkGuard(state); auto &accumulator = *group.accumulators[index];
+										const size_t column = directArguments[index];
+										if (column == rowCountBinding) { accumulator.updateRow(); continue; }
+										const auto cell = columns.cell(column, row);
+										if (aggregations[index].distinct) {
+											std::pmr::string key{&aggregateIndexMemory}; appendCellKey(key, column, row);
+											if (!group.distinct_values[index].insert(std::move(key)).second) continue;
+										}
+										if (functions[index] == AggregateFunctionType::AGG_COUNT) {
+											if (cell.state == detail::ColumnCellState::CCS_VALUE) accumulator.updateRow();
+											continue;
+										}
+										MaterializedByteReservation valueCopy(&state.shared.materialized_budget), update(&state.shared.materialized_budget);
+										auto value = columns.copyValue(column, row, [&](size_t bytes) { valueCopy.set(bytes); }, [&] { checkGuardNow(state); });
+										const size_t before = accumulator.retainedBytesForAdmission();
+										accumulator.updateAdmitted(value, [&](size_t bytes) { checkGuardNow(state); update.set(bytes); });
+										accountAccumulatorRetention(group, before, accumulator.retainedBytesForAdmission(), &update);
+									}
+									debug::PerfTrace::addValue("logical_plan.aggregate.direct_input_rows", 1);
+								}
+								return true;
+							}});
+						aggregateColumnReceiver->filterOwner = directFilter;
+					}
 					const auto consumeAggregateRow = [&](LogicalPlanReadRow row,
 														 MaterializedByteReservation inputRowBytes) {
 						ScopedBoundInputs scopedInputs(state, boundInputs, row);
@@ -13274,6 +13533,10 @@ namespace graph::query::execution {
 					// Release lookup nodes and buckets before downstream output is
 					// admitted. Per-group DISTINCT keys live until their group is consumed.
 					aggregateColumnReceiver.reset();
+					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(directKeys);
+					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directGroups);
+					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(directArguments);
+					std::pmr::vector<DirectFilterTerm>(&aggregateIndexMemory).swap(directTerms);
 					aggregateInputLayout.reset();
 					std::pmr::vector<std::string_view>(&aggregateIndexMemory).swap(aggregateColumnKeys);
 					std::pmr::vector<size_t>(&aggregateIndexMemory).swap(aggregateColumnBindings);

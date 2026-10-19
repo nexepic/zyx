@@ -1256,6 +1256,14 @@ namespace graph::storage {
 			previousToken = token;
 		}
 		std::fill(results.begin(), results.end(), std::nullopt);
+		if (sink && admission) {
+			constexpr size_t ownerBytes = sizeof(std::optional<EntityPropertyLocation>) + sizeof(size_t);
+			if (keys.size() > std::numeric_limits<size_t>::max() / ownerBytes ||
+				keyTokens.size() > std::numeric_limits<size_t>::max() / sizeof(std::optional<PropertyCollectionRootEntry>))
+				throw std::overflow_error("direct Property cursor staging overflowed");
+			(*admission)(keys.size() * ownerBytes);
+			(*admission)(keyTokens.size() * sizeof(std::optional<PropertyCollectionRootEntry>));
+		}
 		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
 		for (size_t ownerIndex = 0U; ownerIndex < keys.size(); ++ownerIndex) {
 			if (cancellation_ != nullptr) {

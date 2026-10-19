@@ -523,6 +523,9 @@ namespace graph::storage {
 		const std::function<void(size_t, size_t, std::optional<PropertyValue>)> &sink,
 		NativeReadSession *session, const SelectedPropertyReadAdmission *admission) const {
 		if (!sink) throw std::invalid_argument("direct Property cells require a sink");
+		if (ids.size() > std::numeric_limits<size_t>::max() / sizeof(EntityPropertyKey))
+			throw std::overflow_error("direct Property owner staging overflowed");
+		if (admission) (*admission)(ids.size() * sizeof(EntityPropertyKey));
 		std::vector<EntityPropertyKey> keys; keys.reserve(ids.size());
 		for (const auto id : ids) keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, id});
 		std::optional<NativeReadSession> localSession;

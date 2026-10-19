@@ -905,6 +905,10 @@ namespace graph::storage {
 		if (!sink) throw std::invalid_argument("direct named Property cells require a sink");
 		std::optional<NativeReadSession> local;
 		auto &active = activeSession(snapshot, session, local);
+		constexpr size_t tokenBytes = sizeof(std::pair<uint32_t, size_t>) + sizeof(uint32_t);
+		if (keys.size() > std::numeric_limits<size_t>::max() / tokenBytes)
+			throw std::overflow_error("direct Property token staging overflowed");
+		if (admission) (*admission)(keys.size() * tokenBytes);
 		std::vector<std::pair<uint32_t, size_t>> resolved; resolved.reserve(keys.size());
 		for (size_t column = 0; column < keys.size(); ++column) {
 			const auto cached = active.propertyToken(keys[column]);
@@ -913,7 +917,7 @@ namespace graph::storage {
 			if (token && *token != 0U) resolved.emplace_back(*token, column);
 		}
 		std::ranges::sort(resolved);
-		std::vector<uint32_t> tokens;
+		std::vector<uint32_t> tokens; tokens.reserve(keys.size());
 		for (const auto &[token, column] : resolved)
 			if (tokens.empty() || tokens.back() != token) tokens.push_back(token);
 		if (tokens.empty()) return;

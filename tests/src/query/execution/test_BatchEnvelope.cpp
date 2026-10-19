@@ -163,4 +163,23 @@ TEST(BatchEnvelopeTest, EveryMetadataAllocationFailurePreservesPublishedPrefixAn
 		batch.release(); EXPECT_EQ(upstream.live, 0U);
 	}
 }
+TEST(BatchEnvelopeTest, DirectStringsAndPresenceUseTheSharedEnvelopeAndRejectExpiredOwners) {
+    MaterializedByteBudget budget(65536U); EnvelopeSnapshot snapshot;
+    const std::array<std::string, 1> names{"value"}; BoundColumnLayout layout(names, budget);
+    DirectPropertyColumns owner(snapshot, 3, 1, budget);
+    owner.append(0, 0, PropertyValue(std::string("a\0b", 3)), [] {});
+    owner.append(1, 0, PropertyValue(), [] {}); owner.seal();
+    const std::array sources{BatchColumnSource::direct(owner, 0)};
+    const std::array<uint32_t, 3> selection{2, 0, 0}; const std::array<uint64_t, 3> ordinals{9, 8, 7};
+    BatchEnvelope batch(1, layout, snapshot, 3, budget);
+    batch.publish(names, sources, 3, selection, ordinals, [] {});
+    EXPECT_TRUE(batch.exactPresence(layout.column(0)));
+    EXPECT_EQ(std::get<std::string_view>(batch.cell(layout.column(0), batch.rowId(0)).data), std::string_view("a\0b", 3));
+    EXPECT_EQ(batch.cell(layout.column(0), batch.rowId(1)).state, ColumnCellState::CCS_NULL);
+    EXPECT_EQ(batch.cell(layout.column(0), batch.rowId(2)).state, ColumnCellState::CCS_MISSING);
+    EXPECT_EQ(batch.selectedRow(1), batch.selectedRow(2));
+    owner.invalidate();
+    EXPECT_THROW(static_cast<void>(batch.cell(layout.column(0), batch.rowId(0))), std::invalid_argument);
+}
+
 }
