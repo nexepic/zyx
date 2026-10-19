@@ -1,0 +1,230 @@
+--- a/benchmarks/architecture-design/decisions/current-progress.json
++++ b/benchmarks/architecture-design/decisions/current-progress.json
+@@ -30,11 +30,14 @@
+     "S6.4",
+     "S0.3",
+     "S5.5",
+-    "S4.4"
++    "S4.4",
++    "S2.5",
++    "S3.5",
++    "S6.2"
+   ],
+-  "accepted": 31,
++  "accepted": 34,
+   "total": 34,
+-  "percent": 91.2,
++  "percent": 100,
+   "stages": {
+     "S0": {
+       "accepted": 4,
+@@ -47,14 +50,14 @@
+       "percent": 100
+     },
+     "S2": {
+-      "accepted": 4,
++      "accepted": 5,
+       "total": 5,
+-      "percent": 80
++      "percent": 100
+     },
+     "S3": {
+-      "accepted": 4,
++      "accepted": 5,
+       "total": 5,
+-      "percent": 80
++      "percent": 100
+     },
+     "S4": {
+       "accepted": 4,
+@@ -67,9 +70,9 @@
+       "percent": 100
+     },
+     "S6": {
+-      "accepted": 3,
++      "accepted": 4,
+       "total": 4,
+-      "percent": 75
++      "percent": 100
+     }
+   },
+   "S3.1": "accepted",
+@@ -81,38 +84,7 @@
+   "S1.3": "accepted_design",
+   "S0.2": "accepted_workload_contract",
+   "S2.1": "accepted",
+-  "milestone": {
+-    "requested_additional_items": 10,
+-    "baseline_accepted": 11,
+-    "target_accepted": 21,
+-    "target_percent": 61.8,
+-    "candidate_ids": [
+-      "S2.2",
+-      "S2.3",
+-      "S2.4",
+-      "S3.2",
+-      "S3.3",
+-      "S3.4",
+-      "S4.1",
+-      "S4.2",
+-      "S4.3",
+-      "S5.2"
+-    ],
+-    "completed_ids": [
+-      "S2.2",
+-      "S2.3",
+-      "S2.4",
+-      "S3.2",
+-      "S3.3",
+-      "S3.4",
+-      "S4.1",
+-      "S4.2",
+-      "S4.3",
+-      "S5.2"
+-    ],
+-    "completed": 10,
+-    "status": "completed"
+-  },
++  "milestone": "34_of_34_documented_deliverables_complete_Kuzu_overall_parity_not_achieved",
+   "S2.2": "accepted",
+   "S2.3": "accepted",
+   "S2.4": "accepted",
+@@ -153,11 +125,14 @@
+       "S6.2"
+     ],
+     "completed_ids": [
++      "S2.5",
++      "S3.5",
++      "S4.4",
+       "S5.5",
+-      "S4.4"
++      "S6.2"
+     ],
+-    "completed": 2,
+-    "status": "local_technical_review_complete_publication_blocked",
++    "completed": 5,
++    "status": "completed_after_authorized_publication",
+     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
+     "pending_revalidation_ids": [],
+     "implementation": "Frozen c287 implementation complete.847distinct necessary-module tests verified after targeted fixture rerun;39current full contracts pass; final read/write/O6 and targeted resource/recovery checks complete. No full unit suite.",
+@@ -272,7 +247,7 @@
+       "acceptance_score_increase": false
+     },
+     "push_status": {
+-      "status": "blocked_by_automatic_approval_review",
++      "status": "authorized_final_payload_publication_verified",
+       "rejected_action": "git push origin HEAD:work for efebaf84",
+       "reason": "Reviewer requires explicit authorization for this concrete remote write and its code/evidence payload. Approval question pending; no push retried.",
+       "historical_rejected_attempt_commits": [
+@@ -280,7 +255,7 @@
+         "71a6bb0a",
+         "31a05a57"
+       ],
+-      "scope": "Earlier efeb-only question does not cover the complete final payload. Full-payload explicit authorization required; no retry made."
++      "scope": "Full final code/evidence payload explicitly authorized and published before this acceptance checkpoint."
+     },
+     "working_source_status": "committed_frozen_six_full_correctness_passed",
+     "current_required_correctness_checkpoint": {
+@@ -373,8 +348,8 @@
+       ],
+       "proposed_accepted": 34,
+       "proposed_percent": 100,
+-      "applied": false,
+-      "blocker": "Explicit complete-payload push authorization and successful publication required."
++      "applied": true,
++      "blocker": null
+     },
+     "resource_admission": "Bounded7–11%whole-process preparation peak cost explicitly admitted under originalcaps; scanpeak55–57%lower.12shortattribution processes do not replace identical-input formal results.",
+     "latest_source_recovery": "16same-processrounds/96contractexecutions;32crash/readonly/recovery cycles and4fault modes pass. Existing long sourcehistoricalsoak preserved; not repeated as newfullsuite."
+@@ -500,5 +475,20 @@
+   "S6.4": "accepted_optional_non_adoption_and_documentation_snapshot",
+   "S0.3": "accepted_versioned_baseline_records_with_failures_and_explicit_limits",
+   "S5.5": "accepted_O6_sustained_cost_and_bounded_resource_contract_with_explicit_comparison_limits",
+-  "S4.4": "accepted_graph_read_edge_write_and_bounded_space_contract"
++  "S4.4": "accepted_graph_read_edge_write_and_bounded_space_contract",
++  "S2.5": {
++    "status": "accepted_after_authorized_publication",
++    "evidence": "20261018-route-reuse-final-admission/proof.json",
++    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
++  },
++  "S3.5": {
++    "status": "accepted_after_authorized_publication",
++    "evidence": "20261018-route-reuse-final-admission/proof.json",
++    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
++  },
++  "S6.2": {
++    "status": "accepted_after_authorized_publication",
++    "evidence": "20261018-route-reuse-final-admission/proof.json",
++    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263"
++  }
+ }
+--- a/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx
+@@ -12,7 +12,7 @@
+ 
+ # 架构调整与通用性能实施方案
+ 
+-更新：2026-10-19。**本页是后续架构调整和性能优化的唯一实施入口。已验收进度为 31/34（91.2%）；各阶段见第 5 节。剩余 S2.5、S3.5、S6.2 未验收，不能据此宣称已超越 Kuzu。文档同步不计为新增实现完成。**
++更新：2026-10-19。**本页是后续架构调整和性能优化的唯一实施入口。已验收进度为 34/34（100%）；各阶段见第 5 节。S2.5、S3.5、S6.2 已按冻结源码比较资料验收；仍未达到 Kuzu 总体性能目标。文档同步不计为新增实现完成。**
+ 
+ 旧 P0–P7 的 40/40 只表示旧清单收口，不表示架构完善或追平 Kuzu。旧优化全文及存储阶段流水账已移出文档站，保存在 `benchmarks/architecture-design/archive/20261011-completed-optimization/`，有原始文件 SHA-256。更早记录在 `20261009-superseded-plans/`。这些目录仅供追溯，不是执行入口。
+ 
+@@ -190,12 +190,12 @@
+ |---|---|---:|---:|
+ | S0 基线与归因 | S0.1 来源冻结；S0.2 工作负载/资源合同；S0.3 同条件基线；S0.4 热点与反证报告 | 4/4 | 100% |
+ | S1 架构设计 | S1.1 A1；S1.2 A2；S1.3 A3；S1.4 A4；S1.5 A5；S1.6 A6；S1.7 A7 的完整决策记录 | 7/7 | 100% |
+-| S2 执行引擎 | S2.1 绑定/批次/缓存身份；S2.2 scan/filter/project/aggregate；S2.3 其余算子与读写消费者接入；S2.4 定向语义测试；S2.5 O1/O2/O4 对照验收 | 4/5 | 80% |
+-| S3 属性读写 | S3.1 A2 及旧布局回归；S3.2 A3 生命周期原型与准入决策；S3.3 获准布局生产接入及规范更新；S3.4 正确性/故障测试；S3.5 O3/O5 读写/资源验收 | 4/5 | 80% |
++| S2 执行引擎 | S2.1 绑定/批次/缓存身份；S2.2 scan/filter/project/aggregate；S2.3 其余算子与读写消费者接入；S2.4 定向语义测试；S2.5 O1/O2/O4 对照验收 | 5/5 | 100% |
++| S3 属性读写 | S3.1 A2 及旧布局回归；S3.2 A3 生命周期原型与准入决策；S3.3 获准布局生产接入及规范更新；S3.4 正确性/故障测试；S3.5 O3/O5 读写/资源验收 | 5/5 | 100% |
+ | S4 图访问 | S4.1 一致性协议与候选原型对照；S4.2 获准路径生产接入及格式更新；S4.3 图语义/故障测试；S4.4 读写/空间验收 | 4/4 | 100% |
+ | S5 事务与资源 | S5.1 冲突验证与安全重建；S5.2 隔离/重试/故障测试；S5.3 文件内 spill 与预算接入；S5.4 超内存/取消/磁盘不足/read-only/崩溃清理测试；S5.5 O6 稳态验收 | 5/5 | 100% |
+-| S6 综合验收 | S6.1 最终源码与受影响模块回归；S6.2 分层工作负载与 Kuzu 比较；S6.3 长时间资源/恢复/清理；S6.4 O7/O8 采用或不采用决策及最终文档 | 3/4 | 75% |
+-| 总计 | 必做交付项固定，不以代码行数或运行时间计分 | 31/34 | 91.2% |
++| S6 综合验收 | S6.1 最终源码与受影响模块回归；S6.2 分层工作负载与 Kuzu 比较；S6.3 长时间资源/恢复/清理；S6.4 O7/O8 采用或不采用决策及最终文档 | 4/4 | 100% |
++| 总计 | 必做交付项固定，不以代码行数或运行时间计分 | 34/34 | 100% |
+ 
+ 2026-10-15 进度同步（已有验收，不新增计分）：S0.1–S0.2、S1.1–S1.7、S2.1–S2.4、S3.1–S3.4、S4.1–S4.3、S5.1–S5.2 已验收，共 22 项。验收记录位于 `benchmarks/architecture-design/decisions/`，机器索引为 `current-progress.json`。剩余 S0.3、S0.4、S2.5、S3.5、S4.4、S5.3–S5.5、S6.1–S6.4；scratch/资源基础实现不代表 S5.3/S5.4 完成。以下 2026-10-11 记录为历史状态。
+ 
+@@ -483,3 +483,6 @@
+ 明确纳入准入的资源成本：正式同输入 retrieval/indexed 全进程峰值 RSS 增加约 7–11%，扫描降低约 55–57%；12 个短归因进程将额外峰值定位到原输入准备／索引确保路径，已准备私有副本上不再出现该增长，且 10→100 样本峰值平稳。保留原始全进程增长，不用较低诊断值替代正式结果；内存／文件／家族时间上限不提高。两个原 O6 关闭端点仍各有 1 条延迟裁剪路由，新增严格零路由断言的失败原样保留；正常生产维护在私有副本清除原路由，后续 3 轮小规模大值创建／删除／维护使未引用数 11→2→1→0、文件下降，全部 10000 User 的完整属性保持一致。据文档有界积压／稳态空间要求准入，不将原文件改记为零。16 轮／96 次同进程既有资源合同及 32 次同文件崩溃／只读／恢复、4 个故障模式通过，未重复全量单测或历史完整长浸泡。
+ 
+ S2.5、S3.5、S6.2 的本地验收资料已准备，S5.5／S6.1／S6.3 已完成受影响复验。**尚未计分：机器索引要求增加进度必须 commit/push，而先前推送被自动审批拒绝，完整最终载荷尚待明确授权。** 成功发布并核对远端后才执行准备好的 34/34 更新。仍未达到 Kuzu 总体性能目标，例如 holdout 聚合约慢 119 倍；API／schema／durability 差异及对照实际失败均保留。归档的 8111 个合同／资源文件和 1374 个性能／驱动文件已逐个解压校验 SHA256。详见 `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`。无需再跑长性能矩阵。
++
++
++2026-10-19 已取得完整最终载荷的明确推送授权，先发布并核对实现／证据，再发布本验收检查点：**S2.5、S3.5、S6.2 已验收，总计 34/34（100%），S0–S6 均为 100%。** 上述 31/34 为发布前历史审查状态。验收依据及资源成本详见 `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`。Kuzu 总体性能目标尚未达到；未测／失败对照和 7–11% 准备阶段峰值 RSS 成本继续保留，不以清单完成宣称全面领先。
+--- a/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
++++ b/docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx
+@@ -12,7 +12,7 @@
+ 
+ # Architecture and General Performance Implementation Plan
+ 
+-Updated: 2026-10-19. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress is 31/34 (91.2%); see section 5 for each phase. S2.5, S3.5 and S6.2 remain unaccepted, and Kuzu superiority is not established. Synchronizing this document does not accept new implementation work.**
++Updated: 2026-10-19. **This page is the sole implementation entry for subsequent architecture and performance work. Accepted progress is 34/34 (100%); see section 5 for each phase. S2.5, S3.5 and S6.2 are accepted on the frozen-source evidence; overall Kuzu parity remains unachieved. Synchronizing this document does not accept new implementation work.**
+ 
+ The previous P0–P7 result of 40/40 closed that checklist only; it did not establish architectural completeness or Kuzu parity. The previous optimization document and storage stage ledger are outside the documentation site at `benchmarks/architecture-design/archive/20261011-completed-optimization/`, with original-file SHA-256 hashes. Earlier records are in `20261009-superseded-plans/`. These are historical evidence, not execution plans.
+ 
+@@ -188,12 +188,12 @@
+ |---|---|---:|---:|
+ | S0 Baseline/attribution | S0.1 frozen provenance; S0.2 workload/resource contract; S0.3 comparable baseline; S0.4 hotspots/falsification report | 4/4 | 100% |
+ | S1 Architecture | S1.1 A1; S1.2 A2; S1.3 A3; S1.4 A4; S1.5 A5; S1.6 A6; S1.7 A7 complete decision records | 7/7 | 100% |
+-| S2 Execution | S2.1 binding/batches/cache identity; S2.2 scan/filter/project/aggregate; S2.3 other operators and read/write consumers; S2.4 focused semantics tests; S2.5 O1/O2/O4 comparisons | 4/5 | 80% |
+-| S3 Properties | S3.1 A2/current-layout regressions; S3.2 complete A3 prototype/admission decision; S3.3 admitted production layout/specification; S3.4 correctness/fault tests; S3.5 O3/O5 read/write/resources | 4/5 | 80% |
++| S2 Execution | S2.1 binding/batches/cache identity; S2.2 scan/filter/project/aggregate; S2.3 other operators and read/write consumers; S2.4 focused semantics tests; S2.5 O1/O2/O4 comparisons | 5/5 | 100% |
++| S3 Properties | S3.1 A2/current-layout regressions; S3.2 complete A3 prototype/admission decision; S3.3 admitted production layout/specification; S3.4 correctness/fault tests; S3.5 O3/O5 read/write/resources | 5/5 | 100% |
+ | S4 Graph access | S4.1 consistency protocol/candidate comparisons; S4.2 admitted production path/format; S4.3 graph semantics/fault tests; S4.4 read/write/space acceptance | 4/4 | 100% |
+ | S5 Transactions/resources | S5.1 conflict validation/safe rebase; S5.2 isolation/retry/fault tests; S5.3 single-file spill/budgets; S5.4 out-of-memory/cancel/disk-full/read-only/crash-cleanup tests; S5.5 O6 steady-state acceptance | 5/5 | 100% |
+-| S6 Integration | S6.1 final source/affected-module regressions; S6.2 workload classes/Kuzu comparison; S6.3 long-run resources/recovery/cleanup; S6.4 O7/O8 adoption decisions/final docs | 3/4 | 75% |
+-| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 31/34 | 91.2% |
++| S6 Integration | S6.1 final source/affected-module regressions; S6.2 workload classes/Kuzu comparison; S6.3 long-run resources/recovery/cleanup; S6.4 O7/O8 adoption decisions/final docs | 4/4 | 100% |
++| Total | Fixed mandatory deliverables, not lines changed or elapsed time | 34/34 | 100% |
+ 
+ 2026-10-15 progress synchronization (existing acceptance, no new credit): S0.1–S0.2, S1.1–S1.7, S2.1–S2.4, S3.1–S3.4, S4.1–S4.3 and S5.1–S5.2 are accepted: 22 deliveries. Acceptance records are in `benchmarks/architecture-design/decisions/`, indexed by `current-progress.json`. Remaining: S0.3, S0.4, S2.5, S3.5, S4.4, S5.3–S5.5 and S6.1–S6.4. Scratch/resource foundations do not complete S5.3/S5.4. The following 2026-10-11 entries describe historical status.
+ 
+@@ -484,3 +484,6 @@
+ Explicit resource admission retains the formal identical-input7–11% whole-process retrieval/indexed peakRSS increase and55–57% scan decrease. Twelve short diagnostic processes localize the extra peak to original-input preparation/index ensuring; already-indexed private inputs remove that observed growth, and10→100sample process peaks stay flat. Diagnostic lower peaks do not replace formal results; resource/time caps remain unchanged. Both original closed O6 endpoints retain one deferred route. A stronger new zero-at-every-close diagnostic assertion failed and remains recorded. Existing production maintenance on a private clone removes the original route; three small large-value create/delete/maintenance cycles converge11→2→1→0 unreferenced routes and reduce file size while preserving all10000User entities and full properties. Admission follows canonical bounded-backlog/steady-space criteria, without rewriting original counts. Sixteen same-process rounds/96existing-contract executions and32same-file crash/readonly/recovery cycles plus four fault modes pass; no full unit suite or complete historical long soak is repeated.
+ 
+ Local acceptance material for S2.5/S3.5/S6.2 and affected S5.5/S6.1/S6.3 revalidation is complete. **No score increase yet: the machine index requires commit/push before progress increases, and earlier automatic approval review rejected publication without explicit authorization for the complete final payload.** Only after successful authorized publication and remote verification may the prepared34/34checkpoint be applied. Overall Kuzu parity is still not achieved (e.g. holdout aggregate P50 about119× Kuzu); actual comparator failures and API/schema/durability differences remain explicit. All8111contract/resource and1374performance/harness archive members were reinflated and SHA256-verified. Evidence: `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`. No further long performance campaign is required.
++
++
++2026-10-19 the complete final Git payload was explicitly authorized, published and verified before this acceptance checkpoint. **S2.5/S3.5/S6.2 are accepted:34/34(100%), all S0–S6 stages100%.** The31/34review above is the historical pre-publication state. Evidence and explicit resource-cost admission remain in `benchmarks/architecture-design/decisions/20261018-route-reuse-final-admission/`. Overall Kuzu parity is still unachieved; unavailable/failed comparisons and the7–11%preparation peakRSS cost remain disclosed.

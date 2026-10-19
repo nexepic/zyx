@@ -1,0 +1,3 @@
+*.gz binary
+*.part* binary
+*.patch whitespace=-blank-at-eol

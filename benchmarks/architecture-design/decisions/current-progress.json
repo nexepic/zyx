@@ -157,13 +157,10 @@
       "S4.4"
     ],
     "completed": 2,
-    "status": "in_progress",
+    "status": "local_technical_review_complete_publication_blocked",
     "scope_rule": "Only the five remaining documented acceptance items. Necessary module tests only; one final performance window; no scope expansion or threshold relaxation.",
-    "pending_revalidation_ids": [
-      "S5.5",
-      "S6.3"
-    ],
-    "implementation": "Immutable authenticated route leaves/radix nodes are shared when unchanged; forced refresh/evacuation still rewrites all.60necessary modules847distinct tests verified after targeted28-test fixture isolation rerun;13family886smoke pass. No full unit suite. New full required correctness running.",
+    "pending_revalidation_ids": [],
+    "implementation": "Frozen c287 implementation complete.847distinct necessary-module tests verified after targeted fixture rerun;39current full contracts pass; final read/write/O6 and targeted resource/recovery checks complete. No full unit suite.",
     "final_window": "/workspace/zyx-resume-evaluation-20261018/route-reuse-final-window",
     "source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
     "source_revalidation": {
@@ -173,10 +170,10 @@
       "evidence": "20261018-immutable-route-branch-reuse/proof.json",
       "scope": "60necessary modules; first847tests846passed/1counter-fixture isolation failure. Original fixture isolated28alreadypass. Reset fixture counters, retain2/1assertions, affected28pass.847distinct tests verified through targeted rerun; full60not repeated.13family886smoke pass."
     },
-    "pending_user_resource_decision": "4GiB proposal not applied or needed for the six passing full cases; all use original2GiB cap.",
+    "pending_user_resource_decision": "None;original2GiBfile/6GiBAS/64MiBquery limits retained.4GiBproposal never applied.",
     "working_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
-    "final_window_status": "all45_base_read_processes_pass_finite_preregistered_read_supplements_running",
-    "latest_checkpoint": "20261018-immutable-route-branch-reuse/proof.json",
+    "final_window_status": "completed_all_frozen_source_cases_with_explicit_comparator_failures",
+    "latest_checkpoint": "20261018-route-reuse-final-admission/proof.json",
     "latest_targeted_tests": {
       "modules": 60,
       "distinct_tests_verified": 847,
@@ -189,8 +186,8 @@
       "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
       "evidence": "20261018-immutable-route-branch-reuse/proof.json"
     },
-    "full_maintenance_preflight": "Three current13window rounds/3000measuredinsertbatches checked; allfilegrowth1.2565%. Round1postcloseretentionEXDEVpreservedseparately, rounds2/3exit0andretainendpoints. Endpointroute/recoveryreviewpending; no automaticreacceptance. NativeVmHWMthroughvalidationbeforecloseonly, legacyrusage notisolatedengineRSS.",
-    "pending_repair": "Complete frozen c287 full wide/dynamic correctness, then finalO6/read/write/remaining correctness and resource gates under original limits. No further implementation changes planned before actual acceptance outcome.",
+    "full_maintenance_preflight": "Three13window rounds/full oracles pass;1.2565%file growth. Original closed one deferred route retained; private normal-maintenance diagnosis converges to zero. Strict extra zero-at-close assertion failure disclosed.",
+    "pending_repair": null,
     "metadata_cleanup_targeted_tests": {
       "modules_first": 42,
       "tests_first": 1018,
@@ -211,13 +208,13 @@
       "full_suite": false
     },
     "final_window_order": "Stop on first required-family failure; retain failed endpoint for diagnosis. Do not rerun a failed unchanged source/family. Start final performance evaluation only after necessary full-size correctness succeeds.",
-    "frozen_source_commit": "e8c38315083f79f63051a2fa30c451f7cff2266a",
-    "source_freeze_manifest": "20261017-final-steady-integrated-window/freeze-manifest.json",
-    "final_performance_window": "not_started_for_new_candidate;old_source_partial_campaign_cancelled_and_preserved",
+    "frozen_source_commit": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "source_freeze_manifest": "20261018-route-reuse-final-preregistration/proof.json",
+    "final_performance_window": "completed;10210read/3890write samples,3000O6batches; old source samples excluded",
     "historical_iterations_evidence": "20261017-steady-slot-history/proof.json",
     "latest_repair_evidence": "20261018-row-chunk-compression-candidate/proof.json",
     "latest_timeout_evidence": "20261018-publication-dynamic-timeout/proof.json",
-    "pending_user_time_budget_decision": "3600-second dynamic proposal not applied or needed for three passing full dynamic cases; original1800-second family deadline preserved.",
+    "pending_user_time_budget_decision": "None;original1800sfamily retained.3600sfamily proposal never applied.",
     "development_verification": {
       "profile": "smoke",
       "whole_run_budget_seconds": 120,
@@ -243,13 +240,7 @@
       "holdout": "six_exact_counts_pass_both_native_consumers_same_file_hash",
       "producer_preparation_failures_retained": true
     },
-    "full_point_correctness": {
-      "independent_processes": 9,
-      "engines": 3,
-      "per_engine_processes": 3,
-      "all_passed": true,
-      "formal_performance_samples": 0
-    },
+    "full_point_correctness": "All9point contracts across current/control/Kuzu pass; current source c287.",
     "full_wide_correctness": {
       "source": "648e60ff",
       "status": "actual_1800second_deadline_timeout",
@@ -268,7 +259,7 @@
     },
     "row_compression_candidate": {
       "source": "31a05a5718a8d832ab877db42b85aaa18e78d840",
-      "status": "full_size_correctness_running",
+      "status": "historical_source_superseded_by_c287_final_validation",
       "modules": 49,
       "tests_passed": 680,
       "old_readonly_consumers_exact_values_passed": 2,
@@ -284,11 +275,12 @@
       "status": "blocked_by_automatic_approval_review",
       "rejected_action": "git push origin HEAD:work for efebaf84",
       "reason": "Reviewer requires explicit authorization for this concrete remote write and its code/evidence payload. Approval question pending; no push retried.",
-      "local_commits": [
+      "historical_rejected_attempt_commits": [
         "efebaf84",
         "71a6bb0a",
         "31a05a57"
-      ]
+      ],
+      "scope": "Earlier efeb-only question does not cover the complete final payload. Full-payload explicit authorization required; no retry made."
     },
     "working_source_status": "committed_frozen_six_full_correctness_passed",
     "current_required_correctness_checkpoint": {
@@ -368,7 +360,24 @@
       "compared_workloads": 23,
       "evidence": "20261018-route-reuse-base-read-checkpoint/proof.json",
       "acceptance_increase": false
-    }
+    },
+    "historical_freeze_before_c287": {
+      "source": "e8c38315083f79f63051a2fa30c451f7cff2266a",
+      "manifest": "20261017-final-steady-integrated-window/freeze-manifest.json"
+    },
+    "local_proposed_acceptance": {
+      "ids": [
+        "S2.5",
+        "S3.5",
+        "S6.2"
+      ],
+      "proposed_accepted": 34,
+      "proposed_percent": 100,
+      "applied": false,
+      "blocker": "Explicit complete-payload push authorization and successful publication required."
+    },
+    "resource_admission": "Bounded7–11%whole-process preparation peak cost explicitly admitted under originalcaps; scanpeak55–57%lower.12shortattribution processes do not replace identical-input formal results.",
+    "latest_source_recovery": "16same-processrounds/96contractexecutions;32crash/readonly/recovery cycles and4fault modes pass. Existing long sourcehistoricalsoak preserved; not repeated as newfullsuite."
   },
   "S5.4": "accepted_resource_fault_matrix",
   "S6.3": "accepted_bounded_resource_recovery_soak",

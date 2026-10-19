@@ -1,0 +1,125 @@
+{
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "status": "local_technical_review_complete_publication_blocked",
+  "official_progress": {
+    "accepted": 31,
+    "total": 34,
+    "percent": 91.2
+  },
+  "proposed_after_authorized_publication": {
+    "ids": [
+      "S2.5",
+      "S3.5",
+      "S6.2"
+    ],
+    "accepted": 34,
+    "total": 34,
+    "percent": 100,
+    "not_applied": true
+  },
+  "revalidated_without_score_increase": [
+    "S5.5",
+    "S6.1",
+    "S6.3"
+  ],
+  "source_unchanged_since_freeze": true,
+  "necessary_tests": {
+    "distinct_verified": 847,
+    "first_pass": 846,
+    "first_pass_total": 847,
+    "fixture_only_targeted_rerun_pass": 28,
+    "full_unit_suite": false,
+    "additional_resource_contract_executions": 96,
+    "resource_contracts_per_round": 6,
+    "same_process_rounds": 16,
+    "crash_cycles": 32,
+    "additional_fault_modes": 4
+  },
+  "contracts": {
+    "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+    "unique_slots": 117,
+    "actual_processes": 93,
+    "full_pass_processes": 87,
+    "status_counts": {
+      "completed": 81,
+      "completed_correctness_external_no_performance": 6,
+      "failed": 5,
+      "unmeasurable_retained_original_control_failure": 6,
+      "inconclusive_timeout": 1,
+      "unsupported_NA": 6,
+      "unmeasurable_previous_failure": 12
+    },
+    "no_failure_or_timeout_counted_as_performance_or_protection_pass": true
+  },
+  "read": {
+    "base_processes": 45,
+    "base_samples": 2010,
+    "supplement_processes": 25,
+    "supplement_samples": 8200,
+    "valid_samples_total": 10210,
+    "paired_supplement_rows": 21,
+    "original_skip_records_retained": 5,
+    "unique_currently_unmeasured_supplement_slots": 3,
+    "superseded_candidate_skip_records": 2,
+    "range_supplement_control_processes": 0,
+    "range_supplement_current_processes": 2,
+    "range_comparison": "Stable control base remains three processes/ten samples each; candidate supplemental two processes/one hundred samples each. No fabricated control P95 or merged sample pools.",
+    "primary_medium_scan_aggregate_topk_p50_reduction_percent": "85–89",
+    "protected_latency_conclusion": "No measured comparable protected workload has a stable P50/P95 regression over the original5% gate. Failures/timeouts/unsupported comparisons remain unmeasurable, never protection passes."
+  },
+  "write": {
+    "base_processes": 9,
+    "base_samples": 690,
+    "supplement_processes": 4,
+    "supplement_samples": 3200,
+    "valid_samples_total": 3890,
+    "all_eight_paired_supplement_workload_p50_and_p95_improve": true,
+    "full_reopened_poststates_checked": true
+  },
+  "maintenance": {
+    "rounds": 3,
+    "windows_per_round": 13,
+    "measured_insert_batches": 3000,
+    "file_growth_percent_each": 1.2565445,
+    "native_close_scope": "Worker VmHWM before close; do not call it an after-close peak.",
+    "initial_endpoint_assertion": "The new diagnostic asserted zero unreferenced routes at every close and failed. Original formal files remain unchanged, each has one catalog-leaf route at generation1402 vs current1511, zero retire entries. This count is not silently changed to zero or relabeled as a passing assertion.",
+    "bounded_cleanup_diagnosis": "Private clone, all10000User entities and properties checked before/after every cycle. Original orphan17917 disappears on first existing production maintenance pass. Unreferenced counts1→11→2→1→0; three actual2MiB create/delete cycles with maintenance; final file252182528 vs original253231104 bytes. No production change, formal sample, or raised cap.",
+    "admission": "Original O6 criterion is bounded backlog and steady file growth, not an unconditional zero-route-at-close contract. The stricter added diagnostic failure is retained; demonstrated ordinary cleanup convergence and all three full13window file-growth results support bounded-space admission."
+  },
+  "resource_admission": {
+    "formal_native_whole_process_peak_growth_percent": {
+      "medium_retrieval": 7.43,
+      "medium_indexed": 7.34,
+      "holdout_retrieval": 10.69
+    },
+    "formal_native_scan_peak_reduction_percent": {
+      "medium": 56.77,
+      "holdout": 54.75
+    },
+    "diagnostic_processes": 12,
+    "diagnostic_samples_in_formal_counts": 0,
+    "attribution": "Whole-process peak includes preparation/index ensuring, query, output and close. Same-source index-ensured private second inputs bring candidate peaks to80.58/81.51/80.65MiB vs controls80.97/81.95/81.04MiB. This localizes the observed extra peak to the original-input preparation path; it does not identify one allocator or replace the formal identical-input resource results.",
+    "decision": "Admit and explicitly retain the bounded7–11% startup peak cost under unchanged original memory limits, based on flat10→100sample peaks,12diagnostic processes, full budget/oracle cases and same-process resource recovery. This is the required explicit resource-cost decision, not a waiver of latency protection or new memory limits.",
+    "caps": "6GiB address space,64MiB query,2GiB file,1800s family unchanged; no3600s family/4GiB proposal applied.",
+    "limitations": "Linux measurements only. Formal worker write/maintenance HWM precedes close; native read CLI HWM is captured after close. Legacy child rusage includes helper processes and is not an isolated engine peak."
+  },
+  "Kuzu": {
+    "target_achieved": false,
+    "example_holdout_aggregate_current_over_Kuzu_p50_ratio": 119.03428220370661,
+    "maintenance_insert_p50_ms": {
+      "current": 371.164,
+      "Kuzu": 7.313
+    },
+    "maintenance_insert_p95_ms": {
+      "current": 538.453,
+      "Kuzu": 12.415
+    },
+    "limitations": "Kuzu0.11.3 scalar secondary indexes/dynamic/budget unsupported where indicated; actual wide/mixed/snapshot failures are buffer-pool allocation failures. Schema, binding, statement grouping and durability differ. No strict overall win or parity claim."
+  },
+  "remaining_actions": [
+    "Explicit authorization for the complete final Git payload to origin/work",
+    "Authorized push and verify remote commit",
+    "Apply/publish the prepared three-item acceptance and100% documentation checkpoint only after publication requirement is met"
+  ],
+  "publication_block": "Earlier automatic approval review rejected push: remote trust and explicit authorization for the concrete full Git payload were not established. No retry or new authorization assumed."
+}
