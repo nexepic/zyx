@@ -320,6 +320,10 @@ namespace graph::storage {
 		uint64_t retired_segments = 0;
 		uint64_t obsolete_segments = 0;
 		uint64_t pending_relocation_sources = 0;
+		Generation oldest_snapshot_generation{}; // observer pin excluded; registry sample
+		uint64_t snapshot_generation_lag = 0; // generation distance, not elapsed time
+		uint64_t retire_queue_entries = 0; // records, not bytes or distinct generations
+		Generation oldest_retired_generation{}; // zero for empty queue
 
 		[[nodiscard]] constexpr uint64_t retainedGenerationCount() const {
 			return retired_segments + pending_relocation_sources;

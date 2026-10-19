@@ -72,6 +72,11 @@ namespace graph::storage {
 		std::unique_lock<std::shared_mutex> lock_;
 	};
 
+	struct MetadataSnapshotPressure {
+		uint64_t active_snapshot_count = 0;
+		Generation oldest_generation{}; // zero when no other active pin
+	};
+
 	class MetadataSnapshotRegistry final {
 	public:
 		explicit MetadataSnapshotRegistry(SuperblockFile &bootstrap, MetadataSnapshotRegistryLimits limits = {},
@@ -105,6 +110,8 @@ namespace graph::storage {
 										 const std::function<bool(const Superblock &)> &predicate) const;
 
 		[[nodiscard]] uint64_t activeSnapshotCount() const;
+		// One registry-lock sample, optionally excluding the observer's own pin.
+		[[nodiscard]] MetadataSnapshotPressure snapshotPressure(const MetadataSnapshotPin *exclude = nullptr) const;
 
 	private:
 		friend class RelocatableMetadataStore;

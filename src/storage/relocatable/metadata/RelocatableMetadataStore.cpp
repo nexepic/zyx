@@ -4088,18 +4088,24 @@ namespace graph::storage {
 	}
 
 	RelocatableCompactionObservation RelocatableMetadataStore::observeCompactionState() const {
-		const uint64_t activeSnapshots = snapshots_.activeSnapshotCount();
 		MetadataSnapshotPin snapshot = openSnapshot();
+		const auto pressure = snapshots_.snapshotPressure(&snapshot);
 		RelocatableCompactionObservation observation;
 		observation.generation = snapshot.superblock().generation;
 		observation.checkpoint_lsn = snapshot.superblock().checkpoint_lsn;
-		observation.active_snapshot_count = activeSnapshots;
+		observation.active_snapshot_count = pressure.active_snapshot_count;
+		observation.oldest_snapshot_generation = pressure.oldest_generation;
+		if (pressure.oldest_generation.isValid() && pressure.oldest_generation < observation.generation)
+			observation.snapshot_generation_lag = observation.generation.value() - pressure.oldest_generation.value();
 		catalog_.visit(snapshot.superblock(), [&observation](const CatalogEntry &entry) {
 			observation.sealed_segments += static_cast<uint64_t>(entry.state == SegmentState::SGS_SEALED);
 			observation.retired_segments += static_cast<uint64_t>(entry.state == SegmentState::SGS_RETIRED);
 			observation.obsolete_segments += static_cast<uint64_t>(entry.state == SegmentState::SGS_OBSOLETE);
 		});
 		locations_.visitRetireQueue(snapshot.superblock(), [&observation](const RetireQueueEntry &entry) {
+			++observation.retire_queue_entries;
+			if (!observation.oldest_retired_generation.isValid() || entry.retired_generation < observation.oldest_retired_generation)
+				observation.oldest_retired_generation = entry.retired_generation;
 			observation.pending_relocation_sources +=
 					static_cast<uint64_t>(entry.disposition == RetireQueueDisposition::RQD_RELOCATED_SOURCE);
 		});
