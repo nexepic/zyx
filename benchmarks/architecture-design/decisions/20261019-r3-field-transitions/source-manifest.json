@@ -1,0 +1,7 @@
+{
+  "benchmarks/architecture-design/property-subblock/PropertySubblockCandidate.hpp": "a42f81b9d834caa9e7d2cc07cd15ca2304b876958bc8b012aa0ec197b8629da9",
+  "benchmarks/architecture-design/property-subblock/PropertySubblockFieldTransition.hpp": "aab1eb328e33fa0c545e174f321da4708ed0384264f819b68777d107c4425e5c",
+  "benchmarks/architecture-design/property-subblock/CMakeLists.txt": "2f11988553d1046c7e99e6bcaf3f84aa5c23fde688946c450859d72daee1832d",
+  "tests/src/storage/relocatable/property/test_PropertySubblockFieldTransition.cpp": "d548efedbdf3231e37bd8857d1f28bf050476648ee09447ee0c50ed34242f773",
+  "benchmarks/architecture-design/decisions/20261019-r3-codec-five/run-tests.py": "a6f846a8c91c1c7a29e5d17ca7f3e6969d36675286e9a56f8ffe944e897786b8"
+}

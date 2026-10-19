@@ -4,8 +4,10 @@ project(zyx_property_subblock_candidate LANGUAGES CXX)
 find_package(GTest REQUIRED)
 enable_testing()
 add_executable(property_subblock_candidate_tests
-    ../../../tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp)
+    ../../../tests/src/storage/relocatable/property/test_PropertySubblockCandidate.cpp
+    ../../../tests/src/storage/relocatable/property/test_PropertySubblockFieldTransition.cpp)
 target_compile_features(property_subblock_candidate_tests PRIVATE cxx_std_20)
+target_include_directories(property_subblock_candidate_tests PRIVATE ../../../include)
 target_link_libraries(property_subblock_candidate_tests PRIVATE GTest::gtest_main)
 option(ZYX_CANDIDATE_SANITIZERS "Enable address/undefined sanitizers for this laboratory test" OFF)
 if(ZYX_CANDIDATE_SANITIZERS)
