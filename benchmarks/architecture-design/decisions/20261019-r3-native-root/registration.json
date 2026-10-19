@@ -1,0 +1,15 @@
+{
+  "parent": "f2bc616dc0a6ef83604385a204f855c94c8c8c91",
+  "item": "R3.2",
+  "scope": "Native empty-descriptor metadata lifecycle, eighth semantic fence, default/experimental isolation and snapshot authentication. Nonempty business roots remain rejected.",
+  "remaining_fixed_deliverables": [
+    "R3.2",
+    "R3.3",
+    "R5.1",
+    "R5.2",
+    "R5.3"
+  ],
+  "acceptance": "A metadata prerequisite, not complete R3.2 acceptance. No native property subblock conversion/routing or performance admission.",
+  "formal_performance_run": false,
+  "full_suite": false
+}

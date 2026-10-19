@@ -1,0 +1,44 @@
+{
+  "parent": "f2bc616dc0a6ef83604385a204f855c94c8c8c91",
+  "code_checkpoint": "bcdf4ff21f540c3782d62dd381170aa5e335cb3f",
+  "item": "R3.2",
+  "state": "in progress",
+  "accepted_top_level_items": 13,
+  "total": 24,
+  "completion_percent": 54.2,
+  "completed_of_fixed_five": 0,
+  "native_hybrid_metadata_root_installed_in_isolated_build": true,
+  "native_empty_descriptor_lifecycle": true,
+  "native_property_subblock_routing": false,
+  "nonempty_descriptor_publication_allowed": false,
+  "formal_performance_run": false,
+  "full_suite": false,
+  "validation": {
+    "candidate": {
+      "unique_latest_cases": 294,
+      "passed": 293,
+      "skipped": 1,
+      "failures": 0,
+      "format_profile": 6,
+      "superblock_version": 32,
+      "header_bytes": 352,
+      "full_suite": false,
+      "platform": "Linux x86_64"
+    },
+    "default": {
+      "unique_latest_cases": 285,
+      "passed": 285,
+      "skipped": 0,
+      "failures": 0,
+      "format_profile": 5,
+      "superblock_version": 31,
+      "header_bytes": 336,
+      "full_suite": false,
+      "platform": "Linux x86_64"
+    }
+  },
+  "progress_source": "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx",
+  "production_default_format_changed": false,
+  "production_default_property_placement_changed": false,
+  "runtime_fence_root_count": 8
+}

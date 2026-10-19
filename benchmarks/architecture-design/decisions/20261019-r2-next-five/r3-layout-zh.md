@@ -30,11 +30,11 @@ map 使用已有 B+Tree framing，R3.2 实测全部成本；16/28 字节只是 p
 
 明确选择新增 Superblock 物理元数据根 hybrid_property_descriptor_root，并作为额外图语义 fence 成员。它指向认证的 192 字节描述符 payload：0 magic u32；4 version u16；6 zero flags u16；8 semantic generation u64；16 database ID u64；24..63 reserved zero；八个 B+Tree 根引用均为 stable PageId u64+expected root generation u64，offset 64/80/96/112 为 Node owner/column/extension/group-header，128/144/160/176 为 Edge 对应根。空树两个字段均为零，部分零拒绝；描述符 generation 必须对 Superblock 可见。组 mode 只存在组 header。ROW 继续通过现有 entity_property_directory_root 路由，不在描述符重复 ROW 根。
 
-R3.2 在任何文件编码前，同时分配新 Superblock 字段 offset/format version 和 metadata page-kind，配套所有 reader/writer/搬迁/integrity。首次转换和后续字段修改均替换描述符、推进额外图 fence，即使 B+Tree PageId 稳定且只改物理映射也如此。故意保留保守冲突；当前七根 fence 不含物理目录，不能替代此显式成员。
+R3.2 在任何文件编码前，同时分配新 Superblock 字段 offset/format version 和 metadata page-kind，配套所有 reader/writer/搬迁/integrity。首次转换和后续字段修改均替换描述符、推进额外图 fence，即使 B+Tree PageId 稳定且只改物理映射也如此。故意保留保守冲突；原七根 fence 不含该描述符；当前已追加第八个描述符成员，并使默认/实验格式具有不同 format token。
 
 selector、列 presence、extension 存在性精确一致；无 selector 是缺失，存储 NULL 有 selector。extension 不留完整第二份行。点读验证所访问归属，完整 integrity 双向枚举发现孤儿/重复/错 owner/group/type；不在每次点读扫描全图。当前列类型不成为永久 schema。
 
-R3.2 物理映射实现定案：复用既有 key-only B+Tree entry，以有序逻辑键前缀加 canonical 值后缀编码。owner selector 为 12+4 字节，列定位为 12+16，组定位为 8+16；这些仍是 packed framing/restart/内部分隔符/填充前的下界，值后缀参与压缩和成本计算。逻辑前缀唯一性独立于完整原生键唯一性：点读匹配项并前看一项，同前缀第二个值即拒绝，跨叶也不能漏检。类型化所有者须验证完整 integrity，并把事务内最终修改归并成每前缀一次 erase-old/insert-new；不能从同一旧快照多次未归并替换。内部 B+Tree child 仍为 U64；原生复合变更和 fresh rebuild 显式保留 EMPTY 叶布局。`FixedBTreeMap` 仅提供通用定宽编码/查找，不安装 hybrid 根、不解释定位目标、不定义图 fence。extension 变长值 framing 仍需独立类型化 codec，不能认为定宽 helper 已实现它。实验测试仅使用通用 index 命名空间及既有格式，未持久化 hybrid 描述符/列根，也未执行生产转换。
+R3.2 物理映射实现定案：复用既有 key-only B+Tree entry，以有序逻辑键前缀加 canonical 值后缀编码。owner selector 为 12+4 字节，列定位为 12+16，组定位为 8+16；这些仍是 packed framing/restart/内部分隔符/填充前的下界，值后缀参与压缩和成本计算。逻辑前缀唯一性独立于完整原生键唯一性：点读匹配项并前看一项，同前缀第二个值即拒绝，跨叶也不能漏检。类型化所有者须验证完整 integrity，并把事务内最终修改归并成每前缀一次 erase-old/insert-new；不能从同一旧快照多次未归并替换。内部 B+Tree child 仍为 U64；原生复合变更和 fresh rebuild 显式保留 EMPTY 叶布局。`FixedBTreeMap` 仅提供通用定宽编码/查找，不安装 hybrid 根、不解释定位目标、不定义图 fence。extension 变长值 framing 仍需独立类型化 codec，不能认为定宽 helper 已实现它。上述共享 map 测试使用通用 index 命名空间，不代表安装了 hybrid 字段路由或完成生产转换。
 
 ## 访问、修改和完整成本
 
@@ -76,4 +76,10 @@ R3.2 同步更新全部 reader/writer/descriptor/map/page-kind/version、root �
 
 必测 R3.2：47/48/64 占用边界，稀疏/独有字段、随机交错形状、多标签、持续变型/降级、删除后稀疏、>4096 成员、宽行/大值、无序重复邻居 gather、no-op/NULL/merge/replace/remove、旧/新快照/重开、合法 checksum 身份错配、各发布 fence 故障、配额拒绝、搬迁/复用/退休。精确校验 ID/类型/值/重复和完整原生成本。失败可以完成比较项 R3.2，不能完成生产项 R3.3；R7 延迟/写入/资源/稳态门槛不变。
 
-R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用 32 字节物理头（0 ZYXH magic u32，4 version u16=1，6 header bytes u16=32，8 physical generation u64，16 committed LSN u64，24 payload CRC32，28 header CRC32），其后为上述 192 字节 payload（magic ZYXD、version 1），其余 4096 字节页尾必须为零。payload CRC 覆盖 offset 32 至页尾，header CRC 覆盖 32 字节头且计算时自身字段归零。区分搬迁的物理代际与属性语义代际，要求 semantic<=physical<=snapshot、committed LSN 可见、database 与预期物理根代际精确匹配；物理代际还须能由 Superblock 的 59 位 packed reference 表示。八个非空命名空间根不能共用 PageId，部分零或未来根拒绝。当前仅测试内存 byte buffer；尚无 Superblock 字段/格式切换、文件 writer 或 allocator/reclaimer 接入，不得据此持久化 hybrid 文件或验收 R3.2。
+R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用 32 字节物理头（0 ZYXH magic u32，4 version u16=1，6 header bytes u16=32，8 physical generation u64，16 committed LSN u64，24 payload CRC32，28 header CRC32），其后为上述 192 字节 payload（magic ZYXD、version 1），其余 4096 字节页尾必须为零。payload CRC 覆盖 offset 32 至页尾，header CRC 覆盖 32 字节头且计算时自身字段归零。区分搬迁的物理代际与属性语义代际，要求 semantic<=physical<=snapshot、committed LSN 可见、database 与预期物理根代际精确匹配；物理代际还须能由 Superblock 的 59 位 packed reference 表示。八个非空命名空间根不能共用 PageId，部分零或未来根拒绝。内存 codec 检查点之后，已接入下述隔离的空描述符元数据生命周期；仍不能据此验收 R3.2 或发布非空 hybrid 属性布局。
+
+隔离元数据原型定案：`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` 默认 OFF；默认 Superblock 31/header 336/profile 5 不变，非空描述符根不能编码或发布。ON 构建仅用于实验，使用 Superblock 32/header 352/profile 6，新增 physical root 位于 336..351（slot u64 + 既有 generation/frame packed u64），emergency reserve 从 352 开始，共 32 字节；其后保留字节仍为零。两种构建互相拒绝文件，不迁移。当前实验 writer/read/open/integrity 只允许八根全零的空描述符；任何非空根在分配 frame 前拒绝，合法校验和下的非空路由或错误身份也会在打开/读取时拒绝，不能静默回落 ROW。普通 Node/Edge/ROW 能力继续可用，但实际子块转换 API 尚未安装。
+
+描述符是 metadata pool 中独立的物理 frame，不分配 routed MetadataPageId，不加入 12 根 logical bootstrap 列表，也不伪装为 State/radix。元数据池恢复、只读发现、可达性、旧 pin 保护和保守整树搬迁显式访问它；局部搬迁遇到额外物理 frame 时保留原来的保守 fallback。搬迁更换 physical generation/LSN 并保留 semantic generation。清除 root 后按现有 pin/reachability 协议回收，不另加退役 sidecar。第八根 fence 在两种构建均存在（默认文件根为零），format token 区分 31/32；该根变化不能被误认成 ID-only 预留或盲邻接 rebase。文件发布仍使用既有 data fence → inactive A/B → superblock fence。完整成本必须计算实际 4 KiB 描述符 frame、128 KiB 保留池及旧 pin 占用，不能仅计 192/224 字节。非空根保护只能与完整字段 reader/writer/integrity/retirement 一起替换。证据：`20261019-r3-native-root/`。
+
+已打开句柄取得新 metadata snapshot 时也认证描述符；失败必须释放刚取得的 pin，不能只在首次 open 验证后让新快照静默沿 ROW 继续。描述符读取使用文件 view 构造时固定的 database ID，避免与 writer 对 mutable routing Superblock 的 rebind 竞争。PROFILE 固定计费 registry 记录 `native_graph.read.metadata_decodes.hybrid_descriptor`（当前线程累计解码尝试数）；未增加资源上限，registry/staging 上界按实际条目数派生。

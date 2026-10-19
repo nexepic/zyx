@@ -1,0 +1,32 @@
+{
+  "candidate-lifecycle-final": {
+    "path": "/workspace/zyx-r3-native-root-20261019/candidate-lifecycle-final/r3-native-root-tests",
+    "sha256": "9be6060d7c2a9c95c82398fee12a46e5af9406d9fb61ed4ef6023f65a7e76107"
+  },
+  "candidate-root-profile-final": {
+    "path": "/workspace/zyx-r3-native-root-20261019/candidate-root-profile-final/root-identity-test",
+    "sha256": "cef59d6859e3406256d154fc2a41183694994ee70ce9db57f542f03c42be2877"
+  },
+  "candidate-core": {
+    "path": "/workspace/zyx-build-r3-native/libzyx_core.a",
+    "sha256": "2dea00145ff2b5dc0ae14871bc24a8d04231685ff97ce4ddceb1b99aa5facb45",
+    "experimental_hybrid_property_format": true,
+    "build_type": "Debug",
+    "coverage": true
+  },
+  "default-lifecycle-final": {
+    "path": "/workspace/zyx-r3-native-root-20261019/default-lifecycle-final/r3-native-root-tests",
+    "sha256": "2ca34279d77bdfb9215b1293be139450e0c1c65d229860521c5a55bdd3e160fe"
+  },
+  "default-root-profile-final": {
+    "path": "/workspace/zyx-r3-native-root-20261019/default-root-profile-final/root-identity-test",
+    "sha256": "24a7a569d35baa6d6eeb75f624b1d799045a04cf896da89a79e86e459377d86c"
+  },
+  "default-core": {
+    "path": "/workspace/zyx/buildDir/libzyx_core.a",
+    "sha256": "451b936550bc944a2686475ecd3916d485a1b93bc3071f2f01e3c10ed84845a2",
+    "experimental_hybrid_property_format": false,
+    "build_type": "Debug",
+    "coverage": true
+  }
+}
