@@ -85,3 +85,11 @@ R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用
 已打开句柄取得新 metadata snapshot 时也认证描述符；失败必须释放刚取得的 pin，不能只在首次 open 验证后让新快照静默沿 ROW 继续。描述符读取使用文件 view 构造时固定的 database ID，避免与 writer 对 mutable routing Superblock 的 rebind 竞争。PROFILE 固定计费 registry 记录 `native_graph.read.metadata_decodes.hybrid_descriptor`（当前线程累计解码尝试数）；未增加资源上限，registry/staging 上界按实际条目数派生。
 
 4096 个字段归属仅限制一次显式转换计划，不是转换后组的永久容量上限。组头用既定 u32 字段记录实际数量；普通写入必须保留现有动态属性能力，并检查计数运算溢出。正向／反向转换超过计划工作上限时仍应拒绝，不能截断、静默拆分发布，也不能把 4096 解释成永久模式限制。
+
+## Extension 信封准备
+
+尚未安装路由的 R3.2 extension codec 使用 48 字节 ZYHE（`0x4548595A`）信封，版本 1：magic u32 位于 0，version u16 位于 4，owner kind u8 位于 6，mode u8 位于 7（1=inline，2=LargeValue 引用），原生 owner ID u64 位于 8，token u32 位于 16，body 字节数 u32 位于 20，语义代数 u64 位于 24，32..47 保留为零。inline body 恰好为一个现有规范 PropertyValue；缺失时没有 extension／selector，NULL 则保存规范 NULL。认证外层 owner/token，要求 extension<=group<=descriptor<=snapshot，引用的逻辑代数不得超过 extension。
+
+大值模式复用现有 LargeValueRefCodec 和 `application/vnd.zyx.entity-property-root` media，但无 owner 的内容必须恰好包含一个 token/value；目录 token 和字段 token 均须匹配外层。多字段、尾随数据、错误 kind/media、未来身份都拒绝。现有 LargeValueStore 必须先认证 manifest、chunk 和内容 hash，再提供数据；信封 decoder 本身不认证内容。不能再复制整行，也不能把任意同 media 的整行当作单字段。相同单字段内容允许沿用现有跨 owner 不可变内容去重及精确退役规则。
+
+完整 extension 记录必须满足真实目标上限，且至多 3952 字节（4032 字节 owner payload 减去 64 字节 slotted header 和 16 字节槽位）。若放入 packed B+Tree key，还要容纳 owner/token 有序前缀、packed framing、页头／槽位和内部 separator；后续 map planner 必须据此降低记录上限，不能假定 3952 字节记录能直接放入 B+Tree key。真实成本须计入 48 字节信封及额外目录／值编码开销。目标缓冲区和规范编码工作区使用调用方 PMR；引用 media 容量及字段／目录解码须分别持有预约。已计费转换计划只能输出实际 inline-extension 成员，拒绝 COLUMN 来源和超限值。此 codec 不安装 variable map 路由、不分配 data ID、不发布大值，也不移除非空根保护。
