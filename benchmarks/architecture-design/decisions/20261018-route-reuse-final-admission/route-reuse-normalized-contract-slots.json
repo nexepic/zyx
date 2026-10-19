@@ -1,0 +1,1188 @@
+{
+  "source": "c28794a7c92434e809f9bbb17d48e8c457a70263",
+  "unique_slots": 117,
+  "actual_processes": 93,
+  "full_pass_processes": 87,
+  "status_counts": {
+    "completed": 81,
+    "completed_correctness_external_no_performance": 6,
+    "failed": 5,
+    "unmeasurable_retained_original_control_failure": 6,
+    "inconclusive_timeout": 1,
+    "unsupported_NA": 6,
+    "unmeasurable_previous_failure": 12
+  },
+  "records": [
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/dynamic/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "wide_large",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/wide_large/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "mixed",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/mixed/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/maintenance/campaign-case-completed.json",
+      "adjudication": "Engine completed all thirteen windows/full oracle; post-close endpoint retention EXDEV harness failure preserved separately. Existing independent adjudication, not a second process."
+    },
+    {
+      "round": 1,
+      "engine": "current",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/current/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "failed",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/control/aggregate/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/control/dynamic/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "wide_large",
+      "status": "inconclusive_timeout",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/control/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "mixed",
+      "status": "failed",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/control/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/control/maintenance/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "control",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/control/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "dynamic",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/dynamic/campaign-case-unsupported.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "wide_large",
+      "status": "failed",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "mixed",
+      "status": "failed",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "snapshot",
+      "status": "failed",
+      "actual_process": true,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/snapshot/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/maintenance/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 1,
+      "engine": "kuzu",
+      "family": "budget",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-1/kuzu/budget/campaign-case-unsupported.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/dynamic/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "wide_large",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/wide_large/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "mixed",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/mixed/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/maintenance/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "current",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/current/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/control/aggregate/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/control/dynamic/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "wide_large",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/control/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "mixed",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/control/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/control/maintenance/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "control",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/control/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "dynamic",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/dynamic/campaign-case-unsupported.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "wide_large",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "mixed",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "snapshot",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/snapshot/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/maintenance/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 2,
+      "engine": "kuzu",
+      "family": "budget",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-2/kuzu/budget/campaign-case-unsupported.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "dynamic",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/dynamic/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "wide_large",
+      "status": "completed_correctness_external_no_performance",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/wide_large/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "mixed",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/mixed/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/maintenance/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "current",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/current/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "aggregate",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/control/aggregate/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "dynamic",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/control/dynamic/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "wide_large",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/control/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "mixed",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/control/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "snapshot",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/snapshot/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "maintenance",
+      "status": "unmeasurable_retained_original_control_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/control/maintenance/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "control",
+      "family": "budget",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/control/budget/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "point",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/point/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "scan",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/scan/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "traversal",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/traversal/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "aggregate",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/aggregate/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "sort",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/sort/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "parameters",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/parameters/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "dynamic",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/dynamic/campaign-case-unsupported.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "wide_large",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/wide_large/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "write",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/write/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "mixed",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/mixed/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "snapshot",
+      "status": "unmeasurable_previous_failure",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/snapshot/campaign-case-failed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "maintenance",
+      "status": "completed",
+      "actual_process": true,
+      "full_pass": true,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/maintenance/campaign-case-completed.json",
+      "adjudication": null
+    },
+    {
+      "round": 3,
+      "engine": "kuzu",
+      "family": "budget",
+      "status": "unsupported_NA",
+      "actual_process": false,
+      "full_pass": false,
+      "marker": "route-reuse-final-window/contract/round-3/kuzu/budget/campaign-case-unsupported.json",
+      "adjudication": null
+    }
+  ],
+  "no_failure_or_timeout_counted_as_performance_or_protection_pass": true
+}

@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "same_process": true,
+  "rounds": 16,
+  "contracts_per_round": 6,
+  "contract_executions": 96,
+  "native_reopen_cycles": 1024,
+  "concurrent_write_iterations": 1024,
+  "shuffle_seed": 42,
+  "elapsed_seconds": 59.543670213999576,
+  "peak_rss_bytes": 28078080,
+  "binary_sha256": "d356fe2a3d29de20edf7c9a80efd1638db1ff554ce39faa13fb6ef0741339c7f",
+  "full_suite": false,
+  "performance_benchmark": false
+}
