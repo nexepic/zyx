@@ -83,3 +83,5 @@ R3.2 原生描述符 frame 编码准备：`HybridPropertyDescriptorCodec` 使用
 描述符是 metadata pool 中独立的物理 frame，不分配 routed MetadataPageId，不加入 12 根 logical bootstrap 列表，也不伪装为 State/radix。元数据池恢复、只读发现、可达性、旧 pin 保护和保守整树搬迁显式访问它；局部搬迁遇到额外物理 frame 时保留原来的保守 fallback。搬迁更换 physical generation/LSN 并保留 semantic generation。清除 root 后按现有 pin/reachability 协议回收，不另加退役 sidecar。第八根 fence 在两种构建均存在（默认文件根为零），format token 区分 31/32；该根变化不能被误认成 ID-only 预留或盲邻接 rebase。文件发布仍使用既有 data fence → inactive A/B → superblock fence。完整成本必须计算实际 4 KiB 描述符 frame、128 KiB 保留池及旧 pin 占用，不能仅计 192/224 字节。非空根保护只能与完整字段 reader/writer/integrity/retirement 一起替换。证据：`20261019-r3-native-root/`。
 
 已打开句柄取得新 metadata snapshot 时也认证描述符；失败必须释放刚取得的 pin，不能只在首次 open 验证后让新快照静默沿 ROW 继续。描述符读取使用文件 view 构造时固定的 database ID，避免与 writer 对 mutable routing Superblock 的 rebind 竞争。PROFILE 固定计费 registry 记录 `native_graph.read.metadata_decodes.hybrid_descriptor`（当前线程累计解码尝试数）；未增加资源上限，registry/staging 上界按实际条目数派生。
+
+4096 个字段归属仅限制一次显式转换计划，不是转换后组的永久容量上限。组头用既定 u32 字段记录实际数量；普通写入必须保留现有动态属性能力，并检查计数运算溢出。正向／反向转换超过计划工作上限时仍应拒绝，不能截断、静默拆分发布，也不能把 4096 解释成永久模式限制。

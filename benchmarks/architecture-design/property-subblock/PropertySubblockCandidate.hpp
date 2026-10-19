@@ -119,7 +119,9 @@ struct GroupHeader {
     void validate() const {
         require(valid(kind) && mode == GroupMode::HPG_HYBRID);
         validLive(group, live);
-        require(generation && live && memberships <= 4096 && columns <= memberships / 48);
+        // 4096 bounds an explicit conversion, not subsequent dynamic writes.
+        // The persisted count uses its declared u32 range.
+        require(generation && live && columns <= memberships / 48);
         // Every column has >=48 present live slots. Empty field sets are legal
         // during conversion of property-less live owners, not empty groups.
         require(columns == 0 || std::popcount(live) >= 48);

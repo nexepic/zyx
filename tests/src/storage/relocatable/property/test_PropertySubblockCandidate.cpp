@@ -124,7 +124,9 @@ TEST(PropertySubblockCandidateTest, GroupRejectsInvalidCountsModesEmptyAndSparse
     GroupHeader group; group.live = UINT64_MAX;
     EXPECT_NO_THROW(group.encode());
     group.memberships = 4097;
-    EXPECT_THROW(group.encode(), std::invalid_argument);
+    EXPECT_EQ(GroupHeader::decode(group.encode(), group.kind, group.group, group.generation).memberships, 4097U);
+    group.memberships = UINT32_MAX;
+    EXPECT_EQ(GroupHeader::decode(group.encode(), group.kind, group.group, group.generation).memberships, UINT32_MAX);
     group.memberships = 47; group.columns = 1;
     EXPECT_THROW(group.encode(), std::invalid_argument);
     group.memberships = 48; EXPECT_NO_THROW(group.encode());
