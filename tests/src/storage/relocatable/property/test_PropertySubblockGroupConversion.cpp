@@ -123,4 +123,23 @@ TEST(PropertySubblockGroupConversionTest, NativeOwnerLimitAndHighestPartialGroup
         groupFor(source[0].owner_entity_id), 2, 64)), std::invalid_argument);
     EXPECT_EQ(budget.used(), 0U);
 }
+TEST(PropertySubblockGroupConversionTest, ParentAccountOwnsThePlanAndFailureRefundsBothCounters) {
+    using namespace graph::query::execution::detail;
+    const auto makeAccount = [](size_t bytes) {
+        auto process = std::make_shared<ProcessResourceBudget>(ResourceLimits::uniform(bytes));
+        auto database = std::make_shared<DatabaseResourceBudget>(process, ResourceLimits::uniform(bytes));
+        return std::make_shared<ResourceAccount>(database, ResourceClass::RCK_QUERY, bytes);
+    };
+    const auto source = rows(64);
+    auto refused = makeAccount(1); MaterializedByteBudget denied(1024 * 1024, refused);
+    EXPECT_THROW((ReservedGroupConversion(denied, source, OwnerKind::HPK_NODE, 1, 2, 3968)), ResourceAdmissionDenied);
+    EXPECT_EQ(denied.used(), 0U); EXPECT_EQ(refused->used(), 0U);
+    auto account = makeAccount(1024 * 1024); MaterializedByteBudget budget(1024 * 1024, account);
+    { ReservedGroupConversion plan(budget, source, OwnerKind::HPK_NODE, 1, 2, 3968);
+      EXPECT_EQ(plan.retainedCharge(), account->used()); EXPECT_EQ(budget.used(), account->used()); }
+    EXPECT_EQ(budget.used(), 0U); EXPECT_EQ(account->used(), 0U);
+    auto empty = rows(64, 0);
+    EXPECT_THROW((ReservedGroupConversion(budget, empty, OwnerKind::HPK_NODE, 1, 2, 63)), std::length_error);
+    EXPECT_EQ(account->used(), 0U);
+}
 } // namespace

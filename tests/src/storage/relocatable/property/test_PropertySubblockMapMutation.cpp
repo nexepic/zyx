@@ -104,4 +104,16 @@ TEST_F(PropertySubblockMapMutationTest, NativeStageFailureRollsBackWholeTransact
     auto snapshot = metadata_->openSnapshot(); Map map(MAP_ID, *btree_pages_, *metadata_);
     EXPECT_EQ(map.find(snapshot, key(1)), value(1)); EXPECT_FALSE(map.find(snapshot, key(2)));
 }
+TEST_F(PropertySubblockMapMutationTest, RejectsAbsentRootsAndInactiveTransactionsBeforePlanningChanges) {
+    MaterializedByteBudget budget(65536);
+    NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options());
+    auto absent = planner.beginTransaction();
+    EXPECT_THROW((Mutation(absent, *btree_pages_, *metadata_, MAP_ID, 1, budget)), std::invalid_argument);
+    absent.rollback(); create(); auto transaction = planner.beginTransaction();
+    Mutation mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget);
+    mutation.set(key(1), value(2)); transaction.rollback();
+    EXPECT_THROW(mutation.set(key(1), value(3)), std::logic_error);
+    EXPECT_THROW(mutation.erase(key(1)), std::logic_error);
+    EXPECT_THROW((Mutation(transaction, *btree_pages_, *metadata_, MAP_ID, 1, budget)), std::invalid_argument);
+}
 } // namespace
