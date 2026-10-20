@@ -132,6 +132,7 @@ namespace graph::storage {
 	// slot one is the complete packed B+Tree payload.
 	class BTreePage final {
 	public:
+        using OwnedHeapElement = void;
 		// Same complete identity/layout validation as create, without page bytes.
 		static void validateNewPage(const PageOwnerHeader &owner, const BTreePageHeader &header);
 		[[nodiscard]] static BTreePage create(const PageOwnerHeader &owner, const BTreePageHeader &header);

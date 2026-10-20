@@ -1,0 +1,73 @@
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from HybridPropertyLargeFieldPreparationTest
+[ RUN      ] HybridPropertyLargeFieldPreparationTest.CorruptDedupIndexCannotCompareBeyondShorterInput
+=================================================================
+==66930==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x5040000066b5 at pc 0x55d9e89daedd bp 0x7ffea270a830 sp 0x7ffea270a828
+READ of size 1 at 0x5040000066b5 thread T0
+==66930==WARNING: invalid path to external symbolizer!
+==66930==WARNING: Failed to use and restart external symbolizer!
+    #0 0x55d9e89daedc  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x230edc) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #1 0x55d9e89dae38  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x230e38) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #2 0x55d9e89e014c  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x23614c) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #3 0x55d9e89ba8aa  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x2108aa) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #4 0x55d9e89852f7  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x1db2f7) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #5 0x55d9e8ac2800  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x318800) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #6 0x55d9e9c61cc6  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14b7cc6) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #7 0x55d9e9c4eba5  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14a4ba5) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #8 0x55d9e9c4ed34  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14a4d34) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #9 0x55d9e9c4f40e  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14a540e) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #10 0x55d9e9c5869b  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14ae69b) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #11 0x55d9e9c62386  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14b8386) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #12 0x55d9e9c4edc1  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14a4dc1) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #13 0x55d9e889dcd3  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0xf3cd3) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #14 0x7ff366dc8ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #15 0x7ff366dc8d64  (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #16 0x55d9e889dd20  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0xf3d20) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+
+0x5040000066b5 is located 0 bytes after 37-byte region [0x504000006690,0x5040000066b5)
+allocated by thread T0 here:
+    #0 0x55d9e897f2d1  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x1d52d1) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #1 0x55d9e89c7266  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x21d266) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #2 0x55d9e89c6cdf  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x21ccdf) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #3 0x55d9e89e4ed0  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x23aed0) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #4 0x55d9e89e4db1  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x23adb1) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #5 0x55d9e8a73fbc  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x2c9fbc) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #6 0x55d9e8ac195b  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x31795b) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+    #7 0x55d9e9c61cc6  (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x14b7cc6) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow (/tmp/zyx-r3-large-dedup-asan-20261020/old/records-first+0x230edc) (BuildId: 920ef9493200dbfcebdfcb17d5724fecb6a5f75f) 
+Shadow bytes around the buggy address:
+  0x504000006400: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fd
+  0x504000006480: fa fa fd fd fd fd fd fd fa fa fd fd fd fd fd fa
+  0x504000006500: fa fa fd fd fd fd fd fd fa fa fd fd fd fd fd fd
+  0x504000006580: fa fa fd fd fd fd fd fa fa fa 00 00 00 00 00 fa
+  0x504000006600: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 01
+=>0x504000006680: fa fa 00 00 00 00[05]fa fa fa 00 00 00 00 00 03
+  0x504000006700: fa fa fd fd fd fd fd fd fa fa fd fd fd fd fd fd
+  0x504000006780: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fd
+  0x504000006800: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x504000006880: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x504000006900: fa fa fd fd fd fd fd fd fa fa fd fd fd fd fd fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==66930==ABORTING

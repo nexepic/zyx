@@ -17,6 +17,7 @@
 #include "graph/storage/relocatable/index/BTreePage.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/core/PropertyDecodeAllocationScope.hpp"
 
 using namespace graph::storage;
 
@@ -963,4 +964,49 @@ TEST(RelocatableBTreePageCodecTest, AdoptedSlottedPageKeepsItsSourceMemoryAuthor
     ASSERT_FALSE(authority.expired());
     EXPECT_EQ(adopted->serialize(), encoded); EXPECT_EQ(adopted->entries(), entries);
     adopted.reset(); EXPECT_TRUE(authority.expired());
+}
+
+TEST(RelocatableBTreePageCodecTest, MetadataBuffersUseNativeCreditAndEscapedEntriesKeepTheirSourceAuthority) {
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    std::optional<BTreePage> page;
+    {
+        graph::utils::OwnedAllocationScope scope(memory);
+        PageOwnerHeader owner{PageId(61), 17, PageOwnerKind::POK_INDEX, 0,
+            RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+        BTreePageHeader header; header.index_id = 17; header.page_id = PageId(61); header.generation = Generation(2);
+        const std::array<BTreePageEntry, 1> entries{{{{std::byte{'a'}}, 11}}};
+        page.emplace(BTreePage::createWithEntries(owner, header, entries));
+    }
+    const auto baseline = memory->used();
+    graph::property_decode::AllocationScope forbid(nullptr, [](void *, size_t) {
+        throw std::logic_error("index bytes are not decoded PropertyValue output");
+    });
+    EXPECT_EQ(page->header().index_id, 17U); EXPECT_EQ(memory->used(), baseline);
+    {
+        graph::query::execution::MaterializedByteReservation hold(memory.get()); hold.set(memory->available());
+        EXPECT_THROW(page->header(), graph::query::execution::MaterializedByteLimitExceeded);
+    }
+    EXPECT_EQ(memory->used(), baseline);
+    std::optional<graph::utils::OwnedStdVector<BTreePageEntry>> escaped;
+    escaped.emplace(page->entries()); ASSERT_EQ(escaped->size(), 1U);
+    EXPECT_GT(memory->used(), baseline);
+    std::weak_ptr<std::pmr::memory_resource> authority = memory;
+    page.reset(); memory.reset(); ASSERT_FALSE(authority.expired());
+    EXPECT_EQ(escaped->front().value_or_child, 11U);
+    escaped.reset(); EXPECT_TRUE(authority.expired());
+}
+
+TEST(RelocatableBTreePageCodecTest, LegacyIndexReadDoesNotBorrowPropertyOutputAdmission) {
+    PageOwnerHeader owner{PageId(61), 17, PageOwnerKind::POK_INDEX, 0,
+        RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(2), LogSequenceNumber(9)};
+    BTreePageHeader header; header.index_id = 17; header.page_id = PageId(61); header.generation = Generation(2);
+    const std::array<BTreePageEntry, 1> entries{{{{std::byte{'a'}}, 11}}};
+    auto page = BTreePage::createWithEntries(owner, header, entries);
+    graph::property_decode::AllocationScope forbid(nullptr, [](void *, size_t) {
+        throw std::logic_error("legacy index temporaries are not PropertyValue output");
+    });
+    EXPECT_EQ(page.header().index_id, 17U);
+    EXPECT_EQ(page.entries().size(), 1U);
+    const std::array key{std::byte{'a'}};
+    const auto found = page.find(key); ASSERT_TRUE(found); EXPECT_EQ(found->value_or_child, 11U);
 }

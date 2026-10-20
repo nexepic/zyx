@@ -1,0 +1,10 @@
+{
+  "default": {
+    "path": "/tmp/zyx-r3-native-planner-20261019/default-preparation-final/records-test",
+    "sha256": "1ad4bfffae1ace57cca2a26f045988d5cc0598b804a3b8ae50a0bf987df1e464"
+  },
+  "candidate": {
+    "path": "/tmp/zyx-r3-native-planner-20261019/candidate-preparation-final/records-test",
+    "sha256": "4eb6c6971ed7de37eb63472ac62500fa3184f52d22962010b1e1120ed7f597b6"
+  }
+}

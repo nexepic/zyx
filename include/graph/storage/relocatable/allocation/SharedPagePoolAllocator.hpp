@@ -32,6 +32,7 @@ namespace graph::storage {
 	class VectorAdjacencyPageStore;
 	class VectorManifestStore;
 	class LargeValueStore;
+    class HybridPropertyFieldPageStore;
 
 	// Prefixes avoid Windows macro collisions. Read-only consumers such as an
 	// integrity scanner must not repair or rewrite pool metadata while inspecting
@@ -195,6 +196,7 @@ namespace graph::storage {
 		friend class VectorPageStore;
 		friend class VectorManifestStore;
 		friend class LargeValueStore;
+        friend class HybridPropertyFieldPageStore;
 
 	public:
 		// `io` must be the same data-file handle used by `metadata`, otherwise a
@@ -283,16 +285,24 @@ namespace graph::storage {
 														 const MetadataPublishOptions &options = {});
 
 	private:
+        // A typed reader may attach to an already authenticated pin while the
+        // metadata writer is held. Do not acquire another snapshot here.
+        SharedPagePoolAllocator(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
+            const MetadataSnapshotPin &snapshot) : io_(std::move(io)), metadata_(metadata) {
+            if (!io_ || !metadata_.usesDataStorage(io_) || !metadata_.ownsSnapshot(snapshot))
+                throw FormatException(FormatError::FERR_INVALID_STATE, "typed pool attachment requires its own file and live pin");
+            data_region_offset_ = snapshot.superblock().data_region_offset;
+        }
 		// Typed scans may already hold a Page Directory location and Catalog entry
 		// authenticated from the same pinned snapshot. Reuse that route without
 		// repeating logical-tree lookups; physical pool and owner validation remains
 		// identical to the public PageId-based read path.
 		[[nodiscard]] SharedPagePoolContents readKnownLocation(
 				const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
-				BufferPoolReadHint hint) const;
+				BufferPoolReadHint hint, bool hybridFieldOnly = false) const;
 		[[nodiscard]] std::optional<SharedPagePoolPinnedView> readPinnedKnownLocation(
 				const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
-				BufferPoolReadHint hint) const;
+				BufferPoolReadHint hint, bool hybridFieldOnly = false) const;
 
 		// Typed page stores use this only after decoding a checked next-page route.
 		// It resolves the current snapshot mapping again before touching the cache,

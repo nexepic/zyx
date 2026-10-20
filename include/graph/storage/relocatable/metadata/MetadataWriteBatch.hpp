@@ -19,6 +19,7 @@
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRoute.hpp"
+#include "graph/utils/OwnedPmrAllocator.hpp"
 
 namespace graph::storage {
 
@@ -29,7 +30,8 @@ namespace graph::storage {
 	class MetadataWriteBatch final : public MetadataSlotReservationLookup {
 	public:
 		MetadataWriteBatch(MetadataPageAllocator &allocator, const Superblock &current,
-						   LogSequenceNumber checkpointLsn);
+						   LogSequenceNumber checkpointLsn,
+                           std::shared_ptr<std::pmr::memory_resource> reservationMemory = {});
 		~MetadataWriteBatch();
 		MetadataWriteBatch(const MetadataWriteBatch &) = delete;
 		MetadataWriteBatch &operator=(const MetadataWriteBatch &) = delete;
@@ -188,12 +190,16 @@ namespace graph::storage {
 		// allocator reusing the same physical frame within a COW batch.
 		std::set<std::pair<uint64_t, uint8_t>> allocated_page_locations_;
 		std::vector<PhysicalSlotId> created_pool_slots_;
-		std::vector<PhysicalSlotId> reserved_data_slots_;
-		std::vector<PhysicalSlotRange> reserved_data_slot_ranges_;
-		std::set<uint64_t> reserved_data_slot_index_;
+        // Explicit ownership covers both iteration order and lookup nodes until
+        // batch teardown. The optional resource applies to reservation storage;
+        // it does not claim to account every metadata mutation allocation.
+        std::vector<PhysicalSlotId, utils::OwnedPmrAllocator<PhysicalSlotId>> reserved_data_slots_;
+        std::vector<PhysicalSlotRange, utils::OwnedPmrAllocator<PhysicalSlotRange>> reserved_data_slot_ranges_;
+        std::set<uint64_t, std::less<uint64_t>, utils::OwnedPmrAllocator<uint64_t>> reserved_data_slot_index_;
 		std::set<uint64_t> catalog_pool_identity_bindings_;
 		std::set<uint64_t> catalog_pool_ownership_prepared_;
-		std::map<uint64_t, uint64_t> reserved_data_slot_range_index_;
+        std::map<uint64_t, uint64_t, std::less<uint64_t>,
+            utils::OwnedPmrAllocator<std::pair<const uint64_t, uint64_t>>> reserved_data_slot_range_index_;
 		uint64_t initial_physical_file_size_ = 0U;
 		bool batch_context_active_ = false;
 		bool published_ = false;

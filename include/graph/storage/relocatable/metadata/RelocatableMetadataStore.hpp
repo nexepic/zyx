@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -42,6 +43,7 @@
 namespace graph::storage {
 
 	class BTreePageStore;
+    class CancellationCheckpoint;
 	class SystemCatalog;
 	class DerivedObjectReachabilityReclaimer;
 	class VectorCodebookReachabilityReclaimer;
@@ -993,6 +995,36 @@ namespace graph::storage {
 
 	using NativeGraphEarlyPublicationPlanner = std::function<void(const NativeGraphEarlyPublicationPlanningContext &)>;
 
+    enum class NativeHybridPropertyRootMode : uint8_t { NHPRM_REPLACE = 1, NHPRM_CLEAR = 2 };
+    // One explicit ROW-group conversion. Metadata reads and authenticates the
+    // source itself under its writer fence; callers supply no source payloads,
+    // logical IDs, selected physical slots or planning callbacks. Placement is a
+    // permitted reservation range, never a caller-assigned frame. Current early stage
+    // still refuses before physical field publication is installed.
+    struct NativeGraphHybridPropertyConversion {
+        EntityPropertyOwnerKind owner_kind = EntityPropertyOwnerKind::EPOK_NODE;
+        uint64_t group_id = 0;
+        std::shared_ptr<std::pmr::memory_resource> memory;
+        const CancellationCheckpoint *cancellation = nullptr;
+        PhysicalSlotId first_slot{}, last_slot{};
+        uint64_t field_pool_owner_id = 0;
+    };
+    // Typed late-root request, not a graph callback with metadata authority.
+    // IDs name the final Node owner/column/extension/group trees, then Edge.
+    // Zero means absent; otherwise each ordinal requires its reserved hybrid
+    // namespace IndexId. Root references are resolved only after all index
+    // mutations receive their final identities in this same publication.
+    // Current isolated format still rejects nonempty descriptors until the
+    // complete native field lifecycle is installed; no production caller stages
+    // these requests yet. Ordinary graph commits require no scratch for this.
+    struct NativeGraphHybridPropertyRootMutation {
+        DatabaseId expected_database_id{};
+        PhysicalPageRef expected_root{};
+        NativeHybridPropertyRootMode mode = NativeHybridPropertyRootMode::NHPRM_REPLACE;
+        std::array<uint64_t, 8> replacement_index_ids{};
+        std::optional<NativeGraphHybridPropertyConversion> conversion;
+    };
+
 	using NativeGraphDeferredIndexPlanner =
 			std::function<NativeGraphDeferredIndexPlan(const NativeGraphDeferredIndexPlanningContext &)>;
 	using NativeGraphDeferredIndexPlansPlanner =
@@ -1020,6 +1052,7 @@ namespace graph::storage {
 
 	class RelocatableMetadataStore final {
 		friend class BTreePageStore;
+        friend class PropertyCollectionRootStore;
 		friend class DerivedObjectReachabilityReclaimer;
 		friend class VectorCodebookReachabilityReclaimer;
 		friend class VectorAdjacencyPageStore;
@@ -1303,7 +1336,8 @@ namespace graph::storage {
 				const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer = {},
 				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
 				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {},
-				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {});
+				const NativeGraphDeferredIndexPlansPlanner &deferredIndexPlansPlanner = {},
+                const std::optional<NativeGraphHybridPropertyRootMutation> &hybridPropertyRootMutation = std::nullopt);
 		// Retires one fixed Entity page and removes matching Node or Edge Entity Map
 		// entries in the same publication. Prior snapshots retain the old directory
 		// roots and may continue reading the retired physical frame.

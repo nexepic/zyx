@@ -1,0 +1,451 @@
+ninja: Entering directory `/workspace/zyx-build-r3-native'
+[0/2] Re-checking globbed directories...
+[1/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/StorageBackendFactory.cpp.o
+In file included from /workspace/zyx/src/storage/StorageBackendFactory.cpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:513:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  513 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:607:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  607 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/StorageBackendFactory.cpp:20:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[2/99] Building CXX object CMakeFiles/zyx_core.dir/src/core/Database.cpp.o
+In file included from /workspace/zyx/src/core/Database.cpp:21:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:34:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanMutationRuntime.hpp:13:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanReadRuntime.hpp:22:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:513:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  513 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:607:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  607 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/core/Database.cpp:21:
+In file included from /workspace/zyx/include/graph/core/Database.hpp:31:
+In file included from /workspace/zyx/include/graph/query/api/QueryEngine.hpp:35:
+In file included from /workspace/zyx/include/graph/query/execution/LogicalPlanProcedureRuntime.hpp:20:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+6 warnings generated.
+[3/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyIndex.cpp.o
+[4/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/adjacency/GlobalAdjacencyMutationMerger.cpp.o
+[5/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/PhysicalSegmentAllocator.cpp.o
+[6/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp.o
+[7/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/allocation/SlottedPagePool.cpp.o
+[8/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:513:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  513 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:607:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  607 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:55:82: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+   55 |                                 return readNodeShaped(nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                              ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableLogicalGraphRead.cpp:160:80: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  160 |                                 return readEdgeShaped(edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                            ^
+8 warnings generated.
+[9/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityLabelSetStore.cpp.o
+/workspace/zyx/src/storage/relocatable/entity/EntityLabelSetStore.cpp:605:67: warning: missing field 'node_insertions' initializer [-Wmissing-designated-field-initializers]
+  605 |                                  .node_updates = {{planned.node_id, planned.replacement_node}}},
+      |                                                                                               ^
+1 warning generated.
+[10/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/EntityPageStore.cpp.o
+/workspace/zyx/src/storage/relocatable/entity/EntityPageStore.cpp:490:22: warning: unused variable 'activeSession' [-Wunused-variable]
+  490 |                 NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+      |                                    ^~~~~~~~~~~~~
+/workspace/zyx/src/storage/relocatable/entity/EntityPageStore.cpp:537:22: warning: unused variable 'activeSession' [-Wunused-variable]
+  537 |                 NativeReadSession &activeSession = selectNativeReadSession(snapshot, session, localSession);
+      |                                    ^~~~~~~~~~~~~
+2 warnings generated.
+[11/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o
+FAILED: [code=1] CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o 
+/workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-r3-native -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIC -Wall -Wextra -Wno-unused-parameter -fprofile-instr-generate -fcoverage-mapping -MD -MT CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o -MF CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o.d -o CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o -c /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:18:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRecord.hpp:17:
+In file included from /workspace/zyx/include/graph/storage/LogicalGraphWrite.hpp:23:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:513:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  513 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:607:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  607 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1529:65: error: failure when lexing a numeric literal
+ 1529 |                                                                            uint32_t maxLiveFrames = RSS_PAGE_POOL_DATA_FRAME_COUNT / 4U,
+      |                                                                                                                                ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1613:64: error: failure when lexing a numeric literal
+ 1613 |                                 const MetadataSnapshotPin &snapshot, uint64_t lowerDirectoryId = 1U,
+      |                                                                                            ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1839:25: error: a type specifier is required for all declarations
+ 1839 |                 bool read_only_ = false;
+      |                                       ^
+/workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:1842:1: error: extraneous closing brace ('}')
+ 1842 | } // namespace graph::st
+      | ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:753:36: error: redefinition of 'LogicalGraphBufferPressure'
+  753 |        *  @param  __first  Iterator pointing to the start of the range to be
+      |                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:34:8: note: previous definition is here
+   34 |         class LogicalGraphBufferPressure final : public std::runtime_error {
+      |               ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:759:33: error: redefinition of 'LogicalGraphReadDirection'
+  759 |        *  This function erases a sequence of elements from a %multimap.
+      |                                 ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:41:13: note: previous definition is here
+   41 |         enum class LogicalGraphReadDirection : uint8_t {
+      |                    ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:760:54: error: redefinition of 'LogicalGraphPropertyEntry'
+  760 |        *  Note that this function only erases the elements, and that if
+      |                                                      ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:46:9: note: previous definition is here
+   46 |         struct LogicalGraphPropertyEntry {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:762:59: error: redefinition of 'LogicalGraphNode'
+  762 |        *  touched in any way.  Managing the pointer is the user's
+      |                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:53:9: note: previous definition is here
+   53 |         struct LogicalGraphNode {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:779:46: error: redefinition of 'EntityReadShape'
+  779 |        *  Note that this function only erases the elements, and that if
+      |                                              ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:69:9: note: previous definition is here
+   69 |         struct EntityReadShape {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:795:7: error: redefinition of 'validateEntityReadShape'
+  795 |        *  the @c Compare type (which itself is often stateless and empty), so it
+      |       ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:83:14: note: previous definition is here
+   83 |         inline void validateEntityReadShape(const EntityReadShape &shape) {
+      |                     ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:803:2: error: redefinition of 'EntityRef'
+  803 |       swap(multimap& __x)
+      |  ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:93:9: note: previous definition is here
+   93 |         struct EntityRef {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:809:13: error: redefinition of 'IndexCandidateBatch'
+  809 |        *  erases the elements, and that if the elements themselves are pointers,
+      |             ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:103:9: note: previous definition is here
+  103 |         struct IndexCandidateBatch {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:854:1: error: redefinition of 'checkedLogicalGraphCandidateBytesAdd'
+  854 |         auto
+      | ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:135:31: note: previous definition is here
+  135 |                 [[nodiscard]] inline size_t checkedLogicalGraphCandidateBytesAdd(size_t current, size_t extra) {
+      |                                             ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:864:24: error: redefinition of 'checkedLogicalGraphCandidateBytesMul'
+  864 |        *  @return  Read-only (constant) iterator pointing to sought-after
+      |                        ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:142:31: note: previous definition is here
+  142 |                 [[nodiscard]] inline size_t checkedLogicalGraphCandidateBytesMul(size_t left, size_t right) {
+      |                                             ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:869:26: error: redefinition of 'logicalGraphCandidateBatchBytes'
+  869 |        *  iterator pointing to the sought after %pair.  If unsuccessful it
+      |                          ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:149:31: note: previous definition is here
+  149 |                 [[nodiscard]] inline size_t logicalGraphCandidateBatchBytes(const IndexCandidateBatch &batch) {
+      |                                             ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:894:5: error: redefinition of 'enforceLogicalGraphCandidateBatchBytes'
+  894 | #if __cplusplus > 201103L
+      |     ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:162:15: note: previous definition is here
+  162 |                 inline void enforceLogicalGraphCandidateBatchBytes(
+      |                             ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:911:9: error: redefinition of 'makeLogicalGraphFallbackCandidateBatch'
+  911 |       { return _M_t.find(__x) != _M_t.end(); }
+      |         ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:173:44: note: previous definition is here
+  173 |                 [[nodiscard]] inline IndexCandidateBatch makeLogicalGraphFallbackCandidateBatch(
+      |                                                          ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:950:35: error: redefinition of 'LogicalGraphPropertyRange'
+  950 |        *  @return  Read-only (constant) iterator pointing to first element
+      |                                   ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:201:9: note: previous definition is here
+  201 |         struct LogicalGraphPropertyRange {
+      |                ^
+In file included from /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.hpp:16:
+In file included from /workspace/zyx/include/graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp:19:
+In file included from /workspace/zyx/include/graph/storage/relocatable/index/NativeBulkRun.hpp:24:
+In file included from /workspace/zyx/include/graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp:22:
+In file included from /workspace/zyx/include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp:16:
+In file included from /usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/map:64:
+/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/stl_multimap.h:960:38: error: redefinition of 'LogicalGraphCompositePropertyRange'
+  960 |       { return _M_t.lower_bound(__x); }
+      |                                      ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:214:9: note: previous definition is here
+  214 |         struct LogicalGraphCompositePropertyRange {
+      |                ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+PLEASE submit a bug report to https://github.com/llvm/llvm-project/issues/ and include the crash backtrace, preprocessed source, and associated run script.
+Stack dump:
+0.	Program arguments: /workspace/zyx-sysroot/usr/bin/clang++-19 -DBOOST_ATOMIC_DYN_LINK -DBOOST_ATOMIC_NO_LIB -DBOOST_FILESYSTEM_DYN_LINK -DBOOST_FILESYSTEM_NO_LIB -DCOVERAGE_SKIP_ZLIB_ERRORS -DZYX_ENABLE_STORAGE_TEST_HOOKS=1 -DZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT=1 -DZYX_HAS_LZ4=1 -DZYX_HAS_ZSTD=1 -I/workspace/zyx/include -I/workspace/zyx/src -I/workspace/zyx -I/workspace/zyx-build-r3-native -I/workspace/zyx/src/query/parser/cypher -I/workspace/zyx/src/query/parser/cypher/generated -I/workspace/zyx/src/query/parser/cypher/helpers/internal -I/workspace/zyx/src/query/parser/cypher/helpers/public -I/workspace/zyx/lib/inputxx/include -isystem /workspace/zyx-sysroot/usr/include -isystem /workspace/antlr4-install/include/antlr4-runtime -g -std=c++20 -fPIC -Wall -Wextra -Wno-unused-parameter -fprofile-instr-generate -fcoverage-mapping -MD -MT CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o -MF CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o.d -o CMakeFiles/zyx_core.dir/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp.o -c /workspace/zyx/src/storage/relocatable/entity/NativeBulkEdgeAdjacencyRunBuilder.cpp
+1.	/usr/lib/gcc/x86_64-linux-gnu/14/../../../../include/c++/14/bits/version.h:1938:42: current parser token '&'
+ #0 0x00007f682922b6ba llvm::sys::PrintStackTrace(llvm::raw_ostream&, int) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xeb06ba)
+ #1 0x00007f6829229264 llvm::sys::RunSignalHandlers() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xeae264)
+ #2 0x00007f682916f184 (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xdf4184)
+ #3 0x00007f6827e1ed70 (/lib/x86_64-linux-gnu/libc.so.6+0x3fd70)
+ #4 0x00007f6830b82c4a clang::Lexer::lexEditorPlaceholder(clang::Token&, char const*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbbdc4a)
+ #5 0x00007f6830b85eeb clang::Lexer::LexTokenInternal(clang::Token&, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbc0eeb)
+ #6 0x00007f6830bf0d2d clang::Preprocessor::Lex(clang::Token&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc2bd2d)
+ #7 0x00007f6830bb01b7 (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbeb1b7)
+ #8 0x00007f6830bb4492 clang::Preprocessor::HandleDirective(clang::Token&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbef492)
+ #9 0x00007f6830b85ab6 clang::Lexer::LexTokenInternal(clang::Token&, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xbc0ab6)
+#10 0x00007f6830bf0d2d clang::Preprocessor::Lex(clang::Token&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc2bd2d)
+#11 0x00007f6830bfff4d (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc3af4d)
+#12 0x00007f6830ccb0c1 clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd060c1)
+#13 0x00007f6830ccafae clang::Parser::SkipUntil(llvm::ArrayRef<clang::tok::TokenKind>, clang::Parser::SkipUntilFlags) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd05fae)
+#14 0x00007f6830c118e6 clang::Parser::SkipMalformedDecl() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc4c8e6)
+#15 0x00007f6830c106b0 clang::Parser::ParseDeclGroup(clang::ParsingDeclSpec&, clang::DeclaratorContext, clang::ParsedAttributes&, clang::Parser::ParsedTemplateInfo&, clang::SourceLocation*, clang::Parser::ForRangeInit*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc4b6b0)
+#16 0x00007f6830ccf8be clang::Parser::ParseDeclOrFunctionDefInternal(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec&, clang::AccessSpecifier) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0a8be)
+#17 0x00007f6830ccf25f clang::Parser::ParseDeclarationOrFunctionDefinition(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec*, clang::AccessSpecifier) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0a25f)
+#18 0x00007f6830cce44c clang::Parser::ParseExternalDeclaration(clang::ParsedAttributes&, clang::ParsedAttributes&, clang::ParsingDeclSpec*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd0944c)
+#19 0x00007f6830ccc8d7 clang::Parser::ParseTopLevelDecl(clang::OpaquePtr<clang::DeclGroupRef>&, clang::Sema::ModuleImportState&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xd078d7)
+#20 0x00007f6830bf957e clang::ParseAST(clang::Sema&, bool, bool) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0xc3457e)
+#21 0x00007f6832d0c779 clang::FrontendAction::Execute() (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2d47779)
+#22 0x00007f6832c7b074 clang::CompilerInstance::ExecuteAction(clang::FrontendAction&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2cb6074)
+#23 0x00007f6832d8abfe clang::ExecuteCompilerInvocation(clang::CompilerInstance*) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2dc5bfe)
+#24 0x0000556a87de0c61 cc1_main(llvm::ArrayRef<char const*>, char const*, void*) (/workspace/zyx-sysroot/usr/bin/clang++-19+0x11c61)
+#25 0x0000556a87dddb35 (/workspace/zyx-sysroot/usr/bin/clang++-19+0xeb35)
+#26 0x00007f68328fa4bd (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x29354bd)
+#27 0x00007f682916ef20 llvm::CrashRecoveryContext::RunSafely(llvm::function_ref<void ()>) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libLLVM.so.19.1+0xdf3f20)
+#28 0x00007f68328f9f51 clang::driver::CC1Command::Execute(llvm::ArrayRef<std::optional<llvm::StringRef>>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>*, bool*) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2934f51)
+#29 0x00007f68328bf188 clang::driver::Compilation::ExecuteCommand(clang::driver::Command const&, clang::driver::Command const*&, bool) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x28fa188)
+#30 0x00007f68328bf3fe clang::driver::Compilation::ExecuteJobs(clang::driver::JobList const&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&, bool) const (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x28fa3fe)
+#31 0x00007f68328dcbbc clang::driver::Driver::ExecuteCompilation(clang::driver::Compilation&, llvm::SmallVectorImpl<std::pair<int, clang::driver::Command const*>>&) (/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libclang-cpp.so.19.1+0x2917bbc)
+#32 0x0000556a87ddd574 clang_main(int, char**, llvm::ToolContext const&) (/workspace/zyx-sysroot/usr/bin/clang++-19+0xe574)
+#33 0x0000556a87deb4ba main (/workspace/zyx-sysroot/usr/bin/clang++-19+0x1c4ba)
+#34 0x00007f6827e08ca8 (/lib/x86_64-linux-gnu/libc.so.6+0x29ca8)
+#35 0x00007f6827e08d65 __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x29d65)
+#36 0x0000556a87ddb731 _start (/workspace/zyx-sysroot/usr/bin/clang++-19+0xc731)
+clang++-19: error: clang frontend command failed with exit code 139 (use -v to see invocation)
+Debian clang version 19.1.7 (3+b1)
+Target: x86_64-pc-linux-gnu
+Thread model: posix
+InstalledDir: /workspace/zyx-sysroot/usr/lib/llvm-19/bin
+clang++-19: note: diagnostic msg: 
+********************
+
+PLEASE ATTACH THE FOLLOWING FILES TO THE BUG REPORT:
+Preprocessed source(s) and associated run script(s) are located at:
+clang++-19: note: diagnostic msg: /tmp/NativeBulkEdgeAdjacencyRunBuilder-e72a8a.cpp
+clang++-19: note: diagnostic msg: /tmp/NativeBulkEdgeAdjacencyRunBuilder-e72a8a.sh
+clang++-19: note: diagnostic msg: 
+
+********************
+[12/99] Building CXX object CMakeFiles/zyx_core.dir/src/storage/relocatable/backend/RelocatableStorageBackend.cpp.o
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:26:
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:412:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  412 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:421:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  421 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:513:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  513 |                         const LogicalGraphNode node = readNodeShaped(nodeId, EntityReadShape{.include_labels = true});
+      |                                                                                                                    ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:607:118: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  607 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.include_type = false, .all_properties = true});
+      |                                                                                                                                           ^
+/workspace/zyx/include/graph/storage/LogicalGraphRead.hpp:616:95: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  616 |                         const LogicalGraphEdge edge = readEdgeShaped(edgeId, EntityReadShape{.all_properties = true});
+      |                                                                                                                    ^
+In file included from /workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:9:
+In file included from /workspace/zyx/include/graph/storage/relocatable/backend/RelocatableStorageBackend.hpp:29:
+/workspace/zyx/include/graph/storage/LogicalGraphVectorSearch.hpp:133:58: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+  133 |                         return {.include_labels = true, .all_properties = true};
+      |                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1920:94: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1920 |                                                         const auto edge = snapshot_->readEdgeShaped(patch.entity.value, {.include_type = false});
+      |                                                                                                                                               ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:1954:56: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 1954 |                                         const EntityReadShape shape{.all_properties = true};
+      |                                                                                           ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:2266:96: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 2266 |                                                         const auto edge = snapshot_->readEdgeShaped(request.entity.value, {.include_type = false});
+      |                                                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4052:75: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4052 |                                 snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
+      |                                                                                                       ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4059:73: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4059 |                                 snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
+      |                                                                                                     ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:4788:71: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 4788 |                                 snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                   ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5230:78: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5230 |                                         snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                 ^
+/workspace/zyx/src/storage/relocatable/backend/RelocatableStorageBackend.cpp:5782:79: warning: missing field 'property_tokens' initializer [-Wmissing-designated-field-initializers]
+ 5782 |                                                 snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+      |                                                                                                                         ^
+14 warnings generated.
+ninja: build stopped: subcommand failed.
+Traceback (most recent call last):
+  File "/workspace/zyx-r3-directory-plans-20261019/run.py", line 5, in <module>
+    subprocess.run(['ninja','-C',str(build),'-j','2','libzyx_core.a'],check=True)
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['ninja', '-C', '/workspace/zyx-build-r3-native', '-j', '2', 'libzyx_core.a']' returned non-zero exit status 1.

@@ -20,6 +20,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/query/execution/MaterializedByteBudget.hpp"
+#include "graph/utils/OwnedHeapReservation.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 using namespace graph::storage;
@@ -840,4 +842,40 @@ TEST_F(RelocatableMetadataWriteBatchTest, RejectsCapacityRequestsAfterPublicatio
 	expectFormatError([&] { batch.reserveMetadataFrames(1U); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(batch.ensureMetadataFrameCapacity(1U)); },
 					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataWriteBatchTest, ReservationStorageRetainsAccountAndRefundsFailedInsertions) {
+    ScriptedPageAllocator allocator;
+    auto memory = std::make_shared<graph::query::execution::MaterializedByteBudget>(65536);
+    {
+        MetadataWriteBatch batch(allocator, superblock(1, 1), LogSequenceNumber(2), memory);
+        batch.reserveDataSlot(PhysicalSlotId(40));
+        const auto retained = memory->used();
+        EXPECT_GT(retained, 0U);
+        batch.reserveDataSlot(PhysicalSlotId(40));
+        EXPECT_EQ(memory->used(), retained);
+        {
+            graph::utils::OwnedHeapReservation full(memory, memory->available());
+            EXPECT_ANY_THROW(batch.reserveDataSlot(PhysicalSlotId(41)));
+            EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId(41)));
+            EXPECT_ANY_THROW(batch.reserveDataSlotRange({PhysicalSlotId(50), PhysicalSlotId(52)}));
+            EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId(50)));
+        }
+        EXPECT_EQ(memory->used(), retained);
+        batch.reserveDataSlot(PhysicalSlotId(41));
+        batch.reserveDataSlotRange({PhysicalSlotId(50), PhysicalSlotId(52)});
+        EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(41)));
+        EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(51)));
+        EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId(53)));
+        EXPECT_EQ(batch.candidate().next_logical_page_id, batch.current().next_logical_page_id);
+    }
+    EXPECT_EQ(memory->used(), 0U);
+    std::weak_ptr<std::pmr::memory_resource> lifetime = memory;
+    auto batch = std::make_unique<MetadataWriteBatch>(allocator, superblock(1, 1), LogSequenceNumber(2), memory);
+    batch->reserveDataSlot(PhysicalSlotId(60));
+    memory.reset();
+    EXPECT_FALSE(lifetime.expired());
+    batch->reserveDataSlotRange({PhysicalSlotId(70), PhysicalSlotId(72)});
+    batch.reset();
+    EXPECT_TRUE(lifetime.expired());
 }

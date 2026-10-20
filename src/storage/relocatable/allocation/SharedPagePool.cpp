@@ -66,6 +66,8 @@ namespace graph::storage {
 				case PageOwnerKind::POK_LARGE_VALUE_DATA:
 				case PageOwnerKind::POK_LARGE_VALUE_MANIFEST:
 					return true;
+                case PageOwnerKind::POK_HYBRID_PROPERTY:
+                    return RSS_HYBRID_PROPERTY_FORMAT_ENABLED;
 				case PageOwnerKind::POK_NONE:
 					return false;
 			}

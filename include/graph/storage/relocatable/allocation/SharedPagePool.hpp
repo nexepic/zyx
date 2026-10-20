@@ -72,6 +72,10 @@ namespace graph::storage {
 		POK_ENTITY_LABEL = 10,
 		POK_LARGE_VALUE_DATA = 11,
 		POK_LARGE_VALUE_MANIFEST = 12,
+        // Values 13..15 remain retired adjacency kinds and must not be reused.
+        // Reserved for isolated hybrid field-frame preparation. Ordinary pool
+        // publication/read matching remains disabled until full field routing.
+        POK_HYBRID_PROPERTY = 16,
 	};
 
 	struct SharedPagePoolHeader {

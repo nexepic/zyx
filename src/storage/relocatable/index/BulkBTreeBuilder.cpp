@@ -21,10 +21,11 @@ namespace graph::storage {
 	namespace {
 
 		struct NodePlan {
+            using OwnedHeapElement = void;
 			uint16_t level = 0;
-			std::vector<std::byte> first_key;
+			utils::OwnedStdVector<std::byte> first_key;
 			size_t leaf_entry_count = 0;
-			std::vector<size_t> children;
+			utils::OwnedStdVector<size_t> children;
 		};
 
 		struct InputSummary {
@@ -155,7 +156,7 @@ namespace graph::storage {
 			size_t capacity_;
 			uint64_t stream_bytes_ = 0U;
 			size_t entry_count_ = 0U;
-			std::vector<std::byte> previous_key_;
+			utils::OwnedStdVector<std::byte> previous_key_;
 		};
 
 		[[nodiscard]] bool tryInsert(BTreePage &page, const BTreePageEntry &entry) {
@@ -172,7 +173,13 @@ namespace graph::storage {
 		}
 
 		void updateSemanticCrc(uint32_t &crc, const BTreePageEntry &entry) {
-			const std::vector<std::byte> encoded = BTreePageEntryCodec::encode(entry);
+			const auto bytes = BTreePageEntryCodec::encodedSize(entry);
+            utils::OwnedHeapReservation credit(utils::sharedAllocationOwner(),
+                utils::detail::addStandardHeapBytes(utils::detail::standardContainerProxyBytes(),
+                    utils::detail::standardAllocatorRequestBytes(bytes, alignof(std::byte))));
+            const std::vector<std::byte> encoded = BTreePageEntryCodec::encode(entry);
+            if (encoded.capacity() != bytes)
+                throw std::logic_error("bulk semantic CRC codec exceeded its admitted fresh backing");
 			crc = utils::updateCrc(crc, encoded.data(), encoded.size());
 		}
 
@@ -184,7 +191,7 @@ namespace graph::storage {
 			return cursor;
 		}
 
-		void appendNode(std::vector<NodePlan> &nodes, NodePlan node, size_t maximumPages) {
+		void appendNode(utils::OwnedStdVector<NodePlan> &nodes, NodePlan node, size_t maximumPages) {
 			if (nodes.size() >= maximumPages) {
 				fail(FormatError::FERR_INVALID_STATE, "relocatable bulk B+Tree build exceeded its configured page bound");
 			}
@@ -192,15 +199,15 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] InputSummary planLeaves(uint64_t indexId, const OrderedBTreeEntrySource &source,
-																					 const BulkBTreeBuildOptions &options, std::vector<NodePlan> &nodes,
-																					 std::vector<size_t> &leafOrdinals) {
+																					 const BulkBTreeBuildOptions &options, utils::OwnedStdVector<NodePlan> &nodes,
+																					 utils::OwnedStdVector<size_t> &leafOrdinals) {
 			OrderedBTreeEntryCursor cursor = openCursor(source);
 			InputSummary summary;
 			const BTreePage measuring = measuringPage(indexId, BTreeNodeKind::BPN_LEAF, 0, options.leaf_value_layout);
 			const size_t payloadCapacity = measuring.slottedPage().stats().contiguous_free_bytes;
 			PackedPageSizeTracker page(BTreeNodeKind::BPN_LEAF, options.leaf_value_layout, payloadCapacity);
-			std::vector<std::byte> firstKey;
-			std::vector<std::byte> previousKey;
+			utils::OwnedStdVector<std::byte> firstKey;
+			utils::OwnedStdVector<std::byte> previousKey;
 			size_t entriesInPage = 0;
 			for (;;) {
 				std::optional<BTreePageEntry> next = cursor();
@@ -257,22 +264,22 @@ namespace graph::storage {
 			return summary;
 		}
 
-		void planParentLevels(uint64_t indexId, const BulkBTreeBuildOptions &options, std::vector<NodePlan> &nodes,
-							  std::vector<size_t> levelOrdinals) {
+		void planParentLevels(uint64_t indexId, const BulkBTreeBuildOptions &options, utils::OwnedStdVector<NodePlan> &nodes,
+							  utils::OwnedStdVector<size_t> levelOrdinals) {
 			uint16_t level = 0;
 			while (levelOrdinals.size() > 1U) {
 				if (level == std::numeric_limits<uint16_t>::max()) { // ZYX_COV_EXCL_LINE: max pages exhausts memory first.
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "relocatable bulk B+Tree build exceeded the persisted tree depth");
 				}
 				++level;
-				std::vector<size_t> parentOrdinals;
+				utils::OwnedStdVector<size_t> parentOrdinals;
 				NodePlan parent;
 				parent.level = level;
 				BTreePage page = measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level,
 															 BTreeLeafValueLayout::BLVL_U64);
 				for (const size_t childOrdinal: levelOrdinals) {
 					const NodePlan &child = nodes[childOrdinal];
-					const std::vector<std::byte> childFirstKey = child.first_key;
+					const utils::OwnedStdVector<std::byte> childFirstKey = child.first_key;
 					if (childFirstKey.empty()) { // ZYX_COV_EXCL_LINE: an empty root leaf bypasses parent planning.
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable bulk B+Tree build cannot use an empty leaf as an internal child");
@@ -309,9 +316,9 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] std::vector<IndexTreeMaterializationPoolOptions>
+		[[nodiscard]] utils::OwnedStdVector<IndexTreeMaterializationPoolOptions>
 		poolOptions(const BulkBTreeBuildOptions &options, size_t pageCount) {
-			std::vector<IndexTreeMaterializationPoolOptions> pools;
+			utils::OwnedStdVector<IndexTreeMaterializationPoolOptions> pools;
 			const size_t poolCount = (pageCount - 1U) / RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
 			pools.reserve(poolCount);
 			for (size_t poolOrdinal = 0; poolOrdinal < poolCount; ++poolOrdinal) {
@@ -345,7 +352,9 @@ namespace graph::storage {
 	BTreeInitialTreeMutationPlan planNativeTreeImpl(
 			BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
 			uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options,
-			bool requireExistingRoot) {
+			bool requireExistingRoot,
+            utils::OwnedFunction<void(const CatalogEntry &, std::span<BTreePage>, std::span<PageLocation>,
+                LogSequenceNumber)> imageSink = {}) {
 		validateOptions(options, indexId, LogSequenceNumber(1U), source);
 		if (!snapshot.isValid() || !pages.usesMetadataStore(metadata)) {
 			fail(FormatError::FERR_INVALID_STATE,
@@ -358,8 +367,8 @@ namespace graph::storage {
 										 : "relocatable native bulk B+Tree planning cannot replace an existing Index root");
 		}
 
-		std::vector<NodePlan> plannedNodes;
-		std::vector<size_t> leafOrdinals;
+		utils::OwnedStdVector<NodePlan> plannedNodes;
+		utils::OwnedStdVector<size_t> leafOrdinals;
 		const InputSummary summary = planLeaves(indexId, source, options, plannedNodes, leafOrdinals);
 		planParentLevels(indexId, options, plannedNodes, leafOrdinals);
 		const size_t pageCount = plannedNodes.size();
@@ -381,19 +390,21 @@ namespace graph::storage {
 		result.root_page = {rootOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT,
 								rootOrdinal % RSS_PAGE_POOL_DATA_FRAME_COUNT};
 
-		auto nodes = std::make_shared<std::vector<NodePlan>>(std::move(plannedNodes));
+		auto nodes = utils::makeSharedOwned<utils::OwnedStdVector<NodePlan>>(std::move(plannedNodes));
 		const size_t leafCount = leafOrdinals.size();
 		result.preparer = [&pages, indexId, source, nodes = std::move(nodes), leafCount, summary,
+                                memory = utils::sharedAllocationOwner(), imageSink = std::move(imageSink),
 								leafValueLayout = options.leaf_value_layout,
 								pools = result.new_pool_mutations](std::vector<IndexTreeMutationPoolBatch> &batches,
 														 LogSequenceNumber checkpointLsn) mutable {
+            utils::OwnedAllocationScope allocationScope(memory);
 			if (!checkpointLsn.isValid() || batches.size() != pools.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
 						 "relocatable native bulk B+Tree preparation changed its pool plan or checkpoint");
 			}
-			std::vector<IndexTreeMaterializedPool> assignments;
+			utils::OwnedStdVector<IndexTreeMaterializedPool> assignments;
 			assignments.reserve(batches.size());
-			std::vector<PageId> assignedPageIds;
+			utils::OwnedStdVector<PageId> assignedPageIds;
 			assignedPageIds.reserve(nodes->size());
 			for (size_t ordinal = 0U; ordinal < batches.size(); ++ordinal) {
 				IndexTreeMutationPoolBatch &batch = batches[ordinal];
@@ -421,7 +432,7 @@ namespace graph::storage {
 			OrderedBTreeEntryCursor secondCursor = openCursor(source);
 			uint64_t secondEntryCount = 0U;
 			uint32_t secondSemanticCrc = 0U;
-			std::vector<std::byte> secondPreviousKey;
+			utils::OwnedStdVector<std::byte> secondPreviousKey;
 			size_t nextLeafOrdinal = 0U;
 			const auto materializePage = [&](size_t poolOrdinal, size_t pageOrdinal) -> BTreePage {
 				const size_t ordinal =
@@ -492,16 +503,25 @@ namespace graph::storage {
 			};
 			for (size_t poolOrdinal = 0U; poolOrdinal < batches.size(); ++poolOrdinal) {
 				IndexTreeMutationPoolBatch &batch = batches[poolOrdinal];
-				std::vector<BTreePage> materialized;
+				utils::OwnedStdVector<BTreePage> materialized;
 				materialized.reserve(batch.appended_page_ids.size());
 				for (size_t pageOrdinal = 0U; pageOrdinal < batch.appended_page_ids.size(); ++pageOrdinal) {
 					materialized.push_back(materializePage(poolOrdinal, pageOrdinal));
 				}
-				pages.prepareNewPoolInitialPages(batch.pool, materialized, batch.appended_locations, checkpointLsn);
+				if (imageSink) imageSink(batch.pool, materialized, batch.appended_locations, checkpointLsn);
+                else pages.prepareNewPoolInitialPages(batch.pool, materialized, batch.appended_locations, checkpointLsn);
 			}
 		};
 		return result;
 	}
+
+    BTreeInitialTreeMutationPlan BulkBTreeBuilder::planNativeTreeWithImageSink(
+        BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
+        uint64_t indexId, const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options,
+        NativeImageSink sink) {
+        if (!sink) fail(FormatError::FERR_INVALID_STATE, "private native tree preparation requires its metadata image owner");
+        return planNativeTreeImpl(pages, metadata, snapshot, indexId, source, options, false, std::move(sink));
+    }
 
 	BTreeInitialTreeMutationPlan BulkBTreeBuilder::planNativeTree(
 			BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
@@ -525,21 +545,21 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE, "relocatable bulk B+Tree build requires one metadata store");
 		}
 
-		std::vector<NodePlan> nodes;
-		std::vector<size_t> leafOrdinals;
+		utils::OwnedStdVector<NodePlan> nodes;
+		utils::OwnedStdVector<size_t> leafOrdinals;
 		const InputSummary summary = planLeaves(indexId, source, options, nodes, leafOrdinals);
 		const size_t leafCount = leafOrdinals.size();
 		planParentLevels(indexId, options, nodes, leafOrdinals);
 		const size_t rootOrdinal = nodes.size() - 1U;
-		const std::vector<IndexTreeMaterializationPoolOptions> pools = poolOptions(options, nodes.size());
+		const utils::OwnedStdVector<IndexTreeMaterializationPoolOptions> pools = poolOptions(options, nodes.size());
 		const IndexTreeMaterializedPageReference rootPage{
 				rootOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT, rootOrdinal % RSS_PAGE_POOL_DATA_FRAME_COUNT};
 
 		OrderedBTreeEntryCursor secondCursor = openCursor(source);
-		auto assignedPageIds = std::make_shared<std::vector<PageId>>();
+		auto assignedPageIds = utils::makeSharedOwned<utils::OwnedStdVector<PageId>>();
 		uint64_t secondEntryCount = 0;
 		uint32_t secondSemanticCrc = 0;
-		std::vector<std::byte> secondPreviousKey;
+		utils::OwnedStdVector<std::byte> secondPreviousKey;
 		// Leaf entries need their page boundaries from the first pass. Wrap the
 		// page factory so each invocation consumes exactly one planned leaf batch.
 		size_t nextLeafOrdinal = 0;

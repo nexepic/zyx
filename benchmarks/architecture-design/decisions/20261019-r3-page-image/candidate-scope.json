@@ -1,0 +1,37 @@
+{
+  "modules": [
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp",
+    "tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp",
+    "tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp",
+    "tests/src/storage/relocatable/allocation/test_SlottedPage.cpp"
+  ],
+  "filter": "HybridPropertyExtensionTest.*:HybridPropertyPageImageTest.*:HybridPropertyRecordsTest.*:RelocatableSlottedPageTest.*",
+  "full_suite": false,
+  "link": [
+    "/workspace/zyx-sysroot/usr/bin/clang++-19",
+    "-g",
+    "-fprofile-instr-generate",
+    "-fcoverage-mapping",
+    "-Xlinker",
+    "--dependency-file=CMakeFiles/zyx_test_suite.dir/link.d",
+    "CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp.o",
+    "CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyRecords.cpp.o",
+    "CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp.o",
+    "CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/allocation/test_SlottedPage.cpp.o",
+    "-o",
+    "/workspace/zyx-r3-page-image-20261019/candidate-final/records-test",
+    "libzyx_core.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libgtest.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libgmock.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libz.so",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/liblz4.so.1.10.0",
+    "-lxxhash",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libzstd.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.83.0",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libboost_atomic.so.1.83.0",
+    "/workspace/antlr4-install/lib/libantlr4-runtime.a",
+    "libzyx_inputxx.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libgtest.a",
+    "/workspace/zyx-sysroot/usr/lib/x86_64-linux-gnu/libgtest_main.a"
+  ]
+}

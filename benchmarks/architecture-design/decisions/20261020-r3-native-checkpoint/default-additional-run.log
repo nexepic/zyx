@@ -1,0 +1,569 @@
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+ninja: Entering directory `/workspace/zyx/buildDir'
+[0/2] Re-checking globbed directories...
+[1/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp.o
+[2/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/index/test_BulkBTreeBuilder.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/index/test_BulkBTreeBuilder.cpp:741:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  741 |         EXPECT_THROW(BulkBTreeBuilder::planNativeTree(store, *metadata, snapshot, INDEX_ID, source, options()),
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+1 warning generated.
+[3/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:50:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   50 |         EXPECT_THROW(PageOwnerHeaderCodec::encode(owner()), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:51:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   51 |         EXPECT_THROW(PageOwnerHeaderCodec::decode(encoded), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:57:5: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   57 |     image.appendGroup(group()); const auto before = image.serialize();
+      |     ^~~~~~~~~~~~~~~~~ ~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:59:27: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   59 |         expectError([&] { std::move(image).bindPrivateOwner(owner(), pool(), LogSequenceNumber(9)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:65:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   65 |     EXPECT_THROW(ordinary.liveSlotsOwned({}), std::invalid_argument);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~ ~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:66:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+   66 |     EXPECT_THROW(ordinary.liveSlotsOwned(tiny), MaterializedByteLimitExceeded); EXPECT_EQ(tiny->used(), 0U);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~ ~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:225:23: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  225 |     expectError([&] { allocator.allocateNewPoolPage(allocation, PhysicalSlotId(40), PhysicalSlotId(80), LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:226:23: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  226 |     expectError([&] { allocator.appendPage(append, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                       ^~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:227:23: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  227 |     expectError([&] { allocator.replacePage(replace, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                       ^~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:228:23: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  228 |     expectError([&] { allocator.evacuatePage(evacuate, LogSequenceNumber(2)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                       ^~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:279:27: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  279 |         expectError([&] { reader.read(pin, PageId(41)); }, FormatError::FERR_UNSUPPORTED_VERSION);
+      |                           ^~~~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:281:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  281 |         EXPECT_THROW(reader.read(pin, PageId(41)), FormatException);
+      |                      ^~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp:27:28: warning: unused function 'column' [-Wunused-function]
+   27 | HybridPropertyColumnRecord column() {
+      |                            ^~~~~~
+13 warnings generated.
+[4/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp.o
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:100:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  100 |     EXPECT_THROW(image.appendGroup(future), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:101:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  101 |     EXPECT_THROW(image.clone(Generation(8), memory), FormatException);
+      |                  ^~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:110:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  110 |     EXPECT_THROW(candidate.readRecord(first), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~ ~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:115:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  115 |     EXPECT_THROW(candidate.readColumn(first, scalar.identity, g, Generation(9)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:133:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  133 |     EXPECT_THROW(HybridPropertyPageImage::create(PageId(41), Generation(1), Generation(9), tiny), MaterializedByteLimitExceeded);
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:142:26: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  142 |             EXPECT_THROW(image.readRecord(slot), MaterializedByteLimitExceeded);
+      |                          ^~~~~~~~~~~~~~~~ ~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:143:26: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  143 |             EXPECT_THROW(image.serialize(), MaterializedByteLimitExceeded);
+      |                          ^~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:156:9: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  156 |         image.appendGroup(group()); const auto bytes = image.serialize(); const auto baseline = memory->used();
+      |         ^~~~~~~~~~~~~~~~~ ~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:157:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  157 |         EXPECT_THROW(HybridPropertyPageImage::open(bytes, PageId(42), Generation(1), Generation(9), memory), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:158:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  158 |         EXPECT_THROW(HybridPropertyPageImage::open(bytes, PageId(41), Generation(2), Generation(9), memory), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:161:22: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  161 |         EXPECT_THROW(HybridPropertyPageImage::open(damaged, PageId(41), Generation(1), Generation(9), memory), FormatException);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:179:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  179 |     EXPECT_THROW(image.appendColumn(extra, g, Generation(9)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:190:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  190 |     EXPECT_THROW(page.readOwned(slot, {}), std::invalid_argument);
+      |                  ^~~~~~~~~~~~~~ ~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:191:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  191 |     EXPECT_THROW(page.serializeOwned({}), std::invalid_argument);
+      |                  ^~~~~~~~~~~~~~~~~~~ ~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:193:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  193 |     EXPECT_THROW(page.readOwned(slot, tiny), MaterializedByteLimitExceeded);
+      |                  ^~~~~~~~~~~~~~ ~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:194:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  194 |     EXPECT_THROW(page.serializeOwned(tiny), MaterializedByteLimitExceeded);
+      |                  ^~~~~~~~~~~~~~~~~~~ ~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:228:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  228 |     EXPECT_THROW(image.readColumn(wrong, column().identity, g, Generation(9)), FormatException);
+      |                  ^~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:230:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  230 |     EXPECT_THROW(image.readRecord(foreign), FormatException);
+      |                  ^~~~~~~~~~~~~~~~ ~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:254:68: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  254 |         auto bad = valid; bad[offset] = std::byte{1}; EXPECT_THROW(Codec::decodeLocator(bad), FormatException);
+      |                                                                    ^~~~~~~~~~~~~~~~~~~~ ~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:257:63: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  257 |         SlottedSlotReference{PageId(41), 0, 0}}) EXPECT_THROW(Codec::locatorValue(bad), FormatException);
+      |                                                               ^~~~~~~~~~~~~~~~~~~ ~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:259:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  259 |     EXPECT_THROW(Codec::decodeLocator(badLocator), FormatException);
+      |                  ^~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:262:69: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  262 |         auto bad = source; bad[offset] = std::byte{1}; EXPECT_THROW(Codec::decodeSource(bad), FormatException);
+      |                                                                     ^~~~~~~~~~~~~~~~~~~ ~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:264:44: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  264 |     source[0] = std::byte{3}; EXPECT_THROW(Codec::decodeSource(source), FormatException);
+      |                                            ^~~~~~~~~~~~~~~~~~~ ~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:265:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  265 |     EXPECT_THROW(Codec::ownerKey({EntityPropertyOwnerKind::EPOK_NODE, UINT64_C(1) << 63}, 1), FormatException);
+      |     ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |   ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:266:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  266 |     EXPECT_THROW(Codec::ownerKey({EntityPropertyOwnerKind::EPOK_NODE, 1}, 0), FormatException);
+      |                  ^~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:267:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  267 |     EXPECT_THROW(Codec::groupKey(RSS_HYBRID_MAX_GROUP_ID + 1), FormatException);
+      |                  ^~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:268:18: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  268 |     EXPECT_THROW(Codec::columnKey(1, 0), FormatException);
+      |                  ^~~~~~~~~~~~~~~~ ~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+/workspace/zyx/tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp:269:54: warning: ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+  269 |     HybridPropertyOwnerMap::Key zero{}; EXPECT_THROW(Codec::decodeOwnerKey(zero, EntityPropertyOwnerKind::EPOK_NODE), FormatException);
+      |                                                      ^~~~~~~~~~~~~~~~~~~~~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/gtest.h:1792:21: note: expanded from macro 'EXPECT_THROW'
+ 1792 |   GTEST_TEST_THROW_(statement, expected_exception, GTEST_NONFATAL_FAILURE_)
+      |                     ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1372:54: note: expanded from macro 'GTEST_TEST_THROW_'
+ 1372 |       GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);            \
+      |                                                      ^~~~~~~~~
+/workspace/zyx-sysroot/usr/include/gtest/internal/gtest-internal.h:1314:5: note: expanded from macro 'GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_'
+ 1314 |     statement;                                                    \
+      |     ^~~~~~~~~
+28 warnings generated.
+[5/6] Building CXX object CMakeFiles/zyx_test_suite.dir/tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp.o
+Running main() from ./googletest/src/gtest_main.cc
+Note: Google Test filter = HybridPropertyDescriptorTest.*:HybridPropertyGroupConversionTest.*:HybridPropertyPageBindingTest.*:HybridPropertyPageImageTest.*:HybridPropertyPhysicalReaderTest.*:HybridPropertyPublicationGuardTest.*:PropertySubblockGroupConversionTest.*:RelocatableBTreePageStoreTest.*
+[==========] Running 51 tests from 8 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from HybridPropertyGroupConversionTest
+[ RUN      ] HybridPropertyGroupConversionTest.RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed
+[       OK ] HybridPropertyGroupConversionTest.RetainsTheExactAllocationOwnerUntilThePlanIsDestroyed (0 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection
+[       OK ] HybridPropertyGroupConversionTest.MaximumColumnCountUsesNativePayloadsAndExactOwnerProjection (11 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.QuotaCancellationAndShapeRefusalsRefundBeforeRetry
+[       OK ] HybridPropertyGroupConversionTest.QuotaCancellationAndShapeRefusalsRefundBeforeRetry (0 ms)
+[ RUN      ] HybridPropertyGroupConversionTest.NullMixedAndHeapExtensionsRemainBorrowedAndOrdered
+[       OK ] HybridPropertyGroupConversionTest.NullMixedAndHeapExtensionsRemainBorrowedAndOrdered (0 ms)
+[----------] 4 tests from HybridPropertyGroupConversionTest (12 ms total)
+
+[----------] 2 tests from HybridPropertyPageBindingTest
+[ RUN      ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat
+[       OK ] HybridPropertyPageBindingTest.OwnerCodecRecognizesSixteenOnlyInTheIsolatedFormat (0 ms)
+[ RUN      ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal
+[       OK ] HybridPropertyPageBindingTest.FeatureGuardAndOwnedEnumerationLeaveSourceUntouchedOnRefusal (0 ms)
+[----------] 2 tests from HybridPropertyPageBindingTest (0 ms total)
+
+[----------] 1 test from HybridPropertyPublicationGuardTest
+[ RUN      ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation
+[       OK ] HybridPropertyPublicationGuardTest.OrdinaryWritersRefuseHybridKindsBeforeReconciliationOrPagePreparation (3 ms)
+[----------] 1 test from HybridPropertyPublicationGuardTest (3 ms total)
+
+[----------] 1 test from HybridPropertyPhysicalReaderTest
+[ RUN      ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit
+[       OK ] HybridPropertyPhysicalReaderTest.FeatureAndRowBoundariesRemainExplicit (6 ms)
+[----------] 1 test from HybridPropertyPhysicalReaderTest (6 ms total)
+
+[----------] 12 tests from HybridPropertyPageImageTest
+[ RUN      ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration
+[       OK ] HybridPropertyPageImageTest.SharedNativeImagePacksGroupsColumnsAndFieldsWithIndependentPhysicalGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots
+[       OK ] HybridPropertyPageImageTest.PrivateCopyUpdatesOneFieldWithoutChangingOriginalOrOtherSlots (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource
+[       OK ] HybridPropertyPageImageTest.ChangedIdentityDemotionAndFutureVisibilityRejectWithoutMutatingPrivateSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration
+[       OK ] HybridPropertyPageImageTest.EraseReuseAndCompactionKeepOtherStableReferencesAndRefuseStaleGeneration (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot
+[       OK ] HybridPropertyPageImageTest.ExtensionResizeChecksLiveOwnerIdentityAndKeepsSameSlot (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource
+[       OK ] HybridPropertyPageImageTest.OwnedBufferQuotaRefusalRefundsAndRetryPreservesSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount
+[       OK ] HybridPropertyPageImageTest.PageIdentityAndChecksumsRejectAndEscapedCopiesRetainTheirAccount (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords
+[       OK ] HybridPropertyPageImageTest.FullPageRefusesExtraRecordWithoutChangingOtherRecords (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource
+[       OK ] HybridPropertyPageImageTest.SlottedOwnedCopiesUseDestinationAccountAndRefuseMissingOwnerWithoutChangingSource (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators
+[       OK ] HybridPropertyPageImageTest.FixedExtensionDirectoryResolvesActualSharedSlotWithoutPayloadBearingSeparators (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity
+[       OK ] HybridPropertyPageImageTest.NativeDirectoryKeysPreserveOrderedPrefixesAndCanonicalLittleEndianSlotIdentity (0 ms)
+[ RUN      ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership
+[       OK ] HybridPropertyPageImageTest.NativeDirectoriesRejectReservedBitsNoSlotAndOutOfDomainOwnership (0 ms)
+[----------] 12 tests from HybridPropertyPageImageTest (3 ms total)
+
+[----------] 7 tests from HybridPropertyDescriptorTest
+[ RUN      ] HybridPropertyDescriptorTest.Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip
+[       OK ] HybridPropertyDescriptorTest.Exact192BytePayloadAndEightIndependentLogicalRootsRoundTrip (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals
+[       OK ] HybridPropertyDescriptorTest.NamespaceIndexIdsAreStableDisjointAndRejectUnknownOrdinals (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility
+[       OK ] HybridPropertyDescriptorTest.ValidChecksumsDoNotAuthorizeWrongDatabaseGenerationOrVisibility (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed
+[       OK ] HybridPropertyDescriptorTest.PartialAndAliasedRootReferencesFailClosed (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds
+[       OK ] HybridPropertyDescriptorTest.IndependentTreePoolEpochsAreNotSemanticVisibilityBounds (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted
+[       OK ] HybridPropertyDescriptorTest.ChecksummedReservedBitsVersionsAndMagicAreNotSilentlyReinterpreted (0 ms)
+[ RUN      ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration
+[       OK ] HybridPropertyDescriptorTest.EveryFrameByteIsCoveredAndPhysicalRelocationPreservesSemanticGeneration (19 ms)
+[----------] 7 tests from HybridPropertyDescriptorTest (19 ms total)
+
+[----------] 16 tests from RelocatableBTreePageStoreTest
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsAndReopensADenseTreeAcrossMultiplePagePools
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsAndReopensADenseTreeAcrossMultiplePagePools (67 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsAnEmptyTreeWithOneRootLeaf
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsAnEmptyTreeWithOneRootLeaf (5 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsLexicographicallyOrderedPrefixKeys
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsLexicographicallyOrderedPrefixKeys (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsAndReopensKeyOnlyLeaves
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsAndReopensKeyOnlyLeaves (11 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsDenseKeyOnlyAdjacencyLeavesAtThePackedPageBoundary
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsDenseKeyOnlyAdjacencyLeavesAtThePackedPageBoundary (66 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidOrChangedBulkSourcesBeforePublishingARoot
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidOrChangedBulkSourcesBeforePublishingARoot (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.FailsClosedForBoundedAndUnstableBulkBuildInputs
+[       OK ] RelocatableBTreePageStoreTest.FailsClosedForBoundedAndUnstableBulkBuildInputs (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.BulkBuildsParentLevelsBySplittingWideSeparators
+[       OK ] RelocatableBTreePageStoreTest.BulkBuildsParentLevelsBySplittingWideSeparators (25 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsSecondPassOrderValueAndLengthChanges
+[       OK ] RelocatableBTreePageStoreTest.RejectsSecondPassOrderValueAndLengthChanges (3 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.RejectsInvalidNativePlansAndTamperedPreparationBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.RejectsInvalidNativePlansAndTamperedPreparationBeforePublication (6 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkReplacementPlanRequiresAndUsesAPublishedRoot
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkReplacementPlanRequiresAndUsesAPublishedRoot (4 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkPlanPublishesDenseMultiPoolTreeThroughTheGraphTransactionAndReopens
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkPlanPublishesDenseMultiPoolTreeThroughTheGraphTransactionAndReopens (63 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkPlanFailsBeforePublishingWhenItsSecondPassChanges
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkPlanFailsBeforePublishingWhenItsSecondPassChanges (2 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkPlansRejectEverySecondPassDivergenceBeforePublication
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkPlansRejectEverySecondPassDivergenceBeforePublication (7 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkPlanRetainsItsAccountOutsideTheAllocationScopeAndAcrossCopies
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkPlanRetainsItsAccountOutsideTheAllocationScopeAndAcrossCopies (12 ms)
+[ RUN      ] RelocatableBTreePageStoreTest.NativeBulkPlanningRefusesItsBudgetAndRefundsWithoutPublishing
+[       OK ] RelocatableBTreePageStoreTest.NativeBulkPlanningRefusesItsBudgetAndRefundsWithoutPublishing (1 ms)
+[----------] 16 tests from RelocatableBTreePageStoreTest (294 ms total)
+
+[----------] 8 tests from PropertySubblockGroupConversionTest
+[ RUN      ] PropertySubblockGroupConversionTest.Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip
+[       OK ] PropertySubblockGroupConversionTest.Exact47And48ThresholdAnd64UnorderedOwnersRoundTrip (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues
+[       OK ] PropertySubblockGroupConversionTest.DynamicMixedNullMissingAndLargeFieldsKeepExactCanonicalValues (2 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount
+[       OK ] PropertySubblockGroupConversionTest.NativeEncodingUsesActualAdmittedValuesAndKeepsTheSameAccount (1 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.MaximumMembershipsAndPropertylessOwnersStayBounded
+[       OK ] PropertySubblockGroupConversionTest.MaximumMembershipsAndPropertylessOwnersStayBounded (16 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge
+[       OK ] PropertySubblockGroupConversionTest.CancellationAndAdmissionRejectWithoutChangingSourceOrLeakingCharge (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens
+[       OK ] PropertySubblockGroupConversionTest.RejectsWrongOwnerKindGroupDuplicateOwnerAndUnsortedTokens (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace
+[       OK ] PropertySubblockGroupConversionTest.NativeOwnerLimitAndHighestPartialGroupDoNotExpandIdNamespace (0 ms)
+[ RUN      ] PropertySubblockGroupConversionTest.ParentAccountOwnsThePlanAndFailureRefundsBothCounters
+[       OK ] PropertySubblockGroupConversionTest.ParentAccountOwnsThePlanAndFailureRefundsBothCounters (0 ms)
+[----------] 8 tests from PropertySubblockGroupConversionTest (22 ms total)
+
+[----------] Global test environment tear-down
+[==========] 51 tests from 8 test suites ran. (362 ms total)
+[  PASSED  ] 51 tests.

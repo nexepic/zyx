@@ -1,0 +1,13 @@
+# R3.2 private field-owner binding checkpoint
+
+Source basis is an uncommitted working tree on the manifest base, not an accepted code commit. The patch includes earlier private images and ordinary graph publication work. Accepted progress remains 13/24; no commit/push.
+
+Private binding authenticates a sealed PROPERTY pool, owner kind 16, exact physical owner/page/LSN, full payload and every live typed record before a no-allocation rebind. Allocation refusal retains the input and refunds temporary charges. Escaped slot lists retain their resource owner. Large-reference envelope admission does not authenticate LargeValue content or prove final graph ownership. Generic pool read matching and all standalone allocate/append/replace/evacuate entry points still reject hybrid field pages. No fields or nonempty descriptors are persisted or routed.
+
+The original choice of owner code 13 collided with retired adjacency codes 13–15. The existing SharedPagePool corruption test caught it (initial candidate 103/104); its raw failure is preserved. Production code now uses 16. The original test file remains byte-identical to the base; no rejection expectation was weakened.
+
+Descriptor roots carry shared-pool physical epochs, independent of semantic/metadata commit generations. The old comparison could reject valid physical pool reuse. The codec now validates paired root identity, not cross-domain ordering. Actual graph tests allocate a native Index tree with physical epoch 99, publish/read it under smaller metadata generations, and reject epoch 100 at typed root publication without changing the authoritative snapshot. Descriptor semantic/frame/snapshot and database/LSN checks remain. The frame codec is not a routed tree authenticator; future field readers must match namespace IndexId, pinned directory and actual root page/epoch. Nonempty-descriptor admission remains disabled.
+
+Seven necessary modules: default108/108 and experimental122/122, zero skipped/failed/disabled; Debug coverage builds, not performance tests or whole-suite coverage claims. No formal comparison/Kuzu window, cross-platform execution, complete resource/RSS admission or full-scale acceptance is claimed. Sources remain portable C++20; no ABI/version/resource-cap change.
+
+Still required: typed early metadata-owned IDs and field coordinator; atomic field persistence, all property read/write/index/overlay paths; exact large-value ownership, recovery/integrity/retirement/reuse/relocation; complete actual native costs and ROW control; all R3/R5 gates and frozen R7. Do not remove standalone/nonempty-root guards before that complete lifecycle is installed.

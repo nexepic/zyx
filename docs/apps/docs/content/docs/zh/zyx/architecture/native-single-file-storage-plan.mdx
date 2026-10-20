@@ -137,13 +137,28 @@ Bootstrap Region 永远不参与普通 Segment 分配。它是固定格式入口
 
 ### 4.4 查询 scratch 开发格式
 
-当前开发实现使用 Segment envelope 版本 **5** 与 Superblock 版本 **31**。查询 scratch 注册 kind **15**，bulk scratch 保持 kind **14**。这是不兼容的开发格式变更：4/30 版本文件会被拒绝，不执行迁移，也不重写旧 A/B 根。稳定格式采用门槛仍待验收。
+默认构建使用 Segment envelope 版本 **5** 与 Superblock 版本 **31**；隔离实验构建另见 4.5。查询 scratch 注册 kind **15**，bulk scratch 保持 kind **14**。这是不兼容的开发格式变更：4/30 版本文件会被拒绝，不执行迁移，也不重写旧 A/B 根。稳定格式采用门槛仍待验收。
 
 `query_scratch_enabled` 默认为 `false`。显式启用的原生 Sort 路径使用归属验证的私有句柄、经过校验的版本 1 行/run block、稳定输入序号与有界双路归并。不支持的行或排序在首次 spill 前保留内存执行，已封存 run 后遇到则明确失败；不会重放已消费输入。物理只读文件不能分配、发布或回收 scratch，也不会退回宿主临时文件。
 
 私有 extent 在 I/O 前按完整 128 KiB 物理段准入：每会话 128 MiB、每个已打开文件身份的 `maximum_database_query_scratch_bytes`（默认 1 GiB）、每进程 2 GiB。硬链接和符号链接别名共享已打开文件身份。最多允许 64 个域、每域 64 个活跃 scratch 会话；资源准入不等待。资源锁会在进入元数据发布门锁前释放。成功持久回收后返还 extent 额度；不确定的 I/O 保留孤儿占用，直到独占、归属验证的可写恢复完成。损坏的 payload 或公开目录引用会阻止回收。Metadata COW extent 有独立归属，不包含在此私有 extent 配额中。
 
 完整性扫描把 sealed 私有 scratch 报告为需要所有者静止或可写恢复。物理只读打开不执行清理。排序、分区 DISTINCT/UNION、共享预算及故障合同已在上一轮验收；聚合状态和哈希连接仍无通用 spill。见 `benchmarks/architecture-design/decisions/20261016-s53-budget-and-spill-acceptance/`，后续变更按 R6 保护这些能力。
+
+### 4.5 隔离的混合属性实验格式
+
+`ZYX_EXPERIMENTAL_HYBRID_PROPERTY_FORMAT` 默认 OFF。以下矩阵描述当前开发分支的隔离边界，不授予 R3 生产准入；版本定义仍以 `Format.hpp`／`Superblock.hpp` 为准。
+
+| 构建 | Segment profile／envelope 版本 | Superblock 版本／header 字节 | 属性路由范围 |
+|---|---:|---:|---|
+| 默认 OFF | 5 | 31／336 | 现行 ROW；描述符物理根必须为零，拒绝 kind 16 |
+| 隔离 ON | 6 | 32／352 | ROW 与空描述符元数据生命周期；非空字段根仍拒绝 |
+
+两种构建互相拒绝对方的文件，不迁移、不重解释旧 A/B 字节。实验 Superblock 在 offset 336..351 新增 `hybrid_property_descriptor_root` 的 16 字节物理引用；metadata emergency reserve 从 header 末尾开始，实验偏移 352，默认偏移 336，宽度均为 32 字节。描述符是 metadata pool 内独立认证的 4096 字节物理 frame（32 字节 header、192 字节 payload、其余为零），不分配 routed MetadataPageId，不属于既有逻辑目录根。数据库／物理根／generation／LSN／CRC 和旧 pin 的恢复、完整性及回收检查适用；第八个图语义 fence 包含该根，两种格式的 token 不同。
+
+八个字段命名空间按 Node owner／column／extension／group、Edge owner／column／extension／group 的固定顺序保留 IndexId `0x8000000000000030`..`0x8000000000000037`。它们与 schema definition 范围、全局邻接、System Catalog、Vector mapping 前缀及 LargeValue content index 不重叠；普通图事务的标量 upsert／erase／create（两入口）／drop 均拒绝它们，默认构建也保留此身份范围。描述符请求在准备数据前验证每个非零 IndexId 与其 ordinal 精确匹配，不能绑定其他字段角色或普通索引。最终字段 reader 仍须核对固定 namespace、pin 下目录及实际根页／物理池代际，不能仅信 frame CRC。
+
+私有字段图像绑定使用现有 PROPERTY SegmentKind 和新的 `POK_HYBRID_PROPERTY=16`；13–15 是退役邻接 owner 编码，继续拒绝。该 owner kind 只在隔离构建中被 codec／SlottedPage 识别，普通池读取匹配以及独立 allocate／append／replace／evacuate 仍拒绝持久化它。元数据私有准备只在同一未发布 batch 内取得逻辑 ID 并生成图像／定位；普通元数据请求现会在 writer pin 下认证实际 Entity／ROW 源，检查≤1MiB账户及完整成员上限，再在该 batch 内准备私有图像／locator 及四个角色固定 map 的原生树规划。请求只给出允许的预留范围与字段池 owner，实际帧及最终树身份仍由元数据选择；空 map 缺席、已有同名目录拒绝，目录规划使用同一持有账户。元数据现会选择真实空闲／不重复位置、绑定私有字段帧，以同batch分配ID编码私有Index图像并验证最终描述符根；这些位置尚未登记且不写帧，后续发布须先登记全部所选槽再分配元数据。随后明确拒绝物理发布，保留文件修改 epoch 与原根。物理池、最终 map／描述符及完整字段读写／索引／大值归属／integrity／退役仍须接通同一图事务；未启用 backend／公开事务转换。完整生命周期完成前不得解除这些保护，不声称已启用混合属性生产布局。
 
 ## 5. Bootstrap、根目录和 Page Directory
 

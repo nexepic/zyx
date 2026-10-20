@@ -26,6 +26,7 @@ constexpr uint64_t RSS_HYBRID_MAX_GROUP_ID = 1 + (RSS_HYBRID_MAX_ENTITY_ID - 1) 
 
 enum class HybridPropertyScalarKind : uint8_t { HPSK_INT64 = 1, HPSK_DOUBLE = 2, HPSK_BOOL = 3 };
 enum class HybridPropertyGroupMode : uint8_t { HPGM_HYBRID = 1 };
+enum class HybridPropertySource : uint8_t { HPS_COLUMN = 1, HPS_EXTENSION = 2 };
 
 namespace hybrid_property_detail {
 inline void require(bool value, const char *message) {
@@ -159,9 +160,10 @@ struct HybridPropertyColumnRecord {
             LittleEndianCodec::writeU64(bytes, 64, bits);
         } else for (unsigned slot = 0; slot < 64; ++slot) LittleEndianCodec::writeU64(bytes, 64 + slot * 8, words[slot]);
     }
-    [[nodiscard]] static HybridPropertyColumnRecord decode(std::span<const std::byte> bytes,
-        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
-        Generation descriptorGeneration, Generation visibleGeneration) {
+    // Payload validation for a private page builder. Reading graph authority
+    // still requires decode() with its authenticated group/descriptor context.
+    [[nodiscard]] static HybridPropertyColumnRecord decodePayload(std::span<const std::byte> bytes,
+        const HybridPropertyColumnIdentity &expected) {
         using namespace hybrid_property_detail;
         header(bytes, RSS_HYBRID_COLUMN_MAGIC);
         HybridPropertyColumnRecord result;
@@ -177,12 +179,29 @@ struct HybridPropertyColumnRecord {
         for (unsigned slot = 0; slot < 64; ++slot)
             result.words[slot] = result.identity.scalar_kind == HybridPropertyScalarKind::HPSK_BOOL ?
                 (LittleEndianCodec::readU64(bytes, 64) >> slot) & 1U : LittleEndianCodec::readU64(bytes, 64 + slot * 8);
-        result.validate(); group.validate();
-        require(group.owner_kind == result.identity.owner_kind && group.group_id == result.identity.group_id &&
-            group.columns && group.memberships >= uint32_t(std::popcount(result.presence)) &&
-            !(result.presence & ~group.live) && result.identity.semantic_generation <= group.semantic_generation &&
+        result.validate(); return result;
+    }
+    void validateInGroup(const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
+        Generation visibleGeneration) const {
+        validate(); validateGroupContext(group, descriptorGeneration, visibleGeneration);
+    }
+private:
+    void validateGroupContext(const HybridPropertyGroupRecord &group, Generation descriptorGeneration,
+        Generation visibleGeneration) const {
+        using namespace hybrid_property_detail;
+        group.validate();
+        require(group.owner_kind == identity.owner_kind && group.group_id == identity.group_id &&
+            group.columns && group.memberships >= uint32_t(std::popcount(presence)) &&
+            !(presence & ~group.live) && identity.semantic_generation <= group.semantic_generation &&
             group.semantic_generation <= descriptorGeneration && descriptorGeneration.isValid() &&
             descriptorGeneration <= visibleGeneration, "hybrid column does not belong to its visible group");
+    }
+public:
+    [[nodiscard]] static HybridPropertyColumnRecord decode(std::span<const std::byte> bytes,
+        const HybridPropertyColumnIdentity &expected, const HybridPropertyGroupRecord &group,
+        Generation descriptorGeneration, Generation visibleGeneration) {
+        auto result = decodePayload(bytes, expected);
+        result.validateGroupContext(group, descriptorGeneration, visibleGeneration);
         return result;
     }
 };

@@ -40,8 +40,14 @@ namespace graph::storage {
 	} // namespace
 
 	MetadataWriteBatch::MetadataWriteBatch(MetadataPageAllocator &allocator, const Superblock &current,
-										   LogSequenceNumber checkpointLsn) :
-		allocator_(allocator), current_(current), candidate_(current) {
+                                           LogSequenceNumber checkpointLsn,
+                                           std::shared_ptr<std::pmr::memory_resource> reservationMemory) :
+        allocator_(allocator), current_(current), candidate_(current),
+        reserved_data_slots_(utils::OwnedPmrAllocator<PhysicalSlotId>(reservationMemory)),
+        reserved_data_slot_ranges_(utils::OwnedPmrAllocator<PhysicalSlotRange>(reservationMemory)),
+        reserved_data_slot_index_(std::less<uint64_t>{}, utils::OwnedPmrAllocator<uint64_t>(reservationMemory)),
+        reserved_data_slot_range_index_(std::less<uint64_t>{},
+            utils::OwnedPmrAllocator<std::pair<const uint64_t, uint64_t>>(reservationMemory)) {
 		SuperblockCodec::validate(current);
 		if (!checkpointLsn.isValid() || checkpointLsn <= current.checkpoint_lsn ||
 			current.generation.value() >= RSS_MAX_PHYSICAL_PAGE_GENERATION) {

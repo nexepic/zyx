@@ -1,0 +1,18 @@
+{
+  "source_basis": "uncommitted working tree",
+  "base_commit": "6a3fedf13ecfa2a7a6447863f4b1ccc3eb9c822c",
+  "code_checkpoint": null,
+  "accepted_progress_changed": false,
+  "files": {
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md": "99f5be023304150e885b9bfbf936d248b826439ebeba8ed8a4d00b25aa68cd8e",
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md": "328fec89ad0a7a0de5c60ff487659fa9bd804197c4ab7585004ef1fb2487376d",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "f13811ee1b40973b3dbb7eec2da5efba56cf06e4a23ede04a09d579ac09a380e",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "d91176158363d8a89c7a0cf615554970cb4e0894e935858466423f6c8c6ca308",
+    "include/graph/storage/relocatable/allocation/SlottedPage.hpp": "b45ccf90510d349c0700c967124b88bfeb9e6801a527c8a01d54d2f4f5a4c1ea",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp": "163989d95a86df76e6ec734cb3fd2e703c7903d7eecd1bafaceac3b3c3dc8b2d",
+    "include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp": "0b27b5f4f69e34ea33936570bf624c182de1315f00dffc022852aad664590dee",
+    "include/graph/storage/relocatable/property/HybridPropertyRecords.hpp": "840ce69b0ff294fee4a2e3b54e03b48c55f368cfe09d95f90a4822a4e8c782be",
+    "src/storage/relocatable/allocation/SlottedPage.cpp": "afb36e696be66c3a79f7637669bb5f82a618c119c592c9ada012815a98ae41ae",
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp": "29aeb2c07acf423584fdb1c4c33d68196183f985ae8da85d92bf57a035285666"
+  }
+}

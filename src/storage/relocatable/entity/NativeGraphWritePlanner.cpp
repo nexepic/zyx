@@ -23,6 +23,7 @@
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/storage/relocatable/property/HybridPropertyIndexIds.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -194,7 +195,8 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] constexpr bool isReservedInternalIndexId(uint64_t indexId) {
-			return indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID || indexId == RSS_GLOBAL_ADJACENCY_INDEX_ID;
+			return indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID || indexId == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
+                isHybridPropertyIndexId(indexId);
 		}
 
 		void validatePlannerOptions(const NativeGraphWritePlannerOptions &options) {

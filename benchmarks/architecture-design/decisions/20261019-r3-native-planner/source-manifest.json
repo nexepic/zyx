@@ -1,0 +1,38 @@
+{
+  "source_basis": "uncommitted working tree",
+  "base_commit": "6a3fedf13ecfa2a7a6447863f4b1ccc3eb9c822c",
+  "code_checkpoint": null,
+  "accepted_progress_changed": false,
+  "original_semantic_tests_unchanged_from_base": [
+    "tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp",
+    "tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp"
+  ],
+  "files": {
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-en.md": "bbbf5fc9220fb3fbbe13b71f86aa9fad1107e1af0e18d6c4e4172f95f12a9211",
+    "benchmarks/architecture-design/decisions/20261019-r2-next-five/r3-layout-zh.md": "cc01103529ebdb8e7cb0b1c66ce88a800ec719b0bb7a37ab499d653cab17c4fa",
+    "benchmarks/architecture-design/property-subblock/ReservedGroupConversion.hpp": "4a96283f3f1af7578ac343d86df6f432696aed24c67356db13d07bde612f0e15",
+    "docs/apps/docs/content/docs/en/zyx/architecture/optimization.mdx": "6bee71f71d2b8432df7b36291ee44f9b9a740af61aa3505142b626c219061855",
+    "docs/apps/docs/content/docs/zh/zyx/architecture/optimization.mdx": "37d1e298d181e39c28135c7510b033132f836aa671f31b716b1dc57519da0dd8",
+    "include/graph/storage/relocatable/allocation/SharedPagePool.hpp": "e74e67d6d30679b997755dfb46bf7e15f1ff1fa1da98a1eac2ac7b1dccff5436",
+    "include/graph/storage/relocatable/allocation/SlottedPage.hpp": "ee64ff05dde03c3cff9d66b40cae0f90703e946dcf6fd1bdaa9b0fa79acef4b5",
+    "include/graph/storage/relocatable/metadata/HybridPropertyConversionPreparation.hpp": "d1290b35161d3edd6d409cf5bfe20faf068bfd84ab557a8b6a8b7f20dae80ca4",
+    "include/graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp": "863bb1e872509c25f64adae649e0ce33c931ed0441cb07209961c577d69cfd77",
+    "include/graph/storage/relocatable/property/HybridPropertyDescriptor.hpp": "20ccb62ea4bc20425255cc70386e4857720784ea1a6af92153260b652748672a",
+    "include/graph/storage/relocatable/property/HybridPropertyDirectory.hpp": "d1de8cd4082e14b7dbdd743028e0eb77f037d355620d84e157aef664e53cf59c",
+    "include/graph/storage/relocatable/property/HybridPropertyGroupConversion.hpp": "5bb77117d45607969dbfa56f05f0dd1c315ad9e73b8e858a0456fcea8fa543ec",
+    "include/graph/storage/relocatable/property/HybridPropertyPageImage.hpp": "f8b21470439de9e738c4e8b48aec2784344ae46afe4f919f15aa32c7b0c538b0",
+    "include/graph/storage/relocatable/property/HybridPropertyRecords.hpp": "297eedf766fb7eea6d52d504a7d45945da786db19173316dc664b885bb44fb57",
+    "src/storage/relocatable/allocation/SharedPagePool.cpp": "d81aa68c5902bb9c0c5b380ff7009488edc27845eb5efd331e6fef594ec19f9d",
+    "src/storage/relocatable/allocation/SharedPagePoolAllocator.cpp": "9477fe1853442c778e72ae6c79dd03a6270e84472dac001a6f3440ef0d739adf",
+    "src/storage/relocatable/allocation/SlottedPage.cpp": "553f9d8906fa0d3c90473a5562617929ab79fe70f9b763f57bae9e86173f5742",
+    "src/storage/relocatable/metadata/RelocatableMetadataStoreGraphMutation.cpp": "e14db2c3108f7a92e7f255bc6b533077f80ea546d87ed63c28fd663aa896fea9",
+    "tests/src/storage/relocatable/property/test_HybridPropertyConversionPreparation.cpp": "36c66d2b4cf86d154ca5521864ca7356067196c6cb19a7ccf8cd41c073acb059",
+    "tests/src/storage/relocatable/property/test_HybridPropertyDescriptor.cpp": "eca891279dc4224c71c79116da2535652f9442027e0bc1446382d6c2c5d5967e",
+    "tests/src/storage/relocatable/property/test_HybridPropertyExtension.cpp": "8e4025697ac693b6131bbc6336d796be8fcb5e152cf99d3529cdb5684a2fa82a",
+    "tests/src/storage/relocatable/property/test_HybridPropertyGraphPublication.cpp": "7b1d63d6e02e05da8e315dd85218bb026a48b58e857366a8f12891f11c898339",
+    "tests/src/storage/relocatable/property/test_HybridPropertyGroupConversion.cpp": "a747b4a3f951318bb184e5f50c169ce12dbed2b58a41bd77397b582775e0dccb",
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageBinding.cpp": "3c1ac7129d259a3da8f8c321e89d170d29a0b0533123d20078b5c5cb70714196",
+    "tests/src/storage/relocatable/property/test_HybridPropertyPageImage.cpp": "29aeb2c07acf423584fdb1c4c33d68196183f985ae8da85d92bf57a035285666",
+    "tests/src/storage/relocatable/property/test_PropertySubblockGroupConversion.cpp": "080307711fcd36ad50b6de5e3d03e4cb05a882d49f02c4bae9d01c0afe89562c"
+  }
+}

@@ -11308,13 +11308,18 @@ namespace graph::query::execution {
 								selected.emplace(nodeIds.size(), &selectionMemory);
 								detail::BoundNodeColumnPredicates predicates(scan, parameterPredicates, propertyKeys, state.shared.materialized_budget);
 								MaterializedByteReservation sourceScratch(&state.shared.materialized_budget);
-								state.shared.snapshot.readNodePropertyCellsSortedWithAdmission(nodeIds, keyViews,
-									[&](size_t row, size_t column, std::optional<PropertyValue> value) {
-										direct->append(row, column, std::move(value), directGuard);
-									}, [&](size_t bytes) {
-										directGuard();
-										sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
-									});
+								const auto emitValue = [&](size_t row, size_t column, std::optional<PropertyValue> value) {
+									direct->append(row, column, std::move(value), directGuard);
+								};
+								const auto emitScalar = [&](size_t row, size_t column, PropertyType type, uint64_t bits) {
+									direct->appendScalar(row, column, type, bits, directGuard);
+								};
+								const auto admitSource = [&](size_t bytes) {
+									directGuard();
+									sourceScratch.set(checkedSizeAdd(sourceScratch.bytes(), bytes, "direct source bytes overflowed"));
+								};
+								state.shared.snapshot.readNodePropertyCellsWithScalarsSortedWithAdmission(nodeIds, keyViews,
+									std::ref(emitValue), std::ref(emitScalar), std::ref(admitSource));
 								direct->seal(); sourceScratch.reset();
 								(void)predicates.filter(*direct, *selected, directGuard);
 								if (state.shared.bound_program) {

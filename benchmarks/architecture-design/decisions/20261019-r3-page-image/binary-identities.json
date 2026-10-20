@@ -1,0 +1,22 @@
+{
+  "default": {
+    "build_type": "Debug",
+    "coverage": true,
+    "hybrid_option": false,
+    "platform": "Linux x86_64",
+    "files": {
+      "/workspace/zyx-r3-page-image-20261019/default-final/records-test": "70aa78ad6ec7bd999103e6a3464ab25fc5301e23e26185ef35660c7d4315a6c2",
+      "/workspace/zyx/buildDir/libzyx_core.a": "3661961cdef0b17a65f29693da32ce01e4ac0c8dff79cbd39780d334246d7d1a"
+    }
+  },
+  "candidate": {
+    "build_type": "Debug",
+    "coverage": true,
+    "hybrid_option": true,
+    "platform": "Linux x86_64",
+    "files": {
+      "/workspace/zyx-r3-page-image-20261019/candidate-final/records-test": "a66b6ec53a323acc0a6e4a7d4096375a1c7769b461e90b34dbc1806d7a8da532",
+      "/workspace/zyx-build-r3-native/libzyx_core.a": "5ec617a0581826fc02017c3adb3081c41601e46966d9872c7473bd2736c14f6a"
+    }
+  }
+}
